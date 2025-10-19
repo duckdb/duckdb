@@ -123,12 +123,12 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 	return true;
 }
 
-SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk) {
+SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const bool have_more_output) {
 	D_ASSERT(required_partition_info.AnyRequired());
 	auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
 	// by default set it to the maximum valid batch index value for the current pipeline
 	OperatorPartitionData next_data(max_batch_index);
-	if (source_chunk.size() > 0) {
+	if (source_chunk.size() > 0 || have_more_output) {
 		// if we retrieved data - initialize the next batch index
 		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *pipeline.source_state,
 		                                                        *local_source_state, required_partition_info);
@@ -235,7 +235,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			}
 
 			if (required_partition_info.AnyRequired()) {
-				auto next_batch_result = NextBatch(source_chunk);
+				auto next_batch_result = NextBatch(source_chunk, source_result == SourceResultType::HAVE_MORE_OUTPUT);
 				next_batch_blocked = next_batch_result == SinkNextBatchType::BLOCKED;
 				if (next_batch_blocked) {
 					return PipelineExecuteResult::INTERRUPTED;
