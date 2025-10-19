@@ -59,10 +59,6 @@ struct BloomFilterState final : public TableFilterState {
 	Vector keys_sliced_v;
 	SelectionVector bf_sel;
 
-	idx_t tuples_accepted = 0;
-	idx_t tuples_processed = 0;
-	idx_t vectors_processed = 0;
-
 	explicit BloomFilterState(const LogicalType &key_logical_type)
 	    : current_capacity(STANDARD_VECTOR_SIZE), hashes_v(LogicalType::HASH), keys_sliced_v(key_logical_type),
 	      bf_sel(STANDARD_VECTOR_SIZE) {

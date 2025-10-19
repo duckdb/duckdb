@@ -21,6 +21,36 @@ class CacheSectorizedBloomFilter {
 
 public:
 
+	struct SelectivityStats {
+		atomic<idx_t> tuples_accepted;
+		atomic<idx_t> tuples_processed;
+		atomic<idx_t> vectors_processed;
+
+		SelectivityStats ()
+		    : tuples_accepted(0), tuples_processed(0), vectors_processed(0) {
+		}
+
+		void Update(const idx_t accepted, const idx_t processed) {
+			tuples_accepted += accepted;
+			tuples_processed += processed;
+			vectors_processed += 1;
+		}
+
+		double GetSelectivity() const {
+			const idx_t processed = tuples_processed.load();
+			if (processed == 0) {
+				return 1.0;
+			}
+			return static_cast<double>(tuples_accepted.load()) / static_cast<double>(processed);
+		}
+	};
+
+	enum class State: uint8_t {
+		Uninitialized,  // not initialized and cannot be populated or probed
+		Active,			// ready and in use
+		Pause			// ready to use but not in use currently, e.g., not selective enough
+	};
+
 	CacheSectorizedBloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t est_num_rows);
 
@@ -29,26 +59,29 @@ public:
 	idx_t LookupHashes(const Vector &hashes, SelectionVector &result_sel, idx_t count) const;
 	bool LookupHash(hash_t hash) const;
 
-	bool IsInitialized() const {
-		return initialized;
+	SelectivityStats &GetSelectivityStats() {
+		return selectivity_data;
+	}
+
+	atomic<State> &GetState() {
+		return state;
+	}
+
+	void Pause() {
+		state.store(State::Pause);
 	}
 
 	bool IsActive() const {
-		return active;
+		return state.load() == State::Active;
+
 	}
 
-	void SetActive(const bool val) {
-		active = val;
-	}
 
 private:
-	bool initialized = false;
-	bool active = false;
 
+	SelectivityStats selectivity_data;
+	atomic<State> state{State::Uninitialized};
 	idx_t num_sectors;
-
-	ClientContext *context;
-	BufferManager *buffer_manager;
 
 	AllocatedData buf_;
 	uint32_t *blocks;
@@ -95,10 +128,6 @@ public:
 	}
 
 	string ToString(const string &column_name) const override;
-
-	bool FilterInitializedAndActive() const {
-		return this->filter.IsInitialized() && this->filter.IsActive();
-	}
 
 	// Filters by first hashing and then probing the bloom filter. The &sel will hold
 	// the remaining tuples, &approved_tuple_count will hold the approved count.

@@ -1,5 +1,3 @@
-
-
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
@@ -11,20 +9,24 @@ static constexpr idx_t MIN_NUM_BITS = 512;
 static constexpr idx_t LOG_SECTOR_SIZE = 5;
 static constexpr idx_t SIMD_BATCH_SIZE = 16;
 
+// number of vectors to check before deciding on selectivity
+static constexpr id_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
+// if the selectivity is higher than this, we disable the BF
+static constexpr double SELECTIVITY_THRESHOLD = 0.33;
+
 void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t est_num_rows) {
-	context = &context_p;
-	buffer_manager = &BufferManager::GetBufferManager(*context);
+
+	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
 
 	const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
 	num_sectors = std::min(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
 
-	buf_ = buffer_manager->GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint32_t));
+	buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint32_t));
 	// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
 	blocks = reinterpret_cast<uint32_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 	std::fill_n(blocks, num_sectors, 0);
 
-	initialized = true;
-	active = true;
+	state.store(State::Active);
 }
 
 void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes, const idx_t count) const {
@@ -159,7 +161,7 @@ bool CacheSectorizedBloomFilter::LookupOne(uint32_t key_lo, uint32_t key_hi, con
 }
 
 string BloomFilter::ToString(const string &column_name) const {
-	if (filter.IsInitialized()) {
+	if (filter.GetState().load() == CacheSectorizedBloomFilter::State::Active) {
 		return column_name + " IN BF(" + key_column_name + ")";
 	} else {
 		return "True";
@@ -178,8 +180,7 @@ void BloomFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const
 
 idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
                           BloomFilterState &state) const {
-
-	if (!FilterInitializedAndActive()) {
+	if (!this->filter.IsActive()) {
 		return approved_tuple_count;
 	}
 
@@ -202,16 +203,12 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 	}
 
 	// add the runtime statistics to stop using the bf if not selective
-	if (state.vectors_processed < 20) {
-		state.vectors_processed += 1;
-		state.tuples_accepted += found_count;
-		state.tuples_processed += approved_tuple_count;
-
-		if (state.vectors_processed == 20) {
-			const double selectivity =
-			    static_cast<double>(state.tuples_accepted) / static_cast<double>(state.tuples_processed);
-			if (selectivity > 0.5) {
-				this->filter.SetActive(false);
+	auto &stats = this->filter.GetSelectivityStats();
+	if (stats.vectors_processed.load() < SELECTIVITY_N_VECTORS_TO_CHECK) {
+		stats.Update(found_count, approved_tuple_count);
+		if (stats.vectors_processed.load() >= SELECTIVITY_N_VECTORS_TO_CHECK) {
+			if (stats.GetSelectivity() >= SELECTIVITY_THRESHOLD) {
+				this->filter.Pause();
 			}
 		}
 	}
@@ -241,7 +238,7 @@ bool BloomFilter::FilterValue(const Value &value) const {
 }
 
 FilterPropagateResult BloomFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (FilterInitializedAndActive()) {
+	if (this->filter.IsActive()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return FilterPropagateResult::FILTER_ALWAYS_TRUE;
