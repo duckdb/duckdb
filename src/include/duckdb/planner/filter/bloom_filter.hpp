@@ -20,14 +20,12 @@ namespace duckdb {
 class CacheSectorizedBloomFilter {
 
 public:
-
 	struct SelectivityStats {
 		atomic<idx_t> tuples_accepted;
 		atomic<idx_t> tuples_processed;
 		atomic<idx_t> vectors_processed;
 
-		SelectivityStats ()
-		    : tuples_accepted(0), tuples_processed(0), vectors_processed(0) {
+		SelectivityStats() : tuples_accepted(0), tuples_processed(0), vectors_processed(0) {
 		}
 
 		void Update(const idx_t accepted, const idx_t processed) {
@@ -45,10 +43,10 @@ public:
 		}
 	};
 
-	enum class State: uint8_t {
-		Uninitialized,  // not initialized and cannot be populated or probed
-		Active,			// ready and in use
-		Pause			// ready to use but not in use currently, e.g., not selective enough
+	enum class State : uint8_t {
+		Uninitialized, // not initialized and cannot be populated or probed
+		Active,        // ready and in use
+		Pause          // ready to use but not in use currently, e.g., not selective enough
 	};
 
 	CacheSectorizedBloomFilter() = default;
@@ -73,14 +71,11 @@ public:
 
 	bool IsActive() const {
 		return state.load() == State::Active;
-
 	}
 
-
 private:
-
 	SelectivityStats selectivity_data;
-	atomic<State> state{State::Uninitialized};
+	atomic<State> state {State::Uninitialized};
 	idx_t num_sectors;
 
 	AllocatedData buf_;
@@ -138,7 +133,7 @@ public:
 
 private:
 	void HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
-	                         BloomFilterState &state) const;
+	                  BloomFilterState &state) const;
 
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;

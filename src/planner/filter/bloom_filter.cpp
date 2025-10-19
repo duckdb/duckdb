@@ -10,7 +10,7 @@ static constexpr idx_t LOG_SECTOR_SIZE = 5;
 static constexpr idx_t SIMD_BATCH_SIZE = 16;
 
 // number of vectors to check before deciding on selectivity
-static constexpr id_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
+static constexpr idx_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
 // if the selectivity is higher than this, we disable the BF
 static constexpr double SELECTIVITY_THRESHOLD = 0.33;
 
