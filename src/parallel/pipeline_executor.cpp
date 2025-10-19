@@ -221,7 +221,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				}
 			}
 		} else if (!exhausted_source || next_batch_blocked) {
-			SourceResultType source_result;
+			SourceResultType source_result = SourceResultType::BLOCKED;
 			if (!next_batch_blocked) {
 				// "Regular" path: fetch a chunk from the source and push it through the pipeline
 				source_chunk.Reset();
@@ -243,7 +243,6 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			}
 
 			if (exhausted_source && source_chunk.size() == 0) {
-				// To ensure that we're not early-terminating the pipeline
 				continue;
 			}
 
