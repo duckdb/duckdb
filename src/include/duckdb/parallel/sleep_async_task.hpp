@@ -9,7 +9,7 @@ namespace duckdb {
 
 class SleepAsyncTask : public AsyncTask {
 public:
-	SleepAsyncTask(idx_t sleep_for) : sleep_for(sleep_for) {
+	explicit SleepAsyncTask(idx_t sleep_for) : sleep_for(sleep_for) {
 	}
 	void Execute() override {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_for));
@@ -19,7 +19,7 @@ public:
 
 class ThrowAsyncTask : public AsyncTask {
 public:
-	ThrowAsyncTask(idx_t sleep_for) : sleep_for(sleep_for) {
+	explicit ThrowAsyncTask(idx_t sleep_for) : sleep_for(sleep_for) {
 	}
 	void Execute() override {
 		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_for));
