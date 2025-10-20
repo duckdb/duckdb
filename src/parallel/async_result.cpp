@@ -21,6 +21,7 @@ public:
 	}
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		async_task->Execute();
+		D_ASSERT(counter->counter.load() > 0);
 		if (--counter->counter == 0) {
 			interrupt_state.Callback();
 		}
@@ -33,7 +34,7 @@ public:
 
 private:
 	unique_ptr<AsyncTask> async_task;
-	InterruptState &interrupt_state;
+	InterruptState interrupt_state;
 	shared_ptr<Counter> counter;
 };
 
