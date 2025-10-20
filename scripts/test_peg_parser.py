@@ -1,7 +1,7 @@
 import argparse
 import os
-import sqllogictest
-from sqllogictest import SQLParserException, SQLLogicParser, SQLLogicTest
+import duckdb_sqllogictest
+from duckdb_sqllogictest import SQLParserException, SQLLogicParser, SQLLogicTest
 import subprocess
 import multiprocessing
 import tempfile
@@ -120,24 +120,24 @@ def parse_test_file(filename):
     loop_count = 0
     statements = []
     for stmt in out.statements:
-        if type(stmt) is sqllogictest.statement.skip.Skip:
+        if type(stmt) is duckdb_sqllogictest.statement.skip.Skip:
             # mode skip - just skip entire test
             break
-        if type(stmt) is sqllogictest.statement.loop.Loop or type(stmt) is sqllogictest.statement.foreach.Foreach:
+        if type(stmt) is duckdb_sqllogictest.statement.loop.Loop or type(stmt) is duckdb_sqllogictest.statement.foreach.Foreach:
             loop_count += 1
-        if type(stmt) is sqllogictest.statement.endloop.Endloop:
+        if type(stmt) is duckdb_sqllogictest.statement.endloop.Endloop:
             loop_count -= 1
         if loop_count > 0:
             # loops are ignored currently
             continue
         if not (
-            type(stmt) is sqllogictest.statement.query.Query or type(stmt) is sqllogictest.statement.statement.Statement
+            type(stmt) is duckdb_sqllogictest.statement.query.Query or type(stmt) is duckdb_sqllogictest.statement.statement.Statement
         ):
             # only handle query and statement nodes for now
             continue
-        if type(stmt) is sqllogictest.statement.statement.Statement:
+        if type(stmt) is duckdb_sqllogictest.statement.Statement:
             # skip expected errors
-            if stmt.expected_result.type == sqllogictest.ExpectedResult.Type.ERROR:
+            if stmt.expected_result.type == duckdb_sqllogictest.ExpectedResult.Type.ERROR:
                 if any(
                     "parser error" in line.lower() or "syntax error" in line.lower()
                     for line in stmt.expected_result.lines
