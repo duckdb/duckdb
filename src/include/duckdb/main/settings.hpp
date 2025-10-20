@@ -249,17 +249,6 @@ struct AutoloadKnownExtensionsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct BlockMemoryPoolSizeSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "block_memory_pool_size";
-	static constexpr const char *Description =
-	    "Size of the memory pool for fixed-size blocks that is retained once used.";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct CatalogErrorMaxSchemasSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "catalog_error_max_schemas";

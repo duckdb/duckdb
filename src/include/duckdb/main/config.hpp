@@ -220,8 +220,6 @@ struct DBConfigOptions {
 #endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
-	//! Size of the memory pool for fixed-size blocks that is retained once used
-	idx_t block_memory_pool_size = 0;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

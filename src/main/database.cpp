@@ -92,9 +92,7 @@ DatabaseInstance::~DatabaseInstance() {
 	buffer_manager.reset();
 
 	// flush allocations and disable the background thread
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
+	config.block_allocator->FlushAll();
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
@@ -457,8 +455,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.allocator = make_uniq<Allocator>();
 	}
 	config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, config.options.default_block_alloc_size,
-	                                                   DBConfig::GetSystemAvailableMemory(*config.file_system),
-	                                                   config.options.block_memory_pool_size);
+	                                                   DBConfig::GetSystemAvailableMemory(*config.file_system));
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	config.parser_extensions = std::move(new_config.parser_extensions);
 	config.error_manager = std::move(new_config.error_manager);
@@ -471,7 +468,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.buffer_pool) {
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
-		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory,
+		config.buffer_pool = make_shared_ptr<BufferPool>(*config.block_allocator, config.options.maximum_memory,
 		                                                 config.options.buffer_manager_track_eviction_timestamps,
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}

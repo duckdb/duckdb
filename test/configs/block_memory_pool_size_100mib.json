@@ -1,5 +1,0 @@
-{
-  "description": "Run with block_memory_pool_size set to 100 MiB.",
-  "on_init": "SET block_memory_pool_size='100MiB';",
-  "skip_compiled": "true"
-}

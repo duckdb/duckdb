@@ -11,6 +11,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 
@@ -282,9 +283,7 @@ void AttachedDatabase::Close() {
 	storage.reset();
 	stored_database_path.reset();
 
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
+	BlockAllocator::Get(db).FlushAll();
 }
 
 } // namespace duckdb

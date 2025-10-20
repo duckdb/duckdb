@@ -31,7 +31,6 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
-#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 
@@ -415,25 +414,6 @@ Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
 		profiling_settings_str += StringUtil::Format("\"%s\": \"true\"", EnumUtil::ToString(entry));
 	}
 	return Value(StringUtil::Format("{%s}", profiling_settings_str));
-}
-
-//===----------------------------------------------------------------------===//
-// Block Memory Pool Size
-//===----------------------------------------------------------------------===//
-void BlockMemoryPoolSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.block_memory_pool_size = DBConfig::ParseMemoryLimit(input.ToString());
-	if (db) {
-		BlockAllocator::Get(*db).Resize(config.options.block_memory_pool_size);
-	}
-}
-
-void BlockMemoryPoolSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	SetGlobal(db, config, StringUtil::BytesToHumanReadableString(0));
-}
-
-Value BlockMemoryPoolSizeSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.options.block_memory_pool_size));
 }
 
 //===----------------------------------------------------------------------===//

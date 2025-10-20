@@ -27,80 +27,86 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 	// Windows returns nullptr if the map fails
 	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_READWRITE));
 #else
-	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	// Some safety when assertions are enabled
+#if defined(D_ASSERT_IS_ENABLED)
+	auto flag = PROT_NONE;
+#else
+	auto flag = PROT_READ | PROT_WRITE;
+#endif
+
+	const auto ptr = mmap(nullptr, size, flag, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
 #endif
 }
 
 static void FreeVirtualMemory(const data_ptr_t pointer, const idx_t size) {
+	bool success;
 #if defined(_WIN32)
-	if (!VirtualFree(pointer, 0, MEM_RELEASE)) {
-		throw InternalException("FreeVirtualMemory failed");
-	}
+	success = VirtualFree(pointer, 0, MEM_RELEASE);
 #else
-	if (munmap(pointer, size) != 0) {
+	success = munmap(pointer, size) == 0;
+#endif
+	if (!success) {
 		throw InternalException("FreeVirtualMemory failed");
 	}
-#endif
-}
-
-static void CommitMemory(const data_ptr_t pointer, const idx_t size) {
-#if defined(_WIN32)
-	// Windows cannot do this lazily
-	if (!VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE)) {
-		throw InternalException("ReturnMemory failed");
-	}
-#endif
 }
 
 static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 	bool success;
 #if defined(_WIN32)
-	success = VirtualAlloc(pointer, size, MEM_RESET, PAGE_READWRITE);
-#elif defined(__APPLE__)
+	success = VirtualFree(pointer, size, MEM_DECOMMIT);
+#else
+	// Unix
+#if defined(__APPLE__)
 	success = madvise(pointer, size, MADV_FREE_REUSABLE) == 0;
 #else
-	success = madvise(pointer, size, MADV_FREE) == 0;
+	success = madvise(pointer, size, MADV_DONTNEED) == 0;
+#endif
+
+#if defined(D_ASSERT_IS_ENABLED)
+	// Some safety when assertions are enabled
+	success &= mprotect(pointer, size, PROT_NONE) == 0;
+#endif
+
 #endif
 	if (!success) {
-		throw InternalException("ReturnMemory failed");
+		throw InternalException("OnDeallocation failed");
 	}
 }
 
-static void OnSubsequentAllocation(const data_ptr_t pointer, const idx_t size) {
-}
-
-static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
+static void OnAllocation(const data_ptr_t pointer, const idx_t size) {
+	bool success = true;
 #if defined(_WIN32)
-	// Windows cannot do this lazily
-	if (!VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE)) {
-		throw InternalException("OnFirstAllocation failed");
-	}
+	success = VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE);
+#elif defined(D_ASSERT_IS_ENABLED)
+	success = mprotect(pointer, size, PROT_READ | PROT_WRITE) == 0;
 #endif
+
+	if (!success) {
+		throw InternalException("OnAllocation failed");
+	}
 }
 
 //===--------------------------------------------------------------------===//
 // BlockAllocator
 //===--------------------------------------------------------------------===//
-typedef duckdb_moodycamel::ConcurrentQueue<uint32_t> block_queue_t;
-
 struct BlockQueue {
-	block_queue_t q;
+	duckdb_moodycamel::ConcurrentQueue<uint32_t> q;
 };
 
-BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p, const idx_t virtual_memory_size_p,
-                               const idx_t physical_memory_size)
+BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p, const idx_t virtual_memory_size_p)
     : allocator(allocator_p), block_size(block_size_p), block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)),
-      virtual_memory_space(AllocateVirtualMemory(virtual_memory_size)), physical_memory_size(0),
-      untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()),
-      to_free(make_unsafe_uniq<BlockQueue>()) {
+      virtual_memory_space(AllocateVirtualMemory(virtual_memory_size)), untouched(make_unsafe_uniq<BlockQueue>()),
+      touched(make_unsafe_uniq<BlockQueue>()), to_free(make_unsafe_uniq<BlockQueue>()) {
 	D_ASSERT(IsPowerOfTwo(block_size));
-	Resize(physical_memory_size);
+	Resize();
 }
 
 BlockAllocator::~BlockAllocator() {
-	FreeVirtualMemory(virtual_memory_space, virtual_memory_size);
+	if (IsActive()) {
+		FreeVirtualMemory(virtual_memory_space, virtual_memory_size);
+	}
 }
 
 BlockAllocator &BlockAllocator::Get(DatabaseInstance &db) {
@@ -111,23 +117,15 @@ BlockAllocator &BlockAllocator::Get(AttachedDatabase &db) {
 	return Get(db.GetDatabase());
 }
 
-void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
-	lock_guard<mutex> guard(physical_memory_size_lock);
-	if (new_physical_memory_size < physical_memory_size) {
-		const string setting_name = BlockMemoryPoolSizeSetting::Name;
-		throw InvalidInputException("%s cannot be reduced (current: %s)", setting_name,
-		                            StringUtil::BytesToHumanReadableString(physical_memory_size));
+void BlockAllocator::Resize() const {
+	if (!IsActive()) {
+		return;
 	}
-
-	// Determine start/end, then update physical memory size before enqueueing
-	// This allows us to verify that block IDs are within the range with VerifyBlockID without the lock
-	const auto start = NumericCast<uint32_t>(physical_memory_size / block_size);
-	const auto end = NumericCast<uint32_t>(new_physical_memory_size / block_size);
-	physical_memory_size = new_physical_memory_size;
 
 	// Enqueue block IDs efficiently in batches
 	uint32_t block_ids[STANDARD_VECTOR_SIZE];
-	for (uint32_t block_id = start; block_id < end; block_id += STANDARD_VECTOR_SIZE) {
+	const auto end = NumericCast<uint32_t>(virtual_memory_size / block_size);
+	for (uint32_t block_id = 0; block_id < end; block_id += STANDARD_VECTOR_SIZE) {
 		const auto next = MinValue<idx_t>(end - block_id, STANDARD_VECTOR_SIZE);
 		for (uint32_t i = 0; i < next; i++) {
 			block_ids[i] = block_id + i;
@@ -137,7 +135,7 @@ void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
 }
 
 bool BlockAllocator::IsActive() const {
-	return physical_memory_size.load(std::memory_order_relaxed) != 0 && virtual_memory_space;
+	return virtual_memory_space;
 }
 
 bool BlockAllocator::IsInPool(const data_ptr_t pointer) const {
@@ -162,7 +160,7 @@ uint32_t BlockAllocator::GetBlockID(const data_ptr_t pointer) const {
 }
 
 void BlockAllocator::VerifyBlockID(const uint32_t block_id) const {
-	D_ASSERT(block_id < NumericCast<uint32_t>(physical_memory_size / block_size));
+	D_ASSERT(block_id < NumericCast<uint32_t>(virtual_memory_size / block_size));
 }
 
 data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
@@ -170,7 +168,7 @@ data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
 	return virtual_memory_space + NumericCast<idx_t>(block_id) * block_size;
 }
 
-data_ptr_t BlockAllocator::AllocateData(const idx_t size) {
+data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 	if (!IsActive() || size != block_size) {
 		return allocator.AllocateData(size);
 	}
@@ -179,10 +177,8 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) {
 	uint32_t block_id;
 	if (to_free->q.try_dequeue(block_id)) {
 		// NOP: we didn't free this one yet, can immediately reuse
-	} else if (touched->q.try_dequeue(block_id)) {
-		OnFirstAllocation(GetPointer(block_id), size);
-	} else if (untouched->q.try_dequeue(block_id)) {
-		OnSubsequentAllocation(GetPointer(block_id), size);
+	} else if (touched->q.try_dequeue(block_id) || untouched->q.try_dequeue(block_id)) {
+		OnAllocation(GetPointer(block_id), size);
 	} else {
 		// We did not get a block ID, use fallback allocator
 		return allocator.AllocateData(size);
@@ -191,7 +187,7 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) {
 	return GetPointer(block_id);
 }
 
-void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) {
+void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
 	if (!IsActive() || !IsInPool(pointer)) {
 		return allocator.FreeData(pointer, size);
 	}
@@ -206,7 +202,7 @@ void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) {
 	}
 }
 
-data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t old_size, const idx_t new_size) {
+data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t old_size, const idx_t new_size) const {
 	if (old_size == new_size) {
 		return pointer;
 	}
@@ -223,7 +219,14 @@ data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t 
 	return new_pointer;
 }
 
-void BlockAllocator::FreeInternal() {
+void BlockAllocator::FlushAll() const {
+	FreeInternal();
+	if (Allocator::SupportsFlush()) {
+		Allocator::FlushAll();
+	}
+}
+
+void BlockAllocator::FreeInternal() const {
 	const unique_lock<mutex> guard(to_free_lock, std::try_to_lock);
 	if (!guard.owns_lock()) {
 		return;
@@ -263,7 +266,7 @@ void BlockAllocator::FreeInternal() {
 	} while (to_free->q.size_approx() >= TO_FREE_SIZE_THRESHOLD);
 }
 
-void BlockAllocator::FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) {
+void BlockAllocator::FreeContiguousBlocks(const uint32_t block_id_start, const uint32_t block_id_end_including) const {
 	const auto pointer = GetPointer(block_id_start);
 	const auto num_blocks = block_id_end_including - block_id_start + 1;
 	const auto size = num_blocks * block_size;

@@ -5,6 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
@@ -563,9 +564,7 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		}
 	}
 	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
+	BlockAllocator::Get(db).FlushAll();
 #endif
 }
 
