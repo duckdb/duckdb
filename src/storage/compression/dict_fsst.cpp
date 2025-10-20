@@ -190,12 +190,13 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 			scan_state.filter_result = make_unsafe_uniq_array<bool>(scan_state.dict_count);
 
 			// apply the filter
+			auto &dict_data = scan_state.dictionary->data;
 			UnifiedVectorFormat vdata;
-			scan_state.dictionary->ToUnifiedFormat(scan_state.dict_count, vdata);
+			dict_data.ToUnifiedFormat(scan_state.dict_count, vdata);
 			SelectionVector dict_sel;
 			idx_t filter_count = scan_state.dict_count;
-			ColumnSegment::FilterSelection(dict_sel, *scan_state.dictionary, vdata, filter, filter_state,
-			                               scan_state.dict_count, filter_count);
+			ColumnSegment::FilterSelection(dict_sel, dict_data, vdata, filter, filter_state, scan_state.dict_count,
+			                               filter_count);
 
 			// now set all matching tuples to true
 			for (idx_t i = 0; i < filter_count; i++) {
@@ -220,8 +221,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 		sel_count = approved_tuple_count;
 
-		result.Dictionary(*(scan_state.dictionary), scan_state.dict_count, dict_sel, vector_count);
-		DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
+		result.Dictionary(scan_state.dictionary, dict_sel);
 		return;
 	}
 	// fallback: scan + filter

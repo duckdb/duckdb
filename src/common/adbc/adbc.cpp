@@ -659,12 +659,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		std::ostringstream create_table;
 		create_table << "CREATE TABLE ";
 		if (schema) {
-			create_table << schema << ".";
+			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
 		}
-		create_table << table_name << " (";
+		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) << " (";
 		for (idx_t i = 0; i < types.size(); i++) {
-			create_table << names[i] << " ";
-			create_table << types[i].ToString();
+			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(names[i]);
+			create_table << " " << types[i].ToString();
 			if (i + 1 < types.size()) {
 				create_table << ", ";
 			}
