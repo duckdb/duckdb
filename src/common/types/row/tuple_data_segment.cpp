@@ -15,7 +15,7 @@ void TupleDataChunkPart::SetHeapEmpty() {
 	base_heap_ptr = nullptr;
 }
 
-TupleDataChunk::TupleDataChunk() : count(0), lock(make_unsafe_uniq<mutex>()) {
+TupleDataChunk::TupleDataChunk(mutex &lock_p) : count(0), lock(lock_p) {
 }
 
 static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noexcept {
@@ -26,7 +26,7 @@ static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noex
 	std::swap(a.lock, b.lock);
 }
 
-TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept : count(0) {
+TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept : count(0), lock(other.lock) {
 	SwapTupleDataChunk(*this, other);
 }
 
@@ -41,7 +41,7 @@ TupleDataChunkPart &TupleDataChunk::AddPart(TupleDataSegment &segment, TupleData
 	if (!segment.layout.AllConstant() && part.total_heap_size > 0) {
 		heap_block_ids.Insert(part.heap_block_index);
 	}
-	part.lock = *lock;
+	part.lock = lock;
 	part_ids.Insert(UnsafeNumericCast<uint32_t>(segment.chunk_parts.size()));
 	segment.chunk_parts.emplace_back(std::move(part));
 	return segment.chunk_parts.back();
@@ -98,7 +98,8 @@ void TupleDataChunk::MergeLastChunkPart(TupleDataSegment &segment) {
 }
 
 TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
-    : allocator(std::move(allocator_p)), layout(allocator->GetLayout()), count(0), data_size(0) {
+    : allocator(std::move(allocator_p)), layout(allocator->GetLayout()), count(0), data_size(0),
+      pinned_row_handles(allocator->GetStlAllocator()), pinned_heap_handles(allocator->GetStlAllocator()) {
 	// We initialize these with plenty of room so that we can avoid allocations
 	static constexpr idx_t CHUNK_RESERVATION = 64;
 	chunks.reserve(CHUNK_RESERVATION);

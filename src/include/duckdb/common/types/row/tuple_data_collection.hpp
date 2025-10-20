@@ -49,8 +49,10 @@ class TupleDataCollection {
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
-	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr);
-	TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr);
+	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr,
+	                    shared_ptr<ArenaAllocator> stl_allocator = nullptr);
+	TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr,
+	                    shared_ptr<ArenaAllocator> stl_allocator = nullptr);
 
 	~TupleDataCollection();
 
@@ -266,6 +268,8 @@ private:
 	//! The layout of the TupleDataCollection
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
+	//! Shared allocator for STL allocations
+	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The TupleDataAllocator
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection
@@ -273,11 +277,11 @@ private:
 	//! The size (in bytes) of this TupleDataCollection
 	idx_t data_size;
 	//! The data segments of the TupleDataCollection
-	unsafe_vector<unsafe_unique_ptr<TupleDataSegment>> segments;
+	unsafe_arena_vector<unsafe_unique_ptr<TupleDataSegment>> segments;
 	//! The set of scatter functions
-	vector<TupleDataScatterFunction> scatter_functions;
+	unsafe_arena_vector<TupleDataScatterFunction> scatter_functions;
 	//! The set of gather functions
-	vector<TupleDataGatherFunction> gather_functions;
+	unsafe_arena_vector<TupleDataGatherFunction> gather_functions;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 };

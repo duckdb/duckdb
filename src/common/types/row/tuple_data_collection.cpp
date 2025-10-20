@@ -12,14 +12,19 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p)
+TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
+                                         shared_ptr<ArenaAllocator> stl_allocator_p)
     : layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr),
-      allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr)) {
+      stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
+                                    : make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())),
+      allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, stl_allocator)),
+      segments(*stl_allocator), scatter_functions(*stl_allocator), gather_functions(*stl_allocator) {
 	Initialize();
 }
 
-TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr)
-    : TupleDataCollection(BufferManager::GetBufferManager(context), std::move(layout_ptr)) {
+TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr,
+                                         shared_ptr<ArenaAllocator> stl_allocator)
+    : TupleDataCollection(BufferManager::GetBufferManager(context), std::move(layout_ptr), std::move(stl_allocator)) {
 }
 
 TupleDataCollection::~TupleDataCollection() {
