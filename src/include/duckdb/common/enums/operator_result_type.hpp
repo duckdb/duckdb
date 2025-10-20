@@ -43,12 +43,16 @@ enum class OperatorFinalResultType : uint8_t { FINISHED, BLOCKED };
 enum class SourceResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
 
 //! AsyncResultType is used to indicate the result of a AsyncResult, in the context of a wider operation being executed
-//! on a Source There are five possible results: INVALID means the current AsyncResult is in an invalid state (eg. it's
-//! in the process of being initialized) IMPLICIT means impliying the result from the context (that is, in the case of
-//! TableFunctions: FINISHED if output is empty and HAVE_MORE_OUTPUT otherwise) HAVE_MORE_OUTPUT means the source has
-//! more output, and should be queried again FINISHED means the source is exhausted BLOCKED means the source is
-//! currently blocked, and the AsyncResult should hold the vector of AsyncTasks to be scheduled to trigger progress
-enum class AsyncResultType : uint8_t { INVALID, IMPLICIT, HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
+enum class AsyncResultType : uint8_t {
+	INVALID,  // current result is in an invalid state (eg: it's in the process of being initialized)
+	IMPLICIT, // current result depends on external context (eg: in the context of TableFunctions, either FINISHED or
+	          // ONGOING depending on output_chunk.size())
+	ONGOING,  // current result is not completed, finished (eg: in the context of TableFunctions, function accept more
+	          // iterations and might producer further results)
+	FINISHED, // current result is completed, no subsequent calls on the same state should be attempted
+	BLOCKED   // current result is blocked, no subsequent calls on the same state should be attempted, BLOCKED migth be
+	          // associated with a vector of AsycnTasks to be scheduled
+};
 
 bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out);
 

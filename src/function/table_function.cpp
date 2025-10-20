@@ -80,7 +80,7 @@ bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out) {
 	case AsyncResultType::IMPLICIT:
 	case AsyncResultType::INVALID:
 		return false;
-	case AsyncResultType::HAVE_MORE_OUTPUT:
+	case AsyncResultType::ONGOING:
 		out = SourceResultType::HAVE_MORE_OUTPUT;
 		break;
 	case AsyncResultType::FINISHED:
@@ -96,7 +96,7 @@ bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out) {
 AsyncResultType GetAsyncResultType(SourceResultType s) {
 	switch (s) {
 	case SourceResultType::HAVE_MORE_OUTPUT:
-		return AsyncResultType::HAVE_MORE_OUTPUT;
+		return AsyncResultType::ONGOING;
 	case SourceResultType::FINISHED:
 		return AsyncResultType::FINISHED;
 	case SourceResultType::BLOCKED:

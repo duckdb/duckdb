@@ -635,7 +635,7 @@ const StringUtil::EnumStringLiteral *GetAsyncResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AsyncResultType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(AsyncResultType::IMPLICIT), "IMPLICIT" },
-		{ static_cast<uint32_t>(AsyncResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
+		{ static_cast<uint32_t>(AsyncResultType::ONGOING), "ONGOING" },
 		{ static_cast<uint32_t>(AsyncResultType::FINISHED), "FINISHED" },
 		{ static_cast<uint32_t>(AsyncResultType::BLOCKED), "BLOCKED" }
 	};
