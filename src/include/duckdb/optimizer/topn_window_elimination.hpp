@@ -66,9 +66,12 @@ private:
 	                                                           vector<unique_ptr<Expression>> &aggregate_payload);
 
 	// Semi-join reduction methods
-	unique_ptr<LogicalOperator> TryReplaceTableScanForSemiJoin(const LogicalWindow &window,
-	                                                           const vector<unique_ptr<Expression>> &args,
-	                                                           idx_t topmost_table_idx);
+	unique_ptr<LogicalOperator> TryPrepareLateMaterialization(const LogicalWindow &window,
+	                                                          vector<unique_ptr<Expression>> &args,
+	                                                          idx_t topmost_table_idx);
+
+	bool CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
+	                               vector<idx_t> &projections, vector<reference<LogicalOperator>> &stack);
 
 private:
 	ClientContext &context;

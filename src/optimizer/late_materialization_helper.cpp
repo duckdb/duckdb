@@ -6,7 +6,7 @@ unique_ptr<LogicalGet> LateMaterializationHelper::CreateLHSGet(const LogicalGet 
 	// we need to construct a new scan of the same table
 	auto table_index = binder.GenerateTableIndex();
 	auto new_get = make_uniq<LogicalGet>(table_index, rhs.function, rhs.bind_data->Copy(), rhs.returned_types,
-										 rhs.names, rhs.virtual_columns);
+	                                     rhs.names, rhs.virtual_columns);
 	new_get->GetMutableColumnIds() = rhs.GetColumnIds();
 	new_get->projection_ids = rhs.projection_ids;
 	new_get->parameters = rhs.parameters;
