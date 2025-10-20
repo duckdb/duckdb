@@ -628,7 +628,7 @@ public:
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
 			}
-			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
+			if (res.GetResultType() == AsyncResultType::ONGOING) {
 				// Loop back to the same block
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				return;
