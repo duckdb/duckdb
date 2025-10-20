@@ -60,7 +60,7 @@ static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 #if defined(__APPLE__)
 	success = madvise(pointer, size, MADV_FREE_REUSABLE) == 0;
 #else
-	success = madvise(pointer, size, MADV_DONTNEED) == 0;
+	success = madvise(pointer, size, MADV_FREE) == 0;
 #endif
 
 #if defined(D_ASSERT_IS_ENABLED)
