@@ -302,7 +302,7 @@ public:
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
-	DUCKDB_API void SetOption(const string &name, Value value);
+	DUCKDB_API void SetOption(const String &name, Value value);
 	DUCKDB_API void ResetOption(const String &name);
 	DUCKDB_API void ResetGenericOption(const String &name);
 	static LogicalType ParseLogicalType(const string &type);
