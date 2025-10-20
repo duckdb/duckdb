@@ -67,11 +67,11 @@ private:
 
 	// Semi-join reduction methods
 	unique_ptr<LogicalOperator> TryPrepareLateMaterialization(const LogicalWindow &window,
-	                                                          vector<unique_ptr<Expression>> &args,
-	                                                          idx_t topmost_table_idx);
+	                                                          vector<unique_ptr<Expression>> &args);
 	unique_ptr<LogicalOperator> ConstructLHS(LogicalGet &rhs, vector<idx_t> &projections) const;
-	unique_ptr<LogicalOperator> ConstructJoin(unique_ptr<LogicalOperator> lhs, unique_ptr<LogicalOperator> rhs,
-	                                          idx_t rhs_rowid_idx, const TopNWindowEliminationParameters &params);
+	static unique_ptr<LogicalOperator> ConstructJoin(unique_ptr<LogicalOperator> lhs, unique_ptr<LogicalOperator> rhs,
+	                                                 idx_t rhs_rowid_idx,
+	                                                 const TopNWindowEliminationParameters &params);
 	bool CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
 	                               vector<idx_t> &projections, vector<reference<LogicalOperator>> &stack);
 

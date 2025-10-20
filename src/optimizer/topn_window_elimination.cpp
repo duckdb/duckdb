@@ -185,8 +185,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	unique_ptr<LogicalOperator> late_mat_lhs = nullptr;
 	if (params.payload_type == TopNPayloadType::STRUCT_PACK) {
 		// Try circumventing struct-packing with late materialization
-		const auto topmost_table_idx = optimizer.binder.GenerateTableIndex();
-		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload, topmost_table_idx);
+		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload);
 		if (late_mat_lhs) {
 			params.payload_type = TopNPayloadType::SINGLE_COLUMN;
 		}
@@ -277,6 +276,21 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	aggregate->groups = std::move(window_expr.partitions);
 	aggregate->children.push_back(std::move(window.children[0]));
 	aggregate->ResolveOperatorTypes();
+
+	aggregate->group_stats.resize(aggregate->groups.size());
+	for (idx_t i = 0; i < aggregate->groups.size(); i++) {
+		auto &group = aggregate->groups[i];
+		if (group->type == ExpressionType::BOUND_COLUMN_REF) {
+			auto &column_ref = group->Cast<BoundColumnRefExpression>();
+			if (stats) {
+				auto group_stats = stats->find(column_ref.binding);
+				if (group_stats == stats->end()) {
+					continue;
+				}
+				aggregate->group_stats[i] = group_stats->second->ToUnique();
+			}
+		}
+	}
 
 	return unique_ptr<LogicalOperator>(std::move(aggregate));
 }
@@ -814,8 +828,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window,
-                                                                                 vector<unique_ptr<Expression>> &args,
-                                                                                 const idx_t topmost_table_idx) {
+                                                                                 vector<unique_ptr<Expression>> &args) {
 	vector<idx_t> lhs_projections;
 	vector<reference<LogicalOperator>> stack;
 	bool use_late_materialization = CanUseLateMaterialization(window, args, lhs_projections, stack);
