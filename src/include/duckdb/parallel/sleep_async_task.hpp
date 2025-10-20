@@ -1,0 +1,31 @@
+#include "duckdb/parallel/async_result.hpp"
+
+#include <chrono>
+#include <thread>
+#include <iostream>
+#pragma once
+
+namespace duckdb {
+
+class SleepAsyncTask : public AsyncTask {
+public:
+	SleepAsyncTask(idx_t sleep_for) : sleep_for(sleep_for) {
+	}
+	void Execute() override {
+		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_for));
+	}
+	const idx_t sleep_for;
+};
+
+class ThrowAsyncTask : public AsyncTask {
+public:
+	ThrowAsyncTask(idx_t sleep_for) : sleep_for(sleep_for) {
+	}
+	void Execute() override {
+		std::this_thread::sleep_for(std::chrono::milliseconds(sleep_for));
+		throw NotImplementedException("ThrowAsyncTask: Test error handling when throwing mid-task");
+	}
+	const idx_t sleep_for;
+};
+
+} // namespace duckdb
