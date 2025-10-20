@@ -19,7 +19,9 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
 	idx_t sub_column_index = 1;
 	auto unshredded_type = LogicalType::STRUCT(StructType::GetChildTypes(type));
 	sub_columns.push_back(
-	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, start_row, unshredded_type, this));
+	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index++, start_row, unshredded_type, this));
+	sub_columns.push_back(
+	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index++, start_row, unshredded_type, this));
 }
 
 void VariantColumnData::SetStart(idx_t new_start) {
@@ -168,7 +170,7 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 
 	//! FIXME: We could potentially use the min/max stats of the 'type_id' column to skip the iteration in
 	//! 'VariantStats' if they are the same, and there are no children (i.e, only primitives)
-	for (idx_t i = 0; i < 1; i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->Append(VariantStats::GetUnshreddedStats(stats), state.child_appends[i + 1], vector, count);
 	}
 	this->count += count;
@@ -305,10 +307,7 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
-
-	// auto unshredded_type = VariantStats::GetUnshreddedType();
-	// dummy = ColumnData::CreateColumnUnique(block_manager, info, 2, sub_columns[0]->start, unshredded_type, this);
-	// checkpoint_state->child_states.push_back(dummy->Checkpoint(row_group, checkpoint_info));
+	checkpoint_state->child_states.push_back(sub_columns[1]->Checkpoint(row_group, checkpoint_info));
 	return std::move(checkpoint_state);
 }
 
@@ -349,6 +348,7 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
 	sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
+	sub_columns[1]->InitializeColumn(column_data.child_columns[2], unshredded_stats);
 	this->count = validity.count.load();
 }
 
