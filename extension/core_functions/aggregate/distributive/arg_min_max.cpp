@@ -149,7 +149,8 @@ struct ArgMinMaxBase {
 		D_ASSERT(binary.input.bind_data);
 		const auto &bind_data = binary.input.bind_data->Cast<ArgMinMaxFunctionData>();
 
-		if (binary.right_mask.RowIsValid(binary.ridx) && COMPARATOR::Operation(y_data, state.value)) {
+		if (binary.right_mask.RowIsValid(binary.ridx) &&
+		    (state.val_null || COMPARATOR::Operation(y_data, state.value))) {
 			if (bind_data.null_handling != ArgMinMaxNullHandling::IGNORE_ANY_NULL ||
 			    binary.left_mask.RowIsValid(binary.lidx)) {
 				Assign(state, x_data, y_data, !binary.left_mask.RowIsValid(binary.lidx), false, binary.input);
