@@ -15,6 +15,9 @@ statement ok
 set allow_parser_override_extension=strict;
 
 statement ok
+ATTACH '__TEST_DIR__/first.db' (TYPE DUCKDB);
+
+statement ok
 ATTACH DATABASE ':memory:' AS database;
 
 statement ok
@@ -65,4 +68,5 @@ DETACH db2
 
 statement ok
 ATTACH '__TEST_DIR__/attach_read_only.db' AS db2 (READONLY 1);
+
 

@@ -85,6 +85,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
+	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformColumnReference);
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLiteralExpression);

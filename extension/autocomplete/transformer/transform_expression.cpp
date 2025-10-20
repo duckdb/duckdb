@@ -35,12 +35,25 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	return expr;
 }
 
-// ColumnName
+unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<string> column_names;
+	auto opt_identifiers = list_pr.Child<OptionalParseResult>(0);
+	if (opt_identifiers.HasResult()) {
+		auto repeat_identifiers = opt_identifiers.optional_result->Cast<RepeatParseResult>();
+		for (auto &child : repeat_identifiers.children) {
+			column_names.push_back(transformer.Transform<string>(child));
+		}
+	}
+	column_names.push_back(list_pr.Child<IdentifierParseResult>(1).identifier);
+	return make_uniq<ColumnRefExpression>(std::move(column_names));
+}
+
+// ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto identifiers = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
-	return make_uniq<ColumnRefExpression>(std::move(identifiers));
+	return transformer.Transform<unique_ptr<ColumnRefExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 unique_ptr<ParsedExpression>

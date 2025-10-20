@@ -388,6 +388,13 @@ public:
 	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
 	}
 
+	bool IsQuoted(const string &text) const {
+		if (text.front() == '"' && text.back() == '"') {
+			return true;
+		}
+		return false;
+	}
+
 	bool IsIdentifier(const string &text) const {
 		if (text.empty()) {
 			return false;
@@ -395,7 +402,7 @@ public:
 		if (text.front() == '\'' && text.back() == '\'' && SupportsStringLiteral()) {
 			return true;
 		}
-		if (text.front() == '"' && text.back() == '"') {
+		if (IsQuoted(text)) {
 			return true;
 		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
@@ -416,7 +423,9 @@ public:
 		if (!MatchIdentifier(state)) {
 			return nullptr;
 		}
-		Printer::PrintF("Matched identifier: %s", token_text);
+		if (IsQuoted(token_text)) {
+			token_text = token_text.substr(1, token_text.size() - 2);
+		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}
 
