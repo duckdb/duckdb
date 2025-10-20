@@ -420,15 +420,24 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 				auto &bbox = column_chunk.meta_data.geospatial_statistics.bbox;
 				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
 
-				stats_bbox.x_min = bbox.xmin;
-				stats_bbox.y_min = bbox.ymin;
-				stats_bbox.x_max = bbox.xmax;
-				stats_bbox.y_max = bbox.ymax;
-				if (bbox.__isset.zmin && bbox.__isset.zmax) {
+				// xmin > xmax is allowed if the geometry crosses the antimeridian,
+				// but we don't handle this right now
+				if (bbox.xmin <= bbox.xmax) {
+					stats_bbox.x_min = bbox.xmin;
+					stats_bbox.x_max = bbox.xmax;
+				}
+
+				if (bbox.ymin <= bbox.ymax) {
+					stats_bbox.y_min = bbox.ymin;
+					stats_bbox.y_max = bbox.ymax;
+				}
+
+				if (bbox.__isset.zmin && bbox.__isset.zmax && bbox.zmin <= bbox.zmax) {
 					stats_bbox.z_min = bbox.zmin;
 					stats_bbox.z_max = bbox.zmax;
 				}
-				if (bbox.__isset.mmin && bbox.__isset.mmax) {
+
+				if (bbox.__isset.mmin && bbox.__isset.mmax && bbox.mmin <= bbox.mmax) {
 					stats_bbox.m_min = bbox.mmin;
 					stats_bbox.m_max = bbox.mmax;
 				}
@@ -437,11 +446,14 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 				auto &types = column_chunk.meta_data.geospatial_statistics.geospatial_types;
 				auto &stats_types = GeometryStats::GetTypes(geo_stats);
 
-				// Make empty
-				stats_types.Clear();
+				// if types are set but empty, that still means "any type" - so we leave stats_types as-is (unknown)
+				// otherwise, clear and set to the actual types
 
-				for (auto &geom_type : types) {
-					stats_types.AddWKBType(geom_type);
+				if (!types.empty()) {
+					stats_types.Clear();
+					for (auto &geom_type : types) {
+						stats_types.AddWKBType(geom_type);
+					}
 				}
 			}
 		}
