@@ -268,7 +268,6 @@ duckdb_value duckdb_copy_function_bind_get_options(duckdb_copy_function_bind_inf
 	// return as struct of options
 	auto options_value = duckdb::MakeValueFromCopyOptions(options);
 	return reinterpret_cast<duckdb_value>(new duckdb::Value(options_value));
-	;
 }
 
 void duckdb_copy_function_bind_set_bind_data(duckdb_copy_function_bind_info info, void *bind_data,

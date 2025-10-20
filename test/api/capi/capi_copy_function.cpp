@@ -1,6 +1,8 @@
 #include "capi_tester.hpp"
 #include "duckdb.h"
 
+#include <cstring> // for strcmp
+
 using namespace duckdb;
 using namespace std;
 
@@ -34,7 +36,18 @@ struct MyCopyFunctionGlobalState {
 
 static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
 
-	duckdb_value options = duckdb_copy_function_bind_get_options(info);
+	// COVERAGE
+	duckdb_copy_function_bind_set_error(nullptr, "foo");
+	duckdb_copy_function_bind_set_error(info, nullptr);
+	duckdb_copy_function_bind_set_error(nullptr, nullptr);
+	REQUIRE(duckdb_copy_function_bind_get_column_count(nullptr) == 0);
+	REQUIRE(duckdb_copy_function_bind_get_column_type(nullptr, 0) == nullptr);
+	REQUIRE(duckdb_copy_function_bind_get_column_type(info, 9999) == nullptr);
+	REQUIRE(duckdb_copy_function_bind_get_options(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_bind_get_client_context(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_bind_get_extra_info(nullptr) == nullptr);
+
+	auto options = duckdb_copy_function_bind_get_options(info);
 	if (!options) {
 		duckdb_copy_function_bind_set_error(info, "No options given!");
 		return;
@@ -126,6 +139,17 @@ static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
 }
 
 static void MyCopyFunctionInit(duckdb_copy_function_global_init_info info) {
+
+	// COVERAGE
+	duckdb_copy_function_global_init_set_error(nullptr, "foo");
+	duckdb_copy_function_global_init_set_error(info, nullptr);
+	duckdb_copy_function_global_init_set_error(nullptr, nullptr);
+	REQUIRE(duckdb_copy_function_global_init_get_client_context(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_global_init_get_extra_info(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_global_init_get_bind_data(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_global_init_get_file_path(nullptr) == nullptr);
+	duckdb_copy_function_global_init_set_global_state(nullptr, nullptr, nullptr);
+
 	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_global_init_get_bind_data(info);
 	auto extra_info = (MyCopyFunctionExtraInfo *)duckdb_copy_function_global_init_get_extra_info(info);
 	auto client_context = duckdb_copy_function_global_init_get_client_context(info);
@@ -164,6 +188,16 @@ static void MyCopyFunctionInit(duckdb_copy_function_global_init_info info) {
 }
 
 static void MyCopyFunctionSink(duckdb_copy_function_sink_info info, duckdb_data_chunk input) {
+
+	// COVERAGE
+	duckdb_copy_function_sink_set_error(nullptr, "foo");
+	duckdb_copy_function_sink_set_error(info, nullptr);
+	duckdb_copy_function_sink_set_error(nullptr, nullptr);
+	REQUIRE(duckdb_copy_function_sink_get_client_context(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_sink_get_extra_info(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_sink_get_bind_data(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_sink_get_global_state(nullptr) == nullptr);
+
 	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_sink_get_bind_data(info);
 	auto g_state = (MyCopyFunctionGlobalState *)duckdb_copy_function_sink_get_global_state(info);
 
@@ -190,6 +224,16 @@ static void MyCopyFunctionSink(duckdb_copy_function_sink_info info, duckdb_data_
 }
 
 static void MyCopyFunctionFinalize(duckdb_copy_function_finalize_info info) {
+
+	// COVERAGE
+	duckdb_copy_function_finalize_set_error(nullptr, "foo");
+	duckdb_copy_function_finalize_set_error(info, nullptr);
+	duckdb_copy_function_finalize_set_error(nullptr, nullptr);
+	REQUIRE(duckdb_copy_function_finalize_get_client_context(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_finalize_get_extra_info(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_finalize_get_bind_data(nullptr) == nullptr);
+	REQUIRE(duckdb_copy_function_finalize_get_global_state(nullptr) == nullptr);
+
 	auto bind_data = (MyCopyFunctionBindData *)duckdb_copy_function_finalize_get_bind_data(info);
 	auto g_state = (MyCopyFunctionGlobalState *)duckdb_copy_function_finalize_get_global_state(info);
 
@@ -233,11 +277,19 @@ struct MyCopyFromFunctionState {
 
 static void MyCopyFromFunctionBind(duckdb_bind_info info) {
 
+	// COVERAGE
+	REQUIRE(duckdb_table_function_bind_get_result_column_count(nullptr) == 0);
+	REQUIRE(duckdb_table_function_bind_get_result_column_name(nullptr, 0) == nullptr);
+	REQUIRE(duckdb_table_function_bind_get_result_column_name(info, 9999) == nullptr);
+	REQUIRE(duckdb_table_function_bind_get_result_column_type(nullptr, 0) == nullptr);
+	REQUIRE(duckdb_table_function_bind_get_result_column_type(info, 9999) == nullptr);
+
 	// Ensure we have exactly one expected column of type BIGINT
 	auto result_column_count = duckdb_table_function_bind_get_result_column_count(info);
 	if (result_column_count != 1) {
 		auto error_msg = "MY_COPY: Expected exactly one target column!";
 		duckdb_bind_set_error(info, error_msg);
+		return;
 	}
 
 	for (idx_t i = 0; i < result_column_count; i++) {
@@ -332,9 +384,9 @@ static void MyCopyFromFunction(duckdb_function_info info, duckdb_data_chunk outp
 			// EOF
 			if (state->total_read_bytes < bind_data->min_size) {
 				duckdb_function_set_error(info, "Read too little data");
+				return;
 			}
 			break;
-			;
 		}
 
 		if (read_bytes < 0) {
@@ -508,6 +560,16 @@ TEST_CASE("Test Copy Functions in C API", "[capi]") {
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Target column 'i' is not of type BIGINT!"));
 	result = tester.Query("DROP TABLE my_varchar_table");
+	REQUIRE_NO_FAIL(*result);
+
+	// Read with two target columns
+	result = tester.Query("CREATE TABLE my_two_col_table(i BIGINT, j BIGINT)");
+	REQUIRE_NO_FAIL(*result);
+	result = tester.Query(StringUtil::Format(
+	    "COPY my_two_col_table FROM '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 10000)", file_path));
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Expected exactly one target column!"));
+	result = tester.Query("DROP TABLE my_two_col_table");
 	REQUIRE_NO_FAIL(*result);
 
 	// Read with unknown option
