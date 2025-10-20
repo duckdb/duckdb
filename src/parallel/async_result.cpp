@@ -21,7 +21,7 @@ public:
 	}
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		async_task->Execute();
-		if (counter->counter-- == 0) {
+		if (--counter->counter == 0) {
 			interrupt_state.Callback();
 		}
 		return TaskExecutionResult::TASK_FINISHED;
