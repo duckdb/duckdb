@@ -749,7 +749,7 @@ typedef struct _duckdb_copy_function_finalize_info {
 	void *internal_ptr;
 } * duckdb_copy_function_finalize_info;
 
-//! The bind function to use when preparing a COPY ... TO function.
+//! The bind function to use when binding a COPY ... TO function.
 typedef void (*duckdb_copy_function_bind_t)(duckdb_copy_function_bind_info info);
 
 //! The initialization function to use when initializing a COPY ... TO function.
