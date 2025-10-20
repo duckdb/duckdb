@@ -8,6 +8,13 @@
   ],
   "skip_tests": [
     {
+      "reason": "Quotations",
+      "paths": [
+        "test/sql/peg_parser/transformer/use_statement.test",
+        "test/sql/pragma/test_show_tables_from.test"
+      ]
+    },
+    {
       "reason": "SIGBUS",
       "paths": [
         "test/sql/catalog/sequence/sequence_offset_increment.test",

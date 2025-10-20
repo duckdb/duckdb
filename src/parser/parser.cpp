@@ -274,7 +274,6 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::ATTACH_STATEMENT:
 					case StatementType::DETACH_STATEMENT:
 						throw_error = true;
-						Printer::PrintF("Throwing error for %s", StatementTypeToString(statement_type));
 						break;
 					}
 					if (throw_error) {
