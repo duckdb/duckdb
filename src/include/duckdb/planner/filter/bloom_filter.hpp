@@ -79,7 +79,9 @@ private:
 	idx_t num_sectors;
 
 	AllocatedData buf_;
-	uint32_t *blocks;
+	uint64_t *blocks;
+
+	uint64_t spread_table[256 * 2];
 
 	// key_lo |5:bit3|5:bit2|5:bit1|  13:block    |4:sector1 | bit layout (32:total)
 	// key_hi |5:bit4|5:bit3|5:bit2|5:bit1|9:block|3:sector2 | bit layout (32:total)
@@ -89,8 +91,7 @@ private:
 	uint32_t GetSector1(uint32_t key_lo, uint32_t key_hi) const;
 	uint32_t GetSector2(uint32_t key_hi, uint32_t block1) const;
 
-	void LookupHashesInternal(const uint32_t *key_32, uint32_t *founds,
-													  const uint32_t *blocks, idx_t count) const;
+	void LookupHashesInternal(const uint64_t *hashes, uint32_t *founds, const uint64_t *blocks, idx_t count) const;
 
 	void InsertOne(uint32_t key_lo, uint32_t key_hi, uint32_t *bf) const;
 	bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const;
