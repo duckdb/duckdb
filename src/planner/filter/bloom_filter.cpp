@@ -29,9 +29,9 @@ void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t numb
 	state.store(BloomFilterState::Active);
 }
 
-void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes, const idx_t count) const {
+void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes_v, const idx_t count) const {
 
-	const auto hashes_64 = reinterpret_cast<const uint64_t *>(hashes.GetData());
+	const auto hashes_64 = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
 	const auto key_32 = reinterpret_cast<const uint32_t *__restrict>(hashes_64);
 
 	for (idx_t i = 0; i + SIMD_BATCH_SIZE <= count; i += SIMD_BATCH_SIZE) {
@@ -64,16 +64,39 @@ void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes, const idx_t 
 	}
 }
 
-idx_t CacheSectorizedBloomFilter::LookupHashes(const Vector &hashes, SelectionVector &result_sel,
+idx_t CacheSectorizedBloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel,
                                                const idx_t count) const {
 
-	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-	D_ASSERT(hashes.GetType() == LogicalType::HASH);
+	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 
-	const auto hashes_64 = reinterpret_cast<const uint64_t *>(hashes.GetData());
+	const auto hashes_64 = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
 	const auto key_32 = reinterpret_cast<const uint32_t *__restrict>(hashes_64);
 
+	auto found_bools = FlatVector::GetData<uint32_t>(found_v);
+
+	LookupHashesInternal(key_32, found_bools, blocks, count);
+
 	idx_t found_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		result_sel.set_index(found_count, i);
+		found_count += found_bools[i];
+	}
+	return found_count;
+}
+
+// void CacheSectorizedBloomFilter::LookupHashesInternal(const uint32_t *__restrict key_32, uint32_t *__restrict founds,
+//                                                       const uint32_t *__restrict bf, const idx_t count) const {
+//
+//
+// 	for (idx_t i = 0; i < count; i ++) {
+// 		founds[i] = LookupOne(key_32[i + i], key_32[i + i + 1], blocks);
+// 	}
+// }
+
+void CacheSectorizedBloomFilter::LookupHashesInternal(const uint32_t *__restrict key_32, uint32_t *__restrict founds,
+                                                      const uint32_t *__restrict bf, const idx_t count) const {
+
 	for (idx_t i = 0; i + SIMD_BATCH_SIZE <= count; i += SIMD_BATCH_SIZE) {
 		uint32_t block1[SIMD_BATCH_SIZE], mask1[SIMD_BATCH_SIZE];
 		uint32_t block2[SIMD_BATCH_SIZE], mask2[SIMD_BATCH_SIZE];
@@ -89,20 +112,14 @@ idx_t CacheSectorizedBloomFilter::LookupHashes(const Vector &hashes, SelectionVe
 		}
 
 		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
-			const bool hit =
-			    ((blocks[block1[j]] & mask1[j]) == mask1[j]) & ((blocks[block2[j]] & mask2[j]) == mask2[j]);
-			result_sel.set_index(found_count, i + j);
-			found_count += hit;
+			founds[i+j] = ((bf[block1[j]] & mask1[j]) == mask1[j]) & ((bf[block2[j]] & mask2[j]) == mask2[j]);
 		}
 	}
 
 	// unaligned tail
 	for (idx_t i = count & ~(SIMD_BATCH_SIZE - 1); i < count; i++) {
-		const bool hit = LookupOne(key_32[i + i], key_32[i + i + 1], blocks);
-		result_sel.set_index(found_count, i);
-		found_count += hit;
+		founds[i]  = LookupOne(key_32[i + i], key_32[i + i + 1], blocks);
 	}
-	return found_count;
 }
 
 bool CacheSectorizedBloomFilter::LookupHash(hash_t hash) const {
@@ -152,7 +169,8 @@ void CacheSectorizedBloomFilter::InsertOne(const uint32_t key_lo, const uint32_t
 	atomic_bf2.fetch_or(mask2, std::memory_order_relaxed);
 }
 
-inline bool CacheSectorizedBloomFilter::LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const {
+inline bool CacheSectorizedBloomFilter::LookupOne(uint32_t key_lo, uint32_t key_hi,
+                                                  const uint32_t *__restrict bf) const {
 	const uint32_t sector1 = GetSector1(key_lo, key_hi);
 	const uint32_t mask1 = GetMask1(key_lo);
 	const uint32_t sector2 = GetSector2(key_hi, sector1);
@@ -186,6 +204,7 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 
 	if (state.current_capacity < approved_tuple_count) {
 		state.hashes_v.Initialize(false, approved_tuple_count);
+		state.found_v.Initialize(false, approved_tuple_count);
 		state.bf_sel.Initialize(approved_tuple_count);
 		state.current_capacity = approved_tuple_count;
 	}
@@ -199,7 +218,7 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 		found_count = found ? approved_tuple_count : 0;
 	} else {
 		state.hashes_v.Flatten(approved_tuple_count);
-		found_count = this->filter.LookupHashes(state.hashes_v, state.bf_sel, approved_tuple_count);
+		found_count = this->filter.LookupHashes(state.hashes_v, state.found_v, state.bf_sel, approved_tuple_count);
 	}
 
 	// add the runtime statistics to stop using the bf if not selective
@@ -232,7 +251,7 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 	return approved_tuple_count;
 }
 
-inline bool BloomFilter::FilterValue(const Value &value) const {
+bool BloomFilter::FilterValue(const Value &value) const {
 	const auto hash = value.Hash();
 	return filter.LookupHash(hash);
 }

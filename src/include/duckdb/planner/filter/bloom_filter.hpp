@@ -52,9 +52,9 @@ public:
 	CacheSectorizedBloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t number_of_rows);
 
-	void InsertHashes(const Vector &hashes, idx_t count) const;
+	void InsertHashes(const Vector &hashes_v, idx_t count) const;
 
-	idx_t LookupHashes(const Vector &hashes, SelectionVector &result_sel, idx_t count) const;
+	idx_t LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel, idx_t count) const;
 	bool LookupHash(hash_t hash) const;
 
 	SelectivityStats &GetSelectivityStats() {
@@ -88,6 +88,9 @@ private:
 
 	uint32_t GetSector1(uint32_t key_lo, uint32_t key_hi) const;
 	uint32_t GetSector2(uint32_t key_hi, uint32_t block1) const;
+
+	void LookupHashesInternal(const uint32_t *key_32, uint32_t *founds,
+													  const uint32_t *blocks, idx_t count) const;
 
 	void InsertOne(uint32_t key_lo, uint32_t key_hi, uint32_t *bf) const;
 	bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const;
