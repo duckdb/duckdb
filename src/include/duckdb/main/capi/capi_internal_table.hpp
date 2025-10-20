@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/capi/capi_internal.hpp
+// duckdb/main/capi/capi_internal_table.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,9 +11,6 @@
 #include "duckdb.h"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/function/table_function.hpp"
-
-#include <cstring>
-#include <cassert>
 
 namespace duckdb {
 
