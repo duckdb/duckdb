@@ -728,7 +728,7 @@ typedef struct _duckdb_copy_function_finalize_info {
 	void *internal_ptr;
 } * duckdb_copy_function_finalize_info;
 
-//! The bind function to use when preparing a COPY ... TO function.
+//! The bind function to use when binding a COPY ... TO function.
 typedef void (*duckdb_copy_function_bind_t)(duckdb_copy_function_bind_info info);
 
 //! The initialization function to use when initializing a COPY ... TO function.
@@ -5383,7 +5383,7 @@ DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handl
 /*!
 Creates a new empty copy function.
 
-The return value should be destroyed with `duckdb_destroy_copy_function`.
+The return value must be destroyed with `duckdb_destroy_copy_function`.
 
 * @return The copy function object.
 */
@@ -5446,9 +5446,11 @@ Retrieves the extra info pointer of the copy function.
 DUCKDB_C_API void *duckdb_copy_function_bind_get_extra_info(duckdb_copy_function_bind_info info);
 
 /*!
-Retrieves the client context of the current connection.
+Retrieves the client context of the current connection binding the `COPY ... TO` function.
 
-Must be destroyed with `duckdb_destroy_client_context`* @param info The bind info provided to the bind function
+Must be destroyed with `duckdb_destroy_client_context`
+
+* @param info The bind info provided to the bind function
 * @return The client context.
 */
 DUCKDB_C_API duckdb_client_context duckdb_copy_function_bind_get_client_context(duckdb_copy_function_bind_info info);
@@ -5466,7 +5468,7 @@ Retrieves the type of a column that will be provided to the `COPY ... TO` functi
 
 * @param info The bind info provided to the bind function
 * @param col_idx The index of the column to retrieve the type for
-* @return The type of the column.
+* @return The type of the column. Must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_C_API duckdb_logical_type duckdb_copy_function_bind_get_column_type(duckdb_copy_function_bind_info info,
                                                                            idx_t col_idx);
@@ -5475,7 +5477,7 @@ DUCKDB_C_API duckdb_logical_type duckdb_copy_function_bind_get_column_type(duckd
 Retrieves all values for the given options provided to the `COPY ... TO` function.
 
 * @param info The bind info provided to the bind function
-* @return A STRUCT value containing all options as fields. Must be freed with `duckdb_destroy_value`.
+* @return A STRUCT value containing all options as fields. Must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_C_API duckdb_value duckdb_copy_function_bind_get_options(duckdb_copy_function_bind_info info);
 
@@ -5515,9 +5517,11 @@ Retrieves the extra info pointer of the copy function.
 DUCKDB_C_API void *duckdb_copy_function_global_init_get_extra_info(duckdb_copy_function_global_init_info info);
 
 /*!
-Retrieves the client context of the current connection.
+Retrieves the client context of the current connection initializing the `COPY ... TO` function.
 
-Must be destroyed with `duckdb_destroy_client_context`* @param info The init info provided to the init function
+Must be destroyed with `duckdb_destroy_client_context`
+
+* @param info The init info provided to the init function
 * @return The client context.
 */
 DUCKDB_C_API duckdb_client_context
@@ -5534,7 +5538,7 @@ DUCKDB_C_API void *duckdb_copy_function_global_init_get_bind_data(duckdb_copy_fu
 /*!
 Retrieves the file path provided to the `COPY ... TO` function.
 
-Lives for the duration of the initialization callback, must not be freed.
+Lives for the duration of the initialization callback, must not be destroyed.
 
 * @param info The init info provided to the init function
 * @return The file path.
@@ -5577,9 +5581,11 @@ Retrieves the extra info pointer of the copy function.
 DUCKDB_C_API void *duckdb_copy_function_sink_get_extra_info(duckdb_copy_function_sink_info info);
 
 /*!
-Retrieves the client context of the current connection.
+Retrieves the client context of the current connection during the sink-phase of the `COPY ... TO` function.
 
-Must be destroyed with `duckdb_destroy_client_context`* @param info The sink info provided to the sink function
+Must be destroyed with `duckdb_destroy_client_context`
+
+* @param info The sink info provided to the sink function
 * @return The client context.
 */
 DUCKDB_C_API duckdb_client_context duckdb_copy_function_sink_get_client_context(duckdb_copy_function_sink_info info);
@@ -5625,9 +5631,11 @@ Retrieves the extra info pointer of the copy function.
 DUCKDB_C_API void *duckdb_copy_function_finalize_get_extra_info(duckdb_copy_function_finalize_info info);
 
 /*!
-Retrieves the client context of the current connection.
+Retrieves the client context of the current connection during the finalize-phase of the `COPY ... TO` function.
 
-Must be destroyed with `duckdb_destroy_client_context`* @param info The finalize info provided to the finalize function
+Must be destroyed with `duckdb_destroy_client_context`
+
+* @param info The finalize info provided to the finalize function
 * @return The client context.
 */
 DUCKDB_C_API duckdb_client_context
@@ -5659,7 +5667,13 @@ The table function must take a single VARCHAR parameter (the file path).
 
 Options passed to the `COPY ... FROM (...)` statement are forwarded as named parameters to the table function.
 
+Since `COPY ... FROM` copies into an already existing table, the table function should not define its own result columns
+using `duckdb_bind_add_result_column` when binding . Instead use `duckdb_table_function_bind_get_result_column_count`
+and related functions in the bind callback of the table function to retrieve the schema of the target table of the `COPY
+... FROM` statement.
+
 * @param copy_function The copy function
+* @param table_function The table function to use for `COPY ... FROM`
 */
 DUCKDB_C_API void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_function,
                                                               duckdb_table_function table_function);
@@ -5681,8 +5695,8 @@ Retrieves the name of a result column of a table function.
 If the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the names of the columns in
 the target table at the start of the bind callback.
 
-The result is valid for the duration of the bind callback or until the next call to `duckdb_bind_add_result_column`,
-must not be freed.
+The result is valid for the duration of the bind callback or until the next call to `duckdb_bind_add_result_column`, so
+it must not be destroyed.
 
 * @param info The bind info provided to the bind function
 * @param col_idx The index of the result column to retrieve the name for
