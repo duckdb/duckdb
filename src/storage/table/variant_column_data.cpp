@@ -20,12 +20,10 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
 	auto unshredded_type = LogicalType::STRUCT(StructType::GetChildTypes(type));
 	sub_columns.push_back(
 	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index++, start_row, unshredded_type, this));
-	sub_columns.push_back(
-	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index++, start_row, unshredded_type, this));
 }
 
 idx_t VariantColumnData::SubColumnsSize() const {
-	return 1;
+	return is_shredded ? 2 : 1;
 }
 
 void VariantColumnData::SetStart(idx_t new_start) {
@@ -88,18 +86,8 @@ void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
 	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
+	//! TODO: implement the 'unshredding' logic here, to output a regular VARIANT when the VARIANT is stored shredded
 	sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], result, target_count);
-	// auto &child_entries = StructVector::GetEntries(result);
-	// for (idx_t i = 0; i < sub_columns.size(); i++) {
-	//	auto &target_vector = *child_entries[i];
-	//	if (!state.scan_child_column[i]) {
-	//		// if we are not scanning this vector - set it to NULL
-	//		target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-	//		ConstantVector::SetNull(target_vector, true);
-	//		continue;
-	//	}
-	//	sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], target_vector, target_count);
-	//}
 	return scan_count;
 }
 
@@ -313,9 +301,10 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
                                                                 ColumnCheckpointInfo &checkpoint_info) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
+	//! TODO: implement the logic to create new data for both the 'unshredded' and the 'shredded' ColumnData, and then
+	//! Checkpoint *that*
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
-	checkpoint_state->child_states.push_back(sub_columns[1]->Checkpoint(row_group, checkpoint_info));
 	return std::move(checkpoint_state);
 }
 
@@ -359,7 +348,9 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
 	sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
-	sub_columns[1]->InitializeColumn(column_data.child_columns[2], unshredded_stats);
+	if (column_data.child_columns.size() == 3) {
+		sub_columns[1]->InitializeColumn(column_data.child_columns[2], unshredded_stats);
+	}
 	this->count = validity.count.load();
 }
 

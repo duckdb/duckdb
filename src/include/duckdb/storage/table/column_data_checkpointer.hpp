@@ -22,10 +22,9 @@ public:
 	ColumnDataCheckpointData() {
 	}
 	ColumnDataCheckpointData(ColumnCheckpointState &checkpoint_state, ColumnData &col_data, DatabaseInstance &db,
-	                         RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info,
-	                         StorageManager &storage_manager)
+	                         RowGroup &row_group, StorageManager &storage_manager)
 	    : checkpoint_state(checkpoint_state), col_data(col_data), db(db), row_group(row_group),
-	      checkpoint_info(checkpoint_info), storage_manager(storage_manager) {
+	      storage_manager(storage_manager) {
 	}
 
 public:
@@ -42,7 +41,6 @@ private:
 	optional_ptr<ColumnData> col_data;
 	optional_ptr<DatabaseInstance> db;
 	optional_ptr<RowGroup> row_group;
-	optional_ptr<ColumnCheckpointInfo> checkpoint_info;
 	optional_ptr<StorageManager> storage_manager;
 };
 
