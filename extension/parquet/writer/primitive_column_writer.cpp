@@ -7,6 +7,9 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
+
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
                                              vector<string> schema_path, bool can_have_nulls)
     : ColumnWriter(writer, column_schema, std::move(schema_path), can_have_nulls) {
@@ -111,7 +114,7 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.type = PageType::DATA_PAGE;
 		hdr.__isset.data_page_header = true;
 
-		hdr.data_page_header.num_values = UnsafeNumericCast<int32_t>(page_info.row_count);
+		hdr.data_page_header.num_values = NumericCast<int32_t>(page_info.row_count);
 		hdr.data_page_header.encoding = GetEncoding(state);
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
@@ -304,12 +307,24 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	}
 
 	if (state.stats_state->HasGeoStats()) {
-		column_chunk.meta_data.__isset.geospatial_statistics = true;
-		state.stats_state->WriteGeoStats(column_chunk.meta_data.geospatial_statistics);
 
-		// Add the geospatial statistics to the extra GeoParquet metadata
-		writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
-		                                              *state.stats_state->GetGeoStats());
+		auto gpq_version = writer.GetGeoParquetVersion();
+
+		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
+		const auto has_json_stats = gpq_version == GeoParquetVersion::V1 || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
+
+		if (has_real_stats) {
+			// Write the parquet native geospatial statistics
+			column_chunk.meta_data.__isset.geospatial_statistics = true;
+			state.stats_state->WriteGeoStats(column_chunk.meta_data.geospatial_statistics);
+		}
+		if (has_json_stats) {
+			// Add the geospatial statistics to the extra GeoParquet metadata
+			writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
+			                                              *state.stats_state->GetGeoStats());
+		}
 	}
 
 	for (const auto &write_info : state.write_info) {

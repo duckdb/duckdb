@@ -8,10 +8,6 @@ namespace duckdb {
 SetOperationNode::SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NODE) {
 }
 
-const vector<unique_ptr<ParsedExpression>> &SetOperationNode::GetSelectList() const {
-	return children[0]->GetSelectList();
-}
-
 string SetOperationNode::ToString() const {
 	string result;
 	result = cte_map.ToString();

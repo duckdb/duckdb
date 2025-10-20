@@ -10,42 +10,32 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
-
-BoundSetOperationNode::~BoundSetOperationNode() {
-}
 
 struct SetOpAliasGatherer {
 public:
 	explicit SetOpAliasGatherer(SelectBindState &bind_state_p) : bind_state(bind_state_p) {
 	}
 
-	void GatherAliases(BoundSetOpChild &node, const vector<idx_t> &reorder_idx);
-	void GatherAliases(BoundSetOperationNode &node, const vector<idx_t> &reorder_idx);
+	void GatherAliases(BoundStatement &stmt, const vector<idx_t> &reorder_idx);
+	void GatherSetOpAliases(SetOperationType setop_type, const vector<string> &names,
+	                        vector<BoundStatement> &bound_children, const vector<idx_t> &reorder_idx);
 
 private:
 	SelectBindState &bind_state;
 };
 
-const vector<string> &BoundSetOpChild::GetNames() {
-	return bound_node ? bound_node->names : node.names;
-}
-const vector<LogicalType> &BoundSetOpChild::GetTypes() {
-	return bound_node ? bound_node->types : node.types;
-}
-idx_t BoundSetOpChild::GetRootIndex() {
-	return bound_node ? bound_node->GetRootIndex() : node.plan->GetRootIndex();
-}
-void SetOpAliasGatherer::GatherAliases(BoundSetOpChild &node, const vector<idx_t> &reorder_idx) {
-	if (node.bound_node) {
-		GatherAliases(*node.bound_node, reorder_idx);
+void SetOpAliasGatherer::GatherAliases(BoundStatement &stmt, const vector<idx_t> &reorder_idx) {
+	if (stmt.extra_info.setop_type != SetOperationType::NONE) {
+		GatherSetOpAliases(stmt.extra_info.setop_type, stmt.names, stmt.extra_info.bound_children, reorder_idx);
 		return;
 	}
 
 	// query node
-	auto &select_names = node.GetNames();
+	auto &select_names = stmt.names;
 	// fill the alias lists with the names
 	D_ASSERT(reorder_idx.size() == select_names.size());
 	for (idx_t i = 0; i < select_names.size(); i++) {
@@ -61,8 +51,9 @@ void SetOpAliasGatherer::GatherAliases(BoundSetOpChild &node, const vector<idx_t
 		}
 	}
 	// check if the expression matches one of the expressions in the original expression list
-	for (idx_t i = 0; i < node.select_list.size(); i++) {
-		auto &expr = node.select_list[i];
+	auto &select_list = stmt.extra_info.original_expressions;
+	for (idx_t i = 0; i < select_list.size(); i++) {
+		auto &expr = select_list[i];
 		idx_t index = reorder_idx[i];
 		// now check if the node is already in the set of expressions
 		auto expr_entry = bind_state.projection_map.find(*expr);
@@ -79,19 +70,21 @@ void SetOpAliasGatherer::GatherAliases(BoundSetOpChild &node, const vector<idx_t
 	}
 }
 
-void SetOpAliasGatherer::GatherAliases(BoundSetOperationNode &setop, const vector<idx_t> &reorder_idx) {
+void SetOpAliasGatherer::GatherSetOpAliases(SetOperationType setop_type, const vector<string> &stmt_names,
+                                            vector<BoundStatement> &bound_children, const vector<idx_t> &reorder_idx) {
 	// create new reorder index
-	if (setop.setop_type == SetOperationType::UNION_BY_NAME) {
+	if (setop_type == SetOperationType::UNION_BY_NAME) {
+		auto &setop_names = stmt_names;
 		// for UNION BY NAME - create a new re-order index
 		case_insensitive_map_t<idx_t> reorder_map;
-		for (idx_t col_idx = 0; col_idx < setop.names.size(); ++col_idx) {
-			reorder_map[setop.names[col_idx]] = reorder_idx[col_idx];
+		for (idx_t col_idx = 0; col_idx < setop_names.size(); ++col_idx) {
+			reorder_map[setop_names[col_idx]] = reorder_idx[col_idx];
 		}
 
 		// use new reorder index
-		for (auto &child : setop.bound_children) {
+		for (auto &child : bound_children) {
 			vector<idx_t> new_reorder_idx;
-			auto &child_names = child.GetNames();
+			auto &child_names = child.names;
 			for (idx_t col_idx = 0; col_idx < child_names.size(); col_idx++) {
 				auto &col_name = child_names[col_idx];
 				auto entry = reorder_map.find(col_name);
@@ -103,22 +96,23 @@ void SetOpAliasGatherer::GatherAliases(BoundSetOperationNode &setop, const vecto
 			GatherAliases(child, new_reorder_idx);
 		}
 	} else {
-		for (auto &child : setop.bound_children) {
+		for (auto &child : bound_children) {
 			GatherAliases(child, reorder_idx);
 		}
 	}
 }
 
-static void GatherAliases(BoundSetOperationNode &node, SelectBindState &bind_state) {
+static void GatherAliases(BoundSetOperationNode &root, vector<BoundStatement> &child_statements,
+                          SelectBindState &bind_state) {
 	SetOpAliasGatherer gatherer(bind_state);
 	vector<idx_t> reorder_idx;
-	for (idx_t i = 0; i < node.names.size(); i++) {
+	for (idx_t i = 0; i < root.names.size(); i++) {
 		reorder_idx.push_back(i);
 	}
-	gatherer.GatherAliases(node, reorder_idx);
+	gatherer.GatherSetOpAliases(root.setop_type, root.names, child_statements, reorder_idx);
 }
 
-static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &result, bool can_contain_nulls) {
+void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 	D_ASSERT(result.setop_type == SetOperationType::UNION_BY_NAME);
 	vector<case_insensitive_map_t<idx_t>> node_name_maps;
 	case_insensitive_set_t global_name_set;
@@ -127,7 +121,7 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 	// We throw a binder exception if two same name in the SELECT list
 	D_ASSERT(result.names.empty());
 	for (auto &child : result.bound_children) {
-		auto &child_names = child.GetNames();
+		auto &child_names = child.names;
 		case_insensitive_map_t<idx_t> node_name_map;
 		for (idx_t i = 0; i < child_names.size(); ++i) {
 			auto &col_name = child_names[i];
@@ -155,7 +149,7 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 		auto &col_name = result.names[i];
 		LogicalType result_type(LogicalTypeId::INVALID);
 		for (idx_t child_idx = 0; child_idx < result.bound_children.size(); ++child_idx) {
-			auto &child_types = result.bound_children[child_idx].GetTypes();
+			auto &child_types = result.bound_children[child_idx].types;
 			auto &child_name_map = node_name_maps[child_idx];
 			// check if the column exists in this child node
 			auto entry = child_name_map.find(col_name);
@@ -191,6 +185,8 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 		return;
 	}
 	// If reorder is required, generate the expressions for each node
+	vector<vector<unique_ptr<Expression>>> reorder_expressions;
+	reorder_expressions.resize(result.bound_children.size());
 	for (idx_t i = 0; i < new_size; ++i) {
 		auto &col_name = result.names[i];
 		for (idx_t child_idx = 0; child_idx < result.bound_children.size(); ++child_idx) {
@@ -205,52 +201,42 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 			} else {
 				// the column exists - reference it
 				auto col_idx_in_child = entry->second;
-				auto &child_col_type = child.GetTypes()[col_idx_in_child];
-				expr = make_uniq<BoundColumnRefExpression>(child_col_type,
-				                                           ColumnBinding(child.GetRootIndex(), col_idx_in_child));
+				auto &child_col_type = child.types[col_idx_in_child];
+				auto root_idx = child.plan->GetRootIndex();
+				expr = make_uniq<BoundColumnRefExpression>(child_col_type, ColumnBinding(root_idx, col_idx_in_child));
 			}
-			child.reorder_expressions.push_back(std::move(expr));
+			reorder_expressions[child_idx].push_back(std::move(expr));
 		}
 	}
-}
-
-BoundSetOpChild Binder::BindSetOpChild(QueryNode &child) {
-	BoundSetOpChild bound_child;
-	if (child.type == QueryNodeType::SET_OPERATION_NODE) {
-		bound_child.bound_node = BindSetOpNode(child.Cast<SetOperationNode>());
-	} else {
-		bound_child.binder = Binder::CreateBinder(context, this);
-		bound_child.binder->can_contain_nulls = true;
-		if (child.type == QueryNodeType::SELECT_NODE) {
-			auto &select_node = child.Cast<SelectNode>();
-			auto bound_select_node = bound_child.binder->BindSelectNodeInternal(select_node);
-			for (auto &expr : bound_select_node->bind_state.original_expressions) {
-				bound_child.select_list.push_back(expr->Copy());
-			}
-			bound_child.node.names = bound_select_node->names;
-			bound_child.node.types = bound_select_node->types;
-			bound_child.node.plan = bound_child.binder->CreatePlan(*bound_select_node);
-		} else {
-			bound_child.node = bound_child.binder->BindNode(child);
+	// now push projections for each node
+	for (idx_t child_idx = 0; child_idx < result.bound_children.size(); ++child_idx) {
+		auto &child = result.bound_children[child_idx];
+		auto &child_reorder_expressions = reorder_expressions[child_idx];
+		// if we have re-order expressions push a projection
+		vector<LogicalType> child_types;
+		for (auto &expr : child_reorder_expressions) {
+			child_types.push_back(expr->return_type);
 		}
-	}
-	return bound_child;
-}
-
-static void GatherSetOpBinders(BoundSetOpChild &setop_child, vector<reference<Binder>> &binders) {
-	if (setop_child.binder) {
-		binders.push_back(*setop_child.binder);
-		return;
-	}
-	auto &setop_node = *setop_child.bound_node;
-	for (auto &child : setop_node.bound_children) {
-		GatherSetOpBinders(child, binders);
+		auto child_projection =
+		    make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(child_reorder_expressions));
+		child_projection->children.push_back(std::move(child.plan));
+		child.plan = std::move(child_projection);
+		child.types = std::move(child_types);
 	}
 }
 
-unique_ptr<BoundSetOperationNode> Binder::BindSetOpNode(SetOperationNode &statement) {
-	auto result_ptr = make_uniq<BoundSetOperationNode>();
-	auto &result = *result_ptr;
+static void GatherSetOpBinders(vector<BoundStatement> &children, vector<shared_ptr<Binder>> &binders,
+                               vector<reference<Binder>> &result) {
+	for (auto &child_binder : binders) {
+		result.push_back(*child_binder);
+	}
+	for (auto &child_node : children) {
+		GatherSetOpBinders(child_node.extra_info.bound_children, child_node.extra_info.child_binders, result);
+	}
+}
+
+BoundStatement Binder::BindNode(SetOperationNode &statement) {
+	BoundSetOperationNode result;
 	result.setop_type = statement.setop_type;
 	result.setop_all = statement.setop_all;
 
@@ -265,27 +251,23 @@ unique_ptr<BoundSetOperationNode> Binder::BindSetOpNode(SetOperationNode &statem
 		throw InternalException("Set Operation type must have exactly 2 children - except for UNION/UNION_BY_NAME");
 	}
 	for (auto &child : statement.children) {
-		result.bound_children.push_back(BindSetOpChild(*child));
-	}
-
-	vector<reference<Binder>> binders;
-	for (auto &child : result.bound_children) {
-		GatherSetOpBinders(child, binders);
-	}
-	// move the correlated expressions from the child binders to this binder
-	for (auto &child_binder : binders) {
-		MoveCorrelatedExpressions(child_binder.get());
+		auto child_binder = Binder::CreateBinder(context, this);
+		child_binder->can_contain_nulls = true;
+		auto child_node = child_binder->BindNode(*child);
+		MoveCorrelatedExpressions(*child_binder);
+		result.bound_children.push_back(std::move(child_node));
+		result.child_binders.push_back(std::move(child_binder));
 	}
 
 	if (result.setop_type == SetOperationType::UNION_BY_NAME) {
 		// UNION BY NAME - merge the columns from all sides
-		BuildUnionByNameInfo(context, result, can_contain_nulls);
+		BuildUnionByNameInfo(result);
 	} else {
 		// UNION ALL BY POSITION - the columns of both sides must match exactly
-		result.names = result.bound_children[0].GetNames();
-		auto result_columns = result.bound_children[0].GetTypes().size();
+		result.names = result.bound_children[0].names;
+		auto result_columns = result.bound_children[0].types.size();
 		for (idx_t i = 1; i < result.bound_children.size(); ++i) {
-			if (result.bound_children[i].GetTypes().size() != result_columns) {
+			if (result.bound_children[i].types.size() != result_columns) {
 				throw BinderException("Set operations can only apply to expressions with the "
 				                      "same number of result columns");
 			}
@@ -293,9 +275,9 @@ unique_ptr<BoundSetOperationNode> Binder::BindSetOpNode(SetOperationNode &statem
 
 		// figure out the types of the setop result by picking the max of both
 		for (idx_t i = 0; i < result_columns; i++) {
-			auto result_type = result.bound_children[0].GetTypes()[i];
+			auto result_type = result.bound_children[0].types[i];
 			for (idx_t child_idx = 1; child_idx < result.bound_children.size(); ++child_idx) {
-				auto &child_types = result.bound_children[child_idx].GetTypes();
+				auto &child_types = result.bound_children[child_idx].types;
 				result_type = LogicalType::ForceMaxLogicalType(result_type, child_types[i]);
 			}
 			if (!can_contain_nulls) {
@@ -310,7 +292,9 @@ unique_ptr<BoundSetOperationNode> Binder::BindSetOpNode(SetOperationNode &statem
 	SelectBindState bind_state;
 	if (!statement.modifiers.empty()) {
 		// handle the ORDER BY/DISTINCT clauses
-		GatherAliases(result, bind_state);
+		vector<reference<Binder>> binders;
+		GatherSetOpBinders(result.bound_children, result.child_binders, binders);
+		GatherAliases(result, result.bound_children, bind_state);
 
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
 		OrderBinder order_binder(binders, bind_state);
@@ -319,16 +303,14 @@ unique_ptr<BoundSetOperationNode> Binder::BindSetOpNode(SetOperationNode &statem
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions
 	BindModifiers(result, result.setop_index, result.names, result.types, bind_state);
-	return result_ptr;
-}
-
-BoundStatement Binder::BindNode(SetOperationNode &statement) {
-	auto result = BindSetOpNode(statement);
 
 	BoundStatement result_statement;
-	result_statement.types = result->types;
-	result_statement.names = result->names;
-	result_statement.plan = CreatePlan(*result);
+	result_statement.types = result.types;
+	result_statement.names = result.names;
+	result_statement.plan = CreatePlan(result);
+	result_statement.extra_info.setop_type = statement.setop_type;
+	result_statement.extra_info.bound_children = std::move(result.bound_children);
+	result_statement.extra_info.child_binders = std::move(result.child_binders);
 	return result_statement;
 }
 

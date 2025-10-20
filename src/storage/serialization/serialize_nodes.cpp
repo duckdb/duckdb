@@ -252,7 +252,7 @@ ColumnList ColumnList::Deserialize(Deserializer &deserializer) {
 void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", query);
-	serializer.WriteProperty<CTEMaterialize>(102, "materialized", materialized);
+	serializer.WriteProperty<CTEMaterialize>(102, "materialized", GetMaterializedForSerialization(serializer));
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
 }
 

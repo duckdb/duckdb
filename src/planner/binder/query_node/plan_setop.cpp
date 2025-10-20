@@ -113,34 +113,16 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 
 	D_ASSERT(node.bound_children.size() >= 2);
 	vector<unique_ptr<LogicalOperator>> children;
-	for (auto &child : node.bound_children) {
-		unique_ptr<LogicalOperator> child_node;
-		if (child.bound_node) {
-			child_node = CreatePlan(*child.bound_node);
-		} else {
-			child.binder->is_outside_flattened = is_outside_flattened;
+	for (idx_t child_idx = 0; child_idx < node.bound_children.size(); child_idx++) {
+		auto &child = node.bound_children[child_idx];
+		auto &child_binder = *node.child_binders[child_idx];
 
-			// construct the logical plan for the child node
-			child_node = std::move(child.node.plan);
-		}
-		if (!child.reorder_expressions.empty()) {
-			// if we have re-order expressions push a projection
-			vector<LogicalType> child_types;
-			for (auto &expr : child.reorder_expressions) {
-				child_types.push_back(expr->return_type);
-			}
-			auto child_projection =
-			    make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(child.reorder_expressions));
-			child_projection->children.push_back(std::move(child_node));
-			child_node = std::move(child_projection);
-
-			child_node = CastLogicalOperatorToTypes(child_types, node.types, std::move(child_node));
-		} else {
-			// otherwise push only casts
-			child_node = CastLogicalOperatorToTypes(child.GetTypes(), node.types, std::move(child_node));
-		}
+		// construct the logical plan for the child node
+		auto child_node = std::move(child.plan);
+		// push casts for the target types
+		child_node = CastLogicalOperatorToTypes(child.types, node.types, std::move(child_node));
 		// check if there are any unplanned subqueries left in any child
-		if (child.binder && child.binder->has_unplanned_dependent_joins) {
+		if (child_binder.has_unplanned_dependent_joins) {
 			has_unplanned_dependent_joins = true;
 		}
 		children.push_back(std::move(child_node));

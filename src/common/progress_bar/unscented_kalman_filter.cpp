@@ -254,11 +254,11 @@ void UnscentedKalmanFilter::UpdateInternal(double measured_progress) {
 	}
 
 	// Ensure progress stays in bounds
-	x[0] = std::max(0.0, std::min(1.0, x[0]));
+	x[0] = std::max(0.0, std::min(scale_factor, x[0]));
 }
 
 double UnscentedKalmanFilter::GetProgress() const {
-	return x[0];
+	return x[0] / scale_factor;
 }
 
 double UnscentedKalmanFilter::GetVelocity() const {
