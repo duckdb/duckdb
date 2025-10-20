@@ -7,21 +7,6 @@ query IIIIII
 describe from parquet_scan('data/parquet-testing/variant_unshredded_nested_nulls.parquet')
 ----
 id	BIGINT	YES	NULL	NULL	NULL
-v	STRUCT("value" BLOB, metadata BLOB)	YES	NULL	NULL	NULL
-array_of_variants	STRUCT("value" BLOB, metadata BLOB)[]	YES	NULL	NULL	NULL
-struct_of_variants	STRUCT(v STRUCT("value" BLOB, metadata BLOB))	YES	NULL	NULL	NULL
-map_of_variants	MAP(VARCHAR, STRUCT("value" BLOB, metadata BLOB))	YES	NULL	NULL	NULL
-array_of_struct_of_variants	STRUCT(v STRUCT("value" BLOB, metadata BLOB))[]	YES	NULL	NULL	NULL
-struct_of_array_of_variants	STRUCT(v STRUCT("value" BLOB, metadata BLOB)[])	YES	NULL	NULL	NULL
-
-statement ok
-set variant_legacy_encoding=true;
-
-# Now the variant column gets emitted as JSON
-query IIIIII
-describe from parquet_scan('data/parquet-testing/variant_unshredded_nested_nulls.parquet')
-----
-id	BIGINT	YES	NULL	NULL	NULL
 v	VARIANT	YES	NULL	NULL	NULL
 array_of_variants	VARIANT[]	YES	NULL	NULL	NULL
 struct_of_variants	STRUCT(v VARIANT)	YES	NULL	NULL	NULL

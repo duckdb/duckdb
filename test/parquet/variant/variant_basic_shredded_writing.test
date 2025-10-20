@@ -3,8 +3,6 @@
 
 require parquet
 
-require json
-
 statement ok
 create macro data() AS TABLE (
 	FROM (VALUES

@@ -3,9 +3,6 @@
 
 require parquet
 
-statement ok
-pragma variant_legacy_encoding = true;
-
 query II
 from parquet_scan('data/parquet-testing/variant_array_object_string.parquet') WHERE var != [{a:123456789,c:'string'},{a:123456789,c:'string'}]
 ----

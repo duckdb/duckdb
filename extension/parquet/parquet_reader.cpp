@@ -631,7 +631,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
 		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
 		if (!is_variant) {
-			is_variant = parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas);
+			is_variant = IsVariantType(s_ele, child_schemas);
 		}
 
 		if (!is_map_kv && this_idx > 0) {
@@ -815,9 +815,6 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	Value lookup_value;
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
-	}
-	if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
-		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
 

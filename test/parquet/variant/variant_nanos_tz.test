@@ -3,9 +3,6 @@
 
 require parquet
 
-statement ok
-set variant_legacy_encoding=true;
-
 # Timestamp NS - negative (with timezone) (shredded)
 query II
 from 'data/parquet-testing/variant_shredded_timestamp_nanos_tz_negative_no_logical_type.parquet';

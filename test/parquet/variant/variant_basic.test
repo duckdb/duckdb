@@ -84,6 +84,11 @@ from 'data/parquet-testing/variant_timestamp_micros.parquet';
 ----
 1	1957-11-07 12:33:54.123456+00
 
+query II
+from 'data/parquet-testing/variant_timestamp_micros_negative.parquet';
+----
+1	1957-11-07 12:33:54.123456
+
 # Object {'a': .., 'c': ...}
 query II
 from 'data/parquet-testing/variant_object_primitives.parquet';
@@ -119,11 +124,6 @@ query II
 from 'data/parquet-testing/variant_decimal8_negative.parquet';
 ----
 1	-123456789.987654321
-
-query II
-from 'data/parquet-testing/variant_timestamp_micros_negative.parquet';
-----
-1	1957-11-07 12:33:54.123456
 
 query II
 from 'data/parquet-testing/variant_int8_positive.parquet';
