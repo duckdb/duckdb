@@ -48,10 +48,10 @@ enum class AsyncResultType : uint8_t {
 	IMPLICIT, // current result depends on external context (eg: in the context of TableFunctions, either FINISHED or
 	          // ONGOING depending on output_chunk.size())
 	ONGOING,  // current result is not completed, finished (eg: in the context of TableFunctions, function accept more
-	          // iterations and might producer further results)
+	          // iterations and might produce further results)
 	FINISHED, // current result is completed, no subsequent calls on the same state should be attempted
-	BLOCKED   // current result is blocked, no subsequent calls on the same state should be attempted, BLOCKED migth be
-	          // associated with a vector of AsycnTasks to be scheduled
+	BLOCKED // current result is blocked, no subsequent calls on the same state should be attempted (eg: in the context
+	        // of AsyncResult, BLOCKED will be associated with a vector of AsyncTasks to be scheduled)
 };
 
 bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out);
