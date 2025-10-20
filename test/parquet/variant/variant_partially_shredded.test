@@ -4,10 +4,6 @@
 require parquet
 
 query II nosort result
-from 'data/parquet-testing/variant_partial_shredded0.parquet';
-----
-
-query II nosort result
 from 'data/parquet-testing/variant_partial_shredded1.parquet';
 ----
 
@@ -186,4 +182,8 @@ from 'data/parquet-testing/variant_partial_shredded44.parquet';
 
 query II nosort result
 from 'data/parquet-testing/variant_partial_shredded45.parquet';
+----
+
+query II nosort result
+from 'data/parquet-testing/variant_partial_shredded46.parquet';
 ----

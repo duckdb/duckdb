@@ -518,52 +518,6 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, parquet_options.can_have_nan);
 }
 
-static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnSchema> &children) {
-	if (children.size() < 2) {
-		return false;
-	}
-	auto &child0 = children[0];
-	auto &child1 = children[1];
-
-	ParquetColumnSchema const *metadata;
-	ParquetColumnSchema const *value;
-
-	if (child0.name == "metadata" && child1.name == "value") {
-		metadata = &child0;
-		value = &child1;
-	} else if (child1.name == "metadata" && child0.name == "value") {
-		metadata = &child1;
-		value = &child0;
-	} else {
-		return false;
-	}
-
-	//! Verify names
-	if (metadata->name != "metadata") {
-		return false;
-	}
-	if (value->name != "value") {
-		return false;
-	}
-
-	//! Verify types
-	if (metadata->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
-		return false;
-	}
-	if (value->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
-		return false;
-	}
-	if (children.size() == 3) {
-		auto &typed_value = children[2];
-		if (typed_value.name != "typed_value") {
-			return false;
-		}
-	} else if (children.size() != 2) {
-		return false;
-	}
-	return true;
-}
-
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
@@ -630,9 +584,6 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
 		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
-		if (!is_variant) {
-			is_variant = IsVariantType(s_ele, child_schemas);
-		}
 
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
