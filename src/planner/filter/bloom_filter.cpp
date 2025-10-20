@@ -26,7 +26,7 @@ void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t numb
 	blocks = reinterpret_cast<uint32_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 	std::fill_n(blocks, num_sectors, 0);
 
-	state.store(State::Active);
+	state.store(BloomFilterState::Active);
 }
 
 void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes, const idx_t count) const {
@@ -115,24 +115,24 @@ bool CacheSectorizedBloomFilter::LookupHash(hash_t hash) const {
 	return LookupOne(lower, higher, blocks);
 }
 
-uint32_t CacheSectorizedBloomFilter::GetMask1(const uint32_t key_lo) {
+inline uint32_t CacheSectorizedBloomFilter::GetMask1(const uint32_t key_lo) {
 	// 3 bits in key_lo
 	return (1u << ((key_lo >> 17) & 31)) | (1u << ((key_lo >> 22) & 31)) | (1u << ((key_lo >> 27) & 31));
 }
 
-uint32_t CacheSectorizedBloomFilter::GetMask2(const uint32_t key_hi) {
+inline uint32_t CacheSectorizedBloomFilter::GetMask2(const uint32_t key_hi) {
 	// 4 bits in key_hi
 	return (1u << ((key_hi >> 12) & 31)) | (1u << ((key_hi >> 17) & 31)) | (1u << ((key_hi >> 22) & 31)) |
 	       (1u << ((key_hi >> 27) & 31));
 }
 
-uint32_t CacheSectorizedBloomFilter::GetSector1(const uint32_t key_lo, const uint32_t key_hi) const {
+inline uint32_t CacheSectorizedBloomFilter::GetSector1(const uint32_t key_lo, const uint32_t key_hi) const {
 	// block: 13 bits in key_lo and 9 bits in key_hi
 	// sector 1: 4 bits in key_lo
 	return ((key_lo & ((1 << 17) - 1)) + ((key_hi << 14) & (((1 << 9) - 1) << 17))) & (num_sectors - 1);
 }
 
-uint32_t CacheSectorizedBloomFilter::GetSector2(const uint32_t key_hi, const uint32_t block1) const {
+inline uint32_t CacheSectorizedBloomFilter::GetSector2(const uint32_t key_hi, const uint32_t block1) const {
 	// sector 2: 3 bits in key_hi
 	return block1 ^ (8 + (key_hi & 7));
 }
@@ -152,7 +152,7 @@ void CacheSectorizedBloomFilter::InsertOne(const uint32_t key_lo, const uint32_t
 	atomic_bf2.fetch_or(mask2, std::memory_order_relaxed);
 }
 
-bool CacheSectorizedBloomFilter::LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const {
+inline bool CacheSectorizedBloomFilter::LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const {
 	const uint32_t sector1 = GetSector1(key_lo, key_hi);
 	const uint32_t mask1 = GetMask1(key_lo);
 	const uint32_t sector2 = GetSector2(key_hi, sector1);
@@ -161,7 +161,7 @@ bool CacheSectorizedBloomFilter::LookupOne(uint32_t key_lo, uint32_t key_hi, con
 }
 
 string BloomFilter::ToString(const string &column_name) const {
-	if (filter.GetState().load() == CacheSectorizedBloomFilter::State::Active) {
+	if (filter.GetState().load() == CacheSectorizedBloomFilter::BloomFilterState::Active) {
 		return column_name + " IN BF(" + key_column_name + ")";
 	} else {
 		return "True";
@@ -232,7 +232,7 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 	return approved_tuple_count;
 }
 
-bool BloomFilter::FilterValue(const Value &value) const {
+inline bool BloomFilter::FilterValue(const Value &value) const {
 	const auto hash = value.Hash();
 	return filter.LookupHash(hash);
 }

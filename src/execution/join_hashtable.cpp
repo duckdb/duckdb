@@ -723,7 +723,7 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataChunkState &chunk_state,
                                  InsertState &insert_state, bool parallel) {
 	// Insert Hashes into the BF
-	if (bloom_filter.GetState().load() != CacheSectorizedBloomFilter::State::Uninitialized) {
+	if (bloom_filter.GetState().load() != CacheSectorizedBloomFilter::BloomFilterState::Uninitialized) {
 		bloom_filter.InsertHashes(hashes_v, count);
 	}
 	auto atomic_entries = reinterpret_cast<atomic<ht_entry_t> *>(this->entries);

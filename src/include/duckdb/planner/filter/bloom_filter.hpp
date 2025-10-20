@@ -43,7 +43,7 @@ public:
 		}
 	};
 
-	enum class State : uint8_t {
+	enum class BloomFilterState : uint8_t {
 		Uninitialized, // not initialized and cannot be populated or probed
 		Active,        // ready and in use
 		Pause          // ready to use but not in use currently, e.g., not selective enough
@@ -61,21 +61,21 @@ public:
 		return selectivity_data;
 	}
 
-	atomic<State> &GetState() {
+	atomic<BloomFilterState> &GetState() {
 		return state;
 	}
 
 	void Pause() {
-		state.store(State::Pause);
+		state.store(BloomFilterState::Pause);
 	}
 
 	bool IsActive() const {
-		return state.load() == State::Active;
+		return state.load() == BloomFilterState::Active;
 	}
 
 private:
 	SelectivityStats selectivity_data;
-	atomic<State> state {State::Uninitialized};
+	atomic<BloomFilterState> state {BloomFilterState::Uninitialized};
 	idx_t num_sectors;
 
 	AllocatedData buf_;
