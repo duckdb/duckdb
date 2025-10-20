@@ -272,15 +272,18 @@ void MetadataManager::Flush() {
 			}
 			continue;
 		}
-		auto handle = buffer_manager.Pin(block.block);
+		auto block_handle = block.block;
+		auto handle = buffer_manager.Pin(block_handle);
 		// zero-initialize the few leftover bytes
 		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
-		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
-			auto new_block =
-			    block_manager.ConvertToPersistent(QueryContext(), kv.first, block.block, std::move(handle));
-
+		if (block_handle->BlockId() >= MAXIMUM_BLOCK) {
 			// Convert the temporary block to a persistent block.
+			// we cannot use ConvertToPersistent as another thread might still be reading the block
+			// so we use the safe version of ConvertToPersistent
+			auto new_block = block_manager.ConvertToPersistent(QueryContext(), kv.first, std::move(block_handle),
+			                                                   std::move(handle), ConvertToPersistentMode::THREAD_SAFE);
+
 			guard.lock();
 			block.block = std::move(new_block);
 			guard.unlock();

@@ -20,6 +20,7 @@
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -74,20 +75,6 @@ bool BindingsReferenceRowNumber(const vector<ColumnBinding> &bindings, const Log
 	}
 	return false;
 }
-// Window, Filter, new_bindings, aggregate_payload
-TopNWindowEliminationParameters ExtractOptimizerParameters(const LogicalWindow &window, const LogicalFilter &filter,
-                                                           const vector<ColumnBinding> &bindings,
-                                                           const vector<unique_ptr<Expression>> &aggregate_payload) {
-	TopNWindowEliminationParameters params;
-
-	auto &limit_expr = filter.expressions[0]->Cast<BoundComparisonExpression>().right;
-	params.limit = limit_expr->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
-	params.include_row_number = BindingsReferenceRowNumber(bindings, window);
-	params.payload_type = aggregate_payload.size() > 1 ? TopNPayloadType::STRUCT_PACK : TopNPayloadType::SINGLE_COLUMN;
-	params.order_type = window.expressions[0]->Cast<BoundWindowExpression>().orders[0].type;
-
-	return params;
-}
 
 } // namespace
 
@@ -97,6 +84,11 @@ TopNWindowElimination::TopNWindowElimination(ClientContext &context_p, Optimizer
 }
 
 unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOperator> op) {
+	auto &extension_manager = context.db->GetExtensionManager();
+	if (!extension_manager.ExtensionIsLoaded("core_functions")) {
+		return op;
+	}
+
 	ColumnBindingReplacer replacer;
 	op = OptimizeInternal(std::move(op), replacer);
 	if (!replacer.replacement_bindings.empty()) {
@@ -163,15 +155,24 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	return unique_ptr<LogicalOperator>(std::move(op));
 }
 
-unique_ptr<Expression> TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params,
-                                                                        const bool requires_arg,
-                                                                        const OrderType order_type) const {
+unique_ptr<Expression>
+TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params,
+                                                 const bool requires_arg,
+                                                 const TopNWindowEliminationParameters &params) const {
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	FunctionBinder function_binder(context);
 
-	D_ASSERT(order_type == OrderType::ASCENDING || order_type == OrderType::DESCENDING);
-	string fun_name = requires_arg ? "arg_" : "";
-	fun_name += order_type == OrderType::ASCENDING ? "min" : "max";
+	// If the value column can be null, we must use the nulls_last function to follow null ordering semantics
+	const bool change_to_arg = !requires_arg && params.can_be_null && params.limit > 1;
+	if (change_to_arg) {
+		// Copy value as argument
+		aggregate_params.insert(aggregate_params.begin() + 1, aggregate_params[0]->Copy());
+	}
+
+	D_ASSERT(params.order_type == OrderType::ASCENDING || params.order_type == OrderType::DESCENDING);
+	string fun_name = requires_arg || change_to_arg ? "arg_" : "";
+	fun_name += params.order_type == OrderType::ASCENDING ? "min" : "max";
+	fun_name += params.can_be_null && (requires_arg || change_to_arg) ? "_nulls_last" : "";
 
 	auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, fun_name);
 	const auto fun = fun_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(aggregate_params));
@@ -206,7 +207,7 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 		aggregate_params.push_back(std::move(make_uniq<BoundConstantExpression>(Value::BIGINT(params.limit))));
 	}
 
-	auto aggregate_expr = CreateAggregateExpression(std::move(aggregate_params), use_arg, params.order_type);
+	auto aggregate_expr = CreateAggregateExpression(std::move(aggregate_params), use_arg, params);
 
 	vector<unique_ptr<Expression>> select_list;
 	select_list.push_back(std::move(aggregate_expr));
@@ -366,10 +367,6 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 }
 
 bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
-	if (!stats) {
-		return false;
-	}
-
 	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return false;
 	}
@@ -448,15 +445,9 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (window_expr.orders[0].type != OrderType::DESCENDING && window_expr.orders[0].type != OrderType::ASCENDING) {
 		return false;
 	}
-
-	VisitExpression(&window_expr.orders[0].expression);
-	for (const auto &column_ref : column_references) {
-		const auto &column_stats = stats->find(column_ref.first);
-		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
-			return false;
-		}
+	if (window_expr.orders[0].null_order != OrderByNullType::NULLS_LAST) {
+		return false;
 	}
-	column_references.clear();
 
 	// We have found a grouped top-n window construct!
 	return true;
@@ -587,6 +578,34 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 		binding.column_index = op->types.size() - 1;
 		replacer.replacement_bindings.emplace_back(topmost_bindings[row_id_binding_idx], binding);
 	}
+}
+
+TopNWindowEliminationParameters
+TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, const LogicalFilter &filter,
+                                                  const vector<ColumnBinding> &bindings,
+                                                  vector<unique_ptr<Expression>> &aggregate_payload) {
+	TopNWindowEliminationParameters params;
+
+	auto &limit_expr = filter.expressions[0]->Cast<BoundComparisonExpression>().right;
+	params.limit = limit_expr->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
+	params.include_row_number = BindingsReferenceRowNumber(bindings, window);
+	params.payload_type = aggregate_payload.size() > 1 ? TopNPayloadType::STRUCT_PACK : TopNPayloadType::SINGLE_COLUMN;
+	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	params.order_type = window_expr.orders[0].type;
+
+	VisitExpression(&window_expr.orders[0].expression);
+	if (params.payload_type == TopNPayloadType::SINGLE_COLUMN && !aggregate_payload.empty()) {
+		VisitExpression(&aggregate_payload[0]);
+	}
+	for (const auto &column_ref : column_references) {
+		const auto &column_stats = stats->find(column_ref.first);
+		if (column_stats == stats->end() || column_stats->second->CanHaveNull()) {
+			params.can_be_null = true;
+		}
+	}
+	column_references.clear();
+
+	return params;
 }
 
 } // namespace duckdb

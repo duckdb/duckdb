@@ -896,10 +896,10 @@ Interrupt running query
 DUCKDB_C_API void duckdb_interrupt(duckdb_connection connection);
 
 /*!
-Get progress of the running query
+Get the progress of the running query.
 
-* @param connection The working connection
-* @return -1 if no progress or a percentage of the progress
+* @param connection The connection running the query.
+* @return The query progress type containing progress information.
 */
 DUCKDB_C_API duckdb_query_progress_type duckdb_query_progress(duckdb_connection connection);
 
