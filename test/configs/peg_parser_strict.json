@@ -8,6 +8,12 @@
   ],
   "skip_tests": [
     {
+      "reason": "Multi-statement containing unimplemented statementType",
+      "paths": [
+        "test/sql/delete/test_segment_deletes.test"
+      ]
+    },
+    {
       "reason": "Quotations",
       "paths": [
         "test/sql/pragma/test_show_tables_from.test",
