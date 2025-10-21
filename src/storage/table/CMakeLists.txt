@@ -1,3 +1,5 @@
+add_subdirectory(variant)
+
 add_library_unity(
   duckdb_storage_table
   OBJECT

@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/variant_column_data.hpp"
+#include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -6,6 +7,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -314,39 +316,95 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(RowGr
 	return make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_group,
-                                                                ColumnCheckpointInfo &checkpoint_info) {
-	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
-	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
-	//! TODO: implement the logic to create new data for both the 'unshredded' and the 'shredded' ColumnData, and then
-	//! Checkpoint *that*
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
-	checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
-	return std::move(checkpoint_state);
+vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &row_group,
+                                                                    const LogicalType &shredded_type) {
+	//! scan_chunk
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::VARIANT()}, STANDARD_VECTOR_SIZE);
+	auto &scan_vector = scan_chunk.data[0];
 
-	auto &old_unshredded = sub_columns[0];
-	auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
+	//! append_chunk
+	auto &old_unshredded = sub_columns[0]->Cast<StructColumnData>();
+	auto &child_types = StructType::GetChildTypes(shredded_type);
+	D_ASSERT(child_types.size() == 2);
+
+	DataChunk append_chunk;
+	append_chunk.Initialize(Allocator::DefaultAllocator(), {shredded_type}, STANDARD_VECTOR_SIZE);
+	auto &append_vector = append_chunk.data[0];
+
 	//! Create the new column data for the shredded data
-	auto unshredded = CreateColumnUnique(block_manager, info, 1, start, old_unshredded->type, this);
-	auto shredded = CreateColumnUnique(block_manager, info, 2, start, shredded_type, this);
+	vector<unique_ptr<ColumnData>> ret(2);
+	ret[0] = CreateColumnUnique(block_manager, info, 1, start, old_unshredded.type, this);
+	ret[1] = CreateColumnUnique(block_manager, info, 2, start, child_types[1].second, this);
+	auto &unshredded = ret[0];
+	auto &shredded = ret[1];
 
-	//! TODO: Scan the current data, apply the transformation and append it to the shredded data
 	ColumnAppendState unshredded_append_state;
 	unshredded->InitializeAppend(unshredded_append_state);
 
 	ColumnAppendState shredded_append_state;
 	shredded->InitializeAppend(shredded_append_state);
 
-	// scan the original table, and fill the new column with the transformed value
-	ColumnScanState variant_scan_state;
-	InitializeScan(variant_scan_state);
+	ColumnScanState scan_state;
+	scan_state.scan_child_column.resize(2, true);
 
-	//! Now checkpoint the shredded data
-	checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
-	checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
+	InitializeScan(scan_state);
+	//! Scan + transform + append
+	auto &nodes = old_unshredded.GetSegments().ReferenceSegments();
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto &segment = *nodes[segment_idx].node;
+		ColumnScanState scan_state;
+		scan_state.current = &segment;
+		segment.InitializeScan(scan_state);
 
-	//! Replace the old data with the new
-	ReplaceColumns(std::move(unshredded), std::move(shredded));
+		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
+			scan_chunk.Reset();
+
+			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
+			scan_state.row_index = segment.start + base_row_index;
+
+			CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
+
+			append_chunk.Reset();
+			VariantColumnData::ShredVariantData(scan_vector, append_vector, child_types[1].second);
+
+			auto &unshredded_vector = *StructVector::GetEntries(append_vector)[0];
+			auto &shredded_vector = *StructVector::GetEntries(append_vector)[1];
+			unshredded->Append(unshredded_append_state, unshredded_vector, scan_chunk.size());
+			shredded->Append(shredded_append_state, shredded_vector, scan_chunk.size());
+		}
+	}
+	return ret;
+}
+
+unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_group,
+                                                                ColumnCheckpointInfo &checkpoint_info) {
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
+
+	auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
+	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
+	auto &type_entries = StructType::GetChildTypes(shredded_type);
+	if (type_entries.size() == 2) {
+		//! STRUCT(unshredded VARIANT, shredded <...>)
+		auto shredded_data = WriteShreddedData(row_group, shredded_type);
+		D_ASSERT(shredded_data.size() == 2);
+		auto &unshredded = shredded_data[0];
+		auto &shredded = shredded_data[1];
+
+		//! Now checkpoint the shredded data
+		checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
+		checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
+
+		//! Replace the old data with the new
+		ReplaceColumns(std::move(unshredded), std::move(shredded));
+	} else {
+		D_ASSERT(type_entries.size() == 1);
+		//! STRUCT(unshredded VARIANT)
+		checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
+	}
+
 	return std::move(checkpoint_state);
 }
 

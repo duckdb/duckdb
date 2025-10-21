@@ -67,6 +67,9 @@ public:
 	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
 
 	void Verify(RowGroup &parent) override;
+
+public:
+	ColumnSegmentTree &GetSegments();
 };
 
 } // namespace duckdb

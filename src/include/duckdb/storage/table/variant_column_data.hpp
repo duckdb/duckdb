@@ -71,6 +71,8 @@ public:
 	void Verify(RowGroup &parent) override;
 
 private:
+	void ShredVariantData(Vector &input, Vector &output, const LogicalType &shredded_type);
+	vector<unique_ptr<ColumnData>> WriteShreddedData(RowGroup &row_group, const LogicalType &shredded_type);
 	idx_t SubColumnsSize() const;
 	void ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded);
 	void CreateScanStates(ColumnScanState &state);

@@ -54,12 +54,160 @@ VariantColumnStatsData &VariantStatsData::GetColumnStats(idx_t index) {
 	return columns[index];
 }
 
+const VariantColumnStatsData &VariantStatsData::GetColumnStats(idx_t index) const {
+	D_ASSERT(columns.size() > index);
+	return columns[index];
+}
+
 LogicalType VariantStats::GetUnshreddedType() {
 	return LogicalType::STRUCT(StructType::GetChildTypes(LogicalType::VARIANT()));
 }
 
+static LogicalType ProduceShreddedType(VariantLogicalType type_id) {
+	switch (type_id) {
+	case VariantLogicalType::BOOL_TRUE:
+	case VariantLogicalType::BOOL_FALSE:
+		return LogicalTypeId::BOOLEAN;
+	case VariantLogicalType::INT8:
+		return LogicalTypeId::TINYINT;
+	case VariantLogicalType::INT16:
+		return LogicalTypeId::SMALLINT;
+	case VariantLogicalType::INT32:
+		return LogicalTypeId::INTEGER;
+	case VariantLogicalType::INT64:
+		return LogicalTypeId::BIGINT;
+	case VariantLogicalType::INT128:
+		return LogicalTypeId::HUGEINT;
+	case VariantLogicalType::UINT8:
+		return LogicalTypeId::UTINYINT;
+	case VariantLogicalType::UINT16:
+		return LogicalTypeId::USMALLINT;
+	case VariantLogicalType::UINT32:
+		return LogicalTypeId::UINTEGER;
+	case VariantLogicalType::UINT64:
+		return LogicalTypeId::UBIGINT;
+	case VariantLogicalType::UINT128:
+		return LogicalTypeId::UHUGEINT;
+	case VariantLogicalType::FLOAT:
+		return LogicalTypeId::FLOAT;
+	case VariantLogicalType::DOUBLE:
+		return LogicalTypeId::DOUBLE;
+	case VariantLogicalType::DECIMAL:
+		throw InternalException("Can't shred on DECIMAL");
+	case VariantLogicalType::VARCHAR:
+		return LogicalTypeId::VARCHAR;
+	case VariantLogicalType::BLOB:
+		return LogicalTypeId::BLOB;
+	case VariantLogicalType::UUID:
+		return LogicalTypeId::UUID;
+	case VariantLogicalType::DATE:
+		return LogicalTypeId::DATE;
+	case VariantLogicalType::TIME_MICROS:
+		return LogicalTypeId::TIME;
+	case VariantLogicalType::TIME_NANOS:
+		return LogicalTypeId::TIME_NS;
+	case VariantLogicalType::TIMESTAMP_SEC:
+		return LogicalTypeId::TIMESTAMP_SEC;
+	case VariantLogicalType::TIMESTAMP_MILIS:
+		return LogicalTypeId::TIMESTAMP_MS;
+	case VariantLogicalType::TIMESTAMP_MICROS:
+		return LogicalTypeId::TIMESTAMP;
+	case VariantLogicalType::TIMESTAMP_NANOS:
+		return LogicalTypeId::TIMESTAMP_NS;
+	case VariantLogicalType::TIME_MICROS_TZ:
+		return LogicalTypeId::TIME_TZ;
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ;
+	case VariantLogicalType::INTERVAL:
+		return LogicalTypeId::INTERVAL;
+	case VariantLogicalType::BIGNUM:
+		return LogicalTypeId::BIGNUM;
+	case VariantLogicalType::BITSTRING:
+		return LogicalTypeId::BIT;
+	case VariantLogicalType::GEOMETRY:
+		return LogicalTypeId::GEOMETRY;
+	case VariantLogicalType::OBJECT:
+	case VariantLogicalType::ARRAY:
+		throw InternalException("Already handled above");
+	default:
+		throw NotImplementedException("Shredding on VariantLogicalType::%s not supported yet",
+		                              EnumUtil::ToString(type_id));
+	}
+}
+
+static LogicalType SetShreddedType(const LogicalType &typed_value) {
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("untyped_value_index", LogicalType::UINTEGER);
+	child_types.emplace_back("typed_value", typed_value);
+	return LogicalType::STRUCT(child_types);
+}
+
+static bool GetShreddedTypeInternal(const VariantStatsData &data, const VariantColumnStatsData &column,
+                                    LogicalType &out_type) {
+	idx_t max_count = 0;
+	uint8_t type_index;
+	//! Skip the 'VARIANT_NULL' type, we can't shred on NULL
+	for (uint8_t i = 1; i < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE); i++) {
+		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL)) {
+			//! Can't shred on DECIMAL currently
+			continue;
+		}
+		idx_t count = column.type_counts[i];
+		if (!max_count || count > max_count) {
+			max_count = count;
+			type_index = i;
+		}
+	}
+
+	if (!max_count) {
+		return false;
+	}
+
+	if (type_index == static_cast<uint8_t>(VariantLogicalType::OBJECT)) {
+		child_list_t<LogicalType> child_types;
+		for (auto &entry : column.field_stats) {
+			auto &child_column = data.GetColumnStats(entry.second);
+			LogicalType child_type;
+			if (GetShreddedTypeInternal(data, child_column, child_type)) {
+				child_types.emplace_back(entry.first, child_type);
+			}
+		}
+		if (child_types.empty()) {
+			return false;
+		}
+		auto shredded_type = LogicalType::STRUCT(child_types);
+		out_type = SetShreddedType(shredded_type);
+		return true;
+	}
+	if (type_index == static_cast<uint8_t>(VariantLogicalType::ARRAY)) {
+		D_ASSERT(column.element_stats != DConstants::INVALID_INDEX);
+		auto &element_column = data.GetColumnStats(column.element_stats);
+		LogicalType element_type;
+		if (!GetShreddedTypeInternal(data, element_column, element_type)) {
+			return false;
+		}
+		auto shredded_type = LogicalType::LIST(element_type);
+		out_type = SetShreddedType(shredded_type);
+		return true;
+	}
+	auto type_id = static_cast<VariantLogicalType>(type_index);
+
+	auto shredded_type = ProduceShreddedType(type_id);
+	out_type = SetShreddedType(shredded_type);
+	return true;
+}
+
 LogicalType VariantStats::GetShreddedType(const BaseStatistics &stats) {
-	throw NotImplementedException("GetShreddedType");
+	auto &data = GetDataUnsafe(stats);
+	auto &root_column = data.GetColumnStats(0);
+
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("unshredded", GetUnshreddedType());
+	LogicalType shredded_type;
+	if (GetShreddedTypeInternal(data, root_column, shredded_type)) {
+		child_types.emplace_back("shredded", shredded_type);
+	}
+	return LogicalType::STRUCT(child_types);
 }
 
 void VariantStats::CreateUnshreddedStats(BaseStatistics &stats) {

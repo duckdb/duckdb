@@ -371,6 +371,10 @@ void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t r
 	}
 }
 
+ColumnSegmentTree &StructColumnData::GetSegments() {
+	return data;
+}
+
 void StructColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	ColumnData::Verify(parent);

@@ -34,6 +34,7 @@ public:
 	void Update(const Value &value);
 
 	VariantColumnStatsData &GetColumnStats(idx_t index);
+	const VariantColumnStatsData &GetColumnStats(idx_t index) const;
 
 public:
 	//! Nested type analysis
