@@ -38,7 +38,7 @@ set(JSON_EXTENSION_FILES
 
 build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
-build_loadable_extension(json ${PARAMETERS} json_extension)
+build_loadable_extension(json ${PARAMETERS} ${JSON_EXTENSION_FILES})
 target_link_libraries(json_loadable_extension duckdb_yyjson)
 
 install(
