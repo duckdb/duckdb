@@ -91,8 +91,7 @@ endforeach(LINK_LIB)
 
 
 add_library(
-  duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS}
-                       $<TARGET_OBJECTS:dummy_static_extension_loader>)
+  duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
 target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
 link_threads(duckdb_static PUBLIC)
 
