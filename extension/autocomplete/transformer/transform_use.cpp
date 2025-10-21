@@ -11,12 +11,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 
 	string value_str;
 	if (IsInvalidSchema(qn.schema)) {
-		value_str = qn.name;
+		value_str = KeywordHelper::WriteOptionallyQuoted(qn.name);
 	} else {
-		value_str = qn.schema + "." + qn.name;
+		value_str = KeywordHelper::WriteOptionallyQuoted(qn.schema) + "." + KeywordHelper::WriteOptionallyQuoted(qn.name);
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
+	Printer::Print(value_expr->ToString());
 	return make_uniq<SetVariableStatement>("schema", std::move(value_expr), SetScope::AUTOMATIC);
 }
 
