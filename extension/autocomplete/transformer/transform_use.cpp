@@ -17,7 +17,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
-	Printer::Print(value_expr->ToString());
 	return make_uniq<SetVariableStatement>("schema", std::move(value_expr), SetScope::AUTOMATIC);
 }
 
