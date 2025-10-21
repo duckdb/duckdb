@@ -58,6 +58,10 @@ LogicalType VariantStats::GetUnshreddedType() {
 	return LogicalType::STRUCT(StructType::GetChildTypes(LogicalType::VARIANT()));
 }
 
+LogicalType VariantStats::GetShreddedType(const BaseStatistics &stats) {
+	throw NotImplementedException("GetShreddedType");
+}
+
 void VariantStats::CreateUnshreddedStats(BaseStatistics &stats) {
 	BaseStatistics::Construct(stats.child_stats[0], GetUnshreddedType());
 }

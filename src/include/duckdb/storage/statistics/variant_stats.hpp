@@ -43,6 +43,8 @@ public:
 struct VariantStats {
 public:
 	DUCKDB_API static LogicalType GetUnshreddedType();
+	DUCKDB_API static LogicalType GetShreddedType(const BaseStatistics &stats);
+
 	DUCKDB_API static void CreateUnshreddedStats(BaseStatistics &stats);
 	DUCKDB_API static void Construct(BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);

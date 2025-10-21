@@ -195,14 +195,9 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 	}
 
 	if (type.id() == LogicalTypeId::VARIANT) {
-		child_states.resize(3);
-
-		D_ASSERT(children.empty());
+		// variant - column scan states are created later
+		// this is done because the internal shape of the VARIANT is different per rowgroup
 		scan_child_column.resize(2, true);
-		auto unshredded_type = VariantStats::GetUnshreddedType();
-		child_states[1].Initialize(context_p, unshredded_type, options);
-		child_states[2].Initialize(context_p, unshredded_type, options);
-		child_states[0].scan_options = options;
 		return;
 	}
 

@@ -26,6 +26,23 @@ idx_t VariantColumnData::SubColumnsSize() const {
 	return is_shredded ? 2 : 1;
 }
 
+void VariantColumnData::ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded) {
+	sub_columns.clear();
+	sub_columns.push_back(std::move(unshredded));
+	sub_columns.push_back(std::move(shredded));
+}
+
+void VariantColumnData::CreateScanStates(ColumnScanState &state) {
+	state.child_states.clear();
+	state.child_states.resize(sub_columns.size() + 1);
+
+	auto unshredded_type = VariantStats::GetUnshreddedType();
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		state.child_states[i + 1].Initialize(state.context, unshredded_type, state.scan_options);
+	}
+	state.child_states[0].scan_options = state.scan_options;
+}
+
 void VariantColumnData::SetStart(idx_t new_start) {
 	this->start = new_start;
 	for (idx_t i = 0; i < SubColumnsSize(); i++) {
@@ -50,7 +67,7 @@ void VariantColumnData::InitializePrefetch(PrefetchState &prefetch_state, Column
 }
 
 void VariantColumnData::InitializeScan(ColumnScanState &state) {
-	D_ASSERT(state.child_states.size() == 3);
+	CreateScanStates(state);
 	state.row_index = 0;
 	state.current = nullptr;
 
@@ -67,7 +84,7 @@ void VariantColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
-	D_ASSERT(state.child_states.size() == 3);
+	CreateScanStates(state);
 	state.row_index = row_idx;
 	state.current = nullptr;
 
@@ -305,6 +322,31 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 	//! Checkpoint *that*
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
+	return std::move(checkpoint_state);
+
+	auto &old_unshredded = sub_columns[0];
+	auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
+	//! Create the new column data for the shredded data
+	auto unshredded = CreateColumnUnique(block_manager, info, 1, start, old_unshredded->type, this);
+	auto shredded = CreateColumnUnique(block_manager, info, 2, start, shredded_type, this);
+
+	//! TODO: Scan the current data, apply the transformation and append it to the shredded data
+	ColumnAppendState unshredded_append_state;
+	unshredded->InitializeAppend(unshredded_append_state);
+
+	ColumnAppendState shredded_append_state;
+	shredded->InitializeAppend(shredded_append_state);
+
+	// scan the original table, and fill the new column with the transformed value
+	ColumnScanState variant_scan_state;
+	InitializeScan(variant_scan_state);
+
+	//! Now checkpoint the shredded data
+	checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
+	checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
+
+	//! Replace the old data with the new
+	ReplaceColumns(std::move(unshredded), std::move(shredded));
 	return std::move(checkpoint_state);
 }
 
