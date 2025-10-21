@@ -11,7 +11,8 @@
       "reason": "Quotations",
       "paths": [
         "test/sql/peg_parser/transformer/use_statement.test",
-        "test/sql/pragma/test_show_tables_from.test"
+        "test/sql/pragma/test_show_tables_from.test",
+        "test/sql/attach/attach_dbname_quotes.test"
       ]
     },
     {
