@@ -14,6 +14,12 @@
       ]
     },
     {
+      "reason": "Parser exception because of dollar-quoted strings",
+      "paths": [
+        "test/sql/peg_parser/parser"
+      ]
+    },
+    {
       "reason": "Quotations",
       "paths": [
         "test/sql/pragma/test_show_tables_from.test",
