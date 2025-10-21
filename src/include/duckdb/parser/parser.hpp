@@ -74,6 +74,7 @@ public:
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
 	StatementType GetStatementType(const string &query);
+	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
 	ParserOptions options;

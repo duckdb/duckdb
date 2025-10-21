@@ -207,6 +207,30 @@ StatementType Parser::GetStatementType(const string &query) {
 	}
 }
 
+void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
+	if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
+		throw ParserException(
+			"Parser override failed to return a valid statement: %s\n\nConsider restarting the "
+			"database and "
+			"using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
+			"default parser.",
+			result.error.RawMessage());
+	}
+	if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+		if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
+			throw NotImplementedException("Parser override has not yet implemented this "
+										  "transformer rule. (Original error: %s)",
+										  result.error.RawMessage());
+		}
+		if (result.error.Type() == ExceptionType::PARSER) {
+			throw ParserException(
+				"Parser override could not parse this query. (Original error: %s)",
+				result.error.RawMessage());
+		}
+		result.error.Throw();
+	}
+}
+
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
@@ -236,67 +260,24 @@ void Parser::ParseQuery(const string &query) {
 					return;
 				}
 				if (StringUtil::CIEquals(parser_override_option, "strict")) {
+					ThrowParserOverrideError(result);
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict_when_supported")) {
 					auto statement_type = GetStatementType(query);
-					bool throw_error = false;
+					bool is_supported = false;
 					switch (statement_type) {
-					case StatementType::INVALID_STATEMENT:
-					case StatementType::SELECT_STATEMENT:
-					case StatementType::INSERT_STATEMENT:
-					case StatementType::UPDATE_STATEMENT:
-					case StatementType::CREATE_STATEMENT:
-					case StatementType::DELETE_STATEMENT:
-					case StatementType::PREPARE_STATEMENT:
-					case StatementType::EXECUTE_STATEMENT:
-					case StatementType::ALTER_STATEMENT:
-					case StatementType::TRANSACTION_STATEMENT:
-					case StatementType::COPY_STATEMENT:
-					case StatementType::ANALYZE_STATEMENT:
-					case StatementType::CREATE_FUNC_STATEMENT:
-					case StatementType::EXPLAIN_STATEMENT:
-					case StatementType::DROP_STATEMENT:
-					case StatementType::EXPORT_STATEMENT:
-					case StatementType::VACUUM_STATEMENT:
-					case StatementType::CALL_STATEMENT:
-					case StatementType::RELATION_STATEMENT:
-					case StatementType::EXTENSION_STATEMENT:
-					case StatementType::LOGICAL_PLAN_STATEMENT:
-					case StatementType::MULTI_STATEMENT:
-					case StatementType::COPY_DATABASE_STATEMENT:
-					case StatementType::UPDATE_EXTENSIONS_STATEMENT:
-					case StatementType::MERGE_INTO_STATEMENT:
-					case StatementType::PRAGMA_STATEMENT:
-					case StatementType::SET_STATEMENT:
-						throw_error = false;
-						break;
 					case StatementType::VARIABLE_SET_STATEMENT:
 					case StatementType::LOAD_STATEMENT:
 					case StatementType::ATTACH_STATEMENT:
 					case StatementType::DETACH_STATEMENT:
-						throw_error = true;
+						is_supported = true;
+						break;
+					default:
+						is_supported = false;
 						break;
 					}
-					if (throw_error) {
-						if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
-							throw ParserException(
-							    "Parser override failed to return a valid statement: %s\n\nConsider restarting the "
-							    "database and "
-							    "using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
-							    "default parser.",
-							    result.error.RawMessage());
-						}
-						if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-							if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
-								throw NotImplementedException("Parser override has not yet implemented this "
-								                              "transformer rule. (Original error: %s)",
-								                              result.error.RawMessage());
-							} else if (result.error.Type() == ExceptionType::PARSER) {
-								throw ParserException(
-								    "Parser override could not parse this query. (Original error: %s)",
-								    result.error.RawMessage());
-							} else {
-								result.error.Throw();
-							}
-						}
+					if (is_supported) {
+						ThrowParserOverrideError(result);
 					}
 				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
 					continue;
