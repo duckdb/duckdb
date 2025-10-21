@@ -211,6 +211,7 @@ private:
 
 	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
+	static string TransformPrefixOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformFunctionIdentifier(PEGTransformer &transformer,

@@ -182,6 +182,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 	return func_expr;
 }
 
+string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.TransformEnum<string>(choice_pr.result);
+}
+
 // Expression <- BaseExpression RecursiveExpression*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {

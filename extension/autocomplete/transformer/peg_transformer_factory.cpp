@@ -99,6 +99,8 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
 	REGISTER_TRANSFORM(TransformConstantLiteral);
+	REGISTER_TRANSFORM(TransformPrefixExpression);
+	REGISTER_TRANSFORM(TransformPrefixOperator);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
 	REGISTER_TRANSFORM(TransformFunctionIdentifier);
 
@@ -162,6 +164,11 @@ PEGTransformerFactory::PEGTransformerFactory() {
 
 	RegisterEnum<TransactionModifierType>("ReadOnly", TransactionModifierType::TRANSACTION_READ_ONLY);
 	RegisterEnum<TransactionModifierType>("ReadWrite", TransactionModifierType::TRANSACTION_READ_WRITE);
+
+	RegisterEnum<string>("NotPrefixOperator", "NOT");
+	RegisterEnum<string>("MinusPrefixOperator", "-");
+	RegisterEnum<string>("PlusPrefixOperator", "+");
+	RegisterEnum<string>("TildePrefixOperator", "~");
 }
 
 vector<optional_ptr<ParseResult>>
