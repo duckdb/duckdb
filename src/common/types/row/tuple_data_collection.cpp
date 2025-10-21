@@ -189,7 +189,7 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, v
 void TupleDataCollection::InitializeAppend(TupleDataPinState &pin_state, TupleDataPinProperties properties) {
 	pin_state.properties = properties;
 	if (segments.empty()) {
-		segments.emplace_back(make_unsafe_uniq<TupleDataSegment>(allocator));
+		segments.emplace_back(stl_allocator->MakeUnsafePtr<TupleDataSegment>(allocator));
 	}
 }
 
@@ -478,7 +478,7 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	other.Reset();
 }
 
-void TupleDataCollection::AddSegment(unsafe_unique_ptr<TupleDataSegment> segment) {
+void TupleDataCollection::AddSegment(unsafe_arena_ptr<TupleDataSegment> segment) {
 	count += segment->count;
 	data_size += segment->data_size;
 	segments.emplace_back(std::move(segment));
