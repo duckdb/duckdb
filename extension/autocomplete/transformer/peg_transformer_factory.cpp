@@ -87,6 +87,9 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	// detach.gram
 	REGISTER_TRANSFORM(TransformDetachStatement);
 
+	// deallocate.gram
+	REGISTER_TRANSFORM(TransformDeallocateStatement);
+
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformRecursiveExpression);

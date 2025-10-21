@@ -187,6 +187,10 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static string TransformStringLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
+	// deallocate.gram
+	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
+																			 optional_ptr<ParseResult> parse_result);
+
 	// expression.gram
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
