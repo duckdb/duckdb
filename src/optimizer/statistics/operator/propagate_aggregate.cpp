@@ -59,7 +59,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	idx_t count = 0;
 	for (auto &stats : partition_stats) {
 		if (stats.count_type == CountType::COUNT_APPROXIMATE) {
-			// we cannot get an exact count
+			// we can only get an exact count
 			return;
 		}
 		count += stats.count;
