@@ -238,7 +238,6 @@ void Parser::ParseQuery(const string &query) {
 				if (StringUtil::CIEquals(parser_override_option, "strict")) {
 					auto statement_type = GetStatementType(query);
 					bool throw_error = false;
-					// Printer::Print(StatementTypeToString(statement_type));
 					switch (statement_type) {
 					case StatementType::INVALID_STATEMENT:
 					case StatementType::SELECT_STATEMENT:
@@ -300,7 +299,6 @@ void Parser::ParseQuery(const string &query) {
 						}
 					}
 				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
-					Printer::PrintF("Failed to parse/transform %s", query);
 					continue;
 				}
 			}
