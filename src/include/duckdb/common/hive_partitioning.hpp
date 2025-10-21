@@ -61,7 +61,7 @@ public:
 	}
 
 	//! Prunes a file based on a set of filters
-	DUCKDB_API bool ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_directory);
+	DUCKDB_API bool ApplyFiltersToFile(const OpenFileInfo &file);
 
 	//! Finalize the hive filtering
 	DUCKDB_API vector<OpenFileInfo> Finalize(idx_t total_files);
@@ -77,6 +77,24 @@ private:
 	vector<OpenFileInfo> pruned_files;
 	vector<bool> have_preserved_filter;
 	bool consumed;
+};
+
+struct HiveFileGlobInput : FileGlobInput {
+	HiveFileGlobInput(const FileGlobInput &glob_input, unique_ptr<HiveFilterParams> hive_params)
+	    : FileGlobInput(glob_input.behavior, glob_input.extension, glob_input.min_files),
+	      executor(make_uniq<HivePartitioningExecutor>(hive_params->context, hive_params->filters, hive_params->options,
+	                                                   hive_params->info)) {
+	}
+
+	bool IncludeFile(const OpenFileInfo &file) const override {
+		return !executor->ApplyFiltersToFile(file);
+	}
+
+	void Finalize() const override {
+		executor->Finalize();
+	}
+
+	unique_ptr<HivePartitioningExecutor> executor;
 };
 
 struct HivePartitionKey {

@@ -284,11 +284,12 @@ unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext
 	lock_guard<mutex> lck(lock);
 
 	if (options.hive_lazy_listing) {
-		HiveFilterParams hive_filter_params(context, filters, options, info);
-		FileGlobInput file_glob_input = glob_input;
+		auto hive_filter_params = make_uniq<HiveFilterParams>(context, filters, options, info);
+		auto file_glob_input = make_uniq<HiveFileGlobInput>(glob_input, std::move(hive_filter_params));
+		// No limit to number of files to
+		file_glob_input->min_files.SetInvalid();
 
-		file_glob_input.hive_params = hive_filter_params;
-		while (ExpandNextPath(file_glob_input, false)) {
+		while (ExpandNextPath(*file_glob_input, false)) {
 		}
 		return make_uniq<SimpleMultiFileList>(expanded_files);
 	}
@@ -383,11 +384,7 @@ OpenFileInfo GlobMultiFileList::PeekFirstFile() {
 OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i, bool peek) {
 	auto &files = peek ? peeked_files : expanded_files;
 	while (files.size() <= i) {
-		FileGlobInput file_glob_input = glob_input;
-		if (peek) {
-			file_glob_input.max_files = i + 1;
-		}
-		if (!ExpandNextPath(file_glob_input, peek)) {
+		if (!ExpandNextPath(glob_input, peek)) {
 			return OpenFileInfo("");
 		}
 	}

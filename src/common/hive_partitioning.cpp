@@ -185,7 +185,7 @@ HivePartitioningFilterInfo HivePartitioning::GetFilterInfo(const MultiFilePushdo
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
-bool HivePartitioningExecutor::ApplyFiltersToFile(OpenFileInfo &file, bool is_deepest_directory) {
+bool HivePartitioningExecutor::ApplyFiltersToFile(const OpenFileInfo &file) {
 	if (consumed) {
 		// TODO: throw an error, shouldn't try applying filters after finalizing
 		return false;
@@ -260,7 +260,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 	HivePartitioningExecutor hive_partitioning_executor(context, filters, options, info);
 
 	for (idx_t i = 0; i < files.size(); i++) {
-		hive_partitioning_executor.ApplyFiltersToFile(files[i], true);
+		hive_partitioning_executor.ApplyFiltersToFile(files[i]);
 	}
 	auto pruned_files = hive_partitioning_executor.Finalize(files.size());
 	files = std::move(pruned_files);

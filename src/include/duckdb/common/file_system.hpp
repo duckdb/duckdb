@@ -254,8 +254,7 @@ public:
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, const FileGlobInput &glob_input,
 	                                             optional_ptr<FileOpener> opener);
-	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
-	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
+	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context, const FileGlobInput &input);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);

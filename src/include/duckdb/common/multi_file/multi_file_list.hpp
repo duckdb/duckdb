@@ -119,7 +119,7 @@ protected:
 protected:
 	//! The unexpanded input paths
 	const vector<OpenFileInfo> paths;
-	//! Whether paths can expand to 0 files
+	//! File globbing parameters and state
 	const FileGlobInput glob_input;
 
 public:

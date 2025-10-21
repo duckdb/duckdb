@@ -9,10 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/optional_ptr.hpp"
-#include <limits>
-
-#undef max
+#include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -22,16 +20,28 @@ enum class FileGlobOptions : uint8_t { DISALLOW_EMPTY = 0, ALLOW_EMPTY = 1, FALL
 
 struct FileGlobInput {
 	FileGlobInput(FileGlobOptions options) // NOLINT: allow implicit conversion from FileGlobOptions
-	    : behavior(options), max_files(std::numeric_limits<idx_t>::max()) {
+	    : behavior(options) {
 	}
-	FileGlobInput(FileGlobOptions options, string extension_p)
-	    : behavior(options), extension(std::move(extension_p)), max_files(std::numeric_limits<idx_t>::max()) {
+	FileGlobInput(FileGlobOptions options, string extension_p, optional_idx min_files = optional_idx())
+	    : behavior(options), extension(std::move(extension_p)), min_files(min_files) {
+	}
+
+	virtual ~FileGlobInput() = default;
+
+	//! Whether or not to include this file in the final glob
+	virtual bool IncludeFile(const OpenFileInfo &file) const {
+		return true;
+	}
+
+	//! Called after globbing is complete
+	virtual void Finalize() const {
+		return;
 	}
 
 	FileGlobOptions behavior;
 	string extension;
-	idx_t max_files;
-	optional_ptr<HiveFilterParams> hive_params;
+	//! Minimum number of files to fetch before returning
+	optional_idx min_files;
 };
 
 } // namespace duckdb
