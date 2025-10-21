@@ -10,8 +10,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTransactionStatement(PE
 	return transformer.Transform<unique_ptr<TransactionStatement>>(choice_pr.result);
 }
 
-unique_ptr<TransactionStatement> PEGTransformerFactory::TransformBeginTransaction(PEGTransformer &transformer,
-                                                                          optional_ptr<ParseResult> parse_result) {
+unique_ptr<TransactionStatement>
+PEGTransformerFactory::TransformBeginTransaction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION);
 	auto &read_or_write = list_pr.Child<OptionalParseResult>(2);
@@ -32,12 +32,12 @@ TransactionModifierType PEGTransformerFactory::TransformReadOrWrite(PEGTransform
 }
 
 unique_ptr<TransactionStatement> PEGTransformerFactory::TransformCommitTransaction(PEGTransformer &,
-                                                                           optional_ptr<ParseResult>) {
+                                                                                   optional_ptr<ParseResult>) {
 	return make_uniq<TransactionStatement>(make_uniq<TransactionInfo>(TransactionType::COMMIT));
 }
 
 unique_ptr<TransactionStatement> PEGTransformerFactory::TransformRollbackTransaction(PEGTransformer &,
-                                                                             optional_ptr<ParseResult>) {
+                                                                                     optional_ptr<ParseResult>) {
 	return make_uniq<TransactionStatement>(make_uniq<TransactionInfo>(TransactionType::ROLLBACK));
 }
 } // namespace duckdb

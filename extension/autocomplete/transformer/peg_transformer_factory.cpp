@@ -66,6 +66,9 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
 	REGISTER_TRANSFORM(TransformGenericCopyOption);
 
+	// checkpoint.gram
+	REGISTER_TRANSFORM(TransformCheckpointStatement);
+
 	// common.gram
 	REGISTER_TRANSFORM(TransformNumberLiteral);
 	REGISTER_TRANSFORM(TransformStringLiteral);

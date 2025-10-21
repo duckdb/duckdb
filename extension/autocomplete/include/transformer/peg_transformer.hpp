@@ -174,6 +174,10 @@ private:
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
 
+	// checkpoint.gram
+	static unique_ptr<SQLStatement> TransformCheckpointStatement(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+
 	// common.gram
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
@@ -252,7 +256,7 @@ private:
 	static unique_ptr<SQLStatement> TransformTransactionStatement(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TransactionStatement> TransformBeginTransaction(PEGTransformer &transformer,
-	                                                          optional_ptr<ParseResult> parse_result);
+	                                                                  optional_ptr<ParseResult> parse_result);
 	static TransactionModifierType TransformReadOrWrite(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TransactionStatement> TransformCommitTransaction(PEGTransformer &, optional_ptr<ParseResult>);
