@@ -62,6 +62,10 @@ public:
 	MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager);
 	~MetadataManager();
 
+	BufferManager &GetBufferManager() const {
+		return buffer_manager;
+	}
+
 	MetadataHandle AllocateHandle();
 	MetadataHandle Pin(const MetadataPointer &pointer);
 

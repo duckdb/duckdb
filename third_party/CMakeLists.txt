@@ -18,6 +18,11 @@ if(${BUILD_TPCE})
   add_subdirectory(tpce-tool)
 endif()
 
+if(NOT WIN32
+   AND ${BUILD_UNITTESTS} AND ${BUILD_TPCE})
+    add_subdirectory(tpce-tool)
+endif()
+
 if (${BUILD_BENCHMARKS})
   add_subdirectory(imdb)
 endif()

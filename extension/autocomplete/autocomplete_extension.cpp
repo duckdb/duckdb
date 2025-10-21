@@ -620,11 +620,11 @@ public:
 		statements.push_back(std::move(tokens));
 		tokens.clear();
 	}
-	void OnLastToken(TokenizeState state, string last_word, idx_t) override {
+	void OnLastToken(TokenizeState state, string last_word, idx_t last_pos) override {
 		if (last_word.empty()) {
 			return;
 		}
-		tokens.push_back(std::move(last_word));
+		tokens.emplace_back(std::move(last_word), last_pos);
 	}
 
 	vector<vector<MatcherToken>> statements;
@@ -700,17 +700,24 @@ public:
 
 		vector<unique_ptr<SQLStatement>> result;
 		try {
-			for (auto tokenized_statement : tokenizer.statements) {
+			for (auto &tokenized_statement : tokenizer.statements) {
 				if (tokenized_statement.empty()) {
 					continue;
 				}
 				auto &transformer = PEGTransformerFactory::GetInstance();
-				auto statement = transformer.Transform(tokenizer.statements[0], "Statement");
+				auto statement = transformer.Transform(tokenized_statement, "Statement");
+				if (statement) {
+					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
+					statement->stmt_length =
+					    NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset +
+					                       tokenized_statement[tokenized_statement.size() - 1].length);
+				}
+				statement->query = query;
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(std::move(result));
-		} catch (const ParserException &) {
-			return ParserOverrideResult();
+		} catch (std::exception &e) {
+			return ParserOverrideResult(e);
 		}
 	}
 };

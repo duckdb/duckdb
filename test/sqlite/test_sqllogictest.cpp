@@ -61,6 +61,11 @@ static void testRunner() {
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 	runner.enable_verification = VERIFICATION;
 
+	// Copy configured env vars
+	for (auto &kv : test_config.GetTestEnvMap()) {
+		runner.environment_variables[kv.first] = kv.second;
+	}
+
 	string prev_directory;
 
 	// We assume the test working dir for extensions to be one dir above the test/sql. Note that this is very hacky.

@@ -151,7 +151,7 @@ public:
 			if (!child_result) {
 				return nullptr;
 			}
-			results.push_back(std::move(child_result));
+			results.push_back(child_result);
 		}
 		state.token_index = list_state.token_index;
 		// Empty name implies it's a subrule, e.g. 'SET'i (StandardAssignment / SetTimeZone)
@@ -555,6 +555,7 @@ public:
 
 public:
 	explicit StringLiteralMatcher() : Matcher(TYPE) {
+		name = "StringLiteral";
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -605,6 +606,7 @@ public:
 
 public:
 	explicit NumberLiteralMatcher() : Matcher(TYPE) {
+		name = "NumberLiteral";
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -1049,25 +1051,28 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 			}
 			case '/': {
 				// OR operator - this signifies a choice between the last rule and the next rule
-				auto &last_matcher = list.GetLastRootMatcher().matcher;
-				if (last_matcher.Type() != MatcherType::LIST) {
+				auto &last_root_matcher = list.GetLastRootMatcher().matcher;
+				if (last_root_matcher.Type() != MatcherType::LIST) {
 					throw InternalException("OR expected a list matcher");
 				}
-				auto &list_matcher = last_matcher.Cast<ListMatcher>();
+				auto &list_matcher = last_root_matcher.Cast<ListMatcher>();
 				if (list_matcher.matchers.empty()) {
 					throw InternalException("OR rule found as first token");
 				}
-				auto &final_matcher = list_matcher.matchers.back();
-				vector<reference<Matcher>> choice_matchers;
-				choice_matchers.push_back(final_matcher);
-				auto &choice_matcher = Choice(choice_matchers);
+				auto &previous_matcher = list_matcher.matchers.back();
 
-				// the choice matcher gets added to the list matcher (instead of the previous matcher)
-				list_matcher.matchers.pop_back();
-				list_matcher.matchers.push_back(choice_matcher);
-				// then it gets pushed onto the stack of matchers
-				// the next rule will then get pushed onto the choice matcher
-				list.AddRootMatcher(choice_matcher);
+				if (previous_matcher.get().Type() == MatcherType::CHOICE) {
+					list.AddRootMatcher(previous_matcher);
+				} else {
+					vector<reference<Matcher>> choice_options;
+					choice_options.push_back(previous_matcher);
+					auto &new_choice_matcher = Choice(choice_options);
+
+					list_matcher.matchers.pop_back();
+					list_matcher.matchers.push_back(new_choice_matcher);
+
+					list.AddRootMatcher(new_choice_matcher);
+				}
 				break;
 			}
 			case '(': {

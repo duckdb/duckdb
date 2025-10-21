@@ -8,7 +8,9 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
                                                                    optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("'Statement' transformer rule has not been implemented yet.");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, const char *root_rule) {
@@ -35,7 +37,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		throw BinderException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
+		throw ParserException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
 		                      state.token_index, tokens[state.token_index].text, token_list);
 	}
 
@@ -45,6 +47,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	auto &factory = GetInstance();
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 }
 
@@ -56,7 +59,58 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
-	// Registering transform functions using the macro for brevity
 	REGISTER_TRANSFORM(TransformStatement);
+
+	// common.gram
+	REGISTER_TRANSFORM(TransformNumberLiteral);
+	REGISTER_TRANSFORM(TransformStringLiteral);
+
+	// expression.gram
+	REGISTER_TRANSFORM(TransformBaseExpression);
+	REGISTER_TRANSFORM(TransformExpression);
+	REGISTER_TRANSFORM(TransformLiteralExpression);
+	REGISTER_TRANSFORM(TransformSingleExpression);
+	REGISTER_TRANSFORM(TransformConstantLiteral);
+
+	// use.gram
+	REGISTER_TRANSFORM(TransformUseStatement);
+	REGISTER_TRANSFORM(TransformUseTarget);
+
+	// set.gram
+	REGISTER_TRANSFORM(TransformResetStatement);
+	REGISTER_TRANSFORM(TransformSetAssignment);
+	REGISTER_TRANSFORM(TransformSetSetting);
+	REGISTER_TRANSFORM(TransformSetStatement);
+	REGISTER_TRANSFORM(TransformSetTimeZone);
+	REGISTER_TRANSFORM(TransformSetVariable);
+	REGISTER_TRANSFORM(TransformStandardAssignment);
+	REGISTER_TRANSFORM(TransformVariableList);
+
+	RegisterEnum<SetScope>("LocalScope", SetScope::LOCAL);
+	RegisterEnum<SetScope>("GlobalScope", SetScope::GLOBAL);
+	RegisterEnum<SetScope>("SessionScope", SetScope::SESSION);
+	RegisterEnum<SetScope>("VariableScope", SetScope::VARIABLE);
+
+	RegisterEnum<Value>("FalseLiteral", Value(false));
+	RegisterEnum<Value>("TrueLiteral", Value(true));
+	RegisterEnum<Value>("NullLiteral", Value());
+}
+
+vector<optional_ptr<ParseResult>>
+PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result) {
+	// List(D) <- D (',' D)* ','?
+	vector<optional_ptr<ParseResult>> result;
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	result.push_back(list_pr.GetChild(0));
+	auto opt_child = list_pr.Child<OptionalParseResult>(1);
+	if (opt_child.HasResult()) {
+		auto repeat_result = opt_child.optional_result->Cast<RepeatParseResult>();
+		for (auto &child : repeat_result.children) {
+			auto &list_child = child->Cast<ListParseResult>();
+			result.push_back(list_child.GetChild(1));
+		}
+	}
+
+	return result;
 }
 } // namespace duckdb

@@ -174,14 +174,14 @@ struct GlobalBinderState {
 	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
+	//! The set of parameter expressions bound by this binder
+	optional_ptr<BoundParameterMap> parameters;
 };
 
 // QueryBinderState is state shared WITHIN a query, a new query-binder state is created when binding inside e.g. a view
 struct QueryBinderState {
 	//! The vector of active binders
 	vector<reference<ExpressionBinder>> active_binders;
-	//! The set of parameter expressions bound by this binder
-	optional_ptr<BoundParameterMap> parameters;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -200,8 +200,6 @@ public:
 
 	//! The client context
 	ClientContext &context;
-	//! A mapping of names to common table expressions
-	case_insensitive_set_t CTE_bindings; // NOLINT
 	//! The bind context
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
@@ -261,12 +259,8 @@ public:
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
-	//! Add a common table expression to the binder
-	void AddCTE(const string &name);
 	//! Find all candidate common table expression by name; returns empty vector if none exists
-	optional_ptr<Binding> GetCTEBinding(const string &name);
-
-	bool CTEExists(const string &name);
+	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);
