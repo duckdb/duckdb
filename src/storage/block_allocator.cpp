@@ -237,9 +237,13 @@ void BlockAllocator::FreeInternal() const {
 		for (idx_t i = 1; i < count; i++) {
 			const auto &previous_block_id = to_free_buffer[i - 1];
 			const auto &current_block_id = to_free_buffer[i];
+
+			// Don't coalesce on Windows
+#if !defined(_WIN32)
 			if (previous_block_id == current_block_id - 1) {
 				continue; // Current is contiguous with previous block
 			}
+#endif
 
 			// Previous block is the last contiguous block starting from block_id_start, free them in one go
 			FreeContiguousBlocks(block_id_start, previous_block_id);
