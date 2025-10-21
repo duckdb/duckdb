@@ -240,7 +240,8 @@ static string NormalizeTimeZone(const string &tz_str) {
 		const auto base_len = mapped.size();
 		for (; pos < tz_str.size(); ++pos) {
 			const auto digit = tz_str[pos];
-			if (digit == '0') {
+			//	We could get fancy here and count colons and their locations, but I doubt anyone cares.
+			if (digit == '0' || digit == ':') {
 				continue;
 			}
 			if (!StringUtil::CharacterIsDigit(digit)) {
@@ -251,10 +252,12 @@ static string NormalizeTimeZone(const string &tz_str) {
 		if (pos < tz_str.size()) {
 			break;
 		}
+		// If we didn't add anything, then make it +0
 		if (mapped.size() == base_len) {
 			mapped.back() = '+';
 			mapped += '0';
 		}
+		// Final sanity check
 		if (GetKnownTimeZone(mapped)) {
 			return mapped;
 		}

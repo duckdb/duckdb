@@ -199,7 +199,7 @@ NULL	NULL	NULL
 #
 # Verify UTC±NNNN translation
 #
-foreach utc UTC-0800 UTC-08 UTC-8
+foreach utc UTC-0800 UTC-08 UTC-8 UTC-08:00
 
 statement ok
 set TimeZone = '${utc}';
@@ -211,7 +211,7 @@ Etc/GMT-8
 
 endloop
 
-foreach utc UTC+0500 UTC+05 UTC+5
+foreach utc UTC+0500 UTC+05 UTC+5 UTC+05:00
 
 statement ok
 set TimeZone = '${utc}';
@@ -223,7 +223,7 @@ Etc/GMT+5
 
 endloop
 
-foreach utc UTC-1400 UTC-14
+foreach utc UTC-1400 UTC-14 UTC-14:00
 
 statement ok
 set TimeZone = '${utc}';
