@@ -25,16 +25,9 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 
 #if defined(_WIN32)
 	// Windows returns nullptr if the map fails
-	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_READWRITE));
+	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
 #else
-	// Some safety when assertions are enabled
-#if defined(D_ASSERT_IS_ENABLED)
-	auto flag = PROT_NONE;
-#else
-	auto flag = PROT_READ | PROT_WRITE;
-#endif
-
-	const auto ptr = mmap(nullptr, size, flag, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
 #endif
 }
@@ -54,36 +47,31 @@ static void FreeVirtualMemory(const data_ptr_t pointer, const idx_t size) {
 static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 	bool success;
 #if defined(_WIN32)
-	success = VirtualFree(pointer, size, MEM_DECOMMIT);
-#else
-	// Unix
-#if defined(__APPLE__)
+	success = VirtualFree(pointer, size, MEM_RESET);
+#elif defined(__APPLE__)
 	success = madvise(pointer, size, MADV_FREE_REUSABLE) == 0;
 #else
 	success = madvise(pointer, size, MADV_FREE) == 0;
-#endif
-
-#if defined(D_ASSERT_IS_ENABLED)
-	// Some safety when assertions are enabled
-	success &= mprotect(pointer, size, PROT_NONE) == 0;
-#endif
-
 #endif
 	if (!success) {
 		throw InternalException("OnDeallocation failed");
 	}
 }
 
-static void OnAllocation(const data_ptr_t pointer, const idx_t size) {
+static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 	bool success = true;
 #if defined(_WIN32)
 	success = VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE);
-#elif defined(D_ASSERT_IS_ENABLED)
-	success = mprotect(pointer, size, PROT_READ | PROT_WRITE) == 0;
+#elif defined(__APPLE__)
+	// Nothing to do here
+#else
+	// Incur page faults
+	for (idx_t i = 0; i < size; i += 4096) {
+		pointer[i] = 0;
+	}
 #endif
-
 	if (!success) {
-		throw InternalException("OnAllocation failed");
+		throw InternalException("OnDeallocation failed");
 	}
 }
 
@@ -177,8 +165,10 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 	uint32_t block_id;
 	if (to_free->q.try_dequeue(block_id)) {
 		// NOP: we didn't free this one yet, can immediately reuse
-	} else if (touched->q.try_dequeue(block_id) || untouched->q.try_dequeue(block_id)) {
-		OnAllocation(GetPointer(block_id), size);
+	} else if (touched->q.try_dequeue(block_id)) {
+		OnFirstAllocation(GetPointer(block_id), size);
+	} else if (untouched->q.try_dequeue(block_id)) {
+		// Nothing to do here
 	} else {
 		// We did not get a block ID, use fallback allocator
 		return allocator.AllocateData(size);
