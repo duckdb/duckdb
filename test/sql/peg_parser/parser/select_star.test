@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/select_star.test
+# name: test/sql/peg_parser/parser/select_star.test
 # description: Test select star expression in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

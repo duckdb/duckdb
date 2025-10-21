@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/dollar_quoted.test
+# name: test/sql/peg_parser/parser/dollar_quoted.test
 # description: Test dollar quoted strings in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

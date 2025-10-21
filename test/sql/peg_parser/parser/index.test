@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/index.test
+# name: test/sql/peg_parser/parser/index.test
 # description: Test index syntax in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

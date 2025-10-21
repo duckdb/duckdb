@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/insert.test
+# name: test/sql/peg_parser/parser/insert.test
 # description: Test analyze and vacuum statements in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/support_unreserved_keywords.test
+# name: test/sql/peg_parser/parser/support_unreserved_keywords.test
 # description: Test supporting different categories of keywords in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

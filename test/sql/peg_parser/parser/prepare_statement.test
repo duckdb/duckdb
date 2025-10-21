@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/prepare_statement.test
+# name: test/sql/peg_parser/parser/prepare_statement.test
 # description: Test prepare statement in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

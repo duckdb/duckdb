@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/empty_map.test
+# name: test/sql/peg_parser/parser/empty_map.test
 # description: Test empty map syntax peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/copy_expression.test
+# name: test/sql/peg_parser/parser/copy_expression.test
 # description: Test copy expression syntax in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

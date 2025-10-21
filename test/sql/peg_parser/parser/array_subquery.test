@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/array_subquery.test
+# name: test/sql/peg_parser/parser/array_subquery.test
 # description: Test array syntax in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

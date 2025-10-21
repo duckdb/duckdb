@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/show_table.test
+# name: test/sql/peg_parser/parser/show_table.test
 # description: Test create macro syntax in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/list_slices.test
+# name: test/sql/peg_parser/parser/list_slices.test
 # description: Test list slices in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

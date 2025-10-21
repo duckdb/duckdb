@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/attach_or_replace.test
+# name: test/sql/peg_parser/parser/attach_or_replace.test
 # description: Test attach or replace in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

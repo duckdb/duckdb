@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/on_conflict.test
+# name: test/sql/peg_parser/parser/on_conflict.test
 # description: Test insert into with conflict syntax in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

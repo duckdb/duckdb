@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/colon_alias.test
+# name: test/sql/peg_parser/parser/colon_alias.test
 # description: Test colon alias in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

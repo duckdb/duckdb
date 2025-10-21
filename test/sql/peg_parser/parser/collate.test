@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/collate.test
+# name: test/sql/peg_parser/parser/collate.test
 # description: Test create table syntax in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

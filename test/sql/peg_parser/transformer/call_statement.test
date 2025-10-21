@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/transformer/attach_statement.test
+# name: test/sql/peg_parser/transformer/call_statement.test
 # description: Test analyze and vacuum statements in peg parser
 # group: [transformer]
 
@@ -21,4 +21,7 @@ CALL dbgen(sf=0.1);
 
 statement ok
 CALL dbgen(sf=0.1, suffix='_original');
+
+statement ok
+CALL dbgen(sf=0.01, children=-1);
 

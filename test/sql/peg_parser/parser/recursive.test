@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/recursive.test
+# name: test/sql/peg_parser/parser/recursive.test
 # description: Test recursive cte in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 

@@ -189,7 +189,7 @@ private:
 
 	// deallocate.gram
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
-																			 optional_ptr<ParseResult> parse_result);
+	                                                             optional_ptr<ParseResult> parse_result);
 
 	// expression.gram
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,
@@ -197,7 +197,7 @@ private:
 	static unique_ptr<ParsedExpression> TransformExpression(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformRecursiveExpression(PEGTransformer &transformer,
-													optional_ptr<ParseResult> parse_result);
+	                                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformConstantLiteral(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ColumnRefExpression> TransformNestedColumnName(PEGTransformer &transformer,
@@ -208,14 +208,17 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSingleExpression(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
+
+	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformFunctionIdentifier(PEGTransformer &transformer,
 	                                                 optional_ptr<ParseResult> parse_result);
 
-	static ExpressionType TransformOperator(PEGTransformer &transformer,
-														optional_ptr<ParseResult> parse_result);
-	static ExpressionType TransformConjunctionOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static ExpressionType TransformOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static ExpressionType TransformConjunctionOperator(PEGTransformer &transformer,
+	                                                   optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformIsOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformInOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

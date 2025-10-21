@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/lambda_functions.test
+# name: test/sql/peg_parser/parser/lambda_functions.test
 # description: Test lambda syntax in peg parser
-# group: [peg_parser]
+# group: [parser]
 
 require autocomplete
 
