@@ -61,6 +61,9 @@ struct ColumnIndex {
 	bool IsRowIdColumn() const {
 		return index == COLUMN_IDENTIFIER_ROW_ID;
 	}
+	bool IsRowNumberColumn() const {
+		return index == COLUMN_IDENTIFIER_ROW_NUMBER;
+	}
 	bool IsEmptyColumn() const {
 		return index == COLUMN_IDENTIFIER_EMPTY;
 	}

@@ -130,6 +130,9 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 		return nullptr;
 	}
+	if (column_id == COLUMN_IDENTIFIER_ROW_NUMBER) {
+		return nullptr;
+	}
 	auto &column = columns.GetColumn(LogicalIndex(column_id));
 	if (column.Generated()) {
 		return nullptr;

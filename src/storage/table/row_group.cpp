@@ -21,19 +21,20 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
+#include "duckdb/storage/table/row_number_column_data.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t count)
-    : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
-      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+    : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr),
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
     : SegmentBase<RowGroup>(pointer.tuple_count), collection(collection_p), version_info(nullptr),
-      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -53,7 +54,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
     : SegmentBase<RowGroup>(data.count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
-      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
@@ -119,6 +120,19 @@ ColumnData &RowGroup::GetRowIdColumnData() {
 	return *row_id_column_data;
 }
 
+ColumnData &RowGroup::GetRowNumberColumnData() {
+	if (row_number_is_loaded) {
+		return *row_number_column_data;
+	}
+	lock_guard<mutex> l(row_number_group_lock);
+	if (!row_number_column_data) {
+		row_number_column_data = make_uniq<RowNumberColumnData>(GetBlockManager(), GetTableInfo(), start);
+		row_number_column_data->count = count.load();
+		row_number_is_loaded = true;
+	}
+	return *row_number_column_data;
+}
+
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
 	return GetColumn(c.GetPrimaryIndex());
 }
@@ -126,6 +140,9 @@ ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
 ColumnData &RowGroup::GetColumn(storage_t c) {
 	if (c == COLUMN_IDENTIFIER_ROW_ID) {
 		return GetRowIdColumnData();
+	}
+	if (c == COLUMN_IDENTIFIER_ROW_NUMBER) {
+		return GetRowNumberColumnData();
 	}
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
@@ -246,7 +263,7 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 		column_scans.emplace_back(*this);
 	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i].IsRowIdColumn()) {
+		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn()) {
 			continue;
 		}
 		auto col_id = column_ids[i].GetPrimaryIndex();
@@ -399,7 +416,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 
 	D_ASSERT(removed_column < columns.size());
 
-	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
+	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	// copy over all columns except for the removed one
 	auto &cols = GetColumns();

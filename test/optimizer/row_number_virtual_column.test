@@ -1,0 +1,72 @@
+# name: test/optimizer/row_number_virtual_column.test
+# description: Test row_number virtual column
+# group: [optimizer]
+
+statement ok
+pragma disable_optimizer;
+
+# statement ok
+# pragma threads=2;
+
+statement ok
+CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(500000);
+
+statement ok
+delete from foo where a<10;
+
+query II
+select a, row_number from foo limit 10;
+----
+10	1
+11	2
+12	3
+13	4
+14	5
+15	6
+16	7
+17	8
+18	9
+19	10
+
+
+query II
+select a, row_number from foo where a >= 100000 and a < 200000 limit 1;
+----
+100000	99991
+
+
+statement ok
+delete from foo where a>1500 and a < 150000;
+
+statement ok
+delete from foo where a>1 and a < 1500;
+
+query II
+select a, row_number from foo limit 10;
+----
+1500	1
+150000	2
+150001	3
+150002	4
+150003	5
+150004	6
+150005	7
+150006	8
+150007	9
+150008	10
+
+statement ok
+CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(500000);
+
+statement ok
+delete from foo where a>150 and a < 1500;
+
+# query IIII
+# select a,rowid, row_number, row_number() over() as x from foo order by a desc limit 1;
+# ----
+# 129999	129999	198651	198651
+
+query III
+select a,rowid, row_number from foo order by a desc limit 1;
+----
+499999	499999	498651

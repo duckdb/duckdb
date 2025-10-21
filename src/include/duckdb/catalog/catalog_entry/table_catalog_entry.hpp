@@ -128,6 +128,7 @@ public:
 	virtual virtual_column_map_t GetVirtualColumns() const;
 
 	virtual vector<column_t> GetRowIdColumns() const;
+	virtual vector<column_t> GetRowNumberColumns() const;
 
 protected:
 	//! A list of columns that are part of this table

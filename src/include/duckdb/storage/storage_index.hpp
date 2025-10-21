@@ -61,6 +61,9 @@ struct StorageIndex {
 	bool IsRowIdColumn() const {
 		return index == DConstants::INVALID_INDEX;
 	}
+	bool IsRowNumberColumn() const {
+		return index == COLUMN_IDENTIFIER_ROW_NUMBER;
+	}
 
 private:
 	idx_t index;

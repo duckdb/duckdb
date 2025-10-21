@@ -224,6 +224,7 @@ private:
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	ColumnData &GetRowIdColumnData();
+	ColumnData &GetRowNumberColumnData();
 	void SetCount(idx_t count);
 
 	template <TableScanType TYPE>
@@ -235,6 +236,7 @@ private:
 
 private:
 	mutex row_group_lock;
+	mutex row_number_group_lock;
 	vector<MetaBlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
 	vector<MetaBlockPointer> deletes_pointers;
@@ -244,6 +246,8 @@ private:
 	atomic<idx_t> allocation_size;
 	unique_ptr<ColumnData> row_id_column_data;
 	atomic<bool> row_id_is_loaded;
+	unique_ptr<ColumnData> row_number_column_data;
+	atomic<bool> row_number_is_loaded;
 	atomic<bool> has_changes;
 };
 

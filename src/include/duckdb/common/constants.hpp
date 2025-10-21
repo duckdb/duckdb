@@ -40,6 +40,8 @@ DUCKDB_API bool IsInvalidCatalog(const string &str);
 
 //! Special value used to signify the ROW ID of a table
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_ID;
+//! Special value used to signify the ROW_NUMBER of a table
+DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_NUMBER;
 //! Special value used to signify an empty column (used for e.g. COUNT(*))
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_EMPTY;
 DUCKDB_API extern const column_t VIRTUAL_COLUMN_START;
