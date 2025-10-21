@@ -129,13 +129,13 @@ private:
 	data_ptr_t GetBaseHeapPointer(TupleDataPinState &state, const TupleDataChunkPart &part);
 
 private:
+	//! Shared allocator for STL allocations
+	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The layout of the data
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
-	//! Shared allocator for STL allocations
-	shared_ptr<ArenaAllocator> stl_allocator;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows

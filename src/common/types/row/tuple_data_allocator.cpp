@@ -32,8 +32,8 @@ TupleDataBlock &TupleDataBlock::operator=(TupleDataBlock &&other) noexcept {
 
 TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
                                        shared_ptr<ArenaAllocator> stl_allocator_p)
-    : buffer_manager(buffer_manager), layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr),
-      stl_allocator(std::move(stl_allocator_p)), row_blocks(*stl_allocator), heap_blocks(*stl_allocator) {
+    : stl_allocator(std::move(stl_allocator_p)), buffer_manager(buffer_manager), layout_ptr(std::move(layout_ptr_p)),
+      layout(*layout_ptr), row_blocks(*stl_allocator), heap_blocks(*stl_allocator) {
 }
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)

@@ -265,11 +265,11 @@ private:
 	void Verify() const;
 
 private:
+	//! Shared allocator for STL allocations
+	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The layout of the TupleDataCollection
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
-	//! Shared allocator for STL allocations
-	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The TupleDataAllocator
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection
