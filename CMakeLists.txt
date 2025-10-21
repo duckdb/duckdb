@@ -754,18 +754,17 @@ function(add_library_unity NAME MODE)
   endif()
 endfunction()
 
-
-include(extension/extension_build_tools.cmake)
-
-
 function(disable_target_warnings NAME)
   if(MSVC)
     target_compile_options(${NAME} PRIVATE "/W0")
   elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
-         OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+          OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     target_compile_options(${NAME} PRIVATE "-w")
   endif()
 endfunction()
+
+# this depends on disable_target_warnings so the order matters
+include(extension/extension_build_tools.cmake)
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
  add_subdirectory(src)
