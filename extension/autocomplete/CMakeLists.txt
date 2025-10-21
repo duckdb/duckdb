@@ -13,8 +13,7 @@ add_subdirectory(parser)
 
 build_static_extension(autocomplete ${AUTOCOMPLETE_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
-build_loadable_extension(autocomplete ${PARAMETERS}
-                         ${AUTOCOMPLETE_EXTENSION_FILES})
+build_loadable_extension(autocomplete ${PARAMETERS} autocomplete_extension)
 
 install(
   TARGETS autocomplete_extension

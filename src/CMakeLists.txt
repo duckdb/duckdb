@@ -89,7 +89,6 @@ foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
   list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
 endforeach(LINK_LIB)
 
-
 add_library(
   duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS}
                        $<TARGET_OBJECTS:dummy_static_extension_loader>)
