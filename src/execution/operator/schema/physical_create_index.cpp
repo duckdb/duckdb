@@ -90,7 +90,6 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 
 	// Check for NULLs, if we are creating a PRIMARY KEY.
 	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
-	// TODO: check if this is a primary key constraint
 	if (alter_table_info) {
 		auto row_count = lstate.key_chunk.size();
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {

@@ -189,19 +189,19 @@ public:
 	string name;
 
 	// Callbacks
-	index_build_bind_t build_bind;
-	index_build_sort_t build_sort;
-	index_build_global_init_t build_global_init;
-	index_build_local_init_t build_local_init;
-	index_build_sink_t build_sink;
-	index_build_combine_t build_combine;
-	index_build_finalize_t build_finalize;
+	index_build_bind_t build_bind = nullptr;
+	index_build_sort_t build_sort = nullptr;
+	index_build_global_init_t build_global_init = nullptr;
+	index_build_local_init_t build_local_init = nullptr;
+	index_build_sink_t build_sink = nullptr;
+	index_build_combine_t build_combine = nullptr;
+	index_build_finalize_t build_finalize = nullptr;
 
 	//! Extra information for the index type
-	shared_ptr<IndexTypeInfo> index_info;
+	shared_ptr<IndexTypeInfo> index_info = nullptr;
 
-	index_build_plan_t create_plan;          // escape hatch for creating the physical plan
-	index_create_function_t create_instance; // function to create an instance of the index
+	index_build_plan_t create_plan = nullptr;          // escape hatch for creating the physical plan
+	index_create_function_t create_instance = nullptr; // function to create an instance of the index
 };
 
 } // namespace duckdb
