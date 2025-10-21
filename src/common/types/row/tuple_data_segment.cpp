@@ -110,7 +110,6 @@ TupleDataSegment::~TupleDataSegment() {
 	}
 	pinned_row_handles.clear();
 	pinned_heap_handles.clear();
-	allocator.reset();
 }
 
 idx_t TupleDataSegment::ChunkCount() const {
