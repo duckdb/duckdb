@@ -14,6 +14,7 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/simplified_token.hpp"
 #include "duckdb/parser/parser_options.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb_libpgquery {
 struct PGNode;

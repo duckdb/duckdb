@@ -15,7 +15,7 @@ LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extensio
 statement error
 set allow_parser_override_extension=doesnotexist;
 ----
-Invalid Input Error: Unrecognized value for parser override setting. Valid options are: "default", "fallback", "strict".
+Invalid Input Error: Unrecognized value for parser override setting. Valid options are: default, fallback, strict, strict_when_supported
 
 # Default behavior is not using the parser override
 statement error
@@ -56,7 +56,9 @@ The DuckDB parser has been overridden
 statement error
 over
 ----
-Parser Error: syntax error at or near "over"
+Parser Error: Parser override could not parse this query. (Original error: Parser overridden, query equaled "over" but not "override")
 
-statement ok
+statement error
 SELECT 1;
+----
+Not implemented Error: Parser override has not yet implemented this transformer rule. (Original error: QuackParser has not yet implemented the statements to transform this query)

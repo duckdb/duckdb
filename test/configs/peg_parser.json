@@ -1,7 +1,7 @@
 {
   "description": "Test PEG Parser + transformer with fallback mode",
   "skip_compiled": "true",
-  "on_init": "set allow_parser_override_extension=strict;",
+  "on_init": "set allow_parser_override_extension=fallback;",
   "statically_loaded_extensions": [
     "core_functions",
     "autocomplete"
