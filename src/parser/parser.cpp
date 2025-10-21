@@ -264,6 +264,7 @@ void Parser::ParseQuery(const string &query) {
 					auto statement_type = GetStatementType(query);
 					bool is_supported = false;
 					switch (statement_type) {
+					case StatementType::TRANSACTION_STATEMENT:
 					case StatementType::VARIABLE_SET_STATEMENT:
 					case StatementType::LOAD_STATEMENT:
 					case StatementType::ATTACH_STATEMENT:

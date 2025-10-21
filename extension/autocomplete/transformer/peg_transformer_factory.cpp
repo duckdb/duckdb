@@ -114,6 +114,13 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);
 
+	// transaction.gram
+	REGISTER_TRANSFORM(TransformTransactionStatement);
+	REGISTER_TRANSFORM(TransformBeginTransaction);
+	REGISTER_TRANSFORM(TransformReadOrWrite);
+	REGISTER_TRANSFORM(TransformCommitTransaction);
+	REGISTER_TRANSFORM(TransformRollbackTransaction);
+
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
 	Register("ColLabel", &TransformIdentifierOrKeyword);
@@ -134,6 +141,9 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterEnum<Value>("FalseLiteral", Value(false));
 	RegisterEnum<Value>("TrueLiteral", Value(true));
 	RegisterEnum<Value>("NullLiteral", Value());
+
+	RegisterEnum<TransactionModifierType>("ReadOnly", TransactionModifierType::TRANSACTION_READ_ONLY);
+	RegisterEnum<TransactionModifierType>("ReadWrite", TransactionModifierType::TRANSACTION_READ_WRITE);
 }
 
 vector<optional_ptr<ParseResult>>

@@ -248,6 +248,16 @@ private:
 
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
+	// transaction.gram
+	static unique_ptr<SQLStatement> TransformTransactionStatement(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<TransactionStatement> TransformBeginTransaction(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static TransactionModifierType TransformReadOrWrite(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static unique_ptr<TransactionStatement> TransformCommitTransaction(PEGTransformer &, optional_ptr<ParseResult>);
+	static unique_ptr<TransactionStatement> TransformRollbackTransaction(PEGTransformer &, optional_ptr<ParseResult>);
+
 	//! Helper functions
 	static vector<optional_ptr<ParseResult>> ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result);
 
