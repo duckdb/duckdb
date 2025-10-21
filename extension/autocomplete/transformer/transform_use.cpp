@@ -13,7 +13,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 	if (IsInvalidSchema(qn.schema)) {
 		value_str = KeywordHelper::WriteOptionallyQuoted(qn.name);
 	} else {
-		value_str = KeywordHelper::WriteOptionallyQuoted(qn.schema) + "." + KeywordHelper::WriteOptionallyQuoted(qn.name);
+		value_str =
+		    KeywordHelper::WriteOptionallyQuoted(qn.schema) + "." + KeywordHelper::WriteOptionallyQuoted(qn.name);
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
