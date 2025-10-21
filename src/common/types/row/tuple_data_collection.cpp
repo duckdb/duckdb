@@ -119,13 +119,13 @@ void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t
 	D_ASSERT(segments.size() == 1); // Assume 1 segment for now (multi-segment destroys can be implemented if needed)
 	D_ASSERT(chunk_idx_begin <= chunk_idx_end && chunk_idx_end <= ChunkCount());
 	auto &segment = *segments[0];
-	auto &chunk_begin = segment.chunks[chunk_idx_begin];
+	auto &chunk_begin = *segment.chunks[chunk_idx_begin];
 
 	const auto row_block_begin = chunk_begin.row_block_ids.Start();
 	if (chunk_idx_end == ChunkCount()) {
 		segment.allocator->DestroyRowBlocks(row_block_begin, segment.allocator->RowBlockCount());
 	} else {
-		auto &chunk_end = segment.chunks[chunk_idx_end];
+		auto &chunk_end = *segment.chunks[chunk_idx_end];
 		const auto row_block_end = chunk_end.row_block_ids.Start();
 		segment.allocator->DestroyRowBlocks(row_block_begin, row_block_end);
 	}
@@ -138,7 +138,7 @@ void TupleDataCollection::DestroyChunks(const idx_t chunk_idx_begin, const idx_t
 		if (chunk_idx_end == ChunkCount()) {
 			segment.allocator->DestroyHeapBlocks(heap_block_begin, segment.allocator->HeapBlockCount());
 		} else {
-			auto &chunk_end = segment.chunks[chunk_idx_end];
+			auto &chunk_end = *segment.chunks[chunk_idx_end];
 			if (chunk_end.heap_block_ids.Empty()) {
 				return;
 			}
@@ -576,7 +576,7 @@ idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, idx_t chunk_idx
 		auto &segment = *segments[segment_idx];
 		if (chunk_idx < segment.ChunkCount()) {
 			segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
-			return segment.chunks[chunk_idx].count;
+			return segment.chunks[chunk_idx]->count;
 		}
 		chunk_idx -= segment.ChunkCount();
 	}
@@ -662,7 +662,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
                                       const vector<column_t> &column_ids, idx_t segment_index, idx_t chunk_index,
                                       DataChunk &result) {
 	auto &segment = *segments[segment_index];
-	auto &chunk = segment.chunks[chunk_index];
+	const auto &chunk = *segment.chunks[chunk_index];
 	segment.allocator->InitializeChunkState(segment, pin_state, chunk_state, chunk_index, false);
 	result.Reset();
 

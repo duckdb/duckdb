@@ -125,7 +125,7 @@ public:
 	TupleDataChunk &operator=(TupleDataChunk &&) noexcept;
 
 	//! Add a part to this chunk
-	TupleDataChunkPart &AddPart(TupleDataSegment &segment, TupleDataChunkPart &&part);
+	TupleDataChunkPart &AddPart(TupleDataSegment &segment, unsafe_arena_ptr<TupleDataChunkPart> part_ptr);
 	//! Tries to merge the last chunk part into the second-to-last one
 	void MergeLastChunkPart(TupleDataSegment &segment);
 	//! Verify counts of the parts in this chunk
@@ -172,9 +172,9 @@ public:
 	shared_ptr<TupleDataAllocator> allocator;
 	const TupleDataLayout &layout;
 	//! The chunks of this segment
-	unsafe_vector<TupleDataChunk> chunks;
+	unsafe_vector<unsafe_arena_ptr<TupleDataChunk>> chunks;
 	//! The chunk parts of this segment
-	unsafe_vector<TupleDataChunkPart> chunk_parts;
+	unsafe_vector<unsafe_arena_ptr<TupleDataChunkPart>> chunk_parts;
 	//! The tuple count of this segment
 	idx_t count;
 	//! The data size of this segment
