@@ -464,7 +464,7 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	}
 
 	// Reduce.
-	auto root_metrics = ProfilingInfo::RootScopeSettings();
+	auto root_metrics = MetricsUtils::GetRootScopeMetrics();
 	for (const auto metric : root_metrics) {
 		settings.erase(metric);
 	}
@@ -909,7 +909,7 @@ profiler_settings_t EraseQueryRootSettings(profiler_settings_t settings) {
 
 	for (auto &setting : settings) {
 		if (MetricsUtils::IsOptimizerMetric(setting) || MetricsUtils::IsPhaseTimingMetric(setting) ||
-		    MetricsUtils::IsQueryGlobalMetric(setting)) {
+		    MetricsUtils::IsRootScopeMetric(setting)) {
 			phase_timing_settings_to_erase.insert(setting);
 		}
 	}

@@ -169,28 +169,14 @@ SELECT unnest(res) FROM (
     string_split(setting, ', ') AS res
 ) ORDER BY ALL;
 ----
-"ATTACH_LOAD_STORAGE_LATENCY": "true"
-"ATTACH_REPLAY_WAL_LATENCY": "true"
-"BLOCKED_THREAD_TIME": "true"
-"CHECKPOINT_LATENCY": "true"
 "CPU_TIME": "true"
 "CUMULATIVE_CARDINALITY": "true"
 "CUMULATIVE_ROWS_SCANNED": "true"
 "EXTRA_INFO": "true"
 "LATENCY": "true"
-"OPERATOR_CARDINALITY": "true"
-"OPERATOR_NAME": "true"
-"OPERATOR_ROWS_SCANNED": "true"
-"OPERATOR_TIMING": "true"
-"OPERATOR_TYPE": "true"
 "QUERY_NAME": "true"
 "RESULT_SET_SIZE": "true"
 "ROWS_RETURNED": "true"
-"SYSTEM_PEAK_BUFFER_MEMORY": "true"
-"SYSTEM_PEAK_TEMP_DIR_SIZE": "true"
-"TOTAL_BYTES_READ": "true"
-"TOTAL_BYTES_WRITTEN": "true"
-"WAITING_TO_ATTACH_LATENCY": "true"
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';

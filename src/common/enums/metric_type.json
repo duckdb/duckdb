@@ -1,0 +1,225 @@
+[
+  {
+    "group": "default",
+    "description": "metrics that are collected by default",
+    "metrics": [
+      {
+        "name": "CPU_TIME",
+        "description": "CPU time spent on the query",
+        "type": "double",
+        "unit": "seconds"
+      },
+      {
+        "name": "CUMULATIVE_CARDINALITY",
+        "description": "Cumulative cardinality of the query",
+        "type": "uint64",
+        "unit": "absolute"
+      },
+      {
+        "name": "CUMULATIVE_ROWS_SCANNED",
+        "description": "Cumulative number of rows scanned by the query",
+        "type": "uint64",
+        "unit": "absolute"
+      },
+      {
+        "name": "EXTRA_INFO",
+        "description": "Unique operator metrics",
+        "type": "string"
+      },
+      {
+        "name": "LATENCY",
+        "description": "The total elapsed query execution time",
+        "type": "double",
+        "unit": "seconds",
+        "query_root": true
+      },
+      {
+        "name": "QUERY_NAME",
+        "description": "The query string",
+        "type": "string",
+        "query_root": true
+      },
+      {
+        "name": "RESULT_SET_SIZE",
+        "description": "The size of the result",
+        "type": "uint64",
+        "unit": "bytes"
+      },
+      {
+        "name": "ROWS_RETURNED",
+        "description": "The number of rows returned by the query",
+        "type": "uint64",
+        "unit": "absolute",
+        "query_root": true
+      }
+    ]
+  },
+  {
+    "group": "execution",
+    "description": "metrics that are collected during query execution",
+    "metrics": [
+      {
+        "name": "BLOCKED_THREAD_TIME",
+        "description": "Time spent waiting for a thread to become available",
+        "type": "double",
+        "unit": "seconds",
+        "query_root": true
+      },
+      {
+        "name": "SYSTEM_PEAK_BUFFER_MEMORY",
+        "description": "Peak memory usage of the system",
+        "type": "uint64",
+        "unit": "bytes",
+        "query_root": true
+      },
+      {
+        "name": "SYSTEM_PEAK_TEMP_DIR_SIZE",
+        "description": "Peak size of the temporary directory",
+        "type": "uint64",
+        "unit": "bytes",
+        "query_root": true
+      }
+    ]
+  },
+  {
+    "group": "file",
+    "description": "metrics that are collected during file operations",
+    "metrics": [
+      {
+        "name": "ATTACH_LOAD_STORAGE_LATENCY",
+        "description": "Time spent loading a storage engine",
+        "type": "double",
+        "unit": "seconds",
+        "query_root": true
+      },
+      {
+        "name": "ATTACH_REPLAY_WAL_LATENCY",
+        "description": "Time spent replaying the WAL",
+        "type": "double",
+        "unit": "seconds",
+        "query_root": true
+      },
+      {
+        "name": "CHECKPOINT_LATENCY",
+        "description": "Time spent performing a checkpoint",
+        "type": "double",
+        "unit": "seconds",
+        "query_root": true
+      },
+      {
+        "name": "TOTAL_BYTES_READ",
+        "description": "Total number of bytes read from disk",
+        "type": "uint64",
+        "unit": "bytes",
+        "query_root": true
+      },
+      {
+        "name": "TOTAL_BYTES_WRITTEN",
+        "description": "Total number of bytes written to disk",
+        "type": "uint64",
+        "unit": "bytes",
+        "query_root": true
+      },
+      {
+        "name": "WAITING_TO_ATTACH_LATENCY",
+        "description": "Time spent waiting for a storage engine to attach",
+        "type": "double",
+        "unit": "seconds",
+        "query_root": true
+      }
+    ]
+  },
+  {
+    "group": "phase_timing",
+    "description": "",
+    "metrics": [
+      {
+        "name": "ALL_OPTIMIZERS",
+        "description": "Enables all optimizers"
+      },
+      {
+        "name": "CUMULATIVE_OPTIMIZER_TIMING",
+        "description": "Time spent in all optimizers",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PHYSICAL_PLANNER",
+        "description": "The time spent generating the physical plan",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PHYSICAL_PLANNER_COLUMN_BINDING",
+        "description": "The time spent binding the columns in the logical plan to physical columns",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PHYSICAL_PLANNER_CREATE_PLAN",
+        "description": "The time spent creating the physical plan",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PHYSICAL_PLANNER_RESOLVE_TYPES",
+        "description": "The time spent resolving the types in the logical plan to physical types",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PLANNER",
+        "description": "The time to generate the logical plan from the parsed SQL nodes.",
+        "type": "double",
+        "unit": "milliseconds"
+      },
+      {
+        "name": "PLANNER_BINDING",
+        "description": "The time taken to bind the logical plan.",
+        "type": "double",
+        "unit": "milliseconds"
+      }
+    ]
+  },
+  {
+    "group": "operator",
+    "description": "metrics that are collected for each operator",
+    "metrics": [
+      {
+        "name": "OPERATOR_CARDINALITY",
+        "description": "Cardinality of the operator",
+        "type": "uint64",
+        "unit": "absolute"
+      },
+      {
+        "name": "OPERATOR_NAME",
+        "description": "Name of the operator",
+        "type": "string"
+      },
+      {
+        "name": "OPERATOR_ROWS_SCANNED",
+        "description": "Number of rows scanned by the operator",
+        "type": "uint64",
+        "unit": "absolute"
+      },
+      {
+        "name": "OPERATOR_TIMING",
+        "description": "Time spent in the operator",
+        "type": "double",
+        "unit": "seconds"
+      },
+      {
+        "name": "OPERATOR_TYPE",
+        "description": "Type of the operator",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "group": "optimizer",
+    "description": "metrics that are collected for each optimizer",
+    "generated": true,
+    "metrics": [],
+    "custom_functions": true
+  }
+]

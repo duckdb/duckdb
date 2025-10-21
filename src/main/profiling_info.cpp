@@ -23,60 +23,17 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 
 	// Reduce.
 	if (depth == 0) {
-		auto op_metrics = OperatorScopeSettings();
+		auto op_metrics = MetricsUtils::GetOperatorMetrics();
 		for (const auto metric : op_metrics) {
 			settings.erase(metric);
 		}
 	} else {
-		auto root_metrics = RootScopeSettings();
+		auto root_metrics = MetricsUtils::GetRootScopeMetrics();
 		for (const auto metric : root_metrics) {
 			settings.erase(metric);
 		}
 	}
 	ResetMetrics();
-}
-
-profiler_settings_t ProfilingInfo::DefaultSettings() {
-	return {MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
-	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
-	        MetricsType::BLOCKED_THREAD_TIME,
-	        MetricsType::CHECKPOINT_LATENCY,
-	        MetricsType::CPU_TIME,
-	        MetricsType::CUMULATIVE_CARDINALITY,
-	        MetricsType::CUMULATIVE_ROWS_SCANNED,
-	        MetricsType::EXTRA_INFO,
-	        MetricsType::LATENCY,
-	        MetricsType::OPERATOR_CARDINALITY,
-	        MetricsType::OPERATOR_NAME,
-	        MetricsType::OPERATOR_ROWS_SCANNED,
-	        MetricsType::OPERATOR_TIMING,
-	        MetricsType::OPERATOR_TYPE,
-	        MetricsType::RESULT_SET_SIZE,
-	        MetricsType::ROWS_RETURNED,
-	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
-	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
-	        MetricsType::TOTAL_BYTES_READ,
-	        MetricsType::TOTAL_BYTES_WRITTEN,
-	        MetricsType::WAITING_TO_ATTACH_LATENCY,
-	        MetricsType::QUERY_NAME};
-}
-
-profiler_settings_t ProfilingInfo::RootScopeSettings() {
-	return {MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
-	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
-	        MetricsType::BLOCKED_THREAD_TIME,
-	        MetricsType::CHECKPOINT_LATENCY,
-	        MetricsType::LATENCY,
-	        MetricsType::ROWS_RETURNED,
-	        MetricsType::TOTAL_BYTES_READ,
-	        MetricsType::TOTAL_BYTES_WRITTEN,
-	        MetricsType::WAITING_TO_ATTACH_LATENCY,
-	        MetricsType::QUERY_NAME};
-}
-
-profiler_settings_t ProfilingInfo::OperatorScopeSettings() {
-	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
-	        MetricsType::OPERATOR_NAME, MetricsType::OPERATOR_TYPE};
 }
 
 void ProfilingInfo::ResetMetrics() {

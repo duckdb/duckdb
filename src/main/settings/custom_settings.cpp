@@ -336,12 +336,12 @@ bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_o
 	return false;
 }
 
-static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json,
+static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &input,
                                                 const set<OptimizerType> &disabled_optimizers) {
 	profiler_settings_t metrics;
 
 	string invalid_settings;
-	for (auto &entry : json) {
+	for (auto &entry : input) {
 		MetricsType setting;
 		try {
 			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
@@ -375,13 +375,16 @@ void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType>
 	}
 }
 
+void AddSubgroups(unordered_map<string, string> &input, profiler_settings_t &settings) {
+}
+
 void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	// parse the file content
-	unordered_map<string, string> json;
+	unordered_map<string, string> input_json;
 	try {
-		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
+		input_json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
 	} catch (std::exception &ex) {
 		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
 		                  "all the keys and values start with a quote. ",
@@ -392,7 +395,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	auto &db_config = DBConfig::GetConfig(context);
 	auto &disabled_optimizers = db_config.options.disabled_optimizers;
 
-	auto settings = FillTreeNodeSettings(json, disabled_optimizers);
+	auto settings = FillTreeNodeSettings(input_json, disabled_optimizers);
 	AddOptimizerMetrics(settings, disabled_optimizers);
 	config.profiler_settings = settings;
 }
@@ -400,7 +403,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 void CustomProfilingSettingsSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
-	config.profiler_settings = ProfilingInfo::DefaultSettings();
+	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
 }
 
 Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {

@@ -40,11 +40,6 @@ public:
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
 
 public:
-	static profiler_settings_t DefaultSettings();
-	static profiler_settings_t RootScopeSettings();
-	static profiler_settings_t OperatorScopeSettings();
-
-public:
 	void ResetMetrics();
 	//! Returns true, if the query profiler must collect this metric.
 	static bool Enabled(const profiler_settings_t &settings, const MetricsType metric);
