@@ -179,8 +179,16 @@ unique_ptr<NodeStatistics> MultiFileList::GetCardinality(ClientContext &context)
 	return nullptr;
 }
 
-OpenFileInfo MultiFileList::PeekFile(idx_t i) {
-	return GetFile(i);
+vector<OpenFileInfo> MultiFileList::PeekFiles(idx_t count) {
+	vector<OpenFileInfo> files;
+	for (idx_t i = 0; i < count; i++) {
+		auto file = GetFile(i);
+		if (file.path.empty()) {
+			break;
+		}
+		files.push_back(file);
+	}
+	return files;
 }
 
 OpenFileInfo MultiFileList::GetFirstFile() {
@@ -365,12 +373,20 @@ OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
 	return GetFileInternal(i, false);
 }
 
-OpenFileInfo GlobMultiFileList::PeekFile(idx_t i) {
+vector<OpenFileInfo> GlobMultiFileList::PeekFiles(idx_t count) {
 	lock_guard<mutex> lck(lock);
-	if (peeked_files.size() <= i) {
+	if (peeked_files.size() <= count) {
 		ClearPeekInternal();
 	}
-	return GetFileInternal(i, true);
+	vector<OpenFileInfo> files;
+	for (idx_t i = 0; i < count; i++) {
+		auto file = GetFileInternal(i, true);
+		if (file.path.empty()) {
+			break;
+		}
+		files.push_back(file);
+	}
+	return files;
 }
 
 OpenFileInfo GlobMultiFileList::PeekFirstFile() {

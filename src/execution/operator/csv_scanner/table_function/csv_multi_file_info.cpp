@@ -70,15 +70,7 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	                               : static_cast<idx_t>(options.files_to_sniff);
 
 	// Ensure peeked files loaded
-	multi_file_list.PeekFile(max_files_to_sniff);
-	vector<OpenFileInfo> files;
-	for (idx_t i = 0; i < max_files_to_sniff; i++) {
-		auto file = multi_file_list.PeekFile(i);
-		if (file.path.empty()) {
-			break;
-		}
-		files.push_back(file);
-	}
+	auto files = multi_file_list.PeekFiles(max_files_to_sniff);
 	auto file_list = make_uniq<SimpleMultiFileList>(files);
 	const auto file_paths = file_list->GetAllFiles();
 

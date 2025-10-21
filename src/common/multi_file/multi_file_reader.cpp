@@ -249,7 +249,7 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
 		auto partitions = HivePartitioning::Parse(files.PeekFirstFile().path);
 		// verify that all files have the same hive partitioning scheme
-		MultiFileList *list;
+		optional_ptr<MultiFileList> list;
 		unique_ptr<MultiFileList> mlist;
 		if (options.hive_lazy_listing) {
 			vector<OpenFileInfo> of_list = {files.PeekFirstFile()};
@@ -736,7 +736,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 
 	unordered_map<string, LogicalType> detected_types;
 	unique_ptr<MultiFileList> mlist;
-	MultiFileList *list;
+	optional_ptr<MultiFileList> list;
 	if (hive_lazy_listing) {
 		vector<OpenFileInfo> of_list = {files.PeekFirstFile()};
 		mlist = make_uniq<SimpleMultiFileList>(of_list);

@@ -88,7 +88,7 @@ public:
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
 	virtual OpenFileInfo GetFirstFile();
 	//! Get the i-th sampled file used for metadata in binding
-	virtual OpenFileInfo PeekFile(idx_t i);
+	virtual vector<OpenFileInfo> PeekFiles(idx_t count);
 	//! Returns an initial file used for metadata sampling, may differ from first file in expanded file list
 	virtual OpenFileInfo PeekFirstFile();
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
@@ -174,7 +174,7 @@ public:
 	                                                TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
-	OpenFileInfo PeekFile(idx_t i) override;
+	vector<OpenFileInfo> PeekFiles(idx_t count) override;
 	vector<OpenFileInfo> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
