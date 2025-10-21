@@ -124,12 +124,15 @@ struct KeywordParseResult : ParseResult {
 
 struct ListParseResult : ParseResult {
 	static constexpr ParseResultType TYPE = ParseResultType::LIST;
-	vector<optional_ptr<ParseResult>> children;
 
 public:
 	explicit ListParseResult(vector<optional_ptr<ParseResult>> results_p, string name_p)
 	    : ParseResult(TYPE), children(std::move(results_p)) {
 		name = name_p;
+	}
+
+	vector<optional_ptr<ParseResult>> GetChildren() const {
+		return children;
 	}
 
 	optional_ptr<ParseResult> GetChild(idx_t index) {
@@ -170,6 +173,9 @@ public:
 			}
 		}
 	}
+
+private:
+	vector<optional_ptr<ParseResult>> children;
 };
 
 struct RepeatParseResult : ParseResult {
@@ -277,7 +283,6 @@ public:
 
 	explicit NumberParseResult(string number_p) : ParseResult(TYPE), number(std::move(number_p)) {
 	}
-	// TODO(dtenwolde): Should probably be stored as a size_t, int32_t or float_t depending on what number is.
 	string number;
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,

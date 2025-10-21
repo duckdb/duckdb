@@ -890,14 +890,14 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, false, LessThan>(fun);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, true, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, true, GreaterThan>(fun);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, false, GreaterThan>(fun);
 	return fun;
 }
 
@@ -916,14 +916,14 @@ AggregateFunctionSet ArgMaxNullFun::GetFunctions() {
 AggregateFunctionSet ArgMinNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ANY_NULL);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, false, LessThan>(fun);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, true, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ANY_NULL);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, true, GreaterThan>(fun);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, false, GreaterThan>(fun);
 	return fun;
 }
 

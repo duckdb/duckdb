@@ -3,6 +3,7 @@
 #include "duckdb/common/adbc/adbc.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include "duckdb/common/adbc/options.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 #include <iostream>
 
 namespace duckdb {
@@ -211,6 +212,79 @@ TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
 	                                             &adbc_error)));
 	REQUIRE((arrow_schema.n_children == 1));
 	arrow_schema.release(&arrow_schema);
+}
+
+TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	std::vector<std::string> column_names = {"column.with.dots", "column\"with\"quotes", "column with whitespace"};
+	std::string table_name = "my.table\"is 😵";
+	std::string schema_name = "my schema\"is.😬";
+	// Create a schema and allocate space for a single child
+	ArrowSchema arrow_schema;
+	duckdb_nanoarrow::ArrowSchemaInit(&arrow_schema, duckdb_nanoarrow::ArrowType::NANOARROW_TYPE_STRUCT);
+	duckdb_nanoarrow::ArrowSchemaAllocateChildren(&arrow_schema, static_cast<int64_t>(column_names.size()));
+
+	// Create the child schemas and build the select query to get test data
+	std::string query = "SELECT ";
+	for (size_t i = 0; i < column_names.size(); i++) {
+		duckdb_nanoarrow::ArrowSchemaInit(arrow_schema.children[i], duckdb_nanoarrow::ArrowType::NANOARROW_TYPE_INT32);
+		duckdb_nanoarrow::ArrowSchemaSetName(arrow_schema.children[i], column_names.at(i).c_str());
+		if (i > 0) {
+			query += ",";
+		}
+		query += std::to_string(i);
+	}
+
+	// Create input data
+	auto &input_data = db.QueryArrow(query);
+	ArrowArray prepared_array;
+	input_data.get_next(&input_data, &prepared_array);
+
+	// Create the schema
+	db.Query("CREATE SCHEMA " + KeywordHelper::WriteOptionallyQuoted(schema_name));
+
+	// Create ADBC statement that will create a table called "test"
+	AdbcStatement adbc_stmt;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_stmt, &adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_stmt, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_CREATE, &adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_stmt, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, schema_name.c_str(), &adbc_error)));
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_stmt, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBind(&adbc_stmt, &prepared_array, &arrow_schema, &adbc_error)));
+
+	// Now execute: this should create the table and put the test data in
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_stmt, nullptr, nullptr, &adbc_error)));
+
+	// Release everything
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_stmt, &adbc_error)));
+	if (arrow_schema.release) {
+		arrow_schema.release(&arrow_schema);
+	}
+	if (adbc_error.release) {
+		adbc_error.release(&adbc_error);
+	}
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	if (prepared_array.release) {
+		prepared_array.release(&prepared_array);
+	}
+
+	// Check we can query
+	auto schema_table =
+	    KeywordHelper::WriteOptionallyQuoted(schema_name) + "." + KeywordHelper::WriteOptionallyQuoted(table_name);
+	auto res = db.Query("select * from " + schema_table);
+	for (size_t i = 0; i < column_names.size(); i++) {
+		REQUIRE((res->ColumnName(i) == column_names.at(i)));
+		REQUIRE((res->GetValue(i, 0) == i));
+	}
 }
 
 TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
