@@ -59,13 +59,6 @@ query_global_metrics = [
     "WAITING_TO_ATTACH_LATENCY",
 ]
 
-excluded_query_global_metrics = [
-    "ATTACH_LOAD_STORAGE_LATENCY",
-    "ATTACH_REPLAY_WAL_LATENCY",
-    "CHECKPOINT_LATENCY",
-    "WAITING_TO_ATTACH_LATENCY",
-]
-
 optimizer_types = []
 
 # Regular expression to match the enum values
@@ -397,13 +390,7 @@ for test_file, name, description in zip(test_files, test_names, test_description
         metrics.sort()
 
         for metric in metrics:
-            skip = False
-            for excluded_metric in excluded_query_global_metrics:
-                if metric == excluded_metric:
-                    skip = True
-                    break
-            if not skip:
-                f.write(f'"{metric}": "true"\n')
+            f.write(f'"{metric}": "true"\n')
         f.write("\n")
 
         write_statement(

@@ -554,7 +554,11 @@ FilterClause <- 'FILTER' Parens('WHERE'? Expression)
 IgnoreNulls <- ('IGNORE' 'NULLS') / ('RESPECT' 'NULLS')
 
 ParenthesisExpression <- Parens(List(Expression))
-LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
+LiteralExpression <- StringLiteral / NumberLiteral / ConstantLiteral
+ConstantLiteral <- NullLiteral / TrueLiteral / FalseLiteral
+NullLiteral <- 'NULL'
+TrueLiteral <- 'TRUE'
+FalseLiteral <- 'FALSE'
 CastExpression <- CastOrTryCast Parens(Expression 'AS' Type)
 CastOrTryCast <- 'CAST' / 'TRY_CAST'
 
@@ -1056,9 +1060,13 @@ SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone <- 'TIME' 'ZONE' Expression
 SetSetting <- SettingScope? SettingName
-SetVariable <- 'VARIABLE' Identifier
+SetVariable <- VariableScope Identifier
+VariableScope <- 'VARIABLE'
 
-SettingScope <- 'LOCAL' / 'SESSION' / 'GLOBAL'
+SettingScope <- LocalScope / SessionScope / GlobalScope
+LocalScope <- 'LOCAL'
+SessionScope <- 'SESSION'
+GlobalScope <- 'GLOBAL'
 
 SetAssignment <- VariableAssign VariableList
 
