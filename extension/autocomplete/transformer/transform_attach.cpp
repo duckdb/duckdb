@@ -88,7 +88,7 @@ PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transforme
 			result.push_back(transformer.Transform<GenericCopyOption>(child.Child<ListParseResult>(1)));
 		}
 	}
-	return std::move(result);
+	return result;
 }
 
 GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
@@ -123,7 +123,7 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 			                              ExpressionTypeToString(expression->GetExpressionType()));
 		}
 	}
-	return std::move(copy_option);
+	return copy_option;
 }
 
 } // namespace duckdb
