@@ -68,37 +68,37 @@ void VariantColumnData::InitializePrefetch(PrefetchState &prefetch_state, Column
 	}
 }
 
-void VariantColumnData::InitializeScan(ColumnScanState &state) {
+void VariantColumnData::InitializeScan(ColumnScanState &state, bool initialize_segment) {
 	CreateScanStates(state);
 	state.row_index = 0;
 	state.current = nullptr;
 
 	// initialize the validity segment
-	validity.InitializeScan(state.child_states[0]);
+	validity.InitializeScan(state.child_states[0], initialize_segment);
 
 	// initialize the sub-columns
 	for (idx_t i = 0; i < SubColumnsSize(); i++) {
 		if (!state.scan_child_column[i]) {
 			continue;
 		}
-		sub_columns[i]->InitializeScan(state.child_states[i + 1]);
+		sub_columns[i]->InitializeScan(state.child_states[i + 1], initialize_segment);
 	}
 }
 
-void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_segment) {
 	CreateScanStates(state);
 	state.row_index = row_idx;
 	state.current = nullptr;
 
 	// initialize the validity segment
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx, initialize_segment);
 
 	// initialize the sub-columns
 	for (idx_t i = 0; i < SubColumnsSize(); i++) {
 		if (!state.scan_child_column[i]) {
 			continue;
 		}
-		sub_columns[i]->InitializeScanWithOffset(state.child_states[i + 1], row_idx);
+		sub_columns[i]->InitializeScanWithOffset(state.child_states[i + 1], row_idx, initialize_segment);
 	}
 }
 
@@ -311,6 +311,13 @@ public:
 	}
 };
 
+void VariantColumnData::CheckpointScan(optional_ptr<ColumnSegment> segment, ColumnScanState &state,
+                                       idx_t row_group_start, idx_t count, Vector &scan_vector) {
+	auto &sub_column = sub_columns[0];
+	auto &child_state = state.child_states[1];
+	sub_column->CheckpointScan(child_state.current, child_state, row_group_start, count, scan_vector);
+}
+
 unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(RowGroup &row_group,
                                                                            PartialBlockManager &partial_block_manager) {
 	return make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
@@ -348,16 +355,14 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	ColumnScanState scan_state;
 	scan_state.scan_child_column.resize(2, true);
 
-	InitializeScan(scan_state);
+	InitializeScan(scan_state, true);
 	//! Scan + transform + append
 	idx_t total_count = count.load();
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 
-		//! TODO: scan X amount of tuples from the ColumnData, only input we need is: idx_t count, Vector &target_vector
-		// idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
-		// scan_state.row_index = segment.start + base_row_index;
-		// CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
+		auto to_scan = MaxValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
+		CheckpointScan(nullptr, scan_state, row_group.start, to_scan, scan_vector);
 
 		append_chunk.Reset();
 		VariantColumnData::ShredVariantData(scan_vector, append_vector, child_types[1].second);

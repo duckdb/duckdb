@@ -51,37 +51,37 @@ void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnS
 	}
 }
 
-void StructColumnData::InitializeScan(ColumnScanState &state) {
+void StructColumnData::InitializeScan(ColumnScanState &state, bool initialize_segment) {
 	D_ASSERT(state.child_states.size() == sub_columns.size() + 1);
 	state.row_index = 0;
 	state.current = nullptr;
 
 	// initialize the validity segment
-	validity.InitializeScan(state.child_states[0]);
+	validity.InitializeScan(state.child_states[0], initialize_segment);
 
 	// initialize the sub-columns
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		if (!state.scan_child_column[i]) {
 			continue;
 		}
-		sub_columns[i]->InitializeScan(state.child_states[i + 1]);
+		sub_columns[i]->InitializeScan(state.child_states[i + 1], initialize_segment);
 	}
 }
 
-void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_segment) {
 	D_ASSERT(state.child_states.size() == sub_columns.size() + 1);
 	state.row_index = row_idx;
 	state.current = nullptr;
 
 	// initialize the validity segment
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx, initialize_segment);
 
 	// initialize the sub-columns
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		if (!state.scan_child_column[i]) {
 			continue;
 		}
-		sub_columns[i]->InitializeScanWithOffset(state.child_states[i + 1], row_idx);
+		sub_columns[i]->InitializeScanWithOffset(state.child_states[i + 1], row_idx, initialize_segment);
 	}
 }
 
@@ -369,6 +369,20 @@ void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t r
 		col_path.back() = i + 1;
 		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	}
+}
+
+void StructColumnData::CheckpointScan(optional_ptr<ColumnSegment> segment, ColumnScanState &state,
+                                      idx_t row_group_start, idx_t count, Vector &scan_vector) {
+	auto &child_vectors = StructVector::GetEntries(scan_vector);
+	for (idx_t i = 0; i < child_vectors.size(); i++) {
+		auto &child_vector = *child_vectors[i];
+		auto &sub_column = sub_columns[i];
+		auto &child_state = state.child_states[i + 1];
+		sub_column->CheckpointScan(child_state.current, child_state, row_group_start, count, child_vector);
+	}
+
+	idx_t offset_in_row_group = state.row_index - row_group_start;
+	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
 ColumnSegmentTree &StructColumnData::GetSegments() {

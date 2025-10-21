@@ -29,8 +29,8 @@ public:
 	idx_t GetMaxEntry() override;
 
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
-	void InitializeScan(ColumnScanState &state) override;
-	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
+	void InitializeScan(ColumnScanState &state, bool initialize_segment) override;
+	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_segment) override;
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
@@ -53,6 +53,9 @@ public:
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
 	void CommitDropColumn() override;
+
+	void CheckpointScan(optional_ptr<ColumnSegment> segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+	                    Vector &scan_vector) override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;

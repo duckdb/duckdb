@@ -115,9 +115,9 @@ public:
 	//! Initialize prefetch state with required I/O data for the next N rows
 	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);
 	//! Initialize a scan of the column
-	virtual void InitializeScan(ColumnScanState &state);
+	virtual void InitializeScan(ColumnScanState &state, bool initialize_segment = false);
 	//! Initialize a scan starting at the specified offset
-	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx);
+	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_segment = false);
 	//! Scan the next vector from the column
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
@@ -168,8 +168,8 @@ public:
 	                                                                PartialBlockManager &partial_block_manager);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info);
 
-	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
-	                            Vector &scan_vector);
+	virtual void CheckpointScan(optional_ptr<ColumnSegment> segment, ColumnScanState &state, idx_t row_group_start,
+	                            idx_t count, Vector &scan_vector);
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
