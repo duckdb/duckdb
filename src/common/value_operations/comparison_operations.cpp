@@ -142,7 +142,8 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		// this should be enforced by the type
 		D_ASSERT(left_children.size() == right_children.size());
 		if (left_children.empty()) {
-			return true;
+			const auto const_true = Value::BOOLEAN(true);
+			return ValuePositionComparator::Final<OP>(const_true, const_true);
 		}
 
 		idx_t i = 0;
