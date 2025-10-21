@@ -668,7 +668,7 @@ Indirection <- CastOperator / DotOperator / SliceExpression / NotNull / PostfixO
 
 BaseExpression <- SingleExpression Indirection*
 Expression <- BaseExpression RecursiveExpression*
-RecursiveExpression <- (Operator Expression)
+RecursiveExpression <- Operator Expression
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? (':' (Expression / '-')?)? (':' Expression?)?
 

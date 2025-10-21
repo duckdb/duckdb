@@ -35,6 +35,35 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	return expr;
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformRecursiveExpression(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto operator_expr = transformer.Transform<ExpressionType>(list_pr.Child<ListParseResult>(0));
+	vector<unique_ptr<ParsedExpression>> expr_children;
+	auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+
+	if (operator_expr == ExpressionType::LAMBDA) {
+		return make_uniq<LambdaExpression>(nullptr, std::move(right_expr));
+	}
+	if (operator_expr == ExpressionType::COMPARE_BETWEEN) {
+		auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(right_expr));
+		return make_uniq<BetweenExpression>(nullptr, std::move(compare_expr->left), std::move(compare_expr->right));
+	}
+
+	if (operator_expr == ExpressionType::COMPARE_NOT_BETWEEN) {
+		throw NotImplementedException("Not between operator not implemented");
+	}
+	if (operator_expr != ExpressionType::INVALID) {
+		return make_uniq<ComparisonExpression>(operator_expr, nullptr, std::move(right_expr));
+	}
+	expr_children.push_back(std::move(right_expr));
+	// Not a special expression, extract operator and make function expression
+	auto op = list_pr.Child<ListParseResult>(0).Child<ChoiceParseResult>(0).result->Cast<OperatorParseResult>().operator_token;
+	return make_uniq<FunctionExpression>(std::move(op), std::move(expr_children));
+}
+
+
 unique_ptr<ColumnRefExpression>
 PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -215,5 +244,57 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSingleExpression(PE
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
+
+ExpressionType PEGTransformerFactory::TransformOperator(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	if (choice_pr.result->type == ParseResultType::OPERATOR) {
+		return OperatorToExpressionType(choice_pr.result->Cast<OperatorParseResult>().operator_token);
+	}
+	return transformer.Transform<ExpressionType>(choice_pr.result);
+}
+
+ExpressionType PEGTransformerFactory::TransformConjunctionOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<ExpressionType>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+ExpressionType PEGTransformerFactory::TransformIsOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	bool is_not = list_pr.Child<OptionalParseResult>(1).HasResult();
+	bool is_distinct = list_pr.Child<OptionalParseResult>(2).HasResult();
+	if (is_distinct && is_not) {
+		return ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	} if (is_distinct) {
+		return ExpressionType::COMPARE_DISTINCT_FROM;
+	} if (is_not) {
+		return ExpressionType::OPERATOR_IS_NOT_NULL;
+	}
+	return ExpressionType::OPERATOR_IS_NULL;
+}
+
+ExpressionType PEGTransformerFactory::TransformInOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto is_not = list_pr.Child<OptionalParseResult>(0).HasResult();
+	if (is_not) {
+		return ExpressionType::COMPARE_NOT_IN;
+	}
+	return ExpressionType::COMPARE_IN;
+}
+
+
+ExpressionType PEGTransformerFactory::TransformLambdaOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	return ExpressionType::LAMBDA;
+}
+
+ExpressionType PEGTransformerFactory::TransformBetweenOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
+		return ExpressionType::COMPARE_NOT_BETWEEN;
+	}
+	return ExpressionType::COMPARE_BETWEEN;
+}
+
 
 } // namespace duckdb

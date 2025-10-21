@@ -66,6 +66,10 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
 	REGISTER_TRANSFORM(TransformGenericCopyOption);
 
+	// call.gram
+	REGISTER_TRANSFORM(TransformCallStatement);
+	REGISTER_TRANSFORM(TransformTableFunctionArguments);
+
 	// checkpoint.gram
 	REGISTER_TRANSFORM(TransformCheckpointStatement);
 
@@ -85,6 +89,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
+	REGISTER_TRANSFORM(TransformRecursiveExpression);
 	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformColumnReference);
 	REGISTER_TRANSFORM(TransformExpression);
@@ -93,6 +98,13 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformConstantLiteral);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
 	REGISTER_TRANSFORM(TransformFunctionIdentifier);
+
+	REGISTER_TRANSFORM(TransformOperator);
+	REGISTER_TRANSFORM(TransformConjunctionOperator);
+	REGISTER_TRANSFORM(TransformIsOperator);
+	REGISTER_TRANSFORM(TransformInOperator);
+	REGISTER_TRANSFORM(TransformLambdaOperator);
+	REGISTER_TRANSFORM(TransformBetweenOperator);
 
 	// load.gram
 	REGISTER_TRANSFORM(TransformLoadStatement);

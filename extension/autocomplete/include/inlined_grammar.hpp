@@ -654,7 +654,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"Indirection <- CastOperator / DotOperator / SliceExpression / NotNull / PostfixOperator\n"
 	"BaseExpression <- SingleExpression Indirection*\n"
 	"Expression <- BaseExpression RecursiveExpression*\n"
-	"RecursiveExpression <- (Operator Expression)\n"
+	"RecursiveExpression <- Operator Expression\n"
 	"SliceExpression <- '[' SliceBound ']'\n"
 	"SliceBound <- Expression? (':' (Expression / '-')?)? (':' Expression?)?\n"
 	"SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression\n"

@@ -1,0 +1,24 @@
+# name: test/sql/peg_parser/transformer/attach_statement.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [transformer]
+
+require tpch
+
+require autocomplete
+
+require skip_reload
+
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+set allow_parser_override_extension=strict_when_supported;
+
+statement ok
+CALL dbgen(sf=0.1);
+
+statement ok
+CALL dbgen(sf=0.1, suffix='_original');
+
