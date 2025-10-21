@@ -350,30 +350,29 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 
 	InitializeScan(scan_state);
 	//! Scan + transform + append
-	auto &nodes = old_unshredded.GetSegments().ReferenceSegments();
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment = *nodes[segment_idx].node;
-		ColumnScanState scan_state;
-		scan_state.current = &segment;
-		segment.InitializeScan(scan_state);
+	idx_t total_count = count.load();
+	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
+		scan_chunk.Reset();
 
-		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
-			scan_chunk.Reset();
+		//! TODO: scan X amount of tuples from the ColumnData, only input we need is: idx_t count, Vector &target_vector
+		// idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
+		// scan_state.row_index = segment.start + base_row_index;
+		// CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
 
-			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
-			scan_state.row_index = segment.start + base_row_index;
+		append_chunk.Reset();
+		VariantColumnData::ShredVariantData(scan_vector, append_vector, child_types[1].second);
 
-			CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
-
-			append_chunk.Reset();
-			VariantColumnData::ShredVariantData(scan_vector, append_vector, child_types[1].second);
-
-			auto &unshredded_vector = *StructVector::GetEntries(append_vector)[0];
-			auto &shredded_vector = *StructVector::GetEntries(append_vector)[1];
-			unshredded->Append(unshredded_append_state, unshredded_vector, scan_chunk.size());
-			shredded->Append(shredded_append_state, shredded_vector, scan_chunk.size());
-		}
+		auto &unshredded_vector = *StructVector::GetEntries(append_vector)[0];
+		auto &shredded_vector = *StructVector::GetEntries(append_vector)[1];
+		unshredded->Append(unshredded_append_state, unshredded_vector, scan_chunk.size());
+		shredded->Append(shredded_append_state, shredded_vector, scan_chunk.size());
 	}
+	// for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+	//	auto &segment = *nodes[segment_idx].node;
+	//	ColumnScanState scan_state;
+	//	scan_state.current = &segment;
+	//	segment.InitializeScan(scan_state);
+	//}
 	return ret;
 }
 
