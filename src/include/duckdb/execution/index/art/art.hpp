@@ -53,8 +53,7 @@ public:
 		return std::move(art);
 	}
 
-	//! Plan index construction.
-	static PhysicalOperator &CreatePlan(PlanIndexInput &input);
+	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
 	Node tree = Node();
