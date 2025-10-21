@@ -13,7 +13,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDetachStatement(PEGTran
 	info->if_not_found = if_exists.optional_result ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->name = list_pr.Child<IdentifierParseResult>(3).identifier;
 	result->info = std::move(info);
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb

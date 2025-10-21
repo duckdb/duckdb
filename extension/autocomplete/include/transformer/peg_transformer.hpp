@@ -168,9 +168,9 @@ private:
 	                                                         optional_ptr<ParseResult> parse_result);
 	static string TransformAttachAlias(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<GenericCopyOption> TransformAttachOptions(PEGTransformer &transformer,
-	                                                           optional_ptr<ParseResult> parse_result);
+	                                                        optional_ptr<ParseResult> parse_result);
 	static vector<GenericCopyOption> TransformGenericCopyOptionList(PEGTransformer &transformer,
-	                                                                           optional_ptr<ParseResult> parse_result);
+	                                                                optional_ptr<ParseResult> parse_result);
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
 
@@ -187,7 +187,7 @@ private:
 	static unique_ptr<ParsedExpression> TransformConstantLiteral(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ColumnRefExpression> TransformNestedColumnName(PEGTransformer &transformer,
-		optional_ptr<ParseResult> parse_result);
+	                                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformColumnReference(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLiteralExpression(PEGTransformer &transformer,

@@ -123,7 +123,10 @@ def parse_test_file(filename):
         if type(stmt) is duckdb_sqllogictest.statement.skip.Skip:
             # mode skip - just skip entire test
             break
-        if type(stmt) is duckdb_sqllogictest.statement.loop.Loop or type(stmt) is duckdb_sqllogictest.statement.foreach.Foreach:
+        if (
+            type(stmt) is duckdb_sqllogictest.statement.loop.Loop
+            or type(stmt) is duckdb_sqllogictest.statement.foreach.Foreach
+        ):
             loop_count += 1
         if type(stmt) is duckdb_sqllogictest.statement.endloop.Endloop:
             loop_count -= 1
@@ -131,7 +134,8 @@ def parse_test_file(filename):
             # loops are ignored currently
             continue
         if not (
-            type(stmt) is duckdb_sqllogictest.statement.query.Query or type(stmt) is duckdb_sqllogictest.statement.statement.Statement
+            type(stmt) is duckdb_sqllogictest.statement.query.Query
+            or type(stmt) is duckdb_sqllogictest.statement.statement.Statement
         ):
             # only handle query and statement nodes for now
             continue

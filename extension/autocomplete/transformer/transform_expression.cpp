@@ -35,7 +35,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	return expr;
 }
 
-unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ColumnRefExpression>
+PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<string> column_names;
 	auto opt_identifiers = list_pr.Child<OptionalParseResult>(0);
@@ -49,7 +50,8 @@ unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName
 	return make_uniq<ColumnRefExpression>(std::move(column_names));
 }
 
-// ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
+// ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName /
+// NestedColumnName
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -102,7 +104,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		window_function->function_name = qualified_function.name;
 		window_function->children = std::move(function_children);
 		window_function->type = WindowExpression::WindowToExpressionType(window_function->function_name);
-		return window_function;
+		return std::move(window_function);
 	}
 
 	auto result = make_uniq<FunctionExpression>(qualified_function.catalog, qualified_function.schema,
@@ -117,7 +119,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 	if (filter_expr) {
 		result->filter = std::move(filter_expr);
 	}
-	return result;
+	return std::move(result);
 }
 
 QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,

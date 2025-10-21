@@ -41,7 +41,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(PEGTran
 		} else if (copy_option.children.size() == 1) {
 			auto val = copy_option.children[0];
 			if (val.IsNull()) {
-				throw BinderException("NULL is not supported as a valid option for ATTACH option \"%s\"", copy_option.name);
+				throw BinderException("NULL is not supported as a valid option for ATTACH option \"%s\"",
+				                      copy_option.name);
 			}
 			info->options[copy_option.name] = std::move(copy_option.children[0]);
 		} else {
@@ -49,7 +50,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(PEGTran
 		}
 	}
 	result->info = std::move(info);
-	return result;
+	return std::move(result);
 }
 
 string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer,
@@ -63,7 +64,7 @@ string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer,
 }
 
 vector<GenericCopyOption> PEGTransformerFactory::TransformAttachOptions(PEGTransformer &transformer,
-                                                                           optional_ptr<ParseResult> parse_result) {
+                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &parens = list_pr.Child<ListParseResult>(0);
 	auto &generic_copy_option_list = parens.Child<ListParseResult>(1);
@@ -87,7 +88,7 @@ PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transforme
 			result.push_back(transformer.Transform<GenericCopyOption>(child.Child<ListParseResult>(1)));
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
@@ -122,7 +123,7 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 			                              ExpressionTypeToString(expression->GetExpressionType()));
 		}
 	}
-	return copy_option;
+	return std::move(copy_option);
 }
 
 } // namespace duckdb
