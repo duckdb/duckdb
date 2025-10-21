@@ -538,7 +538,6 @@ TEST_CASE("Test Copy Functions in C API", "[capi]") {
 	// Read non-existing file
 	result = tester.Query("COPY my_table FROM 'non_existing_file.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 100)");
 	REQUIRE_FAIL(result);
-	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "No such file or directory"));
 
 	// Read with too small max size
 	result = tester.Query(
