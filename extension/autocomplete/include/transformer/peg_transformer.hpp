@@ -215,9 +215,9 @@ private:
 	static unique_ptr<ParsedExpression> TransformListExpression(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformArrayBoundedListExpression(PEGTransformer &transformer,
-																optional_ptr<ParseResult> parse_result);
+	                                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformArrayParensSelect(PEGTransformer &transformer,
-																optional_ptr<ParseResult> parse_result);
+	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformStructExpression(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformStructField(PEGTransformer &transformer,
