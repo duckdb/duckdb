@@ -227,7 +227,7 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 	auto &typed_value = *child_vectors[1];
 
 	DuckDBVariantShreddingState shredding_state(typed_value.GetType(), count);
-	// CreateValues(variant, *value, sel, value_index_sel, result_sel, &shredding_state, count);
+	CreateValues(variant, untyped_value_index, sel, value_index_sel, result_sel, &shredding_state, count);
 
 	SelectionVector null_values;
 	if (shredding_state.count) {
