@@ -123,6 +123,20 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformBetweenOperator);
 
+	// insert.gram
+	REGISTER_TRANSFORM(TransformInsertStatement);
+	REGISTER_TRANSFORM(TransformInsertTarget);
+	REGISTER_TRANSFORM(TransformOnConflictClause);
+	REGISTER_TRANSFORM(TransformOnConflictExpressionTarget);
+	REGISTER_TRANSFORM(TransformOnConflictAction);
+	REGISTER_TRANSFORM(TransformOnConflictUpdate);
+	REGISTER_TRANSFORM(TransformOnConflictNothing);
+	REGISTER_TRANSFORM(TransformInsertValues);
+	REGISTER_TRANSFORM(TransformByNameOrPosition);
+	REGISTER_TRANSFORM(TransformInsertColumnList);
+	REGISTER_TRANSFORM(TransformColumnList);
+	REGISTER_TRANSFORM(TransformReturningClause);
+
 	// load.gram
 	REGISTER_TRANSFORM(TransformLoadStatement);
 	REGISTER_TRANSFORM(TransformInstallStatement);

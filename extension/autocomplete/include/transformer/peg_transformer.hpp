@@ -193,6 +193,15 @@ private:
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 
+	// create_table.gram
+	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
+													 optional_ptr<ParseResult> parse_result);
+	static string TransformColIdOrString(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformDottedIdentifier(PEGTransformer &transformer,
+													optional_ptr<ParseResult> parse_result);
+
 	// delete.gram
 	static unique_ptr<SQLStatement> TransformDeleteStatement(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
@@ -203,6 +212,10 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SQLStatement> TransformTruncateStatement(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
+
+	// detach.gram
+	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer,
+															 optional_ptr<ParseResult> parse_result);
 
 	// expression.gram
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,
@@ -262,18 +275,6 @@ private:
 	static unique_ptr<ParsedExpression> TransformStepSliceBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 
-	// create_table.gram
-	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
-	                                                 optional_ptr<ParseResult> parse_result);
-	static string TransformColIdOrString(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static string TransformColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static string TransformIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<string> TransformDottedIdentifier(PEGTransformer &transformer,
-	                                                optional_ptr<ParseResult> parse_result);
-
-	// detach.gram
-	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer,
-	                                                         optional_ptr<ParseResult> parse_result);
 
 	// insert.gram
 	static unique_ptr<SQLStatement> TransformInsertStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

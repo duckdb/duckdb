@@ -1,4 +1,5 @@
 #pragma once
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 struct InsertValues {
