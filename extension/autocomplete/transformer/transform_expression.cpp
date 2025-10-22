@@ -182,10 +182,63 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 	return func_expr;
 }
 
-string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
+                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	return transformer.TransformEnum<string>(choice_pr.result);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListExpression(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	bool is_array = list_pr.Child<OptionalParseResult>(0).HasResult();
+	auto list_expr = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	if (!is_array) {
+		return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", "list_value", std::move(list_expr));
+	}
+	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR, std::move(list_expr));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto struct_children_pr = list_pr.Child<OptionalParseResult>(1);
+
+	auto func_name = "struct_pack";
+	vector<unique_ptr<ParsedExpression>> struct_children;
+	if (struct_children_pr.HasResult()) {
+		auto struct_children_list = ExtractParseResultsFromList(struct_children_pr.optional_result);
+		for (auto struct_child : struct_children_list) {
+			struct_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(struct_child));
+		}
+	}
+
+	return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", func_name, std::move(struct_children));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructField(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
+	expr->SetAlias(alias);
+	return expr;
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformBoundedListExpression(PEGTransformer &transformer,
+                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto has_expr = list_pr.Child<OptionalParseResult>(1);
+	vector<unique_ptr<ParsedExpression>> list_children;
+	if (has_expr.HasResult()) {
+		auto expr_list = ExtractParseResultsFromList(has_expr.optional_result);
+		for (auto &expr : expr_list) {
+			list_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+		}
+	}
+	return list_children;
 }
 
 // Expression <- BaseExpression RecursiveExpression*

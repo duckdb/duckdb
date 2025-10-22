@@ -16,6 +16,12 @@ PRAGMA enable_verification
 statement ok
 set allow_parser_override_extension=strict_when_supported;
 
+# statement ok
+# CALL enable_logging(['QueryLog', 'FileSystem']);
+
+statement ok
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': 'duckdb_unittest_tempdir/14488/logging_csv_log.csv', 'normalize': false});
+
 statement error
 CALL dbgen(sf=0.01, children=-1);
 ----

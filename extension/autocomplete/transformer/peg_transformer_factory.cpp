@@ -101,6 +101,10 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformConstantLiteral);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
 	REGISTER_TRANSFORM(TransformPrefixOperator);
+	REGISTER_TRANSFORM(TransformListExpression);
+	REGISTER_TRANSFORM(TransformStructExpression);
+	REGISTER_TRANSFORM(TransformStructField);
+	REGISTER_TRANSFORM(TransformBoundedListExpression);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
 	REGISTER_TRANSFORM(TransformFunctionIdentifier);
 

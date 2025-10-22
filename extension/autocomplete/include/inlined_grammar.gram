@@ -595,10 +595,10 @@ NotPrefixOperator <- 'NOT'
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
-ListExpression <- 'ARRAY'? (BoundedListExpression / SelectStatement)
+ListExpression <- 'ARRAY'? BoundedListExpression
 BoundedListExpression <- '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField)? '}'
-StructField <- Expression ':' Expression
+StructField <- ColIdOrString ':' Expression
 MapExpression <- 'MAP' StructExpression
 GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
 GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'

@@ -212,6 +212,14 @@ private:
 	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static string TransformPrefixOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformListExpression(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformStructExpression(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformStructField(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformBoundedListExpression(PEGTransformer &transformer,
+	                                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformFunctionIdentifier(PEGTransformer &transformer,
