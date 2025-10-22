@@ -595,7 +595,9 @@ NotPrefixOperator <- 'NOT'
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
-ListExpression <- ('ARRAY'? BoundedListExpression) / ('ARRAY' Parens(SelectStatement))
+ListExpression <- ArrayBoundedListExpression / ArrayParensSelect
+ArrayBoundedListExpression <- 'ARRAY'? BoundedListExpression
+ArrayParensSelect <- 'ARRAY' Parens(SelectStatement)
 BoundedListExpression <- '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField)? '}'
 StructField <- ColIdOrString ':' Expression

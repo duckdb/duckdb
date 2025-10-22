@@ -190,6 +190,12 @@ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transforme
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListExpression(PEGTransformer &transformer,
+																			optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayBoundedListExpression(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool is_array = list_pr.Child<OptionalParseResult>(0).HasResult();
@@ -198,6 +204,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListExpression(PEGT
 		return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", "list_value", std::move(list_expr));
 	}
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR, std::move(list_expr));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
+																			optional_ptr<ParseResult> parse_result) {
+	throw NotImplementedException("TransformArrayBoundedListExpression");
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,

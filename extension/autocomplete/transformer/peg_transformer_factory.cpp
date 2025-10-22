@@ -105,6 +105,8 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStructExpression);
 	REGISTER_TRANSFORM(TransformStructField);
 	REGISTER_TRANSFORM(TransformBoundedListExpression);
+	REGISTER_TRANSFORM(TransformArrayBoundedListExpression);
+	REGISTER_TRANSFORM(TransformArrayParensSelect);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
 	REGISTER_TRANSFORM(TransformFunctionIdentifier);
 
