@@ -141,6 +141,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformSchemaReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformTableNameIdentifierOrStringLiteral);
+	REGISTER_TRANSFORM(TransformWhereClause);
 
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
