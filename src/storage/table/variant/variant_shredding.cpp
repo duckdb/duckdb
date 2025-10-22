@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/variant_visitor.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 
 namespace duckdb {
 
@@ -137,7 +138,119 @@ struct VariantShreddingVisitor {
 	}
 };
 
+struct DuckDBVariantShredding : public VariantShredding {
+public:
+	DuckDBVariantShredding() : VariantShredding() {
+	}
+	~DuckDBVariantShredding() override = default;
+
+public:
+	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
+	                        optional_ptr<const SelectionVector> value_index_sel,
+	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
+};
+
+static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::ANY) {
+		return {};
+	}
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+		return {VariantLogicalType::OBJECT};
+	case LogicalTypeId::LIST:
+		return {VariantLogicalType::ARRAY};
+	case LogicalTypeId::BOOLEAN:
+		return {VariantLogicalType::BOOL_TRUE, VariantLogicalType::BOOL_FALSE};
+	case LogicalTypeId::TINYINT:
+		return {VariantLogicalType::INT8};
+	case LogicalTypeId::SMALLINT:
+		return {VariantLogicalType::INT16};
+	case LogicalTypeId::INTEGER:
+		return {VariantLogicalType::INT32};
+	case LogicalTypeId::BIGINT:
+		return {VariantLogicalType::INT64};
+	case LogicalTypeId::FLOAT:
+		return {VariantLogicalType::FLOAT};
+	case LogicalTypeId::DOUBLE:
+		return {VariantLogicalType::DOUBLE};
+	case LogicalTypeId::DECIMAL:
+		return {VariantLogicalType::DECIMAL};
+	case LogicalTypeId::DATE:
+		return {VariantLogicalType::DATE};
+	case LogicalTypeId::TIME:
+		return {VariantLogicalType::TIME_MICROS};
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
+	case LogicalTypeId::TIMESTAMP:
+		return {VariantLogicalType::TIMESTAMP_MICROS};
+	case LogicalTypeId::TIMESTAMP_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS};
+	case LogicalTypeId::BLOB:
+		return {VariantLogicalType::BLOB};
+	case LogicalTypeId::VARCHAR:
+		return {VariantLogicalType::VARCHAR};
+	case LogicalTypeId::UUID:
+		return {VariantLogicalType::UUID};
+	default:
+		throw BinderException("Type '%s' can't be translated to a VARIANT type", type.ToString());
+	}
+}
+
+struct DuckDBVariantShreddingState : public VariantShreddingState {
+public:
+	DuckDBVariantShreddingState(const LogicalType &type, idx_t total_count)
+	    : VariantShreddingState(type, total_count), variant_types(GetVariantType(type)) {
+	}
+
+public:
+	const unordered_set<VariantLogicalType> &GetVariantTypes() override {
+		return variant_types;
+	}
+
+private:
+	unordered_set<VariantLogicalType> variant_types;
+};
+
 } // namespace
+
+void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
+                                                optional_ptr<const SelectionVector> sel,
+                                                optional_ptr<const SelectionVector> value_index_sel,
+                                                optional_ptr<const SelectionVector> result_sel, idx_t count) {
+	auto &result_type = result.GetType();
+	D_ASSERT(result_type.id() == LogicalTypeId::STRUCT);
+	auto &child_types = StructType::GetChildTypes(result_type);
+	auto &child_vectors = StructVector::GetEntries(result);
+	D_ASSERT(child_types.size() == child_vectors.size());
+
+	auto &untyped_value_index = *child_vectors[0];
+	auto &typed_value = *child_vectors[1];
+
+	DuckDBVariantShreddingState shredding_state(typed_value.GetType(), count);
+	// CreateValues(variant, *value, sel, value_index_sel, result_sel, &shredding_state, count);
+
+	SelectionVector null_values;
+	if (shredding_state.count) {
+		WriteTypedValues(variant, typed_value, shredding_state.shredded_sel, shredding_state.values_index_sel,
+		                 shredding_state.result_sel, shredding_state.count);
+		//! 'shredding_state.result_sel' will always be a subset of 'result_sel', set the rows not in the subset to
+		//! NULL
+		idx_t sel_idx = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto original_index = result_sel ? result_sel->get_index(i) : i;
+			if (sel_idx < shredding_state.count && shredding_state.result_sel[sel_idx] == original_index) {
+				sel_idx++;
+				continue;
+			}
+			FlatVector::SetNull(typed_value, original_index, true);
+		}
+	} else {
+		//! Set all rows of the typed_value to NULL, nothing is shredded on
+		for (idx_t i = 0; i < count; i++) {
+			FlatVector::SetNull(typed_value, result_sel ? result_sel->get_index(i) : i, true);
+		}
+	}
+}
 
 void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t count, const LogicalType &shredded_type) {
 	RecursiveUnifiedVectorFormat recursive_format;

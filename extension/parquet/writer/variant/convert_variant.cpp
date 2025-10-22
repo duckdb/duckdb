@@ -161,11 +161,10 @@ private:
 	unordered_set<VariantLogicalType> variant_types;
 };
 
-struct ParquetVariantShredding {
-	static void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
-	                               optional_ptr<const SelectionVector> sel,
-	                               optional_ptr<const SelectionVector> value_index_sel,
-	                               optional_ptr<const SelectionVector> result_sel, idx_t count);
+struct ParquetVariantShredding : public VariantShredding {
+	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
+	                        optional_ptr<const SelectionVector> value_index_sel,
+	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
 };
 
 } // namespace
@@ -758,9 +757,8 @@ void ParquetVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varia
 
 		SelectionVector null_values;
 		if (shredding_state.count) {
-			VariantShredding::WriteTypedValues<ParquetVariantShredding>(
-			    variant, *typed_value, shredding_state.shredded_sel, shredding_state.values_index_sel,
-			    shredding_state.result_sel, shredding_state.count);
+			WriteTypedValues(variant, *typed_value, shredding_state.shredded_sel, shredding_state.values_index_sel,
+			                 shredding_state.result_sel, shredding_state.count);
 			//! 'shredding_state.result_sel' will always be a subset of 'result_sel', set the rows not in the subset to
 			//! NULL
 			idx_t sel_idx = 0;
@@ -804,7 +802,9 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	auto &result_vectors = StructVector::GetEntries(result);
 	auto &metadata = *result_vectors[0];
 	CreateMetadata(variant, metadata, count);
-	ParquetVariantShredding::WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
+
+	ParquetVariantShredding shredding;
+	shredding.WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
 
 	if (input.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
