@@ -219,7 +219,6 @@
     "group": "optimizer",
     "description": "metrics that are collected for each optimizer",
     "generated": true,
-    "metrics": [],
-    "custom_functions": true
+    "metrics": []
   }
 ]

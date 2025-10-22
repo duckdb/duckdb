@@ -2796,33 +2796,43 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
 	return static_cast<MetaPipelineType>(StringUtil::StringToEnum(GetMetaPipelineTypeValues(), 2, "MetaPipelineType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetMetricGroupValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MetricGroup::ALL), "ALL" },
+		{ static_cast<uint32_t>(MetricGroup::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(MetricGroup::EXECUTION), "EXECUTION" },
+		{ static_cast<uint32_t>(MetricGroup::FILE), "FILE" },
+		{ static_cast<uint32_t>(MetricGroup::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(MetricGroup::OPERATOR), "OPERATOR" },
+		{ static_cast<uint32_t>(MetricGroup::OPTIMIZER), "OPTIMIZER" },
+		{ static_cast<uint32_t>(MetricGroup::PHASE_TIMING), "PHASE_TIMING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value) {
+	return StringUtil::EnumToString(GetMetricGroupValues(), 8, "MetricGroup", static_cast<uint32_t>(value));
+}
+
+template<>
+MetricGroup EnumUtil::FromString<MetricGroup>(const char *value) {
+	return static_cast<MetricGroup>(StringUtil::StringToEnum(GetMetricGroupValues(), 8, "MetricGroup", value));
+}
+
 const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
+		{ static_cast<uint32_t>(MetricsType::ATTACH_LOAD_STORAGE_LATENCY), "ATTACH_LOAD_STORAGE_LATENCY" },
+		{ static_cast<uint32_t>(MetricsType::ATTACH_REPLAY_WAL_LATENCY), "ATTACH_REPLAY_WAL_LATENCY" },
+		{ static_cast<uint32_t>(MetricsType::BLOCKED_THREAD_TIME), "BLOCKED_THREAD_TIME" },
+		{ static_cast<uint32_t>(MetricsType::CHECKPOINT_LATENCY), "CHECKPOINT_LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::CPU_TIME), "CPU_TIME" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_CARDINALITY), "CUMULATIVE_CARDINALITY" },
+		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_ROWS_SCANNED), "CUMULATIVE_ROWS_SCANNED" },
 		{ static_cast<uint32_t>(MetricsType::EXTRA_INFO), "EXTRA_INFO" },
 		{ static_cast<uint32_t>(MetricsType::LATENCY), "LATENCY" },
-		{ static_cast<uint32_t>(MetricsType::QUERY_NAME), "QUERY_NAME" },
-		{ static_cast<uint32_t>(MetricsType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
-		{ static_cast<uint32_t>(MetricsType::ROWS_RETURNED), "ROWS_RETURNED" },
-		{ static_cast<uint32_t>(MetricsType::BLOCKED_THREAD_TIME), "BLOCKED_THREAD_TIME" },
-		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_BUFFER_MEMORY), "SYSTEM_PEAK_BUFFER_MEMORY" },
-		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE), "SYSTEM_PEAK_TEMP_DIR_SIZE" },
-		{ static_cast<uint32_t>(MetricsType::ATTACH_LOAD_STORAGE_LATENCY), "ATTACH_LOAD_STORAGE_LATENCY" },
-		{ static_cast<uint32_t>(MetricsType::ATTACH_REPLAY_WAL_LATENCY), "ATTACH_REPLAY_WAL_LATENCY" },
-		{ static_cast<uint32_t>(MetricsType::CHECKPOINT_LATENCY), "CHECKPOINT_LATENCY" },
-		{ static_cast<uint32_t>(MetricsType::TOTAL_BYTES_READ), "TOTAL_BYTES_READ" },
-		{ static_cast<uint32_t>(MetricsType::TOTAL_BYTES_WRITTEN), "TOTAL_BYTES_WRITTEN" },
-		{ static_cast<uint32_t>(MetricsType::WAITING_TO_ATTACH_LATENCY), "WAITING_TO_ATTACH_LATENCY" },
-		{ static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
-		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
-		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
-		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING), "PHYSICAL_PLANNER_COLUMN_BINDING" },
-		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN), "PHYSICAL_PLANNER_CREATE_PLAN" },
-		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES), "PHYSICAL_PLANNER_RESOLVE_TYPES" },
-		{ static_cast<uint32_t>(MetricsType::PLANNER), "PLANNER" },
-		{ static_cast<uint32_t>(MetricsType::PLANNER_BINDING), "PLANNER_BINDING" },
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_CARDINALITY), "OPERATOR_CARDINALITY" },
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_NAME), "OPERATOR_NAME" },
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
@@ -2857,7 +2867,21 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_TOP_N), "OPTIMIZER_TOP_N" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION), "OPTIMIZER_TOP_N_WINDOW_ELIMINATION" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_UNNEST_REWRITER), "OPTIMIZER_UNNEST_REWRITER" },
-		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_UNUSED_COLUMNS), "OPTIMIZER_UNUSED_COLUMNS" }
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_UNUSED_COLUMNS), "OPTIMIZER_UNUSED_COLUMNS" },
+		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
+		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING), "PHYSICAL_PLANNER_COLUMN_BINDING" },
+		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN), "PHYSICAL_PLANNER_CREATE_PLAN" },
+		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES), "PHYSICAL_PLANNER_RESOLVE_TYPES" },
+		{ static_cast<uint32_t>(MetricsType::PLANNER), "PLANNER" },
+		{ static_cast<uint32_t>(MetricsType::PLANNER_BINDING), "PLANNER_BINDING" },
+		{ static_cast<uint32_t>(MetricsType::QUERY_NAME), "QUERY_NAME" },
+		{ static_cast<uint32_t>(MetricsType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
+		{ static_cast<uint32_t>(MetricsType::ROWS_RETURNED), "ROWS_RETURNED" },
+		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_BUFFER_MEMORY), "SYSTEM_PEAK_BUFFER_MEMORY" },
+		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE), "SYSTEM_PEAK_TEMP_DIR_SIZE" },
+		{ static_cast<uint32_t>(MetricsType::TOTAL_BYTES_READ), "TOTAL_BYTES_READ" },
+		{ static_cast<uint32_t>(MetricsType::TOTAL_BYTES_WRITTEN), "TOTAL_BYTES_WRITTEN" },
+		{ static_cast<uint32_t>(MetricsType::WAITING_TO_ATTACH_LATENCY), "WAITING_TO_ATTACH_LATENCY" }
 	};
 	return values;
 }

@@ -1,6 +1,7 @@
 import json
 import re
 import os
+from typing import OrderedDict
 
 hpp_header = """//-------------------------------------------------------------------------
 //                         DuckDB
@@ -25,9 +26,9 @@ namespace duckdb {
 
 hpp_typedefs = """
 struct MetricsTypeHashFunction {
-	uint64_t operator()(const MetricsType &index) const {
-		return std::hash<uint8_t>()(static_cast<uint8_t>(index));
-	}
+    uint64_t operator()(const MetricsType &index) const {
+        return std::hash<uint8_t>()(static_cast<uint8_t>(index));
+    }
 };
 
 typedef unordered_set<MetricsType, MetricsTypeHashFunction> profiler_settings_t;
@@ -45,7 +46,25 @@ namespace duckdb {
 
 """
 
-all_metrics = {}
+
+class IndentedFileWriter:
+    """Wrapper around a file object that adds write_indented method."""
+
+    def __init__(self, file_obj):
+        self.file = file_obj
+
+    def write_indented(self, indent_level, text):
+        """Write text to file with the specified indentation level."""
+        indent = '\t' * indent_level
+        self.file.write(f"{indent}{text}\n")
+
+    def write(self, text):
+        """Delegate write to the underlying file object."""
+        self.file.write(text)
+
+    def close(self):
+        """Delegate close to the underlying file object."""
+        self.file.close()
 
 
 def retrieve_optimizers():
@@ -79,10 +98,23 @@ def retrieve_optimizers():
 
 def setup_hpp(f):
     f.write(hpp_header)
-    f.write("enum class MetricsType : uint8_t {\n")
+
+    f.write("enum class MetricGroup : uint8_t {\n")
+
+    groups = []
     for group in all_metrics:
-        for metric in all_metrics[group]:
-            f.write(f"    {metric},\n")
+        groups.append(group.upper())
+
+    groups.append("INVALID")
+    groups.sort()
+
+    for group in groups:
+        f.write_indented(1, f"{group},")
+    f.write("};\n\n")
+
+    f.write("enum class MetricsType : uint8_t {\n")
+    for metric in all_metrics["all"]:
+        f.write_indented(1, f"{metric},")
 
     f.write("};\n")
 
@@ -101,29 +133,35 @@ def generate_standard_functions(group_name, hpp_f, cpp_f, metrics=None):
     # capitalize first letter of group name
     if metrics is None:
         metrics = all_metrics
+
     formatted_group_name = to_pascal_case(group_name)
     get_function = 'Get' + formatted_group_name + 'Metrics'
-    check_function = 'Is' + formatted_group_name + 'Metric'
 
-    hpp_f.write(f"    // {formatted_group_name} metrics\n")
-    hpp_f.write(f"    static profiler_settings_t {get_function}();\n")
-    hpp_f.write(f"    static bool {check_function}(MetricsType type);\n")
+    hpp_f.write('\n')
+    hpp_f.write_indented(1, f"// {formatted_group_name} metrics")
+    hpp_f.write_indented(1, f"static profiler_settings_t {get_function}();")
 
     cpp_f.write(f"profiler_settings_t MetricsUtils::{get_function}() {{\n")
-    cpp_f.write('    return {\n')
+    cpp_f.write_indented(1, "return {")
     for metric in metrics[group_name]:
-        cpp_f.write(f"        MetricsType::{metric},\n")
-    cpp_f.write('    };\n')
+        cpp_f.write_indented(2, f"MetricsType::{metric},")
+    cpp_f.write_indented(1, "};")
     cpp_f.write('}\n\n')
 
+    if group_name == "all":
+        generate_get_metric_by_group_function(hpp_f, cpp_f)
+        return
+
+    check_function = 'Is' + formatted_group_name + 'Metric'
+    hpp_f.write_indented(1, f"static bool {check_function}(MetricsType type);")
     cpp_f.write(f"bool MetricsUtils::{check_function}(MetricsType type) {{\n")
-    cpp_f.write('    switch(type) {\n')
+    cpp_f.write_indented(1, "switch(type) {")
     for metric in metrics[group_name]:
-        cpp_f.write(f"        case MetricsType::{metric}:\n")
-    cpp_f.write(f"            return true;\n")
-    cpp_f.write("        default:\n")
-    cpp_f.write("            return false;\n")
-    cpp_f.write("    }\n")
+        cpp_f.write_indented(2, f"case MetricsType::{metric}:")
+    cpp_f.write_indented(3, "return true;")
+    cpp_f.write_indented(2, "default:")
+    cpp_f.write_indented(3, "return false;")
+    cpp_f.write_indented(1, "}")
     cpp_f.write("}\n\n")
 
 
@@ -131,52 +169,70 @@ def generate_custom_optimizer_functions(optimizers, hpp_f, cpp_f):
     by_type = "GetOptimizerMetricByType(OptimizerType type)"
     by_metric = "GetOptimizerTypeByMetric(MetricsType type)"
 
-    hpp_f.write(f"    static MetricsType {by_type};\n")
-    hpp_f.write(f"    static OptimizerType {by_metric};\n")
+    hpp_f.write_indented(1, f"static MetricsType {by_type};")
+    hpp_f.write_indented(1, f"static OptimizerType {by_metric};")
 
     cpp_f.write(f"MetricsType MetricsUtils::{by_type} {{\n")
-    cpp_f.write('    switch(type) {\n')
+    cpp_f.write_indented(1, "switch(type) {")
     for optimizer in optimizers:
-        cpp_f.write(f"        case OptimizerType::{optimizer}:\n")
-        cpp_f.write(f"            return MetricsType::OPTIMIZER_{optimizer};\n")
-    cpp_f.write('        default:\n')
-    cpp_f.write(
-        '            throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));\n'
+        cpp_f.write_indented(2, f"case OptimizerType::{optimizer}:")
+        cpp_f.write_indented(3, f"return MetricsType::OPTIMIZER_{optimizer};")
+    cpp_f.write_indented(2, "default:")
+    cpp_f.write_indented(
+        3, 'throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));'
     )
-    cpp_f.write('    }\n')
+    cpp_f.write_indented(1, "}")
     cpp_f.write('}\n\n')
 
     cpp_f.write(f"OptimizerType MetricsUtils::{by_metric} {{\n")
-    cpp_f.write('    switch(type) {\n')
+    cpp_f.write_indented(1, "switch(type) {")
     for optimizer in optimizers:
-        cpp_f.write(f"        case MetricsType::OPTIMIZER_{optimizer}:\n")
-        cpp_f.write(f"            return OptimizerType::{optimizer};\n")
-    cpp_f.write('        default:\n')
-    cpp_f.write('            return OptimizerType::INVALID;\n')
-    cpp_f.write('    }\n')
+        cpp_f.write_indented(2, f"case MetricsType::OPTIMIZER_{optimizer}:")
+        cpp_f.write_indented(3, f"return OptimizerType::{optimizer};")
+    cpp_f.write_indented(2, "default:")
+    cpp_f.write_indented(3, "return OptimizerType::INVALID;")
+    cpp_f.write_indented(1, "}")
     cpp_f.write('}\n\n')
+
+
+def generate_get_metric_by_group_function(hpp_f, cpp_f):
+    func_name = "GetMetricsByGroupType(MetricGroup type)"
+
+    hpp_f.write_indented(1, f"static profiler_settings_t {func_name};")
+
+    cpp_f.write(f"profiler_settings_t MetricsUtils::{func_name} {{\n")
+    cpp_f.write_indented(1, "switch(type) {")
+    for group in all_metrics:
+        formatted_group_name = group.upper()
+        cpp_f.write_indented(1, f"case MetricGroup::{formatted_group_name}:")
+        cpp_f.write_indented(2, "return {")
+        for metric in all_metrics[group]:
+            cpp_f.write_indented(3, f"MetricsType::{metric},")
+        cpp_f.write_indented(3, "};")
+
+    cpp_f.write_indented(1, "default:")
+    cpp_f.write_indented(2, 'throw InternalException("The MetricGroup passed is invalid");')
+
+    cpp_f.write_indented(1, "}")
+    cpp_f.write('}\n')
 
 
 def generate_metric_type_files(metrics_json, optimizers, root_scope_metrics):
     metrics_hpp_file = os.path.join("..", "src", "include", "duckdb", "common", "enums", "metric_type.hpp")
     metrics_cpp_file = os.path.join("..", "src", "common", "enums", "metric_type.cpp")
 
-    hpp_f = open(metrics_hpp_file, "w")
+    hpp_f = IndentedFileWriter(open(metrics_hpp_file, "w"))
     setup_hpp(hpp_f)
 
-    cpp_f = open(metrics_cpp_file, "w")
+    cpp_f = IndentedFileWriter(open(metrics_cpp_file, "w"))
     cpp_f.write(cpp_header)
 
     # for group in metrics_json:
-    for group in metrics_json:
-        group_name = group["group"]
+    for group in all_metrics:
+        generate_standard_functions(group, hpp_f, cpp_f)
 
-        generate_standard_functions(group_name, hpp_f, cpp_f)
-
-        if "custom_functions" in group:
+        if group == "optimizer":
             generate_custom_optimizer_functions(optimizers, hpp_f, cpp_f)
-
-        hpp_f.write('\n')
 
     root_scope_metrics.sort()
     root_scope_parent = {"root_scope": root_scope_metrics}
@@ -308,6 +364,61 @@ ORDER BY ALL
     write_statement(f, "ok", "SET profiling_mode = 'standard';")
 
 
+def generate_group_tests():
+    top = """# name: test/sql/pragma/profiling/test_custom_profiling_using_groups.test
+# description: Test default profiling settings using groups.
+# group: [profiling]
+
+# This file is automatically generated by scripts/generate_metric_enums.py
+# Do not edit this file manually, your changes will be overwritten
+
+require json
+
+"""
+
+    with open(
+        os.path.join("..", "test", "sql", "pragma", "profiling", "test_custom_profiling_using_groups.test"), "w"
+    ) as f:
+        f.write(top)
+        for group in all_metrics:
+            write_statement(f, "ok", "PRAGMA enable_profiling = 'json';")
+            write_statement(f, "ok", "PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';")
+            write_statement(f, "ok", f"PRAGMA custom_profiling_settings='{{\"{group.upper()}\": \"true\"}}';")
+
+            write_default_query(f)
+
+            write_get_custom_profiling_settings(f)
+
+            metrics = all_metrics[group]
+
+            if group != "all" and "ALL_OPTIMIZERS" in metrics:
+                metrics.extend(all_metrics["optimizer"])
+
+            metrics.sort()
+            for metric in metrics:
+                f.write(f'"{metric}": "true"\n')
+            f.write("\n")
+
+            write_statement(
+                f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+            )
+            select = "SELECT\n"
+            for metric in metrics:
+                if group != "operator" and metric in all_metrics["operator"]:
+                    continue
+                select += f"\t{metric},\n"
+            select = select[:-2]
+
+            if group == "operator":
+                select += "\nFROM (\n"
+                select += "\tSELECT unnest(children, max_depth := 2)\n"
+                select += "\tFROM metrics_output\n"
+                select += ")"
+            else:
+                select += "\nFROM metrics_output;"
+            write_statement(f, "ok", select)
+
+
 def generate_test_files():
     test_names = ["test_default_profiling_settings", "test_custom_profiling_optimizer"]
     test_descriptions = ["default", "custom optimizer"]
@@ -324,7 +435,6 @@ def generate_test_files():
 
             f.write("require json\n\n")
 
-            write_statement(f, "ok", "PRAGMA enable_verification;")
             write_statement(f, "ok", "PRAGMA enable_profiling = 'json';")
             write_statement(f, "ok", "PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';")
 
@@ -346,6 +456,8 @@ def generate_test_files():
             )
             write_statement(f, "ok", "SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;")
 
+    generate_group_tests()
+
 
 def main():
     os.chdir(os.path.dirname(__file__))
@@ -358,6 +470,7 @@ def main():
 
     root_scope_metrics = []
 
+    unsorted_metrics = {}
     for group in metrics_json:
         if "metrics" in group:
             metrics = []
@@ -367,7 +480,7 @@ def main():
                     root_scope_metrics.append(metric["name"])
             metrics.sort()
             group_name = group["group"]
-            all_metrics[group_name] = metrics
+            unsorted_metrics[group_name] = metrics
 
     optimizers = retrieve_optimizers()
     optimizers.sort()
@@ -375,7 +488,17 @@ def main():
     optimizer_metrics = []
     for optimizer in optimizers:
         optimizer_metrics.append(f"OPTIMIZER_{optimizer}")
-    all_metrics['optimizer'] = optimizer_metrics
+    unsorted_metrics['optimizer'] = optimizer_metrics
+
+    all_metrics_list = []
+    for group in unsorted_metrics:
+        for metric in unsorted_metrics[group]:
+            all_metrics_list.append(metric)
+    all_metrics_list.sort()
+    unsorted_metrics["all"] = all_metrics_list
+
+    global all_metrics
+    all_metrics = OrderedDict(sorted(unsorted_metrics.items()))
 
     generate_metric_type_files(metrics_json, optimizers, root_scope_metrics)
     generate_test_files()

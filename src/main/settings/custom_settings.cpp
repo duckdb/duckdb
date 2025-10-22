@@ -343,15 +343,32 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &i
 	string invalid_settings;
 	for (auto &entry : input) {
 		MetricsType setting;
+		MetricGroup group = MetricGroup::INVALID;
 		try {
 			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
 		} catch (std::exception &ex) {
-			if (!invalid_settings.empty()) {
-				invalid_settings += ", ";
+			try {
+				group = EnumUtil::FromString<MetricGroup>(StringUtil::Upper(entry.first));
+			} catch (std::exception &ex) {
+				if (!invalid_settings.empty()) {
+					invalid_settings += ", ";
+				}
+				invalid_settings += entry.first;
+				continue;
 			}
-			invalid_settings += entry.first;
+		}
+		if (group != MetricGroup::INVALID) {
+			if (entry.second == "true") {
+				auto group_metrics = MetricsUtils::GetMetricsByGroupType(group);
+				for (auto &metric : group_metrics) {
+					if (!MetricsUtils::IsOptimizerMetric(metric) || IsEnabledOptimizer(metric, disabled_optimizers)) {
+						metrics.insert(metric);
+					}
+				}
+			}
 			continue;
 		}
+
 		if (StringUtil::Lower(entry.second) == "true" &&
 		    (!MetricsUtils::IsOptimizerMetric(setting) || IsEnabledOptimizer(setting, disabled_optimizers))) {
 			metrics.insert(setting);
@@ -373,9 +390,6 @@ void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType>
 			}
 		}
 	}
-}
-
-void AddSubgroups(unordered_map<string, string> &input, profiler_settings_t &settings) {
 }
 
 void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Value &input) {
