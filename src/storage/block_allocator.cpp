@@ -24,8 +24,10 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 #endif
 
 #if defined(_WIN32)
-	// Windows returns nullptr if the map fails
-	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
+	// For now, we disable this on Windows
+	return nullptr;
+	// Once we enable this on Windows, we should do something like this
+	// return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
 #else
 	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
@@ -35,7 +37,8 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 static void FreeVirtualMemory(const data_ptr_t pointer, const idx_t size) {
 	bool success;
 #if defined(_WIN32)
-	success = VirtualFree(pointer, 0, MEM_RELEASE);
+	// Once we enable this on Windows, we should do something like this
+	// success = VirtualFree(pointer, 0, MEM_RELEASE);
 #else
 	success = munmap(pointer, size) == 0;
 #endif
@@ -47,7 +50,8 @@ static void FreeVirtualMemory(const data_ptr_t pointer, const idx_t size) {
 static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 	bool success;
 #if defined(_WIN32)
-	success = VirtualFree(pointer, size, MEM_RESET);
+	// Once we enable this on Windows, we should do something like this
+	// success = VirtualFree(pointer, size, MEM_RESET);
 #elif defined(__APPLE__)
 	success = madvise(pointer, size, MADV_FREE_REUSABLE) == 0;
 #else
@@ -61,7 +65,8 @@ static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 	bool success = true;
 #if defined(_WIN32)
-	success = VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE);
+	// Once we enable this on Windows, we should do something like this
+	// success = VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE);
 #elif defined(__APPLE__)
 	// Nothing to do here
 #else
@@ -237,13 +242,9 @@ void BlockAllocator::FreeInternal() const {
 		for (idx_t i = 1; i < count; i++) {
 			const auto &previous_block_id = to_free_buffer[i - 1];
 			const auto &current_block_id = to_free_buffer[i];
-
-			// Don't coalesce on Windows
-#if !defined(_WIN32)
 			if (previous_block_id == current_block_id - 1) {
 				continue; // Current is contiguous with previous block
 			}
-#endif
 
 			// Previous block is the last contiguous block starting from block_id_start, free them in one go
 			FreeContiguousBlocks(block_id_start, previous_block_id);
