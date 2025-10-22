@@ -1,6 +1,9 @@
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;

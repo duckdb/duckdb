@@ -361,11 +361,11 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 
-		auto to_scan = MaxValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
+		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 		CheckpointScan(nullptr, scan_state, row_group.start, to_scan, scan_vector);
 
 		append_chunk.Reset();
-		VariantColumnData::ShredVariantData(scan_vector, append_vector, child_types[1].second);
+		VariantColumnData::ShredVariantData(scan_vector, append_vector, to_scan, child_types[1].second);
 
 		auto &unshredded_vector = *StructVector::GetEntries(append_vector)[0];
 		auto &shredded_vector = *StructVector::GetEntries(append_vector)[1];
