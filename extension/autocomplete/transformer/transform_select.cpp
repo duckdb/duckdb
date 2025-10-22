@@ -85,8 +85,9 @@ QualifiedName PEGTransformerFactory::TransformQualifiedName(PEGTransformer &tran
 	return transformer.Transform<QualifiedName>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifierOrStringLiteral(PEGTransformer &transformer,
-                                                                              optional_ptr<ParseResult> parse_result) {
+QualifiedName
+PEGTransformerFactory::TransformCatalogReservedSchemaIdentifierOrStringLiteral(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
 	QualifiedName result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
@@ -95,7 +96,8 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifierOrS
 	return result;
 }
 
-QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(PEGTransformer &transformer,
+QualifiedName
+PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	QualifiedName result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -105,7 +107,8 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLi
 	return result;
 }
 
-string PEGTransformerFactory::TransformReservedIdentifierOrStringLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformReservedIdentifierOrStringLiteral(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
@@ -114,7 +117,9 @@ string PEGTransformerFactory::TransformReservedIdentifierOrStringLiteral(PEGTran
 	return transformer.Transform<string>(choice_pr.result);
 }
 
-QualifiedName PEGTransformerFactory::TransformTableNameIdentifierOrStringLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+QualifiedName
+PEGTransformerFactory::TransformTableNameIdentifierOrStringLiteral(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
 	QualifiedName result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	result.catalog = INVALID_CATALOG;
@@ -123,10 +128,10 @@ QualifiedName PEGTransformerFactory::TransformTableNameIdentifierOrStringLiteral
 	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWhereClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWhereClause(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
-
 
 } // namespace duckdb

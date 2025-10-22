@@ -209,7 +209,7 @@ PEGTransformerFactory::TransformArrayBoundedListExpression(PEGTransformer &trans
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformParenthesisExpression(PEGTransformer &transformer,
-													  optional_ptr<ParseResult> parse_result) {
+                                                      optional_ptr<ParseResult> parse_result) {
 	// ParenthesisExpression <- Parens(List(Expression))
 	vector<unique_ptr<ParsedExpression>> children;
 
@@ -405,19 +405,23 @@ ExpressionType PEGTransformerFactory::TransformBetweenOperator(PEGTransformer &t
 	return ExpressionType::COMPARE_BETWEEN;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIndirection(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIndirection(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCastOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCastOperator(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto type = transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
-	// We input a dummy constant expression but replace this later with the real expression that precedes this post-fix castOperator
+	// We input a dummy constant expression but replace this later with the real expression that precedes this post-fix
+	// castOperator
 	return make_uniq<CastExpression>(type, make_uniq<ConstantExpression>(Value()));
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDotOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDotOperator(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto nested_list = list_pr.Child<ListParseResult>(1);
 	auto choice_pr = nested_list.Child<ChoiceParseResult>(0);
@@ -429,10 +433,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDotOperator(PEGTran
 		// return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.result);
 	}
 	throw InternalException("Unexpected rule encountered in 'DotOperator'");
-
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSliceExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSliceExpression(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto slice_bound = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
 	if (slice_bound.size() == 1) {
@@ -441,7 +445,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSliceExpression(PEG
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(slice_bound));
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSliceBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> slice_bounds;
 	auto start_slice_opt = list_pr.Child<OptionalParseResult>(0);
@@ -449,7 +454,8 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
 	auto step_slice_opt = list_pr.Child<OptionalParseResult>(2);
 	if (!end_slice_opt.HasResult() && !step_slice_opt.HasResult()) {
 		if (start_slice_opt.HasResult()) {
-			slice_bounds.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(start_slice_opt.optional_result));
+			slice_bounds.push_back(
+			    transformer.Transform<unique_ptr<ParsedExpression>>(start_slice_opt.optional_result));
 		}
 		return slice_bounds;
 	}
@@ -470,7 +476,8 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSliceBound(
 	return slice_bounds;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceBound(PEGTransformer &transformer,
+                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto nested_list_opt = list_pr.Child<OptionalParseResult>(1);
 	// If either the lower or upper bound is not specified, we use an empty constant LIST,
@@ -492,7 +499,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceBound(PEGTr
 	return const_list;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStepSliceBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStepSliceBound(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expression_opt = list_pr.Child<OptionalParseResult>(1);
 	if (expression_opt.HasResult()) {
@@ -500,6 +508,5 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStepSliceBound(PEGT
 	}
 	return make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 }
-
 
 } // namespace duckdb

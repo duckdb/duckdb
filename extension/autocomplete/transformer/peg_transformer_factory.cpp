@@ -122,6 +122,14 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformInOperator);
 	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformBetweenOperator);
+	REGISTER_TRANSFORM(TransformParenthesisExpression);
+	REGISTER_TRANSFORM(TransformIndirection);
+	REGISTER_TRANSFORM(TransformCastOperator);
+	REGISTER_TRANSFORM(TransformDotOperator);
+	REGISTER_TRANSFORM(TransformSliceExpression);
+	REGISTER_TRANSFORM(TransformSliceBound);
+	REGISTER_TRANSFORM(TransformEndSliceBound);
+	REGISTER_TRANSFORM(TransformStepSliceBound);
 
 	// insert.gram
 	REGISTER_TRANSFORM(TransformInsertStatement);

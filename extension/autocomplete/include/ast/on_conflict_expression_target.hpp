@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-struct OnConflictExpressionTarget{
+struct OnConflictExpressionTarget {
 	vector<string> indexed_columns;
 	unique_ptr<ParsedExpression> where_clause; // Default value is defined here
 };
