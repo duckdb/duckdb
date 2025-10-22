@@ -21,6 +21,24 @@ struct PrimitiveCastOperator {
 	}
 };
 
+struct StringCastOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return input;
+	}
+	// Taken from ParquetBaseStringOperator in parquet_write_operators.hpp
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
+		ser.Write<uint32_t>(target_value.GetSize());
+		ser.WriteData(const_data_ptr_cast(target_value.GetData()), target_value.GetSize());
+	}
+	// Taken from ParquetBaseStringOperator in parquet_write_operators.hpp
+	template <class SRC, class TGT>
+	static idx_t WriteSize(const TGT &target_value) {
+		return sizeof(uint32_t) + target_value.GetSize();
+	}
+};
+
 template <class SRC, class TGT = SRC, class OP = PrimitiveCastOperator>
 class PrimitiveDictionary {
 private:
@@ -128,7 +146,6 @@ public:
 		allocated_target.Reset();
 	}
 
-private:
 	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {
 		auto offset = Hash(value) & capacity_mask;
@@ -137,6 +154,7 @@ private:
 		}
 		return dictionary[offset];
 	}
+private:
 
 	//! Write a value to the target data (if source is not string)
 	template <typename S = SRC, typename std::enable_if<!std::is_same<S, string_t>::value, int>::type = 0>

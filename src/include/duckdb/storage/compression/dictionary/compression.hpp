@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/primitive_dictionary.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/compression/dictionary/common.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -47,7 +48,7 @@ public:
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	string_map_t<uint32_t> current_string_map;
+	PrimitiveDictionary<string_t, string_t, StringCastOperator> current_string_map;
 	vector<uint32_t> index_buffer;
 	vector<uint32_t> selection_buffer;
 

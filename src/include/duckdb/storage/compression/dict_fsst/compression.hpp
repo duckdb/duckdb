@@ -75,6 +75,7 @@ public:
 	bitpacking_width_t dictionary_indices_width = 0;
 
 	//! string -> dictionary_index (for lookups)
+	//TODO: Replace with primitive_dictionary
 	string_map_t<uint32_t> current_string_map;
 	//! strings added to the dictionary waiting to be encoded
 	vector<string_t> dictionary_encoding_buffer;

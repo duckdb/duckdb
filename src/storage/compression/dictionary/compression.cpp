@@ -6,7 +6,12 @@ namespace duckdb {
 DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
                                                                        const CompressionInfo &info)
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)) {
+      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+	current_string_map(
+		info.GetBlockManager().buffer_manager.GetBufferAllocator(),
+		//TODO: Here i'm passing column distinct count. Is that what PrimitiveDictionary expects here? Or is it per segment or per block?
+		checkpoint_data_p.GetColumnData().GetStatistics()->GetDistinctCount(), // the distinct count for the column's strings.
+		info.GetBlockSize()){ // TODO: Should be the byte size of the unique strings? idk
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
@@ -19,7 +24,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
 	current_segment = std::move(compressed_segment);
 
 	// Reset the buffers and the string map.
-	current_string_map.clear();
+	current_string_map.Reset();
 	index_buffer.clear();
 
 	// Reserve index 0 for null strings.
@@ -42,15 +47,15 @@ void DictionaryCompressionCompressState::Verify() {
 	D_ASSERT(DictionaryCompression::HasEnoughSpace(current_segment->count.load(), index_buffer.size(),
 	                                               current_dictionary.size, current_width, info.GetBlockSize()));
 	D_ASSERT(current_dictionary.end == info.GetBlockSize());
-	D_ASSERT(index_buffer.size() == current_string_map.size() + 1); // +1 is for null value
+	D_ASSERT(index_buffer.size() == current_string_map.GetSize() + 1); // +1 is for null value
 }
 
 bool DictionaryCompressionCompressState::LookupString(string_t str) {
-	auto search = current_string_map.find(str);
-	auto has_result = search != current_string_map.end();
-
+	// auto search = current_string_map.find(str);
+	const auto &entry = current_string_map.Lookup(str);
+	const auto has_result = !entry.IsEmpty();
 	if (has_result) {
-		latest_lookup_result = search->second;
+		latest_lookup_result = entry.index;
 	}
 	return has_result;
 }
@@ -69,11 +74,11 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 	index_buffer.push_back(current_dictionary.size);
 	selection_buffer.push_back(UnsafeNumericCast<uint32_t>(index_buffer.size() - 1));
 	if (str.IsInlined()) {
-		current_string_map.insert({str, index_buffer.size() - 1});
+		current_string_map.Insert(str);
 	} else {
 		string_t dictionary_string((const char *)dict_pos, UnsafeNumericCast<uint32_t>(str.GetSize())); // NOLINT
 		D_ASSERT(!dictionary_string.IsInlined());
-		current_string_map.insert({dictionary_string, index_buffer.size() - 1});
+		current_string_map.Insert(dictionary_string);
 	}
 	DictionaryCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
 
