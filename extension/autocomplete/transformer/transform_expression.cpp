@@ -207,6 +207,21 @@ PEGTransformerFactory::TransformArrayBoundedListExpression(PEGTransformer &trans
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR, std::move(list_expr));
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformParenthesisExpression(PEGTransformer &transformer,
+													  optional_ptr<ParseResult> parse_result) {
+	// ParenthesisExpression <- Parens(List(Expression))
+	vector<unique_ptr<ParsedExpression>> children;
+
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expressions = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.Child<ListParseResult>(0)));
+
+	for (auto &expression : expressions) {
+		children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expression));
+	}
+	return make_uniq<OperatorExpression>(ExpressionType::PLACEHOLDER, std::move(children));
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
 	throw NotImplementedException("TransformArrayBoundedListExpression");

@@ -6,6 +6,8 @@
 #include "transform_result.hpp"
 #include "ast/extension_repository_info.hpp"
 #include "ast/generic_copy_option.hpp"
+#include "ast/insert_values.hpp"
+#include "ast/on_conflict_expression_target.hpp"
 #include "ast/setting_info.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -247,6 +249,8 @@ private:
 	static ExpressionType TransformInOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformBetweenOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformParenthesisExpression(PEGTransformer &transformer,
+													  optional_ptr<ParseResult> parse_result);
 
 	// create_table.gram
 	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
@@ -260,6 +264,22 @@ private:
 	// detach.gram
 	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
+
+	// insert.gram
+	static unique_ptr<SQLStatement> TransformInsertStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<BaseTableRef> TransformInsertTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<OnConflictInfo> TransformOnConflictClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static OnConflictExpressionTarget TransformOnConflictExpressionTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static OnConflictAction TransformOnConflictAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static OnConflictAction TransformOnConflictUpdate(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static OnConflictAction TransformOnConflictNothing(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static InsertValues TransformInsertValues(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static InsertColumnOrder TransformByNameOrPosition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformInsertColumnList(PEGTransformer &transformer,
+																optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformColumnList(PEGTransformer &transformer,
+														  optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformReturningClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// load.gram
 	static unique_ptr<SQLStatement> TransformLoadStatement(PEGTransformer &transformer,
