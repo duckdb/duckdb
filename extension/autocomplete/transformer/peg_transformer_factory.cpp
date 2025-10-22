@@ -84,9 +84,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformIdentifier);
 	REGISTER_TRANSFORM(TransformDottedIdentifier);
 
-	// detach.gram
-	REGISTER_TRANSFORM(TransformDetachStatement);
-
 	// deallocate.gram
 	REGISTER_TRANSFORM(TransformDeallocateStatement);
 
@@ -95,6 +92,9 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformTargetOptAlias);
 	REGISTER_TRANSFORM(TransformDeleteUsingClause);
 	REGISTER_TRANSFORM(TransformTruncateStatement);
+
+	// detach.gram
+	REGISTER_TRANSFORM(TransformDetachStatement);
 
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
