@@ -90,6 +90,12 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	// deallocate.gram
 	REGISTER_TRANSFORM(TransformDeallocateStatement);
 
+	// delete.gram
+	REGISTER_TRANSFORM(TransformDeleteStatement);
+	REGISTER_TRANSFORM(TransformTargetOptAlias);
+	REGISTER_TRANSFORM(TransformDeleteUsingClause);
+	REGISTER_TRANSFORM(TransformTruncateStatement);
+
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformRecursiveExpression);
@@ -125,6 +131,16 @@ PEGTransformerFactory::PEGTransformerFactory() {
 
 	// select.gram
 	REGISTER_TRANSFORM(TransformFunctionArgument);
+	REGISTER_TRANSFORM(TransformBaseTableName);
+	REGISTER_TRANSFORM(TransformSchemaReservedTable);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTable);
+	REGISTER_TRANSFORM(TransformSchemaQualification);
+	REGISTER_TRANSFORM(TransformCatalogQualification);
+	REGISTER_TRANSFORM(TransformQualifiedName);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifierOrStringLiteral);
+	REGISTER_TRANSFORM(TransformSchemaReservedIdentifierOrStringLiteral);
+	REGISTER_TRANSFORM(TransformReservedIdentifierOrStringLiteral);
+	REGISTER_TRANSFORM(TransformTableNameIdentifierOrStringLiteral);
 
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);

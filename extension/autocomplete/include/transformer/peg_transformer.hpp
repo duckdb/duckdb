@@ -191,6 +191,17 @@ private:
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 
+	// delete.gram
+	static unique_ptr<SQLStatement> TransformDeleteStatement(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static unique_ptr<BaseTableRef> TransformTargetOptAlias(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
+
+	static vector<unique_ptr<TableRef>> TransformDeleteUsingClause(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformTruncateStatement(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
+
 	// expression.gram
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
@@ -266,6 +277,27 @@ private:
 	                                                            optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformTableFunctionArguments(PEGTransformer &transformer,
 	                                                                            optional_ptr<ParseResult> parse_result);
+
+	static unique_ptr<BaseTableRef> TransformBaseTableName(PEGTransformer &transformer,
+																		   optional_ptr<ParseResult> parse_result);
+	static unique_ptr<BaseTableRef> TransformSchemaReservedTable(PEGTransformer &transformer,
+																				 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<BaseTableRef>
+		TransformCatalogReservedSchemaTable(PEGTransformer &transformer,
+																   optional_ptr<ParseResult> parse_result);
+	static string TransformSchemaQualification(PEGTransformer &transformer,
+															   optional_ptr<ParseResult> parse_result);
+	static string TransformCatalogQualification(PEGTransformer &transformer,
+                                                            optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformQualifiedName(PEGTransformer &transformer,
+																optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformCatalogReservedSchemaIdentifierOrStringLiteral(PEGTransformer &transformer,
+																				  optional_ptr<ParseResult> parse_result);
+
+	static QualifiedName TransformSchemaReservedIdentifierOrStringLiteral(PEGTransformer &transformer,
+																				optional_ptr<ParseResult> parse_result);
+	static string TransformReservedIdentifierOrStringLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformTableNameIdentifierOrStringLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// use.gram
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,

@@ -270,6 +270,7 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::LOAD_STATEMENT:
 					case StatementType::ATTACH_STATEMENT:
 					case StatementType::DETACH_STATEMENT:
+					case StatementType::DELETE_STATEMENT:
 						is_supported = true;
 						break;
 					default:
