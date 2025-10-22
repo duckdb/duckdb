@@ -154,8 +154,8 @@ public:
 		}
 		return dictionary[offset];
 	}
-private:
 
+private:
 	//! Write a value to the target data (if source is not string)
 	template <typename S = SRC, typename std::enable_if<!std::is_same<S, string_t>::value, int>::type = 0>
 	bool AddToTarget(const SRC &src_value) {

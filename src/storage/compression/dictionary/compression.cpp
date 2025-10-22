@@ -7,11 +7,13 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
                                                                        const CompressionInfo &info)
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
-	current_string_map(
-		info.GetBlockManager().buffer_manager.GetBufferAllocator(),
-		//TODO: Here i'm passing column distinct count. Is that what PrimitiveDictionary expects here? Or is it per segment or per block?
-		checkpoint_data_p.GetColumnData().GetStatistics()->GetDistinctCount(), // the distinct count for the column's strings.
-		info.GetBlockSize()){ // TODO: Should be the byte size of the unique strings? idk
+      current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
+                         // TODO: Here i'm passing column distinct count. Is that what PrimitiveDictionary expects here?
+                         // Or is it per segment or per block?
+                         checkpoint_data_p.GetColumnData()
+                             .GetStatistics()
+                             ->GetDistinctCount(), // the distinct count for the column's strings.
+                         info.GetBlockSize()) {    // TODO: Should be the byte size of the unique strings? idk
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
