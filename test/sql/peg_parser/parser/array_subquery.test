@@ -5,6 +5,9 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT i, ARRAY(        SELECT 42 ) top FROM integers i1 ORDER BY i$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT ARRAY[42]$TEST_PEG_PARSER$);
 
 statement ok

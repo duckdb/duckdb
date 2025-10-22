@@ -56,11 +56,14 @@ NotPrefixOperator <- 'NOT'
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
-ListExpression <- 'ARRAY'? BoundedListExpression
+ListExpression <- ('ARRAY'? BoundedListExpression) / ('ARRAY' Parens(SelectStatement))
 BoundedListExpression <- '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField)? '}'
 StructField <- ColIdOrString ':' Expression
-MapExpression <- 'MAP' StructExpression
+MapExpression <- 'MAP' MapStructExpression
+MapStructExpression <- '{' List(MapStructField)? '}'
+MapStructField <- Expression ':' Expression
+
 GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
 GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
 Parameter <- '?' / NumberedParameter / ColLabelParameter
