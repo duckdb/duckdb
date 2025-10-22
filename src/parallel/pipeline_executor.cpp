@@ -127,8 +127,11 @@ SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const boo
 	D_ASSERT(required_partition_info.AnyRequired());
 	auto max_batch_index = pipeline.base_batch_index + PipelineBuildState::BATCH_INCREMENT - 1;
 	// by default set it to the maximum valid batch index value for the current pipeline
+	auto &partition_info = local_sink_state->partition_info;
 	OperatorPartitionData next_data(max_batch_index);
-	if (source_chunk.size() > 0 || have_more_output) {
+	if (( source_chunk.size() > 0 )) {
+		D_ASSERT(local_source_state);
+		D_ASSERT(pipeline.source_state);
 		// if we retrieved data - initialize the next batch index
 		auto partition_data = pipeline.source->GetPartitionData(context, source_chunk, *pipeline.source_state,
 		                                                        *local_source_state, required_partition_info);
@@ -140,8 +143,9 @@ SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const boo
 			throw InternalException("Pipeline batch index - invalid batch index %llu returned by source operator",
 			                        batch_index);
 		}
+	} else if (have_more_output) {
+		next_data.batch_index = partition_info.batch_index.GetIndex();
 	}
-	auto &partition_info = local_sink_state->partition_info;
 	if (next_data.batch_index == partition_info.batch_index.GetIndex()) {
 		// no changes, return
 		return SinkNextBatchType::READY;
@@ -221,7 +225,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				}
 			}
 		} else if (!exhausted_source || next_batch_blocked) {
-			SourceResultType source_result = SourceResultType::HAVE_MORE_OUTPUT;
+			SourceResultType source_result = SourceResultType::BLOCKED;
 			if (!next_batch_blocked) {
 				// "Regular" path: fetch a chunk from the source and push it through the pipeline
 				source_chunk.Reset();
