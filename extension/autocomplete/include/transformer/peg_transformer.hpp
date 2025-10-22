@@ -189,18 +189,19 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static string TransformStringLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
-	// deallocate.gram
-	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
-	                                                             optional_ptr<ParseResult> parse_result);
-
 	// create_table.gram
 	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
-	                                                 optional_ptr<ParseResult> parse_result);
+													 optional_ptr<ParseResult> parse_result);
 	static string TransformColIdOrString(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformDottedIdentifier(PEGTransformer &transformer,
-	                                                optional_ptr<ParseResult> parse_result);
+													optional_ptr<ParseResult> parse_result);
+
+	// deallocate.gram
+	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
+
 
 	// delete.gram
 	static unique_ptr<SQLStatement> TransformDeleteStatement(PEGTransformer &transformer,
