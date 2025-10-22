@@ -52,7 +52,7 @@ void duckdb_config_option_set_default_value(duckdb_config_option option, duckdb_
 	auto coption = reinterpret_cast<duckdb::CConfigOption *>(option);
 	auto cvalue = reinterpret_cast<duckdb::Value *>(default_value);
 
-	if (coption->type.id() == LogicalTypeId::INVALID) {
+	if (coption->type.id() == duckdb::LogicalTypeId::INVALID) {
 		coption->type = cvalue->type();
 		coption->default_value = *cvalue;
 		return;
@@ -104,7 +104,7 @@ duckdb_state duckdb_register_config_option(duckdb_connection connection, duckdb_
 	auto conn = reinterpret_cast<duckdb::Connection *>(connection);
 	auto coption = reinterpret_cast<duckdb::CConfigOption *>(option);
 
-	if (coption->name.empty() || coption->type.id() == LogicalTypeId::INVALID) {
+	if (coption->name.empty() || coption->type.id() == duckdb::LogicalTypeId::INVALID) {
 		return DuckDBError;
 	}
 
@@ -129,7 +129,7 @@ duckdb_value duckdb_client_context_get_config_option(duckdb_client_context conte
 		return nullptr;
 	}
 
-	auto wrapper = reinterpret_cast<CClientContextWrapper *>(context);
+	auto wrapper = reinterpret_cast<duckdb::CClientContextWrapper *>(context);
 	auto &ctx = wrapper->context;
 
 	duckdb_config_option_scope res_scope = DUCKDB_CONFIG_OPTION_SCOPE_INVALID;
