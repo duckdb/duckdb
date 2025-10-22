@@ -140,7 +140,9 @@ BaseExpression <- SingleExpression Indirection*
 Expression <- BaseExpression RecursiveExpression*
 RecursiveExpression <- Operator Expression
 SliceExpression <- '[' SliceBound ']'
-SliceBound <- Expression? (':' (Expression / '-')?)? (':' Expression?)?
+SliceBound <- Expression? EndSliceBound? StepSliceBound?
+EndSliceBound <- ':' (Expression / '-')?
+StepSliceBOund <- ':' Expression?
 
 SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))

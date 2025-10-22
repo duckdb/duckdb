@@ -252,6 +252,16 @@ private:
 	static unique_ptr<ParsedExpression> TransformParenthesisExpression(PEGTransformer &transformer,
 													  optional_ptr<ParseResult> parse_result);
 
+	static unique_ptr<ParsedExpression> TransformIndirection(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCastOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	static unique_ptr<ParsedExpression> TransformDotOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformSliceExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSliceBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformEndSliceBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformStepSliceBound(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+
 	// create_table.gram
 	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
 	                                                 optional_ptr<ParseResult> parse_result);
