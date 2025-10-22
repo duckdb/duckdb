@@ -55,6 +55,10 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// Temporary copy of return types that we can modify without having a conflict with binding the aggregates
 	vector<LogicalType> return_types = result.types;
 
+	if (statement.key_targets.empty() && !statement.payload_aggregates.empty()) {
+		throw BinderException("USING KEY clause requires at least one key column.");
+	}
+
 	// Bind specified keys to the referenced column
 	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
 		auto bound_expr = expression_binder.Bind(expr);

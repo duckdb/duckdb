@@ -104,6 +104,17 @@ SELECT * FROM tbl;
 ----
 <REGEX>:.*cannot be used as both key and aggregate.*
 
+statement error
+WITH RECURSIVE tbl(a,b,c) USING KEY (list(c)) AS (
+	SELECT 1, 4, NULL
+		UNION
+	SELECT a, b - 1, b
+	FROM tbl
+	WHERE tbl.b > 0)
+SELECT * FROM tbl;
+----
+<REGEX>:.*requires at least one key column.*
+
 # Duplicate column reference in key list
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a, a , list(b)) AS (
