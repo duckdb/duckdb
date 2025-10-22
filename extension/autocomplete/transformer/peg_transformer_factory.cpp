@@ -77,6 +77,33 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformNumberLiteral);
 	REGISTER_TRANSFORM(TransformStringLiteral);
 
+	REGISTER_TRANSFORM(TransformType);
+	REGISTER_TRANSFORM(TransformArrayBounds);
+	REGISTER_TRANSFORM(TransformArrayKeyword);
+	REGISTER_TRANSFORM(TransformSquareBracketsArray);
+	REGISTER_TRANSFORM(TransformTimeType);
+	REGISTER_TRANSFORM(TransformTimeZone);
+	REGISTER_TRANSFORM(TransformWithOrWithout);
+	REGISTER_TRANSFORM(TransformTimeOrTimestamp);
+	REGISTER_TRANSFORM(TransformNumericType);
+	REGISTER_TRANSFORM(TransformSimpleNumericType);
+	REGISTER_TRANSFORM(TransformDecimalNumericType);
+	REGISTER_TRANSFORM(TransformFloatType);
+	REGISTER_TRANSFORM(TransformDecimalType);
+	REGISTER_TRANSFORM(TransformTypeModifiers);
+	REGISTER_TRANSFORM(TransformSimpleType);
+	REGISTER_TRANSFORM(TransformQualifiedTypeName);
+	REGISTER_TRANSFORM(TransformCharacterType);
+	REGISTER_TRANSFORM(TransformMapType);
+	REGISTER_TRANSFORM(TransformRowType);
+	REGISTER_TRANSFORM(TransformUnionType);
+	REGISTER_TRANSFORM(TransformColIdTypeList);
+	REGISTER_TRANSFORM(TransformColIdType);
+	REGISTER_TRANSFORM(TransformBitType);
+	REGISTER_TRANSFORM(TransformIntervalType);
+	REGISTER_TRANSFORM(TransformIntervalInterval);
+	REGISTER_TRANSFORM(TransformInterval);
+
 	// create_table.gram
 	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformColIdOrString);
