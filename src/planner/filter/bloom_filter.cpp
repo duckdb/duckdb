@@ -40,11 +40,10 @@ void InsertBlock(
 		const uint64_t bitmask
 	) {
 
-	uint8_t shifts_8[SIMD_BATCH_SIZE * 8];
-	const uint8_t* keys_8 = reinterpret_cast<const uint8_t*>(keys);
-
-	for (idx_t i = 0; i < SIMD_BATCH_SIZE * 8; i++) {
-		shifts_8[i] = keys_8[i] & SHIFT_MASK_8;
+	uint64_t shifts[SIMD_BATCH_SIZE];
+	uint8_t* shifts_8 = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(shifts));
+	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
+		shifts[i] = keys[i] & SHIFT_MASK;
 	}
 
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
@@ -107,11 +106,10 @@ static void SearchBlock(
   const uint64_t bitmask
   ) {
 
-	uint8_t shifts_8[SIMD_BATCH_SIZE * 8];
-	const uint8_t* keys_8 = reinterpret_cast<const uint8_t*>(keys);
-
-	for (idx_t i = 0; i < SIMD_BATCH_SIZE * 8; i++) {
-		shifts_8[i] = keys_8[i] & SHIFT_MASK_8;
+	uint64_t shifts[SIMD_BATCH_SIZE];
+	uint8_t* shifts_8 = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(shifts));
+	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
+		shifts[i] = keys[i] & SHIFT_MASK;
 	}
 
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
