@@ -172,9 +172,9 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 	if (to_free->q.try_dequeue(block_id)) {
 		// NOP: we didn't free this one yet, can immediately reuse
 	} else if (touched->q.try_dequeue(block_id)) {
-		OnFirstAllocation(GetPointer(block_id), size);
-	} else if (untouched->q.try_dequeue(block_id)) {
 		// Nothing to do here
+	} else if (untouched->q.try_dequeue(block_id)) {
+		OnFirstAllocation(GetPointer(block_id), size);
 	} else {
 		// We did not get a block ID, use fallback allocator
 		return allocator.AllocateData(size);
