@@ -84,6 +84,7 @@ public:
 	size_t GetPosition() const {
 		return static_cast<idx_t>(pos - beg);
 	}
+
 private:
 	const char *beg;
 	char *pos;
@@ -812,16 +813,16 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 		result.size += sizeof(uint8_t) + sizeof(uint32_t); // Byte order + type/meta
 
 		switch (type_id) {
-		case 1: {	// POINT
+		case 1: { // POINT
 			reader.Skip(v_size);
 			result.size += v_size;
 		} break;
-		case 2: {	// LINESTRING
+		case 2: { // LINESTRING
 			const auto vert_count = reader.Read<uint32_t>(le);
 			reader.Skip(vert_count * v_size);
 			result.size += sizeof(uint32_t) + vert_count * v_size;
 		} break;
-		case 3: {	// POLYGON
+		case 3: { // POLYGON
 			const auto ring_count = reader.Read<uint32_t>(le);
 			result.size += sizeof(uint32_t);
 			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
@@ -830,10 +831,10 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 				result.size += sizeof(uint32_t) + vert_count * v_size;
 			}
 		} break;
-		case 4:		// MULTIPOINT
-		case 5:		// MULTILINESTRING
-		case 6:		// MULTIPOLYGON
-		case 7: {	// GEOMETRYCOLLECTION
+		case 4:   // MULTIPOINT
+		case 5:   // MULTILINESTRING
+		case 6:   // MULTIPOLYGON
+		case 7: { // GEOMETRYCOLLECTION
 			reader.Skip(sizeof(uint32_t));
 			result.size += sizeof(uint32_t); // part count
 		} break;
@@ -857,17 +858,17 @@ void ConvertWKB(BlobReader &reader, FixedSizeBlobWriter &writer) {
 		const auto has_m = (flag_id & 0x02) != 0;
 		const auto v_width = static_cast<uint32_t>((2 + (has_z ? 1 : 0) + (has_m ? 1 : 0)));
 
-		writer.Write<uint8_t>(1); // Always write LE
+		writer.Write<uint8_t>(1);     // Always write LE
 		writer.Write<uint32_t>(meta); // Write meta
 
 		switch (type_id) {
-		case 1: {	// POINT
+		case 1: { // POINT
 			for (uint32_t d_idx = 0; d_idx < v_width; d_idx++) {
 				auto value = reader.Read<double>(le);
 				writer.Write<double>(value);
 			}
 		} break;
-		case 2: {	// LINESTRING
+		case 2: { // LINESTRING
 			const auto vert_count = reader.Read<uint32_t>(le);
 			writer.Write<uint32_t>(vert_count);
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
@@ -877,7 +878,7 @@ void ConvertWKB(BlobReader &reader, FixedSizeBlobWriter &writer) {
 				}
 			}
 		} break;
-		case 3: {	// POLYGON
+		case 3: { // POLYGON
 			const auto ring_count = reader.Read<uint32_t>(le);
 			writer.Write<uint32_t>(ring_count);
 			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
@@ -891,10 +892,10 @@ void ConvertWKB(BlobReader &reader, FixedSizeBlobWriter &writer) {
 				}
 			}
 		} break;
-		case 4:		// MULTIPOINT
-		case 5:		// MULTILINESTRING
-		case 6:		// MULTIPOLYGON
-		case 7: {	// GEOMETRYCOLLECTION
+		case 4:   // MULTIPOINT
+		case 5:   // MULTILINESTRING
+		case 6:   // MULTIPOLYGON
+		case 7: { // GEOMETRYCOLLECTION
 			const auto part_count = reader.Read<uint32_t>(le);
 			writer.Write<uint32_t>(part_count);
 		} break;
@@ -945,25 +946,23 @@ bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_
 
 void Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
 	if (!strict) {
-		UnaryExecutor::Execute<string_t, string_t>(source, result, count,
-			[&](const string_t &wkb) {
-				string_t geom;
-				FromBinary(wkb, geom, result, strict);
-				return geom;
+		UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) {
+			string_t geom;
+			FromBinary(wkb, geom, result, strict);
+			return geom;
 		});
 	} else {
 		UnaryExecutor::ExecuteWithNulls<string_t, string_t>(source, result, count,
-		[&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
-			string_t geom;
-			if (!FromBinary(wkb, geom, result, strict)) {
-				mask.SetInvalid(idx);
-				return string_t();
-			}
-			return geom;
-		});
+		                                                    [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
+			                                                    string_t geom;
+			                                                    if (!FromBinary(wkb, geom, result, strict)) {
+				                                                    mask.SetInvalid(idx);
+				                                                    return string_t();
+			                                                    }
+			                                                    return geom;
+		                                                    });
 	}
 }
-
 
 bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
