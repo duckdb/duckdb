@@ -347,6 +347,7 @@ public:
 	void InitializeVector() {
 		D_ASSERT(!in_vector);
 		if (vector_count + 1 >= total_vector_count) {
+			//! Last vector
 			vector_size = analyze_state->count - (ZSTD_VECTOR_SIZE * vector_count);
 		} else {
 			vector_size = ZSTD_VECTOR_SIZE;
@@ -387,23 +388,22 @@ public:
 		in_vector = true;
 	}
 
-	void CompressString(const string_t &string, bool end_of_vector) {
+	void CompressString(const string_t &string) {
 		duckdb_zstd::ZSTD_inBuffer in_buffer = {/*data = */ string.GetData(),
 		                                        /*length = */ size_t(string.GetSize()),
 		                                        /*pos = */ 0};
 
-		if (!end_of_vector && string.GetSize() == 0) {
+		if (string.GetSize() == 0) {
 			return;
 		}
 		uncompressed_size += string.GetSize();
-		const auto end_mode = end_of_vector ? duckdb_zstd::ZSTD_e_end : duckdb_zstd::ZSTD_e_continue;
 
 		size_t compress_result;
 		while (true) {
 			idx_t old_pos = out_buffer.pos;
 
-			compress_result =
-			    duckdb_zstd::ZSTD_compressStream2(analyze_state->context, &out_buffer, &in_buffer, end_mode);
+			compress_result = duckdb_zstd::ZSTD_compressStream2(analyze_state->context, &out_buffer, &in_buffer,
+			                                                    duckdb_zstd::ZSTD_e_continue);
 			D_ASSERT(out_buffer.pos >= old_pos);
 			auto diff = out_buffer.pos - old_pos;
 			compressed_size += diff;
@@ -417,11 +417,8 @@ public:
 				// Finished
 				break;
 			}
-			if (out_buffer.pos != out_buffer.size) {
-				throw InternalException("Expected ZSTD_compressStream2 to fully utilize the current buffer, but pos is "
-				                        "%d, while size is %d",
-				                        out_buffer.pos, out_buffer.size);
-			}
+			//! compress_result has indicated that it couldn't flush all of its data, and its not an error
+			//! So that means it needs more output_buffer to flush the data, give it a new page for that.
 			NewPage();
 		}
 	}
@@ -432,8 +429,7 @@ public:
 		}
 
 		string_lengths[tuple_count] = UnsafeNumericCast<string_length_t>(string.GetSize());
-		bool final_tuple = tuple_count + 1 >= vector_size;
-		CompressString(string, final_tuple);
+		CompressString(string);
 
 		tuple_count++;
 		if (tuple_count == vector_size) {
@@ -477,7 +473,34 @@ public:
 		block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
 	}
 
+	void FlushStringsForVector() {
+		while (true) {
+			duckdb_zstd::ZSTD_inBuffer empty_buffer = {/*data = */ nullptr,
+			                                           /*length = */ size_t(0),
+			                                           /*pos = */ 0};
+			idx_t old_pos = out_buffer.pos;
+
+			auto flush_result = duckdb_zstd::ZSTD_compressStream2(analyze_state->context, &out_buffer, &empty_buffer,
+			                                                      duckdb_zstd::ZSTD_e_end);
+			D_ASSERT(out_buffer.pos >= old_pos);
+			auto diff = out_buffer.pos - old_pos;
+			compressed_size += diff;
+			current_buffer_ptr += diff;
+
+			if (duckdb_zstd::ZSTD_isError(flush_result)) {
+				throw InvalidInputException("ZSTD Flush failed: %s", duckdb_zstd::ZSTD_getErrorName(flush_result));
+			}
+			if (flush_result == 0) {
+				// Finished
+				break;
+			}
+			NewPage();
+		}
+	}
+
 	void FlushVector() {
+		FlushStringsForVector();
+
 		// Write the metadata for this Vector
 		page_ids[vector_in_segment_count] = starting_page;
 		page_offsets[vector_in_segment_count] = starting_offset;
@@ -691,7 +714,7 @@ public:
 	explicit ZSTDScanState(ColumnSegment &segment)
 	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
 	      block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
-	      segment_block_offset(segment.GetBlockOffset()) {
+	      segment_block_offset(segment.GetBlockOffset()), segment(segment) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
 		segment_handle = buffer_manager.Pin(segment.block);
 
@@ -798,7 +821,7 @@ public:
 		idx_t current_offset = UnsafeNumericCast<idx_t>(scan_state.current_buffer_ptr - handle_start);
 		scan_state.in_buffer.src = scan_state.current_buffer_ptr;
 		scan_state.in_buffer.pos = 0;
-		scan_state.in_buffer.size = block_manager.GetBlockSize() - sizeof(block_id_t) - current_offset;
+		scan_state.in_buffer.size = segment.SegmentSize() - sizeof(block_id_t) - current_offset;
 
 		// Initialize the context for streaming decompression
 		duckdb_zstd::ZSTD_DCtx_reset(decompression_context, duckdb_zstd::ZSTD_reset_session_only);
@@ -956,6 +979,7 @@ public:
 	idx_t segment_count;
 	//! The amount of tuples consumed
 	idx_t scanned_count = 0;
+	ColumnSegment &segment;
 
 	//! Buffer for skipping data
 	AllocatedData skip_buffer;
