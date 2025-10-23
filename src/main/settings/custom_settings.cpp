@@ -1285,6 +1285,12 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 		for (auto &setting : phase_timing_settings) {
 			config.profiler_settings.insert(setting);
 		}
+	} else if (parameter == "all") {
+		config.enable_profiler = true;
+		auto all_metrics = MetricsUtils::GetAllMetrics();
+		for (auto &metric : all_metrics) {
+			config.profiler_settings.insert(metric);
+		}
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);
 	}
