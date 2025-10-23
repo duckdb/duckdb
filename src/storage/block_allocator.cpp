@@ -28,8 +28,11 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 	return nullptr;
 	// Once we enable this on Windows, we should do something like this
 	// return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
-#else
+#elif defined(__APPLE__)
 	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
+#else
+	const auto ptr = mmap(nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
 #endif
 }
@@ -70,10 +73,8 @@ static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 #elif defined(__APPLE__)
 	// Nothing to do here
 #else
-	// Incur page faults
-	for (idx_t i = 0; i < size; i += 4096) {
-		pointer[i] = 0;
-	}
+	success = pointer == mmap(pointer, size, PROT_READ | PROT_WRITE,
+	                          MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_NORESERVE, -1, 0);
 #endif
 	if (!success) {
 		throw InternalException("OnDeallocation failed");
