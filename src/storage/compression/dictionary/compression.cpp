@@ -9,8 +9,8 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
       current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
                          info.GetBlockSize(), // maximum_size_p (amount of elements)
-                         info.GetBlockSize() // maximum_target_capacity_p (byte capacity)
-                         ) {
+                         info.GetBlockSize()  // maximum_target_capacity_p (byte capacity)
+      ) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
