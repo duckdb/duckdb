@@ -819,15 +819,23 @@ public:
 
 		auto vector_size = metadata.count;
 
+		auto string_lengths_size = (sizeof(string_length_t) * vector_size);
 		scan_state.string_lengths = reinterpret_cast<string_length_t *>(scan_state.current_buffer_ptr);
-		scan_state.current_buffer_ptr += (sizeof(string_length_t) * vector_size);
+		scan_state.current_buffer_ptr += string_lengths_size;
 
 		// Update the in_buffer to point to the start of the compressed data frame
 		idx_t current_offset = UnsafeNumericCast<idx_t>(scan_state.current_buffer_ptr - handle_start);
 		scan_state.in_buffer.src = scan_state.current_buffer_ptr;
 		scan_state.in_buffer.pos = 0;
-		scan_state.in_buffer.size =
-		    MinValue(metadata.compressed_size, block_manager.GetBlockSize() - sizeof(block_id_t) - current_offset);
+		if (scan_state.metadata.block_offset + string_lengths_size + scan_state.metadata.compressed_size >
+		    (segment.SegmentSize() - sizeof(block_id_t))) {
+			//! We know that the compressed size is too big to fit on the current page
+			scan_state.in_buffer.size =
+			    MinValue(metadata.compressed_size, block_manager.GetBlockSize() - sizeof(block_id_t) - current_offset);
+		} else {
+			scan_state.in_buffer.size =
+			    MinValue(metadata.compressed_size, block_manager.GetBlockSize() - current_offset);
+		}
 
 		// Initialize the context for streaming decompression
 		duckdb_zstd::ZSTD_DCtx_reset(decompression_context, duckdb_zstd::ZSTD_reset_session_only);
