@@ -210,6 +210,11 @@ public:
 	idx_t NextSize() const {
 		return MinValue<idx_t>(Remaining(), STANDARD_VECTOR_SIZE);
 	}
+	void Seek(idx_t row_idx) {
+		chunk_idx = row_idx / STANDARD_VECTOR_SIZE;
+		base = MinValue<idx_t>(chunk_idx * STANDARD_VECTOR_SIZE, count);
+		scanned = base;
+	}
 	bool Scan(DataChunk &chunk) {
 		//  Free the previous blocks
 		block_state.SetKeepPinned(true);
@@ -851,12 +856,13 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		const auto idx = lhs_match_sel[i];
 		const auto match_pos = matches[idx];
 		// Skip to the range containing the match
-		while (match_pos >= rhs_scanner->Scanned()) {
+		if (match_pos >= rhs_scanner->Scanned()) {
 			if (rhs_match_count) {
 				rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
 				rhs_match_count = 0;
 			}
 			rhs_payload.Reset();
+			rhs_scanner->Seek(match_pos);
 			rhs_scanner->Scan(rhs_payload);
 		}
 		// Select the individual values
