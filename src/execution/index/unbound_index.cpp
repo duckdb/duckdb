@@ -53,7 +53,8 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	}
 	D_ASSERT(mapped_column_ids == mapped_column_ids_p);
 
-	DataChunk combined_chunk; //  which has all index columns and their row IDs
+	// Combined chunk has all the indexed columns and rowids.
+	DataChunk combined_chunk;
 	combined_chunk.InitializeEmpty(types);
 	for (idx_t i = 0; i < index_column_chunk.ColumnCount(); i++) {
 		combined_chunk.data[i].Reference(index_column_chunk.data[i]);

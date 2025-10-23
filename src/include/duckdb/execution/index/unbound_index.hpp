@@ -19,8 +19,8 @@ class ColumnDataCollection;
 enum class BufferedIndexReplay : uint8_t { IDX_INSERT = 0, IDX_DELETE = 1 };
 
 struct BufferedIndexData {
-	BufferedIndexReplay type;              // Type of replay operation.
-	unique_ptr<ColumnDataCollection> data; // collection of chunks
+	BufferedIndexReplay type;
+	unique_ptr<ColumnDataCollection> data;
 };
 
 class UnboundIndex final : public Index {

@@ -672,9 +672,9 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 		indexed_column_id_set.insert(set.begin(), set.end());
 		return false;
 	});
-	// Sort the indexed columns to obtain canonical mapping, since if we wre in WAL replay right now,
-	// these column_ids will be used to initialize the mapped_column_ids in Unbound_index::BufferChunk.
-	// Any index chunk scan should be ordered according to this mapping.
+
+	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
+	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
 	vector<StorageIndex> column_ids;
 	for (auto &col : indexed_column_id_set) {
 		column_ids.emplace_back(col);
