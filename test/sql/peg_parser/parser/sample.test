@@ -5,6 +5,9 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select count(*)$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from range(200000) using sample reservoir(90 PERCENT);$TEST_PEG_PARSER$);
 
 statement ok

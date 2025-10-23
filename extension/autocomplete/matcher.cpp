@@ -731,6 +731,62 @@ private:
 	}
 };
 
+
+class ArithmeticOperatorMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
+
+public:
+	explicit ArithmeticOperatorMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		if (!MatchArithmeticOperator(state)) {
+			return MatchResultType::FAIL;
+		}
+		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchArithmeticOperator(state)) {
+			return nullptr;
+		}
+		Printer::Print("Found arithmetic operator!!!");
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "ARITHMETICOPERATOR";
+	}
+
+private:
+	static bool MatchArithmeticOperator(MatchState &state) {
+		auto &token_text = state.tokens[state.token_index].text;
+		for (auto &c : token_text) {
+			switch (c) {
+			case '*':
+			case '/':
+			case '+':
+			case '-':
+			case '%':
+				break;
+			default:
+				return false;
+			}
+		}
+		state.token_index++;
+		return true;
+	}
+};
+
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	auto &result = *matcher;
 	matchers.push_back(std::move(matcher));
@@ -771,6 +827,7 @@ private:
 	Matcher &StringLiteral() const;
 	Matcher &NumberLiteral() const;
 	Matcher &Operator() const;
+	Matcher &ArithmeticOperator() const;
 	Matcher &ScalarFunctionName() const;
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
@@ -894,6 +951,10 @@ Matcher &MatcherFactory::StringLiteral() const {
 
 Matcher &MatcherFactory::Operator() const {
 	return allocator.Allocate(make_uniq<OperatorMatcher>());
+}
+
+Matcher &MatcherFactory::ArithmeticOperator() const {
+	return allocator.Allocate(make_uniq<ArithmeticOperatorMatcher>());
 }
 
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
@@ -1167,6 +1228,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
+	// AddRuleOverride("ArithmeticOperatorLiteral", ArithmeticOperator());
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);

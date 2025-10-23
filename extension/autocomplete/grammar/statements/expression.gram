@@ -50,12 +50,6 @@ WindowFrameDefinition <- Parens(BaseWindowName? WindowFrameContents) / Parens(Wi
 WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 BaseWindowName <- Identifier
 WindowPartition <- 'PARTITION' 'BY' List(Expression)
-PrefixExpression <- PrefixOperator Expression
-PrefixOperator <- NotPrefixOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
-NotPrefixOperator <- 'NOT'
-MinusPrefixOperator <- '-'
-PlusPrefixOperator <- '+'
-TildePrefixOperator <- '~'
 ListExpression <- ArrayBoundedListExpression / ArrayParensSelect
 ArrayBoundedListExpression <- 'ARRAY'? BoundedListExpression
 ArrayParensSelect <- 'ARRAY' Parens(SelectStatement)
@@ -78,6 +72,7 @@ ListComprehensionExpression <- '[' Expression 'FOR' List(Expression) ListCompreh
 ListComprehensionFilter <- 'IF' Expression
 
 SingleExpression <-
+    Parens(Expression) /
 	LiteralExpression /
 	Parameter /
     SubqueryExpression /
@@ -92,59 +87,66 @@ SingleExpression <-
     MapExpression /
     FunctionExpression /
     ColumnReference /
-    PrefixExpression /
     ListComprehensionExpression /
     ListExpression /
     StructExpression /
     PositionalExpression /
     DefaultExpression
 
-
-
-OperatorLiteral <- <[\+\-\*\/\%\^\<\>\=\~\!\@\&\|\`]+>
-LikeOperator <- 'NOT'? LikeOrSimilarTo
-LikeOrSimilarTo <- LikeExpressionType / IlikeExpressionType / GlobExpressionType / SimilarToExpressionType
-LikeExpressionType <- 'LIKE'
-IlikeExpressionType <- 'ILIKE'
-GlobExpressionType <- 'GLOB'
-SimilarToExpressionType <- 'SIMILAR' 'TO'
-InOperator <- 'NOT'? 'IN'
-IsOperator <- 'IS' 'NOT'? DistinctFrom?
 DistinctFrom <- 'DISTINCT' 'FROM'
-ConjunctionOperator <- ConjunctionOr / ConjunctionAnd
 ConjunctionOr <- 'OR'
 ConjunctionAnd <- 'AND'
-ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
-BetweenOperator <- 'NOT'? 'BETWEEN'
 CollateOperator <- 'COLLATE'
 LambdaOperator <- '->'
 EscapeOperator <- 'ESCAPE'
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 PostfixOperator <- '!'
-AnyAllOperator <- ComparisonOperator AnyOrAll
 AnyOrAll <- 'ANY' / 'ALL'
-
-Operator <-
-	AnyAllOperator /
-    ConjunctionOperator /
-    LikeOperator /
-    InOperator /
-    IsOperator /
-    BetweenOperator /
-    CollateOperator /
-    LambdaOperator /
-    EscapeOperator /
-    AtTimeZoneOperator /
-    OperatorLiteral
 
 CastOperator <- '::' Type
 DotOperator <- '.' (FunctionExpression / ColLabel)
 NotNull <- 'NOT' 'NULL'
 Indirection <- CastOperator / DotOperator / SliceExpression / NotNull / PostfixOperator
 
+Expression <- LogicalOrExpression
+LogicalOrExpression <- LogicalAndExpression (ConjunctionOr LogicalAndExpression)*
+LogicalAndExpression <- LogicalNotExpression (ConjunctionAnd LogicalNotExpression)*
+LogicalNotExpression <- 'NOT'* IsExpression
+IsExpression <- ComparisonExpression (IsOperator)*
+IsOperator <- 'IS' 'NOT'? ('TRUE' / 'FALSE' / 'NULL' / 'UNKNOWN')
+ComparisonExpression <- OtherOperatorExpression (ComparisonOps OtherOperatorExpression)*
+ComparisonOps <-
+    LikeOperator /
+    InOperator /
+    BetweenOperator /
+    AnyAllOperator /
+    ComparisonOperator /
+    IsDistinctFromOperator
+LikeOperator <- 'NOT'? ('LIKE' / 'ILIKE' / 'SIMILAR' 'TO')
+InOperator <- 'NOT'? 'IN'
+BetweenOperator <- 'NOT'? 'BETWEEN'
+ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!='
+AnyAllOperator <- ComparisonOperator ('ANY' / 'ALL')
+IsDistinctFromOperator <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
+
+OtherOperatorExpression <- AdditiveExpression ( ( '&' / '|' / '#' / '<<' / '>>' / '||' ) AdditiveExpression)*
+AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
+Term <- PlusOperator / MinusOperator
+PlusOperator <- '+'
+MinusOperator <- '-'
+MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
+Factor <- MultiplyOperator / DivisionOperator / ModuloOperator
+MultiplyOperator <- '*'
+DivisionOperator <- '/'
+ModuloOperator <- '%'
+ExponentiationExpression <- PrefixExpression ('^' ExponentiationExpression)*
+PrefixExpression <- PrefixOperator* BaseExpression
+PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+MinusPrefixOperator <- '-'
+PlusPrefixOperator <- '+'
+TildePrefixOperator <- '~'
+
 BaseExpression <- SingleExpression Indirection*
-Expression <- BaseExpression RecursiveExpression*
-RecursiveExpression <- Operator Expression
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
