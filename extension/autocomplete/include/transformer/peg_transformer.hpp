@@ -137,6 +137,26 @@ public:
 	static optional_ptr<ParseResult> ExtractResultFromParens(optional_ptr<ParseResult> parse_result);
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);
 
+	// Registration methods
+	void RegisterAttach();
+	void RegisterCall();
+	void RegisterCheckpoint();
+	void RegisterCommon();
+	void RegisterCreateTable();
+
+	void RegisterDeallocate();
+	void RegisterDelete();
+	void RegisterDetach();
+	void RegisterExpression();
+	void RegisterInsert();
+	void RegisterLoad();
+	void RegisterSelect();
+	void RegisterUse();
+	void RegisterSet();
+	void RegisterTransaction();
+	void RegisterKeywordsAndIdentifiers();
+	void RegisterEnums();
+
 private:
 	template <typename T>
 	void RegisterEnum(const string &rule_name, T value) {

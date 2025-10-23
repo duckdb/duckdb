@@ -103,11 +103,17 @@ SingleExpression <-
 
 OperatorLiteral <- <[\+\-\*\/\%\^\<\>\=\~\!\@\&\|\`]+>
 LikeOperator <- 'NOT'? LikeOrSimilarTo
-LikeOrSimilarTo <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO')
+LikeOrSimilarTo <- LikeExpressionType / IlikeExpressionType / GlobExpressionType / SimilarToExpressionType
+LikeExpressionType <- 'LIKE'
+IlikeExpressionType <- 'ILIKE'
+GlobExpressionType <- 'GLOB'
+SimilarToExpressionType <- 'SIMILAR' 'TO'
 InOperator <- 'NOT'? 'IN'
 IsOperator <- 'IS' 'NOT'? DistinctFrom?
 DistinctFrom <- 'DISTINCT' 'FROM'
-ConjunctionOperator <- 'OR' / 'AND'
+ConjunctionOperator <- ConjunctionOr / ConjunctionAnd
+ConjunctionOr <- 'OR'
+ConjunctionAnd <- 'AND'
 ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
 BetweenOperator <- 'NOT'? 'BETWEEN'
 CollateOperator <- 'COLLATE'
