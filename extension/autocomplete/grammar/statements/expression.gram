@@ -96,10 +96,6 @@ SingleExpression <-
 DistinctFrom <- 'DISTINCT' 'FROM'
 ConjunctionOr <- 'OR'
 ConjunctionAnd <- 'AND'
-CollateOperator <- 'COLLATE'
-LambdaOperator <- '->'
-EscapeOperator <- 'ESCAPE'
-AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 PostfixOperator <- '!'
 AnyOrAll <- 'ANY' / 'ALL'
 
@@ -121,13 +117,18 @@ ComparisonOps <-
     BetweenOperator /
     AnyAllOperator /
     ComparisonOperator /
-    IsDistinctFromOperator
+    IsDistinctFromOperator /
+    LambdaOperator /
+    EscapeOperator
+
 LikeOperator <- 'NOT'? ('LIKE' / 'ILIKE' / 'SIMILAR' 'TO')
 InOperator <- 'NOT'? 'IN'
 BetweenOperator <- 'NOT'? 'BETWEEN'
 ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!='
 AnyAllOperator <- ComparisonOperator ('ANY' / 'ALL')
 IsDistinctFromOperator <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
+LambdaOperator <- '->'
+EscapeOperator <- 'ESCAPE'
 
 OtherOperatorExpression <- AdditiveExpression ( ( '&' / '|' / '#' / '<<' / '>>' / '||' ) AdditiveExpression)*
 AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
@@ -139,7 +140,11 @@ Factor <- MultiplyOperator / DivisionOperator / ModuloOperator
 MultiplyOperator <- '*'
 DivisionOperator <- '/'
 ModuloOperator <- '%'
-ExponentiationExpression <- PrefixExpression ('^' ExponentiationExpression)*
+ExponentiationExpression <- AtTimeZoneExpression ('^' AtTimeZoneExpression)*
+AtTimeZoneExpression <- CollateExpression (AtTimeZoneOperator CollateExpression)*
+AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
+CollateExpression <- PrefixExpression (CollateOperator PrefixExpression)*
+CollateOperator <- 'COLLATE'
 PrefixExpression <- PrefixOperator* BaseExpression
 PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
