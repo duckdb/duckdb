@@ -826,12 +826,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					if (use_bloom_filter) {
-						auto optional_greater_equals = make_uniq<OptionalFilter>(std::move(greater_equals));
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
-					} else {
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
-					}
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
 					break;
 				}
 				default:
@@ -843,13 +838,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-					// if we use a bloom filter, we only use the min/max filter for zone map pruning
-					if (use_bloom_filter) {
-						auto optional_less_equals = make_uniq<OptionalFilter>(std::move(less_equals));
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
-					} else {
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
-					}
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
 					break;
 				}
 				default:
