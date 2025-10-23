@@ -54,7 +54,7 @@ bool DictionaryCompressionCompressState::LookupString(string_t str) {
 	const auto &entry = current_string_map.Lookup(str);
 	const auto has_result = !entry.IsEmpty();
 	if (has_result) {
-		latest_lookup_result = entry.index;
+		latest_lookup_result = entry.index + 1;
 	}
 	return has_result;
 }
