@@ -8,12 +8,9 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
       current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
-                         // TODO: Here i'm passing column distinct count. Is that what PrimitiveDictionary expects here?
-                         // Or is it per segment or per block?
-                         checkpoint_data_p.GetColumnData()
-                             .GetStatistics()
-                             ->GetDistinctCount(), // the distinct count for the column's strings.
-                         info.GetBlockSize()) {    // TODO: Should be the byte size of the unique strings? idk
+                         info.GetBlockSize(), // maximum_size_p (amount of elements)
+                         info.GetBlockSize() // maximum_target_capacity_p (byte capacity)
+                         ) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
@@ -26,7 +23,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
 	current_segment = std::move(compressed_segment);
 
 	// Reset the buffers and the string map.
-	current_string_map.Reset();
+	current_string_map.Clear();
 	index_buffer.clear();
 
 	// Reserve index 0 for null strings.

@@ -146,6 +146,16 @@ public:
 		allocated_target.Reset();
 	}
 
+	void Clear() {
+		// Don't reset the allocated memory - just clear the dictionary contents
+		for (idx_t i = 0; i < capacity; i++) {
+			dictionary[i].index = INVALID_INDEX;
+		}
+		size = 0;
+		full = false;
+		// Reset the target stream position but don't free the memory
+		target_stream.SetPosition(0);
+	}
 	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {
 		auto offset = Hash(value) & capacity_mask;
