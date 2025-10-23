@@ -492,6 +492,7 @@ public:
 			if (duckdb_zstd::ZSTD_isError(flush_result)) {
 				throw InvalidInputException("ZSTD Flush failed: %s", duckdb_zstd::ZSTD_getErrorName(flush_result));
 			}
+			D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 			if (flush_result == 0) {
 				// Finished
 				break;
