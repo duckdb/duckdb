@@ -413,10 +413,12 @@ public:
 				throw InvalidInputException("ZSTD Compression failed: %s",
 				                            duckdb_zstd::ZSTD_getErrorName(compress_result));
 			}
+			D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 			if (compress_result == 0) {
 				// Finished
 				break;
 			}
+
 			//! compress_result has indicated that it couldn't flush all of its data, and its not an error
 			//! So that means it needs more output_buffer to flush the data, give it a new page for that.
 			NewPage();
