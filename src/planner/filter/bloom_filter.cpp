@@ -30,6 +30,7 @@ void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t numb
 }
 
 static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
+static constexpr uint8_t SHIFT_MASK_8 = 0x3F; // 6 bits for 64 positions
 static constexpr idx_t N_BITS = 4;
 
 
@@ -38,10 +39,12 @@ void InsertBlock(
 		uint64_t *__restrict bf,
 		const uint64_t bitmask
 	) {
-	uint64_t shifts[SIMD_BATCH_SIZE];
-	uint8_t* shifts_8 = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(shifts));
-	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
-		shifts[i] = keys[i] & SHIFT_MASK;
+
+	uint8_t shifts_8[SIMD_BATCH_SIZE * 8];
+	const uint8_t* keys_8 = reinterpret_cast<const uint8_t*>(keys);
+
+	for (idx_t i = 0; i < SIMD_BATCH_SIZE * 8; i++) {
+		shifts_8[i] = keys_8[i] & SHIFT_MASK_8;
 	}
 
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
@@ -103,10 +106,12 @@ static void SearchBlock(
   uint64_t *__restrict found,
   const uint64_t bitmask
   ) {
-	uint64_t shifts[SIMD_BATCH_SIZE];
-	uint8_t* shifts_8 = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(shifts));
-	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
-		shifts[i] = keys[i] & SHIFT_MASK;
+
+	uint8_t shifts_8[SIMD_BATCH_SIZE * 8];
+	const uint8_t* keys_8 = reinterpret_cast<const uint8_t*>(keys);
+
+	for (idx_t i = 0; i < SIMD_BATCH_SIZE * 8; i++) {
+		shifts_8[i] = keys_8[i] & SHIFT_MASK_8;
 	}
 
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
