@@ -61,7 +61,7 @@ struct BloomFilterState final : public TableFilterState {
 	SelectionVector bf_sel;
 
 	explicit BloomFilterState(const LogicalType &key_logical_type)
-	    : current_capacity(STANDARD_VECTOR_SIZE), hashes_v(LogicalType::HASH), found_v(LogicalType::UINTEGER), keys_sliced_v(key_logical_type),
+	    : current_capacity(STANDARD_VECTOR_SIZE), hashes_v(LogicalType::HASH), found_v(LogicalType::UBIGINT), keys_sliced_v(key_logical_type),
 	      bf_sel(STANDARD_VECTOR_SIZE) {
 	}
 };

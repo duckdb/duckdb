@@ -4,7 +4,7 @@
 namespace duckdb {
 
 static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
-static constexpr idx_t MIN_NUM_BITS_PER_KEY = 16;
+static constexpr idx_t MIN_NUM_BITS_PER_KEY = 12;
 static constexpr idx_t MIN_NUM_BITS = 512;
 static constexpr idx_t LOG_SECTOR_SIZE = 6;
 static constexpr idx_t SIMD_BATCH_SIZE = 128;
@@ -26,54 +26,55 @@ void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t numb
 	blocks = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 	std::fill_n(blocks, num_sectors, 0);
 
-	for (idx_t b = 0; b < 256; b++) {
-		uint64_t positive = 0;
-		for (idx_t i = 0; i < 8; i++) {
-			positive |= (b >> i & 1) << (i * 8);
-		}
-		const uint64_t negative = (~positive) & 0x0101010101010101ULL;
-
-		spread_table[2 * b] = positive;
-		spread_table[2 * b + 1] = negative;
-	}
-
 	state.store(BloomFilterState::Active);
 }
 
 static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
 static constexpr idx_t N_BITS = 4;
 
-void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes_v, const idx_t count) const {
 
-	const auto hashes = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
+void InsertBlock(
+		const uint64_t *__restrict keys,
+		uint64_t *__restrict bf,
+		const uint64_t bitmask
+	) {
+	uint64_t shifts[SIMD_BATCH_SIZE];
+	uint8_t* shifts_8 = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(shifts));
+	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
+		shifts[i] = keys[i] & SHIFT_MASK;
+	}
+
+	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
+		const uint64_t offset_pos = 8 * i;
+		uint64_t seed = keys[i];
+		const uint64_t bf_offset = seed & bitmask;
+		uint64_t mask = 0;
+		for (idx_t j = 8 - N_BITS; j < 8; j++) {
+			const uint8_t bit_pos = shifts_8[offset_pos + j];
+			mask |= (1ULL << bit_pos);
+		}
+
+		std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&bf[bf_offset]);
+		slot.fetch_or(mask, std::memory_order_relaxed);
+	}
+}
+
+
+void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
+
+	auto hashes = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
 	const uint64_t bitmask = num_sectors - 1;
-	for (uint64_t i = 0; i + SIMD_BATCH_SIZE <= count; i += SIMD_BATCH_SIZE) {
-
-		uint64_t shifts[SIMD_BATCH_SIZE];
-		uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(const_cast<uint64_t *>(shifts));
-
-		const uint64_t *key64_batch = &hashes[i];
-
-		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
-			shifts[j] = key64_batch[j] & SHIFT_MASK;
-		}
-
-		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
-			const uint64_t offset_pos = 8 * j;
-
-			uint64_t seed = key64_batch[j];
-			// seed *= 0xbf58476d1ce4e5b9ULL;
-			// seed ^= seed >> 27;
-			const uint64_t bf_offset = seed & bitmask;
-
-			uint64_t mask = 0;
-			for (idx_t k = 8 - N_BITS; k < 8; k++) {
-				const uint8_t bit_pos = shifts_8[offset_pos + k];
-				mask |= (1ULL << bit_pos);
-			}
-			std::atomic<uint64_t> &atomic_bf2 = *reinterpret_cast<std::atomic<uint64_t> *>(&blocks[bf_offset]);
-			atomic_bf2.fetch_or(mask, std::memory_order_relaxed);
-		}
+	while (count >= SIMD_BATCH_SIZE) {
+		InsertBlock(
+			hashes,
+			blocks,
+			bitmask
+		);
+		hashes += SIMD_BATCH_SIZE;
+		count -= SIMD_BATCH_SIZE;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		InsertOne(hashes[i]);
 	}
 }
 
@@ -84,8 +85,7 @@ idx_t CacheSectorizedBloomFilter::LookupHashes(const Vector &hashes_v, Vector &f
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 
 	const auto hashes_64 = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
-
-	auto found_bools = FlatVector::GetData<uint32_t>(found_v);
+	auto found_bools = FlatVector::GetData<uint64_t>(found_v);
 
 	LookupHashesInternal(hashes_64, found_bools, blocks, count);
 
@@ -97,114 +97,85 @@ idx_t CacheSectorizedBloomFilter::LookupHashes(const Vector &hashes_v, Vector &f
 	return found_count;
 }
 
-void CacheSectorizedBloomFilter::LookupHashesInternal(const uint64_t *__restrict hashes, uint32_t *__restrict founds,
-                                                      const uint64_t *__restrict bf, const idx_t count) const {
+static void SearchBlock(
+  const uint64_t *__restrict keys,
+  const uint64_t *__restrict bf,
+  uint64_t *__restrict found,
+  const uint64_t bitmask
+  ) {
+	uint64_t shifts[SIMD_BATCH_SIZE];
+	uint8_t* shifts_8 = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(shifts));
+	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
+		shifts[i] = keys[i] & SHIFT_MASK;
+	}
+
+	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
+		const uint64_t offset_pos = 8 * i;
+
+		uint64_t seed = keys[i];
+		const uint64_t bf_offset = seed & bitmask;
+
+		uint64_t mask = 0;
+		for (idx_t j = 8 - N_BITS; j < 8; j++) {
+			const uint8_t bit_pos = shifts_8[offset_pos + j];
+			mask |= (1ULL << bit_pos);
+		}
+
+		found[i] = (bf[bf_offset] & mask) == mask;
+	}
+}
+
+void CacheSectorizedBloomFilter::LookupHashesInternal(const uint64_t *__restrict hashes, uint64_t *__restrict founds,
+                                                      const uint64_t *__restrict bf, idx_t count) const {
 
 	const uint64_t bitmask = num_sectors - 1;
-
-	for (uint64_t i = 0; i + SIMD_BATCH_SIZE <= count; i += SIMD_BATCH_SIZE) {
-
-		uint64_t shifts[SIMD_BATCH_SIZE];
-		uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(const_cast<uint64_t *>(shifts));
-
-		const uint64_t *key64_batch = &hashes[i];
-		uint32_t *found_batch = &founds[i];
-
-		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
-			shifts[j] = key64_batch[j] & SHIFT_MASK;
-		}
-
-		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
-			const uint64_t offset_pos = 8 * j;
-
-			uint64_t seed = key64_batch[j];
-			// seed *= 0xbf58476d1ce4e5b9ULL;
-			// seed ^= seed >> 27;
-			const uint64_t bf_offset = seed & bitmask;
-
-			uint64_t mask = 0;
-			for (idx_t k = 8 - N_BITS; k < 8; k++) {
-				const uint8_t bit_pos = shifts_8[offset_pos + k];
-				mask |= (1ULL << bit_pos);
-			}
-
-			found_batch[j] = (bf[bf_offset] & mask) == mask;
-		}
+	while (count >= SIMD_BATCH_SIZE) {
+		SearchBlock(
+			hashes,
+			bf,
+			founds,
+			bitmask
+		);
+		hashes += SIMD_BATCH_SIZE;
+		founds += SIMD_BATCH_SIZE;
+		count -= SIMD_BATCH_SIZE;
 	}
-	// Todo: Handle unaligned tail
-	for (uint64_t i = count & ~(SIMD_BATCH_SIZE - 1); i < count; i++) {
-		founds[i] = true;
+	for (idx_t i = 0; i < count; i++) {
+		founds[i] =  LookupOne(hashes[i]);
 	}
 }
 
-bool CacheSectorizedBloomFilter::LookupHash(hash_t hash_p) const {
+void CacheSectorizedBloomFilter::InsertOne(const hash_t hash) const {;
 
-	uint64_t masks[2];
-	uint64_t shifts[2];
+	uint64_t shifts[1] = {hash & SHIFT_MASK};
+	auto shifts_8 = reinterpret_cast<uint8_t*>(shifts);
 
-	uint64_t hash[2] = {hash_p, hash_p};
-	const uint64_t offset = (hash[0] >> 14) & 0xFFFF;
+	const uint64_t bf_offset = hash & (num_sectors - 1);
 
-	const uint64_t blocks_buffer[2] = {blocks[offset], blocks[offset + 1]};
+	uint64_t mask = 0;
+	for (idx_t j = 8 - N_BITS; j < 8; j++) {
+		const uint8_t bit_pos = shifts_8[j];
+		mask |= (1ULL << bit_pos);
+	}
 
-	const uint64_t spread_table_offset = (hash_p & 0xFF) * 2;
-	masks[0] = spread_table[spread_table_offset];
-	masks[1] = spread_table[spread_table_offset + 1];
-
-	// maxiumn shift amount is 7, so we need 3 bits
-	shifts[0] = (hash[0] >> 8) & 0x7;
-	shifts[1] = (hash[1] >> 11) & 0x7;
-
-	masks[0] = masks[0] << shifts[0];
-	masks[1] = masks[1] << shifts[1];
-
-	return (masks[0] & blocks_buffer[0]) == masks[0] & (masks[1] & blocks_buffer[1]) == masks[1];
+	std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&blocks[bf_offset]);
+	slot.fetch_or(mask, std::memory_order_relaxed);
 }
 
-inline uint32_t CacheSectorizedBloomFilter::GetMask1(const uint32_t key_lo) {
-	// 3 bits in key_lo
-	return (1u << ((key_lo >> 17) & 31)) | (1u << ((key_lo >> 22) & 31)) | (1u << ((key_lo >> 27) & 31));
-}
+inline bool CacheSectorizedBloomFilter::LookupOne(uint64_t hash) const {
 
-inline uint32_t CacheSectorizedBloomFilter::GetMask2(const uint32_t key_hi) {
-	// 4 bits in key_hi
-	return (1u << ((key_hi >> 12) & 31)) | (1u << ((key_hi >> 17) & 31)) | (1u << ((key_hi >> 22) & 31)) |
-	       (1u << ((key_hi >> 27) & 31));
-}
+	uint64_t shifts[1] = {hash & SHIFT_MASK};
+	auto shifts_8 = reinterpret_cast<uint8_t*>(shifts);
 
-inline uint32_t CacheSectorizedBloomFilter::GetSector1(const uint32_t key_lo, const uint32_t key_hi) const {
-	// block: 13 bits in key_lo and 9 bits in key_hi
-	// sector 1: 4 bits in key_lo
-	return ((key_lo & ((1 << 17) - 1)) + ((key_hi << 14) & (((1 << 9) - 1) << 17))) & (num_sectors - 1);
-}
+	const uint64_t bf_offset = hash & (num_sectors - 1);
 
-inline uint32_t CacheSectorizedBloomFilter::GetSector2(const uint32_t key_hi, const uint32_t block1) const {
-	// sector 2: 3 bits in key_hi
-	return block1 ^ (8 + (key_hi & 7));
-}
+	uint64_t mask = 0;
+	for (idx_t j = 8 - N_BITS; j < 8; j++) {
+		const uint8_t bit_pos = shifts_8[j];
+		mask |= (1ULL << bit_pos);
+	}
 
-void CacheSectorizedBloomFilter::InsertOne(const uint32_t key_lo, const uint32_t key_hi,
-                                           uint32_t *__restrict bf) const {
-	const uint32_t sector1 = GetSector1(key_lo, key_hi);
-	const uint32_t mask1 = GetMask1(key_lo);
-	const uint32_t sector2 = GetSector2(key_hi, sector1);
-	const uint32_t mask2 = GetMask2(key_hi);
-
-	// Perform atomic OR operation on the bf array elements using std::atomic
-	std::atomic<uint32_t> &atomic_bf1 = *reinterpret_cast<std::atomic<uint32_t> *>(&bf[sector1]);
-	std::atomic<uint32_t> &atomic_bf2 = *reinterpret_cast<std::atomic<uint32_t> *>(&bf[sector2]);
-
-	atomic_bf1.fetch_or(mask1, std::memory_order_relaxed);
-	atomic_bf2.fetch_or(mask2, std::memory_order_relaxed);
-}
-
-inline bool CacheSectorizedBloomFilter::LookupOne(uint32_t key_lo, uint32_t key_hi,
-                                                  const uint32_t *__restrict bf) const {
-	const uint32_t sector1 = GetSector1(key_lo, key_hi);
-	const uint32_t mask1 = GetMask1(key_lo);
-	const uint32_t sector2 = GetSector2(key_hi, sector1);
-	const uint32_t mask2 = GetMask2(key_hi);
-	return ((bf[sector1] & mask1) == mask1) & ((bf[sector2] & mask2) == mask2);
+	return (blocks[bf_offset] & mask) == mask;
 }
 
 string BloomFilter::ToString(const string &column_name) const {
@@ -243,7 +214,7 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 	idx_t found_count;
 	if (state.hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		const auto constant_hash = *ConstantVector::GetData<hash_t>(state.hashes_v);
-		const bool found = this->filter.LookupHash(constant_hash);
+		const bool found = this->filter.LookupOne(constant_hash);
 		found_count = found ? approved_tuple_count : 0;
 	} else {
 		state.hashes_v.Flatten(approved_tuple_count);
@@ -282,7 +253,7 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 
 bool BloomFilter::FilterValue(const Value &value) const {
 	const auto hash = value.Hash();
-	return filter.LookupHash(hash);
+	return filter.LookupOne(hash);
 }
 
 FilterPropagateResult BloomFilter::CheckStatistics(BaseStatistics &stats) const {

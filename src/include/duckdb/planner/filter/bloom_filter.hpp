@@ -55,7 +55,6 @@ public:
 	void InsertHashes(const Vector &hashes_v, idx_t count) const;
 
 	idx_t LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel, idx_t count) const;
-	bool LookupHash(hash_t hash) const;
 
 	SelectivityStats &GetSelectivityStats() {
 		return selectivity_data;
@@ -72,7 +71,8 @@ public:
 	bool IsActive() const {
 		return state.load() == BloomFilterState::Active;
 	}
-
+	void InsertOne(hash_t hash) const;
+	bool LookupOne(hash_t hash) const;
 private:
 	SelectivityStats selectivity_data;
 	atomic<BloomFilterState> state {BloomFilterState::Uninitialized};
@@ -81,20 +81,9 @@ private:
 	AllocatedData buf_;
 	uint64_t *blocks;
 
-	uint64_t spread_table[256 * 2];
+	void LookupHashesInternal(const uint64_t *hashes, uint64_t *founds, const uint64_t *bf, idx_t count) const;
 
-	// key_lo |5:bit3|5:bit2|5:bit1|  13:block    |4:sector1 | bit layout (32:total)
-	// key_hi |5:bit4|5:bit3|5:bit2|5:bit1|9:block|3:sector2 | bit layout (32:total)
-	static uint32_t GetMask1(uint32_t key_lo);
-	static uint32_t GetMask2(uint32_t key_hi);
 
-	uint32_t GetSector1(uint32_t key_lo, uint32_t key_hi) const;
-	uint32_t GetSector2(uint32_t key_hi, uint32_t block1) const;
-
-	void LookupHashesInternal(const uint64_t *hashes, uint32_t *founds, const uint64_t *blocks, idx_t count) const;
-
-	void InsertOne(uint32_t key_lo, uint32_t key_hi, uint32_t *bf) const;
-	bool LookupOne(uint32_t key_lo, uint32_t key_hi, const uint32_t *__restrict bf) const;
 };
 
 class BloomFilter : public TableFilter {
