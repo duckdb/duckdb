@@ -249,6 +249,7 @@ public:
 
 public:
 	void ResetOutBuffer() {
+		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 		out_buffer.dst = current_buffer_ptr;
 		out_buffer.pos = 0;
 
@@ -356,6 +357,7 @@ public:
 		current_offset = UnsafeNumericCast<page_offset_t>(
 		    AlignValue<idx_t, sizeof(string_length_t)>(UnsafeNumericCast<idx_t>(current_offset)));
 		current_buffer_ptr = current_buffer->Ptr() + current_offset;
+		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 		compressed_size = 0;
 		uncompressed_size = 0;
 
