@@ -7,7 +7,7 @@ static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
 static constexpr idx_t MIN_NUM_BITS_PER_KEY = 16;
 static constexpr idx_t MIN_NUM_BITS = 512;
 static constexpr idx_t LOG_SECTOR_SIZE = 6;
-static constexpr idx_t SIMD_BATCH_SIZE = 16;
+static constexpr idx_t SIMD_BATCH_SIZE = 128;
 
 // number of vectors to check before deciding on selectivity
 static constexpr idx_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
@@ -37,37 +37,43 @@ void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t numb
 		spread_table[2 * b + 1] = negative;
 	}
 
-
 	state.store(BloomFilterState::Active);
 }
+
+static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
+static constexpr idx_t N_BITS = 4;
 
 void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes_v, const idx_t count) const {
 
 	const auto hashes = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
+	const uint64_t bitmask = num_sectors - 1;
+	for (uint64_t i = 0; i + SIMD_BATCH_SIZE <= count; i += SIMD_BATCH_SIZE) {
 
-	for (idx_t i = 0; i < count; i += 1) {
-		uint64_t masks[2];
-		uint64_t shifts[2];
+		uint64_t shifts[SIMD_BATCH_SIZE];
+		uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(const_cast<uint64_t *>(shifts));
 
-		uint64_t hash[2] = {hashes[i], hashes[i]};
-		const uint64_t offset = ((hash[0] >> 14) & (num_sectors - 1)) & ~1ULL;
+		const uint64_t *key64_batch = &hashes[i];
 
-		const uint64_t spread_table_offset = (hashes[i] & 0xFF) * 2;
-		masks[0] = spread_table[spread_table_offset];
-		masks[1] = spread_table[spread_table_offset + 1];
+		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
+			shifts[j] = key64_batch[j] & SHIFT_MASK;
+		}
 
-		// maxiumn shift amount is 7, so we need 3 bits
-		shifts[0] = (hash[0]  >> 8) & 0x7;
-		shifts[1] = (hash[1]  >> 11) & 0x7;
+		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
+			const uint64_t offset_pos = 8 * j;
 
-		masks[0] = masks[0] << shifts[0];
-		masks[1] = masks[1] << shifts[1];
+			uint64_t seed = key64_batch[j];
+			// seed *= 0xbf58476d1ce4e5b9ULL;
+			// seed ^= seed >> 27;
+			const uint64_t bf_offset = seed & bitmask;
 
-		std::atomic<uint64_t> &atomic_bf1 = *reinterpret_cast<std::atomic<uint64_t> *>(&blocks[offset]);
-		std::atomic<uint64_t> &atomic_bf2 = *reinterpret_cast<std::atomic<uint64_t> *>(&blocks[offset + 1]);
-
-		atomic_bf1.fetch_or(masks[0], std::memory_order_relaxed);
-		atomic_bf2.fetch_or(masks[1], std::memory_order_relaxed);
+			uint64_t mask = 0;
+			for (idx_t k = 8 - N_BITS; k < 8; k++) {
+				const uint8_t bit_pos = shifts_8[offset_pos + k];
+				mask |= (1ULL << bit_pos);
+			}
+			std::atomic<uint64_t> &atomic_bf2 = *reinterpret_cast<std::atomic<uint64_t> *>(&blocks[bf_offset]);
+			atomic_bf2.fetch_or(mask, std::memory_order_relaxed);
+		}
 	}
 }
 
@@ -92,34 +98,43 @@ idx_t CacheSectorizedBloomFilter::LookupHashes(const Vector &hashes_v, Vector &f
 }
 
 void CacheSectorizedBloomFilter::LookupHashesInternal(const uint64_t *__restrict hashes, uint32_t *__restrict founds,
-                                                      const uint64_t *__restrict blocks, const idx_t count) const {
+                                                      const uint64_t *__restrict bf, const idx_t count) const {
 
-	for (idx_t i = 0; i < count; i += 1) {
-		uint64_t masks[2];
-		uint64_t shifts[2];
+	const uint64_t bitmask = num_sectors - 1;
 
-		uint64_t hash[2] = {hashes[i], hashes[i]};
-		const uint64_t offset = ((hash[0] >> 14) & (num_sectors - 1)) & ~1ULL;
+	for (uint64_t i = 0; i + SIMD_BATCH_SIZE <= count; i += SIMD_BATCH_SIZE) {
 
-		const uint64_t blocks_buffer[2] = {blocks[offset], blocks[offset + 1]};
+		uint64_t shifts[SIMD_BATCH_SIZE];
+		uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(const_cast<uint64_t *>(shifts));
 
-		const uint64_t spread_table_offset = (hashes[i] & 0xFF) * 2;
-		masks[0] = spread_table[spread_table_offset];
-		masks[1] = spread_table[spread_table_offset + 1];
+		const uint64_t *key64_batch = &hashes[i];
+		uint32_t *found_batch = &founds[i];
 
-		// maxiumn shift amount is 7, so we need 3 bits
-		shifts[0] = (hash[0]  >> 8) & 0x7;
-		shifts[1] = (hash[1]  >> 11) & 0x7;
+		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
+			shifts[j] = key64_batch[j] & SHIFT_MASK;
+		}
 
-		masks[0] = masks[0] << shifts[0];
-		masks[1] = masks[1] << shifts[1];
+		for (idx_t j = 0; j < SIMD_BATCH_SIZE; j++) {
+			const uint64_t offset_pos = 8 * j;
 
-		const bool found0 = (masks[0] & blocks_buffer[0]) == masks[0];
-		const bool found1 = (masks[1] & blocks_buffer[1]) == masks[1];
-		founds[i] = found0 & found1;
+			uint64_t seed = key64_batch[j];
+			// seed *= 0xbf58476d1ce4e5b9ULL;
+			// seed ^= seed >> 27;
+			const uint64_t bf_offset = seed & bitmask;
 
+			uint64_t mask = 0;
+			for (idx_t k = 8 - N_BITS; k < 8; k++) {
+				const uint8_t bit_pos = shifts_8[offset_pos + k];
+				mask |= (1ULL << bit_pos);
+			}
+
+			found_batch[j] = (bf[bf_offset] & mask) == mask;
+		}
 	}
-
+	// Todo: Handle unaligned tail
+	for (uint64_t i = count & ~(SIMD_BATCH_SIZE - 1); i < count; i++) {
+		founds[i] = true;
+	}
 }
 
 bool CacheSectorizedBloomFilter::LookupHash(hash_t hash_p) const {
@@ -137,8 +152,8 @@ bool CacheSectorizedBloomFilter::LookupHash(hash_t hash_p) const {
 	masks[1] = spread_table[spread_table_offset + 1];
 
 	// maxiumn shift amount is 7, so we need 3 bits
-	shifts[0] = (hash[0]  >> 8) & 0x7;
-	shifts[1] = (hash[1]  >> 11) & 0x7;
+	shifts[0] = (hash[0] >> 8) & 0x7;
+	shifts[1] = (hash[1] >> 11) & 0x7;
 
 	masks[0] = masks[0] << shifts[0];
 	masks[1] = masks[1] << shifts[1];
