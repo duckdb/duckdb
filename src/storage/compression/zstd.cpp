@@ -869,7 +869,7 @@ public:
 		scan_state.in_buffer.src = ptr;
 		scan_state.in_buffer.pos = 0;
 
-		idx_t page_size = block_manager.GetBlockSize() - sizeof(block_id_t);
+		idx_t page_size = segment.SegmentSize() - sizeof(block_id_t);
 		idx_t remaining_compressed_data = scan_state.metadata.compressed_size - scan_state.compressed_scan_count;
 		scan_state.in_buffer.size = MinValue<idx_t>(page_size, remaining_compressed_data);
 	}
