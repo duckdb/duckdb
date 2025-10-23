@@ -76,6 +76,10 @@ public:
 	}
 
 public:
+	void Replace(uint32_t index, SRC &value) {
+		dictionary[index].value = value;
+	}
+
 	//! Insert value into dictionary (if not full)
 	void Insert(SRC value) {
 		if (full) {

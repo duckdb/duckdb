@@ -11,6 +11,10 @@ DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &che
                                                    unique_ptr<DictFSSTAnalyzeState> &&analyze_p)
     : CompressionState(analyze_p->info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)),
+      current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
+                         info.GetBlockSize(), // maximum_size_p (amount of elements)
+                         info.GetBlockSize()  // maximum_target_capacity_p (byte capacity)
+                         ),
       analyze(std::move(analyze_p)) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
@@ -251,7 +255,7 @@ void DictFSSTCompressionState::CreateEmptySegment(idx_t row_start) {
 	D_ASSERT(string_lengths.empty());
 	string_lengths.push_back(0);
 	dict_count = 1;
-	D_ASSERT(current_string_map.empty());
+	D_ASSERT(current_string_map.GetSize() == 0);
 	symbol_table_size = DConstants::INVALID_INDEX;
 
 	dictionary_offset = 0;
@@ -280,11 +284,11 @@ void DictFSSTCompressionState::Flush(bool final) {
 	D_ASSERT(dictionary_encoding_buffer.empty());
 	D_ASSERT(to_encode_string_sum == 0);
 
-	auto old_size = current_string_map.size();
-	current_string_map.clear();
-	if (!final) {
-		current_string_map.reserve(old_size);
-	}
+	// auto old_size = current_string_map.size();
+	// current_string_map.clear();
+	// if (!final) {
+	// 	current_string_map.reserve(old_size);
+	// }
 	string_lengths.clear();
 	dictionary_indices.clear();
 	if (encoder) {
@@ -444,7 +448,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		}
 		state.to_encode_string_sum += str_len;
 		auto &uncompressed_string = state.dictionary_encoding_buffer.back();
-		state.current_string_map[uncompressed_string] = state.dict_count;
+		state.current_string_map.Replace(state.dict_count, uncompressed_string);
 	} else {
 		state.string_lengths.push_back(str_len);
 		auto baseptr =
@@ -452,7 +456,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		memcpy(baseptr + state.dictionary_offset, str.GetData(), str_len);
 		string_t dictionary_string((const char *)(baseptr + state.dictionary_offset), str_len); // NOLINT
 		state.dictionary_offset += str_len;
-		state.current_string_map[dictionary_string] = state.dict_count;
+		state.current_string_map.Replace(state.dict_count, dictionary_string);
 	}
 	state.dict_count++;
 
@@ -490,8 +494,8 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	if (append_state == DictionaryAppendState::ENCODED_ALL_UNIQUE || is_null) {
 		lookup = 0;
 	} else {
-		auto it = current_string_map.find(str);
-		lookup = it == current_string_map.end() ? DConstants::INVALID_INDEX : it->second;
+		auto it = current_string_map.Lookup(str);
+		lookup = it.IsEmpty() ? DConstants::INVALID_INDEX : it.index;
 	}
 
 	switch (append_state) {
@@ -785,8 +789,8 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 #endif
 
 	// Rewrite the dictionary
-	current_string_map.clear();
-	current_string_map.reserve(dict_count);
+	current_string_map.Clear();
+	// current_string_map.reserve(dict_count);
 	if (new_state == DictionaryAppendState::ENCODED) {
 		offset = 0;
 		auto uncompressed_dictionary_ptr = dict_copy.GetData();
@@ -797,7 +801,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 			auto uncompressed_str_len = string_lengths[dictionary_index];
 
 			string_t dictionary_string(uncompressed_dictionary_ptr + offset, uncompressed_str_len);
-			current_string_map.insert({dictionary_string, dictionary_index});
+			current_string_map.Insert(dictionary_string);
 
 #ifdef DEBUG
 			//! Verify that we can decompress the string
@@ -822,7 +826,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 			string_lengths[dictionary_index] = size;
 			string_t dictionary_string((const char *)start, UnsafeNumericCast<uint32_t>(size)); // NOLINT
 
-			current_string_map.insert({dictionary_string, dictionary_index});
+			current_string_map.Insert(dictionary_string);
 		}
 	}
 	dictionary_offset = new_size;
