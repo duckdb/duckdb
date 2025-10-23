@@ -365,7 +365,7 @@ public:
 			NewSegment();
 		}
 
-		if (current_offset + (vector_size * sizeof(string_length_t)) >= GetWritableSpace(info)) {
+		if (current_offset + (vector_size * sizeof(string_length_t)) > GetWritableSpace(info)) {
 			// Check if there is room on the current page for the vector data
 			NewPage();
 		}
