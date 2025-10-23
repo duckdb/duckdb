@@ -827,7 +827,7 @@ public:
 		scan_state.in_buffer.src = scan_state.current_buffer_ptr;
 		scan_state.in_buffer.pos = 0;
 		scan_state.in_buffer.size =
-		    MinValue(metadata.compressed_size, segment.SegmentSize() - sizeof(block_id_t) - current_offset);
+		    MinValue(metadata.compressed_size, block_manager.GetBlockSize() - sizeof(block_id_t) - current_offset);
 
 		// Initialize the context for streaming decompression
 		duckdb_zstd::ZSTD_DCtx_reset(decompression_context, duckdb_zstd::ZSTD_reset_session_only);
