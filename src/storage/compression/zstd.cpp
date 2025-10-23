@@ -821,7 +821,8 @@ public:
 		idx_t current_offset = UnsafeNumericCast<idx_t>(scan_state.current_buffer_ptr - handle_start);
 		scan_state.in_buffer.src = scan_state.current_buffer_ptr;
 		scan_state.in_buffer.pos = 0;
-		scan_state.in_buffer.size = segment.SegmentSize() - sizeof(block_id_t) - current_offset;
+		scan_state.in_buffer.size =
+		    MinValue(metadata.compressed_size, segment.SegmentSize() - sizeof(block_id_t) - current_offset);
 
 		// Initialize the context for streaming decompression
 		duckdb_zstd::ZSTD_DCtx_reset(decompression_context, duckdb_zstd::ZSTD_reset_session_only);
@@ -865,6 +866,7 @@ public:
 			return;
 		}
 
+		auto &in_buffer = scan_state.in_buffer;
 		duckdb_zstd::ZSTD_outBuffer out_buffer;
 
 		out_buffer.dst = destination;
@@ -872,18 +874,21 @@ public:
 		out_buffer.size = uncompressed_length;
 
 		while (true) {
-			idx_t old_pos = scan_state.in_buffer.pos;
+			idx_t old_pos = in_buffer.pos;
 			size_t res = duckdb_zstd::ZSTD_decompressStream(
 			    /* zds = */ decompression_context,
 			    /* output =*/&out_buffer,
-			    /* input =*/&scan_state.in_buffer);
-			scan_state.compressed_scan_count += scan_state.in_buffer.pos - old_pos;
+			    /* input =*/&in_buffer);
+			scan_state.compressed_scan_count += in_buffer.pos - old_pos;
 			if (duckdb_zstd::ZSTD_isError(res)) {
 				throw InvalidInputException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(res));
 			}
-			if (out_buffer.pos == out_buffer.size) {
+			if (!res) {
+				D_ASSERT(out_buffer.pos == out_buffer.size);
+				D_ASSERT(in_buffer.pos == in_buffer.size);
 				break;
 			}
+			D_ASSERT(in_buffer.pos == in_buffer.size);
 			// Did not fully decompress, it needs a new page to read from
 			LoadNextPageForVector(scan_state);
 		}
