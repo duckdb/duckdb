@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -35,26 +36,32 @@ void UnboundIndex::CommitDrop() {
 	}
 }
 
-void UnboundIndex::BufferChunk(DataChunk &chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p) {
+void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
+                               const vector<StorageIndex> &mapped_column_ids_p, BufferedIndexReplay replay_type) {
 	D_ASSERT(!column_ids.empty());
-	auto types = chunk.GetTypes();
+	auto types = index_column_chunk.GetTypes(); // column types
 	types.push_back(LogicalType::ROW_TYPE);
 
-	if (!buffered_appends) {
-		auto &allocator = Allocator::Get(db);
-		buffered_appends = make_uniq<ColumnDataCollection>(allocator, types);
+	auto &allocator = Allocator::Get(db);
+
+	BufferedIndexData buffered_data {replay_type, make_uniq<ColumnDataCollection>(allocator, types)};
+
+	//! First time we are buffering data, canonical column_id mapping is stored.
+	//! This should be a sorted list of all the physical offsets of Indexed columns on this table.
+	if (mapped_column_ids.empty()) {
 		mapped_column_ids = mapped_column_ids_p;
 	}
 	D_ASSERT(mapped_column_ids == mapped_column_ids_p);
 
-	DataChunk combined_chunk;
+	DataChunk combined_chunk; //  which has all index columns and their row IDs
 	combined_chunk.InitializeEmpty(types);
-	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-		combined_chunk.data[i].Reference(chunk.data[i]);
+	for (idx_t i = 0; i < index_column_chunk.ColumnCount(); i++) {
+		combined_chunk.data[i].Reference(index_column_chunk.data[i]);
 	}
 	combined_chunk.data.back().Reference(row_ids);
-	combined_chunk.SetCardinality(chunk.size());
-	buffered_appends->Append(combined_chunk);
+	combined_chunk.SetCardinality(index_column_chunk.size());
+	buffered_data.data->Append(combined_chunk);
+	buffered_replays.emplace_back(std::move(buffered_data));
 }
 
 } // namespace duckdb

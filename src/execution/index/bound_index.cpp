@@ -154,28 +154,39 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 	return error;
 }
 
-void BoundIndex::ApplyBufferedAppends(const vector<LogicalType> &table_types, ColumnDataCollection &buffered_appends,
+void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
+                                      vector<BufferedIndexData> &buffered_replays,
                                       const vector<StorageIndex> &mapped_column_ids) {
-	IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+	for (auto &replay : buffered_replays) {
+		ColumnDataScanState state;
+		std::unique_ptr<ColumnDataCollection> buffered_data = std::move(replay.data);
+		buffered_data->InitializeScan(state);
 
-	ColumnDataScanState state;
-	buffered_appends.InitializeScan(state);
+		DataChunk scan_chunk;
+		buffered_data->InitializeScanChunk(scan_chunk);
+		DataChunk table_chunk;
+		table_chunk.InitializeEmpty(table_types);
 
-	DataChunk scan_chunk;
-	buffered_appends.InitializeScanChunk(scan_chunk);
-	DataChunk table_chunk;
-	table_chunk.InitializeEmpty(table_types);
+		while (buffered_data->Scan(state, scan_chunk)) {
+			for (idx_t i = 0; i < scan_chunk.ColumnCount() - 1; i++) {
+				auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+				table_chunk.data[col_id].Reference(scan_chunk.data[i]);
+			}
+			table_chunk.SetCardinality(scan_chunk.size());
 
-	while (buffered_appends.Scan(state, scan_chunk)) {
-		for (idx_t i = 0; i < scan_chunk.ColumnCount() - 1; i++) {
-			auto col_id = mapped_column_ids[i].GetPrimaryIndex();
-			table_chunk.data[col_id].Reference(scan_chunk.data[i]);
-		}
-		table_chunk.SetCardinality(scan_chunk.size());
-
-		auto error = Append(table_chunk, scan_chunk.data.back(), index_append_info);
-		if (error.HasError()) {
-			throw InternalException("error while applying buffered appends: " + error.Message());
+			switch (replay.type) {
+			case BufferedIndexReplay::IDX_INSERT: {
+				IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+				auto error = Append(table_chunk, scan_chunk.data.back(), index_append_info);
+				if (error.HasError()) {
+					throw InternalException("error while applying buffered appends: " + error.Message());
+				}
+				continue;
+			}
+			case BufferedIndexReplay::IDX_DELETE: {
+				Delete(table_chunk, scan_chunk.data.back());
+			}
+			}
 		}
 	}
 }

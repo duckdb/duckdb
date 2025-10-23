@@ -522,7 +522,9 @@ ErrorData ART::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppe
 		if (keys[i].Empty()) {
 			continue;
 		}
-		D_ASSERT(ARTOperator::Lookup(*this, tree, keys[i], 0));
+		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
+		D_ASSERT(leaf);
+		D_ASSERT(ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]));
 	}
 #endif
 	return ErrorData();
@@ -602,6 +604,15 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
+		if (leaf) {
+			if (leaf->GetType() == NType::LEAF_INLINED) {
+				D_ASSERT(leaf->GetRowId() != row_id_keys[i].GetRowId());
+				continue;
+			}
+			auto lookup_result = ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]);
+			D_ASSERT(!lookup_result);
+		}
+
 		if (leaf && leaf->GetType() == NType::LEAF_INLINED) {
 			D_ASSERT(leaf->GetRowId() != row_id_keys[i].GetRowId());
 		}

@@ -665,14 +665,16 @@ void RowGroupCollection::Update(TransactionData transaction, DataTable &data_tab
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	// Collect all indexed columns.
+	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
 	indexes.Scan([&](Index &index) {
-		D_ASSERT(index.IsBound());
 		auto &set = index.GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
 		return false;
 	});
+	// Sort the indexed columns to obtain canonical mapping, since if we wre in WAL replay right now,
+	// these column_ids will be used to initialize the mapped_column_ids in Unbound_index::BufferChunk.
+	// Any index chunk scan should be ordered according to this mapping.
 	vector<StorageIndex> column_ids;
 	for (auto &col : indexed_column_id_set) {
 		column_ids.emplace_back(col);
@@ -686,10 +688,14 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 
 	// Initialize the fetch state. Only use indexed columns.
 	TableScanState state;
-	state.Initialize(std::move(column_ids));
+	auto column_ids_copy = column_ids;
+	state.Initialize(std::move(column_ids_copy));
 	state.table_state.max_row = row_start + total_rows;
 
 	// Used for scanning data. Only contains the indexed columns.
+	// Since the chunk is being initialized using the column_types ordering, which is derived from the
+	// sorted column_id ordering above, fetch_chunk will have the Indexed columns in the proper order in case
+	// of WAL replay buffering.
 	DataChunk fetch_chunk;
 	fetch_chunk.Initialize(GetAllocator(), column_types);
 
@@ -749,17 +755,18 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 		result_chunk.SetCardinality(fetch_chunk);
 
 		// Slice the vector with all rows that are present in this vector.
-		// Then, erase all values from the indexes.
+		// If the index is bound, delete the data. If unbound, buffer into unbound_index.
 		result_chunk.Slice(sel, sel_count);
 		indexes.Scan([&](Index &index) {
 			if (index.IsBound()) {
 				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
-				return false;
+			} else {
+				// See comments above and in unbound index --  fetch_chunk is ordered to map into column_ids
+				// which provides physical offsets, and the delete data is buffered with this ordering and mapping.
+				auto &unbound_index = index.Cast<UnboundIndex>();
+				unbound_index.BufferChunk(fetch_chunk, row_identifiers, column_ids, BufferedIndexReplay::IDX_DELETE);
 			}
-			throw MissingExtensionException(
-			    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
-			    "extension that provides this index type before table '%s' can be modified.",
-			    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
+			return false;
 		});
 	}
 }
