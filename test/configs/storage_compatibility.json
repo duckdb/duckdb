@@ -49,6 +49,13 @@
         "test/sql/copy/csv/test_null_padding_projection.test",
         "test/sql/types/geo/geometry.test",
         "test/sql/types/geo/geometry_stats.test",
+        "test/geoparquet/disabled.test",
+        "test/geoparquet/geoarrow.test",
+        "test/geoparquet/mixed.test",
+        "test/geoparquet/no_spatial.test",
+        "test/geoparquet/roundtrip.test",
+        "test/geoparquet/unsupported.test",
+        "test/geoparquet/versions.text",
         "test/sql/types/variant/variant_distinct.test"
       ]
     }
