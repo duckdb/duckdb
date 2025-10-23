@@ -3,70 +3,106 @@
 # group: [optimizer]
 
 statement ok
-pragma disable_optimizer;
-
-# statement ok
-# pragma threads=2;
+pragma enable_verification;
 
 statement ok
-CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(500000);
+CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(1300000);
 
-statement ok
-delete from foo where a<10;
-
-query II
-select a, row_number from foo limit 10;
+# Check that row_number is not accessible
+statement error
+SELECT a, row_number FROM foo;
 ----
-10	1
-11	2
-12	3
-13	4
-14	5
-15	6
-16	7
-17	8
-18	9
-19	10
-
-
-query II
-select a, row_number from foo where a >= 100000 and a < 200000 limit 1;
-----
-100000	99991
-
+Binder Error: Referenced column "row_number" not found in FROM clause
 
 statement ok
-delete from foo where a>1500 and a < 150000;
-
-statement ok
-delete from foo where a>1 and a < 1500;
-
-query II
-select a, row_number from foo limit 10;
-----
-1500	1
-150000	2
-150001	3
-150002	4
-150003	5
-150004	6
-150005	7
-150006	8
-150007	9
-150008	10
-
-statement ok
-CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(500000);
-
-statement ok
-delete from foo where a>150 and a < 1500;
-
-# query IIII
-# select a,rowid, row_number, row_number() over() as x from foo order by a desc limit 1;
-# ----
-# 129999	129999	198651	198651
+delete from foo where a < 5000;
 
 query III
-select a,rowid, row_number from foo order by a desc limit 1;
+select a,rowid, row_number() over() as x from foo order by a desc limit 1;
 ----
-499999	499999	498651
+1299999	1299999	1295000
+
+query II
+explain select a,rowid, row_number() over() as x from foo order by a desc limit 1;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+# Test that if the window function is on the LHS we do not rewrite
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2), (13, 3);
+
+statement ok
+CREATE TABLE test2 (b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30);
+
+query II
+explain SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+statement ok
+select setseed(0.1);
+
+statement ok
+create or replace table test as select (random()*10)::INT a, (random()*5)::INT b  from range(10);
+
+statement ok
+create or replace table test2 as select (random()*100)::INT c, (random()*5)::INT b  from range(10);
+
+statement ok
+pragma enable_optimizer
+
+# Try with a window function on LHS
+
+query III
+SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b limit 10;
+----
+1	3	1
+2	5	16
+4	8	16
+5	8	1
+7	2	45
+8	7	24
+9	10	1
+10	1	45
+1	3	31
+5	8	31
+
+
+
+# =================== IGNORE ===================
+# BUILD_SIDE_PROBE_SIDE changes the window from RHS to LHS
+
+# Try with a window function on RHS
+
+query IIII
+SELECT t.a, t.b, t2.row_num, t2.c FROM test t JOIN ( SELECT b, c, ROW_NUMBER() OVER () AS row_num FROM test2) t2 ON t.b = t2.b;
+----
+7	1	1	85
+8	3	2	16
+7	1	3	67
+10	2	4	69
+10	2	5	36
+10	2	6	33
+1	4	7	45
+10	2	8	31
+7	1	9	24
+10	2	10	1
+5	3	2	16
+8	2	4	69
+8	2	5	36
+8	2	6	33
+2	4	7	45
+8	2	8	31
+8	2	10	1
+3	2	4	69
+3	2	5	36
+3	2	6	33
+3	2	8	31
+3	2	10	1
