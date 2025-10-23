@@ -1,6 +1,7 @@
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "fast_float/fast_float.h"
 #include "fmt/format.h"
 
@@ -143,6 +144,10 @@ public:
 
 	size_t GetPosition() const {
 		return static_cast<idx_t>(pos - beg);
+	}
+
+	const char *GetDataPtr() const {
+		return pos;
 	}
 
 	bool IsAtEnd() const {
@@ -932,7 +937,7 @@ bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_
 		reader.Reset();
 		// Make a new WKB with all LE
 		auto blob = StringVector::EmptyString(result_vector, analysis.size);
-		FixedSizeBlobWriter writer(const_cast<char *>(blob.GetData()), static_cast<uint32_t>(blob.GetSize()));
+		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob.GetSize()));
 		ConvertWKB(reader, writer);
 		blob.Finalize();
 		result = blob;
