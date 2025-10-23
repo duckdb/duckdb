@@ -219,7 +219,11 @@ PEGTransformerFactory::TransformParenthesisExpression(PEGTransformer &transforme
 	for (auto &expression : expressions) {
 		children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expression));
 	}
-	return make_uniq<OperatorExpression>(ExpressionType::PLACEHOLDER, std::move(children));
+	if (children.size() == 1) {
+		return std::move(children[0]);
+	}
+	throw NotImplementedException("TransformParenthesisExpression with multiple children");
+	// return make_uniq<OperatorExpression>(children[0]->GetExpressionType(), std::move(children));
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,

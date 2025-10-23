@@ -24,6 +24,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	MatcherAllocator allocator;
 	auto &matcher = Matcher::RootMatcher(allocator);
 	auto match_result = matcher.MatchParseResult(state);
+	// Printer::Print(match_result->ToString());
 	if (match_result == nullptr || state.token_index < state.tokens.size()) {
 		// TODO(dtenwolde) add error handling
 		string token_list;
@@ -46,6 +47,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	// Printer::PrintF("Final result %s", result->ToString());
 	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 }
 

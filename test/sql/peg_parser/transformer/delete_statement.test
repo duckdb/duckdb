@@ -12,3 +12,12 @@ require no_extension_autoloading "FIXME: to be reviewed whether this can be lift
 
 statement ok
 PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers (i bigint);
+
+statement ok
+set allow_parser_override_extension=strict_when_supported;
+
+statement ok
+DELETE FROM integers WHERE i=2;
