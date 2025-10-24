@@ -33,25 +33,29 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 }
 
 
+inline uint64_t GetMask(const uint8_t *__restrict shifts_8, const idx_t i) {
+	uint64_t mask = 0;
+	const uint64_t shift_8 = 8 * i;
+
+	for (idx_t j = 8 - N_BITS; j < 8; j++) {
+		const uint8_t bit_pos = shifts_8[shift_8 + j];
+		mask |= (1ULL << bit_pos);
+	}
+
+	return mask;
+}
+
 static void InsertBlock(const uint64_t *__restrict keys, uint64_t *__restrict bf, const uint64_t bitmask) {
 
 	uint64_t shifts[SIMD_BATCH_SIZE];
-	const uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(const_cast<uint64_t *>(shifts));
+	const uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(shifts);
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
 		shifts[i] = keys[i] & SHIFT_MASK;
 	}
 
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
-
-		const uint64_t offset_pos = 8 * i;
 		const uint64_t bf_offset = keys[i] & bitmask;
-		uint64_t mask = 0;
-
-		for (idx_t j = 8 - N_BITS; j < 8; j++) {
-			const uint8_t bit_pos = shifts_8[offset_pos + j];
-			mask |= (1ULL << bit_pos);
-		}
-
+		const uint64_t mask = GetMask(shifts_8, i);
 		std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&bf[bf_offset]);
 		slot.fetch_or(mask, std::memory_order_relaxed);
 	}
@@ -81,37 +85,31 @@ static void LookupBlock(const uint64_t *__restrict keys, const uint64_t *__restr
 
 	const auto shifts_8 = reinterpret_cast<uint8_t *>(shifts);
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
-
-		const uint64_t offset_pos = 8 * i;
 		const uint64_t bf_offset = keys[i] & bitmask;
-		uint64_t mask = 0;
-
-		for (idx_t j = 8 - N_BITS; j < 8; j++) {
-			const uint8_t bit_pos = shifts_8[offset_pos + j];
-			mask |= (1ULL << bit_pos);
-		}
-
+		const uint64_t mask = GetMask(shifts_8, i);
 		found[i] = (bf[bf_offset] & mask) == mask;
 	}
 }
 
 idx_t BloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel,
-                                idx_t count) const {
+                                const idx_t count) const {
 
 	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 
 	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
-	auto founds = FlatVector::GetData<uint64_t>(found_v);
+	const auto founds = FlatVector::GetData<uint64_t>(found_v);
 
-	while (count >= SIMD_BATCH_SIZE) {
-		LookupBlock(hashes, bf, founds, bitmask);
+	idx_t remaining_count = count;
+	uint64_t* remaining_founds = founds;
+	while (remaining_count >= SIMD_BATCH_SIZE) {
+		LookupBlock(hashes, bf, remaining_founds, bitmask);
 		hashes += SIMD_BATCH_SIZE;
-		founds += SIMD_BATCH_SIZE;
-		count -= SIMD_BATCH_SIZE;
+		remaining_founds += SIMD_BATCH_SIZE;
+		remaining_count -= SIMD_BATCH_SIZE;
 	}
-	for (idx_t i = 0; i < count; i++) {
-		founds[i] = LookupOne(hashes[i]);
+	for (idx_t i = 0; i < remaining_count; i++) {
+		remaining_founds[i] = LookupOne(hashes[i]);
 	}
 
 	idx_t found_count = 0;
@@ -128,14 +126,9 @@ inline void BloomFilter::InsertOne(const hash_t hash) const {
 	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
 
 	const uint64_t bf_offset = hash & bitmask;
-
-	uint64_t mask = 0;
-	for (idx_t j = 8 - N_BITS; j < 8; j++) {
-		const uint8_t bit_pos = shifts_8[j];
-		mask |= (1ULL << bit_pos);
-	}
-
+	const uint64_t mask = GetMask(shifts_8, 0);
 	std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&bf[bf_offset]);
+
 	slot.fetch_or(mask, std::memory_order_relaxed);
 }
 
@@ -145,12 +138,7 @@ inline bool BloomFilter::LookupOne(uint64_t hash) const {
 	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
 
 	const uint64_t bf_offset = hash & bitmask;
-
-	uint64_t mask = 0;
-	for (idx_t j = 8 - N_BITS; j < 8; j++) {
-		const uint8_t bit_pos = shifts_8[j];
-		mask |= (1ULL << bit_pos);
-	}
+	const uint64_t mask = GetMask(shifts_8, 0);
 
 	return (bf[bf_offset] & mask) == mask;
 }
