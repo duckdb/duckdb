@@ -12,23 +12,25 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto indirection_opt = list_pr.Child<OptionalParseResult>(1);
-	if (indirection_opt.HasResult()) {
-		auto indirection_repeat = indirection_opt.optional_result->Cast<RepeatParseResult>();
-		for (auto child : indirection_repeat.children) {
-			auto indirection_expr = transformer.Transform<unique_ptr<ParsedExpression>>(child);
-			if (indirection_expr->GetExpressionClass() == ExpressionClass::CAST) {
-				auto cast_expr = unique_ptr_cast<ParsedExpression, CastExpression>(std::move(indirection_expr));
-				cast_expr->child = std::move(expr);
-				expr = std::move(cast_expr);
-			} else if (indirection_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
-				auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(indirection_expr));
-				operator_expr->children.insert(operator_expr->children.begin(), std::move(expr));
-				expr = std::move(operator_expr);
-			} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
-				auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
-				function_expr->children.push_back(std::move(expr));
-				expr = std::move(function_expr);
-			}
+	if (!indirection_opt.HasResult()) {
+		return expr;
+	}
+
+	auto indirection_repeat = indirection_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto child : indirection_repeat.children) {
+		auto indirection_expr = transformer.Transform<unique_ptr<ParsedExpression>>(child);
+		if (indirection_expr->GetExpressionClass() == ExpressionClass::CAST) {
+			auto cast_expr = unique_ptr_cast<ParsedExpression, CastExpression>(std::move(indirection_expr));
+			cast_expr->child = std::move(expr);
+			expr = std::move(cast_expr);
+		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+			auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(indirection_expr));
+			operator_expr->children.insert(operator_expr->children.begin(), std::move(expr));
+			expr = std::move(operator_expr);
+		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
+			function_expr->children.push_back(std::move(expr));
+			expr = std::move(function_expr);
 		}
 	}
 
