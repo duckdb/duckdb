@@ -5,6 +5,18 @@
 require autocomplete
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select histogram(g)     from hist_data     group by g%2==0 ORDER BY g%2==0$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select kurtosis(10) from range (5) where 1 == 0;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select 1 between 1;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select a ilike 'col%';$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$select list_apply(maps, lambda x: map_keys(x)) from tbl;$TEST_PEG_PARSER$);
 
 statement ok

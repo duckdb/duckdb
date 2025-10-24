@@ -119,28 +119,41 @@ ComparisonOps <-
     ComparisonOperator /
     IsDistinctFromOperator /
     LambdaOperator /
-    EscapeOperator
+    EscapeOperator /
+    InetOperator /
+    JsonOperator /
+    ListOperator /
+    StringOperator
 
-LikeOperator <- 'NOT'? ('LIKE' / 'ILIKE' / 'SIMILAR' 'TO')
+ListOperator <- '&&' / '@>' / '<@'
+StringOperator <- '^@'
+InetOperator <- '>>=' / '<<='
+JsonOperator <- '->>'
+
+LikeOperator <- 'NOT'? LikeVariations
+LikeVariations <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO') / '~' / '~~' / '!~' / '!~~' / '!~~*'
 InOperator <- 'NOT'? 'IN'
 BetweenOperator <- 'NOT'? 'BETWEEN'
-ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!='
+ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '==' / '&&'
 AnyAllOperator <- ComparisonOperator ('ANY' / 'ALL')
 IsDistinctFromOperator <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 LambdaOperator <- '->'
 EscapeOperator <- 'ESCAPE'
 
-OtherOperatorExpression <- AdditiveExpression ( ( '&' / '|' / '#' / '<<' / '>>' / '||' ) AdditiveExpression)*
+OtherOperatorExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
+BitOperator <- '&' / '|' / '<<' / '>>' / '||'
 AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
 Term <- PlusOperator / MinusOperator
 PlusOperator <- '+'
 MinusOperator <- '-'
 MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
-Factor <- MultiplyOperator / DivisionOperator / ModuloOperator
+Factor <- MultiplyOperator / DivisionOperator / FloorDivisionOperator / ModuloOperator
 MultiplyOperator <- '*'
 DivisionOperator <- '/'
+FloorDivisionOperator <- '//'
 ModuloOperator <- '%'
-ExponentiationExpression <- AtTimeZoneExpression ('^' AtTimeZoneExpression)*
+ExponentiationExpression <- AtTimeZoneExpression (ExponentOperator AtTimeZoneExpression)*
+ExponentOperator <- '^' / '**'
 AtTimeZoneExpression <- CollateExpression (AtTimeZoneOperator CollateExpression)*
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 CollateExpression <- PrefixExpression (CollateOperator PrefixExpression)*
