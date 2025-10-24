@@ -138,6 +138,7 @@ struct TableFunctionInitInput {
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
 	optional_ptr<const PhysicalOperator> op;
+	optional_ptr<pair<column_t, bool>> order_row_groups_by; // TODO
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {

@@ -275,11 +275,11 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<Storage
 	// initialize the scan
 	TableScanState state;
 	state.Initialize(column_ids, nullptr);
-	InitializeScan(QueryContext(), state.local_state, column_ids, nullptr);
+	InitializeScan(QueryContext(), *state.local_state, column_ids, nullptr);
 
 	while (true) {
 		chunk.Reset();
-		state.local_state.Scan(transaction, chunk);
+		state.local_state->Scan(transaction, chunk);
 		if (chunk.size() == 0) {
 			return true;
 		}
@@ -697,7 +697,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// Initialize the fetch state. Only use indexed columns.
 	TableScanState state;
 	state.Initialize(std::move(column_ids));
-	state.table_state.max_row = row_start + total_rows;
+	state.table_state->max_row = row_start + total_rows;
 
 	// Used for scanning data. Only contains the indexed columns.
 	DataChunk fetch_chunk;
@@ -727,9 +727,9 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_group->start;
 
 		// Fetch the current vector into fetch_chunk.
-		state.table_state.Initialize(context, GetTypes());
-		row_group->InitializeScanWithOffset(state.table_state, row_group_vector_idx);
-		row_group->ScanCommitted(state.table_state, fetch_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		state.table_state->Initialize(context, GetTypes());
+		row_group->InitializeScanWithOffset(*state.table_state, row_group_vector_idx);
+		row_group->ScanCommitted(*state.table_state, fetch_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		fetch_chunk.Verify();
 
 		// Check for any remaining row ids, if they also fall into this vector.
@@ -897,8 +897,8 @@ public:
 
 		TableScanState scan_state;
 		scan_state.Initialize(column_ids);
-		scan_state.table_state.Initialize(QueryContext(), types);
-		scan_state.table_state.max_row = idx_t(-1);
+		scan_state.table_state->Initialize(QueryContext(), types);
+		scan_state.table_state->max_row = idx_t(-1);
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
 		for (idx_t c_idx = segment_idx; merged_groups < merge_count && c_idx < total_row_groups; c_idx++) {
@@ -909,11 +909,11 @@ public:
 
 			auto &current_row_group = *checkpoint_state.segments[c_idx].node;
 
-			current_row_group.InitializeScan(scan_state.table_state);
+			current_row_group.InitializeScan(*scan_state.table_state);
 			while (true) {
 				scan_chunk.Reset();
 
-				current_row_group.ScanCommitted(scan_state.table_state, scan_chunk,
+				current_row_group.ScanCommitted(*scan_state.table_state, scan_chunk,
 				                                TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS);
 				if (scan_chunk.size() == 0) {
 					break;
@@ -1345,14 +1345,14 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	TableScanState scan_state;
 	scan_state.Initialize(bound_columns);
-	scan_state.table_state.max_row = row_start + total_rows;
+	scan_state.table_state->max_row = row_start + total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
 	auto lock = result->stats.GetLock();
 	auto &changed_stats = result->stats.GetStats(*lock, changed_idx);
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
-		                                                 scan_state.table_state, scan_chunk);
+		                                                 *scan_state.table_state, scan_chunk);
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
@@ -1382,13 +1382,13 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	CreateIndexScanState state;
 	auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	state.Initialize(column_ids, nullptr);
-	InitializeScan(context, state.table_state, column_ids, nullptr);
+	InitializeScan(context, *state.table_state, column_ids, nullptr);
 
 	InitializeCreateIndexScan(state);
 
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
+		state.table_state->ScanCommitted(scan_chunk, state.segment_lock, scan_type);
 		if (scan_chunk.size() == 0) {
 			break;
 		}

@@ -152,7 +152,7 @@ public:
 			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
 		}
 		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
-		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
+		local_storage.InitializeScan(storage, *l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
 	}
 
@@ -197,10 +197,10 @@ public:
 			auto &local_storage = LocalStorage::Get(tx);
 			if (CanRemoveFilterColumns()) {
 				l_state.all_columns.Reset();
-				local_storage.Scan(l_state.scan_state.local_state, column_ids, l_state.all_columns);
+				local_storage.Scan(*l_state.scan_state.local_state, column_ids, l_state.all_columns);
 				output.ReferenceColumns(l_state.all_columns, projection_ids);
 			} else {
-				local_storage.Scan(l_state.scan_state.local_state, column_ids, output);
+				local_storage.Scan(*l_state.scan_state.local_state, column_ids, output);
 			}
 		}
 	}
@@ -247,6 +247,12 @@ public:
 		vector<StorageIndex> storage_ids;
 		for (auto &col : input.column_indexes) {
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
+		}
+		if (input.order_row_groups_by) {
+			l_state->scan_state.table_state = make_shared_ptr<OrderedCollectionScanState>(
+			    l_state->scan_state, input.order_row_groups_by->first, input.order_row_groups_by->second);
+			l_state->scan_state.local_state = make_shared_ptr<OrderedCollectionScanState>(
+			    l_state->scan_state, input.order_row_groups_by->first, input.order_row_groups_by->second);
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
@@ -309,12 +315,12 @@ public:
 	OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
 	                                                TableFunctionGetPartitionInput &input) override {
 		auto &l_state = input.local_state->Cast<TableScanLocalState>();
-		if (l_state.scan_state.table_state.row_group) {
-			return OperatorPartitionData(l_state.scan_state.table_state.batch_index);
+		if (l_state.scan_state.table_state->row_group) {
+			return OperatorPartitionData(l_state.scan_state.table_state->batch_index);
 		}
-		if (l_state.scan_state.local_state.row_group) {
-			return OperatorPartitionData(l_state.scan_state.table_state.batch_index +
-			                             l_state.scan_state.local_state.batch_index);
+		if (l_state.scan_state.local_state->row_group) {
+			return OperatorPartitionData(l_state.scan_state.table_state->batch_index +
+			                             l_state.scan_state.local_state->batch_index);
 		}
 		return OperatorPartitionData(0);
 	}

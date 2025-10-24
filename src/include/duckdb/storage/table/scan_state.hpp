@@ -263,9 +263,9 @@ public:
 	~TableScanState();
 
 	//! The underlying table scan state
-	CollectionScanState table_state;
+	shared_ptr<CollectionScanState> table_state;
 	//! Transaction-local scan state
-	CollectionScanState local_state;
+	shared_ptr<CollectionScanState> local_state;
 	//! Options for scanning
 	TableScanOptions options;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
