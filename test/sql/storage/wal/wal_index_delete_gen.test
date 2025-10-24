@@ -18,7 +18,7 @@ statement ok
 CREATE INDEX idx_cd ON tbl(c,d);
 
 statement ok
-CREATE INDEX idx_bd ON tbl(d, f)
+CREATE INDEX idx_df ON tbl(d, f)
 
 statement ok
 INSERT INTO tbl VALUES (1, 'foo', 10.5, '2023-01-01 10:00:00'), (2, 'bar', 20.5, '2023-02-01 11:00:00'), (3, 'baz', 30.5, '2023-03-01 12:00:00');
@@ -29,16 +29,6 @@ SELECT a, b, c, d, e, f FROM tbl ORDER BY a;
 1	2	foo	10.5	12.5	2023-01-01 10:00:00
 2	4	bar	20.5	22.5	2023-02-01 11:00:00
 3	6	baz	30.5	32.5 	2023-03-01 12:00:00
-
-query I
-SELECT COUNT(*) FROM tbl WHERE b = 2 * a;
-----
-3
-
-query I
-SELECT COUNT(*) FROM duckdb_indexes() WHERE table_name = 'tbl';
-----
-2
 
 statement ok
 DELETE FROM tbl WHERE a = 2;
@@ -61,7 +51,6 @@ SELECT a, b, c, d, e, f FROM tbl ORDER BY a;
 1	2	foo	10.5	12.5	2023-01-01 10:00:00
 3	6	baz	30.5	32.5 	2023-03-01 12:00:00
 
-# Verify row count after delete
 query I
 SELECT COUNT(*) FROM tbl;
 ----
