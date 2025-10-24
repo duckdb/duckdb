@@ -2,7 +2,9 @@
 # description: Test index delete replays.
 # group: [wal]
 
-# load the DB from disk
+statement ok
+SET index_scan_percentage = 1.0;
+
 load __TEST_DIR__/index_delete_test.db
 
 statement ok
@@ -12,55 +14,60 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-CREATE TABLE tbl(a BIGINT, b VARCHAR, c DOUBLE, d TIMESTAMP);
+CREATE TABLE tbl(a INTEGER, b VARCHAR, c DOUBLE, d TIMESTAMP);
 
 statement ok
 CREATE INDEX idx_ab ON tbl(a, b);
 
 statement ok
-CREATE INDEX idx_bd ON tbl(b, d)
+CREATE INDEX idx_a ON tbl(a);
 
 statement ok
-INSERT INTO tbl VALUES (1, 'foo', 10.5, '2023-01-01 10:00:00'), (2, 'bar', 20.5, '2023-02-01 11:00:00'), (3, 'baz', 30.5, '2023-03-01 12:00:00');
-
-query IIII
-SELECT a,b,c,d FROM tbl where (a,b) = (1, 'foo')
-----
-1	foo	10.5	2023-01-01 10:00:00
-
-query IIII
-SELECT a, b, c, d FROM tbl ORDER BY a;
-----
-1	foo	10.5	2023-01-01 10:00:00
-2	bar	20.5	2023-02-01 11:00:00
-3	baz	30.5 	2023-03-01 12:00:00
-
-query I
-SELECT COUNT(*) FROM duckdb_indexes() WHERE table_name = 'tbl';
-----
-2
+INSERT INTO tbl SELECT range, 'value_' || range, range * 1.5, '2023-01-01 10:00:00'::TIMESTAMP + INTERVAL (range) DAY FROM range(10);
 
 statement ok
-DELETE FROM tbl WHERE (a, b) = (2, 'bar');
+DELETE FROM tbl WHERE a % 5 = 0;
+
+query II
+EXPLAIN ANALYZE SELECT a, b, c, d FROM tbl WHERE (a) = 1;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 restart
 
+query II
+EXPLAIN ANALYZE SELECT a, b, c, d FROM tbl WHERE (a) = 1;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query IIII
+SELECT a, b, c, d FROM tbl WHERE (a) = 1;
+----
+1	value_1	1.5	2023-01-02 10:00:00
+
+query II
+EXPLAIN ANALYZE SELECT a, b, c, d FROM tbl WHERE (a) = 5;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query IIII
+SELECT a, b, c, d FROM tbl WHERE (a) = 5;
+----
+
 statement ok
-INSERT INTO tbl VALUES (4, 'deedadum', 42.0, '3030-10-28 10:00:00')
+INSERT INTO tbl VALUES (5, 'value_5', 7.5, '2023-01-06 10:00:00');
 
 query IIII
-SELECT a, b, c, d FROM tbl where (a, b) = (2, 'bar')
+SELECT a, b, c, d FROM tbl WHERE (a) = 5;
 ----
+5	value_5	7.5	2023-01-06 10:00:00
 
-query IIII
-SELECT a, b, c, d FROM tbl ORDER BY a;
+query II
+EXPLAIN ANALYZE SELECT a, b, c, d FROM tbl WHERE (a) = 2;
 ----
-1	foo	10.5	2023-01-01 10:00:00
-3	baz	30.5 	2023-03-01 12:00:00
-4	deedadum	42.0 	3030-10-28 10:00:00
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
-# Verify row count after delete
 query I
-SELECT COUNT(*) FROM tbl;
+SELECT COUNT(*) FROM tbl where (a) = 2;
 ----
-3
+1
