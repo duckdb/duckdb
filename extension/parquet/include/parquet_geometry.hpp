@@ -21,7 +21,11 @@ struct ParquetColumnSchema;
 class ParquetReader;
 class ColumnReader;
 class ClientContext;
-class ExpressionExecutor;
+
+struct GeometryColumnReader {
+	static unique_ptr<ColumnReader> Create(ParquetReader &reader, const ParquetColumnSchema &schema,
+	                                       ClientContext &context);
+};
 
 enum class GeoParquetColumnEncoding : uint8_t {
 	WKB = 1,
@@ -70,6 +74,11 @@ struct GeoParquetColumnMetadata {
 
 	// Used to track the "primary" geometry column (if any)
 	idx_t insertion_index = 0;
+
+	GeoParquetColumnMetadata() {
+		geometry_encoding = GeoParquetColumnEncoding::WKB;
+		stats.SetEmpty();
+	}
 };
 
 class GeoParquetFileMetadata {
@@ -85,13 +94,9 @@ public:
 	                                                  const ClientContext &context);
 	const unordered_map<string, GeoParquetColumnMetadata> &GetColumnMeta() const;
 
-	static unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
-	                                                   ClientContext &context);
-
 	bool IsGeometryColumn(const string &column_name) const;
 
 	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
-	static LogicalType GeometryType();
 
 private:
 	mutex write_lock;

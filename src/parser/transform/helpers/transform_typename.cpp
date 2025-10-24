@@ -97,6 +97,11 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 	// transform it to the SQL type
 	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);
 
+	if (base_type == LogicalTypeId::GEOMETRY) {
+		// Always return a type with GeoTypeInfo
+		return LogicalType::GEOMETRY();
+	}
+
 	if (base_type == LogicalTypeId::LIST) {
 		throw ParserException("LIST is not valid as a stand-alone type");
 	}

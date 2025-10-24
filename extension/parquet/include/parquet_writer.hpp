@@ -24,7 +24,7 @@
 #include "parquet_field_id.hpp"
 #include "parquet_shredding.hpp"
 #include "parquet_types.h"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 

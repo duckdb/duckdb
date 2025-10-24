@@ -1,8 +1,6 @@
 # name: test/geoparquet/geoarrow.test
 # group: [geoparquet]
 
-require spatial
-
 require parquet
 
 #------------------------------------------------------------------------------
