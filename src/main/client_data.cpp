@@ -119,6 +119,9 @@ public:
 		return buffer_manager.SetSwapLimit(limit);
 	}
 
+	BlockManager &GetTemporaryBlockManager() override {
+		return buffer_manager.GetTemporaryBlockManager();
+	}
 	vector<TemporaryFileInformation> GetTemporaryFiles() override {
 		return buffer_manager.GetTemporaryFiles();
 	}

@@ -302,49 +302,35 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	}
 
 	if (ref.with_ordinality == OrdinalityType::WITH_ORDINALITY && correlated_columns.empty()) {
+		bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
+		                              get->GetTable().get(), std::move(virtual_columns));
+
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
 		auto row_number =
 		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
 			row_number->alias = column_name_alias[return_names.size()];
+			ordinality_alias = column_name_alias[return_names.size()];
 		} else {
 			row_number->alias = ordinality_column_name;
 		}
-		window->expressions.push_back(std::move(row_number));
-		for (idx_t i = 0; i < return_types.size(); i++) {
-			get->AddColumnId(i);
-		}
-		window->children.push_back(std::move(get));
-
-		vector<unique_ptr<Expression>> select_list;
-		for (idx_t i = 0; i < return_types.size(); i++) {
-			auto expression = make_uniq<BoundColumnRefExpression>(return_types[i], ColumnBinding(bind_index, i));
-			select_list.push_back(std::move(expression));
-		}
-		select_list.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, ColumnBinding(window_index, 0)));
-
-		auto projection_index = GenerateTableIndex();
-		auto projection = make_uniq<LogicalProjection>(projection_index, std::move(select_list));
-
-		projection->children.push_back(std::move(window));
-		if (return_names.size() < column_name_alias.size()) {
-			return_names.push_back(column_name_alias[return_names.size()]);
-		} else {
-			return_names.push_back(ordinality_column_name);
-		}
-
+		return_names.push_back(ordinality_alias);
 		return_types.push_back(LogicalType::BIGINT);
-		bind_context.AddGenericBinding(projection_index, function_name, return_names, return_types);
+		window->expressions.push_back(std::move(row_number));
+		window->types.push_back(LogicalType::BIGINT);
+		window->children.push_back(std::move(get));
+		bind_context.AddGenericBinding(window_index, function_name, {ordinality_alias}, {LogicalType::BIGINT});
+
 		BoundStatement result;
 		result.names = std::move(return_names);
 		result.types = std::move(return_types);
-		result.plan = std::move(projection);
+		result.plan = std::move(window);
 		return result;
 	}
-
 	// now add the table function to the bind context so its columns can be bound
 	BoundStatement result;
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),

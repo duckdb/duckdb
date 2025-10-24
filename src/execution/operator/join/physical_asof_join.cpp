@@ -8,7 +8,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
-#include "duckdb/execution/operator/join/physical_range_join.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -82,10 +81,8 @@ public:
 	using HashedSortPtr = unique_ptr<HashedSort>;
 	using HashedSinkPtr = unique_ptr<GlobalSinkState>;
 	using PartitionMarkers = vector<OuterJoinMarker>;
-	using HashGroupPtr = unique_ptr<SortedRun>;
-	using HashGroups = vector<HashGroupPtr>;
 
-	AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op) : is_outer(IsRightOuterJoin(op.join_type)) {
+	AsOfGlobalSinkState(ClientContext &client, const PhysicalAsOfJoin &op) {
 		// Set up partitions for both sides
 		hashed_sorts.reserve(2);
 		hashed_sinks.reserve(2);
@@ -101,8 +98,6 @@ public:
 		                             rhs.estimated_cardinality, true);
 		hashed_sinks.emplace_back(sort->GetGlobalSinkState(client));
 		hashed_sorts.emplace_back(std::move(sort));
-
-		hash_groups.resize(2);
 	}
 
 	//! The child that is being materialised (right/1 then left/0)
@@ -111,12 +106,6 @@ public:
 	vector<HashedSortPtr> hashed_sorts;
 	//! The child's partitioning buffer
 	vector<HashedSinkPtr> hashed_sinks;
-	//! The child's hash groups
-	vector<HashGroups> hash_groups;
-	//! Whether the right side is outer
-	const bool is_outer;
-	//! The right outer join markers (one per partition)
-	vector<OuterJoinMarker> right_outers;
 };
 
 class AsOfLocalSinkState : public LocalSinkState {
@@ -203,6 +192,8 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+enum class AsOfJoinSourceStage : uint8_t { INNER, RIGHT, DONE };
+
 class AsOfPayloadScanner {
 public:
 	using Types = vector<LogicalType>;
@@ -217,6 +208,9 @@ public:
 	}
 	idx_t Remaining() const {
 		return count - scanned;
+	}
+	idx_t NextSize() const {
+		return MinValue<idx_t>(Remaining(), STANDARD_VECTOR_SIZE);
 	}
 	bool Scan(DataChunk &chunk) {
 		//  Free the previous blocks
@@ -239,7 +233,7 @@ private:
 		BLOCK_ITERATOR itr(block_state, chunk_idx, 0);
 
 		const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
-		const auto result_count = MinValue<idx_t>(Remaining(), STANDARD_VECTOR_SIZE);
+		const auto result_count = NextSize();
 		for (idx_t i = 0; i < result_count; ++i) {
 			const auto idx = block_state.GetIndex(chunk_idx, i);
 			sort_keys[i] = &itr[idx];
@@ -306,11 +300,141 @@ AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const Hashed
 	}
 }
 
+class AsOfLocalSourceState;
+
+class AsOfGlobalSourceState : public GlobalSourceState {
+public:
+	using HashGroupPtr = unique_ptr<SortedRun>;
+	using HashGroups = vector<HashGroupPtr>;
+
+	AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op);
+
+	//! Assign a new task to the local state
+	bool AssignTask(AsOfLocalSourceState &lsource);
+	//! Can we shift to the next stage?
+	bool TryPrepareNextStage();
+
+	//! The parent operator
+	const PhysicalAsOfJoin &op;
+	//! For synchronizing the external hash join
+	atomic<AsOfJoinSourceStage> stage;
+	//! The child's hash groups
+	vector<HashGroups> hashed_groups;
+	//! Whether the right side is outer
+	const bool is_right_outer;
+	//! The right outer join markers (one per partition)
+	vector<OuterJoinMarker> right_outers;
+	//! The next buffer to flush
+	atomic<size_t> next_left;
+	//! The number of flushed buffers
+	atomic<size_t> flushed_left;
+	//! The right outer output read position.
+	atomic<idx_t> next_right;
+	//! The right outer output read position.
+	atomic<idx_t> flushed_right;
+
+public:
+	idx_t MaxThreads() override {
+		return hashed_groups[1].size();
+	}
+};
+
+AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op)
+    : op(op), stage(AsOfJoinSourceStage::INNER), is_right_outer(IsRightOuterJoin(op.join_type)), next_left(0),
+      flushed_left(0), next_right(0), flushed_right(0) {
+
+	//	 Take ownership of the hash groups
+	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
+	hashed_groups.resize(2);
+	for (idx_t child = 0; child < 2; ++child) {
+		auto &hashed_sort = *gsink.hashed_sorts[child];
+		auto &hashed_sink = *gsink.hashed_sinks[child];
+		auto hashed_source = hashed_sort.GetGlobalSourceState(client, hashed_sink);
+		auto &sorted_runs = hashed_sort.GetSortedRuns(*hashed_source);
+		auto &hash_groups = hashed_groups[child];
+		hash_groups.resize(sorted_runs.size());
+
+		for (idx_t group_idx = 0; group_idx < sorted_runs.size(); ++group_idx) {
+			hash_groups[group_idx] = std::move(sorted_runs[group_idx]);
+		}
+	}
+
+	// for FULL/RIGHT OUTER JOIN, initialize right_outers to false for every tuple
+	auto &rhs_groups = hashed_groups[1];
+	right_outers.reserve(rhs_groups.size());
+	for (const auto &hash_group : rhs_groups) {
+		right_outers.emplace_back(OuterJoinMarker(is_right_outer));
+		right_outers.back().Initialize(hash_group ? hash_group->Count() : 0);
+	}
+}
+
+enum class SortKeyPrefixComparisonType : uint8_t { FIXED, VARCHAR, BLOB, STRUCT, LIST, ARRAY };
+
+struct SortKeyPrefixComparisonColumn {
+	SortKeyPrefixComparisonType type;
+	idx_t size;
+};
+
+struct SortKeyPrefixComparisonResult {
+	//! The column at which the sides are no longer equal,
+	//! e.g., Compare([42, 84], [42, 83]) would return {1, COMPARE_GREATERTHAN}
+	idx_t column_index;
+	//! Either COMPARE_EQUAL, COMPARE_LESSTHAN, COMPARE_GREATERTHAN
+	ExpressionType type;
+};
+
+struct SortKeyPrefixComparison {
+	unsafe_vector<SortKeyPrefixComparisonColumn> columns;
+
+	template <class SORT_KEY>
+	SortKeyPrefixComparisonResult Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) const {
+		SortKeyPrefixComparisonResult result {0, ExpressionType::COMPARE_EQUAL};
+
+		auto lhs_copy = lhs;
+		string_t lhs_bytes;
+		lhs_copy.Deconstruct(lhs_bytes);
+		auto lhs_ptr = lhs_bytes.GetData();
+
+		auto rhs_copy = rhs;
+		string_t rhs_bytes;
+		rhs_copy.Deconstruct(rhs_bytes);
+		auto rhs_ptr = rhs_bytes.GetData();
+
+		for (const auto &col : columns) {
+			auto width = col.size;
+			int cmp = 1;
+			switch (col.type) {
+			case SortKeyPrefixComparisonType::FIXED:
+				break;
+			case SortKeyPrefixComparisonType::BLOB:
+			case SortKeyPrefixComparisonType::VARCHAR:
+				//	Include first null byte.
+				width = 1 + MinValue<size_t>(strlen(lhs_ptr), strlen(rhs_ptr));
+				break;
+			default:
+				break;
+			}
+
+			cmp = memcmp(lhs_ptr, rhs_ptr, width);
+			if (cmp) {
+				result.type = (cmp < 0) ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_GREATERTHAN;
+				return result;
+			}
+
+			++result.column_index;
+			lhs_ptr += width;
+			rhs_ptr += width;
+		}
+
+		return result;
+	}
+};
+
 class AsOfProbeBuffer {
 public:
 	using Orders = vector<BoundOrderByNode>;
 
-	AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin &op);
+	AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op, AsOfGlobalSourceState &gsource);
 
 public:
 	//	Comparison utilities
@@ -338,9 +462,9 @@ public:
 	}
 
 	template <SortKeyType SORT_KEY_TYPE>
-	void ResolveJoin(bool *found_matches, idx_t *matches);
+	void ResolveJoin(idx_t *matches);
 
-	using resolve_join_t = void (duckdb::AsOfProbeBuffer::*)(bool *, idx_t *);
+	using resolve_join_t = void (duckdb::AsOfProbeBuffer::*)(idx_t *);
 	resolve_join_t resolve_join_func;
 
 	bool Scanning() const {
@@ -348,6 +472,7 @@ public:
 	}
 	void BeginLeftScan(hash_t scan_bin);
 	bool NextLeft();
+	void ScanLeft();
 	void EndLeftScan();
 
 	//! Create a new iterator for the sorted run
@@ -376,16 +501,16 @@ public:
 
 	ClientContext &client;
 	const PhysicalAsOfJoin &op;
+	//! The source state
+	AsOfGlobalSourceState &gsource;
 	//! Is the inequality strict?
 	const bool strict;
 
 	//	LHS scanning
-	SelectionVector lhs_scan_sel;
 	optional_ptr<SortedRun> left_group;
 	OuterJoinMarker left_outer;
 	unique_ptr<ExternalBlockIteratorState> left_itr;
 	unique_ptr<AsOfPayloadScanner> lhs_scanner;
-	DataChunk lhs_scanned;
 	DataChunk lhs_payload;
 	ExpressionExecutor lhs_executor;
 	DataChunk lhs_keys;
@@ -400,43 +525,60 @@ public:
 	idx_t right_pos; // ExternalBlockIteratorState doesn't know this...
 	unique_ptr<AsOfPayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
-	ExpressionExecutor rhs_executor;
 	DataChunk rhs_input;
-	DataChunk rhs_keys;
 	idx_t right_bin = 0;
 
 	//	Predicate evaluation
-	SelectionVector tail_sel;
-
 	idx_t lhs_match_count;
 	bool fetch_next_left;
+
+	SortKeyPrefixComparison prefix;
 };
 
-AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op)
-    : client(client), op(op), strict(IsStrictComparison(op.comparison_type)), left_outer(IsLeftOuterJoin(op.join_type)),
-      lhs_executor(client), rhs_executor(client), fetch_next_left(true) {
+AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op, AsOfGlobalSourceState &gsource)
+    : client(client), op(op), gsource(gsource), strict(IsStrictComparison(op.comparison_type)),
+      left_outer(IsLeftOuterJoin(op.join_type)), lhs_executor(client), fetch_next_left(true) {
 
 	lhs_keys.Initialize(client, op.join_key_types);
 	for (const auto &cond : op.conditions) {
 		lhs_executor.AddExpression(*cond.left);
 	}
 
-	lhs_scanned.Initialize(client, op.children[0].get().GetTypes());
 	lhs_payload.Initialize(client, op.children[0].get().GetTypes());
 	rhs_payload.Initialize(client, op.children[1].get().GetTypes());
 	rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
-	lhs_scan_sel.Initialize();
 	lhs_match_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
-	//	If we have equality predicates, we need some more buffers.
-	if (op.conditions.size() > 1) {
-		tail_sel.Initialize();
-		rhs_keys.Initialize(client, op.join_key_types);
-		for (const auto &cond : op.conditions) {
-			rhs_executor.AddExpression(*cond.right);
+	//	If we have equality predicates, set up the prefix data.
+	for (idx_t i = 0; i < op.conditions.size() - 1; ++i) {
+		const auto &cond = op.conditions[i];
+		const auto &type = cond.left->return_type;
+		SortKeyPrefixComparisonColumn col;
+		col.size = DConstants::INVALID_INDEX;
+		switch (type.id()) {
+		case LogicalTypeId::VARCHAR:
+			col.type = SortKeyPrefixComparisonType::VARCHAR;
+			break;
+		case LogicalTypeId::BLOB:
+			col.type = SortKeyPrefixComparisonType::BLOB;
+			break;
+		case LogicalTypeId::STRUCT:
+			col.type = SortKeyPrefixComparisonType::STRUCT;
+			break;
+		case LogicalTypeId::LIST:
+			col.type = SortKeyPrefixComparisonType::LIST;
+			break;
+		case LogicalTypeId::ARRAY:
+			col.type = SortKeyPrefixComparisonType::ARRAY;
+			break;
+		default:
+			col.type = SortKeyPrefixComparisonType::FIXED;
+			col.size = 1 + GetTypeIdSize(type.InternalType());
+			break;
 		}
+		prefix.columns.emplace_back(col);
 	}
 }
 
@@ -444,14 +586,14 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 
 	//	Always set right_bin too for memory management
-	auto &rhs_groups = gsink.hash_groups[1];
+	auto &rhs_groups = gsource.hashed_groups[1];
 	if (scan_bin < rhs_groups.size()) {
 		right_bin = scan_bin;
 	} else {
 		right_bin = rhs_groups.size();
 	}
 
-	auto &lhs_groups = gsink.hash_groups[0];
+	auto &lhs_groups = gsource.hashed_groups[0];
 	if (scan_bin < lhs_groups.size()) {
 		left_bin = scan_bin;
 	} else {
@@ -509,7 +651,7 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	right_pos = 0;
 	if (right_bin < rhs_groups.size()) {
 		right_group = rhs_groups[right_bin].get();
-		right_outer = gsink.right_outers.data() + right_bin;
+		right_outer = gsource.right_outers.data() + right_bin;
 		if (right_group && right_group->Count()) {
 			right_itr = CreateIteratorState(*right_group);
 			rhs_scanner = make_uniq<AsOfPayloadScanner>(*right_group, *gsink.hashed_sorts[1]);
@@ -518,19 +660,25 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 }
 
 bool AsOfProbeBuffer::NextLeft() {
-	//	Scan the next sorted chunk
-	lhs_scanned.Reset();
-	if (!lhs_scanner || !lhs_scanner->Scan(lhs_scanned)) {
+	if (!lhs_scanner || !lhs_scanner->Remaining()) {
 		return false;
 	}
 
+	return true;
+}
+
+void AsOfProbeBuffer::ScanLeft() {
+	//	Scan the next sorted chunk
+	lhs_payload.Reset();
+	lhs_scanner->Scan(lhs_payload);
+
 	//	Compute the join keys
 	lhs_keys.Reset();
-	lhs_executor.Execute(lhs_scanned, lhs_keys);
+	lhs_executor.Execute(lhs_payload, lhs_keys);
 	lhs_keys.Flatten();
 
 	//	Combine the NULLs
-	const auto count = lhs_scanned.size();
+	const auto count = lhs_payload.size();
 	lhs_valid_mask.Reset();
 	for (auto col_idx : op.null_sensitive) {
 		auto &col = lhs_keys.data[col_idx];
@@ -539,50 +687,27 @@ bool AsOfProbeBuffer::NextLeft() {
 		lhs_valid_mask.Combine(unified.validity, count);
 	}
 
-	//	Convert the mask to a selection vector
-	//	and mark all the rows that cannot match for early return.
-	idx_t lhs_valid = 0;
-	const auto entry_count = lhs_valid_mask.EntryCount(count);
-	idx_t base_idx = 0;
-	for (idx_t entry_idx = 0; entry_idx < entry_count;) {
-		const auto validity_entry = lhs_valid_mask.GetValidityEntry(entry_idx++);
-		const auto next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
-		if (ValidityMask::AllValid(validity_entry)) {
-			for (; base_idx < next; ++base_idx) {
-				lhs_scan_sel.set_index(lhs_valid++, base_idx);
-			}
-		} else if (ValidityMask::NoneValid(validity_entry)) {
-			base_idx = next;
-		} else {
-			const auto start = base_idx;
-			for (; base_idx < next; ++base_idx) {
-				if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-					lhs_scan_sel.set_index(lhs_valid++, base_idx);
-				}
+	// Filter out NULL matches
+	if (!lhs_valid_mask.AllValid()) {
+		const auto count = lhs_match_count;
+		lhs_match_count = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto idx = lhs_match_sel.get_index(i);
+			if (lhs_valid_mask.RowIsValidUnsafe(idx)) {
+				lhs_match_sel.set_index(lhs_match_count++, idx);
 			}
 		}
 	}
-
-	//	Slice the keys to the ones we can match
-	if (lhs_valid < count) {
-		lhs_payload.Slice(lhs_scanned, lhs_scan_sel, lhs_valid);
-	} else {
-		lhs_payload.Reference(lhs_scanned);
-	}
-
-	return true;
 }
 
 void AsOfProbeBuffer::EndLeftScan() {
-	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
-
 	right_group = nullptr;
 	right_itr.reset();
 	rhs_scanner.reset();
 	right_outer = nullptr;
 
-	auto &rhs_groups = gsink.hash_groups[1];
-	if (!gsink.is_outer && right_bin < rhs_groups.size()) {
+	auto &rhs_groups = gsource.hashed_groups[1];
+	if (!gsource.is_right_outer && right_bin < rhs_groups.size()) {
 		rhs_groups[right_bin].reset();
 	}
 
@@ -590,14 +715,14 @@ void AsOfProbeBuffer::EndLeftScan() {
 	left_itr.reset();
 	lhs_scanner.reset();
 
-	auto &lhs_groups = gsink.hash_groups[0];
+	auto &lhs_groups = gsource.hashed_groups[0];
 	if (left_bin < lhs_groups.size()) {
 		lhs_groups[left_bin].reset();
 	}
 }
 
 template <SortKeyType SORT_KEY_TYPE>
-void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
+void AsOfProbeBuffer::ResolveJoin(idx_t *matches) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCKS_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 
@@ -613,13 +738,12 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 	Repin(*right_itr);
 	BLOCKS_ITERATOR right_key(*right_itr);
 
-	const auto count = lhs_payload.size();
-	const auto left_base = lhs_scanner->Base();
-	auto lhs_sel = (count == lhs_scanned.size()) ? FlatVector::IncrementalSelectionVector() : &lhs_scan_sel;
+	const auto count = lhs_scanner->NextSize();
+	const auto left_base = lhs_scanner->Scanned();
 	//	Searching for right <= left
 	for (idx_t i = 0; i < count; ++i) {
 		//	If right > left, then there is no match
-		const auto left_pos = left_base + lhs_sel->get_index(i);
+		const auto left_pos = left_base + i;
 		if (!Compare(right_key[right_pos], left_key[left_pos], strict)) {
 			continue;
 		}
@@ -652,15 +776,15 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 		}
 		right_pos = --first;
 
-		//	TODO: Check partitions for strict equality
-		// 		if (right_group->ComparePartitions(*left_itr, *right_itr)) {
-		// 			continue;
-		// 		}
+		//	Check partitions for strict equality
+		if (!prefix.columns.empty()) {
+			const auto cmp = prefix.Compare(left_key[left_pos], right_key[right_pos]);
+			if (cmp.column_index < prefix.columns.size()) {
+				continue;
+			}
+		}
 
 		// Emit match data
-		if (found_match) {
-			found_match[i] = true;
-		}
 		if (matches) {
 			matches[i] = first;
 		}
@@ -670,8 +794,16 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 
 void AsOfProbeBuffer::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk) {
 	// perform the actual join
+	(this->*resolve_join_func)(nullptr);
+
+	// Scan the lhs values (after comparing keys) and filter out the LHS NULLs
+	ScanLeft();
+
+	// Convert the match selection to simple join mask
 	bool found_match[STANDARD_VECTOR_SIZE] = {false};
-	(this->*resolve_join_func)(found_match, nullptr);
+	for (idx_t i = 0; i < lhs_match_count; ++i) {
+		found_match[lhs_match_sel.get_index(i)] = true;
+	}
 
 	// now construct the result based on the join result
 	switch (op.join_type) {
@@ -689,7 +821,10 @@ void AsOfProbeBuffer::ResolveSimpleJoin(ExecutionContext &context, DataChunk &ch
 void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk) {
 	// perform the actual join
 	idx_t matches[STANDARD_VECTOR_SIZE];
-	(this->*resolve_join_func)(nullptr, matches);
+	(this->*resolve_join_func)(matches);
+
+	// Scan the lhs values (after comparing keys) and filter out the LHS NULLs
+	ScanLeft();
 
 	//	Extract the rhs input columns from the match
 	rhs_input.Reset();
@@ -726,45 +861,6 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 	}
 	chunk.SetCardinality(lhs_match_count);
 
-	//	Filter out partition mismatches
-	const auto equal_cols = op.conditions.size() - 1;
-	if (equal_cols) {
-		//	Prepare the lhs keys
-		if (lhs_match_count < lhs_keys.size()) {
-			lhs_keys.Slice(lhs_match_sel, lhs_match_count);
-		}
-
-		rhs_keys.Reset();
-		rhs_executor.Execute(rhs_input, rhs_keys);
-
-		auto sel = FlatVector::IncrementalSelectionVector();
-		auto tail_count = lhs_match_count;
-		for (size_t cmp_idx = 0; cmp_idx < equal_cols; ++cmp_idx) {
-			auto &left = lhs_keys.data[cmp_idx];
-			auto &right = rhs_keys.data[cmp_idx];
-			if (tail_count < rhs_keys.size()) {
-				left.Slice(*sel, tail_count);
-				right.Slice(*sel, tail_count);
-			}
-			tail_count = PhysicalRangeJoin::SelectJoinTail(op.conditions[cmp_idx].comparison, left, right, sel,
-			                                               tail_count, &tail_sel);
-			sel = &tail_sel;
-		}
-
-		//	Did anything get filtered out?
-		if (tail_count < lhs_match_count) {
-			if (tail_count == 0) {
-				// Need to reset here otherwise we may use the non-flat chunk when constructing LEFT/OUTER
-				chunk.Reset();
-				lhs_match_count = tail_count;
-			} else {
-				chunk.Slice(*sel, tail_count);
-				//	Slice lhs_match_sel to the remaining lhs rows
-				lhs_match_count = lhs_match_sel.SliceInPlace(*sel, tail_count);
-			}
-		}
-	}
-
 	//	Update the match masks for the rows we ended up with
 	left_outer.Reset();
 	for (idx_t i = 0; i < lhs_match_count; ++i) {
@@ -785,7 +881,7 @@ void AsOfProbeBuffer::GetData(ExecutionContext &context, DataChunk &chunk) {
 		if (left_outer.Enabled()) {
 			// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 			// have a match found
-			left_outer.ConstructLeftJoinResult(lhs_scanned, chunk);
+			left_outer.ConstructLeftJoinResult(lhs_payload, chunk);
 			left_outer.Reset();
 		}
 		return;
@@ -814,54 +910,8 @@ void AsOfProbeBuffer::GetData(ExecutionContext &context, DataChunk &chunk) {
 	}
 }
 
-class AsOfGlobalSourceState : public GlobalSourceState {
-public:
-	AsOfGlobalSourceState(ClientContext &client, AsOfGlobalSinkState &gsink_p);
-
-	AsOfGlobalSinkState &gsink;
-	//! The next buffer to flush
-	atomic<size_t> next_left;
-	//! The number of flushed buffers
-	atomic<size_t> flushed;
-	//! The right outer output read position.
-	atomic<idx_t> next_right;
-
-public:
-	idx_t MaxThreads() override {
-		return gsink.hash_groups[1].size();
-	}
-};
-
-AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, AsOfGlobalSinkState &gsink_p)
-    : gsink(gsink_p), next_left(0), flushed(0), next_right(0) {
-
-	//	 Take ownership of the hash groups
-	for (idx_t child = 0; child < 2; ++child) {
-		auto &hashed_sort = *gsink.hashed_sorts[child];
-		auto &hashed_sink = *gsink.hashed_sinks[child];
-		auto hashed_source = hashed_sort.GetGlobalSourceState(client, hashed_sink);
-		auto &sorted_runs = hashed_sort.GetSortedRuns(*hashed_source);
-		auto &hash_groups = gsink.hash_groups[child];
-		hash_groups.resize(sorted_runs.size());
-
-		for (idx_t group_idx = 0; group_idx < sorted_runs.size(); ++group_idx) {
-			hash_groups[group_idx] = std::move(sorted_runs[group_idx]);
-		}
-	}
-
-	// for FULL/RIGHT OUTER JOIN, initialize right_outers to false for every tuple
-	auto &rhs_partition = gsink.hash_groups[1];
-	auto &right_outers = gsink.right_outers;
-	right_outers.reserve(rhs_partition.size());
-	for (const auto &hash_group : rhs_partition) {
-		right_outers.emplace_back(OuterJoinMarker(gsink.is_outer));
-		right_outers.back().Initialize(hash_group ? hash_group->Count() : 0);
-	}
-}
-
 unique_ptr<GlobalSourceState> PhysicalAsOfJoin::GetGlobalSourceState(ClientContext &client) const {
-	auto &gsink = sink_state->Cast<AsOfGlobalSinkState>();
-	return make_uniq<AsOfGlobalSourceState>(client, gsink);
+	return make_uniq<AsOfGlobalSourceState>(client, *this);
 }
 
 class AsOfLocalSourceState : public LocalSourceState {
@@ -869,6 +919,26 @@ public:
 	using HashGroupPtr = unique_ptr<SortedRun>;
 
 	AsOfLocalSourceState(ExecutionContext &context, AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op);
+
+	//! Task management
+	bool TaskFinished() const {
+		if (hash_group) {
+			return !scanner.get();
+		} else {
+			return !probe_buffer.Scanning();
+		}
+	}
+
+	void ExecuteInnerTask(DataChunk &chunk);
+	void ExecuteOuterTask(DataChunk &chunk);
+
+	void ExecuteTask(DataChunk &chunk) {
+		if (hash_group) {
+			ExecuteOuterTask(chunk);
+		} else {
+			ExecuteInnerTask(chunk);
+		}
+	}
 
 	idx_t BeginRightScan(const idx_t hash_bin);
 
@@ -878,24 +948,30 @@ public:
 	//! The left side partition being probed
 	AsOfProbeBuffer probe_buffer;
 
-	//! The read partition
+	//! The rhs group
 	idx_t hash_bin;
 	HashGroupPtr hash_group;
 	//! The read cursor
 	unique_ptr<AsOfPayloadScanner> scanner;
+	//! The right outer buffer
+	DataChunk rhs_chunk;
+	//! The right outer slicer
+	SelectionVector rsel;
 	//! Pointer to the right marker
 	const bool *rhs_matches = {};
 };
 
 AsOfLocalSourceState::AsOfLocalSourceState(ExecutionContext &context, AsOfGlobalSourceState &gsource,
                                            const PhysicalAsOfJoin &op)
-    : gsource(gsource), context(context), probe_buffer(context.client, op) {
+    : gsource(gsource), context(context), probe_buffer(context.client, op, gsource), rsel(STANDARD_VECTOR_SIZE) {
+
+	rhs_chunk.Initialize(context.client, op.children[1].get().GetTypes());
 }
 
 idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	hash_bin = hash_bin_p;
 
-	auto &rhs_groups = gsource.gsink.hash_groups[1];
+	auto &rhs_groups = gsource.hashed_groups[1];
 	if (hash_bin >= rhs_groups.size()) {
 		return 0;
 	}
@@ -904,9 +980,10 @@ idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	if (!hash_group || !hash_group->Count()) {
 		return 0;
 	}
-	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsource.gsink.hashed_sorts[1]);
+	auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
+	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsink.hashed_sorts[1]);
 
-	rhs_matches = gsource.gsink.right_outers[hash_bin].GetMatches();
+	rhs_matches = gsource.right_outers[hash_bin].GetMatches();
 
 	return scanner->Remaining();
 }
@@ -917,106 +994,134 @@ unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionCont
 	return make_uniq<AsOfLocalSourceState>(context, gsource, *this);
 }
 
+bool AsOfGlobalSourceState::TryPrepareNextStage() {
+	//	Inside the lock.
+	auto &lhs_groups = hashed_groups[0];
+	auto &rhs_groups = hashed_groups[1];
+	switch (stage.load()) {
+	case AsOfJoinSourceStage::INNER:
+		if (flushed_left >= lhs_groups.size()) {
+			stage = IsRightOuterJoin(op.join_type) ? AsOfJoinSourceStage::RIGHT : AsOfJoinSourceStage::DONE;
+			return true;
+		}
+		break;
+	case AsOfJoinSourceStage::RIGHT:
+		if (flushed_right >= rhs_groups.size()) {
+			stage = AsOfJoinSourceStage::DONE;
+			return true;
+		}
+		break;
+	default:
+		break;
+	}
+	return false;
+}
+
+bool AsOfGlobalSourceState::AssignTask(AsOfLocalSourceState &lsource) {
+	auto guard = Lock();
+
+	auto &lhs_groups = hashed_groups[0];
+	auto &rhs_groups = hashed_groups[1];
+
+	switch (stage.load()) {
+	case AsOfJoinSourceStage::INNER:
+		while (next_left < lhs_groups.size()) {
+			//	More to flush
+			const auto left_bin = next_left++;
+			lsource.probe_buffer.BeginLeftScan(left_bin);
+			if (!lsource.TaskFinished()) {
+				return true;
+			} else {
+				++flushed_left;
+			}
+		}
+		break;
+	case AsOfJoinSourceStage::RIGHT:
+		while (next_right < rhs_groups.size()) {
+			const auto right_bin = next_right++;
+			lsource.BeginRightScan(right_bin);
+			if (!lsource.TaskFinished()) {
+				return true;
+			} else {
+				++flushed_right;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
+	return false;
+}
+
+void AsOfLocalSourceState::ExecuteInnerTask(DataChunk &chunk) {
+	while (probe_buffer.HasMoreData()) {
+		probe_buffer.GetData(context, chunk);
+		if (chunk.size()) {
+			return;
+		}
+	}
+	probe_buffer.EndLeftScan();
+	gsource.flushed_left++;
+}
+
 SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<AsOfLocalSourceState>();
-	auto &rhs_groups = gsource.gsink.hash_groups[1];
-	auto &client = context.client;
 
-	//	Step 1: Join the partitions
-	auto &lhs_groups = gsource.gsink.hash_groups[0];
-	const auto left_bins = lhs_groups.size();
-	while (gsource.flushed < left_bins) {
-		//	Make sure we have something to flush
-		if (!lsource.probe_buffer.Scanning()) {
-			const auto left_bin = gsource.next_left++;
-			if (left_bin < left_bins) {
-				//	More to flush
-				lsource.probe_buffer.BeginLeftScan(left_bin);
-			} else if (!IsRightOuterJoin(join_type) || client.interrupted) {
-				return SourceResultType::FINISHED;
-			} else {
-				//	Wait for all threads to finish
-				//	TODO: How to implement a spin wait correctly?
-				//	Returning BLOCKED seems to hang the system.
-				TaskScheduler::GetScheduler(client).YieldThread();
-				continue;
-			}
-		}
-
-		lsource.probe_buffer.GetData(context, chunk);
-		if (chunk.size()) {
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		} else if (lsource.probe_buffer.HasMoreData()) {
-			//	Join the next partition
-			continue;
+	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
+	// Therefore, we loop until we've produced tuples, or until the operator is actually done
+	while (gsource.stage != AsOfJoinSourceStage::DONE && chunk.size() == 0) {
+		if (!lsource.TaskFinished() || gsource.AssignTask(lsource)) {
+			lsource.ExecuteTask(chunk);
 		} else {
-			lsource.probe_buffer.EndLeftScan();
-			gsource.flushed++;
+			auto guard = gsource.Lock();
+			if (gsource.TryPrepareNextStage() || gsource.stage == AsOfJoinSourceStage::DONE) {
+				gsource.UnblockTasks(guard);
+			} else {
+				return gsource.BlockSource(guard, input.interrupt_state);
+			}
 		}
 	}
 
-	//	Step 2: Emit right join matches
-	if (!IsRightOuterJoin(join_type)) {
-		return SourceResultType::FINISHED;
-	}
+	return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+}
 
-	DataChunk rhs_chunk;
-	rhs_chunk.Initialize(context.client, children[1].get().GetTypes());
-	SelectionVector rsel(STANDARD_VECTOR_SIZE);
-
-	while (chunk.size() == 0) {
-		//	Move to the next bin if we are done.
-		while (!lsource.scanner || !lsource.scanner->Remaining()) {
-			lsource.scanner.reset();
-			lsource.hash_group.reset();
-			auto hash_bin = gsource.next_right++;
-			if (hash_bin >= rhs_groups.size()) {
-				return SourceResultType::FINISHED;
-			}
-
-			for (; hash_bin < rhs_groups.size(); hash_bin = gsource.next_right++) {
-				if (rhs_groups[hash_bin]) {
-					break;
-				}
-			}
-			lsource.BeginRightScan(hash_bin);
-		}
-		const auto rhs_position = lsource.scanner->Scanned();
-		lsource.scanner->Scan(rhs_chunk);
+void AsOfLocalSourceState::ExecuteOuterTask(DataChunk &chunk) {
+	idx_t result_count = 0;
+	while (!result_count) {
+		const auto rhs_position = scanner->Scanned();
+		scanner->Scan(rhs_chunk);
 
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
-			return SourceResultType::FINISHED;
+			scanner.reset();
+			++gsource.flushed_right;
+			return;
 		}
 
 		// figure out which tuples didn't find a match in the RHS
-		auto rhs_matches = lsource.rhs_matches;
-		idx_t result_count = 0;
+		result_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			if (!rhs_matches[rhs_position + i]) {
 				rsel.set_index(result_count++, i);
 			}
 		}
-
-		if (result_count > 0) {
-			// if there were any tuples that didn't find a match, output them
-			const idx_t left_column_count = children[0].get().GetTypes().size();
-			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(chunk.data[col_idx], true);
-			}
-			for (idx_t col_idx = 0; col_idx < right_projection_map.size(); ++col_idx) {
-				const auto rhs_idx = right_projection_map[col_idx];
-				chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
-			}
-			chunk.SetCardinality(result_count);
-			break;
-		}
 	}
 
-	return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
+	// if there were any tuples that didn't find a match, output them
+	const auto &op = gsource.op;
+	const idx_t left_column_count = op.children[0].get().GetTypes().size();
+	for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
+		chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(chunk.data[col_idx], true);
+	}
+	for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
+		const auto rhs_idx = op.right_projection_map[col_idx];
+		chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
+	}
+	chunk.SetCardinality(result_count);
 }
 
 //===--------------------------------------------------------------------===//

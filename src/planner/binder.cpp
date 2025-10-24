@@ -184,34 +184,27 @@ BoundStatement Binder::Bind(TableRef &ref) {
 	return result;
 }
 
-void Binder::AddCTE(const string &name) {
-	D_ASSERT(!name.empty());
-	CTE_bindings.insert(name);
-}
-
-optional_ptr<Binding> Binder::GetCTEBinding(const string &name) {
+optional_ptr<CTEBinding> Binder::GetCTEBinding(const BindingAlias &name) {
 	reference<Binder> current_binder(*this);
+	optional_ptr<CTEBinding> result;
 	while (true) {
 		auto &current = current_binder.get();
 		auto entry = current.bind_context.GetCTEBinding(name);
 		if (entry) {
-			return entry;
+			// we only directly return the CTE if it can be referenced
+			// if it cannot be referenced (circular reference) we keep going up the stack
+			// to look for a CTE that can be referenced
+			if (entry->CanBeReferenced()) {
+				return entry;
+			}
+			result = entry;
 		}
 		if (!current.parent || current.binder_type != BinderType::REGULAR_BINDER) {
-			return nullptr;
+			break;
 		}
 		current_binder = *current.parent;
 	}
-}
-
-bool Binder::CTEExists(const string &name) {
-	if (CTE_bindings.find(name) != CTE_bindings.end()) {
-		return true;
-	}
-	if (parent && binder_type == BinderType::REGULAR_BINDER) {
-		return parent->CTEExists(name);
-	}
-	return false;
+	return result;
 }
 
 void Binder::AddBoundView(ViewCatalogEntry &view) {
@@ -235,11 +228,11 @@ StatementProperties &Binder::GetStatementProperties() {
 }
 
 optional_ptr<BoundParameterMap> Binder::GetParameters() {
-	return query_binder_state->parameters;
+	return global_binder_state->parameters;
 }
 
 void Binder::SetParameters(BoundParameterMap &parameters) {
-	query_binder_state->parameters = parameters;
+	global_binder_state->parameters = parameters;
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {

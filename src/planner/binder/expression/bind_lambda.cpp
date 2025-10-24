@@ -12,25 +12,25 @@
 
 namespace duckdb {
 
-idx_t GetLambdaParamCount(const vector<DummyBinding> &lambda_bindings) {
+idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 	idx_t count = 0;
 	for (auto &binding : lambda_bindings) {
-		count += binding.names.size();
+		count += binding.GetColumnCount();
 	}
 	return count;
 }
 
-idx_t GetLambdaParamIndex(const vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
+idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
                           const BoundLambdaRefExpression &bound_lambda_ref_expr) {
 	D_ASSERT(bound_lambda_ref_expr.lambda_idx < lambda_bindings.size());
 	idx_t offset = 0;
 	// count the remaining lambda parameters BEFORE the current lambda parameter,
 	// as these will be in front of the current lambda parameter in the input chunk
 	for (idx_t i = bound_lambda_ref_expr.lambda_idx + 1; i < lambda_bindings.size(); i++) {
-		offset += lambda_bindings[i].names.size();
+		offset += lambda_bindings[i].GetColumnCount();
 	}
-	offset +=
-	    lambda_bindings[bound_lambda_ref_expr.lambda_idx].names.size() - bound_lambda_ref_expr.binding.column_index - 1;
+	offset += lambda_bindings[bound_lambda_ref_expr.lambda_idx].GetColumnCount() -
+	          bound_lambda_ref_expr.binding.column_index - 1;
 	offset += bound_lambda_expr.parameter_count;
 	return offset;
 }
@@ -148,16 +148,18 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		if (lambda_bindings && bound_lambda_ref.lambda_idx != lambda_bindings->size()) {
 
 			auto &binding = (*lambda_bindings)[bound_lambda_ref.lambda_idx];
-			D_ASSERT(binding.names.size() == binding.types.size());
+			auto &column_names = binding.GetColumnNames();
+			auto &column_types = binding.GetColumnTypes();
+			D_ASSERT(column_names.size() == column_types.size());
 
 			// find the matching dummy column in the lambda binding
-			for (idx_t column_idx = 0; column_idx < binding.names.size(); column_idx++) {
+			for (idx_t column_idx = 0; column_idx < binding.GetColumnCount(); column_idx++) {
 				if (column_idx == bound_lambda_ref.binding.column_index) {
 
 					// now create the replacement
 					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_expr, bound_lambda_ref);
-					replacement = make_uniq<BoundReferenceExpression>(binding.names[column_idx],
-					                                                  binding.types[column_idx], index);
+					replacement =
+					    make_uniq<BoundReferenceExpression>(column_names[column_idx], column_types[column_idx], index);
 					return;
 				}
 			}
