@@ -17,12 +17,12 @@ namespace duckdb {
 
 struct DecodeFun {
 	static constexpr const char *Name = "decode";
-	static constexpr const char *Parameters = "blob";
-	static constexpr const char *Description = "Converts `blob` to `VARCHAR`. Fails if `blob` is not valid UTF-8.";
-	static constexpr const char *Example = "decode('\\xC3\\xBC'::BLOB)";
+	static constexpr const char *Parameters = "blob,varchar";
+	static constexpr const char *Description = "Converts `blob` to `VARCHAR`. Invalid UTF-8 is handled based on the error behavior argument. Can be 'abort' (default, fail), 'strict' (return NULL), or 'replace'";
+	static constexpr const char *Example = "decode('\\xC3\\xBC'::BLOB)\002decode('\\xA0'::BLOB, 'replace')";
 	static constexpr const char *Categories = "blob";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct EncodeFun {
