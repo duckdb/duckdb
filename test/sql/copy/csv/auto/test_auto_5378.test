@@ -9,6 +9,6 @@ statement ok
 PRAGMA verify_parallelism
 
 query I
-SELECT count(*) FROM read_csv_auto ('data/csv/auto/titlebasicsdebug.tsv', nullstr='\N', sample_size = -1);
+SELECT count(*) FROM read_csv_auto ('{DATA_DIR}/csv/auto/titlebasicsdebug.tsv', nullstr='\N', sample_size = -1);
 ----
 3002

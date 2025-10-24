@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query II
-SELECT * FROM 'data/csv/issue2628_中文.csv'
+SELECT * FROM '{DATA_DIR}/csv/issue2628_中文.csv'
 ----
 1	1
 2	2
@@ -14,7 +14,7 @@ SELECT * FROM 'data/csv/issue2628_中文.csv'
 
 # unicode glob
 query II
-SELECT * FROM 'data/csv/*中文.csv'
+SELECT * FROM '{DATA_DIR}/csv/*中文.csv'
 ----
 1	1
 2	2
@@ -22,7 +22,7 @@ SELECT * FROM 'data/csv/*中文.csv'
 
 # unicode directory
 query II
-SELECT * FROM 'data/csv/中文/*.csv' ORDER BY 1
+SELECT * FROM '{DATA_DIR}/csv/中文/*.csv' ORDER BY 1
 ----
 1	1
 2	2
@@ -30,7 +30,7 @@ SELECT * FROM 'data/csv/中文/*.csv' ORDER BY 1
 4	4
 
 query II
-SELECT * FROM 'data/csv/中*/*.csv' ORDER BY 1
+SELECT * FROM '{DATA_DIR}/csv/中*/*.csv' ORDER BY 1
 ----
 1	1
 2	2

@@ -6,11 +6,11 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT count(*) FROM read_csv_auto( ['data/csv/error/mismatch/half1.csv', 'data/csv/error/mismatch/half2.csv'], ignore_errors=true, sample_size=1);
+SELECT count(*) FROM read_csv_auto( ['{DATA_DIR}/csv/error/mismatch/half1.csv', '{DATA_DIR}/csv/error/mismatch/half2.csv'], ignore_errors=true, sample_size=1);
 ----
 9102
 
 query I
-SELECT count(*) FROM read_csv_auto( ['data/csv/error/mismatch/half2.csv', 'data/csv/error/mismatch/half1.csv'], ignore_errors=true, sample_size=1);
+SELECT count(*) FROM read_csv_auto( ['{DATA_DIR}/csv/error/mismatch/half2.csv', '{DATA_DIR}/csv/error/mismatch/half1.csv'], ignore_errors=true, sample_size=1);
 ----
 9102

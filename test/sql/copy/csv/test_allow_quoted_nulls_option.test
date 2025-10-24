@@ -7,21 +7,21 @@ PRAGMA enable_verification
 
 # allow_quoted_nulls set as true by default
 query II
-SELECT * FROM read_csv_auto('data/csv/null_comparison.csv');
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null_comparison.csv');
 ----
 42	NULL
 NULL	NULL
 88	a
 
 query II
-SELECT * FROM read_csv_auto('data/csv/null_comparison.csv', allow_quoted_nulls=False);
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null_comparison.csv', allow_quoted_nulls=False);
 ----
 42	(empty)
 NULL	NULL
 88	a
 
 query II
-SELECT * FROM read_csv_auto('data/csv/null_comparison.csv', allow_quoted_nulls=True);
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null_comparison.csv', allow_quoted_nulls=True);
 ----
 42	NULL
 NULL	NULL

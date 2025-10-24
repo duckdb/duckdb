@@ -7,22 +7,22 @@ statement ok
 PRAGMA verify_parallelism
 
 query III
-SELECT sum(a), sum(b), sum(c) FROM read_csv('data/csv/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=30)
+SELECT sum(a), sum(b), sum(c) FROM read_csv('{DATA_DIR}/csv/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=30)
 ----
 111111111	51866	3195
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=30)
+SELECT sum(a) FROM read_csv('{DATA_DIR}/csv/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=30)
 ----
 111111111
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/multi_column_integer_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=30)
+SELECT sum(a) FROM read_csv('{DATA_DIR}/csv/test/multi_column_integer_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=30)
 ----
 111111111
 
 query IIII
-select * from read_csv('data/csv/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=30)
+select * from read_csv('{DATA_DIR}/csv/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=30)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -35,7 +35,7 @@ select * from read_csv('data/csv/test/multi_column_string.csv',  COLUMNS=STRUCT_
 100000000	15519	785	p9
 
 query IIII
-select * from read_csv('data/csv/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=27)
+select * from read_csv('{DATA_DIR}/csv/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=27)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -48,33 +48,33 @@ select * from read_csv('data/csv/test/multi_column_string_rn.csv',  COLUMNS=STRU
 100000000	15519	785	p9
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|')
+SELECT sum(a) FROM read_csv('{DATA_DIR}/csv/test/new_line_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|')
 ----
 111
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=100)
-----
-111
-
-
-query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn_exc.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|')
-----
-111
-
-query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn_exc.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=80)
+SELECT sum(a) FROM read_csv('{DATA_DIR}/csv/test/new_line_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=100)
 ----
 111
 
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|')
+SELECT sum(a) FROM read_csv('{DATA_DIR}/csv/test/new_line_string_rn_exc.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|')
 ----
 111
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), quote ='"', escape ='"', comment = '', auto_detect='true', delim = '|', buffer_size=100, new_line = '\r\n', strict_mode = false)
+SELECT sum(a) FROM read_csv('{DATA_DIR}/csv/test/new_line_string_rn_exc.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=80)
+----
+111
+
+
+query I
+SELECT sum(a) FROM read_csv('{DATA_DIR}/csv/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|')
+----
+111
+
+query I
+SELECT sum(a) FROM read_csv('{DATA_DIR}/csv/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), quote ='"', escape ='"', comment = '', auto_detect='true', delim = '|', buffer_size=100, new_line = '\r\n', strict_mode = false)
 ----
 111

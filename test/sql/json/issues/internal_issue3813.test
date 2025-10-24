@@ -5,4 +5,4 @@
 require json
 
 statement ok
-SELECT * FROM read_json('data/json/internal_3813.json', map_inference_threshold=10);
+SELECT * FROM read_json('{DATA_DIR}/json/internal_3813.json', map_inference_threshold=10);

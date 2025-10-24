@@ -10,7 +10,7 @@ CREATE TABLE dates(d DATE);
 
 # simple globbing
 statement ok
-COPY dates FROM 'data/csv/glob/a?/*.csv' (AUTO_DETECT 1);
+COPY dates FROM '{DATA_DIR}/csv/glob/a?/*.csv' (AUTO_DETECT 1);
 
 query I
 SELECT * FROM dates ORDER BY 1
@@ -27,7 +27,7 @@ SELECT * FROM dates ORDER BY 1
 
 # nothing matches the glob
 statement error
-COPY dates FROM read_csv('data/csv/glob/*/a*a.csv', auto_detect=1)
+COPY dates FROM read_csv('{DATA_DIR}/csv/glob/*/a*a.csv', auto_detect=1)
 ----
-syntax error at or near "'data/csv/glob/*/a*a.csv'"
+syntax error at or near "'{DATA_DIR}/csv/glob/*/a*a.csv'"
 

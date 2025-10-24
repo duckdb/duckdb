@@ -5,6 +5,6 @@
 require parquet
 
 query IIIIIIIIIIIIIIIII
-SELECT * FROM 'data/parquet-testing/bug4442.parquet'
+SELECT * FROM '{DATA_DIR}/parquet-testing/bug4442.parquet'
 ----
 12	5184	1	22	2011-10-06 22:21:49.58+00	outbound	323020033	{}	2100	33	0	7	10	0	1317427200000	1317939709580	11

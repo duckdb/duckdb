@@ -6,7 +6,7 @@ require parquet
 
 
 query I
-select * FROM parquet_scan('data/parquet-testing/map.parquet') sq limit 3;
+select * FROM parquet_scan('{DATA_DIR}/parquet-testing/map.parquet') sq limit 3;
 ----
 {Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via='1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)', X-Xss-Protection='1; mode=block', Content-Type='text/html;charset=utf-8', Date='Sat, 30 Jan 2021 16:19:57 GMT', X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup='HIT from ip-10-1-1-216.ec2.internal:3128', X-Content-Type-Options=nosniff, Content-Length=921}
 {Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via='1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)', X-Xss-Protection='1; mode=block', Content-Type='text/html;charset=utf-8', Date='Sat, 30 Jan 2021 16:19:59 GMT', X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup='HIT from ip-10-1-1-216.ec2.internal:3128', X-Content-Type-Options=nosniff, Content-Length=922}
@@ -14,7 +14,7 @@ select * FROM parquet_scan('data/parquet-testing/map.parquet') sq limit 3;
 
 # this was a hard one
 query II
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snappy.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/nested_lists.snappy.parquet')
 ----
 [[[a, b], [c]], [NULL, [d]]]	1
 [[[a, b], [c, d]], [NULL, [e]]]	1
@@ -27,7 +27,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snappy.parqu
 #2  [[[a, b], [c, d], [e]], [None, [f]]]  1
 
 query I
-SELECT unnest(a) FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snappy.parquet')
+SELECT unnest(a) FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/nested_lists.snappy.parquet')
 ----
 [[a, b], [c]]
 [NULL, [d]]
@@ -37,7 +37,7 @@ SELECT unnest(a) FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snap
 [NULL, [f]]
 
 query II
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/list_columns.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/list_columns.parquet')
 ----
 [1, 2, 3]	[abc, efg, hij]
 [NULL, 1]	NULL
@@ -52,13 +52,13 @@ SELECT * FROM parquet_scan('data/parquet-testing/arrow/list_columns.parquet')
 
 ## need to fix data page v2 for this
 #query II
-#SELECT * FROM parquet_scan('data/parquet-testing/datapage_v2.snappy.parquet')
+#SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/datapage_v2.snappy.parquet')
 #----
 #
 
 
 query II
-SELECT id, url FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 10
+SELECT id, url FROM parquet_scan('{DATA_DIR}/parquet-testing/apkwan.parquet') limit 10
 ----
 53e997b9b7602d9701f9f044	['https://link.springer.com/10.1007/s00108-004-1229-0']
 53e997b2b7602d9701f8fea5	[]
@@ -72,7 +72,7 @@ SELECT id, url FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 10
 53e997a6b7602d9701f7ffb0	['http://www.ncbi.nlm.nih.gov/pubmed/4051185?report=xml&format=text']
 
 query II
-select * from (SELECT id, unnest(url) u FROM parquet_scan('data/parquet-testing/apkwan.parquet')) sq where u is not null limit 10
+select * from (SELECT id, unnest(url) u FROM parquet_scan('{DATA_DIR}/parquet-testing/apkwan.parquet')) sq where u is not null limit 10
 ----
 53e997b9b7602d9701f9f044	https://link.springer.com/10.1007/s00108-004-1229-0
 53e997aeb7602d9701f8856e	http://www.ncbi.nlm.nih.gov/pubmed/4669724?report=xml&format=text
@@ -87,7 +87,7 @@ select * from (SELECT id, unnest(url) u FROM parquet_scan('data/parquet-testing/
 
 
 query II
-SELECT id, authors FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 10
+SELECT id, authors FROM parquet_scan('{DATA_DIR}/parquet-testing/apkwan.parquet') limit 10
 ----
 53e997b9b7602d9701f9f044	[{'name': M. Stoll, 'id': 56018d9645cedb3395e77641, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': H. Heiken, 'id': 53f4d53adabfaef34ff814c8, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': G. M. N. Behrens, 'id': 53f42afbdabfaec09f0ed4e0, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': R. E. Schmidt, 'id': 56018d9645cedb3395e77644, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}]
 53e997b2b7602d9701f8fea5	[{'name': D. Barr, 'id': 5440d4cfdabfae805a6fd46c, 'org': 'Camborne School of Mines Redruth, Cornwall England'}]
@@ -101,7 +101,7 @@ SELECT id, authors FROM parquet_scan('data/parquet-testing/apkwan.parquet') limi
 53e997a6b7602d9701f7ffb0	[{'name': R R Walters, 'id': 53f43b0edabfaee0d9b91d40, 'org': NULL}]
 
 query II
-SELECT id, unnest(authors) FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 20
+SELECT id, unnest(authors) FROM parquet_scan('{DATA_DIR}/parquet-testing/apkwan.parquet') limit 20
 ----
 53e997b9b7602d9701f9f044	{'name': M. Stoll, 'id': 56018d9645cedb3395e77641, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
 53e997b9b7602d9701f9f044	{'name': H. Heiken, 'id': 53f4d53adabfaef34ff814c8, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
@@ -125,7 +125,7 @@ SELECT id, unnest(authors) FROM parquet_scan('data/parquet-testing/apkwan.parque
 53e99813b7602d970202f0a1	{'name': Sean Milmo, 'id': 53f45f64dabfaee4dc832b5f, 'org': NULL}
 
 query III
-SELECT id, struct_extract(unnest(authors), 'name'), struct_extract(unnest(authors), 'id') FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 20
+SELECT id, struct_extract(unnest(authors), 'name'), struct_extract(unnest(authors), 'id') FROM parquet_scan('{DATA_DIR}/parquet-testing/apkwan.parquet') limit 20
 ----
 53e997b9b7602d9701f9f044	M. Stoll	56018d9645cedb3395e77641
 53e997b9b7602d9701f9f044	H. Heiken	53f4d53adabfaef34ff814c8

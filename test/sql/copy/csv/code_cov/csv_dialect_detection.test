@@ -6,16 +6,16 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT * from read_csv_auto('data/csv/escape.csv', escape=']', header = 0)
+SELECT * from read_csv_auto('{DATA_DIR}/csv/escape.csv', escape=']', header = 0)
 ----
 "bla"
 
 query I
-SELECT * from read_csv_auto('data/csv/escape.csv', header = 0)
+SELECT * from read_csv_auto('{DATA_DIR}/csv/escape.csv', header = 0)
 ----
 "]"bla]""
 
 statement error
-SELECT * from read_csv_auto('data/csv/no_opt.csv', delim = ';')
+SELECT * from read_csv_auto('{DATA_DIR}/csv/no_opt.csv', delim = ';')
 ----
 It was not possible to automatically detect the CSV parsing dialect

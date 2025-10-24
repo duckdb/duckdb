@@ -14,27 +14,27 @@ CREATE TABLE venue (
 );
 
 statement error
-copy venue from 'data/csv/venue_pipe.csv'
+copy venue from '{DATA_DIR}/csv/venue_pipe.csv'
 ----
 This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
 
 statement error
-SELECT * FROM read_csv('data/csv/venue_pipe.csv', types=['SMALLINT','VARCHAR','VARCHAR','VARCHAR','INTEGER']);
+SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe.csv', types=['SMALLINT','VARCHAR','VARCHAR','VARCHAR','INTEGER']);
 ----
 This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
 
 statement error
-SELECT * FROM read_csv('data/csv/venue_pipe.csv', types=['SMALLINT','VARCHAR','VARCHAR','VARCHAR','INTEGER']);
+SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe.csv', types=['SMALLINT','VARCHAR','VARCHAR','VARCHAR','INTEGER']);
 ----
 This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
 
 statement error
-SELECT * FROM read_csv('data/csv/venue_pipe.csv', types={'venueseats':'INTEGER'});
+SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe.csv', types={'venueseats':'INTEGER'});
 ----
 This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
 
 statement error
-SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
+SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = 1);
 ----
 This type was auto-detected from the CSV file.
 
@@ -48,7 +48,7 @@ CREATE TABLE venue_2 (
 );
 
 statement ok
-INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
+INSERT INTO venue_2 SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = 1);
 
 query I
 SELECT COUNT(*) from venue_2
@@ -72,23 +72,23 @@ CREATE TABLE venue_2 (
 # Check our  possible solutions:
 #* Override the type for this column manually by setting the type explicitly, e.g., types={'venueseats': 'VARCHAR'}
 statement ok
-INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1, types={'venueseats': 'VARCHAR'});
+INSERT INTO venue_2 SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = 1, types={'venueseats': 'VARCHAR'});
 
 #* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g., sample_size=-1
 statement ok
-INSERT INTO venue_2 SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = -1);
+INSERT INTO venue_2 SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = -1);
 
 #* Use a COPY statement to automatically derive types from an existing table.
 statement ok
-copy venue_2 from 'data/csv/venue_pipe_big.csv'
+copy venue_2 from '{DATA_DIR}/csv/venue_pipe_big.csv'
 
 statement error
-SELECT * FROM read_csv('data/csv/venue_pipe_big.csv', sample_size = 1);
+SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = 1);
 ----
 This type was auto-detected from the CSV file.
 
 # This cast happens from the CSV -> To the table so there is not much we can easily do
 statement error
-INSERT INTO venue SELECT * FROM read_csv('data/csv/venue_pipe.csv');
+INSERT INTO venue SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe.csv');
 ----
 Could not convert string "\N" to 'INTEGER'

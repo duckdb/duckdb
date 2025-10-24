@@ -24,7 +24,7 @@ SET disabled_filesystems='';
 
 # we can read from the local file system
 statement ok
-SELECT * FROM read_csv_auto('data/csv/auto/skip_row.csv')
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/auto/skip_row.csv')
 
 statement ok
 SET disabled_filesystems='LocalFileSystem';
@@ -35,7 +35,7 @@ RESET disabled_filesystems;
 File system "LocalFileSystem" has been disabled previously
 
 statement error
-SELECT * FROM read_csv_auto('data/csv/auto/skip_row.csv')
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/auto/skip_row.csv')
 ----
 File system LocalFileSystem has been disabled by configuration
 

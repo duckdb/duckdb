@@ -6,12 +6,12 @@ require exact_vector_size 512
 
 # The vector size of this file is 2048.
 statement error
-ATTACH 'data/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);
+ATTACH '{DATA_DIR}/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);
 ----
 Cannot read database file
 
 statement ok
-ATTACH 'data/storage/vector_size_512.db' (TYPE DUCKDB, READONLY);
+ATTACH '{DATA_DIR}/storage/vector_size_512.db' (TYPE DUCKDB, READONLY);
 
 query I
 SELECT * FROM vector_size_512.tbl;

@@ -8,28 +8,28 @@ statement ok
 pragma enable_verification
 
 query I
-SELECT data FROM read_ndjson('data/json/union.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
+SELECT data FROM read_ndjson('{DATA_DIR}/json/union.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
 Frank
 5
 false
 
 statement error
-SELECT * FROM read_ndjson('data/json/malformed/union/bad_key.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
+SELECT * FROM read_ndjson('{DATA_DIR}/json/malformed/union/bad_key.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
 Found object containing unknown key, instead of union
 
 statement error
-SELECT * FROM read_ndjson('data/json/malformed/union/empty_object.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
+SELECT * FROM read_ndjson('{DATA_DIR}/json/malformed/union/empty_object.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
 Found empty object, instead of union
 
 statement error
-SELECT * FROM read_ndjson('data/json/malformed/union/non_object.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
+SELECT * FROM read_ndjson('{DATA_DIR}/json/malformed/union/non_object.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
 Expected an object representing a union, got uint
 
 statement error
-SELECT * FROM read_ndjson('data/json/malformed/union/too_many_keys.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
+SELECT * FROM read_ndjson('{DATA_DIR}/json/malformed/union/too_many_keys.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
 Found object containing more than one key, instead of union

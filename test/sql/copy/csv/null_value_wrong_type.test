@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIIIII
-describe from 'data/csv/null_mismatch.csv'
+describe from '{DATA_DIR}/csv/null_mismatch.csv'
 ----
 id	BIGINT	YES	NULL	NULL	NULL
 name	VARCHAR	YES	NULL	NULL	NULL

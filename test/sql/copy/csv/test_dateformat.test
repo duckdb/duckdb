@@ -10,12 +10,12 @@ CREATE TABLE dates (d DATE);
 
 # base date format does not work here
 statement error
-COPY dates FROM 'data/csv/test/dateformat.csv' (AUTO_DETECT 0, HEADER 0)
+COPY dates FROM '{DATA_DIR}/csv/test/dateformat.csv' (AUTO_DETECT 0, HEADER 0)
 ----
 Line: 1
 
 statement ok
-COPY dates FROM 'data/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
+COPY dates FROM '{DATA_DIR}/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
 
 query I
 SELECT * FROM dates
@@ -24,7 +24,7 @@ SELECT * FROM dates
 
 # if we reverse the date format, we get a different result
 statement ok
-COPY dates FROM 'data/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%m/%d/%Y')
+COPY dates FROM '{DATA_DIR}/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%m/%d/%Y')
 
 query I
 SELECT * FROM dates ORDER BY d
@@ -37,10 +37,10 @@ statement ok
 CREATE TABLE new_dates (d DATE);
 
 statement ok
-COPY dates TO '__TEST_DIR__/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
+COPY dates TO '{TEMP_DIR}/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
 
 statement ok
-COPY new_dates FROM '__TEST_DIR__/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
+COPY new_dates FROM '{TEMP_DIR}/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
 
 query I
 SELECT * FROM new_dates ORDER BY 1
@@ -54,7 +54,7 @@ CREATE TABLE timestamps(t TIMESTAMP);
 
 # timestamp format
 statement ok
-COPY timestamps FROM 'data/csv/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
+COPY timestamps FROM '{DATA_DIR}/csv/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
 
 query I
 SELECT * FROM timestamps
@@ -66,10 +66,10 @@ statement ok
 CREATE TABLE new_timestamps (t TIMESTAMP);
 
 statement ok
-COPY timestamps TO '__TEST_DIR__/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
+COPY timestamps TO '{TEMP_DIR}/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
 
 statement ok
-COPY new_timestamps FROM '__TEST_DIR__/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
+COPY new_timestamps FROM '{TEMP_DIR}/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT '%a %d, %B %Y, %I:%M:%S %p')
 
 query I
 SELECT * FROM new_timestamps ORDER BY 1
@@ -81,10 +81,10 @@ DELETE FROM new_timestamps
 
 # test iso format in copy
 statement ok
-COPY timestamps TO '__TEST_DIR__/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT ISO)
+COPY timestamps TO '{TEMP_DIR}/timestampformat.csv' (HEADER 0, TIMESTAMPFORMAT ISO)
 
 statement ok
-COPY new_timestamps FROM '__TEST_DIR__/timestampformat.csv' (HEADER 0)
+COPY new_timestamps FROM '{TEMP_DIR}/timestampformat.csv' (HEADER 0)
 
 query I
 SELECT * FROM new_timestamps ORDER BY 1
@@ -93,20 +93,20 @@ SELECT * FROM new_timestamps ORDER BY 1
 
 # incorrect date/timestamp format results in an error
 statement error
-COPY dates FROM 'data/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%')
+COPY dates FROM '{DATA_DIR}/csv/test/dateformat.csv' (HEADER 0, DATEFORMAT '%')
 ----
 Could not parse DATEFORMAT: Trailing format character %
 
 statement error
-COPY timestamps FROM 'data/csv/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')
+COPY timestamps FROM '{DATA_DIR}/csv/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')
 ----
 
 query I
-select columns FROM sniff_csv('data/csv/dateformat/working.csv',  header=true,dateformat='%d-%b-%Y');
+select columns FROM sniff_csv('{DATA_DIR}/csv/dateformat/working.csv',  header=true,dateformat='%d-%b-%Y');
 ----
 [{'name': ACCESSION_NUMBER, 'type': VARCHAR}, {'name': FILING_DATE, 'type': DATE}]
 
 query I
-select columns FROM sniff_csv('data/csv/dateformat/not_working.csv',  header=true,dateformat='%d-%b-%Y');
+select columns FROM sniff_csv('{DATA_DIR}/csv/dateformat/not_working.csv',  header=true,dateformat='%d-%b-%Y');
 ----
 [{'name': ACCESSION_NUMBER, 'type': VARCHAR}, {'name': FILING_DATE, 'type': DATE}]

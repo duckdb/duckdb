@@ -7,30 +7,30 @@ PRAGMA enable_verification
 
 # Test comment and skip option
 query III
-FROM read_csv('data/csv/comments/17226.csv', comment='#', all_varchar=True, skip=0, ignore_errors=True)
+FROM read_csv('{DATA_DIR}/csv/comments/17226.csv', comment='#', all_varchar=True, skip=0, ignore_errors=True)
 ----
 1	2	3
 4	5	6
 
 # Comment must be different than quote and delimiter options
 statement error
-FROM  read_csv('data/csv/comments/mixed_options.csv', delim = ',', comment = ',', auto_detect = false, columns= {'a':'integer'})
+FROM  read_csv('{DATA_DIR}/csv/comments/mixed_options.csv', delim = ',', comment = ',', auto_detect = false, columns= {'a':'integer'})
 ----
 COMMENT must not appear in the DELIMITER specification and vice versa
 
 statement error
-FROM  read_csv('data/csv/comments/mixed_options.csv', quote = ',', comment = ',', escape = '', delim = ';', auto_detect = false, columns= {'a':'integer'})
+FROM  read_csv('{DATA_DIR}/csv/comments/mixed_options.csv', quote = ',', comment = ',', escape = '', delim = ';', auto_detect = false, columns= {'a':'integer'})
 ----
 COMMENT must not appear in the QUOTE specification and vice versa
 
 query II
-FROM 'data/csv/comments/simple.csv';
+FROM '{DATA_DIR}/csv/comments/simple.csv';
 ----
 1	3
 6	7
 
 query I
-FROM 'data/csv/comments/simple_comma.csv';
+FROM '{DATA_DIR}/csv/comments/simple_comma.csv';
 ----
 , I'm a csv file
 a;b
@@ -40,14 +40,14 @@ a;b
 , You better skip me
 
 query II
-FROM read_csv('data/csv/comments/simple_comma.csv', comment = ',');
+FROM read_csv('{DATA_DIR}/csv/comments/simple_comma.csv', comment = ',');
 ----
 1	3
 6	7
 
 # Lets try over a vector size
 query II
-FROM 'data/csv/comments/big.csv' limit 5;
+FROM '{DATA_DIR}/csv/comments/big.csv' limit 5;
 ----
 1	3
 6	7
@@ -57,17 +57,17 @@ FROM 'data/csv/comments/big.csv' limit 5;
 
 # Check commented data-points are not in the data
 query II
-FROM 'data/csv/comments/big.csv' where  a = 20
+FROM '{DATA_DIR}/csv/comments/big.csv' where  a = 20
 ----
 
 query I
-SELECT count(*) FROM 'data/csv/comments/big.csv'
+SELECT count(*) FROM '{DATA_DIR}/csv/comments/big.csv'
 ----
 1448
 
 # Test empty spaces
 query II
-FROM 'data/csv/comments/empty_space.csv';
+FROM '{DATA_DIR}/csv/comments/empty_space.csv';
 ----
 1	3
 1	3
@@ -80,7 +80,7 @@ FROM 'data/csv/comments/empty_space.csv';
 loop buffer_size 30 35
 
 query II
-FROM read_csv('data/csv/comments/simple.csv', buffer_size = ${buffer_size}) limit 5;
+FROM read_csv('{DATA_DIR}/csv/comments/simple.csv', buffer_size = ${buffer_size}) limit 5;
 ----
 1	3
 6	7
@@ -89,45 +89,45 @@ endloop
 
 # Test that fully commented lines are ignored by the parameter header but not by skiprows.
 query II
-FROM read_csv('data/csv/comments/simple.csv', skip = 2);
+FROM read_csv('{DATA_DIR}/csv/comments/simple.csv', skip = 2);
 ----
 6	7
 
 # Test we can detect comments and skip rows at the same time
 query II
-FROM 'data/csv/comments/invalid_rows.csv';
+FROM '{DATA_DIR}/csv/comments/invalid_rows.csv';
 ----
 1	3
 6	7
 
 query II
-select SkipRows, Comment FROM sniff_csv('data/csv/comments/invalid_rows.csv');
+select SkipRows, Comment FROM sniff_csv('{DATA_DIR}/csv/comments/invalid_rows.csv');
 ----
 2	#
 
 # Test ignore errors
 statement error
-select count(*) FROM 'data/csv/comments/error.csv';
+select count(*) FROM '{DATA_DIR}/csv/comments/error.csv';
 ----
 Expected Number of Columns: 2 Found: 1
 
 query I
-select count(*) FROM read_csv('data/csv/comments/error.csv', ignore_errors = true);
+select count(*) FROM read_csv('{DATA_DIR}/csv/comments/error.csv', ignore_errors = true);
 ----
 2726
 
 query I
-select count(*) FROM read_csv('data/csv/comments/error.csv', ignore_errors = true, comment = '#');
+select count(*) FROM read_csv('{DATA_DIR}/csv/comments/error.csv', ignore_errors = true, comment = '#');
 ----
 2726
 
 query II
-select comment, columns from sniff_csv('data/csv/comments/error.csv', ignore_errors = true);
+select comment, columns from sniff_csv('{DATA_DIR}/csv/comments/error.csv', ignore_errors = true);
 ----
 #	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]
 
 query II
-select comment, columns from sniff_csv('data/csv/comments/error.csv', ignore_errors = true);
+select comment, columns from sniff_csv('{DATA_DIR}/csv/comments/error.csv', ignore_errors = true);
 ----
 #	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]
 
@@ -135,7 +135,7 @@ select comment, columns from sniff_csv('data/csv/comments/error.csv', ignore_err
 loop i 0 2
 
 query II
-FROM read_csv('data/csv/comments/simple.csv',skip=${i});
+FROM read_csv('{DATA_DIR}/csv/comments/simple.csv',skip=${i});
 ----
 1	3
 6	7

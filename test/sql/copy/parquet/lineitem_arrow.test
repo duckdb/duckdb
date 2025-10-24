@@ -7,7 +7,7 @@ require tpch
 require parquet
 
 statement ok
-CREATE TABLE lineitem AS SELECT * FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+CREATE TABLE lineitem AS SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
 
 query I nosort q01
 PRAGMA tpch(1)
@@ -21,7 +21,7 @@ statement ok
 DROP TABLE lineitem
 
 statement ok
-CREATE VIEW lineitem AS SELECT * FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+CREATE VIEW lineitem AS SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
 
 query I nosort q01
 PRAGMA tpch(1)

@@ -7,138 +7,138 @@ PRAGMA enable_verification
 
 # Duplicate names shuold not be accepted
 statement error
-from read_csv('data/csv/header_bug.csv', names=['col1', 'col1']) LIMIT 1;
+from read_csv('{DATA_DIR}/csv/header_bug.csv', names=['col1', 'col1']) LIMIT 1;
 ----
 read_csv names must have unique values
 
 # Empty Names should not be accepted
 statement error
-from read_csv('data/csv/header_bug.csv', names=['']) LIMIT 1;
+from read_csv('{DATA_DIR}/csv/header_bug.csv', names=['']) LIMIT 1;
 ----
 read_csv names cannot have empty (or all whitespace) value
 
 statement error
-from read_csv('data/csv/header_bug.csv', names=[' ', '  '], header = 0);
+from read_csv('{DATA_DIR}/csv/header_bug.csv', names=[' ', '  '], header = 0);
 ----
 read_csv names cannot have empty (or all whitespace) value
 
 # no names provided
 query IIII
-select column00, column01, column02, column03 from 'data/csv/real/lineitem_sample.csv' LIMIT 1;
+select column00, column01, column02, column03 from '{DATA_DIR}/csv/real/lineitem_sample.csv' LIMIT 1;
 ----
 1	15519	785	1
 
 # override the names partially
 query IIII
-select l_orderkey, l_partkey, column02, column03 from read_csv_auto('data/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey']) LIMIT 1;
+select l_orderkey, l_partkey, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey']) LIMIT 1;
 ----
 1	15519	785	1
 
 # empty list
 query IIII
-select column00, column01, column02, column03 from read_csv_auto('data/csv/real/lineitem_sample.csv', names=[]) LIMIT 1;
+select column00, column01, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=[]) LIMIT 1;
 ----
 1	15519	785	1
 
 # specify all names
 query IIII
-select l_orderkey, l_partkey, l_commitdate, l_comment from read_csv_auto('data/csv/real/lineitem_sample.csv', column_names=['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode', 'l_comment']) LIMIT 1;
+select l_orderkey, l_partkey, l_commitdate, l_comment from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', column_names=['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode', 'l_comment']) LIMIT 1;
 ----
 1	15519	1996-02-12	egular courts above the
 
 # specify too many names
 statement error
-select l_orderkey, l_partkey, l_commitdate, l_comment from read_csv_auto('data/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode', 'l_comment', 'xx']) LIMIT 1;
+select l_orderkey, l_partkey, l_commitdate, l_comment from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode', 'l_comment', 'xx']) LIMIT 1;
 ----
-Error when sniffing file "data/csv/real/lineitem_sample.csv".
+Error when sniffing file "{DATA_DIR}/csv/real/lineitem_sample.csv".
 
 # specify names on a file with a header
 query II
-select yr, Quarter from read_csv_auto('data/csv/real/ontime_sample.csv', names=['yr']) LIMIT 1;
+select yr, Quarter from read_csv_auto('{DATA_DIR}/csv/real/ontime_sample.csv', names=['yr']) LIMIT 1;
 ----
 1988	1
 
 # NULL
 statement error
-select column00, column01, column02, column03 from read_csv_auto('data/csv/real/lineitem_sample.csv', names=NULL) LIMIT 1;
+select column00, column01, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=NULL) LIMIT 1;
 ----
 read_csv names cannot be NULL
 
 # specify the names twice
 statement error
-select l_orderkey, l_partkey, column02, column03 from read_csv_auto('data/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey'], column_names=['l_orderkey']) LIMIT 1;
+select l_orderkey, l_partkey, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey'], column_names=['l_orderkey']) LIMIT 1;
 ----
 read_csv column_names/names can only be supplied once
 
 statement error
-select l_orderkey, l_partkey, column02, column03 from read_csv_auto('data/csv/real/lineitem_sample.csv', names=42) LIMIT 1;
+select l_orderkey, l_partkey, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=42) LIMIT 1;
 ----
 Failed to cast value: Unimplemented type for cast (INTEGER -> VARCHAR[])
 
 # specify options delim and sep
 statement error
-select column00 from read_csv_auto('data/csv/real/lineitem_sample.csv', delim='|', sep='|') LIMIT 1;
+select column00 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|', sep='|') LIMIT 1;
 ----
 CSV Reader function option delim and sep are aliases, only one can be supplied
 
 # duplicate names
 statement error
-select l_orderkey, l_partkey, column02, column03 from read_csv_auto('data/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_orderkey']) LIMIT 1;
+select l_orderkey, l_partkey, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_orderkey']) LIMIT 1;
 ----
 read_csv names must have unique values. "l_orderkey" is repeated.
 
 query I
-select Columns FROM sniff_csv('data/csv/header.csv', names = ['a'])
+select Columns FROM sniff_csv('{DATA_DIR}/csv/header.csv', names = ['a'])
 ----
 [{'name': a, 'type': VARCHAR}]
 
 query I
-FROM read_csv('data/csv/header.csv', names = ['a'])
+FROM read_csv('{DATA_DIR}/csv/header.csv', names = ['a'])
 ----
 line2
 line3
 
 query I
-select Columns FROM sniff_csv('data/csv/header.csv', names = ['a'], header = false)
+select Columns FROM sniff_csv('{DATA_DIR}/csv/header.csv', names = ['a'], header = false)
 ----
 [{'name': a, 'type': VARCHAR}]
 
 query I
-FROM read_csv('data/csv/header.csv', names = ['a'], header = false)
+FROM read_csv('{DATA_DIR}/csv/header.csv', names = ['a'], header = false)
 ----
 line1
 line2
 line3
 
 query I
-select Columns FROM sniff_csv('data/csv/header_2.csv', names = ['a'])
+select Columns FROM sniff_csv('{DATA_DIR}/csv/header_2.csv', names = ['a'])
 ----
 [{'name': a, 'type': VARCHAR}, {'name': line1_2, 'type': VARCHAR}, {'name': line1_3, 'type': VARCHAR}]
 
 query III
-FROM read_csv('data/csv/header_2.csv', names = ['a'])
+FROM read_csv('{DATA_DIR}/csv/header_2.csv', names = ['a'])
 ----
 line2	line2_2	line2_3
 line3	line3_2	line3_3
 
 
 query I
-select Columns FROM sniff_csv('data/csv/header_2.csv', names = ['a'], header=False)
+select Columns FROM sniff_csv('{DATA_DIR}/csv/header_2.csv', names = ['a'], header=False)
 ----
 [{'name': a, 'type': VARCHAR}, {'name': column1, 'type': VARCHAR}, {'name': column2, 'type': VARCHAR}]
 
 statement error
-select Columns FROM sniff_csv('data/csv/header_2.csv', names = ['a','b','c','d'])
+select Columns FROM sniff_csv('{DATA_DIR}/csv/header_2.csv', names = ['a','b','c','d'])
 ----
-Error when sniffing file "data/csv/header_2.csv"
+Error when sniffing file "{DATA_DIR}/csv/header_2.csv"
 
 query I
-select Columns FROM sniff_csv('data/csv/header_2.csv', names = ['a','b','c','d'], null_padding = True)
+select Columns FROM sniff_csv('{DATA_DIR}/csv/header_2.csv', names = ['a','b','c','d'], null_padding = True)
 ----
 [{'name': a, 'type': VARCHAR}, {'name': b, 'type': VARCHAR}, {'name': c, 'type': VARCHAR}, {'name': d, 'type': VARCHAR}]
 
 query IIII
-FROM read_csv('data/csv/header_2.csv', names = ['a','b','c','d'], null_padding = True)
+FROM read_csv('{DATA_DIR}/csv/header_2.csv', names = ['a','b','c','d'], null_padding = True)
 ----
 line2	line2_2	line2_3	NULL
 line3	line3_2	line3_3	NULL

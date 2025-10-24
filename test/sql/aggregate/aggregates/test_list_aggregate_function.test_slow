@@ -161,7 +161,7 @@ SELECT LIST(s) FROM structs_strings GROUP BY g ORDER BY g
 require parquet
 
 statement ok
-SELECT tconst, list(principals) as principals FROM parquet_scan('data/parquet-testing/bug3734.parquet') GROUP BY 1 limit 10;
+SELECT tconst, list(principals) as principals FROM parquet_scan('{DATA_DIR}/parquet-testing/bug3734.parquet') GROUP BY 1 limit 10;
 
 # test all data types
 

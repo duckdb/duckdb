@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # first create a table from read csv, and use that in a recursive cte
 statement ok
-create table r AS SELECT * FROM read_csv('data/csv/test/date.csv', columns=STRUCT_PACK(d := 'DATE'), header=0, auto_detect=0);
+create table r AS SELECT * FROM read_csv('{DATA_DIR}/csv/test/date.csv', columns=STRUCT_PACK(d := 'DATE'), header=0, auto_detect=0);
 
 query II
 WITH RECURSIVE t(i) AS
@@ -36,7 +36,7 @@ WITH RECURSIVE t(i) AS
 	UNION ALL
 	(
 		SELECT i+1, d
-		FROM t, read_csv('data/csv/test/date.csv', columns=STRUCT_PACK(d := 'DATE'), header=0, auto_detect=0)
+		FROM t, read_csv('{DATA_DIR}/csv/test/date.csv', columns=STRUCT_PACK(d := 'DATE'), header=0, auto_detect=0)
 		WHERE i<5
 	)
 )
@@ -49,7 +49,7 @@ SELECT * FROM t ORDER BY i;
 5	2019-06-05
 
 query I
-SELECT * FROM read_csv_auto('data/csv/test/date.csv')
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/date.csv')
 ----
 2019-06-05
 
@@ -62,7 +62,7 @@ WITH RECURSIVE t(i) AS
 	UNION ALL
 	(
 		SELECT i+1, d
-		FROM t, read_csv('data/csv/test/date.csv', header=0, auto_detect=1) r(d)
+		FROM t, read_csv('{DATA_DIR}/csv/test/date.csv', header=0, auto_detect=1) r(d)
 		WHERE i<5
 	)
 )

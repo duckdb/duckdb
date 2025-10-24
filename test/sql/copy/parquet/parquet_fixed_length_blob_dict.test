@@ -12,7 +12,7 @@ SELECT
     MIN(classification), MAX(classification),
     MIN(return_number), MAX(return_number),
     MIN(number_of_returns), MAX(number_of_returns)
-FROM parquet_scan('data/parquet-testing/sorted.zstd_18_131072_small.parquet')
+FROM parquet_scan('{DATA_DIR}/parquet-testing/sorted.zstd_18_131072_small.parquet')
 ----
 \x00\xA0e\xFB\xF8|\xF0\xA8_t\x16\x9A
 \x03,\xDF$)\xF5\x13\x11\x9B\x11k\x10

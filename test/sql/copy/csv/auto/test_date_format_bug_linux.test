@@ -6,7 +6,7 @@ PRAGMA enable_verification
 
 
 query I
-SELECT *  FROM read_csv_auto('data/csv/auto/date_format_bug_linux.csv')
+SELECT *  FROM read_csv_auto('{DATA_DIR}/csv/auto/date_format_bug_linux.csv')
 ----
 8cb123cb8
 34fd321

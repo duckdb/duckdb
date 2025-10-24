@@ -6,26 +6,26 @@ statement ok
 PRAGMA enable_verification
 
 query III
-FROM 'data/csv/glob_dif_dialect/14166/__200*.csv';
+FROM '{DATA_DIR}/csv/glob_dif_dialect/14166/__200*.csv';
 ----
 2000-01-01	10	80.9189441112103
 2000-01-02	5	109.16581782022259
 
 query III
-FROM read_csv(['data/csv/glob_dif_dialect/14166/__2000.csv', 'data/csv/glob_dif_dialect/14166/__2001.csv', 'data/csv/glob_dif_dialect/14166/empty.csv']);
+FROM read_csv(['{DATA_DIR}/csv/glob_dif_dialect/14166/__2000.csv', '{DATA_DIR}/csv/glob_dif_dialect/14166/__2001.csv', '{DATA_DIR}/csv/glob_dif_dialect/14166/empty.csv']);
 ----
 2000-01-01	10	80.9189441112103
 2000-01-02	5	109.16581782022259
 
 query III
-FROM read_csv(['data/csv/glob_dif_dialect/14166/__2000.csv','data/csv/glob_dif_dialect/14166/matching_types.csv']);
+FROM read_csv(['{DATA_DIR}/csv/glob_dif_dialect/14166/__2000.csv','{DATA_DIR}/csv/glob_dif_dialect/14166/matching_types.csv']);
 ----
 2000-01-01	10	80.9189441112103
 2000-01-02	5	109.16581782022259
 
 # Globbing with different dialects
 query III
-FROM 'data/csv/glob_dif_dialect/f_*.csv' order by all
+FROM '{DATA_DIR}/csv/glob_dif_dialect/f_*.csv' order by all
 ----
 1	alice	alice@email.com
 1	alice	alice@email.com

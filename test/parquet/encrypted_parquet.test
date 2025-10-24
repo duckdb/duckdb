@@ -1,5 +1,5 @@
 # name: test/parquet/encrypted_parquet.test
-# description: Test Parquet reader on data/parquet-testing/encryption
+# description: Test Parquet reader on $TEST_DATA_LOC/parquet-testing/encryption
 # group: [parquet]
 
 # TODO: re-enable these tests once we encrypt the full Parquet Encryption spec
@@ -9,11 +9,11 @@ mode skip
 require parquet
 
 statement error
-SELECT * FROM parquet_scan('data/parquet-testing/encryption/encrypted_footer.parquet') limit 50;
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/encryption/encrypted_footer.parquet') limit 50;
 ----
-Invalid Input Error: Encrypted Parquet files are not supported for file 'data/parquet-testing/encryption/encrypted_footer.parquet'
+Invalid Input Error: Encrypted Parquet files are not supported for file '{DATA_DIR}/parquet-testing/encryption/encrypted_footer.parquet'
 
 statement error
-SELECT * FROM parquet_scan('data/parquet-testing/encryption/encrypted_column.parquet') limit 50;
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/encryption/encrypted_column.parquet') limit 50;
 ----
-Invalid Error: Failed to read Parquet file "data/parquet-testing/encryption/encrypted_column.parquet": Encrypted Parquet files are not supported
+Invalid Error: Failed to read Parquet file "{DATA_DIR}/parquet-testing/encryption/encrypted_column.parquet": Encrypted Parquet files are not supported

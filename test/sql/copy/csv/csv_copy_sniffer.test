@@ -19,4 +19,4 @@ CREATE TABLE sales (
     saletime TIMESTAMP);
 
 statement ok
-COPY sales FROM 'data/csv/sales_snippet.csv' (TIMESTAMPFORMAT '%m/%d/%Y %I:%M:%S', IGNORE_ERRORS true);
+COPY sales FROM '{DATA_DIR}/csv/sales_snippet.csv' (TIMESTAMPFORMAT '%m/%d/%Y %I:%M:%S', IGNORE_ERRORS true);

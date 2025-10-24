@@ -11,7 +11,7 @@ PRAGMA enable_verification
 
 query IIIIIIIIII
 select *
-from  read_csv('data/csv/bug_7578.csv', delim='\t', quote = '`', columns={
+from  read_csv('{DATA_DIR}/csv/bug_7578.csv', delim='\t', quote = '`', columns={
   'transaction_id': 'VARCHAR',
   'team_id': 'INT',
   'direction': 'INT',
@@ -36,7 +36,7 @@ pragma threads=2
 
 statement error
 select *
-from  read_csv('data/csv/bug_7578.csv', delim='\t',  columns={
+from  read_csv('{DATA_DIR}/csv/bug_7578.csv', delim='\t',  columns={
   'transaction_id': 'VARCHAR',
   'team_id': 'INT',
   'direction': 'INT',

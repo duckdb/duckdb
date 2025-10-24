@@ -1,5 +1,5 @@
 # name: test/parquet/test_parquet_reader_compression.test
-# description: Test Parquet Reader with files on data/parquet-testing/compression
+# description: Test Parquet Reader with files on $TEST_DATA_LOC/parquet-testing/compression
 # group: [parquet]
 
 require parquet
@@ -7,7 +7,7 @@ require parquet
 foreach codec NONE SNAPPY GZIP ZSTD LZ4 BROTLI
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_${codec}.parquet', hive_partitioning=0) limit 50
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/compression/generated/data_page=1_${codec}.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -41,7 +41,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_${codec}.parquet', hive_partitioning=0) limit 50
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/compression/generated/data_page=2_${codec}.parquet', hive_partitioning=0) limit 50
 ----
 0	20	{'string': foo, 'int': 22}	[]
 1	6	{'string': baz, 'int': 10}	NULL
@@ -75,7 +75,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 29	13	{'string': bar, 'int': 8}	[40, 32, 9, 2, 2, 40, 7, 0, 32, 31, 11, 14, 4, 14, 40, 20, 29, 17, 41]
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/compression/empty_datapage_v2.snappy.parquet', hive_partitioning=0) limit 50
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/compression/empty_datapage_v2.snappy.parquet', hive_partitioning=0) limit 50
 ----
 NULL
 

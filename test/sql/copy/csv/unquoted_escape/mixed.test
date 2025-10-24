@@ -11,6 +11,6 @@ SELECT
     hamming(replace(string_agg(w, '|' ORDER BY y), E'\r\n', E'\n'), E'\\|,|"|\n'),
     hamming(string_agg(z, '|' ORDER BY y), '"|"a"|"b|c"'),
     bool_and(x = concat(w, '"', w))::int
-FROM read_csv('data/csv/unquoted_escape/mixed.csv', quote = '"', escape = '\', sep = ',', strict_mode = false);
+FROM read_csv('{DATA_DIR}/csv/unquoted_escape/mixed.csv', quote = '"', escape = '\', sep = ',', strict_mode = false);
 ----
 0	0	1

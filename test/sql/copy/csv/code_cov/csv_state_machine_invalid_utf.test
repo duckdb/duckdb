@@ -4,35 +4,35 @@
 
 # Error during sniffing
 statement error
-from read_csv_auto('data/csv/test/invalid_utf.csv')
+from read_csv_auto('{DATA_DIR}/csv/test/invalid_utf.csv')
 ----
 Invalid unicode (byte sequence mismatch) detected
 
 statement error
-from read_csv_auto('data/csv/test/invalid_utf.csv')
+from read_csv_auto('{DATA_DIR}/csv/test/invalid_utf.csv')
 ----
 CSV Error on Line: 1
 
 # Error during parsing
 statement error
-from read_csv('data/csv/test/invalid_utf.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+from read_csv('{DATA_DIR}/csv/test/invalid_utf.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
 
 statement error
-from read_csv('data/csv/test/invalid_utf.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+from read_csv('{DATA_DIR}/csv/test/invalid_utf.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
 ----
 CSV Error on Line: 1
 
 # Test ignore errors over more complex file
 statement error
-from read_csv('data/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
 ----
 CSV Error on Line: 11
 
 query III
-from read_csv('data/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true)
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true)
 ----
 valid	valid	valid
 valid	valid	valid
@@ -57,7 +57,7 @@ valid	valid	valid
 
 # Test error in the second vector
 statement ok
-create table t as from read_csv('data/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true)
+create table t as from read_csv('{DATA_DIR}/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true)
 
 query I
 select count(*) from t
@@ -65,18 +65,18 @@ select count(*) from t
 3030
 
 statement error
-from read_csv('data/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
 ----
 CSV Error on Line: 3001
 
 # Test borked utf-8 within quotes
 statement error
-from read_csv('data/csv/test/invalid_utf_quoted.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"')
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_quoted.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"')
 ----
 CSV Error on Line: 11
 
 query III
-from read_csv('data/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', ignore_errors=true)
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', ignore_errors=true)
 ----
 valid	valid	valid
 valid	valid	valid
@@ -101,17 +101,17 @@ valid	valid	valid
 
 # Test Invalid Header
 statement error
-from read_csv('data/csv/test/invalid_utf_header.csv', delim = ',', quote = '"')
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_header.csv', delim = ',', quote = '"')
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
 statement error
-from read_csv('data/csv/test/invalid_utf_header.csv', header=1,  delim = ',', quote = '"')
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_header.csv', header=1,  delim = ',', quote = '"')
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
 query III
-from read_csv('data/csv/test/invalid_utf_header.csv', header=1,  delim = ',', quote = '"', ignore_errors = true)
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_header.csv', header=1,  delim = ',', quote = '"', ignore_errors = true)
 ----
 valid	valid	valid
 valid	valid	valid
@@ -126,12 +126,12 @@ valid	valid	valid
 
 # Test invalid unicode in between a quoted newline
 statement error
-from read_csv('data/csv/test/invalid_utf_quoted_nl.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"')
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_quoted_nl.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"')
 ----
 CSV Error on Line: 11
 
 query III
-from read_csv('data/csv/test/invalid_utf_quoted_nl.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', ignore_errors=true)
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_quoted_nl.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', ignore_errors=true)
 ----
 valid	valid	valid
 valid	valid	valid
@@ -156,13 +156,13 @@ valid	valid	valid
 
 # Test error between buffers
 statement error
-from read_csv('data/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', buffer_size = 198)
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', buffer_size = 198)
 ----
 CSV Error on Line: 11
 
 # Test error between buffers (with ignore_errors set)
 query III
-from read_csv('data/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true, buffer_size = 198)
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true, buffer_size = 198)
 ----
 valid	valid	valid
 valid	valid	valid
@@ -188,22 +188,22 @@ valid	valid	valid
 
 # We get a casting error
 statement error
-SELECT * FROM read_csv('data/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
 statement error
-SELECT * FROM read_csv('data/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
 ----
 CSV Error on Line: 11
 
 # We get a invalid unicode error
 statement error
-SELECT * FROM read_csv('data/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )
 ----
 Invalid unicode (byte sequence mismatch) detected.
 
 statement error
-SELECT * FROM read_csv('data/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )
 ----
 CSV Error on Line: 11
