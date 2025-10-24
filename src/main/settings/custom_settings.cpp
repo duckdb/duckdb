@@ -31,6 +31,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 
@@ -634,6 +635,23 @@ void DuckDBAPISetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value DuckDBAPISetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(config.options.duckdb_api);
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Block Allocator
+//===----------------------------------------------------------------------===//
+bool EnableBlockAllocatorSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db) {
+		BlockAllocator::Get(*db).SetEnabled(input.GetValue<bool>());
+	}
+	return true;
+}
+
+bool EnableBlockAllocatorSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		BlockAllocator::Get(*db).SetEnabled(DBConfigOptions().enable_block_allocator);
+	}
+	return true;
 }
 
 //===----------------------------------------------------------------------===//

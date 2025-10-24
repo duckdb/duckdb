@@ -220,6 +220,8 @@ struct DBConfigOptions {
 #endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
+	//! Whether to enable the allocator that lazily frees fixed-size blocks
+	bool enable_block_allocator = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

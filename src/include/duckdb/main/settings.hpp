@@ -504,6 +504,18 @@ struct DynamicOrFilterThresholdSetting {
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
+struct EnableBlockAllocatorSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_block_allocator";
+	static constexpr const char *Description = "Whether to enable the allocator that lazily frees fixed-size blocks.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableExternalAccessSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_external_access";

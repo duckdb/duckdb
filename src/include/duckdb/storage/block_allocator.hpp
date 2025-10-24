@@ -21,12 +21,14 @@ struct BlockQueue;
 
 class BlockAllocator {
 public:
-	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t virtual_memory_size);
+	BlockAllocator(Allocator &allocator, bool enabled, idx_t block_size, idx_t virtual_memory_size);
 	~BlockAllocator();
 
 public:
 	static BlockAllocator &Get(DatabaseInstance &db);
 	static BlockAllocator &Get(AttachedDatabase &db);
+
+	void SetEnabled(bool enabled);
 
 	//! Allocation functions (same API as Allocator)
 	data_ptr_t AllocateData(idx_t size) const;
@@ -56,6 +58,9 @@ private:
 private:
 	//! Fallback allocator
 	Allocator &allocator;
+	//! Whether this is open for new allocations
+	atomic<bool> enabled;
+
 	//! Block size (power of two)
 	const idx_t block_size;
 	//! Shift for dividing by block size

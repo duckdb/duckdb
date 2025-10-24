@@ -123,7 +123,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_external_file_cache", {false}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
-	    {"pin_threads", {"off"}}};
+	    {"pin_threads", {"off"}},
+	    {"enable_block_allocator", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {

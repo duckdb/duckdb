@@ -457,6 +457,12 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/enable_verification.json
 
+    - name: test/configs/enable_block_allocator.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/enable_block_allocator.json
+
     - name: Test dictionary_expression
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
@@ -510,6 +516,7 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/peg_parser.json
+
     - name: Forwards compatibility tests
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
