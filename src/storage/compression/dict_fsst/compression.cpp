@@ -495,7 +495,7 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 		lookup = 0;
 	} else {
 		auto it = current_string_map.Lookup(str);
-		lookup = it.IsEmpty() ? DConstants::INVALID_INDEX : it.index;
+		lookup = it.IsEmpty() ? DConstants::INVALID_INDEX : it.index + 1;
 	}
 
 	switch (append_state) {
