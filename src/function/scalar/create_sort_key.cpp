@@ -1158,11 +1158,13 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 
 } // namespace
 
-void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
-                                         OrderModifiers modifiers) {
+idx_t CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
+                                          OrderModifiers modifiers) {
 	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
 	DecodeSortKeyData decode_data(sort_key);
 	DecodeSortKeyRecursive(&decode_data, sort_key_data, result, result_idx, 1);
+
+	return decode_data.position;
 }
 
 void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,

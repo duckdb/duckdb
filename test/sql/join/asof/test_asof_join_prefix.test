@@ -1,0 +1,201 @@
+# name: test/sql/join/asof/test_asof_join_prefix.test
+# description: Prefix data type coverage
+# group: [asof]
+
+statement ok 
+PRAGMA debug_asof_iejoin=False
+
+statement ok
+PRAGMA asof_loop_join_threshold = 0;
+
+#
+# INTEGERs
+#
+statement ok
+CREATE TABLE prices_int("when" TIMESTAMP, symbol INTEGER, price INTEGER);
+
+statement ok
+INSERT INTO prices_int VALUES 
+	('2020-01-01 00:00:00', 1, 42),
+	('2020-01-01 00:00:00', 2, 55),
+	
+
+statement ok
+CREATE TABLE trades_int("when" timestamp, symbol INTEGER);
+
+statement ok
+INSERT INTO trades_int VALUES 
+	('2020-01-01 00:00:03', 1),
+	('2020-01-01 00:00:03', 3),
+
+query III
+SELECT t.*, p.price
+FROM trades_int t ASOF JOIN prices_int p 
+  ON t.symbol = p.symbol AND t.when >= p.when;
+----
+2020-01-01 00:00:03	1	42
+
+#
+# VARCHARs
+#
+statement ok
+CREATE TABLE prices_varchar("when" TIMESTAMP, symbol VARCHAR, price INTEGER);
+
+statement ok
+INSERT INTO prices_varchar VALUES 
+	('2020-01-01 00:00:00', 'APPL', 42),
+	('2020-01-01 00:00:00', 'MEL', 55),
+	
+
+statement ok
+CREATE TABLE trades_varchar("when" timestamp, symbol VARCHAR);
+
+statement ok
+INSERT INTO trades_varchar VALUES 
+	('2020-01-01 00:00:03', 'APPL'),
+	('2020-01-01 00:00:03', 'VCT'),
+
+query III
+SELECT t.*, p.price
+FROM trades_varchar t ASOF JOIN prices_varchar p 
+  ON t.symbol = p.symbol AND t.when >= p.when;
+----
+2020-01-01 00:00:03	APPL	42
+
+#
+# STRUCTs
+#
+statement ok
+CREATE TABLE prices_struct("when" TIMESTAMP, symbol STRUCT(ticker VARCHAR, exchange INTEGER), price INTEGER);
+
+statement ok
+INSERT INTO prices_struct VALUES 
+	('2020-01-01 00:00:00', {'ticker': 'APPL', 'exchange': 1}, 42),
+	('2020-01-01 00:00:00', {'ticker': 'MEL', 'exchange': 2}, 55),
+	
+
+statement ok
+CREATE TABLE trades_struct("when" timestamp, symbol STRUCT(ticker VARCHAR, exchange INTEGER));
+
+statement ok
+INSERT INTO trades_struct VALUES 
+	('2020-01-01 00:00:03', {'ticker': 'APPL', 'exchange': 1}),
+	('2020-01-01 00:00:03', {'ticker': 'VCT', 'exchange': 2}),
+
+query III
+SELECT t.*, p.price
+FROM trades_struct t ASOF JOIN prices_struct p 
+  ON t.symbol = p.symbol AND t.when >= p.when;
+----
+2020-01-01 00:00:03	{'ticker': APPL, 'exchange': 1}	42
+
+#
+# LISTs
+#
+statement ok
+CREATE TABLE prices_list("when" TIMESTAMP, symbol INTEGER[], price INTEGER);
+
+statement ok
+INSERT INTO prices_list VALUES 
+	('2020-01-01 00:00:00', [1, 0], 42),
+	('2020-01-01 00:00:00', [2, 0], 55),
+	
+
+statement ok
+CREATE TABLE trades_list("when" timestamp, symbol INTEGER[]);
+
+statement ok
+INSERT INTO trades_list VALUES 
+	('2020-01-01 00:00:03', [1, 0]),
+	('2020-01-01 00:00:03', [2, 1]),
+
+query III
+SELECT t.*, p.price
+FROM trades_list t ASOF JOIN prices_list p 
+  ON t.symbol = p.symbol AND t.when >= p.when;
+----
+2020-01-01 00:00:03	[1, 0]	42
+
+#
+# ARRAYs
+#
+statement ok
+CREATE TABLE prices_array("when" TIMESTAMP, symbol INTEGER[2], price INTEGER);
+
+statement ok
+INSERT INTO prices_array VALUES 
+	('2020-01-01 00:00:00', [1, 0], 42),
+	('2020-01-01 00:00:00', [2, 0], 55),
+	
+
+statement ok
+CREATE TABLE trades_array("when" timestamp, symbol INTEGER[2]);
+
+statement ok
+INSERT INTO trades_array VALUES 
+	('2020-01-01 00:00:03', [1, 0]),
+	('2020-01-01 00:00:03', [2, 1]),
+
+query III
+SELECT t.*, p.price
+FROM trades_array t ASOF JOIN prices_array p 
+  ON t.symbol = p.symbol AND t.when >= p.when;
+----
+2020-01-01 00:00:03	[1, 0]	42
+
+#
+# Nested
+#
+statement ok
+CREATE TABLE prices_nested("when" TIMESTAMP, symbol STRUCT(ticker VARCHAR[], exchange INTEGER), price INTEGER);
+
+statement ok
+INSERT INTO prices_nested VALUES 
+	('2020-01-01 00:00:00', {'ticker': ['APPL', 'Apple Inc'], 'exchange': 1}, 42),
+	('2020-01-01 00:00:00', {'ticker': ['MEL', 'Meridian Energy'], 'exchange': 2}, 55),
+	
+
+statement ok
+CREATE TABLE trades_nested("when" timestamp, symbol STRUCT(ticker VARCHAR[], exchange INTEGER));
+
+statement ok
+INSERT INTO trades_nested VALUES 
+	('2020-01-01 00:00:03', {'ticker': ['APPL', 'Apple Inc'], 'exchange': 1}),
+	('2020-01-01 00:00:03', {'ticker': ['VCT', 'Vector Ltd'], 'exchange': 2}),
+
+query III
+SELECT t.*, p.price
+FROM trades_nested t ASOF JOIN prices_nested p 
+  ON t.symbol = p.symbol AND t.when >= p.when;
+----
+2020-01-01 00:00:03	{'ticker': [APPL, Apple Inc], 'exchange': 1}	42
+
+#
+# Multiple keys
+#
+statement ok
+CREATE TABLE prices_multiple("when" TIMESTAMP, symbol VARCHAR, exchange INTEGER, price INTEGER);
+
+statement ok
+INSERT INTO prices_multiple VALUES 
+	('2020-01-01 00:00:00', 'APPL', 1, 42),
+	('2020-01-01 00:00:00', 'MEL', 2, 55),
+	
+
+statement ok
+CREATE TABLE trades_multiple("when" timestamp, symbol VARCHAR, exchange INTEGER);
+
+statement ok
+INSERT INTO trades_multiple VALUES 
+	('2020-01-01 00:00:03', 'APPL', 1),
+	('2020-01-01 00:00:03', 'MEL', 3),
+
+query IIII
+SELECT t.*, p.price
+FROM trades_multiple t ASOF JOIN prices_multiple p 
+  ON t.symbol = p.symbol 
+ AND t.exchange = p.exchange
+ AND t.when >= p.when
+----
+2020-01-01 00:00:03	APPL	1	42
+
