@@ -36,16 +36,17 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 static void InsertBlock(const uint64_t *__restrict keys, uint64_t *__restrict bf, const uint64_t bitmask) {
 
 	uint64_t shifts[SIMD_BATCH_SIZE];
-	uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(const_cast<uint64_t *>(shifts));
+	const uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(const_cast<uint64_t *>(shifts));
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
 		shifts[i] = keys[i] & SHIFT_MASK;
 	}
 
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
+
 		const uint64_t offset_pos = 8 * i;
-		uint64_t seed = keys[i];
-		const uint64_t bf_offset = seed & bitmask;
+		const uint64_t bf_offset = keys[i] & bitmask;
 		uint64_t mask = 0;
+
 		for (idx_t j = 8 - N_BITS; j < 8; j++) {
 			const uint8_t bit_pos = shifts_8[offset_pos + j];
 			mask |= (1ULL << bit_pos);
@@ -80,12 +81,11 @@ static void LookupBlock(const uint64_t *__restrict keys, const uint64_t *__restr
 
 	const auto shifts_8 = reinterpret_cast<uint8_t *>(shifts);
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
+
 		const uint64_t offset_pos = 8 * i;
-
-		uint64_t seed = keys[i];
-		const uint64_t bf_offset = seed & bitmask;
-
+		const uint64_t bf_offset = keys[i] & bitmask;
 		uint64_t mask = 0;
+
 		for (idx_t j = 8 - N_BITS; j < 8; j++) {
 			const uint8_t bit_pos = shifts_8[offset_pos + j];
 			mask |= (1ULL << bit_pos);
