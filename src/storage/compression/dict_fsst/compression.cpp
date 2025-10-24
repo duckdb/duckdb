@@ -448,7 +448,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		}
 		state.to_encode_string_sum += str_len;
 		auto &uncompressed_string = state.dictionary_encoding_buffer.back();
-		state.current_string_map.Replace(state.dict_count, uncompressed_string);
+		state.current_string_map.Insert(uncompressed_string);
 	} else {
 		state.string_lengths.push_back(str_len);
 		auto baseptr =
@@ -456,7 +456,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		memcpy(baseptr + state.dictionary_offset, str.GetData(), str_len);
 		string_t dictionary_string((const char *)(baseptr + state.dictionary_offset), str_len); // NOLINT
 		state.dictionary_offset += str_len;
-		state.current_string_map.Replace(state.dict_count, dictionary_string);
+		state.current_string_map.Insert(dictionary_string);
 	}
 	state.dict_count++;
 
