@@ -16,6 +16,7 @@
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/table_column.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 
@@ -158,13 +159,14 @@ public:
 	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
 	                   optional_ptr<LocalTableFunctionState> local_state_p,
 	                   optional_ptr<GlobalTableFunctionState> global_state_p)
-	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p), async_result() {
 	}
 
 public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
+	AsyncResult async_result {};
 };
 
 struct TableFunctionPartitionInput {
@@ -329,14 +331,41 @@ enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SC
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	DUCKDB_API TableFunction();
+	// Overloads taking table_function_t
 	DUCKDB_API
-	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
+	TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
 	TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
-	DUCKDB_API TableFunction();
+	// Overloads taking std::nullptr
+	DUCKDB_API
+	TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr);
+	DUCKDB_API
+	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
+	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
+
+	bool HasSimpleScan() const {
+		return function;
+	}
+	SourceResultType SimpleScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) const {
+		data.async_result = AsyncResult(AsyncResultType::IMPLICIT);
+		function(context, data, output);
+		AsyncResultType table_res = data.async_result.GetResultType();
+		SourceResultType source_res;
+		if (ExtractSourceResultType(table_res, source_res)) {
+			return source_res;
+		}
+		// data.async_result is IMPLICIT, so implicit handling:
+		if (output.size() > 0) {
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		}
+		return SourceResultType::FINISHED;
+	}
 
 	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data

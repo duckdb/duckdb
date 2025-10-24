@@ -276,6 +276,7 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
+		res.push_back("ThrowAsyncTask: Test error handling when throwing mid-task");
 	}
 	return res;
 }
