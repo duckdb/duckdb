@@ -68,5 +68,6 @@ private:
 private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
+	void RemoveColumnsFromLogicalGet(LogicalGet &get);
 };
 } // namespace duckdb
