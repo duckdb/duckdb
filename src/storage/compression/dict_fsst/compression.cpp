@@ -285,7 +285,7 @@ void DictFSSTCompressionState::Flush(bool final) {
 	D_ASSERT(to_encode_string_sum == 0);
 
 	// auto old_size = current_string_map.size();
-	// current_string_map.clear();
+	current_string_map.Clear();
 	// if (!final) {
 	// 	current_string_map.reserve(old_size);
 	// }
