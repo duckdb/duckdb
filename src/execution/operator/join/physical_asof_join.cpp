@@ -303,12 +303,39 @@ AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const Hashed
 	}
 }
 
+class AsOfHashGroup {
+public:
+	using HashGroupPtr = unique_ptr<SortedRun>;
+
+	AsOfHashGroup(const PhysicalAsOfJoin &op, HashGroupPtr &lhs_data, HashGroupPtr &rhs_data, const idx_t hash_group);
+
+	bool IsRightOuter() const {
+		return right_outer.Enabled();
+	}
+	//! The parent operator
+	const PhysicalAsOfJoin &op;
+	//! The left hash partition data
+	HashGroupPtr left_group;
+	//! The right hash partition data
+	HashGroupPtr right_group;
+	//! The right outer join markers
+	OuterJoinMarker right_outer;
+};
+
+AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, HashGroupPtr &left_group_p, HashGroupPtr &right_group_p,
+                             const idx_t hash_group)
+    : op(op), left_group(std::move(left_group_p)), right_group(std::move(right_group_p)),
+      right_outer(IsRightOuterJoin(op.join_type)) {
+
+	right_outer.Initialize(right_group ? right_group->Count() : 0);
+};
+
 class AsOfLocalSourceState;
 
 class AsOfGlobalSourceState : public GlobalSourceState {
 public:
-	using HashGroupPtr = unique_ptr<SortedRun>;
-	using HashGroups = vector<HashGroupPtr>;
+	using AsOfHashGroupPtr = unique_ptr<AsOfHashGroup>;
+	using AsOfHashGroups = vector<AsOfHashGroupPtr>;
 
 	AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op);
 
@@ -321,12 +348,8 @@ public:
 	const PhysicalAsOfJoin &op;
 	//! For synchronizing the external hash join
 	atomic<AsOfJoinSourceStage> stage;
-	//! The child's hash groups
-	vector<HashGroups> hashed_groups;
-	//! Whether the right side is outer
-	const bool is_right_outer;
-	//! The right outer join markers (one per partition)
-	vector<OuterJoinMarker> right_outers;
+	//! The childrens' hash groups
+	AsOfHashGroups asof_groups;
 	//! The next buffer to flush
 	atomic<size_t> next_left;
 	//! The number of flushed buffers
@@ -338,36 +361,48 @@ public:
 
 public:
 	idx_t MaxThreads() override {
-		return hashed_groups[1].size();
+		return asof_groups.size();
 	}
 };
 
 AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op)
-    : op(op), stage(AsOfJoinSourceStage::INNER), is_right_outer(IsRightOuterJoin(op.join_type)), next_left(0),
-      flushed_left(0), next_right(0), flushed_right(0) {
+    : op(op), stage(AsOfJoinSourceStage::INNER), next_left(0), flushed_left(0), next_right(0), flushed_right(0) {
 
 	//	 Take ownership of the hash groups
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
+
+	using HashGroupPtr = unique_ptr<SortedRun>;
+	using HashGroups = vector<HashGroupPtr>;
+	vector<HashGroups> hashed_groups;
 	hashed_groups.resize(2);
-	for (idx_t child = 0; child < 2; ++child) {
+	for (idx_t child = 0; child < hashed_groups.size(); ++child) {
 		auto &hashed_sort = *gsink.hashed_sorts[child];
 		auto &hashed_sink = *gsink.hashed_sinks[child];
 		auto hashed_source = hashed_sort.GetGlobalSourceState(client, hashed_sink);
 		auto &sorted_runs = hashed_sort.GetSortedRuns(*hashed_source);
-		auto &hash_groups = hashed_groups[child];
-		hash_groups.resize(sorted_runs.size());
+		auto &child_groups = hashed_groups[child];
+		child_groups.resize(sorted_runs.size());
 
 		for (idx_t group_idx = 0; group_idx < sorted_runs.size(); ++group_idx) {
-			hash_groups[group_idx] = std::move(sorted_runs[group_idx]);
+			child_groups[group_idx] = std::move(sorted_runs[group_idx]);
 		}
 	}
 
-	// for FULL/RIGHT OUTER JOIN, initialize right_outers to false for every tuple
+	//	Pivot into AsOfHashGroups
+	auto &lhs_groups = hashed_groups[0];
 	auto &rhs_groups = hashed_groups[1];
-	right_outers.reserve(rhs_groups.size());
-	for (const auto &hash_group : rhs_groups) {
-		right_outers.emplace_back(is_right_outer);
-		right_outers.back().Initialize(hash_group ? hash_group->Count() : 0);
+	const auto group_count = MaxValue<idx_t>(lhs_groups.size(), rhs_groups.size());
+	for (idx_t group_idx = 0; group_idx < group_count; ++group_idx) {
+		HashGroupPtr lhs_data;
+		if (group_idx < lhs_groups.size()) {
+			lhs_data = std::move(lhs_groups[group_idx]);
+		}
+		HashGroupPtr rhs_data;
+		if (group_idx < rhs_groups.size()) {
+			rhs_data = std::move(rhs_groups[group_idx]);
+		}
+		auto asof_group = make_uniq<AsOfHashGroup>(op, lhs_data, rhs_data, group_idx);
+		asof_groups.emplace_back(std::move(asof_group));
 	}
 }
 
@@ -526,6 +561,8 @@ public:
 	AsOfGlobalSourceState &gsource;
 	//! Is the inequality strict?
 	const bool strict;
+	//! The current hash group
+	optional_ptr<AsOfHashGroup> asof_hash_group;
 
 	//	LHS scanning
 	optional_ptr<SortedRun> left_group;
@@ -608,26 +645,14 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 
+	asof_hash_group = gsource.asof_groups[scan_bin].get();
+
 	//	Always set right_bin too for memory management
-	auto &rhs_groups = gsource.hashed_groups[1];
-	if (scan_bin < rhs_groups.size()) {
-		right_bin = scan_bin;
-	} else {
-		right_bin = rhs_groups.size();
-	}
+	right_group = asof_hash_group->right_group;
+	right_bin = right_group ? scan_bin : gsource.asof_groups.size();
 
-	auto &lhs_groups = gsource.hashed_groups[0];
-	if (scan_bin < lhs_groups.size()) {
-		left_bin = scan_bin;
-	} else {
-		left_bin = lhs_groups.size();
-	}
-
-	if (left_bin >= lhs_groups.size()) {
-		return;
-	}
-
-	left_group = lhs_groups[left_bin].get();
+	left_group = asof_hash_group->left_group;
+	left_bin = left_group ? scan_bin : gsource.asof_groups.size();
 	if (!left_group || !left_group->Count()) {
 		return;
 	}
@@ -672,9 +697,8 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	// We are only probing the corresponding right side bin, which may be empty
 	// If it is empty, we leave the iterator as null so we can emit left matches
 	right_pos = 0;
-	if (right_bin < rhs_groups.size()) {
-		right_group = rhs_groups[right_bin].get();
-		right_outer = gsource.right_outers.data() + right_bin;
+	if (right_group) {
+		right_outer = &asof_hash_group->right_outer;
 		if (right_group && right_group->Count()) {
 			right_itr = CreateIteratorState(*right_group);
 			rhs_scanner = make_uniq<AsOfPayloadScanner>(*right_group, *gsink.hashed_sorts[1]);
@@ -729,18 +753,17 @@ void AsOfProbeBuffer::EndLeftScan() {
 	rhs_scanner.reset();
 	right_outer = nullptr;
 
-	auto &rhs_groups = gsource.hashed_groups[1];
-	if (!gsource.is_right_outer && right_bin < rhs_groups.size()) {
-		rhs_groups[right_bin].reset();
+	auto &asof_groups = gsource.asof_groups;
+	if (!asof_hash_group->IsRightOuter() && right_bin < asof_groups.size()) {
+		asof_groups[right_bin]->right_group.reset();
 	}
 
 	left_group = nullptr;
 	left_itr.reset();
 	lhs_scanner.reset();
 
-	auto &lhs_groups = gsource.hashed_groups[0];
-	if (left_bin < lhs_groups.size()) {
-		lhs_groups[left_bin].reset();
+	if (left_bin < asof_groups.size()) {
+		asof_groups[left_bin]->left_group.reset();
 	}
 }
 
@@ -995,19 +1018,19 @@ AsOfLocalSourceState::AsOfLocalSourceState(ExecutionContext &context, AsOfGlobal
 idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	hash_bin = hash_bin_p;
 
-	auto &rhs_groups = gsource.hashed_groups[1];
-	if (hash_bin >= rhs_groups.size()) {
+	auto &asof_groups = gsource.asof_groups;
+	if (hash_bin >= asof_groups.size()) {
 		return 0;
 	}
 
-	hash_group = std::move(rhs_groups[hash_bin]);
+	hash_group = std::move(asof_groups[hash_bin]->right_group);
 	if (!hash_group || !hash_group->Count()) {
 		return 0;
 	}
 	auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
 	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsink.hashed_sorts[1]);
 
-	rhs_matches = gsource.right_outers[hash_bin].GetMatches();
+	rhs_matches = asof_groups[hash_bin]->right_outer.GetMatches();
 
 	return scanner->Remaining();
 }
@@ -1020,17 +1043,15 @@ unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionCont
 
 bool AsOfGlobalSourceState::TryPrepareNextStage() {
 	//	Inside the lock.
-	auto &lhs_groups = hashed_groups[0];
-	auto &rhs_groups = hashed_groups[1];
 	switch (stage.load()) {
 	case AsOfJoinSourceStage::INNER:
-		if (flushed_left >= lhs_groups.size()) {
+		if (flushed_left >= asof_groups.size()) {
 			stage = IsRightOuterJoin(op.join_type) ? AsOfJoinSourceStage::RIGHT : AsOfJoinSourceStage::DONE;
 			return true;
 		}
 		break;
 	case AsOfJoinSourceStage::RIGHT:
-		if (flushed_right >= rhs_groups.size()) {
+		if (flushed_right >= asof_groups.size()) {
 			stage = AsOfJoinSourceStage::DONE;
 			return true;
 		}
@@ -1044,12 +1065,9 @@ bool AsOfGlobalSourceState::TryPrepareNextStage() {
 bool AsOfGlobalSourceState::AssignTask(AsOfLocalSourceState &lsource) {
 	auto guard = Lock();
 
-	auto &lhs_groups = hashed_groups[0];
-	auto &rhs_groups = hashed_groups[1];
-
 	switch (stage.load()) {
 	case AsOfJoinSourceStage::INNER:
-		while (next_left < lhs_groups.size()) {
+		while (next_left < asof_groups.size()) {
 			//	More to flush
 			const auto left_bin = next_left++;
 			lsource.probe_buffer.BeginLeftScan(left_bin);
@@ -1061,7 +1079,7 @@ bool AsOfGlobalSourceState::AssignTask(AsOfLocalSourceState &lsource) {
 		}
 		break;
 	case AsOfJoinSourceStage::RIGHT:
-		while (next_right < rhs_groups.size()) {
+		while (next_right < asof_groups.size()) {
 			const auto right_bin = next_right++;
 			lsource.BeginRightScan(right_bin);
 			if (!lsource.TaskFinished()) {
