@@ -761,10 +761,16 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 			if (index.IsBound()) {
 				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
 			} else {
-				// See comments above and in unbound index --  fetch_chunk is ordered to map into column_ids
-				// which provides physical offsets, and the delete data is buffered with this ordering and mapping.
+				DataChunk index_column_chunk;
+				index_column_chunk.InitializeEmpty(column_types);
+				for (idx_t i = 0; i < column_types.size(); i++) {
+					auto col_id = column_ids[i].GetPrimaryIndex();
+					index_column_chunk.data[i].Reference(result_chunk.data[col_id]);
+				}
+				index_column_chunk.SetCardinality(result_chunk.size());
 				auto &unbound_index = index.Cast<UnboundIndex>();
-				unbound_index.BufferChunk(fetch_chunk, row_identifiers, column_ids, BufferedIndexReplay::IDX_DELETE);
+				unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids,
+				                          BufferedIndexReplay::IDX_DELETE);
 			}
 			return false;
 		});
