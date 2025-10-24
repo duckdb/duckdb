@@ -867,6 +867,10 @@ public:
 			if (duckdb_zstd::ZSTD_isError(res)) {
 				throw InvalidInputException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(res));
 			}
+			if (out_buffer.pos == out_buffer.size) {
+				//! Done decompressing the relevant portion
+				break;
+			}
 			if (!res) {
 				D_ASSERT(out_buffer.pos == out_buffer.size);
 				D_ASSERT(in_buffer.pos == in_buffer.size);
