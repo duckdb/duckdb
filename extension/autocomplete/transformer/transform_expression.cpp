@@ -324,6 +324,29 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsExpression(PEGTra
 	return expr;
 }
 
+// IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsDistinctFromExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto is_test_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!is_test_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("IsDistinctFromOp has not yet been implemented");
+}
+
+// ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformComparisonExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto comparison_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!comparison_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("ComparisonOperator has not yet been implemented");
+}
 
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(PEGTransformer &transformer,
