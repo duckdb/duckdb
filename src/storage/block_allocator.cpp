@@ -24,9 +24,7 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 #endif
 
 #if defined(_WIN32)
-	// For now, we disable this on Windows
-	return nullptr;
-	// Once we enable this on Windows, we should do something like this
+	// This returns nullptr on failure
 	// return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
 #else
 	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -37,8 +35,7 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 static void FreeVirtualMemory(const data_ptr_t pointer, const idx_t size) {
 	bool success;
 #if defined(_WIN32)
-	// Once we enable this on Windows, we should do something like this
-	// success = VirtualFree(pointer, 0, MEM_RELEASE);
+	success = VirtualFree(pointer, 0, MEM_RELEASE);
 #else
 	success = munmap(pointer, size) == 0;
 #endif
@@ -50,8 +47,7 @@ static void FreeVirtualMemory(const data_ptr_t pointer, const idx_t size) {
 static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 	bool success;
 #if defined(_WIN32)
-	// Once we enable this on Windows, we should do something like this
-	// success = VirtualFree(pointer, size, MEM_RESET);
+	success = VirtualFree(pointer, size, MEM_RESET);
 #elif defined(__APPLE__)
 	success = madvise(pointer, size, MADV_FREE_REUSABLE) == 0;
 #else
@@ -65,8 +61,7 @@ static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 	bool success = true;
 #if defined(_WIN32)
-	// Once we enable this on Windows, we should do something like this
-	// success = VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE);
+	success = VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE);
 #elif defined(__APPLE__)
 	// Nothing to do here
 #else
