@@ -77,13 +77,10 @@ private:
 	SelectivityStats selectivity_data;
 	atomic<BloomFilterState> state {BloomFilterState::Uninitialized};
 	idx_t num_sectors;
+	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
 
 	AllocatedData buf_;
-	uint64_t *blocks;
-
-	void LookupHashesInternal(const uint64_t *hashes, uint64_t *founds, const uint64_t *bf, idx_t count) const;
-
-
+	uint64_t *bf;
 };
 
 class BFTableFilter : public TableFilter {

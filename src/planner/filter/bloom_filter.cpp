@@ -6,13 +6,15 @@ namespace duckdb {
 static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
 static constexpr idx_t MIN_NUM_BITS_PER_KEY = 12;
 static constexpr idx_t MIN_NUM_BITS = 512;
-static constexpr idx_t LOG_SECTOR_SIZE = 6;  // a sector is 64 bits, log2(64) = 6
+static constexpr idx_t LOG_SECTOR_SIZE = 6; // a sector is 64 bits, log2(64) = 6
 static constexpr idx_t SIMD_BATCH_SIZE = 128;
+static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
+static constexpr idx_t N_BITS = 4;  // the number of bits to set per hash
 
 // number of vectors to check before deciding on selectivity
 static constexpr idx_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
 // if the selectivity is higher than this, we disable the BF
-static constexpr double SELECTIVITY_THRESHOLD = 0.26;
+static constexpr double SELECTIVITY_THRESHOLD = 0.25;
 
 void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 
@@ -20,28 +22,21 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 
 	const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, number_of_rows * MIN_NUM_BITS_PER_KEY);
 	num_sectors = std::min(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
+	bitmask = num_sectors - 1;
 
 	buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint64_t));
 	// make sure blocks is a 64-byte aligned pointer, i.e., cache-line aligned
-	blocks = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
-	std::fill_n(blocks, num_sectors, 0);
+	bf = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
+	std::fill_n(bf, num_sectors, 0);
 
 	state.store(BloomFilterState::Active);
 }
 
-static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
-static constexpr uint8_t SHIFT_MASK_8 = 0x3F; // 6 bits for 64 positions
-static constexpr idx_t N_BITS = 4;
 
-
-void InsertBlock(
-		const uint64_t *__restrict keys,
-		uint64_t *__restrict bf,
-		const uint64_t bitmask
-	) {
+static void InsertBlock(const uint64_t *__restrict keys, uint64_t *__restrict bf, const uint64_t bitmask) {
 
 	uint64_t shifts[SIMD_BATCH_SIZE];
-	uint8_t* shifts_8 = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(shifts));
+	uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(const_cast<uint64_t *>(shifts));
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
 		shifts[i] = keys[i] & SHIFT_MASK;
 	}
@@ -61,17 +56,11 @@ void InsertBlock(
 	}
 }
 
-
 void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 
-	auto hashes = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
-	const uint64_t bitmask = num_sectors - 1;
+	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
 	while (count >= SIMD_BATCH_SIZE) {
-		InsertBlock(
-			hashes,
-			blocks,
-			bitmask
-		);
+		InsertBlock(hashes, bf, bitmask);
 		hashes += SIMD_BATCH_SIZE;
 		count -= SIMD_BATCH_SIZE;
 	}
@@ -80,38 +69,16 @@ void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 	}
 }
 
-idx_t BloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel,
-                                               const idx_t count) const {
 
-	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
-	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
-
-	const auto hashes_64 = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
-	auto found_bools = FlatVector::GetData<uint64_t>(found_v);
-
-	LookupHashesInternal(hashes_64, found_bools, blocks, count);
-
-	idx_t found_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		result_sel.set_index(found_count, i);
-		found_count += found_bools[i];
-	}
-	return found_count;
-}
-
-static void SearchBlock(
-  const uint64_t *__restrict keys,
-  const uint64_t *__restrict bf,
-  uint64_t *__restrict found,
-  const uint64_t bitmask
-  ) {
+static void LookupBlock(const uint64_t *__restrict keys, const uint64_t *__restrict bf, uint64_t *__restrict found,
+						const uint64_t bitmask) {
 
 	uint64_t shifts[SIMD_BATCH_SIZE];
-	uint8_t* shifts_8 = reinterpret_cast<uint8_t*>(const_cast<uint64_t*>(shifts));
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
 		shifts[i] = keys[i] & SHIFT_MASK;
 	}
 
+	const auto shifts_8 = reinterpret_cast<uint8_t *>(shifts);
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
 		const uint64_t offset_pos = 8 * i;
 
@@ -128,32 +95,39 @@ static void SearchBlock(
 	}
 }
 
-void BloomFilter::LookupHashesInternal(const uint64_t *__restrict hashes, uint64_t *__restrict founds,
-                                                      const uint64_t *__restrict bf, idx_t count) const {
+idx_t BloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel,
+                                idx_t count) const {
 
-	const uint64_t bitmask = num_sectors - 1;
+	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
+
+	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
+	auto founds = FlatVector::GetData<uint64_t>(found_v);
+
 	while (count >= SIMD_BATCH_SIZE) {
-		SearchBlock(
-			hashes,
-			bf,
-			founds,
-			bitmask
-		);
+		LookupBlock(hashes, bf, founds, bitmask);
 		hashes += SIMD_BATCH_SIZE;
 		founds += SIMD_BATCH_SIZE;
 		count -= SIMD_BATCH_SIZE;
 	}
 	for (idx_t i = 0; i < count; i++) {
-		founds[i] =  LookupOne(hashes[i]);
+		founds[i] = LookupOne(hashes[i]);
 	}
+
+	idx_t found_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		result_sel.set_index(found_count, i);
+		found_count += founds[i];
+	}
+	return found_count;
 }
 
-void BloomFilter::InsertOne(const hash_t hash) const {;
+inline void BloomFilter::InsertOne(const hash_t hash) const {
 
-	uint64_t shifts[1] = {hash & SHIFT_MASK};
-	auto shifts_8 = reinterpret_cast<uint8_t*>(shifts);
+	const uint64_t shifts = hash & SHIFT_MASK;
+	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
 
-	const uint64_t bf_offset = hash & (num_sectors - 1);
+	const uint64_t bf_offset = hash & bitmask;
 
 	uint64_t mask = 0;
 	for (idx_t j = 8 - N_BITS; j < 8; j++) {
@@ -161,16 +135,16 @@ void BloomFilter::InsertOne(const hash_t hash) const {;
 		mask |= (1ULL << bit_pos);
 	}
 
-	std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&blocks[bf_offset]);
+	std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&bf[bf_offset]);
 	slot.fetch_or(mask, std::memory_order_relaxed);
 }
 
 inline bool BloomFilter::LookupOne(uint64_t hash) const {
 
-	uint64_t shifts[1] = {hash & SHIFT_MASK};
-	auto shifts_8 = reinterpret_cast<uint8_t*>(shifts);
+	const uint64_t shifts = hash & SHIFT_MASK;
+	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
 
-	const uint64_t bf_offset = hash & (num_sectors - 1);
+	const uint64_t bf_offset = hash & bitmask;
 
 	uint64_t mask = 0;
 	for (idx_t j = 8 - N_BITS; j < 8; j++) {
@@ -178,7 +152,7 @@ inline bool BloomFilter::LookupOne(uint64_t hash) const {
 		mask |= (1ULL << bit_pos);
 	}
 
-	return (blocks[bf_offset] & mask) == mask;
+	return (bf[bf_offset] & mask) == mask;
 }
 
 string BFTableFilter::ToString(const string &column_name) const {
@@ -190,7 +164,7 @@ string BFTableFilter::ToString(const string &column_name) const {
 }
 
 void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
-                               BloomFilterState &state) const {
+                                 BloomFilterState &state) const {
 	if (sel.IsSet()) {
 		state.keys_sliced_v.Slice(keys_v, sel, approved_count);
 		VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_count);
@@ -200,7 +174,7 @@ void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, con
 }
 
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
-                          BloomFilterState &state) const {
+                            BloomFilterState &state) const {
 	if (!this->filter.IsActive()) {
 		return approved_tuple_count;
 	}
