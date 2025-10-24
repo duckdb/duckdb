@@ -731,7 +731,6 @@ private:
 	}
 };
 
-
 class ArithmeticOperatorMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPERATOR;

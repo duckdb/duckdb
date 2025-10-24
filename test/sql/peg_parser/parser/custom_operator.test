@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/parser/lambda_functions.test
+# name: test/sql/peg_parser/parser/custom_operator.test
 # description: Test inet operator in peg parser
 # group: [parser]
 

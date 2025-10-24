@@ -222,15 +222,19 @@ private:
 	static LogicalType TransformDecimalNumericType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformFloatType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformDecimalType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformTypeModifiers(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformTypeModifiers(PEGTransformer &transformer,
+	                                                                   optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformSimpleType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static QualifiedName TransformQualifiedTypeName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformQualifiedTypeName(PEGTransformer &transformer,
+	                                                optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformCharacterType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformMapType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformRowType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformUnionType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static child_list_t<LogicalType> TransformColIdTypeList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static std::pair<std::string, LogicalType> TransformColIdType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static child_list_t<LogicalType> TransformColIdTypeList(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
+	static std::pair<std::string, LogicalType> TransformColIdType(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformBitType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformIntervalType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformIntervalInterval(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
@@ -238,17 +242,16 @@ private:
 
 	// create_table.gram
 	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
-													 optional_ptr<ParseResult> parse_result);
+	                                                 optional_ptr<ParseResult> parse_result);
 	static string TransformColIdOrString(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformDottedIdentifier(PEGTransformer &transformer,
-													optional_ptr<ParseResult> parse_result);
+	                                                optional_ptr<ParseResult> parse_result);
 
 	// deallocate.gram
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
-
 
 	// delete.gram
 	static unique_ptr<SQLStatement> TransformDeleteStatement(PEGTransformer &transformer,
