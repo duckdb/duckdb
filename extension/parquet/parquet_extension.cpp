@@ -998,9 +998,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	    "enable_geoparquet_conversion",
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
 	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
-	config.AddExtensionOption("variant_legacy_encoding",
-	                          "Enables the Parquet reader to identify a Variant structurally.", LogicalType::BOOLEAN,
-	                          Value::BOOLEAN(false));
 }
 
 void ParquetExtension::Load(ExtensionLoader &loader) {

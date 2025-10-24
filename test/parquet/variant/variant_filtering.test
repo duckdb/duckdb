@@ -1,0 +1,17 @@
+# name: test/parquet/variant/variant_filtering.test
+# group: [variant]
+
+require parquet
+
+query II
+from parquet_scan('data/parquet-testing/variant_array_object_string.parquet') WHERE var != [{a:123456789,c:'string'},{a:123456789,c:'string'}]
+----
+
+query I
+select id from parquet_scan('data/parquet-testing/variant_array_object_string.parquet') WHERE var == [{a:123456789,c:'string'},{a:123456789,c:'string'}]
+----
+1
+
+query I
+select id from parquet_scan('data/parquet-testing/variant_array_object_string.parquet') WHERE var == [{a:123456788,c:'string'},{a:123456789,c:'string'}]
+----

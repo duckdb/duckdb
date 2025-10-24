@@ -8,7 +8,6 @@
 #include "duckdb/function/cast/variant/to_variant.hpp"
 
 namespace duckdb {
-
 namespace variant {
 
 static void InitializeOffsets(DataChunk &offsets, idx_t count) {
