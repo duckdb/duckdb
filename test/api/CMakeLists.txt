@@ -49,7 +49,7 @@ if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)
       serialized_plans/test_plan_serialization_bwc.cpp)
 endif()
 
-add_library(test_api OBJECT ${TEST_API_OBJECTS})
+add_library_unity(test_api OBJECT ${TEST_API_OBJECTS})
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_api>
     PARENT_SCOPE)
