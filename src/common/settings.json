@@ -177,6 +177,15 @@
         ]
     },
     {
+        "name": "compression_sample_rate",
+        "description": "The sampling ratio used to detect the best compression method.",
+        "type": "DOUBLE",
+        "scope": "global",
+        "custom_implementation": [
+            "set"
+        ]
+    },
+    {
         "name": "custom_extension_repository",
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "VARCHAR",
