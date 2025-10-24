@@ -42,7 +42,6 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"!__postfix", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"&&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"**", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"<->", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
