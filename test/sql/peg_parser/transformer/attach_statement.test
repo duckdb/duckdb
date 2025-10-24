@@ -1,0 +1,72 @@
+# name: test/sql/peg_parser/transformer/attach_statement.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [transformer]
+
+require autocomplete
+
+require skip_reload
+
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+set allow_parser_override_extension=strict_when_supported;
+
+statement ok
+ATTACH '__TEST_DIR__/first.db' (TYPE DUCKDB);
+
+statement ok
+ATTACH DATABASE ':memory:' AS database;
+
+statement ok
+CREATE SCHEMA database.schema;
+
+statement error
+ATTACH DATABASE ':memory:' AS temp;
+----
+Binder Error: Attached database name "temp" cannot be used because it is a reserved name
+
+statement ok
+SET VARIABLE db_type='DUCKDB';
+
+statement ok
+ATTACH ':memory:' AS db1 (TYPE getvariable('db_type'));
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
+----
+Binder Error: "true" is not a valid key. A key must be of type VARCHAR
+
+statement ok
+ATTACH '__TEST_DIR__/macro_default_arg.db' (STORAGE_VERSION 'v1.0.0');
+
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+statement error
+ATTACH '__TEST_DIR__/persistent_attach.db'
+----
+
+statement error
+ATTACH '__TEST_DIR__/error.db' (TYPE DUCKDB, HELLO, OPTION 2);
+----
+<REGEX>:Binder Error.*Unrecognized option for attach.*
+
+statement error
+ATTACH '__TEST_DIR__/error.db' (HELLO, OPTION 2);
+----
+<REGEX>:Binder Error.*Unrecognized option for attach.*
+
+# create a database file and close it again
+statement ok
+ATTACH '__TEST_DIR__/attach_read_only.db' AS db2
+
+statement ok
+DETACH db2
+
+statement ok
+ATTACH '__TEST_DIR__/attach_read_only.db' AS db2 (READONLY 1);
+
+

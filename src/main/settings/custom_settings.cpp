@@ -163,12 +163,15 @@ bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConf
 //===----------------------------------------------------------------------===//
 bool AllowParserOverrideExtensionSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto new_value = input.GetValue<string>();
-	if (!StringUtil::CIEquals(new_value, "default") && !StringUtil::CIEquals(new_value, "fallback") &&
-	    !StringUtil::CIEquals(new_value, "strict")) {
-		throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: \"default\", "
-		                            "\"fallback\", \"strict\".");
+	vector<string> supported_options = {"default", "fallback", "strict", "strict_when_supported"};
+	string supported_option_string;
+	for (const auto &option : supported_options) {
+		if (StringUtil::CIEquals(new_value, option)) {
+			return true;
+		}
 	}
-	return true;
+	throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: %s",
+	                            StringUtil::Join(supported_options, ", "));
 }
 
 bool AllowParserOverrideExtensionSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {

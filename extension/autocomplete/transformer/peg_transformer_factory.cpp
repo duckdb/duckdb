@@ -18,7 +18,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
 	}
-
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
 	MatchState state(tokens, suggestions, parse_result_allocator);
@@ -40,7 +39,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 		throw ParserException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
 		                      state.token_index, tokens[state.token_index].text, token_list);
 	}
-
 	match_result->name = root_rule;
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
@@ -61,16 +59,46 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 
+	// attach.gram
+	REGISTER_TRANSFORM(TransformAttachStatement);
+	REGISTER_TRANSFORM(TransformAttachAlias);
+	REGISTER_TRANSFORM(TransformAttachOptions);
+	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
+	REGISTER_TRANSFORM(TransformGenericCopyOption);
+
 	// common.gram
 	REGISTER_TRANSFORM(TransformNumberLiteral);
 	REGISTER_TRANSFORM(TransformStringLiteral);
 
+	// create_table.gram
+	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
+	REGISTER_TRANSFORM(TransformColIdOrString);
+	REGISTER_TRANSFORM(TransformColId);
+	REGISTER_TRANSFORM(TransformIdentifier);
+	REGISTER_TRANSFORM(TransformDottedIdentifier);
+
+	// detach.gram
+	REGISTER_TRANSFORM(TransformDetachStatement);
+
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
+	REGISTER_TRANSFORM(TransformNestedColumnName);
+	REGISTER_TRANSFORM(TransformColumnReference);
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
 	REGISTER_TRANSFORM(TransformConstantLiteral);
+	REGISTER_TRANSFORM(TransformFunctionExpression);
+	REGISTER_TRANSFORM(TransformFunctionIdentifier);
+
+	// load.gram
+	REGISTER_TRANSFORM(TransformLoadStatement);
+	REGISTER_TRANSFORM(TransformInstallStatement);
+	REGISTER_TRANSFORM(TransformFromSource);
+	REGISTER_TRANSFORM(TransformVersionNumber);
+
+	// select.gram
+	REGISTER_TRANSFORM(TransformFunctionArgument);
 
 	// use.gram
 	REGISTER_TRANSFORM(TransformUseStatement);
@@ -85,6 +113,18 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformSetVariable);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);
+
+	Register("PragmaName", &TransformIdentifierOrKeyword);
+	Register("TypeName", &TransformIdentifierOrKeyword);
+	Register("ColLabel", &TransformIdentifierOrKeyword);
+	Register("PlainIdentifier", &TransformIdentifierOrKeyword);
+	Register("QuotedIdentifier", &TransformIdentifierOrKeyword);
+	Register("ReservedKeyword", &TransformIdentifierOrKeyword);
+	Register("UnreservedKeyword", &TransformIdentifierOrKeyword);
+	Register("ColumnNameKeyword", &TransformIdentifierOrKeyword);
+	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
+	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
+	Register("SettingName", &TransformIdentifierOrKeyword);
 
 	RegisterEnum<SetScope>("LocalScope", SetScope::LOCAL);
 	RegisterEnum<SetScope>("GlobalScope", SetScope::GLOBAL);
@@ -113,4 +153,22 @@ PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> par
 
 	return result;
 }
+
+optional_ptr<ParseResult> PEGTransformerFactory::ExtractResultFromParens(optional_ptr<ParseResult> parse_result) {
+	// Parens(D) <- '(' D ')'
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.GetChild(1);
+}
+
+bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::STAR) {
+		return false;
+	}
+	auto &star = expr.Cast<StarExpression>();
+	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
+		return true;
+	}
+	return false;
+}
+
 } // namespace duckdb

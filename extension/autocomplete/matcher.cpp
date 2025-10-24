@@ -61,10 +61,14 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
 		if (!MatchKeyword(state)) {
 			return nullptr;
 		}
-		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(keyword));
+		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text));
 		result->name = name;
 		return result;
 	}
@@ -384,6 +388,13 @@ public:
 	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
 	}
 
+	bool IsQuoted(const string &text) const {
+		if (text.front() == '"' && text.back() == '"') {
+			return true;
+		}
+		return false;
+	}
+
 	bool IsIdentifier(const string &text) const {
 		if (text.empty()) {
 			return false;
@@ -391,7 +402,7 @@ public:
 		if (text.front() == '\'' && text.back() == '\'' && SupportsStringLiteral()) {
 			return true;
 		}
-		if (text.front() == '"' && text.back() == '"') {
+		if (IsQuoted(text)) {
 			return true;
 		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
@@ -411,6 +422,9 @@ public:
 		auto &token_text = state.tokens[state.token_index].text;
 		if (!MatchIdentifier(state)) {
 			return nullptr;
+		}
+		if (IsQuoted(token_text)) {
+			token_text = token_text.substr(1, token_text.size() - 2);
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}
@@ -761,6 +775,7 @@ private:
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
+	Matcher &CopyOptionName() const;
 	Matcher &ReservedSchemaName() const;
 	Matcher &ReservedTableName() const;
 	Matcher &ReservedColumnName() const;
@@ -863,6 +878,10 @@ Matcher &MatcherFactory::PragmaName() const {
 
 Matcher &MatcherFactory::SettingName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME));
+}
+
+Matcher &MatcherFactory::CopyOptionName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
 }
 
 Matcher &MatcherFactory::NumberLiteral() const {
@@ -1144,6 +1163,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
+	AddRuleOverride("CopyOptionName", CopyOptionName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
