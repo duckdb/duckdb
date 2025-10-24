@@ -115,3 +115,21 @@ TEST_CASE("Test user_agent", "[api]") {
 		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
 	}
 }
+
+TEST_CASE("Test secret_directory configuration", "[api]") {
+	DBConfig config;
+
+	auto options = config.GetOptions();
+
+	config.SetOptionByName("secret_directory", Value("my_secret_dir"));
+	config.SetOptionByName("extension_directory", Value("my_extension_dir"));
+
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	auto select_extension_dir = con.Query("SELECT current_setting('extension_directory') AS extdir;");
+	REQUIRE(select_extension_dir->GetValue(0, 0).ToString() == "my_extension_dir");
+
+	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
+	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == "my_secret_dir");
+}
