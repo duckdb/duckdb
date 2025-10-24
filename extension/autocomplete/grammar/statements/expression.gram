@@ -152,12 +152,12 @@ MultiplyOperator <- '*'
 DivisionOperator <- '/'
 FloorDivisionOperator <- '//'
 ModuloOperator <- '%'
-ExponentiationExpression <- AtTimeZoneExpression (ExponentOperator AtTimeZoneExpression)*
+ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
 ExponentOperator <- '^' / '**'
-AtTimeZoneExpression <- CollateExpression (AtTimeZoneOperator CollateExpression)*
-AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
-CollateExpression <- PrefixExpression (CollateOperator PrefixExpression)*
+CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
 CollateOperator <- 'COLLATE'
+AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
+AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 PrefixExpression <- PrefixOperator* BaseExpression
 PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
