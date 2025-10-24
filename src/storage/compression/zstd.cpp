@@ -390,22 +390,23 @@ public:
 		in_vector = true;
 	}
 
-	void CompressString(const string_t &string) {
+	void CompressString(const string_t &string, bool end_of_vector) {
 		duckdb_zstd::ZSTD_inBuffer in_buffer = {/*data = */ string.GetData(),
 		                                        /*length = */ size_t(string.GetSize()),
 		                                        /*pos = */ 0};
 
-		if (string.GetSize() == 0) {
+		if (!end_of_vector && string.GetSize() == 0) {
 			return;
 		}
 		uncompressed_size += string.GetSize();
+		const auto end_mode = end_of_vector ? duckdb_zstd::ZSTD_e_end : duckdb_zstd::ZSTD_e_continue;
 
 		size_t compress_result;
 		while (true) {
 			idx_t old_pos = out_buffer.pos;
 
-			compress_result = duckdb_zstd::ZSTD_compressStream2(analyze_state->context, &out_buffer, &in_buffer,
-			                                                    duckdb_zstd::ZSTD_e_continue);
+			compress_result =
+			    duckdb_zstd::ZSTD_compressStream2(analyze_state->context, &out_buffer, &in_buffer, end_mode);
 			D_ASSERT(out_buffer.pos >= old_pos);
 			auto diff = out_buffer.pos - old_pos;
 			compressed_size += diff;
@@ -420,9 +421,6 @@ public:
 				// Finished
 				break;
 			}
-
-			//! compress_result has indicated that it couldn't flush all of its data, and its not an error
-			//! So that means it needs more output_buffer to flush the data, give it a new page for that.
 			NewPage();
 		}
 	}
@@ -433,7 +431,8 @@ public:
 		}
 
 		string_lengths[tuple_count] = UnsafeNumericCast<string_length_t>(string.GetSize());
-		CompressString(string);
+		bool final_tuple = tuple_count + 1 >= vector_size;
+		CompressString(string, final_tuple);
 
 		tuple_count++;
 		if (tuple_count == vector_size) {
@@ -477,35 +476,7 @@ public:
 		block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
 	}
 
-	void FlushStringsForVector() {
-		while (true) {
-			duckdb_zstd::ZSTD_inBuffer empty_buffer = {/*data = */ nullptr,
-			                                           /*length = */ size_t(0),
-			                                           /*pos = */ 0};
-			idx_t old_pos = out_buffer.pos;
-
-			auto flush_result = duckdb_zstd::ZSTD_compressStream2(analyze_state->context, &out_buffer, &empty_buffer,
-			                                                      duckdb_zstd::ZSTD_e_end);
-			D_ASSERT(out_buffer.pos >= old_pos);
-			auto diff = out_buffer.pos - old_pos;
-			compressed_size += diff;
-			current_buffer_ptr += diff;
-
-			if (duckdb_zstd::ZSTD_isError(flush_result)) {
-				throw InvalidInputException("ZSTD Flush failed: %s", duckdb_zstd::ZSTD_getErrorName(flush_result));
-			}
-			D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
-			if (flush_result == 0) {
-				// Finished
-				break;
-			}
-			NewPage();
-		}
-	}
-
 	void FlushVector() {
-		FlushStringsForVector();
-
 		// Write the metadata for this Vector
 		page_ids[vector_in_segment_count] = starting_page;
 		page_offsets[vector_in_segment_count] = starting_offset;
