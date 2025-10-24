@@ -13,4 +13,6 @@ CALL check_peg_parser($TEST_PEG_PARSER$SELECT j->>'duck';$TEST_PEG_PARSER$);
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT 2**2 + 1;$TEST_PEG_PARSER$);
 
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select 1 not null; $TEST_PEG_PARSER$);
 

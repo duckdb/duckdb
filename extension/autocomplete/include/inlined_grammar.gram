@@ -632,82 +632,85 @@ SingleExpression <-
     PositionalExpression /
     DefaultExpression
 
-DistinctFrom <- 'DISTINCT' 'FROM'
-ConjunctionOr <- 'OR'
-ConjunctionAnd <- 'AND'
-PostfixOperator <- '!'
-AnyOrAll <- 'ANY' / 'ALL'
-
-CastOperator <- '::' Type
-DotOperator <- '.' (FunctionExpression / ColLabel)
-NotNull <- 'NOT' 'NULL'
-Indirection <- CastOperator / DotOperator / SliceExpression / NotNull / PostfixOperator
-
+# LEVEL 1 (Lowest)
 Expression <- LogicalOrExpression
-LogicalOrExpression <- LogicalAndExpression (ConjunctionOr LogicalAndExpression)*
-LogicalAndExpression <- LogicalNotExpression (ConjunctionAnd LogicalNotExpression)*
+LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
+# LEVEL 2
+LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
+# LEVEL 3
 LogicalNotExpression <- 'NOT'* IsExpression
-IsExpression <- ComparisonExpression (IsOperator)*
-IsOperator <- 'IS' 'NOT'? ('TRUE' / 'FALSE' / 'NULL' / 'UNKNOWN')
-ComparisonExpression <- OtherOperatorExpression (ComparisonOps OtherOperatorExpression)*
-ComparisonOps <-
-    LikeOperator /
-    InOperator /
-    BetweenOperator /
-    AnyAllOperator /
-    ComparisonOperator /
-    IsDistinctFromOperator /
-    LambdaOperator /
-    EscapeOperator /
-    InetOperator /
-    JsonOperator /
-    ListOperator /
-    StringOperator
-
-ListOperator <- '&&' / '@>' / '<@'
-StringOperator <- '^@'
+# LEVEL 4
+IsExpression <- IsDistinctFromExpression (IsTest)*
+IsTest <- ('IS' 'NOT'? ('TRUE' / 'FALSE' / 'UNKNOWN' / 'NULL')) / NotNull / IsNull
+NotNull <- ('NOT' 'NULL') / 'NOTNULL'
+IsNull <- 'ISNULL'
+# LEVEL 5 (Split because IsDistinctFromExpression allows post expression while IsOperator does not)
+IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*
+IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
+# LEVEL 6
+ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
+ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
+# LEVEL 7
+BetweenInLikeExpression <- OtherOperatorExpression (BetweenInLikeOp)?
+BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
+LikeClause <- LikeVariations OtherOperatorExpression ('ESCAPE' OtherOperatorExpression)?
+LikeVariations <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO') / '~' / '~~' / '!~' / '!~~' / '!~~*'
+InClause <- 'IN' InExpression
+InExpression <- Parens(List(Expression)) / Parens(SelectStatement) / OtherOperatorExpression
+BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
+# LEVEL 8
+OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
+OtherOperator <-
+    AnyAllOperator / LambdaOperator / InetOperator / JsonOperator / ListOperator / StringOperator
+AnyAllOperator <- ComparisonOperator AnyOrAll
+AnyOrAll <- 'ANY' / 'ALL'
+LambdaOperator <- '->'
 InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
-
-LikeOperator <- 'NOT'? LikeVariations
-LikeVariations <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO') / '~' / '~~' / '!~' / '!~~' / '!~~*'
-InOperator <- 'NOT'? 'IN'
-BetweenOperator <- 'NOT'? 'BETWEEN'
-ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '==' / '&&'
-AnyAllOperator <- ComparisonOperator ('ANY' / 'ALL')
-IsDistinctFromOperator <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
-LambdaOperator <- '->'
-EscapeOperator <- 'ESCAPE'
-
-OtherOperatorExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
+ListOperator <- '&&' / '@>' / '<@'
+StringOperator <- '^@' / '||'
+# LEVEL 9
+BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
 BitOperator <- '&' / '|' / '<<' / '>>' / '||'
+# LEVEL 10
 AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
 Term <- PlusOperator / MinusOperator
 PlusOperator <- '+'
 MinusOperator <- '-'
+# LEVEL 11
 MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
 Factor <- MultiplyOperator / DivisionOperator / FloorDivisionOperator / ModuloOperator
 MultiplyOperator <- '*'
 DivisionOperator <- '/'
 FloorDivisionOperator <- '//'
 ModuloOperator <- '%'
-ExponentiationExpression <- AtTimeZoneExpression (ExponentOperator AtTimeZoneExpression)*
+# LEVEL 12
+ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
 ExponentOperator <- '^' / '**'
-AtTimeZoneExpression <- CollateExpression (AtTimeZoneOperator CollateExpression)*
-AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
-CollateExpression <- PrefixExpression (CollateOperator PrefixExpression)*
+# LEVEL 13
+CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
 CollateOperator <- 'COLLATE'
+# LEVEL 14
+AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
+AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
+# LEVEL 15
 PrefixExpression <- PrefixOperator* BaseExpression
 PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
-
+# LEVEL 16
 BaseExpression <- SingleExpression Indirection*
+
+Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
+CastOperator <- '::' Type
+DotOperator <- '.' (FunctionExpression / ColLabel)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
 StepSliceBOund <- ':' Expression?
+PostfixOperator <- '!'
+
 
 SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))
@@ -721,7 +724,6 @@ RowExpression <- 'ROW' Parens(List(Expression))
 SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
 SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
-
 TrimDirection <- 'BOTH' / 'LEADING' / 'TRAILING'
 TrimSource <- Expression? 'FROM'
 

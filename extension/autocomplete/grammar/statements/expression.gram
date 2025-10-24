@@ -93,71 +93,85 @@ SingleExpression <-
     PositionalExpression /
     DefaultExpression
 
+# LEVEL 1 (Lowest)
 Expression <- LogicalOrExpression
-LogicalOrExpression <- LogicalAndExpression (ConjunctionOr LogicalAndExpression)*
-LogicalAndExpression <- LogicalNotExpression (ConjunctionAnd LogicalNotExpression)*
+LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
+# LEVEL 2
+LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
+# LEVEL 3
 LogicalNotExpression <- 'NOT'* IsExpression
-IsExpression <- ComparisonExpression (IsOperator)*
-IsOperator <- 'IS' 'NOT'? ('TRUE' / 'FALSE' / 'NULL' / 'UNKNOWN')
-ComparisonExpression <- OtherOperatorExpression (ComparisonOps OtherOperatorExpression)*
-OtherOperatorExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
-AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
-MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
-ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
-CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
-AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
-PrefixExpression <- PrefixOperator* BaseExpression
-BaseExpression <- SingleExpression Indirection*
-
-ComparisonOps <-
-    LikeOperator / InOperator / BetweenOperator / AnyAllOperator / ComparisonOperator / IsDistinctFromOperator /
-    LambdaOperator / EscapeOperator / InetOperator / JsonOperator / ListOperator / StringOperator
-
-LikeOperator <- 'NOT'? LikeVariations
+# LEVEL 4
+IsExpression <- IsDistinctFromExpression (IsTest)*
+IsTest <- ('IS' 'NOT'? ('TRUE' / 'FALSE' / 'UNKNOWN' / 'NULL')) / NotNull / IsNull
+NotNull <- ('NOT' 'NULL') / 'NOTNULL'
+IsNull <- 'ISNULL'
+# LEVEL 5 (Split because IsDistinctFromExpression allows post expression while IsOperator does not)
+IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*
+IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
+# LEVEL 6
+ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
+ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
+# LEVEL 7
+BetweenInLikeExpression <- OtherOperatorExpression (BetweenInLikeOp)?
+BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
+LikeClause <- LikeVariations OtherOperatorExpression ('ESCAPE' OtherOperatorExpression)?
 LikeVariations <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO') / '~' / '~~' / '!~' / '!~~' / '!~~*'
-InOperator <- 'NOT'? 'IN'
-BetweenOperator <- 'NOT'? 'BETWEEN'
+InClause <- 'IN' InExpression
+InExpression <- Parens(List(Expression)) / Parens(SelectStatement) / OtherOperatorExpression
+BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
+# LEVEL 8
+OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
+OtherOperator <-
+    AnyAllOperator / LambdaOperator / InetOperator / JsonOperator / ListOperator / StringOperator
 AnyAllOperator <- ComparisonOperator AnyOrAll
 AnyOrAll <- 'ANY' / 'ALL'
-ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '==' / '&&'
-IsDistinctFromOperator <- 'IS' 'NOT'? DistinctFrom
-DistinctFrom <- 'DISTINCT' 'FROM'
 LambdaOperator <- '->'
-EscapeOperator <- 'ESCAPE'
 InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
 ListOperator <- '&&' / '@>' / '<@'
-StringOperator <- '^@'
-
-ConjunctionOr <- 'OR'
-ConjunctionAnd <- 'AND'
-
+StringOperator <- '^@' / '||'
+# LEVEL 9
+BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
 BitOperator <- '&' / '|' / '<<' / '>>' / '||'
+# LEVEL 10
+AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
 Term <- PlusOperator / MinusOperator
 PlusOperator <- '+'
 MinusOperator <- '-'
+# LEVEL 11
+MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
 Factor <- MultiplyOperator / DivisionOperator / FloorDivisionOperator / ModuloOperator
 MultiplyOperator <- '*'
 DivisionOperator <- '/'
 FloorDivisionOperator <- '//'
 ModuloOperator <- '%'
+# LEVEL 12
+ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
 ExponentOperator <- '^' / '**'
+# LEVEL 13
+CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
 CollateOperator <- 'COLLATE'
+# LEVEL 14
+AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
-Indirection <- CastOperator / DotOperator / SliceExpression / NotNull / PostfixOperator
+# LEVEL 15
+PrefixExpression <- PrefixOperator* BaseExpression
+PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+MinusPrefixOperator <- '-'
+PlusPrefixOperator <- '+'
+TildePrefixOperator <- '~'
+# LEVEL 16
+BaseExpression <- SingleExpression Indirection*
+
+Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
 CastOperator <- '::' Type
 DotOperator <- '.' (FunctionExpression / ColLabel)
-NotNull <- 'NOT' 'NULL'
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
 StepSliceBOund <- ':' Expression?
 PostfixOperator <- '!'
 
-PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
-MinusPrefixOperator <- '-'
-PlusPrefixOperator <- '+'
-TildePrefixOperator <- '~'
 
 SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))
