@@ -83,9 +83,9 @@ struct BlockQueue {
 	duckdb_moodycamel::ConcurrentQueue<uint32_t> q;
 };
 
-BlockAllocator::BlockAllocator(Allocator &allocator_p, bool enabled_p, const idx_t block_size_p,
+BlockAllocator::BlockAllocator(Allocator &allocator_p, bool enable, const idx_t block_size_p,
                                const idx_t virtual_memory_size_p)
-    : allocator(allocator_p), enabled(enabled_p), block_size(block_size_p),
+    : allocator(allocator_p), enabled(enable), block_size(block_size_p),
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)),
       virtual_memory_space(AllocateVirtualMemory(virtual_memory_size)), untouched(make_unsafe_uniq<BlockQueue>()),
@@ -108,8 +108,8 @@ BlockAllocator &BlockAllocator::Get(AttachedDatabase &db) {
 	return Get(db.GetDatabase());
 }
 
-void BlockAllocator::SetEnabled(bool enabled_p) {
-	enabled = enabled_p;
+void BlockAllocator::SetEnabled(bool enable) {
+	enabled = enable;
 }
 
 void BlockAllocator::Resize() const {
@@ -164,7 +164,7 @@ data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
 }
 
 data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
-	if (!IsActive() || !enabled || size != block_size) {
+	if (!IsActive() || !enabled.load(std::memory_order_relaxed) || size != block_size) {
 		return allocator.AllocateData(size);
 	}
 
