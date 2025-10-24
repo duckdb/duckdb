@@ -23,19 +23,28 @@
 //  IN THE SOFTWARE.
 
 import Foundation
+import XCTest
+@testable import DuckDB
 
-public extension Foundation.Date {
-  
-  /// Creates a date value initialized from a DuckDB Time value
-  init(_ date: Time) {
-    self.init(timeIntervalSince1970: TimeInterval(date.microseconds) * 1e-6)
-  }
-}
-
-public extension Time {
-  
-  /// Creates a time value initialized from a Foundation Date
-  init(_ date: Foundation.Date) {
-    self.init(microseconds: Int64(date.timeIntervalSince1970 * 1e6))
-  }
+final class FoundationTests: XCTestCase {
+    func test_time_to_date() {
+        let time = Time(microseconds: Int64(USEC_PER_SEC))
+        let date = Foundation.Date(time)
+        XCTAssertEqual(date.timeIntervalSince1970, 1)
+    }
+    func test_date_to_time() throws {
+        let date = Foundation.Date(timeIntervalSince1970: 1)
+        let time = Time(date)
+        XCTAssertEqual(time.microseconds, Int64(USEC_PER_SEC))
+    }
+    func test_timestamp_to_date() throws {
+        let time = Timestamp(microseconds: Int64(USEC_PER_SEC))
+        let date = Foundation.Date(time)
+        XCTAssertEqual(date.timeIntervalSince1970, 1)
+    }
+    func test_date_to_timestamp() throws {
+        let date = Foundation.Date(timeIntervalSince1970: 1)
+        let time = Timestamp(date)
+        XCTAssertEqual(time.microseconds, Int64(USEC_PER_SEC))
+    }
 }
