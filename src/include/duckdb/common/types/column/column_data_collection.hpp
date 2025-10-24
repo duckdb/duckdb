@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 
 namespace duckdb {
@@ -78,6 +77,7 @@ public:
 
 	//! Initializes a chunk with the correct types that can be used to call Scan
 	DUCKDB_API void InitializeScanChunk(DataChunk &chunk) const;
+	DUCKDB_API void InitializeScanChunk(Allocator &allocator, DataChunk &chunk) const;
 	//! Initializes a chunk with the correct types for a given scan state
 	DUCKDB_API void InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
@@ -161,6 +161,8 @@ public:
 	vector<shared_ptr<StringHeap>> GetHeapReferences();
 	//! Get the allocator type of this ColumnDataCollection
 	ColumnDataAllocatorType GetAllocatorType() const;
+	//! Get the buffer manager of the allocator
+	BufferManager &GetBufferManager() const;
 
 	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
@@ -194,7 +196,8 @@ private:
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection);
+	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection,
+	                                            bool independently_usable = true);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;

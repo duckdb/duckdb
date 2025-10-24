@@ -45,6 +45,7 @@ add_library_unity(
   relation.cpp
   query_profiler.cpp
   query_result.cpp
+  result_set_manager.cpp
   stream_query_result.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES

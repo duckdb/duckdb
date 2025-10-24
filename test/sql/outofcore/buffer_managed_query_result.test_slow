@@ -1,0 +1,43 @@
+# name: test/sql/outofcore/buffer_managed_query_result.test_slow
+# description: Test that query results can be spilled
+# group: [outofcore]
+
+load __TEST_DIR__/buffer_managed_query_result.db
+
+statement ok
+set memory_limit='100mb';
+
+statement ok
+set temp_directory='';
+
+statement ok
+create table range as from range(100_000_000);
+
+# test batched
+statement error
+from range;
+----
+Out of Memory Error
+
+# test non-batched
+statement ok
+set preserve_insertion_order=false;
+
+statement error
+from range;
+----
+Out of Memory Error
+
+statement ok
+set temp_directory='__TEST_DIR__/buffer_managed_query_result.db.tmp'
+
+# test non-batched
+statement ok
+from range;
+
+# test batched
+statement ok
+set preserve_insertion_order=false;
+
+statement ok
+from range;

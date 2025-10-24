@@ -4,6 +4,7 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
@@ -145,10 +146,15 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (HasError() || !context) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
-	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+
+	// For now, always use QueryResultMemoryType::IN_MEMORY, as we don't have the original QueryParameters here
+	auto managed_result = ResultSetManager::Get(*context).Add(
+	    make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types), QueryResultMemoryType::IN_MEMORY);
+	auto pinned_result_set = managed_result->Pin();
+	auto &collection = pinned_result_set->collection;
 
 	ColumnDataAppendState append_state;
-	collection->InitializeAppend(append_state);
+	collection.InitializeAppend(append_state);
 	while (true) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 		auto chunk = AlternativeFetch(*this);
@@ -158,10 +164,10 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
-		collection->Append(append_state, *chunk);
+		collection.Append(append_state, *chunk);
 	}
-	auto result =
-	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(managed_result),
+	                                                 client_properties);
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}

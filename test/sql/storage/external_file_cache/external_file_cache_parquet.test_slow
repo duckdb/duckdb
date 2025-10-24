@@ -74,7 +74,7 @@ select round(memory_usage_bytes / 1048576) from duckdb_memory() where tag = 'EXT
 
 # set the memory so low that the ~3MB entry should be unloaded
 statement ok
-set memory_limit='100kb';
+set memory_limit='512KiB';
 
 # set it back to something reasonable so we can actually do the following queries
 statement ok

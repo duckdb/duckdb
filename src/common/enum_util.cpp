@@ -84,6 +84,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
@@ -126,6 +127,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/query_parameters.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
@@ -629,6 +631,24 @@ const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value) {
 	return static_cast<ArrowVariableSizeType>(StringUtil::StringToEnum(GetArrowVariableSizeTypeValues(), 4, "ArrowVariableSizeType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetBatchedDataCollectionBufferManagerTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(BatchedDataCollectionBufferManagerType::CLIENT_CONTEXT), "CLIENT_CONTEXT" },
+		{ static_cast<uint32_t>(BatchedDataCollectionBufferManagerType::DATABASE_INSTANCE), "DATABASE_INSTANCE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<BatchedDataCollectionBufferManagerType>(BatchedDataCollectionBufferManagerType value) {
+	return StringUtil::EnumToString(GetBatchedDataCollectionBufferManagerTypeValues(), 2, "BatchedDataCollectionBufferManagerType", static_cast<uint32_t>(value));
+}
+
+template<>
+BatchedDataCollectionBufferManagerType EnumUtil::FromString<BatchedDataCollectionBufferManagerType>(const char *value) {
+	return static_cast<BatchedDataCollectionBufferManagerType>(StringUtil::StringToEnum(GetBatchedDataCollectionBufferManagerTypeValues(), 2, "BatchedDataCollectionBufferManagerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBinderTypeValues() {
@@ -3621,6 +3641,42 @@ const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
 template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
 	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 6, "QueryNodeType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetQueryResultMemoryTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(QueryResultMemoryType::IN_MEMORY), "IN_MEMORY" },
+		{ static_cast<uint32_t>(QueryResultMemoryType::BUFFER_MANAGED), "BUFFER_MANAGED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value) {
+	return StringUtil::EnumToString(GetQueryResultMemoryTypeValues(), 2, "QueryResultMemoryType", static_cast<uint32_t>(value));
+}
+
+template<>
+QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *value) {
+	return static_cast<QueryResultMemoryType>(StringUtil::StringToEnum(GetQueryResultMemoryTypeValues(), 2, "QueryResultMemoryType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetQueryResultOutputTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(QueryResultOutputType::MATERIALIZED), "MATERIALIZED" },
+		{ static_cast<uint32_t>(QueryResultOutputType::STREAMING), "STREAMING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<QueryResultOutputType>(QueryResultOutputType value) {
+	return StringUtil::EnumToString(GetQueryResultOutputTypeValues(), 2, "QueryResultOutputType", static_cast<uint32_t>(value));
+}
+
+template<>
+QueryResultOutputType EnumUtil::FromString<QueryResultOutputType>(const char *value) {
+	return static_cast<QueryResultOutputType>(StringUtil::StringToEnum(GetQueryResultOutputTypeValues(), 2, "QueryResultOutputType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQueryResultTypeValues() {

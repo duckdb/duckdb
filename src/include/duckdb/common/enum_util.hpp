@@ -78,6 +78,8 @@ enum class ArrowTypeInfoType : uint8_t;
 
 enum class ArrowVariableSizeType : uint8_t;
 
+enum class BatchedDataCollectionBufferManagerType : uint8_t;
+
 enum class BinderType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -322,6 +324,10 @@ enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
 
+enum class QueryResultMemoryType : uint8_t;
+
+enum class QueryResultOutputType : uint8_t;
+
 enum class QueryResultType : uint8_t;
 
 enum class RelationType : uint8_t;
@@ -521,6 +527,9 @@ const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
+
+template<>
+const char* EnumUtil::ToChars<BatchedDataCollectionBufferManagerType>(BatchedDataCollectionBufferManagerType value);
 
 template<>
 const char* EnumUtil::ToChars<BinderType>(BinderType value);
@@ -889,6 +898,12 @@ template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value);
 
 template<>
+const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value);
+
+template<>
+const char* EnumUtil::ToChars<QueryResultOutputType>(QueryResultOutputType value);
+
+template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
@@ -1152,6 +1167,9 @@ ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
+
+template<>
+BatchedDataCollectionBufferManagerType EnumUtil::FromString<BatchedDataCollectionBufferManagerType>(const char *value);
 
 template<>
 BinderType EnumUtil::FromString<BinderType>(const char *value);
@@ -1518,6 +1536,12 @@ QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const 
 
 template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
+
+template<>
+QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *value);
+
+template<>
+QueryResultOutputType EnumUtil::FromString<QueryResultOutputType>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
