@@ -141,30 +141,37 @@ LambdaOperator <- '->'
 EscapeOperator <- 'ESCAPE'
 
 OtherOperatorExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
-BitOperator <- '&' / '|' / '<<' / '>>' / '||'
 AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
+MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
+ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
+CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
+AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
+PrefixExpression <- PrefixOperator* BaseExpression
+BaseExpression <- SingleExpression Indirection*
+
+BitOperator <- '&' / '|' / '<<' / '>>' / '||'
+
 Term <- PlusOperator / MinusOperator
 PlusOperator <- '+'
 MinusOperator <- '-'
-MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
+
 Factor <- MultiplyOperator / DivisionOperator / FloorDivisionOperator / ModuloOperator
 MultiplyOperator <- '*'
 DivisionOperator <- '/'
 FloorDivisionOperator <- '//'
 ModuloOperator <- '%'
-ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
+
 ExponentOperator <- '^' / '**'
-CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
+
 CollateOperator <- 'COLLATE'
-AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
+
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
-PrefixExpression <- PrefixOperator* BaseExpression
+
 PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
 
-BaseExpression <- SingleExpression Indirection*
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
