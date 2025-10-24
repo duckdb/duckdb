@@ -1,7 +1,7 @@
 #include "duckdb/main/profiling_info.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiling_utils.hpp"
 
 #include "yyjson.hpp"
 
@@ -44,44 +44,7 @@ void ProfilingInfo::ResetMetrics() {
 			continue;
 		}
 
-		switch (metric) {
-		case MetricsType::QUERY_NAME:
-			metrics[metric] = Value::CreateValue("");
-			break;
-		case MetricsType::LATENCY:
-		case MetricsType::BLOCKED_THREAD_TIME:
-		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING:
-		case MetricsType::WAITING_TO_ATTACH_LATENCY:
-		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
-		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
-		case MetricsType::CHECKPOINT_LATENCY:
-			metrics[metric] = Value::CreateValue(0.0);
-			break;
-		case MetricsType::OPERATOR_NAME:
-			metrics[metric] = Value::CreateValue("");
-			break;
-		case MetricsType::OPERATOR_TYPE:
-			metrics[metric] = Value::CreateValue<uint8_t>(0);
-			break;
-		case MetricsType::ROWS_RETURNED:
-		case MetricsType::RESULT_SET_SIZE:
-		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY:
-		case MetricsType::CUMULATIVE_ROWS_SCANNED:
-		case MetricsType::OPERATOR_ROWS_SCANNED:
-		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
-		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-		case MetricsType::TOTAL_BYTES_READ:
-		case MetricsType::TOTAL_BYTES_WRITTEN:
-			metrics[metric] = Value::CreateValue<uint64_t>(0);
-			break;
-		case MetricsType::EXTRA_INFO:
-			metrics[metric] = Value::MAP(InsertionOrderPreservingMap<string>());
-			break;
-		default:
-			throw InternalException("MetricsType" + EnumUtil::ToString(metric) + "not implemented");
-		}
+		ProfilingUtils::SetMetricToDefault(metrics, metric);
 	}
 }
 
@@ -174,42 +137,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			continue;
 		}
 
-		switch (metric) {
-		case MetricsType::QUERY_NAME:
-		case MetricsType::OPERATOR_NAME:
-			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
-			break;
-		case MetricsType::LATENCY:
-		case MetricsType::BLOCKED_THREAD_TIME:
-		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING:
-		case MetricsType::WAITING_TO_ATTACH_LATENCY:
-		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
-		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
-		case MetricsType::CHECKPOINT_LATENCY: {
-			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
-			break;
-		}
-		case MetricsType::OPERATOR_TYPE: {
-			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, GetMetricAsString(metric).c_str());
-			break;
-		}
-		case MetricsType::ROWS_RETURNED:
-		case MetricsType::RESULT_SET_SIZE:
-		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY:
-		case MetricsType::CUMULATIVE_ROWS_SCANNED:
-		case MetricsType::OPERATOR_ROWS_SCANNED:
-		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
-		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-		case MetricsType::TOTAL_BYTES_READ:
-		case MetricsType::TOTAL_BYTES_WRITTEN: {
-			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
-			break;
-		}
-		default:
-			throw NotImplementedException("MetricsType %s not implemented", EnumUtil::ToString(metric));
-		}
+		ProfilingUtils::MetricToJson(doc, dest, key_ptr, metrics, metric);
 	}
 }
 

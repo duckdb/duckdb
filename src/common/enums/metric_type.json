@@ -7,31 +7,38 @@
         "name": "CPU_TIME",
         "description": "CPU time spent on the query",
         "type": "double",
-        "unit": "seconds"
+        "unit": "seconds",
+        "collection_method": "cumulative",
+        "child": "OPERATOR_TIMING"
       },
       {
         "name": "CUMULATIVE_CARDINALITY",
         "description": "Cumulative cardinality of the query",
         "type": "uint64",
-        "unit": "absolute"
+        "unit": "absolute",
+        "collection_method": "cumulative",
+        "child": "OPERATOR_CARDINALITY"
       },
       {
         "name": "CUMULATIVE_ROWS_SCANNED",
         "description": "Cumulative number of rows scanned by the query",
         "type": "uint64",
-        "unit": "absolute"
+        "unit": "absolute",
+        "collection_method": "cumulative",
+        "child": "OPERATOR_CARDINALITY"
       },
       {
         "name": "EXTRA_INFO",
         "description": "Unique operator metrics",
-        "type": "string"
+        "type": "map"
       },
       {
         "name": "LATENCY",
         "description": "The total elapsed query execution time",
         "type": "double",
         "unit": "seconds",
-        "query_root": true
+        "query_root": true,
+        "collection_method": "timer"
       },
       {
         "name": "QUERY_NAME",
@@ -43,14 +50,18 @@
         "name": "RESULT_SET_SIZE",
         "description": "The size of the result",
         "type": "uint64",
-        "unit": "bytes"
+        "unit": "bytes",
+        "collection_method": "child",
+        "child": "RESULT_SET_SIZE"
       },
       {
         "name": "ROWS_RETURNED",
         "description": "The number of rows returned by the query",
         "type": "uint64",
         "unit": "absolute",
-        "query_root": true
+        "query_root": true,
+        "collection_method": "child",
+        "child": "OPERATOR_CARDINALITY"
       }
     ]
   },
@@ -90,42 +101,48 @@
         "description": "Time spent loading a storage engine",
         "type": "double",
         "unit": "seconds",
-        "query_root": true
+        "query_root": true,
+        "collection_method": "timer"
       },
       {
         "name": "ATTACH_REPLAY_WAL_LATENCY",
         "description": "Time spent replaying the WAL",
         "type": "double",
         "unit": "seconds",
-        "query_root": true
+        "query_root": true,
+        "collection_method": "timer"
       },
       {
         "name": "CHECKPOINT_LATENCY",
         "description": "Time spent performing a checkpoint",
         "type": "double",
         "unit": "seconds",
-        "query_root": true
+        "query_root": true,
+        "collection_method": "timer"
       },
       {
         "name": "TOTAL_BYTES_READ",
         "description": "Total number of bytes read from disk",
         "type": "uint64",
         "unit": "bytes",
-        "query_root": true
+        "query_root": true,
+        "collection_method": "query_metric"
       },
       {
         "name": "TOTAL_BYTES_WRITTEN",
         "description": "Total number of bytes written to disk",
         "type": "uint64",
         "unit": "bytes",
-        "query_root": true
+        "query_root": true,
+        "collection_method": "query_metric"
       },
       {
         "name": "WAITING_TO_ATTACH_LATENCY",
         "description": "Time spent waiting for a storage engine to attach",
         "type": "double",
         "unit": "seconds",
-        "query_root": true
+        "query_root": true,
+        "collection_method": "timer"
       }
     ]
   },
@@ -141,7 +158,8 @@
         "name": "CUMULATIVE_OPTIMIZER_TIMING",
         "description": "Time spent in all optimizers",
         "type": "double",
-        "unit": "milliseconds"
+        "unit": "milliseconds",
+        "collection_method": "cumulative_operators"
       },
       {
         "name": "PHYSICAL_PLANNER",

@@ -21,10 +21,10 @@ enum class MetricGroup : uint8_t {
 	DEFAULT,
 	EXECUTION,
 	FILE,
-	INVALID,
 	OPERATOR,
 	OPTIMIZER,
 	PHASE_TIMING,
+	INVALID,
 };
 
 enum class MetricsType : uint8_t {

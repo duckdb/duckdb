@@ -13,6 +13,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/profiling_utils.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
@@ -191,39 +192,39 @@ void QueryProfiler::StartExplainAnalyze() {
 	is_explain_analyze = true;
 }
 
-template <class METRIC_TYPE>
-static void AggregateMetric(ProfilingNode &node, MetricsType aggregated_metric, MetricsType child_metric,
-                            const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
-	auto &info = node.GetProfilingInfo();
-	info.metrics[aggregated_metric] = info.metrics[child_metric];
-
-	for (idx_t i = 0; i < node.GetChildCount(); i++) {
-		auto child = node.GetChild(i);
-		AggregateMetric<METRIC_TYPE>(*child, aggregated_metric, child_metric, update_fun);
-
-		auto &child_info = child->GetProfilingInfo();
-		auto value = child_info.GetMetricValue<METRIC_TYPE>(aggregated_metric);
-		info.MetricUpdate<METRIC_TYPE>(aggregated_metric, value, update_fun);
-	}
-}
-
-template <class METRIC_TYPE>
-static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
-	AggregateMetric<METRIC_TYPE>(
-	    node, cumulative_metric, child_metric,
-	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return old_value + new_value; });
-}
-
-Value GetCumulativeOptimizers(ProfilingNode &node) {
-	auto &metrics = node.GetProfilingInfo().metrics;
-	double count = 0;
-	for (auto &metric : metrics) {
-		if (MetricsUtils::IsOptimizerMetric(metric.first)) {
-			count += metric.second.GetValue<double>();
-		}
-	}
-	return Value::CreateValue(count);
-}
+// template <class METRIC_TYPE>
+// static void AggregateMetric(ProfilingNode &node, MetricsType aggregated_metric, MetricsType child_metric,
+//                             const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
+// 	auto &info = node.GetProfilingInfo();
+// 	info.metrics[aggregated_metric] = info.metrics[child_metric];
+//
+// 	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+// 		auto child = node.GetChild(i);
+// 		AggregateMetric<METRIC_TYPE>(*child, aggregated_metric, child_metric, update_fun);
+//
+// 		auto &child_info = child->GetProfilingInfo();
+// 		auto value = child_info.GetMetricValue<METRIC_TYPE>(aggregated_metric);
+// 		info.MetricUpdate<METRIC_TYPE>(aggregated_metric, value, update_fun);
+// 	}
+// }
+//
+// template <class METRIC_TYPE>
+// static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
+// 	AggregateMetric<METRIC_TYPE>(
+// 	    node, cumulative_metric, child_metric,
+// 	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return old_value + new_value; });
+// }
+//
+// Value GetCumulativeOptimizers(ProfilingNode &node) {
+// 	auto &metrics = node.GetProfilingInfo().metrics;
+// 	double count = 0;
+// 	for (auto &metric : metrics) {
+// 		if (MetricsUtils::IsOptimizerMetric(metric.first)) {
+// 			count += metric.second.GetValue<double>();
+// 		}
+// 	}
+// 	return Value::CreateValue(count);
+// }
 
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
@@ -250,55 +251,16 @@ void QueryProfiler::EndQuery() {
 			auto &child_info = root->children[0]->GetProfilingInfo();
 			info.metrics[MetricsType::QUERY_NAME] = query_metrics.query;
 
-			auto &settings = info.expanded_settings;
+			const auto &settings = info.expanded_settings;
 			for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
 				info.metrics[global_info_entry.first] = global_info_entry.second;
 			}
-			if (info.Enabled(settings, MetricsType::LATENCY)) {
-				info.metrics[MetricsType::LATENCY] = query_metrics.latency.Elapsed();
-			}
-			if (info.Enabled(settings, MetricsType::TOTAL_BYTES_READ)) {
-				info.metrics[MetricsType::TOTAL_BYTES_READ] = Value::UBIGINT(query_metrics.total_bytes_read);
-			}
-			if (info.Enabled(settings, MetricsType::TOTAL_BYTES_WRITTEN)) {
-				info.metrics[MetricsType::TOTAL_BYTES_WRITTEN] = Value::UBIGINT(query_metrics.total_bytes_written);
-			}
-			if (info.Enabled(settings, MetricsType::ROWS_RETURNED)) {
-				info.metrics[MetricsType::ROWS_RETURNED] = child_info.metrics[MetricsType::OPERATOR_CARDINALITY];
-			}
-			if (info.Enabled(settings, MetricsType::CPU_TIME)) {
-				GetCumulativeMetric<double>(*root, MetricsType::CPU_TIME, MetricsType::OPERATOR_TIMING);
-			}
-			if (info.Enabled(settings, MetricsType::CUMULATIVE_CARDINALITY)) {
-				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_CARDINALITY,
-				                           MetricsType::OPERATOR_CARDINALITY);
-			}
-			if (info.Enabled(settings, MetricsType::CUMULATIVE_ROWS_SCANNED)) {
-				GetCumulativeMetric<idx_t>(*root, MetricsType::CUMULATIVE_ROWS_SCANNED,
-				                           MetricsType::OPERATOR_ROWS_SCANNED);
-			}
-			if (info.Enabled(settings, MetricsType::RESULT_SET_SIZE)) {
-				info.metrics[MetricsType::RESULT_SET_SIZE] = child_info.metrics[MetricsType::RESULT_SET_SIZE];
-			}
-			if (info.Enabled(settings, MetricsType::WAITING_TO_ATTACH_LATENCY)) {
-				info.metrics[MetricsType::WAITING_TO_ATTACH_LATENCY] =
-				    query_metrics.waiting_to_attach_latency.Elapsed();
-			}
-			if (info.Enabled(settings, MetricsType::ATTACH_LOAD_STORAGE_LATENCY)) {
-				info.metrics[MetricsType::ATTACH_LOAD_STORAGE_LATENCY] =
-				    query_metrics.attach_load_storage_latency.Elapsed();
-			}
-			if (info.Enabled(settings, MetricsType::ATTACH_REPLAY_WAL_LATENCY)) {
-				info.metrics[MetricsType::ATTACH_REPLAY_WAL_LATENCY] =
-				    query_metrics.attach_replay_wal_latency.Elapsed();
-			}
-			if (info.Enabled(settings, MetricsType::CHECKPOINT_LATENCY)) {
-				info.metrics[MetricsType::CHECKPOINT_LATENCY] = query_metrics.checkpoint_latency.Elapsed();
-			}
 
 			MoveOptimizerPhasesToRoot();
-			if (info.Enabled(settings, MetricsType::CUMULATIVE_OPTIMIZER_TIMING)) {
-				info.metrics.at(MetricsType::CUMULATIVE_OPTIMIZER_TIMING) = GetCumulativeOptimizers(*root);
+			for (auto metric : info.metrics) {
+				if (info.Enabled(settings, metric.first)) {
+					ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, *root, child_info);
+				}
 			}
 		}
 

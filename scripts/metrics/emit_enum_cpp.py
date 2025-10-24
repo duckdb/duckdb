@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from pathlib import Path
 
 from .inputs import _to_pascal_case
+from .model import MetricIndex
 from .writer import IndentedFileWriter
 
 HPP_HEADER = """//-------------------------------------------------------------------------
@@ -48,18 +49,18 @@ namespace duckdb {
 """
 
 
-def _setup_hpp(f: IndentedFileWriter, all_metrics: Dict[str, List[str]]):
+def _setup_hpp(f: IndentedFileWriter, metric_index: MetricIndex):
     f.write(HPP_HEADER)
 
     f.write("enum class MetricGroup : uint8_t {\n")
 
-    groups = sorted([g.upper() for g in all_metrics] + ["INVALID"])
+    groups = metric_index.group_names + ["INVALID"]
     for g in groups:
-        f.write_indented(1, f"{g},")
+        f.write_indented(1, f"{g.upper()},")
     f.write("};\n\n")
 
     f.write("enum class MetricsType : uint8_t {\n")
-    for metric in all_metrics["all"]:
+    for metric in metric_index.all_metrics():
         f.write_indented(1, f"{metric},")
     f.write("};\n")
 
@@ -69,7 +70,7 @@ def _setup_hpp(f: IndentedFileWriter, all_metrics: Dict[str, List[str]]):
 
 
 def _generate_standard_functions(
-    group: str, hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter, metrics: Dict[str, List[str]]
+    group: str, hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter, metric_index: MetricIndex
 ):
     formatted = _to_pascal_case(group)
     get_fn = f"Get{formatted}Metrics"
@@ -78,15 +79,17 @@ def _generate_standard_functions(
     hpp_f.write_indented(1, f"// {formatted} metrics")
     hpp_f.write_indented(1, f"static profiler_settings_t {get_fn}();")
 
+    metrics = metric_index.metrics_per_group(group) if group != "root_scope" else metric_index.root_scope_metrics()
+
     cpp_f.write(f"profiler_settings_t MetricsUtils::{get_fn}() {{\n")
     cpp_f.write_indented(1, "return {")
-    for m in metrics[group]:
+    for m in metrics:
         cpp_f.write_indented(2, f"MetricsType::{m},")
     cpp_f.write_indented(1, "};")
     cpp_f.write('}\n\n')
 
     if group == "all":
-        _generate_get_metric_by_group_function(hpp_f, cpp_f, metrics)
+        _generate_get_metric_by_group_function(hpp_f, cpp_f, metric_index)
         return
 
     check_fn = f"Is{formatted}Metric"
@@ -94,7 +97,7 @@ def _generate_standard_functions(
 
     cpp_f.write(f"bool MetricsUtils::{check_fn}(MetricsType type) {{\n")
     cpp_f.write_indented(1, "switch(type) {")
-    for m in metrics[group]:
+    for m in metrics:
         cpp_f.write_indented(2, f"case MetricsType::{m}:")
     cpp_f.write_indented(3, "return true;")
     cpp_f.write_indented(2, "default:")
@@ -134,18 +137,18 @@ def _generate_custom_optimizer_functions(optimizers: List[str], hpp_f: IndentedF
 
 
 def _generate_get_metric_by_group_function(
-    hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter, all_metrics: Dict[str, List[str]]
+    hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter, metric_index: MetricIndex
 ):
     fn = "GetMetricsByGroupType(MetricGroup type)"
     hpp_f.write_indented(1, f"static profiler_settings_t {fn};")
 
     cpp_f.write(f"profiler_settings_t MetricsUtils::{fn} {{\n")
     cpp_f.write_indented(1, "switch(type) {")
-    for group in all_metrics:
+    for group in metric_index.group_names:
         formatted = group.upper()
         cpp_f.write_indented(1, f"case MetricGroup::{formatted}:")
         cpp_f.write_indented(2, "return {")
-        for m in all_metrics[group]:
+        for m in metric_index.metrics_per_group(group):
             cpp_f.write_indented(3, f"MetricsType::{m},")
         cpp_f.write_indented(3, "};")
     cpp_f.write_indented(1, "default:")
@@ -154,30 +157,22 @@ def _generate_get_metric_by_group_function(
     cpp_f.write('}\n')
 
 
-def _generate_profiling_utils(out_hpp: Path, out_cpp: Path, all_metrics: Dict[str, List[str]]):
-    with IndentedFileWriter(out_hpp) as hpp_f, IndentedFileWriter(out_cpp) as cpp_f:
-        hpp_f.write(HPP_HEADER)
-        cpp_f.write(CPP_HEADER)
-
-
 def generate_metric_type_files(
     out_hpp: Path,
     out_cpp: Path,
-    all_metrics: Dict[str, List[str]],
+    metric_index: MetricIndex,
     optimizers: List[str],
-    root_scope_metrics: List[str],
 ) -> None:
     with IndentedFileWriter(out_hpp) as hpp_f, IndentedFileWriter(out_cpp) as cpp_f:
-        _setup_hpp(hpp_f, all_metrics)
+        _setup_hpp(hpp_f, metric_index)
         cpp_f.write(CPP_HEADER)
 
-        for group in all_metrics:
-            _generate_standard_functions(group, hpp_f, cpp_f, all_metrics)
+        for group in metric_index.metrics_by_group:
+            _generate_standard_functions(group, hpp_f, cpp_f, metric_index)
             if group == "optimizer":
                 _generate_custom_optimizer_functions(optimizers, hpp_f, cpp_f)
 
-        temp = {"root_scope": root_scope_metrics}
-        _generate_standard_functions("root_scope", hpp_f, cpp_f, temp)
+        _generate_standard_functions("root_scope", hpp_f, cpp_f, metric_index)
 
         hpp_f.write("};\n")
         hpp_f.write("} // namespace duckdb\n")

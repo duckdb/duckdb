@@ -1,29 +1,33 @@
-from scripts.metrics.emit_cpp import generate_metric_type_files
+from scripts.metrics.emit_enum_cpp import generate_metric_type_files
+from scripts.metrics.emit_profiling_utils_cpp import generate_profiling_utils
 from scripts.metrics.emit_tests import generate_test_files
 from scripts.metrics.inputs import load_metrics_json, validate_identifier, retrieve_optimizers
 from scripts.metrics.model import build_all_metrics
-from scripts.metrics.paths import METRICS_JSON, OPTIMIZER_HPP, OUT_METRIC_HPP, OUT_METRIC_CPP, TEST_PROFILING_DIR
+from scripts.metrics.paths import (
+    METRICS_JSON,
+    OPTIMIZER_HPP,
+    OUT_METRIC_HPP,
+    OUT_METRIC_CPP,
+    TEST_PROFILING_DIR,
+    OUT_PROFILING_HPP,
+    OUT_PROFILING_CPP,
+)
 
 
 def main():
     # load metrics from JSON
     metrics_json = load_metrics_json(METRICS_JSON)
 
-    for group in metrics_json:
-        if "metrics" not in group:
-            continue
-        for metric in group["metrics"]:
-            validate_identifier(metric["name"], group["group"])
-
     optimizers = retrieve_optimizers(OPTIMIZER_HPP)
 
-    all_metrics, root_scope = build_all_metrics(metrics_json, optimizers)
+    metric_index = build_all_metrics(metrics_json, optimizers)
 
     # emit C++ files
-    generate_metric_type_files(OUT_METRIC_HPP, OUT_METRIC_CPP, all_metrics, optimizers, root_scope)
+    generate_metric_type_files(OUT_METRIC_HPP, OUT_METRIC_CPP, metric_index, optimizers)
+    generate_profiling_utils(OUT_PROFILING_HPP, OUT_PROFILING_CPP, metric_index)
 
     # emit test files
-    generate_test_files(TEST_PROFILING_DIR, all_metrics)
+    generate_test_files(TEST_PROFILING_DIR, metric_index.metrics_by_group)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, List
+
+from .paths import REPO_ROOT
 from .writer import IndentedFileWriter
 
 
@@ -202,7 +204,7 @@ def _generate_profiling_setting_tests(out_dir: Path, all_metrics: Dict[str, List
 
     for test_file, name, description, group in zip(test_paths, test_names, test_descriptions, metrics_group):
         with IndentedFileWriter(test_file) as f:
-            display_name = str(test_file).replace("../", "")
+            display_name = test_file.relative_to(REPO_ROOT).as_posix()
             f.write(f"# name: {display_name}\n")
             f.write(f"# description: Test {description} profiling settings.\n")
             f.write("# group: [profiling]\n\n")
@@ -216,7 +218,7 @@ def _generate_profiling_setting_tests(out_dir: Path, all_metrics: Dict[str, List
             mode = "standard" if group == "default" else group
             _write_statement(f, "ok", f"SET profiling_mode='{mode}';")
 
-            if name == "test_custom_profiling_optimizer":
+            if name == "test_custom_profiling_optimizer_settings":
                 _write_custom_profiling_optimizer(f)
 
             _write_default_query(f)
