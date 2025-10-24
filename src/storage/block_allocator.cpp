@@ -24,6 +24,8 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 #endif
 
 #if defined(_WIN32)
+	// Disable on Windows until we do more testing there
+	return nullptr;
 	// This returns nullptr on failure
 	// return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
 #else
