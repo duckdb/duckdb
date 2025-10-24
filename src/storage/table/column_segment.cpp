@@ -560,7 +560,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		                       approved_tuple_count);
 	}
 	case TableFilterType::BLOOM_FILTER: {
-		auto &bloom_filter = filter.Cast<BloomFilter>();
+		auto &bloom_filter = filter.Cast<BFTableFilter>();
 		auto &state = filter_state.Cast<BloomFilterState>();
 		return bloom_filter.Filter(vector, sel, approved_tuple_count, state);
 	}

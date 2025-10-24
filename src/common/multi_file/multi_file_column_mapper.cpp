@@ -867,7 +867,7 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 		return expr_filter.EvaluateWithConstant(context, constant);
 	}
 	case TableFilterType::BLOOM_FILTER: {
-		auto &bloom_filter = filter.Cast<BloomFilter>();
+		auto &bloom_filter = filter.Cast<BFTableFilter>();
 		return bloom_filter.FilterValue(constant);
 	}
 	default:

@@ -335,7 +335,7 @@ private:
 	unsafe_unique_array<data_t> dead_end;
 
 	//! Whether or not to use a bloom filter will be determined by the operator
-	CacheSectorizedBloomFilter bloom_filter;
+	BloomFilter bloom_filter;
 	bool should_build_bloom_filter = false;
 
 	//! Copying not allowed
@@ -422,7 +422,7 @@ public:
 		this->should_build_bloom_filter = should_build;
 	}
 
-	CacheSectorizedBloomFilter &GetBloomFilter() {
+	BloomFilter &GetBloomFilter() {
 		return bloom_filter;
 	}
 

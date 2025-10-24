@@ -13,7 +13,7 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
 	switch (filter.filter_type) {
 	case TableFilterType::BLOOM_FILTER: {
-		auto &bf = filter.Cast<BloomFilter>();
+		auto &bf = filter.Cast<BFTableFilter>();
 		return make_uniq<BloomFilterState>(bf.GetKeyType());
 	}
 	case TableFilterType::OPTIONAL_FILTER:

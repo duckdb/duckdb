@@ -6,15 +6,15 @@ namespace duckdb {
 static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
 static constexpr idx_t MIN_NUM_BITS_PER_KEY = 12;
 static constexpr idx_t MIN_NUM_BITS = 512;
-static constexpr idx_t LOG_SECTOR_SIZE = 6;
+static constexpr idx_t LOG_SECTOR_SIZE = 6;  // a sector is 64 bits, log2(64) = 6
 static constexpr idx_t SIMD_BATCH_SIZE = 128;
 
 // number of vectors to check before deciding on selectivity
 static constexpr idx_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
 // if the selectivity is higher than this, we disable the BF
-static constexpr double SELECTIVITY_THRESHOLD = 0.33;
+static constexpr double SELECTIVITY_THRESHOLD = 0.26;
 
-void CacheSectorizedBloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
+void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
 
@@ -62,7 +62,7 @@ void InsertBlock(
 }
 
 
-void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
+void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 
 	auto hashes = reinterpret_cast<const uint64_t *>(hashes_v.GetData());
 	const uint64_t bitmask = num_sectors - 1;
@@ -80,7 +80,7 @@ void CacheSectorizedBloomFilter::InsertHashes(const Vector &hashes_v, idx_t coun
 	}
 }
 
-idx_t CacheSectorizedBloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel,
+idx_t BloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel,
                                                const idx_t count) const {
 
 	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -128,7 +128,7 @@ static void SearchBlock(
 	}
 }
 
-void CacheSectorizedBloomFilter::LookupHashesInternal(const uint64_t *__restrict hashes, uint64_t *__restrict founds,
+void BloomFilter::LookupHashesInternal(const uint64_t *__restrict hashes, uint64_t *__restrict founds,
                                                       const uint64_t *__restrict bf, idx_t count) const {
 
 	const uint64_t bitmask = num_sectors - 1;
@@ -148,7 +148,7 @@ void CacheSectorizedBloomFilter::LookupHashesInternal(const uint64_t *__restrict
 	}
 }
 
-void CacheSectorizedBloomFilter::InsertOne(const hash_t hash) const {;
+void BloomFilter::InsertOne(const hash_t hash) const {;
 
 	uint64_t shifts[1] = {hash & SHIFT_MASK};
 	auto shifts_8 = reinterpret_cast<uint8_t*>(shifts);
@@ -165,7 +165,7 @@ void CacheSectorizedBloomFilter::InsertOne(const hash_t hash) const {;
 	slot.fetch_or(mask, std::memory_order_relaxed);
 }
 
-inline bool CacheSectorizedBloomFilter::LookupOne(uint64_t hash) const {
+inline bool BloomFilter::LookupOne(uint64_t hash) const {
 
 	uint64_t shifts[1] = {hash & SHIFT_MASK};
 	auto shifts_8 = reinterpret_cast<uint8_t*>(shifts);
@@ -181,15 +181,15 @@ inline bool CacheSectorizedBloomFilter::LookupOne(uint64_t hash) const {
 	return (blocks[bf_offset] & mask) == mask;
 }
 
-string BloomFilter::ToString(const string &column_name) const {
-	if (filter.GetState().load() == CacheSectorizedBloomFilter::BloomFilterState::Active) {
+string BFTableFilter::ToString(const string &column_name) const {
+	if (filter.GetState().load() == BloomFilter::BloomFilterState::Active) {
 		return column_name + " IN BF(" + key_column_name + ")";
 	} else {
 		return "True";
 	}
 }
 
-void BloomFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
+void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
                                BloomFilterState &state) const {
 	if (sel.IsSet()) {
 		state.keys_sliced_v.Slice(keys_v, sel, approved_count);
@@ -199,7 +199,7 @@ void BloomFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const
 	}
 }
 
-idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
+idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
                           BloomFilterState &state) const {
 	if (!this->filter.IsActive()) {
 		return approved_tuple_count;
@@ -254,34 +254,34 @@ idx_t BloomFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_
 	return approved_tuple_count;
 }
 
-bool BloomFilter::FilterValue(const Value &value) const {
+bool BFTableFilter::FilterValue(const Value &value) const {
 	const auto hash = value.Hash();
 	return filter.LookupOne(hash);
 }
 
-FilterPropagateResult BloomFilter::CheckStatistics(BaseStatistics &stats) const {
+FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
 	if (this->filter.IsActive()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 }
 
-bool BloomFilter::Equals(const TableFilter &other) const {
+bool BFTableFilter::Equals(const TableFilter &other) const {
 	if (!TableFilter::Equals(other)) {
 		return false;
 	}
 	return false;
 }
-unique_ptr<TableFilter> BloomFilter::Copy() const {
-	return make_uniq<BloomFilter>(this->filter, this->filters_null_values, this->key_column_name, this->key_type);
+unique_ptr<TableFilter> BFTableFilter::Copy() const {
+	return make_uniq<BFTableFilter>(this->filter, this->filters_null_values, this->key_column_name, this->key_type);
 }
 
-unique_ptr<Expression> BloomFilter::ToExpression(const Expression &column) const {
+unique_ptr<Expression> BFTableFilter::ToExpression(const Expression &column) const {
 	auto bound_constant = make_uniq<BoundConstantExpression>(Value(true));
 	return std::move(bound_constant); // todo: I can't really have an expression for this, so this is a hack
 }
 
-void BloomFilter::Serialize(Serializer &serializer) const {
+void BFTableFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WriteProperty<bool>(200, "filters_null_values", filters_null_values);
 	serializer.WriteProperty<string>(201, "key_column_name", key_column_name);
@@ -289,13 +289,13 @@ void BloomFilter::Serialize(Serializer &serializer) const {
 	// todo: How/Should be serialize the bloom filter?
 }
 
-unique_ptr<TableFilter> BloomFilter::Deserialize(Deserializer &deserializer) {
+unique_ptr<TableFilter> BFTableFilter::Deserialize(Deserializer &deserializer) {
 	auto filters_null_values = deserializer.ReadProperty<bool>(200, "filters_null_values");
 	auto key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
 	auto key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
 
-	CacheSectorizedBloomFilter filter;
-	auto result = make_uniq<BloomFilter>(filter, filters_null_values, key_column_name, key_type);
+	BloomFilter filter;
+	auto result = make_uniq<BFTableFilter>(filter, filters_null_values, key_column_name, key_type);
 	return std::move(result);
 }
 

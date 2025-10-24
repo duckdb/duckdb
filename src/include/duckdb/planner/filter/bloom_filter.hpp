@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-class CacheSectorizedBloomFilter {
+class BloomFilter {
 
 public:
 	struct SelectivityStats {
@@ -49,7 +49,7 @@ public:
 		Pause          // ready to use but not in use currently, e.g., not selective enough
 	};
 
-	CacheSectorizedBloomFilter() = default;
+	BloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t number_of_rows);
 
 	void InsertHashes(const Vector &hashes_v, idx_t count) const;
@@ -86,10 +86,10 @@ private:
 
 };
 
-class BloomFilter : public TableFilter {
+class BFTableFilter : public TableFilter {
 
 private:
-	CacheSectorizedBloomFilter &filter;
+	BloomFilter &filter;
 
 	bool filters_null_values;
 	string key_column_name;
@@ -99,7 +99,7 @@ public:
 	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
-	explicit BloomFilter(CacheSectorizedBloomFilter &filter_p, const bool filters_null_values_p,
+	explicit BFTableFilter(BloomFilter &filter_p, const bool filters_null_values_p,
 	                     const string &key_column_name_p, const LogicalType &key_type_p)
 	    : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p),
 	      key_column_name(key_column_name_p), key_type(key_type_p) {

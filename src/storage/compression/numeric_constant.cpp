@@ -162,7 +162,7 @@ void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool 
 		break;
 	}
 	case TableFilterType::BLOOM_FILTER: {
-		auto &bf = filter.Cast<BloomFilter>();
+		auto &bf = filter.Cast<BFTableFilter>();
 		filters_nulls = bf.FiltersNullValues();
 		break;
 	}
