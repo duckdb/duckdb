@@ -192,40 +192,6 @@ void QueryProfiler::StartExplainAnalyze() {
 	is_explain_analyze = true;
 }
 
-// template <class METRIC_TYPE>
-// static void AggregateMetric(ProfilingNode &node, MetricsType aggregated_metric, MetricsType child_metric,
-//                             const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
-// 	auto &info = node.GetProfilingInfo();
-// 	info.metrics[aggregated_metric] = info.metrics[child_metric];
-//
-// 	for (idx_t i = 0; i < node.GetChildCount(); i++) {
-// 		auto child = node.GetChild(i);
-// 		AggregateMetric<METRIC_TYPE>(*child, aggregated_metric, child_metric, update_fun);
-//
-// 		auto &child_info = child->GetProfilingInfo();
-// 		auto value = child_info.GetMetricValue<METRIC_TYPE>(aggregated_metric);
-// 		info.MetricUpdate<METRIC_TYPE>(aggregated_metric, value, update_fun);
-// 	}
-// }
-//
-// template <class METRIC_TYPE>
-// static void GetCumulativeMetric(ProfilingNode &node, MetricsType cumulative_metric, MetricsType child_metric) {
-// 	AggregateMetric<METRIC_TYPE>(
-// 	    node, cumulative_metric, child_metric,
-// 	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return old_value + new_value; });
-// }
-//
-// Value GetCumulativeOptimizers(ProfilingNode &node) {
-// 	auto &metrics = node.GetProfilingInfo().metrics;
-// 	double count = 0;
-// 	for (auto &metric : metrics) {
-// 		if (MetricsUtils::IsOptimizerMetric(metric.first)) {
-// 			count += metric.second.GetValue<double>();
-// 		}
-// 	}
-// 	return Value::CreateValue(count);
-// }
-
 void QueryProfiler::EndQuery() {
 	unique_lock<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
