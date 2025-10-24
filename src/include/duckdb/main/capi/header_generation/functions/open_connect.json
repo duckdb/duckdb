@@ -183,11 +183,11 @@
                 }
             ],
             "comment": {
-                "description": "Get progress of the running query\n\n",
+                "description": "Get the progress of the running query.\n\n",
                 "param_comments": {
-                    "connection": "The working connection"
+                    "connection": "The connection running the query."
                 },
-                "return_value": "-1 if no progress or a percentage of the progress"
+                "return_value": "The query progress type containing progress information."
             }
         },
         {

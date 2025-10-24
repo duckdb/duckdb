@@ -27,6 +27,13 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 CommonTableExpressionInfo::~CommonTableExpressionInfo() {
 }
 
+CTEMaterialize CommonTableExpressionInfo::GetMaterializedForSerialization(Serializer &serializer) const {
+	if (serializer.ShouldSerialize(7)) {
+		return materialized;
+	}
+	return CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+}
+
 void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	for (auto &cte_entry : stored_cte_map) {
 		for (auto &entry : cte_entry.get().map) {

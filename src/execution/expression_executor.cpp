@@ -182,6 +182,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			VectorOperations::DefaultCast(vector, intermediate, count, true);
 		}
 		intermediate.Verify(count);
+		//! FIXME: this is probably also where we want to test 'variant_normalize'
 
 		Vector result(vector.GetType(), true, false, count);
 		//! Then cast back into the original type

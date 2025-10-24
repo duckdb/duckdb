@@ -96,8 +96,7 @@ Vector::Vector(const Value &value) : type(value.type()) {
 
 Vector::Vector(Vector &&other) noexcept
     : vector_type(other.vector_type), type(std::move(other.type)), data(other.data),
-      validity(std::move(other.validity)), buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)),
-      cached_hashes(std::move(other.cached_hashes)) {
+      validity(std::move(other.validity)), buffer(std::move(other.buffer)), auxiliary(std::move(other.auxiliary)) {
 }
 
 void Vector::Reference(const Value &value) {
@@ -171,7 +170,6 @@ void Vector::Reinterpret(const Vector &other) {
 		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
 	} else {
 		AssignSharedPointer(auxiliary, other.auxiliary);
-		AssignSharedPointer(cached_hashes, other.cached_hashes);
 	}
 	data = other.data;
 	validity = other.validity;
@@ -235,6 +233,9 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
+	if (!sel.IsSet() || count == 0) {
+		return; // Nothing to do here
+	}
 	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// dictionary on a constant is just a constant
 		return;
@@ -276,7 +277,6 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	vector_type = VectorType::DICTIONARY_VECTOR;
 	buffer = std::move(dict_buffer);
 	auxiliary = std::move(child_ref);
-	cached_hashes.reset();
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
@@ -287,13 +287,23 @@ void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t
 }
 
 void Vector::Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (DictionaryVector::CanCacheHashes(dict.GetType()) && !dict.cached_hashes) {
-		// Create an empty hash vector for this dictionary, potentially to be used for caching hashes later
-		// This needs to happen here, as we need to add "cached_hashes" to the original input Vector "dict"
-		dict.cached_hashes = make_buffer<VectorChildBuffer>(Vector(LogicalType::HASH, false, false, 0));
-	}
 	Reference(dict);
 	Dictionary(dictionary_size, sel, count);
+}
+
+void Vector::Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const SelectionVector &sel) {
+	D_ASSERT(type.InternalType() != PhysicalType::STRUCT);
+	D_ASSERT(type == reusable_dict->data.GetType());
+	vector_type = VectorType::DICTIONARY_VECTOR;
+	data = reusable_dict->data.data;
+	validity.Reset();
+
+	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
+	dict_buffer->SetDictionarySize(reusable_dict->size.GetIndex());
+	dict_buffer->SetDictionaryId(reusable_dict->id);
+	buffer = std::move(dict_buffer);
+
+	auxiliary = std::move(reusable_dict);
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
@@ -1850,7 +1860,9 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		inverted_sel.set_index(offset++, current_index);
 		inverted_sel.set_index(offset++, current_index);
 	}
-	Vector inverted_vector(vector, inverted_sel, verify_count);
+	auto reusable_dict = DictionaryVector::CreateReusableDictionary(vector.type, verify_count);
+	auto &inverted_vector = reusable_dict->data;
+	inverted_vector.Slice(vector, inverted_sel, verify_count);
 	inverted_vector.Flatten(verify_count);
 	// now insert the NULL values at every other position
 	for (idx_t i = 0; i < count; i++) {
@@ -1864,8 +1876,13 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 		original_sel.set_index(offset++, verify_count - 1 - i * 2);
 	}
 	// now slice the inverted vector with the inverted selection vector
-	vector.Dictionary(inverted_vector, verify_count, original_sel, count);
-	DictionaryVector::SetDictionaryId(vector, UUID::ToString(UUID::GenerateRandomUUID()));
+	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
+		// Reusable dictionary API does not work for STRUCT
+		vector.Dictionary(inverted_vector, verify_count, original_sel, count);
+		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(reusable_dict->id);
+	} else {
+		vector.Dictionary(reusable_dict, original_sel);
+	}
 	vector.Verify(count);
 }
 
@@ -1926,17 +1943,27 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 //===--------------------------------------------------------------------===//
 // DictionaryVector
 //===--------------------------------------------------------------------===//
+buffer_ptr<VectorChildBuffer> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
+	auto res = make_buffer<VectorChildBuffer>(Vector(type, size));
+	res->size = size;
+	res->id = UUID::ToString(UUID::GenerateRandomUUID());
+	return res;
+}
+
 const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
-	auto &dictionary = Child(input);
-	auto &dictionary_hashes = dictionary.cached_hashes->Cast<VectorChildBuffer>().data;
-	if (!dictionary_hashes.data) {
+
+	auto &child = input.auxiliary->Cast<VectorChildBuffer>();
+	lock_guard<mutex> guard(child.cached_hashes_lock);
+
+	if (!child.cached_hashes.data) {
 		// Uninitialized: hash the dictionary
-		const auto dictionary_count = DictionarySize(input).GetIndex();
-		dictionary_hashes.Initialize(false, dictionary_count);
-		VectorOperations::Hash(dictionary, dictionary_hashes, dictionary_count);
+		const auto dictionary_size = DictionarySize(input).GetIndex();
+		D_ASSERT(!child.size.IsValid() || child.size.GetIndex() == dictionary_size);
+		child.cached_hashes.Initialize(false, dictionary_size);
+		VectorOperations::Hash(child.data, child.cached_hashes, dictionary_size);
 	}
-	return dictionary.cached_hashes->Cast<VectorChildBuffer>().data;
+	return child.cached_hashes;
 }
 
 //===--------------------------------------------------------------------===//

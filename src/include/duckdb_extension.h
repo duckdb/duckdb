@@ -560,6 +560,21 @@ typedef struct {
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
 #endif
 
+// New configuration options functions
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_config_option (*duckdb_create_config_option)();
+	void (*duckdb_destroy_config_option)(duckdb_config_option *option);
+	void (*duckdb_config_option_set_name)(duckdb_config_option option, const char *name);
+	void (*duckdb_config_option_set_type)(duckdb_config_option option, duckdb_logical_type type);
+	void (*duckdb_config_option_set_default_value)(duckdb_config_option option, duckdb_value default_value);
+	void (*duckdb_config_option_set_default_scope)(duckdb_config_option option,
+	                                               duckdb_config_option_scope default_scope);
+	void (*duckdb_config_option_set_description)(duckdb_config_option option, const char *description);
+	duckdb_state (*duckdb_register_config_option)(duckdb_connection connection, duckdb_config_option option);
+	duckdb_value (*duckdb_client_context_get_config_option)(duckdb_client_context context, const char *name,
+	                                                        duckdb_config_option_scope *out_scope);
+#endif
+
 // New functions for duckdb error data
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -1108,6 +1123,17 @@ typedef struct {
 #define duckdb_schema_from_arrow              duckdb_ext_api.duckdb_schema_from_arrow
 #define duckdb_data_chunk_from_arrow          duckdb_ext_api.duckdb_data_chunk_from_arrow
 #define duckdb_destroy_arrow_converted_schema duckdb_ext_api.duckdb_destroy_arrow_converted_schema
+
+// Version unstable_new_config_options_functions
+#define duckdb_create_config_option             duckdb_ext_api.duckdb_create_config_option
+#define duckdb_destroy_config_option            duckdb_ext_api.duckdb_destroy_config_option
+#define duckdb_config_option_set_name           duckdb_ext_api.duckdb_config_option_set_name
+#define duckdb_config_option_set_type           duckdb_ext_api.duckdb_config_option_set_type
+#define duckdb_config_option_set_default_value  duckdb_ext_api.duckdb_config_option_set_default_value
+#define duckdb_config_option_set_default_scope  duckdb_ext_api.duckdb_config_option_set_default_scope
+#define duckdb_config_option_set_description    duckdb_ext_api.duckdb_config_option_set_description
+#define duckdb_register_config_option           duckdb_ext_api.duckdb_register_config_option
+#define duckdb_client_context_get_config_option duckdb_ext_api.duckdb_client_context_get_config_option
 
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data

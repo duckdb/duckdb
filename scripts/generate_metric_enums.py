@@ -14,41 +14,49 @@ metrics_cpp_file = os.path.join("..", "src", "common", "enums", "metric_type.cpp
 optimizer_file = os.path.join("..", "src", "include", "duckdb", "common", "enums", "optimizer_type.hpp")
 
 metrics = [
-    "QUERY_NAME",
+    "ATTACH_LOAD_STORAGE_LATENCY",
+    "ATTACH_REPLAY_WAL_LATENCY",
     "BLOCKED_THREAD_TIME",
+    "CHECKPOINT_LATENCY",
     "CPU_TIME",
-    "EXTRA_INFO",
     "CUMULATIVE_CARDINALITY",
-    "OPERATOR_TYPE",
-    "OPERATOR_CARDINALITY",
     "CUMULATIVE_ROWS_SCANNED",
+    "EXTRA_INFO",
+    "LATENCY",
+    "OPERATOR_CARDINALITY",
+    "OPERATOR_NAME",
     "OPERATOR_ROWS_SCANNED",
     "OPERATOR_TIMING",
+    "OPERATOR_TYPE",
+    "QUERY_NAME",
     "RESULT_SET_SIZE",
-    "LATENCY",
     "ROWS_RETURNED",
-    "OPERATOR_NAME",
     "SYSTEM_PEAK_BUFFER_MEMORY",
     "SYSTEM_PEAK_TEMP_DIR_SIZE",
     "TOTAL_BYTES_READ",
     "TOTAL_BYTES_WRITTEN",
+    "WAITING_TO_ATTACH_LATENCY",
 ]
 
 phase_timing_metrics = [
     "ALL_OPTIMIZERS",
     "CUMULATIVE_OPTIMIZER_TIMING",
-    "PLANNER",
-    "PLANNER_BINDING",
     "PHYSICAL_PLANNER",
     "PHYSICAL_PLANNER_COLUMN_BINDING",
-    "PHYSICAL_PLANNER_RESOLVE_TYPES",
     "PHYSICAL_PLANNER_CREATE_PLAN",
+    "PHYSICAL_PLANNER_RESOLVE_TYPES",
+    "PLANNER",
+    "PLANNER_BINDING",
 ]
 
 query_global_metrics = [
+    "ATTACH_LOAD_STORAGE_LATENCY",
+    "ATTACH_REPLAY_WAL_LATENCY",
     "BLOCKED_THREAD_TIME",
+    "CHECKPOINT_LATENCY",
     "SYSTEM_PEAK_BUFFER_MEMORY",
     "SYSTEM_PEAK_TEMP_DIR_SIZE",
+    "WAITING_TO_ATTACH_LATENCY",
 ]
 
 optimizer_types = []

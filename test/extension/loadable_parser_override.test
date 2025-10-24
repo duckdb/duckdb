@@ -56,9 +56,9 @@ The DuckDB parser has been overridden
 statement error
 over
 ----
-Parser Error: Parser overridden, query equaled "over" but not "override"
+Parser Error: Parser override could not parse this query. (Original error: Parser overridden, query equaled "over" but not "override")
 
 statement error
 SELECT 1;
 ----
-Parser Error: Parser override failed to return a valid statement. Consider restarting the database and using the setting "set allow_parser_override_extension=fallback" to fallback to the default parser.
+<REGEX>:.*Parser Error: Parser override failed.*
