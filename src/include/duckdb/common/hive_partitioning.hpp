@@ -32,13 +32,13 @@ class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
+
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
-	                                              const HivePartitioningFilterInfo &filter_info,
-	                                              MultiFilePushdownInfo &info);
+	                                              const MultiFileOptions &options, MultiFilePushdownInfo &info);
 
 	DUCKDB_API static Value GetValue(ClientContext &context, const string &key, const string &value,
 	                                 const LogicalType &type);
@@ -46,6 +46,55 @@ public:
 	DUCKDB_API static string Escape(const string &input);
 	//! Unescape a hive partition key or value encoded using URL encoding
 	DUCKDB_API static string Unescape(const string &input);
+
+	DUCKDB_API static HivePartitioningFilterInfo GetFilterInfo(const MultiFilePushdownInfo &info,
+	                                                           const MultiFileOptions &options);
+};
+
+class HivePartitioningExecutor {
+public:
+	// Constructor
+	HivePartitioningExecutor(ClientContext &context, vector<unique_ptr<Expression>> &filters,
+	                         const MultiFileOptions &options, MultiFilePushdownInfo &info)
+	    : context(context), filters(filters), info(info), have_preserved_filter(filters.size(), true), consumed(false) {
+		filter_info = HivePartitioning::GetFilterInfo(info, options);
+	}
+
+	//! Prunes a file based on a set of filters
+	DUCKDB_API bool ApplyFiltersToFile(const OpenFileInfo &file);
+
+	//! Finalize the hive filtering
+	DUCKDB_API vector<OpenFileInfo> Finalize(idx_t total_files);
+	DUCKDB_API vector<OpenFileInfo> Finalize();
+
+private:
+	ClientContext &context;
+	vector<unique_ptr<Expression>> &filters;
+	MultiFilePushdownInfo &info;
+	HivePartitioningFilterInfo filter_info;
+	unordered_set<idx_t> filters_applied_to_files;
+	vector<unique_ptr<Expression>> pruned_filters;
+	vector<OpenFileInfo> pruned_files;
+	vector<bool> have_preserved_filter;
+	bool consumed;
+};
+
+struct HiveFileGlobInput : FileGlobInput {
+	HiveFileGlobInput(const FileGlobInput &glob_input, unique_ptr<HiveFilterParams> hive_params)
+	    : FileGlobInput(glob_input.behavior, glob_input.extension, glob_input.min_files),
+	      executor(make_uniq<HivePartitioningExecutor>(hive_params->context, hive_params->filters, hive_params->options,
+	                                                   hive_params->info)) {
+	}
+
+	bool IncludeFile(const OpenFileInfo &file) const override {
+		return !executor->ApplyFiltersToFile(file);
+	}
+
+	void Finalize() const override {
+		executor->Finalize();
+	}
+
+	unique_ptr<HivePartitioningExecutor> executor;
 };
 
 struct HivePartitionKey {

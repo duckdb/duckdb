@@ -65,7 +65,14 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	vector<CSVSchema> schemas;
 	const auto option_og = options;
 
-	const auto file_paths = multi_file_list.GetAllFiles();
+	idx_t max_files_to_sniff = static_cast<idx_t>(options.files_to_sniff == -1)
+	                               ? NumericLimits<idx_t>::Maximum()
+	                               : static_cast<idx_t>(options.files_to_sniff);
+
+	// Ensure peeked files loaded
+	auto files = multi_file_list.PeekFiles(max_files_to_sniff);
+	auto file_list = make_uniq<SimpleMultiFileList>(files);
+	const auto file_paths = file_list->GetAllFiles();
 
 	// Here what we want to do is to sniff a given number of lines, if we have many files, we might go through them
 	// to reach the number of lines.
@@ -94,9 +101,6 @@ CSVSchema CSVSchemaDiscovery::SchemaDiscovery(ClientContext &context, shared_ptr
 	}
 
 	// We do a copy of the options to not pollute the options of the first file.
-	idx_t max_files_to_sniff = static_cast<idx_t>(options.files_to_sniff == -1)
-	                               ? NumericLimits<idx_t>::Maximum()
-	                               : static_cast<idx_t>(options.files_to_sniff);
 	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
 	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
 		auto option_copy = option_og;

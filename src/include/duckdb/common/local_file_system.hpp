@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
@@ -63,9 +64,6 @@ public:
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
 
-	//! Runs a glob on the file system, returning a list of matching files
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path
 		return false;
@@ -103,13 +101,29 @@ protected:
 	bool SupportsListFilesExtended() const override {
 		return true;
 	}
+	//! Runs a glob on the file system, returning a list of matching files
+	vector<OpenFileInfo> GlobExtended(const string &path, const FileGlobInput &glob_input,
+	                                  optional_ptr<FileOpener> opener = nullptr) override;
+
+	bool SupportsGlobExtended() const override {
+		return true;
+	}
 
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
 	idx_t GetFilePointer(FileHandle &handle);
 
-	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
+	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, bool absolute_path,
+	                                          optional_ptr<FileOpener> opener = nullptr);
+	void ProcessSplit(const vector<string> &splits, idx_t i, const string &path, vector<OpenFileInfo> &result,
+	                  optional_ptr<FileOpener> opener, const FileGlobInput &glob_input);
+	void RecursiveGlobDirectories(const vector<string> &splits, idx_t i, const string &path,
+	                              vector<OpenFileInfo> &result, optional_ptr<FileOpener> opener,
+	                              const FileGlobInput &glob_input);
+	void GlobFilesInternal(const vector<string> &splits, idx_t i, const string &path, const string &glob,
+	                       vector<OpenFileInfo> &result, optional_ptr<FileOpener> opener,
+	                       const FileGlobInput &glob_input);
 };
 
 } // namespace duckdb
