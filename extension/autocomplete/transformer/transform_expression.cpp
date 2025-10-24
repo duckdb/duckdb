@@ -37,36 +37,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	return expr;
 }
 
-unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformRecursiveExpression(PEGTransformer &transformer,
-                                                    optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto operator_expr = transformer.Transform<ExpressionType>(list_pr.Child<ListParseResult>(0));
-	vector<unique_ptr<ParsedExpression>> expr_children;
-	auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
-
-	if (operator_expr == ExpressionType::LAMBDA) {
-		return make_uniq<LambdaExpression>(nullptr, std::move(right_expr));
-	}
-	if (operator_expr == ExpressionType::COMPARE_BETWEEN) {
-		auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(right_expr));
-		return make_uniq<BetweenExpression>(nullptr, std::move(compare_expr->left), std::move(compare_expr->right));
-	}
-
-	if (operator_expr == ExpressionType::COMPARE_NOT_BETWEEN) {
-		throw NotImplementedException("Not between operator not implemented");
-	}
-	if (operator_expr != ExpressionType::INVALID) {
-		return make_uniq<ComparisonExpression>(operator_expr, nullptr, std::move(right_expr));
-	}
-	expr_children.push_back(std::move(right_expr));
-	// Not a special expression, extract operator and make function expression
-	auto op = list_pr.Child<ListParseResult>(0)
-	              .Child<ChoiceParseResult>(0)
-	              .result->Cast<OperatorParseResult>()
-	              .operator_token;
-	return make_uniq<FunctionExpression>(std::move(op), std::move(expr_children));
-}
 
 unique_ptr<ColumnRefExpression>
 PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
@@ -273,41 +243,47 @@ PEGTransformerFactory::TransformBoundedListExpression(PEGTransformer &transforme
 	return list_children;
 }
 
-// Expression <- BaseExpression RecursiveExpression*
+// Expression <- LogicalOrExpression
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto &base_expr_pr = list_pr.Child<ListParseResult>(0);
-	unique_ptr<ParsedExpression> base_expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
-	auto &indirection_pr = list_pr.Child<OptionalParseResult>(1);
-	if (indirection_pr.HasResult()) {
-		auto repeat_expression_pr = indirection_pr.optional_result->Cast<RepeatParseResult>();
-		vector<unique_ptr<ParsedExpression>> expr_children;
-		for (auto &child : repeat_expression_pr.children) {
-			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(child);
-			if (expr->expression_class == ExpressionClass::COMPARISON) {
-				auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(expr));
-				compare_expr->left = std::move(base_expr);
-				base_expr = std::move(compare_expr);
-			} else if (expr->expression_class == ExpressionClass::FUNCTION) {
-				auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expr));
-				func_expr->children.insert(func_expr->children.begin(), std::move(base_expr));
-				base_expr = std::move(func_expr);
-			} else if (expr->expression_class == ExpressionClass::LAMBDA) {
-				auto lambda_expr = unique_ptr_cast<ParsedExpression, LambdaExpression>(std::move(expr));
-				lambda_expr->lhs = std::move(base_expr);
-				base_expr = std::move(lambda_expr);
-			} else if (expr->expression_class == ExpressionClass::BETWEEN) {
-				auto between_expr = unique_ptr_cast<ParsedExpression, BetweenExpression>(std::move(expr));
-				between_expr->input = std::move(base_expr);
-				base_expr = std::move(between_expr);
-			} else {
-				base_expr = make_uniq<OperatorExpression>(expr->type, std::move(base_expr), std::move(expr));
-			}
-		}
-	}
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
 
-	return base_expr;
+// LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalOrExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto or_expr_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!or_expr_opt.HasResult()) {
+		return expr;
+	}
+	auto or_expr_repeat = or_expr_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &or_expr : or_expr_repeat.children) {
+		auto &inner_list_pr = or_expr->Cast<ListParseResult>();
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+		expr = make_uniq<OperatorExpression>(ExpressionType::CONJUNCTION_OR, std::move(expr), std::move(right_expr));
+	}
+	return expr;
+}
+
+// LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalAndExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto and_expr_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!and_expr_opt.HasResult()) {
+		return expr;
+	}
+	auto and_expr_repeat = and_expr_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &and_expr : and_expr_repeat.children) {
+		auto &inner_list_pr = and_expr->Cast<ListParseResult>();
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+		expr = make_uniq<OperatorExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr), std::move(right_expr));
+	}
+	return expr;
 }
 
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'

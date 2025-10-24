@@ -142,10 +142,11 @@ void PEGTransformerFactory::RegisterDetach() {
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
-	REGISTER_TRANSFORM(TransformRecursiveExpression);
+	REGISTER_TRANSFORM(TransformExpression);
+	REGISTER_TRANSFORM(TransformLogicalOrExpression);
+	REGISTER_TRANSFORM(TransformLogicalAndExpression);
 	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformColumnReference);
-	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
 	REGISTER_TRANSFORM(TransformConstantLiteral);
