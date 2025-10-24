@@ -101,7 +101,7 @@ LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
 # LEVEL 3
 LogicalNotExpression <- 'NOT'* IsExpression
 # LEVEL 4
-IsExpression <- IsDistinctFromExpression (IsTest)*
+IsExpression <- IsDistinctFromExpression IsTest*
 IsTest <- ('IS' 'NOT'? ('TRUE' / 'FALSE' / 'UNKNOWN' / 'NULL')) / NotNull / IsNull
 NotNull <- ('NOT' 'NULL') / 'NOTNULL'
 IsNull <- 'ISNULL'

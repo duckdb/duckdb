@@ -286,6 +286,45 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalAndExpressio
 	return expr;
 }
 
+// LogicalNotExpression <- 'NOT'* IsExpression
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+	auto not_expr_opt = list_pr.Child<OptionalParseResult>(0);
+	if (!not_expr_opt.HasResult()) {
+		return expr;
+	}
+	auto not_expr_repeat = not_expr_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &_: not_expr_repeat.children) {
+		vector<unique_ptr<ParsedExpression>> inner_list_children;
+		inner_list_children.push_back(std::move(expr));
+		expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
+	}
+	return expr;
+}
+
+// IsExpression <- IsDistinctFromExpression (IsTest)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto is_test_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!is_test_opt.HasResult()) {
+		return expr;
+	}
+	auto is_test_expr_repeat = is_test_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &is_test_expr : is_test_expr_repeat.children) {
+		throw NotImplementedException("IsTest has not yet been implemented.");
+		auto expr_type = transformer.Transform<ExpressionType>(is_test_expr);
+		vector<unique_ptr<ParsedExpression>> inner_list_children;
+		inner_list_children.push_back(std::move(expr));
+		expr = make_uniq<OperatorExpression>(expr_type, std::move(inner_list_children));
+	}
+	return expr;
+}
+
+
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {

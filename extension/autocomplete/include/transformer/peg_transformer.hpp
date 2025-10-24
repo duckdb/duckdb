@@ -278,7 +278,10 @@ private:
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLogicalAndExpression(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
-
+	static unique_ptr<ParsedExpression> TransformLogicalNotExpression(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformIsExpression(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformConstantLiteral(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ColumnRefExpression> TransformNestedColumnName(PEGTransformer &transformer,
