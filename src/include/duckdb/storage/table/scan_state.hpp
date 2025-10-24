@@ -225,11 +225,15 @@ private:
 
 class OrderedCollectionScanState : public CollectionScanState {
 public:
-	explicit OrderedCollectionScanState(TableScanState &parent_p);
+	OrderedCollectionScanState(TableScanState &parent_p, column_t column_idx, bool sort_asc);
 	RowGroup *GetNextRowGroup() override;
 	RowGroup *GetRootSegment() override;
 
 private:
+	const column_t column_idx;
+	const bool sort_asc;
+	optional_ptr<vector<idx_t>> row_group_idxs;
+	idx_t current_row_group = 0;
 };
 
 struct ScanSamplingInfo {
@@ -301,6 +305,19 @@ struct ParallelCollectionScanState {
 	idx_t batch_index;
 	atomic<idx_t> processed_rows;
 	mutex lock;
+};
+
+class OrderedParallelCollectionScanState : public ParallelCollectionScanState {
+public:
+	OrderedParallelCollectionScanState(column_t column_idx, bool sort_asc);
+	RowGroup *GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) override;
+	RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups) override;
+
+private:
+	const column_t column_idx;
+	const bool sort_asc;
+	optional_ptr<vector<idx_t>> row_group_idxs;
+	idx_t current_row_group = 0;
 };
 
 struct ParallelTableScanState {
