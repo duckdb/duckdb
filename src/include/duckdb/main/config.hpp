@@ -291,6 +291,7 @@ public:
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION);
+	DUCKDB_API bool HasExtensionOption(const string &name);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetcha n alias by index, or nullptr if out of range
