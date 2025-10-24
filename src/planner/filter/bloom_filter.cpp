@@ -9,7 +9,7 @@ static constexpr idx_t MIN_NUM_BITS = 512;
 static constexpr idx_t LOG_SECTOR_SIZE = 6; // a sector is 64 bits, log2(64) = 6
 static constexpr idx_t SIMD_BATCH_SIZE = 128;
 static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
-static constexpr idx_t N_BITS = 4;  // the number of bits to set per hash
+static constexpr idx_t N_BITS = 4;                      // the number of bits to set per hash
 
 // number of vectors to check before deciding on selectivity
 static constexpr idx_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
@@ -31,7 +31,6 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 
 	state.store(BloomFilterState::Active);
 }
-
 
 inline uint64_t GetMask(const uint8_t *__restrict shifts_8, const idx_t i) {
 	uint64_t mask = 0;
@@ -74,9 +73,8 @@ void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 	}
 }
 
-
 static void LookupBlock(const uint64_t *__restrict keys, const uint64_t *__restrict bf, uint64_t *__restrict found,
-						const uint64_t bitmask) {
+                        const uint64_t bitmask) {
 
 	uint64_t shifts[SIMD_BATCH_SIZE];
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
@@ -101,7 +99,7 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, Selecti
 	const auto founds = FlatVector::GetData<uint64_t>(found_v);
 
 	idx_t remaining_count = count;
-	uint64_t* remaining_founds = founds;
+	uint64_t *remaining_founds = founds;
 	while (remaining_count >= SIMD_BATCH_SIZE) {
 		LookupBlock(hashes, bf, remaining_founds, bitmask);
 		hashes += SIMD_BATCH_SIZE;
