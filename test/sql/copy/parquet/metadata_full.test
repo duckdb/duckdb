@@ -1,0 +1,140 @@
+# name: test/sql/copy/parquet/metadata_full.test
+# description: Comprehensive test for parquet_full_metadata function based on existing parquet metadata tests
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET parquet_metadata_cache = true;
+
+# -------------------------------------------------------------------
+# file_metadata tests from test/sql/copy/parquet/file_metadata.test
+# -------------------------------------------------------------------
+
+query IIIIIIIII
+SELECT unnest(parquet_file_metadata, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/arrow/alltypes_dictionary.parquet')
+----
+data/parquet-testing/arrow/alltypes_dictionary.parquet	impala version 1.3.0-INTERNAL (build 8a48ddb1eff84592b3fc06bc6f51ec120e1fffc9)	2	1	1	NULL	NULL	1698	723
+
+query IIIIIIIII
+SELECT unnest(parquet_file_metadata, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/arrow/alltypes_dictionary.parquet')
+----
+data/parquet-testing/arrow/alltypes_dictionary.parquet	impala version 1.3.0-INTERNAL (build 8a48ddb1eff84592b3fc06bc6f51ec120e1fffc9)	2	1	1	NULL	NULL	1698	723
+
+# -------------------------------------------------------------------
+# kv_metadata tests from test/sql/copy/parquet/kv_metadata.test
+# -------------------------------------------------------------------
+
+statement ok
+COPY (SELECT 1, 'foo') TO  '__TEST_DIR__/kv_metadata_test.parquet' (FORMAT PARQUET, KV_METADATA {foo: 'bar', baz: 42, quz: '\xC3\xB6\xC3\xA4\xC3\xA5'::BLOB});
+
+query II
+SELECT key::VARCHAR, value::VARCHAR FROM (SELECT unnest(parquet_kv_metadata, recursive:=True) FROM parquet_full_metadata('__TEST_DIR__/kv_metadata_test.parquet'));
+----
+foo	bar
+baz	42
+quz	\xC3\xB6\xC3\xA4\xC3\xA5
+
+# Test decoding blobs
+query II
+SELECT key::VARCHAR, decode(value) FROM (SELECT unnest(parquet_kv_metadata, recursive:=True) FROM parquet_full_metadata('__TEST_DIR__/kv_metadata_test.parquet')) WHERE key = 'quz';
+----
+quz	öäå
+
+# Test no kv
+statement ok
+COPY (SELECT 3, 'baz') TO '__TEST_DIR__/kv_metadata_test3.parquet' (FORMAT PARQUET);
+
+query II
+SELECT key::VARCHAR, value::VARCHAR FROM (SELECT unnest(parquet_kv_metadata, recursive:=True) FROM parquet_full_metadata('__TEST_DIR__/kv_metadata_test3.parquet'));
+----
+
+# Test globbing
+statement ok
+COPY (SELECT 2, 'bar') TO  '__TEST_DIR__/kv_metadata_test2.parquet' (FORMAT PARQUET, KV_METADATA {a: 'b', c: 'd'});
+
+query III
+SELECT replace(replace(file_name, '\', '/'),replace('__TEST_DIR__/', '\', '/'), '') AS file_name, key::VARCHAR, value::VARCHAR FROM (SELECT unnest(parquet_kv_metadata, recursive:=True) FROM parquet_full_metadata('__TEST_DIR__/kv_metadata_tes*')) ORDER BY 1, 2;
+----
+kv_metadata_test.parquet	baz	42
+kv_metadata_test.parquet	foo	bar
+kv_metadata_test.parquet	quz	\xC3\xB6\xC3\xA4\xC3\xA5
+kv_metadata_test2.parquet	a	b
+kv_metadata_test2.parquet	c	d
+
+# -------------------------------------------------------------------
+# parquet_metadata and parquet_schema tests from test/sql/copy/parquet/parquet_metadata.test
+# -------------------------------------------------------------------
+
+statement ok
+SELECT unnest(parquet_metadata, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet');
+
+statement ok
+SELECT unnest(parquet_schema, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet');
+
+query I
+SELECT COUNT(*) > 0 FROM (SELECT unnest(parquet_metadata, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet'));
+----
+true
+
+query I
+SELECT COUNT(*) > 0 FROM (SELECT unnest(parquet_schema, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet'));
+----
+true
+
+statement ok
+SELECT * FROM parquet_full_metadata('data/parquet-testing/decimal/decimal_dc.parquet');
+
+statement ok
+SELECT * FROM parquet_full_metadata('data/parquet-testing/decimal/int64_decimal.parquet');
+
+# with globs
+statement ok
+SELECT * FROM parquet_full_metadata('data/parquet-testing/glob/*.parquet');
+
+# list parameters
+statement ok
+SELECT * FROM parquet_full_metadata(['data/parquet-testing/decimal/int64_decimal.parquet', 'data/parquet-testing/decimal/int64_decimal.parquet']);
+
+query III
+SELECT name, type, duckdb_type FROM (SELECT unnest(parquet_schema, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet')) WHERE type IS NOT NULL;
+----
+l_orderkey	INT64	BIGINT
+l_partkey	INT64	BIGINT
+l_suppkey	INT64	BIGINT
+l_linenumber	INT32	INTEGER
+l_quantity	INT32	INTEGER
+l_extendedprice	DOUBLE	DOUBLE
+l_discount	DOUBLE	DOUBLE
+l_tax	DOUBLE	DOUBLE
+l_returnflag	BYTE_ARRAY	VARCHAR
+l_linestatus	BYTE_ARRAY	VARCHAR
+l_shipdate	BYTE_ARRAY	VARCHAR
+l_commitdate	BYTE_ARRAY	VARCHAR
+l_receiptdate	BYTE_ARRAY	VARCHAR
+l_shipinstruct	BYTE_ARRAY	VARCHAR
+l_shipmode	BYTE_ARRAY	VARCHAR
+l_comment	BYTE_ARRAY	VARCHAR
+
+# column_id
+query II
+SELECT column_id, name FROM (SELECT unnest(parquet_schema, recursive:=True) FROM parquet_full_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet')) ORDER BY column_id;
+----
+0	spark_schema
+1	l_orderkey
+2	l_partkey
+3	l_suppkey
+4	l_linenumber
+5	l_quantity
+6	l_extendedprice
+7	l_discount
+8	l_tax
+9	l_returnflag
+10	l_linestatus
+11	l_shipdate
+12	l_commitdate
+13	l_receiptdate
+14	l_shipinstruct
+15	l_shipmode
+16	l_comment
+
