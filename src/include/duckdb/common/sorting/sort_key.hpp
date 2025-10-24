@@ -45,7 +45,7 @@ struct SortKey;
 template <class SORT_KEY>
 struct SortKeyNoPayload {
 protected:
-	SortKeyNoPayload() = default;
+	SortKeyNoPayload() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -63,7 +63,7 @@ public:
 template <class SORT_KEY>
 struct SortKeyPayload {
 protected:
-	SortKeyPayload() = default;
+	SortKeyPayload() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -93,7 +93,7 @@ inline bool SortKeyLessThan<1>(const uint64_t *const &lhs, const uint64_t *const
 template <class SORT_KEY, bool HAS_PAYLOAD>
 struct FixedSortKey : std::conditional<HAS_PAYLOAD, SortKeyPayload<SORT_KEY>, SortKeyNoPayload<SORT_KEY>>::type {
 protected:
-	FixedSortKey() = default;
+	FixedSortKey() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -143,6 +143,10 @@ public:
 		val = static_cast<int64_t>(sort_key.part0); // NOLINT: unsafe cast on purpose
 	}
 
+	void Reconstruct() {
+		ByteSwap();
+	}
+
 	data_ptr_t GetData() const {
 		throw InternalException("GetData() called on a FixedSortKey");
 	}
@@ -163,7 +167,7 @@ public:
 template <class SORT_KEY, bool HAS_PAYLOAD>
 struct VariableSortKey : std::conditional<HAS_PAYLOAD, SortKeyPayload<SORT_KEY>, SortKeyNoPayload<SORT_KEY>>::type {
 protected:
-	VariableSortKey() = default;
+	VariableSortKey() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -213,6 +217,13 @@ public:
 
 	void Deconstruct(int64_t &) {
 		throw InternalException("VariableSortKey::Deconstruct() called with an int64_t");
+	}
+
+	void Reconstruct() {
+		auto &sort_key = static_cast<SORT_KEY &>(*this);
+		if (sort_key.size <= SORT_KEY::INLINE_LENGTH) {
+			ByteSwap();
+		}
 	}
 
 	data_ptr_t GetData() const {

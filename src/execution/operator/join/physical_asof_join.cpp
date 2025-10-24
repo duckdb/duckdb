@@ -363,7 +363,7 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	auto &rhs_groups = hashed_groups[1];
 	right_outers.reserve(rhs_groups.size());
 	for (const auto &hash_group : rhs_groups) {
-		right_outers.emplace_back(OuterJoinMarker(is_right_outer));
+		right_outers.emplace_back(is_right_outer);
 		right_outers.back().Initialize(hash_group ? hash_group->Count() : 0);
 	}
 }
