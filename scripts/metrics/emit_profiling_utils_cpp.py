@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Callable
 
-from scripts.metrics.model import MetricIndex
-from scripts.metrics.writer import IndentedFileWriter
+from .model import MetricIndex
+from .writer import IndentedFileWriter
 
 HPP_HEADER = """//-------------------------------------------------------------------------
 //                         DuckDB

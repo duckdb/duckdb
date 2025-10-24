@@ -2802,10 +2802,10 @@ const StringUtil::EnumStringLiteral *GetMetricGroupValues() {
 		{ static_cast<uint32_t>(MetricGroup::DEFAULT), "DEFAULT" },
 		{ static_cast<uint32_t>(MetricGroup::EXECUTION), "EXECUTION" },
 		{ static_cast<uint32_t>(MetricGroup::FILE), "FILE" },
-		{ static_cast<uint32_t>(MetricGroup::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(MetricGroup::OPERATOR), "OPERATOR" },
 		{ static_cast<uint32_t>(MetricGroup::OPTIMIZER), "OPTIMIZER" },
-		{ static_cast<uint32_t>(MetricGroup::PHASE_TIMING), "PHASE_TIMING" }
+		{ static_cast<uint32_t>(MetricGroup::PHASE_TIMING), "PHASE_TIMING" },
+		{ static_cast<uint32_t>(MetricGroup::INVALID), "INVALID" }
 	};
 	return values;
 }

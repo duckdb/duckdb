@@ -1,9 +1,9 @@
-from scripts.metrics.emit_enum_cpp import generate_metric_type_files
-from scripts.metrics.emit_profiling_utils_cpp import generate_profiling_utils
-from scripts.metrics.emit_tests import generate_test_files
-from scripts.metrics.inputs import load_metrics_json, validate_identifier, retrieve_optimizers
-from scripts.metrics.model import build_all_metrics
-from scripts.metrics.paths import (
+from metrics.emit_enum_cpp import generate_metric_type_files
+from metrics.emit_profiling_utils_cpp import generate_profiling_utils
+from metrics.emit_tests import generate_test_files
+from metrics.inputs import load_metrics_json, retrieve_optimizers
+from metrics.model import build_all_metrics
+from metrics.paths import (
     METRICS_JSON,
     OPTIMIZER_HPP,
     OUT_METRIC_HPP,

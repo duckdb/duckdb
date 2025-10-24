@@ -3,7 +3,7 @@ from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional, Iterable
 
-from scripts.metrics.inputs import validate_identifier
+from .inputs import validate_identifier
 
 
 @dataclass(frozen=True)
