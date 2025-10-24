@@ -174,9 +174,28 @@ ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
 }
 
+RowGroup *ParallelCollectionScanState::GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) {
+	return row_groups->GetRootSegment();
+}
+
+RowGroup *ParallelCollectionScanState::GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups) {
+	return row_groups->GetNextSegment(current_row_group);
+}
+
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
       valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
+}
+
+RowGroup *CollectionScanState::GetNextRowGroup() {
+	return row_groups->GetNextSegment(row_group);
+}
+RowGroup *CollectionScanState::GetRootSegment() {
+	return row_groups->GetRootSegment();
+}
+
+RowGroup *CollectionScanState::GetSegment(idx_t start_idx) {
+	return row_groups->GetSegment(start_idx);
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
@@ -189,6 +208,7 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 			return false;
 		} else {
 			do {
+				// row_group = GetNextRowGroup();
 				row_group = row_groups->GetNextSegment(row_group);
 				if (row_group) {
 					if (row_group->start >= max_row) {
@@ -228,6 +248,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 		if (result.size() > 0) {
 			return true;
 		} else {
+			// row_group = GetNextRowGroup();
 			row_group = row_groups->GetNextSegment(row_group);
 			if (row_group) {
 				row_group->InitializeScan(*this);

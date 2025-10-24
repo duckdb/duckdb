@@ -185,6 +185,7 @@ private:
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
+	virtual ~CollectionScanState() = default;
 
 	//! The current row_group we are scanning
 	RowGroup *row_group;
@@ -211,12 +212,24 @@ public:
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
+	virtual RowGroup *GetNextRowGroup();
+	virtual RowGroup *GetRootSegment();
+	virtual RowGroup *GetSegment(idx_t start_idx);
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
 
 private:
 	TableScanState &parent;
+};
+
+class OrderedCollectionScanState : public CollectionScanState {
+public:
+	explicit OrderedCollectionScanState(TableScanState &parent_p);
+	RowGroup *GetNextRowGroup() override;
+	RowGroup *GetRootSegment() override;
+
+private:
 };
 
 struct ScanSamplingInfo {
@@ -276,6 +289,9 @@ private:
 
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
+	virtual ~ParallelCollectionScanState() = default;
+	virtual RowGroup *GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups);
+	virtual RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups);
 
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;

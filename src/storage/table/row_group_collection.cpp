@@ -157,13 +157,16 @@ void RowGroupCollection::Verify() {
 void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionScanState &state,
                                         const vector<StorageIndex> &column_ids,
                                         optional_ptr<TableFilterSet> table_filters) {
+	// state.row_groups = row_groups.get();
+	// auto row_group = state.GetRootSegment();
 	auto row_group = row_groups->GetRootSegment();
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
+
 	state.max_row = row_start + total_rows;
 	state.Initialize(context, GetTypes());
 	while (row_group && !row_group->InitializeScan(state)) {
-		row_group = row_groups->GetNextSegment(row_group);
+		row_group = state.GetNextRowGroup();
 	}
 }
 
@@ -174,7 +177,9 @@ void RowGroupCollection::InitializeCreateIndexScan(CreateIndexScanState &state) 
 void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
                                                   const vector<StorageIndex> &column_ids, idx_t start_row,
                                                   idx_t end_row) {
-	auto row_group = row_groups->GetSegment(start_row);
+	// state.row_groups = row_groups.get();
+	// auto row_group = state.GetSegment(start_row);
+	auto row_group = row_groups->GetRootSegment();
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
 	state.max_row = end_row;
@@ -199,7 +204,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, C
 
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
 	state.collection = this;
-	state.current_row_group = row_groups->GetRootSegment();
+	state.current_row_group = state.GetRootSegment(row_groups);
 	state.vector_index = 0;
 	state.max_row = row_start + total_rows;
 	state.batch_index = 0;
@@ -230,14 +235,14 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				D_ASSERT(vector_index * STANDARD_VECTOR_SIZE < state.current_row_group->count);
 				state.vector_index++;
 				if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
-					state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+					state.current_row_group = state.GetNextRowGroup(row_groups);
 					state.vector_index = 0;
 				}
 			} else {
 				state.processed_rows += state.current_row_group->count;
 				vector_index = 0;
 				max_row = state.current_row_group->start + state.current_row_group->count;
-				state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+				state.current_row_group = state.GetNextRowGroup(row_groups);
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;
