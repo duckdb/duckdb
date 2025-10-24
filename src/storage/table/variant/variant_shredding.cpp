@@ -213,6 +213,12 @@ private:
 
 } // namespace
 
+static void CreateValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
+                         optional_ptr<const SelectionVector> value_index_sel,
+                         optional_ptr<const SelectionVector> result_sel,
+                         optional_ptr<DuckDBVariantShreddingState> state, idx_t count) {
+}
+
 void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
                                                 optional_ptr<const SelectionVector> sel,
                                                 optional_ptr<const SelectionVector> value_index_sel,
