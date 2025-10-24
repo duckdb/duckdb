@@ -160,7 +160,7 @@ PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
-# LEVEL 16
+# LEVEL 16 (Highest)
 BaseExpression <- SingleExpression Indirection*
 
 Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
