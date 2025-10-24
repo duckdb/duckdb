@@ -268,7 +268,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::Replay(FileSystem &fs, AttachedDatabase
 	}
 	// replay returning NULL indicates we can nuke the WAL entirely - but only if this is not a read-only connection
 	if (!db.IsReadOnly()) {
-		fs.RemoveFile(wal_path);
+		fs.TryRemoveFile(wal_path);
 	}
 	return make_uniq<WriteAheadLog>(db, wal_path);
 }
