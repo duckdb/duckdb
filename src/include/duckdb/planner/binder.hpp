@@ -221,7 +221,8 @@ public:
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
-	                                                     vector<unique_ptr<Expression>> &bound_defaults);
+	                                                     vector<unique_ptr<Expression>> &bound_defaults,
+	                                                     bool skip_bind_default = false);
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
 
@@ -321,6 +322,10 @@ public:
 
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
 
+	bool IsFunctionBound() {
+		return is_function_bound;
+	}
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -334,6 +339,8 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
+	//! Whether or not the binder has bound FUNCTION, used by `ADD COLUMN`
+	bool is_function_bound = false;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
 	//! The set of bound views
