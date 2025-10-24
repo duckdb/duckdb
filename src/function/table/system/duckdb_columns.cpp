@@ -196,7 +196,7 @@ unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry &entry) {
 	case CatalogType::VIEW_ENTRY:
 		return make_uniq<ViewColumnHelper>(entry.Cast<ViewCatalogEntry>());
 	default:
-		throw NotImplementedException("Unsupported catalog type for duckdb_columns");
+		throw NotImplementedException(StringUtil::Format("Unsupported catalog type %s for duckdb_columns", entry.type));
 	}
 }
 
