@@ -12,12 +12,17 @@ END_MARKER = "// End of the auto-generated list of settings structures"
 
 
 def extract_declarations(setting) -> str:
+    if setting.alternative_sql_type:
+        alternative_sql_type = f"\"{setting.alternative_sql_type}\""
+    else:
+        alternative_sql_type = "nullptr"
     definition = (
         f"struct {setting.struct_name} {{\n"
         f"    using RETURN_TYPE = {setting.return_type};\n"
         f"    static constexpr const char *Name = \"{setting.name}\";\n"
         f"    static constexpr const char *Description = \"{setting.description}\";\n"
         f"    static constexpr const char *InputType = \"{setting.sql_type}\";\n"
+        f"    static constexpr const char *AlternativeInputType = {alternative_sql_type};\n"
     )
     if setting.scope == "GLOBAL" or setting.scope == "GLOBAL_LOCAL":
         definition += f"    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);\n"
