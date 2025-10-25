@@ -31,7 +31,7 @@ SELECT a, b, c, d, e, f FROM tbl ORDER BY a;
 3	6	baz	30.5	32.5 	2023-03-01 12:00:00
 
 statement ok
-DELETE FROM tbl WHERE a = 2;
+DELETE FROM tbl WHERE a in (2);
 
 restart
 

@@ -209,7 +209,6 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
                                         bool append_to_table) {
 	// In this function, we might scan all table columns,
 	// as we might also append to the table itself (append_to_table).
-
 	auto &table = table_ref.get();
 	if (append_to_table) {
 		table.InitializeAppend(transaction, append_state);

@@ -692,10 +692,6 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 	state.Initialize(std::move(column_ids_copy));
 	state.table_state.max_row = row_start + total_rows;
 
-	// Used for scanning data. Only contains the indexed columns.
-	// Since the chunk is being initialized using the column_types ordering, which is derived from the
-	// sorted column_id ordering above, fetch_chunk will have the Indexed columns in the proper order in case
-	// of WAL replay buffering.
 	DataChunk fetch_chunk;
 	fetch_chunk.Initialize(GetAllocator(), column_types);
 
@@ -761,6 +757,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 			if (index.IsBound()) {
 				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
 			} else {
+				// Buffering takes only the indexed columns in ordering of the column_ids mapping.
 				DataChunk index_column_chunk;
 				index_column_chunk.InitializeEmpty(column_types);
 				for (idx_t i = 0; i < column_types.size(); i++) {
