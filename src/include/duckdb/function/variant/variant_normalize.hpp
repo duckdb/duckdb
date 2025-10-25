@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/function/scalar/variant_utils.hpp"
+#include "duckdb/common/serializer/varint.hpp"
 
 namespace duckdb {
 
