@@ -246,13 +246,16 @@ void BFTableFilter::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<bool>(200, "filters_null_values", filters_null_values);
 	serializer.WriteProperty<string>(201, "key_column_name", key_column_name);
 	serializer.WriteProperty<LogicalType>(202, "key_type", key_type);
-	// todo: How/Should be serialize the bloom filter?
+
+	throw NotImplementedException("BFTableFilter::Serialize not implemented");
 }
 
 unique_ptr<TableFilter> BFTableFilter::Deserialize(Deserializer &deserializer) {
 	auto filters_null_values = deserializer.ReadProperty<bool>(200, "filters_null_values");
 	auto key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
 	auto key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
+
+	throw NotImplementedException("BFTableFilter::Deserialize not implemented");
 
 	BloomFilter filter;
 	auto result = make_uniq<BFTableFilter>(filter, filters_null_values, key_column_name, key_type);
