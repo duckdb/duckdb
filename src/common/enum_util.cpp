@@ -728,23 +728,23 @@ BlockState EnumUtil::FromString<BlockState>(const char *value) {
 	return static_cast<BlockState>(StringUtil::StringToEnum(GetBlockStateValues(), 2, "BlockState", value));
 }
 
-const StringUtil::EnumStringLiteral *GetBloomFilterStateValues() {
+const StringUtil::EnumStringLiteral *GetBloomFilterStatusValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(BloomFilterState::Uninitialized), "Uninitialized" },
-		{ static_cast<uint32_t>(BloomFilterState::Active), "Active" },
-		{ static_cast<uint32_t>(BloomFilterState::Pause), "Pause" }
+		{ static_cast<uint32_t>(BloomFilterStatus::Uninitialized), "Uninitialized" },
+		{ static_cast<uint32_t>(BloomFilterStatus::Active), "Active" },
+		{ static_cast<uint32_t>(BloomFilterStatus::Pause), "Pause" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<BloomFilterState>(BloomFilterState value) {
-	return StringUtil::EnumToString(GetBloomFilterStateValues(), 3, "BloomFilterState", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<BloomFilterStatus>(BloomFilterStatus value) {
+	return StringUtil::EnumToString(GetBloomFilterStatusValues(), 3, "BloomFilterStatus", static_cast<uint32_t>(value));
 }
 
 template<>
-BloomFilterState EnumUtil::FromString<BloomFilterState>(const char *value) {
-	return static_cast<BloomFilterState>(StringUtil::StringToEnum(GetBloomFilterStateValues(), 3, "BloomFilterState", value));
+BloomFilterStatus EnumUtil::FromString<BloomFilterStatus>(const char *value) {
+	return static_cast<BloomFilterStatus>(StringUtil::StringToEnum(GetBloomFilterStatusValues(), 3, "BloomFilterStatus", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCAPIResultSetTypeValues() {

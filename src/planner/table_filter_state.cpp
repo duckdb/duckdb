@@ -14,7 +14,7 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 	switch (filter.filter_type) {
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bf = filter.Cast<BFTableFilter>();
-		return make_uniq<BloomFilterState>(bf.GetKeyType());
+		return make_uniq<BFTableFilterState>(bf.GetKeyType());
 	}
 	case TableFilterType::OPTIONAL_FILTER:
 		// optional filter is not executed - create an empty filter state

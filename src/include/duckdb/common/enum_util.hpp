@@ -88,7 +88,7 @@ enum class BlockIteratorStateType : int8_t;
 
 enum class BlockState : uint8_t;
 
-enum class BloomFilterState : uint8_t;
+enum class BloomFilterStatus : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
@@ -540,7 +540,7 @@ template<>
 const char* EnumUtil::ToChars<BlockState>(BlockState value);
 
 template<>
-const char* EnumUtil::ToChars<BloomFilterState>(BloomFilterState value);
+const char* EnumUtil::ToChars<BloomFilterStatus>(BloomFilterStatus value);
 
 template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
@@ -1174,7 +1174,7 @@ template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value);
 
 template<>
-BloomFilterState EnumUtil::FromString<BloomFilterState>(const char *value);
+BloomFilterStatus EnumUtil::FromString<BloomFilterStatus>(const char *value);
 
 template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);

@@ -43,7 +43,7 @@ public:
 		}
 	};
 
-	enum class BloomFilterState : uint8_t {
+	enum class BloomFilterStatus : uint8_t {
 		Uninitialized, // not initialized and cannot be populated or probed
 		Active,        // ready and in use
 		Pause          // ready to use but not in use currently, e.g., not selective enough
@@ -60,23 +60,23 @@ public:
 		return selectivity_data;
 	}
 
-	atomic<BloomFilterState> &GetState() {
-		return state;
+	atomic<BloomFilterStatus> &GetStatus() {
+		return status;
 	}
 
 	void Pause() {
-		state.store(BloomFilterState::Pause);
+		status.store(BloomFilterStatus::Pause);
 	}
 
 	bool IsActive() const {
-		return state.load() == BloomFilterState::Active;
+		return status.load() == BloomFilterStatus::Active;
 	}
 	void InsertOne(hash_t hash) const;
 	bool LookupOne(hash_t hash) const;
 
 private:
 	SelectivityStats selectivity_data;
-	atomic<BloomFilterState> state {BloomFilterState::Uninitialized};
+	atomic<BloomFilterStatus> status {BloomFilterStatus::Uninitialized};
 	idx_t num_sectors;
 	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
 
@@ -117,14 +117,14 @@ public:
 
 	// Filters by first hashing and then probing the bloom filter. The &sel will hold
 	// the remaining tuples, &approved_tuple_count will hold the approved count.
-	idx_t Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count, BloomFilterState &state) const;
+	idx_t Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count, BFTableFilterState &state) const;
 	bool FilterValue(const Value &value) const;
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 
 private:
-	void HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
-	                  BloomFilterState &state) const;
+	static void HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
+	                         BFTableFilterState &state);
 
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;

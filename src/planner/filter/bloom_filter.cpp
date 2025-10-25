@@ -29,7 +29,7 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	bf = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 	std::fill_n(bf, num_sectors, 0);
 
-	state.store(BloomFilterState::Active);
+	status.store(BloomFilterStatus::Active);
 }
 
 inline uint64_t GetMask(const uint8_t *__restrict shifts_8, const idx_t i) {
@@ -142,7 +142,7 @@ inline bool BloomFilter::LookupOne(uint64_t hash) const {
 }
 
 string BFTableFilter::ToString(const string &column_name) const {
-	if (filter.GetState().load() == BloomFilter::BloomFilterState::Active) {
+	if (filter.GetStatus().load() == BloomFilter::BloomFilterStatus::Active) {
 		return column_name + " IN BF(" + key_column_name + ")";
 	} else {
 		return "True";
@@ -150,7 +150,7 @@ string BFTableFilter::ToString(const string &column_name) const {
 }
 
 void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
-                                 BloomFilterState &state) const {
+                                 BFTableFilterState &state) {
 	if (sel.IsSet()) {
 		state.keys_sliced_v.Slice(keys_v, sel, approved_count);
 		VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_count);
@@ -160,7 +160,7 @@ void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, con
 }
 
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
-                            BloomFilterState &state) const {
+                            BFTableFilterState &state) const {
 	if (!this->filter.IsActive()) {
 		return approved_tuple_count;
 	}
