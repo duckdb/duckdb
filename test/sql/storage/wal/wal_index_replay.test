@@ -1,0 +1,74 @@
+# name: test/sql/storage/wal/wal_index_replay.test
+# description: Test insert and delete replays with indexes
+# group: [wal]
+
+statement ok
+SET index_scan_max_count = 1;
+
+load __TEST_DIR__/index_replay_test.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE tbl(a INTEGER);
+
+statement ok
+CREATE INDEX idx_a ON tbl(a);
+
+statement ok
+INSERT INTO tbl SELECT range FROM range(100);
+
+statement ok
+DELETE FROM tbl WHERE a % 5 = 0;
+
+statement ok
+INSERT INTO tbl SELECT range + 100 FROM range(50);
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+130
+
+restart
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+130
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 1;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 1;
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 5;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 5;
+----
+
+statement ok
+INSERT INTO tbl VALUES (5);
+
+query I
+SELECT * FROM tbl WHERE a = 5;
+----
+5
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+131
+
