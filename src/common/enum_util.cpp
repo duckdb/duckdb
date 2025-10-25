@@ -160,6 +160,7 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
@@ -725,6 +726,25 @@ const char* EnumUtil::ToChars<BlockState>(BlockState value) {
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value) {
 	return static_cast<BlockState>(StringUtil::StringToEnum(GetBlockStateValues(), 2, "BlockState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetBloomFilterStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(BloomFilterState::Uninitialized), "Uninitialized" },
+		{ static_cast<uint32_t>(BloomFilterState::Active), "Active" },
+		{ static_cast<uint32_t>(BloomFilterState::Pause), "Pause" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<BloomFilterState>(BloomFilterState value) {
+	return StringUtil::EnumToString(GetBloomFilterStateValues(), 3, "BloomFilterState", static_cast<uint32_t>(value));
+}
+
+template<>
+BloomFilterState EnumUtil::FromString<BloomFilterState>(const char *value) {
+	return static_cast<BloomFilterState>(StringUtil::StringToEnum(GetBloomFilterStateValues(), 3, "BloomFilterState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCAPIResultSetTypeValues() {
