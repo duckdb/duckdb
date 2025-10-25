@@ -142,7 +142,7 @@ inline bool BloomFilter::LookupOne(uint64_t hash) const {
 }
 
 string BFTableFilter::ToString(const string &column_name) const {
-	if (filter.GetStatus().load() == BloomFilter::BloomFilterStatus::Active) {
+	if (filter.GetStatus().load() == BloomFilterStatus::Active) {
 		return column_name + " IN BF(" + key_column_name + ")";
 	} else {
 		return "True";

@@ -17,6 +17,12 @@
 
 namespace duckdb {
 
+enum class BloomFilterStatus : uint8_t {
+	Uninitialized, // not initialized and cannot be populated or probed
+	Active,        // ready and in use
+	Pause          // ready to use but not in use currently, e.g., not selective enough
+};
+
 class BloomFilter {
 
 public:
@@ -41,12 +47,6 @@ public:
 			}
 			return static_cast<double>(tuples_accepted.load()) / static_cast<double>(processed);
 		}
-	};
-
-	enum class BloomFilterStatus : uint8_t {
-		Uninitialized, // not initialized and cannot be populated or probed
-		Active,        // ready and in use
-		Pause          // ready to use but not in use currently, e.g., not selective enough
 	};
 
 	BloomFilter() = default;
