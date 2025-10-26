@@ -318,10 +318,16 @@ protected:
 class InternalException : public Exception {
 public:
 	DUCKDB_API explicit InternalException(const string &msg);
+	InternalException(const unordered_map<string, string> &extra_info, const string &msg);
 
 	template <typename... ARGS>
 	explicit InternalException(const string &msg, ARGS &&...params)
 	    : InternalException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
+	}
+
+	template <typename... ARGS>
+	explicit InternalException(const unordered_map<string, string> &extra_info, const string &msg, ARGS &&...params)
+	    : InternalException(extra_info, ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 };
 
