@@ -288,7 +288,7 @@ void my_function_connection_id(duckdb_function_info info, duckdb_data_chunk outp
 	auto ptr2 = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(output, 1));
 	idx_t i;
 	for (i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		if (init_data->pos >= bind_data->rows_requested) {
+		if (static_cast<idx_t>(init_data->pos) >= bind_data->rows_requested) {
 			break;
 		}
 		ptr[i] = bind_data->connection_id;
@@ -313,9 +313,9 @@ TEST_CASE("Table function client context return") {
 
 	result = tester.Query("SELECT * FROM my_connection_id_function(3)");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->Fetch<int64_t>(0, 0) == first_conn_id);
-	REQUIRE(result->Fetch<int64_t>(0, 1) == first_conn_id);
-	REQUIRE(result->Fetch<int64_t>(0, 2) == first_conn_id);
+	REQUIRE(result->Fetch<int64_t>(0, 0) == static_cast<int64_t>(first_conn_id));
+	REQUIRE(result->Fetch<int64_t>(0, 1) == static_cast<int64_t>(first_conn_id));
+	REQUIRE(result->Fetch<int64_t>(0, 2) == static_cast<int64_t>(first_conn_id));
 	REQUIRE(result->Fetch<int64_t>(1, 0) == 42);
 	REQUIRE(result->Fetch<int64_t>(1, 1) == 42);
 	REQUIRE(result->Fetch<int64_t>(1, 2) == 42);
