@@ -261,7 +261,7 @@ public:
 class NotImplementedException : public Exception {
 public:
 	DUCKDB_API explicit NotImplementedException(const string &msg);
-	NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg);
+	explicit NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg);
 
 	template <typename... ARGS>
 	explicit NotImplementedException(const string &msg, ARGS &&...params)

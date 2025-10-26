@@ -343,7 +343,7 @@ InternalException::InternalException(const string &msg) : Exception(ExceptionTyp
 }
 
 InternalException::InternalException(const unordered_map<string, string> &extra_info, const string &msg)
-	: Exception(extra_info, ExceptionType::INTERNAL, msg) {
+    : Exception(extra_info, ExceptionType::INTERNAL, msg) {
 }
 
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
