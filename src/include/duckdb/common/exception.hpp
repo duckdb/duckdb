@@ -268,7 +268,8 @@ public:
 	    : NotImplementedException(ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 	template <typename... ARGS>
-	explicit NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg, ARGS &&...params)
+	explicit NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg,
+	                                 ARGS &&...params)
 	    : NotImplementedException(extra_info, ConstructMessage(msg, std::forward<ARGS>(params)...)) {
 	}
 };
