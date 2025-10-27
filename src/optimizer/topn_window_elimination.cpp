@@ -565,8 +565,8 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 		} else {
 			// The child operator could have multiple or no table indexes. Therefore, we must find the right type first
 			const auto child_column_idx =
-			    std::find(window_child_bindings.begin(), window_child_bindings.end(), binding) -
-			    window_child_bindings.begin();
+			    static_cast<idx_t>(std::find(window_child_bindings.begin(), window_child_bindings.end(), binding) -
+			                       window_child_bindings.begin());
 			aggregate_args.push_back(
 			    make_uniq<BoundColumnRefExpression>(column_id, window_child_types[child_column_idx], binding));
 		}
@@ -958,9 +958,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 	const auto lhs_rowid_idx = lhs->types.size() - 1;
 	const auto rhs_rowid_idx = rhs->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ? 0 : aggregate_offset;
 
-	condition.left = make_uniq<BoundColumnRefExpression>(lhs->types[lhs_rowid_idx],
+	condition.left = make_uniq<BoundColumnRefExpression>("rowid", lhs->types[lhs_rowid_idx],
 	                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
-	condition.right = make_uniq<BoundColumnRefExpression>(rhs->types[aggregate_offset],
+	condition.right = make_uniq<BoundColumnRefExpression>("rowid", rhs->types[aggregate_offset],
 	                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
 
 	join->conditions.push_back(std::move(condition));
