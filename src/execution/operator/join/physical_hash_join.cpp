@@ -158,10 +158,6 @@ public:
 		if (op.filter_pushdown) {
 			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
 				// Only computing min/max to check for perfect HJ, but we already can
-				// fixme: even with a perfect HT it might still be worth to do filter pushdown in the sense that
-				// if the slot number retrieved for the perfect hash table does not fit the range. In this sense
-				// a pushed down filter for a perfect hash table could be a simple range query that with min-max
-				// if you expect the table do be densely populated or a super fast bloom filter pushdown
 				skip_filter_pushdown = true;
 			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
