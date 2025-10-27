@@ -223,6 +223,7 @@ private:
 	TableScanState &parent;
 };
 
+// TODO: Rename to CustomOrderCollectionScanState?
 class OrderedCollectionScanState : public CollectionScanState {
 public:
 	OrderedCollectionScanState(TableScanState &parent_p, column_t column_idx, bool sort_asc);

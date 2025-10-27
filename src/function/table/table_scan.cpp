@@ -253,6 +253,7 @@ public:
 			    l_state->scan_state, input.order_row_groups_by->first, input.order_row_groups_by->second);
 			l_state->scan_state.local_state = make_shared_ptr<OrderedCollectionScanState>(
 			    l_state->scan_state, input.order_row_groups_by->first, input.order_row_groups_by->second);
+			// TODO: initialize this->state = mk_shared<OrderedParallelCollectionScanState>
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
