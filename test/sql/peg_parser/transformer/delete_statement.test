@@ -51,6 +51,10 @@ DELETE FROM integers WHERE i IS NULL;
 statement ok
 DELETE FROM integers WHERE i BETWEEN 200 AND 300;
 
+statement ok
+DELETE FROM integers
+WHERE i < 5 RETURNING i;
+
 # statement ok
 # CREATE TABLE integers2 (i bigint);
 #

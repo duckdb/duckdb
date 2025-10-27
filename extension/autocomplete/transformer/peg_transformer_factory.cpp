@@ -238,6 +238,12 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformTableNameIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformWhereClause);
+
+	REGISTER_TRANSFORM(TransformTargetList);
+	REGISTER_TRANSFORM(TransformAliasedExpression);
+	REGISTER_TRANSFORM(TransformExpressionAsCollabel);
+	REGISTER_TRANSFORM(TransformColIdExpression);
+	REGISTER_TRANSFORM(TransformExpressionOptIdentifier);
 }
 
 void PEGTransformerFactory::RegisterUse() {

@@ -436,6 +436,14 @@ private:
 	static unique_ptr<ParsedExpression> TransformWhereClause(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
 
+	static vector<unique_ptr<ParsedExpression>> TransformTargetList(PEGTransformer &transformer,
+		optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformAliasedExpression(PEGTransformer &transformer,
+		optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformExpressionAsCollabel(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformColIdExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformExpressionOptIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 	// use.gram
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
