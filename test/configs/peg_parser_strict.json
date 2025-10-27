@@ -67,15 +67,6 @@
       ]
     },
     {
-      "reason": "Arithmetic expression",
-      "paths": [
-        "test/sql/function/operator/test_arithmetic_sqllogic.test",
-        "test/sql/projection/test_row_id_expression.test",
-        "test/sql/function/numeric/test_trigo.test",
-        "test/sql/function/generic/test_between.test"
-      ]
-    },
-    {
       "reason": "Timeout",
       "paths": [
         "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",
