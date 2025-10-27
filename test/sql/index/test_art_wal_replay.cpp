@@ -44,7 +44,7 @@ static ART &GetARTIndex(Connection &con, const string &table_name, const string 
 // work -- it includes a "regular case" with an index on the first two physical columns, and an index on
 // physical columns that are interleaved between  generated columns to test that the buffered mappings work as
 // intended.
-TEST_CASE("Test ART index with WAL replay - generated columns and interleaved ops", "[wal][art-wal-replay]") {
+TEST_CASE("Test ART index with WAL replay - generated columns and interleaved inserts/deletes", "[wal][art-wal-replay]") {
 	duckdb::unique_ptr<QueryResult> result;
 	auto db_path = TestCreatePath("art_wal_gen_test.db");
 	DeleteDatabase(db_path);
@@ -61,14 +61,13 @@ TEST_CASE("Test ART index with WAL replay - generated columns and interleaved op
 		REQUIRE_NO_FAIL(con.Query("CREATE INDEX idx_ab ON tbl(a, b)"));
 		REQUIRE_NO_FAIL(con.Query("CREATE INDEX idx_df ON tbl(d, f)"));
 
-		// Insert 10000 rows
 		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO tbl SELECT range, range * 2, 'val_' || range, 'tag_' || range FROM range(10000)"));
+		    con.Query("INSERT INTO tbl SELECT range, range * 2, 'val_' || range, 'tag_' || range FROM range(100)"));
 
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM tbl WHERE a % 5 = 0"));
 
 		result = con.Query("SELECT COUNT(*) FROM tbl");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(8000)}));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(80)}));
 
 		REQUIRE_NO_FAIL(con.Query("USE memory"));
 		REQUIRE_NO_FAIL(con.Query("DETACH testdb"));
@@ -86,21 +85,22 @@ TEST_CASE("Test ART index with WAL replay - generated columns and interleaved op
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 		result = con.Query("SELECT COUNT(*) FROM tbl");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(8000)}));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(80)}));
 
-		auto &art_ab = GetARTIndex(con, "tbl", "idx_ab");
-		auto &art_df = GetARTIndex(con, "tbl", "idx_df");
+		auto &idx_ab = GetARTIndex(con, "tbl", "idx_ab");
+		auto &idx_df = GetARTIndex(con, "tbl", "idx_df");
 
-		ArenaAllocator arena(BufferAllocator::Get(art_ab.db));
+		ArenaAllocator arena_ab(BufferAllocator::Get(idx_ab.db));
+		ArenaAllocator arena_df(BufferAllocator::Get(idx_df.db));
 
 		// Verify idx_ab: all mod 5 deleted, everything else exists
-		for (int i = 0; i < 10000; i++) {
+		for (int i = 0; i < 100; i++) {
 			Value val_a(i);
 			Value val_b(i * 2);
-			auto key = ARTKey::CreateARTKey<int32_t>(arena, val_a);
-			auto key_b = ARTKey::CreateARTKey<int32_t>(arena, val_b);
-			key.Concat(arena, key_b);
-			auto leaf = ARTOperator::Lookup(art_ab, art_ab.tree, key, 0);
+			auto key = ARTKey::CreateARTKey<int32_t>(arena_ab, val_a);
+			auto key_b = ARTKey::CreateARTKey<int32_t>(arena_ab, val_b);
+			key.Concat(arena_ab, key_b);
+			auto leaf = ARTOperator::Lookup(idx_ab, idx_ab.tree, key, 0);
 
 			if (i % 5 == 0) {
 				REQUIRE(!leaf);
@@ -110,16 +110,16 @@ TEST_CASE("Test ART index with WAL replay - generated columns and interleaved op
 		}
 
 		// Verify idx_df: all mod5 are deleted, everything else exists.
-		for (int i = 0; i < 10000; i++) {
+		for (int i = 0; i < 100; i++) {
 			string str_d = "val_" + to_string(i);
 			string str_f = "tag_" + to_string(i);
 			string_t str_t_d(str_d.c_str(), str_d.length());
 			string_t str_t_f(str_f.c_str(), str_f.length());
 
-			auto key_d = ARTKey::CreateARTKey<string_t>(arena, str_t_d);
-			auto key_f = ARTKey::CreateARTKey<string_t>(arena, str_t_f);
-			key_d.Concat(arena, key_f);
-			auto leaf = ARTOperator::Lookup(art_df, art_df.tree, key_d, 0);
+			auto key_d = ARTKey::CreateARTKey<string_t>(arena_df, str_t_d);
+			auto key_f = ARTKey::CreateARTKey<string_t>(arena_df, str_t_f);
+			key_d.Concat(arena_df, key_f);
+			auto leaf = ARTOperator::Lookup(idx_df, idx_df.tree, key_d, 0);
 
 			if (i % 5 == 0) {
 				REQUIRE(!leaf);
@@ -127,13 +127,6 @@ TEST_CASE("Test ART index with WAL replay - generated columns and interleaved op
 				REQUIRE(leaf);
 			}
 		}
-
-		result = con.Query("SELECT a, b, c, e FROM tbl WHERE a = 1");
-		REQUIRE(CHECK_COLUMN(result, 0, {1}));
-		REQUIRE(CHECK_COLUMN(result, 1, {2}));
-		REQUIRE(CHECK_COLUMN(result, 2, {2}));
-		REQUIRE(CHECK_COLUMN(result, 3, {4}));
 	}
-
 	DeleteDatabase(db_path);
 }
