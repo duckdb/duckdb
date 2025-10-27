@@ -148,6 +148,12 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformLogicalNotExpression);
 	REGISTER_TRANSFORM(TransformIsExpression);
 	REGISTER_TRANSFORM(TransformIsDistinctFromExpression);
+	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);
+	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
+
+
+
+
 	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformColumnReference);
 	REGISTER_TRANSFORM(TransformLiteralExpression);

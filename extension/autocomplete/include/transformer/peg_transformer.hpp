@@ -286,6 +286,12 @@ private:
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformComparisonExpression(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformBetweenInLikeExpression(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformBitwiseExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformConstantLiteral(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ColumnRefExpression> TransformNestedColumnName(PEGTransformer &transformer,

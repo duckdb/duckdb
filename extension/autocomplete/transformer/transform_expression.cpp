@@ -348,6 +348,43 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformComparisonExpressio
 	throw NotImplementedException("ComparisonOperator has not yet been implemented");
 }
 
+// BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto comparison_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!comparison_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("BetweenInLikeOp has not yet been implemented");
+}
+
+// OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto other_operator_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!other_operator_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("OtherOperator has not yet been implemented");
+}
+
+// BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitwiseExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto bit_operator_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!bit_operator_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("BitOperator has not yet been implemented");
+}
+
+
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {

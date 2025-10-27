@@ -112,7 +112,7 @@ IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
 ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
 # LEVEL 7
-BetweenInLikeExpression <- OtherOperatorExpression (BetweenInLikeOp)?
+BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
 BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
 LikeClause <- LikeVariations OtherOperatorExpression ('ESCAPE' OtherOperatorExpression)?
 LikeVariations <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO') / '~' / '~~' / '!~' / '!~~' / '!~~*'
