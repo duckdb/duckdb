@@ -3,7 +3,7 @@
 
 require no_alternative_verify
 
-load __TEST_DIR__/test_fk_persistent.db
+load {LOCAL_TEMP_DIR}/test_fk_persistent.db
 
 statement ok
 SET memory_limit = '1925kB';

@@ -11,30 +11,30 @@ require parquet
 # This is now ok, but we dont write the geoparquet metadata
 
 statement ok
-COPY (SELECT 'POINT ZM (0 1 2 3)'::GEOMETRY as geometry) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet');
+COPY (SELECT 'POINT ZM (0 1 2 3)'::GEOMETRY as geometry) TO '{TEMP_DIR}/t1.parquet' (FORMAT 'parquet');
 
 # Not a geoparquet file
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/t1.parquet');
+FROM parquet_kv_metadata('{TEMP_DIR}/t1.parquet');
 ----
 
 # But still a normal parquet file
 query I
-SELECT st_astext(st_geomfromwkb(geometry)) FROM '__TEST_DIR__/t1.parquet';
+SELECT st_astext(st_geomfromwkb(geometry)) FROM '{TEMP_DIR}/t1.parquet';
 ----
 POINT ZM (0 1 2 3)
 
 statement ok
-COPY (SELECT 'POINT M (0 1 2)'::GEOMETRY as geometry) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet');
+COPY (SELECT 'POINT M (0 1 2)'::GEOMETRY as geometry) TO '{TEMP_DIR}/t1.parquet' (FORMAT 'parquet');
 
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/t1.parquet');
+FROM parquet_kv_metadata('{TEMP_DIR}/t1.parquet');
 ----
 
 # But still a normal parquet file
 query I
-SELECT st_astext(st_geomfromwkb(geometry)) FROM '__TEST_DIR__/t1.parquet';
+SELECT st_astext(st_geomfromwkb(geometry)) FROM '{TEMP_DIR}/t1.parquet';
 ----
 POINT M (0 1 2)

@@ -16,10 +16,10 @@ COPY (
   CASE WHEN row_number() OVER ()=1234567 THEN 'thisisnotanumber'
   ELSE l_orderkey::VARCHAR
   END AS l_orderkey)
-  FROM lineitem) TO '__TEST_DIR__/lineitem_malformed.csv';
+  FROM lineitem) TO '{TEMP_DIR}/lineitem_malformed.csv';
 
 # Should return 1234567 + 1 (Header)
 statement error
-COPY lineitem FROM '__TEST_DIR__/lineitem_malformed.csv';
+COPY lineitem FROM '{TEMP_DIR}/lineitem_malformed.csv';
 ----
 CSV Error on Line: 1234568

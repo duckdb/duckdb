@@ -12,7 +12,7 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER, CHECK(i+j<10))
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/export_permissions_test' (FORMAT CSV)
+EXPORT DATABASE '{TEMP_DIR}/export_permissions_test' (FORMAT CSV)
 
 statement ok
 ROLLBACK
@@ -21,9 +21,9 @@ statement ok
 SET enable_external_access=false
 
 statement error
-IMPORT DATABASE '__TEST_DIR__/export_permissions_test'
+IMPORT DATABASE '{TEMP_DIR}/export_permissions_test'
 ----
 
 statement error
-EXPORT DATABASE '__TEST_DIR__/export_permissions_test2' (FORMAT CSV)
+EXPORT DATABASE '{TEMP_DIR}/export_permissions_test2' (FORMAT CSV)
 ----

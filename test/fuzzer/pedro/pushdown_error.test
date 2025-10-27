@@ -7,7 +7,7 @@
 statement ok
 PRAGMA enable_verification
 
-load __TEST_DIR__/wal_crash.db
+load {LOCAL_TEMP_DIR}/wal_crash.db
 
 statement ok
 CREATE TABLE t2(c1 INT);

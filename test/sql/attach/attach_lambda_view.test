@@ -5,7 +5,7 @@
 foreach i 2 3
 
 statement ok
-ATTACH '__TEST_DIR__/version_1_${i}_0.db' (STORAGE_VERSION 'v1.${i}.0');
+ATTACH '{LOCAL_TEMP_DIR}/version_1_${i}_0.db' (STORAGE_VERSION 'v1.${i}.0');
 
 statement ok
 CREATE TABLE version_1_${i}_0.lists(l integer[], initial integer);
@@ -29,7 +29,7 @@ statement ok
 DETACH version_1_${i}_0
 
 statement ok
-ATTACH '__TEST_DIR__/version_1_${i}_0.db'
+ATTACH '{LOCAL_TEMP_DIR}/version_1_${i}_0.db'
 
 query I
 FROM version_1_${i}_0.reduced_lists;

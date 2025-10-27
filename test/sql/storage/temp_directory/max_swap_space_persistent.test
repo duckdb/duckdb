@@ -7,7 +7,7 @@ require skip_reload
 # Implicitly relies on the assumption that the block allocation size is 256KB.
 require block_size 262144
 
-load __TEST_DIR__/max_swap_space.db
+load {LOCAL_TEMP_DIR}/max_swap_space.db
 
 # The default temp_directory for a persistent database is <db_name>.tmp.
 query I
@@ -47,9 +47,9 @@ SELECT current_setting('max_temp_directory_size');
 
 # The maximum size is by default set to the available disk space, if the temp_directory exists.
 statement ok
-SET temp_directory = '__TEST_DIR__';
+SET temp_directory = '{LOCAL_TEMP_DIR}';
 
-# Even though __TEST_DIR__ exists, the handle is not created so the size is still zero (unknown).
+# Even though {LOCAL_TEMP_DIR} exists, the handle is not created so the size is still zero (unknown).
 query I
 SELECT current_setting('max_temp_directory_size');
 ----
@@ -70,14 +70,14 @@ SELECT current_setting('max_temp_directory_size');
 
 # Change the temp_directory to a path that does not exist, which does not affect the setting.
 statement ok
-SET temp_directory = '__TEST_DIR__/does_not_exist5';
+SET temp_directory = '{LOCAL_TEMP_DIR}/does_not_exist5';
 
 query I nosort unchanged
 SELECT current_setting('max_temp_directory_size');
 ----
 
 statement ok
-SET temp_directory = '__TEST_DIR__';
+SET temp_directory = '{LOCAL_TEMP_DIR}';
 
 query I nosort unchanged
 SELECT current_setting('max_temp_directory_size');
@@ -97,7 +97,7 @@ statement ok
 RESET max_temp_directory_size;
 
 statement ok
-SET temp_directory = '__TEST_DIR__/does_not_exist6';
+SET temp_directory = '{LOCAL_TEMP_DIR}/does_not_exist6';
 
 query I
 SELECT current_setting('max_temp_directory_size');

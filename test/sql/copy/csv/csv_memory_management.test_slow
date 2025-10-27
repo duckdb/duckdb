@@ -13,18 +13,18 @@ SET threads=16;
 
 #100KK rows, 2 BIGINT columns = 1.6GB uncompressed
 statement ok
-COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/integers.csv'
+COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '{TEMP_DIR}/integers.csv'
 
 statement ok
 CALL enable_logging('FileSystem')
 
 query I
-select count(*) from '__TEST_DIR__/integers.csv'
+select count(*) from '{TEMP_DIR}/integers.csv'
 ----
 100000000
 
 statement ok
-COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/integers.csv.gz'
+COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '{TEMP_DIR}/integers.csv.gz'
 
 statement ok
 SET temp_directory='';
@@ -36,6 +36,6 @@ statement ok
 SET threads=1;
 
 query I
-select count(*) from '__TEST_DIR__/integers.csv.gz'
+select count(*) from '{TEMP_DIR}/integers.csv.gz'
 ----
 100000000

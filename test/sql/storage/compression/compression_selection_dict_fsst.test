@@ -4,7 +4,7 @@
 
 require vector_size 2048
 
-load __TEST_DIR__/test_compression_simple.db readwrite v1.3.0
+load {LOCAL_TEMP_DIR}/test_compression_simple.db readwrite v1.3.0
 
 statement ok
 CREATE TABLE test_rle (a INTEGER);

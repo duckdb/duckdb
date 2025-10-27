@@ -2,7 +2,7 @@
 # description: Test dropping a table when we have many blocks
 # group: [partial_blocks]
 
-load __TEST_DIR__/many_columns.db
+load {LOCAL_TEMP_DIR}/many_columns.db
 
 statement ok
 BEGIN TRANSACTION

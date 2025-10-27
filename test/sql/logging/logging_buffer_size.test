@@ -83,7 +83,7 @@ statement ok
 FROM duckdb_logs()
 
 statement ok
-CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': 20*2048, 'path': '__TEST_DIR__/logging_buffer_size'});
+CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': 20*2048, 'path': '{TEMP_DIR}/logging_buffer_size'});
 
 statement ok
 SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,40*2048);
@@ -92,7 +92,7 @@ SELECT write_log('hello from the connection log scope', level := 'error', scope 
 # Try direct flushing 
 
 statement ok
-CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': 0, 'path': '__TEST_DIR__/logging_buffer_size'});
+CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': 0, 'path': '{TEMP_DIR}/logging_buffer_size'});
 
 statement ok
 SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0, 2048);
@@ -101,6 +101,6 @@ SELECT write_log('hello from the connection log scope', level := 'error', scope 
 # Try weird buffer size
 
 statement error
-CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': -1, 'path': '__TEST_DIR__/logging_buffer_size'});
+CALL enable_logging(level='trace', storage='file', storage_config={'buffer_size': -1, 'path': '{TEMP_DIR}/logging_buffer_size'});
 ----
 Invalid Input Error

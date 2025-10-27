@@ -10,13 +10,13 @@ statement ok
 CALL dbgen(sf=1);
 
 statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem_aggregate_partitioned' (FORMAT parquet, PARTITION_BY (l_returnflag, l_linestatus));
+COPY lineitem TO '{TEMP_DIR}/lineitem_aggregate_partitioned' (FORMAT parquet, PARTITION_BY (l_returnflag, l_linestatus));
 
 statement ok
 DROP TABLE lineitem
 
 statement ok
-CREATE VIEW lineitem AS FROM '__TEST_DIR__/lineitem_aggregate_partitioned/**/*.parquet'
+CREATE VIEW lineitem AS FROM '{TEMP_DIR}/lineitem_aggregate_partitioned/**/*.parquet'
 
 query I
 PRAGMA tpch(1)

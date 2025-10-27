@@ -8,17 +8,17 @@ require parquet
 # PRAGMA enable_verification
 
 statement ok
-COPY (SELECT {'f': f, 'i': i} struct_val FROM (VALUES ('f1', 42::INT), ('f1', 8::INT), ('f1', NULL::INT)) t(f, i)) TO '__TEST_DIR__/multi_file_filter_f1.parquet'
+COPY (SELECT {'f': f, 'i': i} struct_val FROM (VALUES ('f1', 42::INT), ('f1', 8::INT), ('f1', NULL::INT)) t(f, i)) TO '{TEMP_DIR}/multi_file_filter_f1.parquet'
 
 statement ok
-COPY (SELECT {'i': i, 'f2': f} struct_val FROM (VALUES (42::BIGINT, 'f2'), (124::BIGINT, 'f2'), (NULL::BIGINT, 'f2')) t(i, f)) TO '__TEST_DIR__/multi_file_filter_f2.parquet'
+COPY (SELECT {'i': i, 'f2': f} struct_val FROM (VALUES (42::BIGINT, 'f2'), (124::BIGINT, 'f2'), (NULL::BIGINT, 'f2')) t(i, f)) TO '{TEMP_DIR}/multi_file_filter_f2.parquet'
 
 # the schema of the file depends on the first file read
 statement ok
-CREATE VIEW integer_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f1.parquet', '__TEST_DIR__/multi_file_filter_f2.parquet'])
+CREATE VIEW integer_file_first AS FROM read_parquet(['{TEMP_DIR}/multi_file_filter_f1.parquet', '{TEMP_DIR}/multi_file_filter_f2.parquet'])
 
 statement ok
-CREATE VIEW bigint_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f2.parquet', '__TEST_DIR__/multi_file_filter_f1.parquet'])
+CREATE VIEW bigint_file_first AS FROM read_parquet(['{TEMP_DIR}/multi_file_filter_f2.parquet', '{TEMP_DIR}/multi_file_filter_f1.parquet'])
 
 # projection pushdown
 query I

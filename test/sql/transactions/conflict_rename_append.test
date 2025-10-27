@@ -2,7 +2,7 @@
 # description: Conflict: rename, then drop a table, then append to it from another transaction
 # group: [transactions]
 
-load __TEST_DIR__/conflict_rename_append.db
+load {LOCAL_TEMP_DIR}/conflict_rename_append.db
 
 statement ok
 create or replace table original_table as from range(10) select 1 as col

@@ -5,7 +5,7 @@
 mode skip
 
 # we need a persistent DB because we want to compress the table that we're working with
-load __TEST_DIR__/depth_first_evaluation.db
+load {LOCAL_TEMP_DIR}/depth_first_evaluation.db
 
 # we don't want any disk spilling because we're testing memory pressure
 statement ok

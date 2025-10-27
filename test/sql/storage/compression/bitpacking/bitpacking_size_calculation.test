@@ -6,7 +6,7 @@ require parquet
 
 require httpfs
 
-load __TEST_DIR__/test_bitpacking.db
+load {LOCAL_TEMP_DIR}/test_bitpacking.db
 
 statement ok
 pragma force_compression='bitpacking'

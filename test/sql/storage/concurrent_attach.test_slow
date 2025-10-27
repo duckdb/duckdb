@@ -5,7 +5,7 @@
 concurrentforeach name foo bar
 
 statement ok
-attach '__TEST_DIR__/${name}.duckdb' AS ${name}
+ATTACH '{LOCAL_TEMP_DIR}/${name}.duckdb' AS ${name}
 
 statement ok
 create table ${name}.${name}(${name} bigint)
@@ -22,7 +22,7 @@ statement ok
 detach ${name}
 
 statement ok
-attach '__TEST_DIR__/${name}.duckdb' AS ${name}
+ATTACH '{LOCAL_TEMP_DIR}/${name}.duckdb' AS ${name}
 
 endloop
 

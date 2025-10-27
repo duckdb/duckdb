@@ -8,14 +8,14 @@ loop i 0 100
 
 # create file
 statement ok
-copy (select 42 i) to '__TEST_DIR__/last_modified_tz.csv'
+copy (select 42 i) to '{TEMP_DIR}/last_modified_tz.csv'
 
 # last modified time should be equal to now(), but, now() is a lot more accurate than file system modification times
 # so, we convert to epoch (double), then check that the absolute difference between the two is less than 5
 query I
 with cte as (
     select epoch(last_modified) as last_modified
-    from read_blob('__TEST_DIR__/last_modified_tz.csv')
+    from read_blob('{TEMP_DIR}/last_modified_tz.csv')
 )
 select abs(epoch(now()) - last_modified) < 5
 from cte;

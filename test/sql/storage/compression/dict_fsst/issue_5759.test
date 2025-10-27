@@ -2,7 +2,7 @@
 # description: Issue #5759: segfault on sample creation
 # group: [dict_fsst]
 
-load __TEST_DIR__/issue_5759.db readwrite v1.3.0
+load {LOCAL_TEMP_DIR}/issue_5759.db readwrite v1.3.0
 
 statement ok
 pragma force_compression='dict_fsst'

@@ -3,12 +3,12 @@
 # group: [create]
 
 # load the DB from disk and make some test data
-load __TEST_DIR__/create_objects_readonly.db
+load {LOCAL_TEMP_DIR}/create_objects_readonly.db
 
 statement ok
 create table t1 as select 'c1' as c1
 
-load __TEST_DIR__/create_objects_readonly.db readonly
+load {LOCAL_TEMP_DIR}/create_objects_readonly.db readonly
 
 # cannot create a schema - database is opened in read-only mode
 statement error

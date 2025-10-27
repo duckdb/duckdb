@@ -2,7 +2,7 @@
 # description: Test vacuuming of deletes in combination with indexes
 # group: [vacuum]
 
-load __TEST_DIR__/vacuum_deletes_cleanup.db
+load {LOCAL_TEMP_DIR}/vacuum_deletes_cleanup.db
 
 statement ok
 CREATE TABLE integers(i INTEGER PRIMARY KEY);

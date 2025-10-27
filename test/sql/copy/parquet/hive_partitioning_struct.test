@@ -13,24 +13,24 @@ COPY (
 		i//50 id,
 		{'a': i, 'b': 21} s
 	FROM range(100) t(i)
-) TO '__TEST_DIR__/hive_partitioned_struct_col' (FORMAT PARQUET, PARTITION_BY (id))
+) TO '{TEMP_DIR}/hive_partitioned_struct_col' (FORMAT PARQUET, PARTITION_BY (id))
 
 query II
-SELECT * FROM read_parquet('__TEST_DIR__/hive_partitioned_struct_col/**/*.parquet', hive_partitioning=1) WHERE s.a=42
+SELECT * FROM read_parquet('{TEMP_DIR}/hive_partitioned_struct_col/**/*.parquet', hive_partitioning=1) WHERE s.a=42
 ----
 {'a': 42, 'b': 21}	0
 
 query I
-SELECT s.a FROM read_parquet('__TEST_DIR__/hive_partitioned_struct_col/**/*.parquet', hive_partitioning=1) WHERE s.a=42
+SELECT s.a FROM read_parquet('{TEMP_DIR}/hive_partitioned_struct_col/**/*.parquet', hive_partitioning=1) WHERE s.a=42
 ----
 42
 
 # what if the hive types themselves are structs?
 statement ok
-COPY (SELECT i id, {'a': i//2} s FROM range(100) t(i)) TO '__TEST_DIR__/hive_partitioned_struct' (FORMAT PARQUET, PARTITION_BY (s))
+COPY (SELECT i id, {'a': i//2} s FROM range(100) t(i)) TO '{TEMP_DIR}/hive_partitioned_struct' (FORMAT PARQUET, PARTITION_BY (s))
 
 query II
-SELECT * FROM read_parquet('__TEST_DIR__/hive_partitioned_struct/**/*.parquet', hive_partitioning=1, hive_types={'s': 'STRUCT(a INT)'}) WHERE s.a=42 ORDER BY ALL
+SELECT * FROM read_parquet('{TEMP_DIR}/hive_partitioned_struct/**/*.parquet', hive_partitioning=1, hive_types={'s': 'STRUCT(a INT)'}) WHERE s.a=42 ORDER BY ALL
 ----
 84	{'a': 42}
 85	{'a': 42}

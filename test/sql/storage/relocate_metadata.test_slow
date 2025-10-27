@@ -2,7 +2,7 @@
 # description: Verify that metadata is relocated to allow the database to free up space
 # group: [storage]
 
-load __TEST_DIR__/relocate_metadata.db
+load {LOCAL_TEMP_DIR}/relocate_metadata.db
 
 statement ok
 CREATE TABLE test (x INT, y AS (x + 100));

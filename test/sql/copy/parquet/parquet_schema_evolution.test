@@ -12,19 +12,19 @@ loop i 0 2
 
 # test column names in different orders
 statement ok
-COPY (SELECT 42::INT a, 43::INT c) TO '__TEST_DIR__/evolution_1.parquet' (FORMAT PARQUET);
+COPY (SELECT 42::INT a, 43::INT c) TO '{TEMP_DIR}/evolution_1.parquet' (FORMAT PARQUET);
 
 statement ok
-COPY (SELECT 88::INT b, 84::INT a) TO '__TEST_DIR__/evolution_2.parquet' (FORMAT PARQUET);
+COPY (SELECT 88::INT b, 84::INT a) TO '{TEMP_DIR}/evolution_2.parquet' (FORMAT PARQUET);
 
 query I
-SELECT a FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY a
+SELECT a FROM '{TEMP_DIR}/evolution_*.parquet' ORDER BY a
 ----
 42
 84
 
 query I
-SELECT a FROM parquet_scan(['__TEST_DIR__/evolution_2.parquet', '__TEST_DIR__/evolution_1.parquet', '__TEST_DIR__/evolution_*.parquet']) ORDER BY a
+SELECT a FROM parquet_scan(['{TEMP_DIR}/evolution_2.parquet', '{TEMP_DIR}/evolution_1.parquet', '{TEMP_DIR}/evolution_*.parquet']) ORDER BY a
 ----
 42
 42
@@ -33,11 +33,11 @@ SELECT a FROM parquet_scan(['__TEST_DIR__/evolution_2.parquet', '__TEST_DIR__/ev
 
 # reading either b or c results in an error, since the name is not present in both files
 statement error
-SELECT b FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
+SELECT b FROM '{TEMP_DIR}/evolution_*.parquet' ORDER BY 1
 ----
 
 statement error
-SELECT c FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
+SELECT c FROM '{TEMP_DIR}/evolution_*.parquet' ORDER BY 1
 ----
 
 # we can also do this with COPY
@@ -46,96 +46,96 @@ CREATE TABLE copy_test(a INT, b INT);
 
 # if we copy from both files, we run into a schema mismatch in the files themselves (name differences)
 statement error
-COPY copy_test FROM '__TEST_DIR__/evolution_*.parquet'
+COPY copy_test FROM '{TEMP_DIR}/evolution_*.parquet'
 ----
 schema mismatch
 
 # copying from one file works, however
 statement ok
-COPY copy_test FROM '__TEST_DIR__/evolution_1.parquet'
+COPY copy_test FROM '{TEMP_DIR}/evolution_1.parquet'
 
 statement ok
 DROP TABLE copy_test
 
 # test type promotion
 statement ok
-COPY (SELECT 42::INT a, 43::INT b) TO '__TEST_DIR__/evolution_1.parquet' (FORMAT PARQUET);
+COPY (SELECT 42::INT a, 43::INT b) TO '{TEMP_DIR}/evolution_1.parquet' (FORMAT PARQUET);
 
 statement ok
-COPY (SELECT 'hello'::VARCHAR b, 84::TINYINT a) TO '__TEST_DIR__/evolution_2.parquet' (FORMAT PARQUET);
+COPY (SELECT 'hello'::VARCHAR b, 84::TINYINT a) TO '{TEMP_DIR}/evolution_2.parquet' (FORMAT PARQUET);
 
 query I
-SELECT a FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
+SELECT a FROM '{TEMP_DIR}/evolution_*.parquet' ORDER BY 1
 ----
 42
 84
 
 # reading either b results in an error, however, since we can't cast from 'hello' to integer
 statement error
-SELECT b FROM parquet_scan(['__TEST_DIR__/evolution_1.parquet', '__TEST_DIR__/evolution_2.parquet']) ORDER BY 1
+SELECT b FROM parquet_scan(['{TEMP_DIR}/evolution_1.parquet', '{TEMP_DIR}/evolution_2.parquet']) ORDER BY 1
 ----
 
 # if we flip the order of the reads we can read b
 query I
-SELECT b FROM parquet_scan(['__TEST_DIR__/evolution_2.parquet', '__TEST_DIR__/evolution_1.parquet']) ORDER BY 1
+SELECT b FROM parquet_scan(['{TEMP_DIR}/evolution_2.parquet', '{TEMP_DIR}/evolution_1.parquet']) ORDER BY 1
 ----
 43
 hello
 
 # type promotion, but with lists
 statement ok
-COPY (SELECT [42::INT] a, [43::INT] b) TO '__TEST_DIR__/evolution_1.parquet' (FORMAT PARQUET);
+COPY (SELECT [42::INT] a, [43::INT] b) TO '{TEMP_DIR}/evolution_1.parquet' (FORMAT PARQUET);
 
 statement ok
-COPY (SELECT ['hello'::VARCHAR] b, [84::TINYINT] a) TO '__TEST_DIR__/evolution_2.parquet' (FORMAT PARQUET);
+COPY (SELECT ['hello'::VARCHAR] b, [84::TINYINT] a) TO '{TEMP_DIR}/evolution_2.parquet' (FORMAT PARQUET);
 
 query I
-SELECT a FROM '__TEST_DIR__/evolution_*.parquet' ORDER BY 1
+SELECT a FROM '{TEMP_DIR}/evolution_*.parquet' ORDER BY 1
 ----
 [42]
 [84]
 
 # reading either b results in an error, however, since we can't cast from 'hello' to integer
 statement error
-SELECT b FROM parquet_scan(['__TEST_DIR__/evolution_1.parquet', '__TEST_DIR__/evolution_2.parquet']) ORDER BY 1
+SELECT b FROM parquet_scan(['{TEMP_DIR}/evolution_1.parquet', '{TEMP_DIR}/evolution_2.parquet']) ORDER BY 1
 ----
 
 # if we flip the order of the reads we can read b
 query I
-SELECT b FROM parquet_scan(['__TEST_DIR__/evolution_2.parquet', '__TEST_DIR__/evolution_1.parquet']) ORDER BY 1
+SELECT b FROM parquet_scan(['{TEMP_DIR}/evolution_2.parquet', '{TEMP_DIR}/evolution_1.parquet']) ORDER BY 1
 ----
 [43]
 [hello]
 
 # type promotion & skipping
 statement ok
-COPY (SELECT range id, 1::INT a FROM range(10000) UNION ALL SELECT 10000+range id, 2::INT FROM range(10000)) TO '__TEST_DIR__/evolution_1.parquet' (FORMAT PARQUET);
+COPY (SELECT range id, 1::INT a FROM range(10000) UNION ALL SELECT 10000+range id, 2::INT FROM range(10000)) TO '{TEMP_DIR}/evolution_1.parquet' (FORMAT PARQUET);
 
 statement ok
-COPY (SELECT (20000+range)::BIGINT id, 'hello'::VARCHAR b, 3::BIGINT a FROM range(10000) UNION ALL SELECT (30000+range)::BIGINT id, 'world'::VARCHAR, 4 FROM range(10000)) TO '__TEST_DIR__/evolution_2.parquet' (FORMAT PARQUET);
+COPY (SELECT (20000+range)::BIGINT id, 'hello'::VARCHAR b, 3::BIGINT a FROM range(10000) UNION ALL SELECT (30000+range)::BIGINT id, 'world'::VARCHAR, 4 FROM range(10000)) TO '{TEMP_DIR}/evolution_2.parquet' (FORMAT PARQUET);
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/evolution_*.parquet' WHERE a=2
+SELECT COUNT(*) FROM '{TEMP_DIR}/evolution_*.parquet' WHERE a=2
 ----
 10000
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/evolution_*.parquet' WHERE a>=2
+SELECT COUNT(*) FROM '{TEMP_DIR}/evolution_*.parquet' WHERE a>=2
 ----
 30000
 
 query II
-SELECT id, a FROM '__TEST_DIR__/evolution_*.parquet' WHERE id=2
+SELECT id, a FROM '{TEMP_DIR}/evolution_*.parquet' WHERE id=2
 ----
 2	1
 
 query II
-SELECT id, a FROM '__TEST_DIR__/evolution_*.parquet' WHERE id=27777
+SELECT id, a FROM '{TEMP_DIR}/evolution_*.parquet' WHERE id=27777
 ----
 27777	3
 
 query II
-SELECT id, a FROM '__TEST_DIR__/evolution_*.parquet' WHERE id>=39998 ORDER BY id
+SELECT id, a FROM '{TEMP_DIR}/evolution_*.parquet' WHERE id>=39998 ORDER BY id
 ----
 39998	4
 39999	4

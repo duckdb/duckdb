@@ -14,7 +14,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"ALL_OPTIMIZERS": "true"}';
@@ -73,7 +73,7 @@ SELECT unnest(res) FROM (
 "OPTIMIZER_JOIN_ORDER": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 query I
 SELECT
@@ -114,7 +114,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 query I
 SELECT
@@ -189,7 +189,7 @@ SELECT unnest(res) FROM (
 "TOTAL_BYTES_WRITTEN": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement ok
 SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;

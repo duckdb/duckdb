@@ -9,10 +9,10 @@ statement ok
 CREATE TABLE integers AS SELECT i, i // 5 AS j FROM range(1000000) t(i) ;
 
 statement ok
-COPY integers TO '__TEST_DIR__/batched_integers.csv' (HEADER);
+COPY integers TO '{TEMP_DIR}/batched_integers.csv' (HEADER);
 
 statement ok
-CREATE TABLE integers_copied AS FROM '__TEST_DIR__/batched_integers.csv'
+CREATE TABLE integers_copied AS FROM '{TEMP_DIR}/batched_integers.csv'
 
 query IIIII
 SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers_copied
@@ -46,10 +46,10 @@ statement ok
 CREATE VIEW v1 AS SELECT * FROM integers WHERE (i%2=0 AND i<300000) OR (i BETWEEN 500000 AND 700000)
 
 statement ok
-COPY v1 TO '__TEST_DIR__/batched_integers_filters.csv' (HEADER);
+COPY v1 TO '{TEMP_DIR}/batched_integers_filters.csv' (HEADER);
 
 statement ok
-CREATE TABLE integers_filtered AS FROM '__TEST_DIR__/batched_integers_filters.csv'
+CREATE TABLE integers_filtered AS FROM '{TEMP_DIR}/batched_integers_filters.csv'
 
 
 foreach table v1 integers_filtered

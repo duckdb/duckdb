@@ -21,14 +21,14 @@ insert into t2 values (3,4);
 
 # Create CSV files
 statement ok
-copy t1 to '__TEST_DIR__/null_glob_reorder_1.csv';
+copy t1 to '{TEMP_DIR}/null_glob_reorder_1.csv';
 
 statement ok
-copy t2  to '__TEST_DIR__/null_glob_reorder_2.csv';
+copy t2  to '{TEMP_DIR}/null_glob_reorder_2.csv';
 
 # Scan should work
 query II
-select a,b from read_csv(['__TEST_DIR__/null_glob_reorder_*.csv']) where b is not null order by all;
+select a,b from read_csv(['{TEMP_DIR}/null_glob_reorder_*.csv']) where b is not null order by all;
 ----
 1	1
 1	1

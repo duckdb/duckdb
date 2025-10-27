@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/append_strings_to_persistent.db
+load {LOCAL_TEMP_DIR}/append_strings_to_persistent.db
 
 statement ok
 CREATE TABLE vals(i INTEGER, v VARCHAR)

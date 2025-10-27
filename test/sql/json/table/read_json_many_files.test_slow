@@ -10,12 +10,12 @@ create table input as select range as a from range(1, 4);
 loop i 0 2000
 
 statement ok
-copy input to '__TEST_DIR__/input${i}.json';
+copy input to '{TEMP_DIR}/input${i}.json';
 
 endloop
 
 query T
-select count(*) from read_json_auto('__TEST_DIR__/input*.json');
+select count(*) from read_json_auto('{TEMP_DIR}/input*.json');
 ----
 6000
 
@@ -23,11 +23,11 @@ select count(*) from read_json_auto('__TEST_DIR__/input*.json');
 loop i 0 2000
 
 statement ok
-copy input to '__TEST_DIR__/input${i}.json.gz' (COMPRESSION GZIP);
+copy input to '{TEMP_DIR}/input${i}.json.gz' (COMPRESSION GZIP);
 
 endloop
 
 query T
-select count(*) from read_json_auto('__TEST_DIR__/input*.json.gz');
+select count(*) from read_json_auto('{TEMP_DIR}/input*.json.gz');
 ----
 6000

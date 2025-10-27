@@ -2,7 +2,7 @@
 # description: Rename table restart
 # group: [pedro]
 
-load __TEST_DIR__/rename_restart.db
+load {LOCAL_TEMP_DIR}/rename_restart.db
 
 statement ok
 SET wal_autocheckpoint='10MB';

@@ -2,7 +2,7 @@
 # description: Test large external aggregate
 # group: [external]
 
-load __TEST_DIR__/large_external_aggregate.db
+load {LOCAL_TEMP_DIR}/large_external_aggregate.db
 
 statement ok
 pragma verify_external

@@ -20,7 +20,7 @@ SELECT parse_path(g)[-3:] FROM glob('{DATA_DIR}/csv\test/*.csv') t(g) WHERE g LI
 
 # also for attach
 statement ok
-ATTACH '{TEMP_DIR}/windows_test.db' AS s1
+ATTACH '{LOCAL_TEMP_DIR}/windows_test.db' AS s1
 
 statement  ok
 CREATE TABLE s1.tbl AS SELECT * FROM range(10) t(i);
@@ -34,7 +34,7 @@ statement ok
 DETACH s1
 
 statement ok
-ATTACH '{TEMP_DIR}\windows_test.db' AS s1
+ATTACH '{LOCAL_TEMP_DIR}\windows_test.db' AS s1
 
 query I
 SELECT SUM(i) FROM s1.tbl

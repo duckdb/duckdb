@@ -2,7 +2,7 @@
 # description: Test COMMENT ON to add comments to various catalog entries
 # group: [catalog]
 
-load __TEST_DIR__/comment_on.db
+load {LOCAL_TEMP_DIR}/comment_on.db
 
 ### Generic tests
 

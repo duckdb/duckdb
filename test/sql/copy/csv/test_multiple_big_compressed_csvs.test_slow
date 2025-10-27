@@ -11,7 +11,7 @@ statement ok
 SET temp_directory=''
 
 statement ok
-copy lineitem to '__TEST_DIR__/lineitem.csv.gz';
+copy lineitem to '{TEMP_DIR}/lineitem.csv.gz';
 
 statement ok
 DROP TABLE lineitem;
@@ -21,30 +21,30 @@ CREATE TABLE lineitem(l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l
 
 query I
 select count(*) from read_csv([
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
-	'__TEST_DIR__/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
+	'{TEMP_DIR}/lineitem.csv.gz',
 ]);
 ----
 144029160

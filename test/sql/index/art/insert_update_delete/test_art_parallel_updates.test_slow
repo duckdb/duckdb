@@ -2,10 +2,10 @@
 # description: Test concurrent updates causing index scans.
 # group: [insert_update_delete]
 
-unzip data/storage/artupdates.db.gz __TEST_DIR__/artupdates.db
+unzip data/storage/artupdates.db.gz {TEMP_DIR}/artupdates.db
 
 statement ok
-ATTACH '__TEST_DIR__/artupdates.db' AS db;
+ATTACH '{LOCAL_TEMP_DIR}/artupdates.db' AS db;
 
 statement ok
 USE db;

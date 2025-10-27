@@ -4,7 +4,7 @@
 
 require vector_size 2048
 
-load __TEST_DIR__/rle_many_repeated.db
+load {LOCAL_TEMP_DIR}/rle_many_repeated.db
 
 statement ok
 PRAGMA force_compression = 'rle'

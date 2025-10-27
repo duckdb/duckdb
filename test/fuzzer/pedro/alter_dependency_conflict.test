@@ -2,7 +2,7 @@
 # description: Issue #4696: Alter table dependency conflict
 # group: [pedro]
 
-load __TEST_DIR__/alter_dependency_conflict.db
+load {LOCAL_TEMP_DIR}/alter_dependency_conflict.db
 
 statement ok
 CREATE TABLE t4 (c0 DATE, c3 VARCHAR(10));

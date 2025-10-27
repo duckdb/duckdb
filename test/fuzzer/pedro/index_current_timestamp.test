@@ -2,7 +2,7 @@
 # description: Get current timestamp and similar functions cannot be used in indexes
 # group: [pedro]
 
-load __TEST_DIR__/index_current_timestamp.db
+load {LOCAL_TEMP_DIR}/index_current_timestamp.db
 
 statement ok
 CREATE TABLE t1(c0 INT, c1 VARCHAR);

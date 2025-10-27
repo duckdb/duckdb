@@ -32,43 +32,43 @@ statement ok
 INSERT INTO unsigned SELECT * FROM values_${type}
 
 statement ok
-COPY unsigned TO '__TEST_DIR__/unsigned.parquet' (FORMAT 'parquet');
+COPY unsigned TO '{TEMP_DIR}/unsigned.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM '__TEST_DIR__/unsigned.parquet' EXCEPT SELECT * FROM unsigned
+SELECT * FROM '{TEMP_DIR}/unsigned.parquet' EXCEPT SELECT * FROM unsigned
 ----
 
 query I
-SELECT * FROM unsigned EXCEPT SELECT * FROM '__TEST_DIR__/unsigned.parquet'
+SELECT * FROM unsigned EXCEPT SELECT * FROM '{TEMP_DIR}/unsigned.parquet'
 ----
 
 query I
-SELECT * FROM '__TEST_DIR__/unsigned.parquet' WHERE d=42
+SELECT * FROM '{TEMP_DIR}/unsigned.parquet' WHERE d=42
 ----
 42
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d>42
+SELECT COUNT(*) FROM '{TEMP_DIR}/unsigned.parquet' WHERE d>42
 ----
 1
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d>=42
+SELECT COUNT(*) FROM '{TEMP_DIR}/unsigned.parquet' WHERE d>=42
 ----
 2
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d<42
+SELECT COUNT(*) FROM '{TEMP_DIR}/unsigned.parquet' WHERE d<42
 ----
 1
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d<=42
+SELECT COUNT(*) FROM '{TEMP_DIR}/unsigned.parquet' WHERE d<=42
 ----
 2
 
 query I
-SELECT typeof(d)='${type}' FROM '__TEST_DIR__/unsigned.parquet' LIMIT 1
+SELECT typeof(d)='${type}' FROM '{TEMP_DIR}/unsigned.parquet' LIMIT 1
 ----
 true
 

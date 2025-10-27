@@ -16,7 +16,7 @@ statement ok
 call dbgen(sf=0.001);
 
 statement ok
-copy (select date_trunc('month', l_shipdate) as partition_shipdate, [l_returnflag, l_linestatus] as string_list, * from lineitem) to '__TEST_DIR__/lineitem_partitioned_test' (format parquet, partition_by(partition_shipdate, l_returnflag));
+copy (select date_trunc('month', l_shipdate) as partition_shipdate, [l_returnflag, l_linestatus] as string_list, * from lineitem) to '{TEMP_DIR}/lineitem_partitioned_test' (format parquet, partition_by(partition_shipdate, l_returnflag));
 
 statement ok
 CREATE TABLE unique_strings(string_list VARCHAR[], l_returnflag VARCHAR);
@@ -34,7 +34,7 @@ statement ok
 INSERT INTO unique_strings VALUES('[N, O]','N');
 
 statement ok
-CREATE VIEW parquet_view AS FROM read_parquet('__TEST_DIR__/lineitem_partitioned_test/partition_shipdate=*/l_returnflag=*/*.parquet');
+CREATE VIEW parquet_view AS FROM read_parquet('{TEMP_DIR}/lineitem_partitioned_test/partition_shipdate=*/l_returnflag=*/*.parquet');
 
 # works!
 # after probing 6, the scan structure still has 6 for this one

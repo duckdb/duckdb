@@ -4,12 +4,12 @@
 
 require parquet
 
-load __TEST_DIR__/insert_small_batches.db
+load {LOCAL_TEMP_DIR}/insert_small_batches.db
 
 foreach row_group_size 5000 100000
 
 statement ok
-COPY (FROM range(1000000) tbl(i)) TO '__TEST_DIR__/small_batches.parquet' (ROW_GROUP_SIZE ${row_group_size})
+COPY (FROM range(1000000) tbl(i)) TO '{TEMP_DIR}/small_batches.parquet' (ROW_GROUP_SIZE ${row_group_size})
 
 statement ok
 drop view if exists v2;
@@ -18,7 +18,7 @@ statement ok
 drop view if exists v3;
 
 statement ok
-CREATE VIEW v1 AS SELECT * FROM '__TEST_DIR__/small_batches.parquet'
+CREATE VIEW v1 AS SELECT * FROM '{TEMP_DIR}/small_batches.parquet'
 
 statement ok
 CREATE VIEW v2 AS FROM v1 WHERE (i//10000)%2=0;

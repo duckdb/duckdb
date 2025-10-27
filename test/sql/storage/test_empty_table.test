@@ -2,7 +2,7 @@
 # description: Test empty table storage.
 # group: [storage]
 
-load __TEST_DIR__/test_empty_table.db
+load {LOCAL_TEMP_DIR}/test_empty_table.db
 
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR)

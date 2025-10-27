@@ -16,9 +16,9 @@ SET TimeZone = 'America/Los_Angeles';
 statement ok
 COPY (
     SELECT make_timestamptz(1713193669561000) AS t
-) TO '__TEST_DIR__/timestamp-format.csv' (FORMAT CSV, timestampformat '%x %X.%g%z');
+) TO '{TEMP_DIR}/timestamp-format.csv' (FORMAT CSV, timestampformat '%x %X.%g%z');
 
 query I
-select * from read_csv('__TEST_DIR__/timestamp-format.csv', all_varchar=true)
+select * from read_csv('{TEMP_DIR}/timestamp-format.csv', all_varchar=true)
 ----
 2024-04-15 08:07:49.561-07

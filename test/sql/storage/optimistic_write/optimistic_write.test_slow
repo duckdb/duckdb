@@ -4,7 +4,7 @@
 
 foreach skip_checkpoint true false
 
-load __TEST_DIR__/optimistic_write_${skip_checkpoint}.db
+load {LOCAL_TEMP_DIR}/optimistic_write_${skip_checkpoint}.db
 
 statement ok
 SET debug_skip_checkpoint_on_commit = ${skip_checkpoint}

@@ -5,28 +5,28 @@
 require no_alternative_verify
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
 ----
 Binder Error: "true" is not a valid key. A key must be of type VARCHAR
 
 # a base64 key as input
 statement ok
-ATTACH '__TEST_DIR__/base64_encrypted.duckdb' AS base64 (ENCRYPTION_KEY 'sYfVG1ZZN1mdtMP7Hd+2KLoU1iqglOMQQmhMm7ZnB8o=');
+ATTACH '{LOCAL_TEMP_DIR}/base64_encrypted.duckdb' AS base64 (ENCRYPTION_KEY 'sYfVG1ZZN1mdtMP7Hd+2KLoU1iqglOMQQmhMm7ZnB8o=');
 
 # a not base64 encoded key
 statement ok
-ATTACH '__TEST_DIR__/nobase64_encrypted.duckdb' AS nobase64 (ENCRYPTION_KEY 'gH8@#v$k1!!9=+=rYZ^32x==0plm*');
+ATTACH '{LOCAL_TEMP_DIR}/nobase64_encrypted.duckdb' AS nobase64 (ENCRYPTION_KEY 'gH8@#v$k1!!9=+=rYZ^32x==0plm*');
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
 ----
 Binder Error: Not a valid key. A key cannot be empty
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCY0000EXAMPLEKEY');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCY0000EXAMPLEKEY');
 
 statement ok
 DETACH encrypted
@@ -35,29 +35,29 @@ statement ok
 DETACH encrypted_aws
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'xxxx');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'xxxx');
 ----
 Wrong encryption key used to open the database file
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted;
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted;
 ----
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdfx');
-----
-Wrong encryption key used to open the database file
-
-statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
-
-statement error
-ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEX');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdfx');
 ----
 Wrong encryption key used to open the database file
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCY0000EXAMPLEKEY');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement error
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEX');
+----
+Wrong encryption key used to open the database file
+
+statement ok
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCY0000EXAMPLEKEY');
 
 
 

@@ -14,36 +14,36 @@ statement ok
 CREATE TABLE integers AS FROM range(100) t(i)
 
 statement error
-COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', COMPRESSION_LEVEL 10);
+COPY integers TO '{TEMP_DIR}/compress_level.parquet' (FORMAT 'parquet', COMPRESSION_LEVEL 10);
 ----
 only supported
 
 statement ok
-COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 0);
+COPY integers TO '{TEMP_DIR}/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 0);
 
 statement error
-COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 23);
+COPY integers TO '{TEMP_DIR}/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 23);
 ----
 level must be between
 
 statement ok
-COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL -131072);
+COPY integers TO '{TEMP_DIR}/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL -131072);
 
 statement error
-COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL -131073);
+COPY integers TO '{TEMP_DIR}/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL -131073);
 ----
 level must be between
 
 statement ok
-COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 1);
+COPY integers TO '{TEMP_DIR}/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 1);
 
 statement ok
-COPY integers TO '__TEST_DIR__/compress_level2.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 22);
+COPY integers TO '{TEMP_DIR}/compress_level2.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 22);
 
 query I nosort clevel
-SELECT * FROM '__TEST_DIR__/compress_level.parquet'
+SELECT * FROM '{TEMP_DIR}/compress_level.parquet'
 ----
 
 query I nosort clevel
-SELECT * FROM '__TEST_DIR__/compress_level2.parquet'
+SELECT * FROM '{TEMP_DIR}/compress_level2.parquet'
 ----

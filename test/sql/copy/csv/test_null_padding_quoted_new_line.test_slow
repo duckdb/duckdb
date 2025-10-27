@@ -10,14 +10,14 @@ CREATE TABLE T as SELECT 'this line
 has a new line' from range (1000000);
 
 statement ok
-COPY T TO '__TEST_DIR__/test_null_padding_quoted_new_line.csv' (FORMAT CSV , FORCE_QUOTE *);
+COPY T TO '{TEMP_DIR}/test_null_padding_quoted_new_line.csv' (FORMAT CSV , FORCE_QUOTE *);
 
 statement error
-select count(*) FROM read_csv('__TEST_DIR__/test_null_padding_quoted_new_line.csv', null_padding = true)
+select count(*) FROM read_csv('{TEMP_DIR}/test_null_padding_quoted_new_line.csv', null_padding = true)
 ----
 The parallel scanner does not support null_padding in conjunction with quoted new lines. Please disable the parallel csv reader with parallel=false
 
 query I
-select count(*) FROM read_csv('__TEST_DIR__/test_null_padding_quoted_new_line.csv')
+select count(*) FROM read_csv('{TEMP_DIR}/test_null_padding_quoted_new_line.csv')
 ----
 1000000

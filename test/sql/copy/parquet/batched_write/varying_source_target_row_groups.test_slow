@@ -15,21 +15,21 @@ statement ok
 SET threads=1
 
 statement ok
-COPY integers TO '__TEST_DIR__/src_size.parquet' (ROW_GROUP_SIZE ${src_size});
+COPY integers TO '{TEMP_DIR}/src_size.parquet' (ROW_GROUP_SIZE ${src_size});
 
 statement ok
 SET threads=4
 
 query I
-select abs(median(row_group_num_rows)-${src_size})<2048 from parquet_metadata('__TEST_DIR__/src_size.parquet');
+select abs(median(row_group_num_rows)-${src_size})<2048 from parquet_metadata('{TEMP_DIR}/src_size.parquet');
 ----
 true
 
 statement ok
-COPY '__TEST_DIR__/src_size.parquet' TO '__TEST_DIR__/tgt_size.parquet' (ROW_GROUP_SIZE ${tgt_size});
+COPY '{TEMP_DIR}/src_size.parquet' TO '{TEMP_DIR}/tgt_size.parquet' (ROW_GROUP_SIZE ${tgt_size});
 
 query I
-select abs(median(row_group_num_rows)-${tgt_size})<2048 from parquet_metadata('__TEST_DIR__/tgt_size.parquet');
+select abs(median(row_group_num_rows)-${tgt_size})<2048 from parquet_metadata('{TEMP_DIR}/tgt_size.parquet');
 ----
 true
 
@@ -37,13 +37,13 @@ true
 query III
 SELECT *, row_number() OVER () FROM integers
 EXCEPT
-SELECT *, row_number() OVER () FROM '__TEST_DIR__/src_size.parquet'
+SELECT *, row_number() OVER () FROM '{TEMP_DIR}/src_size.parquet'
 ----
 
 query III
-SELECT *, row_number() OVER () FROM '__TEST_DIR__/src_size.parquet'
+SELECT *, row_number() OVER () FROM '{TEMP_DIR}/src_size.parquet'
 EXCEPT
-SELECT *, row_number() OVER () FROM '__TEST_DIR__/tgt_size.parquet'
+SELECT *, row_number() OVER () FROM '{TEMP_DIR}/tgt_size.parquet'
 ----
 
 endloop

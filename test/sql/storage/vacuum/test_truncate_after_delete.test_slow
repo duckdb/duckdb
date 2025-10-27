@@ -2,7 +2,7 @@
 # description: Test truncating of the database file after data is deleted
 # group: [vacuum]
 
-load __TEST_DIR__/truncate_after_delete.db
+load {LOCAL_TEMP_DIR}/truncate_after_delete.db
 
 statement ok
 CREATE TABLE uuids (i VARCHAR);

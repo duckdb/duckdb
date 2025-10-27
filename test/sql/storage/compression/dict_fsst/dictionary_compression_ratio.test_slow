@@ -2,7 +2,7 @@
 # description: Assert dictionary compression ratio is within reasonable margins
 # group: [dict_fsst]
 
-load __TEST_DIR__/test_dictionary.db readwrite v1.3.0
+load {LOCAL_TEMP_DIR}/test_dictionary.db readwrite v1.3.0
 
 # First test: detailed compression ratio
 statement ok

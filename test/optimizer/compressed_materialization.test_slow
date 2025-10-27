@@ -156,17 +156,17 @@ pragma disable_verification
 
 # one column without NULL, and two columns (varchar and bigint) that are all NULL
 statement ok
-copy (select hash(range + 1) i, null::varchar j, null::bigint k from range(100)) to '__TEST_DIR__/cm1.parquet'
+copy (select hash(range + 1) i, null::varchar j, null::bigint k from range(100)) to '{TEMP_DIR}/cm1.parquet'
 
 statement ok
-copy (select hash(range + 1) i, null::varchar j, null::bigint k from range(100,200)) to '__TEST_DIR__/cm2.parquet'
+copy (select hash(range + 1) i, null::varchar j, null::bigint k from range(100,200)) to '{TEMP_DIR}/cm2.parquet'
 
 # has NULL, and does not have non-NULL
 query II
 select
     stats(j) LIKE '%[Has Null: true, Has No Null: false]%',
     stats(k) LIKE '%[Has Null: true, Has No Null: false]%'
-from read_parquet('__TEST_DIR__/cm*.parquet', union_by_name=true) limit 1
+from read_parquet('{TEMP_DIR}/cm*.parquet', union_by_name=true) limit 1
 ----
 true	true
 
@@ -175,7 +175,7 @@ statement ok
 PRAGMA explain_output = PHYSICAL_ONLY
 
 query II
-explain select * from read_parquet('__TEST_DIR__/cm*.parquet', union_by_name=true) order by i
+explain select * from read_parquet('{TEMP_DIR}/cm*.parquet', union_by_name=true) order by i
 ----
 physical_plan	<REGEX>:.*__internal_decompress.*__internal_decompress.*__internal_compress.*__internal_compress.*
 

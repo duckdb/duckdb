@@ -2,7 +2,7 @@
 # description: Test adding a PRIMARY KEY, dropping everything, restarting, and recreating the PRIMARY KEY.
 # group: [add_pk]
 
-load __TEST_DIR__/test_add_pk_drop_reload.db
+load {LOCAL_TEMP_DIR}/test_add_pk_drop_reload.db
 
 statement ok
 PRAGMA enable_verification

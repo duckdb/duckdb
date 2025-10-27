@@ -12,10 +12,10 @@ statement ok
 CREATE TABLE t AS SELECT 2000+i%10 AS year, 1+i%3 AS month, i%4 AS c, i%5 AS d FROM RANGE(0,20) tbl(i);
 
 statement ok
-COPY t TO '__TEST_DIR__/partition_rec_cte' (FORMAT PARQUET, PARTITION_BY (year, month));
+COPY t TO '{TEMP_DIR}/partition_rec_cte' (FORMAT PARQUET, PARTITION_BY (year, month));
 
 statement ok
-CREATE VIEW partitioned_tbl AS FROM '__TEST_DIR__/partition_rec_cte/**/*.parquet';
+CREATE VIEW partitioned_tbl AS FROM '{TEMP_DIR}/partition_rec_cte/**/*.parquet';
 
 loop i 0 2
 
@@ -39,6 +39,6 @@ WHERE count>0
 
 # retry with union by name
 statement ok
-CREATE OR REPLACE VIEW partitioned_tbl AS FROM read_parquet('__TEST_DIR__/partition_rec_cte/**/*.parquet', union_by_name=True);
+CREATE OR REPLACE VIEW partitioned_tbl AS FROM read_parquet('{TEMP_DIR}/partition_rec_cte/**/*.parquet', union_by_name=True);
 
 endloop

@@ -4,7 +4,7 @@
 
 # PRIMARY KEY
 
-load __TEST_DIR__/pk_mem_cleanup.db
+load {LOCAL_TEMP_DIR}/pk_mem_cleanup.db
 
 query I
 SELECT used_blocks < 2 FROM pragma_database_size();
@@ -35,7 +35,7 @@ SELECT used_blocks < 2 FROM pragma_database_size();
 
 # FOREIGN KEY
 
-load __TEST_DIR__/fk_mem_cleanup.db
+load {LOCAL_TEMP_DIR}/fk_mem_cleanup.db
 
 query I
 SELECT used_blocks < 2 FROM pragma_database_size();
@@ -70,7 +70,7 @@ SELECT used_blocks < 2 FROM pragma_database_size();
 
 # UNIQUE
 
-load __TEST_DIR__/unique_mem_cleanup.db
+load {LOCAL_TEMP_DIR}/unique_mem_cleanup.db
 
 query I
 SELECT used_blocks < 2 FROM pragma_database_size();

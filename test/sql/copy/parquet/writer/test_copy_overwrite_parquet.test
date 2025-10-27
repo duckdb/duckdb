@@ -20,13 +20,13 @@ SELECT * FROM test ORDER BY 1;
 
 # copy to the parquet file
 query I
-COPY test TO '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET)
+COPY test TO '{TEMP_DIR}/overwrite.parquet' (FORMAT PARQUET)
 ----
 3
 
 # now copy to the file again
 query I
-COPY (SELECT * FROM test LIMIT 2) TO '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET);
+COPY (SELECT * FROM test LIMIT 2) TO '{TEMP_DIR}/overwrite.parquet' (FORMAT PARQUET);
 ----
 2
 
@@ -35,7 +35,7 @@ statement ok
 DELETE FROM test;
 
 query I
-COPY test FROM '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET);
+COPY test FROM '{TEMP_DIR}/overwrite.parquet' (FORMAT PARQUET);
 ----
 2
 
@@ -47,14 +47,14 @@ SELECT * FROM test ORDER BY 1;
 
 # test query returning error does not export to file
 statement error
-COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET);
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '{TEMP_DIR}/overwrite.parquet' (FORMAT PARQUET);
 ----
 
 statement ok
 DELETE FROM test;
 
 query I
-COPY test FROM '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET);
+COPY test FROM '{TEMP_DIR}/overwrite.parquet' (FORMAT PARQUET);
 ----
 2
 
@@ -67,9 +67,9 @@ SELECT * FROM test ORDER BY 1;
 
 # Test USE_TMP_FILE flag with parquet
 statement error
-COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.parquet' (FORMAT PARQUET, USE_TMP_FILE FALSE);
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '{TEMP_DIR}/overwrite.parquet' (FORMAT PARQUET, USE_TMP_FILE FALSE);
 ----
 
 statement error
-SELECT * FROM '__TEST_DIR__/overwrite.parquet';
+SELECT * FROM '{TEMP_DIR}/overwrite.parquet';
 ----

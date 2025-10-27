@@ -2,7 +2,7 @@
 # description: Test storage of approx unique statistic
 # group: [storage]
 
-load __TEST_DIR__/distinct_statistics.db
+load {LOCAL_TEMP_DIR}/distinct_statistics.db
 
 statement ok
 create table test as select range % 10 i, range % 30 j from range(100)

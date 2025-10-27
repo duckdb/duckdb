@@ -16,7 +16,7 @@ SELECT * EXCLUDE (bit, "union") REPLACE (
 FROM test_all_types();
 
 statement ok
-COPY all_types TO "__TEST_DIR__/all_types.parquet" (FORMAT PARQUET);
+COPY all_types TO "{TEMP_DIR}/all_types.parquet" (FORMAT PARQUET);
 
 # we have to make some replacements to get result equivalence
 # hugeint/uhugeint is stored as double -> we have to cast
@@ -32,13 +32,13 @@ FROM all_types
 
 query I nosort alltypes
 SELECT *
-FROM '__TEST_DIR__/all_types.parquet'
+FROM '{TEMP_DIR}/all_types.parquet'
 ----
 
 foreach type TINYINT SMALLINT INT BIGINT UTINYINT USMALLINT UINT UBIGINT HUGEINT UHUGEINT FLOAT DOUBLE
 
 query II
-explain select "${type}" from '__TEST_DIR__/all_types.parquet' 
+explain select "${type}" from '{TEMP_DIR}/all_types.parquet' 
 WHERE "${type}" IN (127);
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters.*
@@ -46,13 +46,13 @@ physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters.*
 endloop
 
 query II
-explain select "VARCHAR" from '__TEST_DIR__/all_types.parquet' 
+explain select "VARCHAR" from '{TEMP_DIR}/all_types.parquet' 
 WHERE "VARCHAR" IN ('🦆🦆🦆🦆🦆🦆');
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters.*
 
 query II
-explain select "bool" from '__TEST_DIR__/all_types.parquet' 
+explain select "bool" from '{TEMP_DIR}/all_types.parquet' 
 WHERE "bool" IN (true);
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters.*

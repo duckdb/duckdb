@@ -11,7 +11,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true", "LATENCY": "true"}';
@@ -37,7 +37,7 @@ SELECT unnest(res) FROM (
 "OPERATOR_TIMING": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement error
 SELECT cpu_time FROM metrics_output;
@@ -70,7 +70,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -79,7 +79,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 query I
 SELECT

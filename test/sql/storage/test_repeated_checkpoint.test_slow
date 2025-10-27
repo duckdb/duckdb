@@ -2,7 +2,7 @@
 # description: Test repeated load and checkpoint of storage
 # group: [storage]
 
-load __TEST_DIR__/repeated_load.db
+load {LOCAL_TEMP_DIR}/repeated_load.db
 
 loop i 0 100
 
@@ -41,13 +41,13 @@ SELECT
 						ELSE 'U33' END AS model
 FROM range(1000) t(i)
 )
-TO '__TEST_DIR__/repeated_load.csv' (DELIMITER '|');
+TO '{TEMP_DIR}/repeated_load.csv' (DELIMITER '|');
 
 statement ok
 CREATE TABLE IF NOT EXISTS pdata (record_id BIGINT PRIMARY KEY , price DOUBLE, shop VARCHAR, category VARCHAR, name VARCHAR, brand VARCHAR, color VARCHAR, model VARCHAR);
 
 statement ok
-COPY pdata(record_id,price,shop,category,name,brand,color,model) FROM '__TEST_DIR__/repeated_load.csv' ( DELIMITER '|' );
+COPY pdata(record_id,price,shop,category,name,brand,color,model) FROM '{TEMP_DIR}/repeated_load.csv' ( DELIMITER '|' );
 
 query IIIIIIII
 SELECT MIN(record_id), MIN(price), MIN(shop), MIN(category), MIN(name), MIN(brand), MIN(color), MIN(model) FROM pdata

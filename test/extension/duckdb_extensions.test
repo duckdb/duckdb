@@ -17,7 +17,7 @@ set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/duckdb_extensions'
+set extension_directory='{TEMP_DIR}/duckdb_extensions'
 
 require json
 

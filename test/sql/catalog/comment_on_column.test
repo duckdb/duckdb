@@ -2,7 +2,7 @@
 # description: Test COMMENT ON COLUMN
 # group: [catalog]
 
-load __TEST_DIR__/comment_on_column.db
+load {LOCAL_TEMP_DIR}/comment_on_column.db
 
 statement ok
 CREATE TABLE test_table as SELECT 1 as test_table_column

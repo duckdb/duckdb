@@ -3,7 +3,7 @@
 # group: [attach]
 
 statement ok
-ATTACH '__TEST_DIR__/attach_if_not_exists_detach.db' AS db1
+ATTACH '{LOCAL_TEMP_DIR}/attach_if_not_exists_detach.db' AS db1
 
 # con1 opens a transaction for db1 that prevents it from being fully detached
 statement ok con1
@@ -18,6 +18,6 @@ DETACH db1
 
 # upon attaching we should fail
 statement error con2
-ATTACH IF NOT EXISTS '__TEST_DIR__/attach_if_not_exists_detach.db' AS db1
+ATTACH IF NOT EXISTS '{LOCAL_TEMP_DIR}/attach_if_not_exists_detach.db' AS db1
 ----
 the process of being detached

@@ -4,7 +4,7 @@
 
 require tpcds
 
-load __TEST_DIR__/tpcds_storage.db
+load {LOCAL_TEMP_DIR}/tpcds_storage.db
 
 foreach compression <compression>
 

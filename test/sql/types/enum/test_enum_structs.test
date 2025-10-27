@@ -10,7 +10,7 @@ statement ok
 SET storage_compatibility_version='v0.10.2';
 
 # load the DB from disk
-load __TEST_DIR__/enum_types.db
+load {LOCAL_TEMP_DIR}/enum_types.db
 
 statement ok
 CREATE TYPE mood AS ENUM (

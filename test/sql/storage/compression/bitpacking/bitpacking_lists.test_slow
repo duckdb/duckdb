@@ -6,7 +6,7 @@
 # because the bitpacking groups no longer fit the blocks.
 require block_size 262144
 
-load __TEST_DIR__/test_rle.db
+load {LOCAL_TEMP_DIR}/test_rle.db
 
 statement ok
 PRAGMA force_compression = 'bitpacking'

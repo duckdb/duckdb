@@ -3,7 +3,7 @@
 # group: [general]
 
 # load the DB from disk
-load __TEST_DIR__/issue_3611.db
+load {LOCAL_TEMP_DIR}/issue_3611.db
 
 statement ok
 PRAGMA enable_verification

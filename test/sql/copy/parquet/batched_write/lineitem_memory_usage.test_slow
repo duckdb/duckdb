@@ -6,13 +6,13 @@ require parquet
 
 require tpch
 
-load __TEST_DIR__/lineitem_memory_test.db
+load {LOCAL_TEMP_DIR}/lineitem_memory_test.db
 
 statement ok
 CALL dbgen(sf=1)
 
 statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem_memory_usage.parquet'
+COPY lineitem TO '{TEMP_DIR}/lineitem_memory_usage.parquet'
 
 restart
 
@@ -21,14 +21,14 @@ statement ok
 SET memory_limit='500MB'
 
 statement ok
-COPY '__TEST_DIR__/lineitem_memory_usage.parquet' TO '__TEST_DIR__/lineitem_memory_usage_copy.parquet';
+COPY '{TEMP_DIR}/lineitem_memory_usage.parquet' TO '{TEMP_DIR}/lineitem_memory_usage_copy.parquet';
 
 # ensure the parquet files hold the same content in the same order
 statement ok
 SET memory_limit='2GB';
 
 query IIIIIIIIIIIIIIIII
-SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/lineitem_memory_usage.parquet'
+SELECT *, row_number() OVER () as rownum FROM '{TEMP_DIR}/lineitem_memory_usage.parquet'
 EXCEPT
-SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/lineitem_memory_usage_copy.parquet';
+SELECT *, row_number() OVER () as rownum FROM '{TEMP_DIR}/lineitem_memory_usage_copy.parquet';
 ----

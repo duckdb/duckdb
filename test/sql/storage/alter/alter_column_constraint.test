@@ -3,7 +3,7 @@
 # group: [alter]
 
 # load the DB from disk
-load __TEST_DIR__/add_column_constraint.db
+load {LOCAL_TEMP_DIR}/add_column_constraint.db
 
 statement ok
 CREATE TABLE IF NOT EXISTS a(id INT PRIMARY KEY);

@@ -4,7 +4,7 @@
 
 require parquet
 
-load __TEST_DIR__/insert_order_preserving.db
+load {LOCAL_TEMP_DIR}/insert_order_preserving.db
 
 # test the PRESERVE_ORDER option
 statement ok
@@ -16,12 +16,12 @@ CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
 10000000
 
 query I
-COPY integers TO '__TEST_DIR__/force_order_preserve.parquet' (PRESERVE_ORDER);
+COPY integers TO '{TEMP_DIR}/force_order_preserve.parquet' (PRESERVE_ORDER);
 ----
 10000000
 
 statement ok
-CREATE VIEW integers2 AS FROM '__TEST_DIR__/force_order_preserve.parquet'
+CREATE VIEW integers2 AS FROM '{TEMP_DIR}/force_order_preserve.parquet'
 
 query I
 SELECT SUM(i) FROM integers
@@ -38,7 +38,7 @@ statement ok
 SET preserve_insertion_order=true
 
 query I
-SELECT * FROM '__TEST_DIR__/force_order_preserve.parquet' LIMIT 5
+SELECT * FROM '{TEMP_DIR}/force_order_preserve.parquet' LIMIT 5
 ----
 0
 1
@@ -47,7 +47,7 @@ SELECT * FROM '__TEST_DIR__/force_order_preserve.parquet' LIMIT 5
 4
 
 query I
-SELECT * FROM '__TEST_DIR__/force_order_preserve.parquet' LIMIT 5 OFFSET 777778
+SELECT * FROM '{TEMP_DIR}/force_order_preserve.parquet' LIMIT 5 OFFSET 777778
 ----
 777778
 777779
@@ -56,6 +56,6 @@ SELECT * FROM '__TEST_DIR__/force_order_preserve.parquet' LIMIT 5 OFFSET 777778
 777782
 
 statement error
-COPY integers TO '__TEST_DIR__/force_order_preserve_2.parquet' (PRESERVE_ORDER, PARTITION_BY (i), WRITE_PARTITION_COLUMNS);
+COPY integers TO '{TEMP_DIR}/force_order_preserve_2.parquet' (PRESERVE_ORDER, PARTITION_BY (i), WRITE_PARTITION_COLUMNS);
 ----
 PRESERVE_ORDER is not supported with these parameters

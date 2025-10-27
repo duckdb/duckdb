@@ -16,19 +16,19 @@ statement ok
 CALL dbgen(sf=100);
 
 statement ok
-copy lineitem to '__TEST_DIR__/lineitem_100.csv.gz';
+copy lineitem to '{TEMP_DIR}/lineitem_100.csv.gz';
 
 statement ok
 SET temp_directory=''
 
 # load the DB from disk (Avoids OOM when generating ze table)
-load __TEST_DIR__/lineitem_100_compressed.db
+load {LOCAL_TEMP_DIR}/lineitem_100_compressed.db
 
 statement ok
 CREATE TABLE lineitem_2(l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l_suppkey INTEGER NOT NULL, l_linenumber INTEGER NOT NULL, l_quantity DECIMAL(15,2) NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR NOT NULL, l_linestatus VARCHAR NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR NOT NULL, l_shipmode VARCHAR NOT NULL, l_comment VARCHAR NOT NULL);
 
 statement ok
-INSERT INTO lineitem_2 FROM '__TEST_DIR__/lineitem_100.csv.gz';
+INSERT INTO lineitem_2 FROM '{TEMP_DIR}/lineitem_100.csv.gz';
 
 query I
 select count(*) from lineitem_2

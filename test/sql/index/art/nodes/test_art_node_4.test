@@ -2,7 +2,7 @@
 # description: Test ART Node 4
 # group: [nodes]
 
-load __TEST_DIR__/test_index.db
+load {LOCAL_TEMP_DIR}/test_index.db
 
 statement ok
 CREATE TABLE integers(i integer)

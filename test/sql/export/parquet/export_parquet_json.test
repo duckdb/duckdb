@@ -18,13 +18,13 @@ select * from tbl;
 
 # now export the db
 statement ok
-EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT PARQUET)
+EXPORT DATABASE '{TEMP_DIR}/export_test' (FORMAT PARQUET)
 
 statement ok
 ROLLBACK
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/export_test'
+IMPORT DATABASE '{TEMP_DIR}/export_test'
 
 query I nosort result
 select * from tbl;

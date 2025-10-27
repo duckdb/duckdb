@@ -33,7 +33,7 @@ CREATE VIEW lineitem_array_view AS SELECT LIST({'l_orderkey': l_orderkey,
 	'l_comment': l_comment}) lineitem_array FROM tpch.lineitem
 
 statement ok
-COPY lineitem_array_view TO '__TEST_DIR__/lineitem.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+COPY lineitem_array_view TO '{TEMP_DIR}/lineitem.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
 
 statement ok
 CREATE VIEW lineitem AS SELECT
@@ -53,15 +53,15 @@ CREATE VIEW lineitem AS SELECT
 	s.l_shipinstruct AS l_shipinstruct,
 	s.l_shipmode AS l_shipmode,
 	s.l_comment AS l_comment
-	FROM (SELECT UNNEST(lineitem_array) s FROM parquet_scan('__TEST_DIR__/lineitem.parquet'));
+	FROM (SELECT UNNEST(lineitem_array) s FROM parquet_scan('{TEMP_DIR}/lineitem.parquet'));
 
 foreach tbl nation orders supplier part partsupp region customer
 
 statement ok
-COPY tpch.${tbl} TO '__TEST_DIR__/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+COPY tpch.${tbl} TO '{TEMP_DIR}/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
 
 statement ok
-CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('__TEST_DIR__/${tbl}.parquet');
+CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('{TEMP_DIR}/${tbl}.parquet');
 
 endloop
 

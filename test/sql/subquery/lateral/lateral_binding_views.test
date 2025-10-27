@@ -3,10 +3,10 @@
 # group: [lateral]
 
 statement ok
-copy (select date '2000-01-01' as dt) to '__TEST_DIR__/datetest.csv';
+copy (select date '2000-01-01' as dt) to '{TEMP_DIR}/datetest.csv';
 
 statement ok
-create view v1 as select * from read_csv('__TEST_DIR__/datetest.csv', columns={'dt': date});
+create view v1 as select * from read_csv('{TEMP_DIR}/datetest.csv', columns={'dt': date});
 
 query I
 from v1

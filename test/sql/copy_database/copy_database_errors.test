@@ -29,7 +29,7 @@ FROM and TO databases are the same
 
 # read-only test
 statement ok
-ATTACH DATABASE '__TEST_DIR__/read_only.db' AS read_only
+ATTACH DATABASE '{TEMP_DIR}/read_only.db' AS read_only
 
 statement ok
 CREATE TABLE read_only.t(i INT);
@@ -38,7 +38,7 @@ statement ok
 DETACH read_only
 
 statement ok
-ATTACH DATABASE '__TEST_DIR__/read_only.db' AS read_only (READ_ONLY)
+ATTACH DATABASE '{TEMP_DIR}/read_only.db' AS read_only (READ_ONLY)
 
 # we cannot copy TO a read-only database
 statement error

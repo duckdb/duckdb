@@ -4,29 +4,29 @@
 require parquet
 
 statement ok
-COPY (SELECT 1 as a, 2 as a, 3 as a) TO '__TEST_DIR__/dupe_cols.parquet';
+COPY (SELECT 1 as a, 2 as a, 3 as a) TO '{TEMP_DIR}/dupe_cols.parquet';
 
 # The duplicate column(s) get `_{index}` appended to it
 query III
-SELECT a, "a_1", "a_2" FROM '__TEST_DIR__/dupe_cols.parquet';
+SELECT a, "a_1", "a_2" FROM '{TEMP_DIR}/dupe_cols.parquet';
 ----
 1	2	3
 
 # Original names are not preserved if a dupe appears first
 statement ok
-COPY (SELECT 1 as a, 2 as a, 3 as "a_1") TO '__TEST_DIR__/dupe_cols.parquet';
+COPY (SELECT 1 as a, 2 as a, 3 as "a_1") TO '{TEMP_DIR}/dupe_cols.parquet';
 
 # original 'a_1' is renamed to 'a_2'
 query III
-SELECT a, "a_1", "a_1_1" FROM '__TEST_DIR__/dupe_cols.parquet';
+SELECT a, "a_1", "a_1_1" FROM '{TEMP_DIR}/dupe_cols.parquet';
 ----
 1	2	3
 
 statement ok
-COPY (SELECT 1 as a, 3 as "a_1", 2 as a) TO '__TEST_DIR__/dupe_cols.parquet';
+COPY (SELECT 1 as a, 3 as "a_1", 2 as a) TO '{TEMP_DIR}/dupe_cols.parquet';
 
 # Here the name is preserved, because it appears before the dupe
 query III
-SELECT a, "a_1", "a_2" FROM '__TEST_DIR__/dupe_cols.parquet';
+SELECT a, "a_1", "a_2" FROM '{TEMP_DIR}/dupe_cols.parquet';
 ----
 1	3	2
