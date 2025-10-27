@@ -121,7 +121,7 @@ RowOrRows <- 'ROW' / 'ROWS'
 
 AliasedExpression <- ColIdExpression / ExpressionAsColLabel / ExpressionOptIdentifier
 ColIdExpression <- ColId ':' Expression
-ExpressionAsColLabel <- Expression 'AS'i ColLabelOrString
+ExpressionAsColLabel <- Expression 'AS' ColLabelOrString
 ExpressionOptIdentifier <- Expression Identifier?
 
 ValuesClause <- 'VALUES' List(ValuesExpressions)

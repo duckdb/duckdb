@@ -987,7 +987,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"RowOrRows <- 'ROW' / 'ROWS'\n"
 	"AliasedExpression <- ColIdExpression / ExpressionAsColLabel / ExpressionOptIdentifier\n"
 	"ColIdExpression <- ColId ':' Expression\n"
-	"ExpressionAsColLabel <- Expression 'AS'i ColLabelOrString\n"
+	"ExpressionAsColLabel <- Expression 'AS' ColLabelOrString\n"
 	"ExpressionOptIdentifier <- Expression Identifier?\n"
 	"ValuesClause <- 'VALUES' List(ValuesExpressions)\n"
 	"ValuesExpressions <- Parens(List(Expression))\n"
