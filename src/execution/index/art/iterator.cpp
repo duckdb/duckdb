@@ -95,51 +95,57 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 }
 
 void Iterator::FindMinimum(const Node &node) {
-	D_ASSERT(node.HasMetadata());
 
-	// Found the minimum.
-	if (node.IsAnyLeaf()) {
-		last_leaf = node;
-		return;
-	}
+	auto current_node = node;
 
-	// We are passing a gate node.
-	if (node.GetGateStatus() == GateStatus::GATE_SET) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		status = GateStatus::GATE_SET;
-		entered_nested_leaf = true;
-		nested_depth = 0;
-	}
+	while (true) {
+		D_ASSERT(current_node.HasMetadata());
 
-	// Traverse the prefix.
-	if (node.GetType() == NType::PREFIX) {
-		Prefix prefix(art, node);
-		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
-			current_key.Push(prefix.data[i]);
-			if (status == GateStatus::GATE_SET) {
-				row_id[nested_depth] = prefix.data[i];
-				nested_depth++;
-				D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
-			}
+		// Found the minimum.
+		if (current_node.IsAnyLeaf()) {
+			last_leaf = current_node;
+			return;
 		}
-		nodes.emplace(node, 0);
-		return FindMinimum(*prefix.ptr);
-	}
 
-	// Go to the leftmost entry in the current node.
-	uint8_t byte = 0;
-	auto next = node.GetNextChild(art, byte);
-	D_ASSERT(next);
+		// We are passing a gate node.
+		if (current_node.GetGateStatus() == GateStatus::GATE_SET) {
+			D_ASSERT(status == GateStatus::GATE_NOT_SET);
+			status = GateStatus::GATE_SET;
+			entered_nested_leaf = true;
+			nested_depth = 0;
+		}
 
-	// Recurse on the leftmost node.
-	current_key.Push(byte);
-	if (status == GateStatus::GATE_SET) {
-		row_id[nested_depth] = byte;
-		nested_depth++;
-		D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
+		// Traverse the prefix.
+		if (current_node.GetType() == NType::PREFIX) {
+			Prefix prefix(art, current_node);
+			for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+				current_key.Push(prefix.data[i]);
+				if (status == GateStatus::GATE_SET) {
+					row_id[nested_depth] = prefix.data[i];
+					nested_depth++;
+					D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
+				}
+			}
+			nodes.emplace(current_node, 0);
+			current_node = *prefix.ptr;
+			continue;
+		}
+
+		// Go to the leftmost entry in the current node.
+		uint8_t byte = 0;
+		auto next = current_node.GetNextChild(art, byte);
+		D_ASSERT(next);
+
+		// Move to the leftmost node.
+		current_key.Push(byte);
+		if (status == GateStatus::GATE_SET) {
+			row_id[nested_depth] = byte;
+			nested_depth++;
+			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
+		}
+		nodes.emplace(current_node, byte);
+		current_node = *next;
 	}
-	nodes.emplace(node, byte);
-	FindMinimum(*next);
 }
 
 bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth) {
