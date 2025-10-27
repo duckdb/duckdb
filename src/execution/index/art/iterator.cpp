@@ -148,78 +148,85 @@ void Iterator::FindMinimum(const Node &node) {
 	}
 }
 
-bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth) {
-	if (!node.HasMetadata()) {
-		return false;
-	}
+bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal) {
+	auto current_node = node;
+	auto current_depth = 0;
 
-	// We found any leaf node, or a gate.
-	if (node.IsAnyLeaf() || node.GetGateStatus() == GateStatus::GATE_SET) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		D_ASSERT(current_key.Size() == key.len);
-		if (!equal && current_key.Contains(key)) {
-			return Next();
+	while (true) {
+		if (!current_node.HasMetadata()) {
+			return false;
 		}
 
-		if (node.GetGateStatus() == GateStatus::GATE_SET) {
-			FindMinimum(node);
-		} else {
-			last_leaf = node;
-		}
-		return true;
-	}
+		// We found any leaf node, or a gate.
+		if (current_node.IsAnyLeaf() || current_node.GetGateStatus() == GateStatus::GATE_SET) {
+			D_ASSERT(status == GateStatus::GATE_NOT_SET);
+			D_ASSERT(current_key.Size() == key.len);
+			if (!equal && current_key.Contains(key)) {
+				return Next();
+			}
 
-	D_ASSERT(node.GetGateStatus() == GateStatus::GATE_NOT_SET);
-	if (node.GetType() != NType::PREFIX) {
-		auto next_byte = key[depth];
-		auto child = node.GetNextChild(art, next_byte);
-
-		// The key is greater than any key in this subtree.
-		if (!child) {
-			return Next();
-		}
-
-		current_key.Push(next_byte);
-		nodes.emplace(node, next_byte);
-
-		// We return the minimum because all keys are greater than the lower bound.
-		if (next_byte > key[depth]) {
-			FindMinimum(*child);
+			if (current_node.GetGateStatus() == GateStatus::GATE_SET) {
+				FindMinimum(current_node);
+			} else {
+				last_leaf = current_node;
+			}
 			return true;
 		}
 
-		// We recurse into the child.
-		return LowerBound(*child, key, equal, depth + 1);
-	}
+		D_ASSERT(current_node.GetGateStatus() == GateStatus::GATE_NOT_SET);
+		if (current_node.GetType() != NType::PREFIX) {
+			auto next_byte = key[current_depth];
+			auto child = current_node.GetNextChild(art, next_byte);
 
-	// Push back all prefix bytes.
-	Prefix prefix(art, node);
-	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
-		current_key.Push(prefix.data[i]);
-	}
-	nodes.emplace(node, 0);
+			// The key is greater than any key in this subtree.
+			if (!child) {
+				return Next();
+			}
 
-	// We compare the prefix bytes with the key bytes.
-	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
-		// We found a prefix byte that is less than its corresponding key byte.
-		// I.e., the subsequent node is lesser than the key. Thus, the next node
-		// is the lower bound.
-		if (prefix.data[i] < key[depth + i]) {
-			return Next();
+			current_key.Push(next_byte);
+			nodes.emplace(current_node, next_byte);
+
+			// We return the minimum because all keys are greater than the lower bound.
+			if (next_byte > key[current_depth]) {
+				FindMinimum(*child);
+				return true;
+			}
+
+			// Move to the child and increment depth.
+			current_node = *child;
+			current_depth++;
+			continue;
 		}
 
-		// We found a prefix byte that is greater than its corresponding key byte.
-		// I.e., the subsequent node is greater than the key. Thus, the minimum is
-		// the lower bound.
-		if (prefix.data[i] > key[depth + i]) {
-			FindMinimum(*prefix.ptr);
-			return true;
+		// Push back all prefix bytes.
+		Prefix prefix(art, current_node);
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+			current_key.Push(prefix.data[i]);
 		}
-	}
+		nodes.emplace(current_node, 0);
 
-	// The prefix matches the key. We recurse into the child.
-	depth += prefix.data[Prefix::Count(art)];
-	return LowerBound(*prefix.ptr, key, equal, depth);
+		// We compare the prefix bytes with the key bytes.
+		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+			// We found a prefix byte that is less than its corresponding key byte.
+			// I.e., the subsequent node is lesser than the key. Thus, the next node
+			// is the lower bound.
+			if (prefix.data[i] < key[current_depth + i]) {
+				return Next();
+			}
+
+			// We found a prefix byte that is greater than its corresponding key byte.
+			// I.e., the subsequent node is greater than the key. Thus, the minimum is
+			// the lower bound.
+			if (prefix.data[i] > key[current_depth + i]) {
+				FindMinimum(*prefix.ptr);
+				return true;
+			}
+		}
+
+		// The prefix matches the key. Move to the child and update depth.
+		current_depth += prefix.data[Prefix::Count(art)];
+		current_node = *prefix.ptr;
+	}
 }
 
 bool Iterator::Next() {
