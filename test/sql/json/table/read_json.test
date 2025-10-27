@@ -8,19 +8,19 @@ statement ok
 pragma enable_verification
 
 statement error
-SELECT * FROM read_json('data/json/example_n.ndjson', auto_detect=false)
+SELECT * FROM read_json('{DATA_DIR}/json/example_n.ndjson', auto_detect=false)
 ----
 Binder Error
 
 # can't read ndjson with array
 statement error
-SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='array')
+SELECT * FROM read_json('{DATA_DIR}/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='array')
 ----
 Invalid Input Error: Expected top-level JSON array
 
 # read_ndjson works
 query II
-SELECT * FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+SELECT * FROM read_ndjson('{DATA_DIR}/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
 1	O Brother, Where Art Thou?
 2	Home for the Holidays
@@ -30,7 +30,7 @@ SELECT * FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', 
 
 # We can also read only one of the columns
 query I
-SELECT * FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER'})
+SELECT * FROM read_ndjson('{DATA_DIR}/json/example_n.ndjson', columns={id: 'INTEGER'})
 ----
 1
 2
@@ -39,7 +39,7 @@ SELECT * FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER'})
 5
 
 query I
-SELECT * FROM read_ndjson('data/json/example_n.ndjson', columns={name: 'VARCHAR'})
+SELECT * FROM read_ndjson('{DATA_DIR}/json/example_n.ndjson', columns={name: 'VARCHAR'})
 ----
 O Brother, Where Art Thou?
 Home for the Holidays
@@ -49,7 +49,7 @@ Raising Arizona
 
 # what about a broken JSON file
 query II
-SELECT * FROM read_ndjson('data/json/unterminated_quotes.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, ignore_errors=true)
+SELECT * FROM read_ndjson('{DATA_DIR}/json/unterminated_quotes.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, ignore_errors=true)
 ----
 1	O Brother, Where Art Thou?
 2	Home for the Holidays
@@ -59,7 +59,7 @@ NULL	NULL
 
 # some of these values don't have "name"
 query II
-SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+SELECT * FROM read_ndjson('{DATA_DIR}/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
 1	O Brother, Where Art Thou?
 2	NULL
@@ -69,7 +69,7 @@ SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'IN
 
 # test projection pushdown (unstructured json)
 query I
-SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='unstructured')
+SELECT id FROM read_json('{DATA_DIR}/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='unstructured')
 ----
 1
 2
@@ -78,7 +78,7 @@ SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', n
 5
 
 query I
-SELECT name FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='unstructured')
+SELECT name FROM read_json('{DATA_DIR}/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='unstructured')
 ----
 O Brother, Where Art Thou?
 Home for the Holidays
@@ -88,7 +88,7 @@ Raising Arizona
 
 # test projection pushdown (newline-delimited json)
 query I
-SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='newline_delimited')
+SELECT id FROM read_json('{DATA_DIR}/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='newline_delimited')
 ----
 1
 2
@@ -97,7 +97,7 @@ SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', n
 5
 
 query I
-SELECT name FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='nd')
+SELECT name FROM read_ndjson('{DATA_DIR}/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='nd')
 ----
 O Brother, Where Art Thou?
 Home for the Holidays
@@ -107,7 +107,7 @@ Raising Arizona
 
 # auto-detect
 query II
-SELECT * FROM read_json_auto('data/json/example_n.ndjson')
+SELECT * FROM read_json_auto('{DATA_DIR}/json/example_n.ndjson')
 ----
 1	O Brother, Where Art Thou?
 2	Home for the Holidays
@@ -116,7 +116,7 @@ SELECT * FROM read_json_auto('data/json/example_n.ndjson')
 5	Raising Arizona
 
 query II
-SELECT * FROM 'data/json/example_n.ndjson'
+SELECT * FROM '{DATA_DIR}/json/example_n.ndjson'
 ----
 1	O Brother, Where Art Thou?
 2	Home for the Holidays
@@ -126,7 +126,7 @@ SELECT * FROM 'data/json/example_n.ndjson'
 
 # we can detect at varying levels, level 0 is just JSON
 query I
-SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=0)
+SELECT * FROM read_json_auto('{DATA_DIR}/json/with_list.json', maximum_depth=0)
 ----
 {"id":1,"name":["O","Brother,","Where","Art","Thou?"]}
 {"id":2,"name":["Home","for","the","Holidays"]}
@@ -136,7 +136,7 @@ SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=0)
 
 # at level one we get JSON and JSON
 query II
-SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
+SELECT * FROM read_json_auto('{DATA_DIR}/json/with_list.json', maximum_depth=1)
 ----
 1	["O","Brother,","Where","Art","Thou?"]
 2	["Home","for","the","Holidays"]
@@ -146,7 +146,7 @@ SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
 
 # at level 2 we get BIGINT and JSON[]
 query II
-SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
+SELECT * FROM read_json_auto('{DATA_DIR}/json/with_list.json', maximum_depth=2)
 ----
 1	["O", "Brother,", "Where", "Art", "Thou?"]
 2	["Home", "for", "the", "Holidays"]
@@ -156,7 +156,7 @@ SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
 
 # at level 3 it's fully detected, and we get BIGINT and VARCHAR[]
 query II
-SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=3)
+SELECT * FROM read_json_auto('{DATA_DIR}/json/with_list.json', maximum_depth=3)
 ----
 1	[O, 'Brother,', Where, Art, Thou?]
 2	[Home, for, the, Holidays]
@@ -166,7 +166,7 @@ SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=3)
 
 # we can detect lists too
 query III
-SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
+SELECT id, typeof(name), unnest(name) FROM '{DATA_DIR}/json/with_list.json'
 ----
 1	VARCHAR[]	O
 1	VARCHAR[]	Brother,
@@ -186,7 +186,7 @@ SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
 
 # with depth 2 we don't bother detecting inside of the list - defaults to JSON
 query III
-SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
+SELECT id, typeof(name), unnest(name) FROM read_json_auto('{DATA_DIR}/json/with_list.json', maximum_depth=2)
 ----
 1	JSON[]	"O"
 1	JSON[]	"Brother,"
@@ -206,7 +206,7 @@ SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.j
 
 # with depth 0 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
 query II
-SELECT typeof(id), typeof(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
+SELECT typeof(id), typeof(name) FROM read_json_auto('{DATA_DIR}/json/with_list.json', maximum_depth=1)
 ----
 JSON	JSON
 JSON	JSON
@@ -216,7 +216,7 @@ JSON	JSON
 
 # we can detect UUID's
 query II
-SELECT id, typeof(id) FROM 'data/json/with_uuid.json'
+SELECT id, typeof(id) FROM '{DATA_DIR}/json/with_uuid.json'
 ----
 bbd05ae7-76e5-4f1a-a31f-247408251fc9	UUID
 d5c52052-5f8e-473f-bc8d-176342643ef5	UUID
@@ -226,60 +226,60 @@ ae24e69e-e0bf-4e85-9848-27d35df85b8b	UUID
 
 # top-level array of values
 query I
-select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'})
+select * from read_json('{DATA_DIR}/json/top_level_array.json', columns={conclusion: 'VARCHAR'})
 ----
 cancelled
 cancelled
 
 query I
-select * from read_json('data/json/top_level_array.json', auto_detect=true)
+select * from read_json('{DATA_DIR}/json/top_level_array.json', auto_detect=true)
 ----
 cancelled
 cancelled
 
 # if we try to read it as 'unstructured' records
 statement error
-select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, format='unstructured', records=true)
+select * from read_json('{DATA_DIR}/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, format='unstructured', records=true)
 ----
-Invalid Input Error: JSON transform error in file "data/json/top_level_array.json", in record/value 1: Expected OBJECT, but got ARRAY
+Invalid Input Error: JSON transform error in file "{DATA_DIR}/json/top_level_array.json", in record/value 1: Expected OBJECT, but got ARRAY
 
 # if we try to read an ndjson file as if it is an array of values, we get an error
 statement error
-select * from read_json_auto('data/json/example_n.ndjson', format='array')
+select * from read_json_auto('{DATA_DIR}/json/example_n.ndjson', format='array')
 ----
 Invalid Input Error: Expected top-level JSON array
 
 # test that we can read a list of longer than STANDARD_VECTOR_SIZE properly
 statement ok
-copy (select 42 duck from range(10000)) to '__TEST_DIR__/my_file.json' (array true)
+copy (select 42 duck from range(10000)) to '{TEMP_DIR}/my_file.json' (array true)
 
 query T
-select count(*) from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, format='array')
+select count(*) from read_json('{TEMP_DIR}/my_file.json', columns={duck: 'INTEGER'}, format='array')
 ----
 10000
 
 query T
-select sum(duck) = 42*10000 from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, format='array')
+select sum(duck) = 42*10000 from read_json('{TEMP_DIR}/my_file.json', columns={duck: 'INTEGER'}, format='array')
 ----
 true
 
 # read_json_auto also understands ARRAY format
 query T
-select count(*) from '__TEST_DIR__/my_file.json'
+select count(*) from '{TEMP_DIR}/my_file.json'
 ----
 10000
 
 query T
-select sum(duck) = 42*10000 from '__TEST_DIR__/my_file.json'
+select sum(duck) = 42*10000 from '{TEMP_DIR}/my_file.json'
 ----
 true
 
 # what if we do an array of non-records?
 statement ok
-copy (select list(range) from range(10)) to '__TEST_DIR__/my_file.json' (format csv, quote '', HEADER 0)
+copy (select list(range) from range(10)) to '{TEMP_DIR}/my_file.json' (format csv, quote '', HEADER 0)
 
 query T
-select * from '__TEST_DIR__/my_file.json'
+select * from '{TEMP_DIR}/my_file.json'
 ----
 0
 1
@@ -294,18 +294,18 @@ select * from '__TEST_DIR__/my_file.json'
 
 # fails because it's not records
 statement error
-select * from read_json('__TEST_DIR__/my_file.json', format='array', columns={range: 'INTEGER'}, records=true)
+select * from read_json('{TEMP_DIR}/my_file.json', format='array', columns={range: 'INTEGER'}, records=true)
 ----
 Invalid Input Error: JSON transform error
 
 # fails because it's not records
 statement error
-select * from read_json_auto('__TEST_DIR__/my_file.json', format='array', records=true)
+select * from read_json_auto('{TEMP_DIR}/my_file.json', format='array', records=true)
 ----
 Binder Error: json_read expected records
 
 query T
-select * from read_json('__TEST_DIR__/my_file.json', format='auto', records=false, auto_detect=true)
+select * from read_json('{TEMP_DIR}/my_file.json', format='auto', records=false, auto_detect=true)
 ----
 0
 1
@@ -320,19 +320,19 @@ select * from read_json('__TEST_DIR__/my_file.json', format='auto', records=fals
 
 # need to supply columns
 statement error
-select * from read_json('__TEST_DIR__/my_file.json', format='auto', records='false', auto_detect=false)
+select * from read_json('{TEMP_DIR}/my_file.json', format='auto', records='false', auto_detect=false)
 ----
 Binder Error
 
 # read as unstructured values, so we just get the array
 query T
-select * from read_json('__TEST_DIR__/my_file.json', format='unstructured', records='false', auto_detect=true)
+select * from read_json('{TEMP_DIR}/my_file.json', format='unstructured', records='false', auto_detect=true)
 ----
 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 # array of non-records
 query T
-select * from read_json('__TEST_DIR__/my_file.json', format='array', records='false', auto_detect=true)
+select * from read_json('{TEMP_DIR}/my_file.json', format='array', records='false', auto_detect=true)
 ----
 0
 1
@@ -347,7 +347,7 @@ select * from read_json('__TEST_DIR__/my_file.json', format='array', records='fa
 
 # also works with auto
 query T
-select * from read_json('__TEST_DIR__/my_file.json', format='array', records='auto', auto_detect=true)
+select * from read_json('{TEMP_DIR}/my_file.json', format='array', records='auto', auto_detect=true)
 ----
 0
 1
@@ -367,7 +367,7 @@ SET threads=2
 # issue 6646, this is not an array, but we try to read it as one
 statement error
 select json_structure(json ->> '$.metadata') as structure,
-from read_json('data/json/issue.json', format='array', columns={'json': 'JSON'}, maximum_object_size=104857600)
+from read_json('{DATA_DIR}/json/issue.json', format='array', columns={'json': 'JSON'}, maximum_object_size=104857600)
 limit 1;
 ----
 Invalid Input Error: Expected top-level JSON array
@@ -375,7 +375,7 @@ Invalid Input Error: Expected top-level JSON array
 # let's try a variation
 statement error
 select json_structure(json ->> '$.metadata') as structure,
-from read_json('data/json/issue.json', format='array', records='false', columns={'json': 'JSON'}, maximum_object_size=104857600)
+from read_json('{DATA_DIR}/json/issue.json', format='array', records='false', columns={'json': 'JSON'}, maximum_object_size=104857600)
 limit 1;
 ----
 Invalid Input Error: Expected top-level JSON array
@@ -383,7 +383,7 @@ Invalid Input Error: Expected top-level JSON array
 # we can parse it as unstructured values, and give it a different col name
 query I
 select json_structure(my_json ->> '$.metadata') as structure,
-from read_json('data/json/issue.json', format='unstructured', records='false', columns={'my_json': 'JSON'}, maximum_object_size=104857600)
+from read_json('{DATA_DIR}/json/issue.json', format='unstructured', records='false', columns={'my_json': 'JSON'}, maximum_object_size=104857600)
 limit 1;
 ----
 {"argv":["VARCHAR"],"dag":{"dag_size":"VARCHAR","tasks":{"load_oscar":{"status":"VARCHAR","type":"VARCHAR","upstream":"VARCHAR","products":{"nb":"VARCHAR"}},"load_weather":{"status":"VARCHAR","type":"VARCHAR","upstream":"VARCHAR","products":{"nb":"VARCHAR"}},"compress":{"status":"VARCHAR","type":"VARCHAR","upstream":{"load_oscar":"VARCHAR"},"products":{"nb":"VARCHAR"}}}}}
@@ -395,10 +395,10 @@ pragma disable_verification
 # the JSON is 55 bytes, and the minimum buffer size is 32MB
 # let's do 50k to be safe
 statement ok
-copy (select 42 this_is_a_very_long_field_name_yes_very_much_so from range(50000)) to '__TEST_DIR__/my_file.json' (array true)
+copy (select 42 this_is_a_very_long_field_name_yes_very_much_so from range(50000)) to '{TEMP_DIR}/my_file.json' (array true)
 
 query T
-select sum(this_is_a_very_long_field_name_yes_very_much_so) = 42 * 50000 from '__TEST_DIR__/my_file.json'
+select sum(this_is_a_very_long_field_name_yes_very_much_so) = 42 * 50000 from '{TEMP_DIR}/my_file.json'
 ----
 true
 

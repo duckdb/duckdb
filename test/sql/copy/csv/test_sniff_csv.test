@@ -10,82 +10,82 @@ require notwindows
 
 # This has a row with an extra column, so with ignore_errors we give preference to that
 query II
-SELECT quote, escape from sniff_csv('data/csv/16857.csv', ignore_errors = true);
+SELECT quote, escape from sniff_csv('{DATA_DIR}/csv/16857.csv', ignore_errors = true);
 ----
 "	"
 
 query II
-SELECT quote, escape from sniff_csv('data/csv/16857.csv');
+SELECT quote, escape from sniff_csv('{DATA_DIR}/csv/16857.csv');
 ----
 "	"
 
 query III
-SELECT escape,quote, delimiter from sniff_csv('data/csv/later_quotes.csv');
+SELECT escape,quote, delimiter from sniff_csv('{DATA_DIR}/csv/later_quotes.csv');
 ----
 "	"	,
 
 query I
-SELECT Prompt FROM sniff_csv('data/csv/real/lineitem_sample.csv');
+SELECT Prompt FROM sniff_csv('{DATA_DIR}/csv/real/lineitem_sample.csv');
 ----
-FROM read_csv('data/csv/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d');
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d');
 
 query IIIIIIIIIIIIIIII
-FROM read_csv('data/csv/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d')  limit 1;
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d')  limit 1;
 ----
 1	15519	785	1	17	24386.67	0.04	0.02	N	O	1996-03-13	1996-02-12	1996-03-22	DELIVER IN PERSON	TRUCK	egular courts above the
 
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/real/lineitem_sample.csv');
+FROM sniff_csv('{DATA_DIR}/csv/real/lineitem_sample.csv');
 ----
-|	(empty)	(empty)	\n	(empty)	0	0	[{'name': column00, 'type': BIGINT}, {'name': column01, 'type': BIGINT}, {'name': column02, 'type': BIGINT}, {'name': column03, 'type': BIGINT}, {'name': column04, 'type': BIGINT}, {'name': column05, 'type': DOUBLE}, {'name': column06, 'type': DOUBLE}, {'name': column07, 'type': DOUBLE}, {'name': column08, 'type': VARCHAR}, {'name': column09, 'type': VARCHAR}, {'name': column10, 'type': DATE}, {'name': column11, 'type': DATE}, {'name': column12, 'type': DATE}, {'name': column13, 'type': VARCHAR}, {'name': column14, 'type': VARCHAR}, {'name': column15, 'type': VARCHAR}]	%Y-%m-%d	NULL	NULL	FROM read_csv('data/csv/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d');
+|	(empty)	(empty)	\n	(empty)	0	0	[{'name': column00, 'type': BIGINT}, {'name': column01, 'type': BIGINT}, {'name': column02, 'type': BIGINT}, {'name': column03, 'type': BIGINT}, {'name': column04, 'type': BIGINT}, {'name': column05, 'type': DOUBLE}, {'name': column06, 'type': DOUBLE}, {'name': column07, 'type': DOUBLE}, {'name': column08, 'type': VARCHAR}, {'name': column09, 'type': VARCHAR}, {'name': column10, 'type': DATE}, {'name': column11, 'type': DATE}, {'name': column12, 'type': DATE}, {'name': column13, 'type': VARCHAR}, {'name': column14, 'type': VARCHAR}, {'name': column15, 'type': VARCHAR}]	%Y-%m-%d	NULL	NULL	FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', auto_detect=false, delim='|', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column00': 'BIGINT', 'column01': 'BIGINT', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'DOUBLE', 'column06': 'DOUBLE', 'column07': 'DOUBLE', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'DATE', 'column11': 'DATE', 'column12': 'DATE', 'column13': 'VARCHAR', 'column14': 'VARCHAR', 'column15': 'VARCHAR'}, dateformat='%Y-%m-%d');
 
 # Test Invalid Path
 statement error
-FROM sniff_csv('data/csv/real/non_ecziste.csv');
+FROM sniff_csv('{DATA_DIR}/csv/real/non_ecziste.csv');
 ----
-No files found that match the pattern "data/csv/real/non_ecziste.csv"
+No files found that match the pattern "{DATA_DIR}/csv/real/non_ecziste.csv"
 
 # Test different sample sizes
 
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/error/mismatch/big_bad.csv', sample_size=1);
+FROM sniff_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', sample_size=1);
 ----
-,	(empty)	(empty)	\n	(empty)	0	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': VARCHAR}]	NULL	NULL	sample_size=1	FROM read_csv('data/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
+,	(empty)	(empty)	\n	(empty)	0	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': VARCHAR}]	NULL	NULL	sample_size=1	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
 
 statement error
-FROM read_csv('data/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
+FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
 ----
 Conversion Error: CSV Error on Line: 2176
 
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/error/mismatch/big_bad.csv', sample_size=10000);
+FROM sniff_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', sample_size=10000);
 ----
-,	(empty)	(empty)	\n	(empty)	0	1	[{'name': 1, 'type': VARCHAR}, {'name': A, 'type': VARCHAR}]	NULL	NULL	sample_size=10000	FROM read_csv('data/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=10000);
+,	(empty)	(empty)	\n	(empty)	0	1	[{'name': 1, 'type': VARCHAR}, {'name': A, 'type': VARCHAR}]	NULL	NULL	sample_size=10000	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=10000);
 
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/error/mismatch/big_bad.csv', sample_size=-1);
+FROM sniff_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', sample_size=-1);
 ----
-,	(empty)	(empty)	\n	(empty)	0	1	[{'name': 1, 'type': VARCHAR}, {'name': A, 'type': VARCHAR}]	NULL	NULL	sample_size=-1	FROM read_csv('data/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=-1);
+,	(empty)	(empty)	\n	(empty)	0	1	[{'name': 1, 'type': VARCHAR}, {'name': A, 'type': VARCHAR}]	NULL	NULL	sample_size=-1	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=-1);
 
 # Test with defined time and timestamp
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/test/dateformat.csv')
+FROM sniff_csv('{DATA_DIR}/csv/test/dateformat.csv')
 ----
-,	(empty)	(empty)	\n	(empty)	0	0	[{'name': column0, 'type': DATE}]	%d/%m/%Y	NULL	NULL	FROM read_csv('data/csv/test/dateformat.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'DATE'}, dateformat='%d/%m/%Y');
+,	(empty)	(empty)	\n	(empty)	0	0	[{'name': column0, 'type': DATE}]	%d/%m/%Y	NULL	NULL	FROM read_csv('{DATA_DIR}/csv/test/dateformat.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'DATE'}, dateformat='%d/%m/%Y');
 
 query I
-FROM read_csv('data/csv/test/dateformat.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column0': 'DATE'}, dateformat='%d/%m/%Y');
+FROM read_csv('{DATA_DIR}/csv/test/dateformat.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column0': 'DATE'}, dateformat='%d/%m/%Y');
 ----
 2019-06-05
 
 
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/auto/time_date_timestamp_yyyy.mm.dd.csv')
+FROM sniff_csv('{DATA_DIR}/csv/auto/time_date_timestamp_yyyy.mm.dd.csv')
 ----
-,	(empty)	(empty)	\n	(empty)	0	1	[{'name': a, 'type': BIGINT}, {'name': b, 'type': VARCHAR}, {'name': t, 'type': TIME}, {'name': d, 'type': DATE}, {'name': ts, 'type': TIMESTAMP}]	%Y.%m.%d	%Y.%m.%d %H:%M:%S	NULL	FROM read_csv('data/csv/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S');
+,	(empty)	(empty)	\n	(empty)	0	1	[{'name': a, 'type': BIGINT}, {'name': b, 'type': VARCHAR}, {'name': t, 'type': TIME}, {'name': d, 'type': DATE}, {'name': ts, 'type': TIMESTAMP}]	%Y.%m.%d	%Y.%m.%d %H:%M:%S	NULL	FROM read_csv('{DATA_DIR}/csv/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S');
 
 query IIIII
-FROM read_csv('data/csv/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S');
+FROM read_csv('{DATA_DIR}/csv/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'a': 'BIGINT', 'b': 'VARCHAR', 't': 'TIME', 'd': 'DATE', 'ts': 'TIMESTAMP'}, dateformat='%Y.%m.%d', timestampformat='%Y.%m.%d %H:%M:%S');
 ----
 123	TEST2	12:12:12	2000-01-01	2000-01-01 12:12:00
 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
@@ -93,35 +93,35 @@ FROM read_csv('data/csv/auto/time_date_timestamp_yyyy.mm.dd.csv', auto_detect=fa
 
 # Test with dirty rows
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/inconsistent_cells.csv')
+FROM sniff_csv('{DATA_DIR}/csv/inconsistent_cells.csv')
 ----
-,	(empty)	(empty)	\n	(empty)	5	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': BIGINT}, {'name': column2, 'type': BIGINT}, {'name': column3, 'type': BIGINT}, {'name': column4, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=5, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
+,	(empty)	(empty)	\n	(empty)	5	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': BIGINT}, {'name': column2, 'type': BIGINT}, {'name': column3, 'type': BIGINT}, {'name': column4, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('{DATA_DIR}/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=5, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
 
 query IIIII
-FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=5, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
+FROM read_csv('{DATA_DIR}/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=5, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
 ----
 1	2	3	4	5
 1	2	3	4	5
 
 # Test Header and quote '
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/timings.csv')
+FROM sniff_csv('{DATA_DIR}/csv/timings.csv')
 ----
-|	(empty)	(empty)	\n	(empty)	0	1	[{'name': tool, 'type': VARCHAR}, {'name': sf, 'type': BIGINT}, {'name': day, 'type': DATE}, {'name': batch_type, 'type': VARCHAR}, {'name': q, 'type': VARCHAR}, {'name': parameters, 'type': VARCHAR}, {'name': time, 'type': DOUBLE}]	%Y-%m-%d	NULL	NULL	FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d');
+|	(empty)	(empty)	\n	(empty)	0	1	[{'name': tool, 'type': VARCHAR}, {'name': sf, 'type': BIGINT}, {'name': day, 'type': DATE}, {'name': batch_type, 'type': VARCHAR}, {'name': q, 'type': VARCHAR}, {'name': parameters, 'type': VARCHAR}, {'name': time, 'type': DOUBLE}]	%Y-%m-%d	NULL	NULL	FROM read_csv('{DATA_DIR}/csv/timings.csv', auto_detect=false, delim='|', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d');
 
 query IIIIIII
-FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='"', escape='\', new_line='\n', skip=0, header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d') order by all limit 1;
+FROM read_csv('{DATA_DIR}/csv/timings.csv', auto_detect=false, delim='|', quote='"', escape='\', new_line='\n', skip=0, header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d') order by all limit 1;
 ----
 Umbra	100	2012-11-29	power	1	{"datetime": "2010-02-26T03:51:21.000+00:00"}	0.05473947525024414
 
 # Test backslash option
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/auto/backslash_escape.csv')
+FROM sniff_csv('{DATA_DIR}/csv/auto/backslash_escape.csv')
 ----
-|	"	\	\n	(empty)	0	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': VARCHAR}, {'name': column2, 'type': VARCHAR}]	NULL	NULL	NULL	FROM read_csv('data/csv/auto/backslash_escape.csv', auto_detect=false, delim='|', quote='"', escape='\', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR', 'column2': 'VARCHAR'});
+|	"	\	\n	(empty)	0	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': VARCHAR}, {'name': column2, 'type': VARCHAR}]	NULL	NULL	NULL	FROM read_csv('{DATA_DIR}/csv/auto/backslash_escape.csv', auto_detect=false, delim='|', quote='"', escape='\', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR', 'column2': 'VARCHAR'});
 
 query III
-FROM read_csv('data/csv/auto/backslash_escape.csv', auto_detect=false, delim='|', quote='"', escape='\', new_line='\n', skip=0, header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR', 'column2': 'VARCHAR'});
+FROM read_csv('{DATA_DIR}/csv/auto/backslash_escape.csv', auto_detect=false, delim='|', quote='"', escape='\', new_line='\n', skip=0, header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR', 'column2': 'VARCHAR'});
 ----
 123	TEST7	text1
 345	TEST7	text"2"
@@ -129,13 +129,13 @@ FROM read_csv('data/csv/auto/backslash_escape.csv', auto_detect=false, delim='|'
 
 # Add tests with the comment option
 query IIIIIIIIIIII
-FROM sniff_csv('data/csv/comments/simple.csv');
+FROM sniff_csv('{DATA_DIR}/csv/comments/simple.csv');
 ----
-;	(empty)	(empty)	\n	#	0	1	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=0, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
+;	(empty)	(empty)	\n	#	0	1	[{'name': a, 'type': BIGINT}, {'name': b, 'type': BIGINT}]	NULL	NULL	NULL	FROM read_csv('{DATA_DIR}/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=0, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
 
 # Test Prompt
 query II
-FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=0, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
+FROM read_csv('{DATA_DIR}/csv/comments/simple.csv', auto_detect=false, delim=';', quote='', escape='', new_line='\n', skip=0, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
 ----
 1	3
 6	7

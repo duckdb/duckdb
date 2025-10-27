@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIII
-from read_csv('data/csv/unescaped_quotes/stops.csv');
+from read_csv('{DATA_DIR}/csv/unescaped_quotes/stops.csv');
 ----
 "de:08115:1303:2:1"	"Weil der Stadt Bahnhof"	"48.7551432936956"	"8.87272294455349"
 "de:08115:1303:2:4"	"Weil der Stadt Bahnhof"	"48.7542193911232"	"8.87191446079767"
@@ -19,7 +19,7 @@ from read_csv('data/csv/unescaped_quotes/stops.csv');
 "de:08317:12007:2:1"	"Lahr Schlüssel "Vis-à-Vis Bus""	"48.3411985847104"	"7.87932997062448"
 
 query IIII
-from read_csv('data/csv/unescaped_quotes/stops.csv', strict_mode=false);
+from read_csv('{DATA_DIR}/csv/unescaped_quotes/stops.csv', strict_mode=false);
 ----
 de:08115:1303:2:1	Weil der Stadt Bahnhof	48.7551432936956	8.87272294455349
 de:08115:1303:2:4	Weil der Stadt Bahnhof	48.7542193911232	8.87191446079767
@@ -32,7 +32,7 @@ de:08317:12007:2:1	Lahr Schlüssel "Vis-à-Vis Bus" more text	48.3411985847104	7
 de:08317:12007:2:1	Lahr Schlüssel "Vis-à-Vis Bus"	48.3411985847104	7.87932997062448
 
 query II
-from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', escape = '"', strict_mode=false);
+from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote.csv', escape = '"', strict_mode=false);
 ----
 1	pedro pdet holanda
 2	pedro pdet holanda
@@ -42,7 +42,7 @@ from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', escape = '"', str
 6	pedro pdet holanda
 
 query II
-from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', strict_mode=false, escape = '', quote = '"', delim = ';');
+from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote.csv', strict_mode=false, escape = '', quote = '"', delim = ';');
 ----
 1	pedro "pdet" holanda
 2	pedro "pdet" holanda
@@ -55,7 +55,7 @@ from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', strict_mode=false
 loop buffer_size 30 35
 
 query II
-from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', strict_mode=false, escape = '', buffer_size = ${buffer_size}, header = 0)
+from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote.csv', strict_mode=false, escape = '', buffer_size = ${buffer_size}, header = 0)
 ----
 1	pedro "pdet" holanda
 2	pedro "pdet" holanda
@@ -67,7 +67,7 @@ from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', strict_mode=false
 endloop
 
 statement ok
-create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line.csv', strict_mode=false, header = 0)
+create table t as from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote_new_line.csv', strict_mode=false, header = 0)
 
 query I
 select count(*) from t;
@@ -78,41 +78,41 @@ statement ok
 drop table t;
 
 statement error
-create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', strict_mode=false, buffer_size = 20, header = 0, delim = ';')
+create table t as from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', strict_mode=false, buffer_size = 20, header = 0, delim = ';')
 ----
 
 statement ok
-create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line.csv', strict_mode=false, buffer_size = 30, header = 0, parallel = false)
+create table t as from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote_new_line.csv', strict_mode=false, buffer_size = 30, header = 0, parallel = false)
 
 statement ok
 drop table t
 
 statement ok
-create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', strict_mode=false, buffer_size = 30, header = 0, parallel = false)
+create table t as from read_csv('{DATA_DIR}/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', strict_mode=false, buffer_size = 30, header = 0, parallel = false)
 
 
 query I
-FROM read_csv('data/csv/unescaped_quotes/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', strict_mode = false)
+FROM read_csv('{DATA_DIR}/csv/unescaped_quotes/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', strict_mode = false)
 ----
 Pedro "the" legend
 Pedro "the
 
 query I
-FROM read_csv('data/csv/unescaped_quotes/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', strict_mode = false)
+FROM read_csv('{DATA_DIR}/csv/unescaped_quotes/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', strict_mode = false)
 ----
 Pedro "the" legend
 Pedro "the
 
 
 query I
-FROM read_csv('data/csv/unescaped_quotes/end_quote_2.csv', columns = {'a':'varchar'}, header = false, quote = '"', strict_mode = false)
+FROM read_csv('{DATA_DIR}/csv/unescaped_quotes/end_quote_2.csv', columns = {'a':'varchar'}, header = false, quote = '"', strict_mode = false)
 ----
 Pedro "the" legend
 Pedro "the
 Pedro "the
 
 query I
-FROM read_csv('data/csv/unescaped_quotes/end_quote_3.csv', columns = {'a':'varchar'}, header = false, quote = '"', strict_mode = false)
+FROM read_csv('{DATA_DIR}/csv/unescaped_quotes/end_quote_3.csv', columns = {'a':'varchar'}, header = false, quote = '"', strict_mode = false)
 ----
 Pedro "the
 Pedro "the" legend
@@ -120,7 +120,7 @@ Pedro "the
 
 # What happens when we mix everything
 query I
-FROM read_csv('data/csv/unescaped_quotes/some_escaped_some_not.csv', columns = {'a':'varchar'}, header = false, quote = '"', escape = '"', strict_mode = false)
+FROM read_csv('{DATA_DIR}/csv/unescaped_quotes/some_escaped_some_not.csv', columns = {'a':'varchar'}, header = false, quote = '"', escape = '"', strict_mode = false)
 ----
 Pedro "the" legend
 Pedro the legend
@@ -129,7 +129,7 @@ Pedro the
 
 # It is not possible to read this with escape set.
 query I
-FROM read_csv('data/csv/unescaped_quotes/end_quote_mixed.csv', columns = {'a':'varchar'}, header = false, quote = '"', escape = '', strict_mode = false)
+FROM read_csv('{DATA_DIR}/csv/unescaped_quotes/end_quote_mixed.csv', columns = {'a':'varchar'}, header = false, quote = '"', escape = '', strict_mode = false)
 ----
 Pedro "the
 Pedro ""the"" legend

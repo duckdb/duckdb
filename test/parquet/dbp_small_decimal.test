@@ -5,7 +5,7 @@
 require parquet
 
 query III
-select * from 'data/parquet-testing/dbp_small_decimal.parquet' ;
+select * from '{DATA_DIR}/parquet-testing/dbp_small_decimal.parquet' ;
 ----
 1	10.0	diez
 2	20.0	vente

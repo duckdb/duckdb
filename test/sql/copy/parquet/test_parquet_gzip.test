@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIIIIIIIIIIIIIII
-select * from parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet')
 ----
 160000 values hashing to 96cd23a0712a6a753aedcb8a2bcfcfa0
 

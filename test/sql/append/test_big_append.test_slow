@@ -1,4 +1,4 @@
-# name: test/sql/append/test_big_append_slow.test
+# name: test/sql/append/test_big_append.test_slow
 # description: Test big append
 # group: [append]
 

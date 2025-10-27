@@ -9,27 +9,27 @@ require parquet
 
 # we can load a parquet file
 query ITIIIIRRTTT nosort parquet_scan_result
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
 ----
 
 # now load a DB from disk
-load __TEST_DIR__/test_extension_restart.db
+load {TEMP_DIR}/test_extension_restart.db
 
 # we can still load the parquet file
 query ITIIIIRRTTT nosort parquet_scan_result
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
 ----
 
 # store it in the db
 statement ok
-CREATE TABLE t1 AS SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.parquet')
+CREATE TABLE t1 AS SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
 
 # now restart the DB
 restart
 
 # we can still load the parquet file
 query ITIIIIRRTTT nosort parquet_scan_result
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
 
 # the file also exists in the database now
 query ITIIIIRRTTT nosort parquet_scan_result

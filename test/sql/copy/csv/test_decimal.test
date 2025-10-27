@@ -7,26 +7,26 @@ PRAGMA enable_verification
 
 
 query I
-FROM 'data/csv/decimal.csv'
+FROM '{DATA_DIR}/csv/decimal.csv'
 ----
 3.521525712040701
 
 query I
-select typeof (col_a) FROM 'data/csv/decimal.csv'
+select typeof (col_a) FROM '{DATA_DIR}/csv/decimal.csv'
 ----
 DOUBLE
 
 # By Default our decimal is (18,3)
 query I
 SELECT * FROM read_csv(
-    'data/csv/decimal.csv',
+    '{DATA_DIR}/csv/decimal.csv',
     columns = {'col_a': 'DECIMAL'});
 ----
 3.522
 
 query I
 SELECT typeof(col_a) FROM read_csv(
-    'data/csv/decimal.csv',
+    '{DATA_DIR}/csv/decimal.csv',
     columns = {'col_a': 'DECIMAL'});
 ----
 DECIMAL(18,3)
@@ -34,21 +34,21 @@ DECIMAL(18,3)
 # We can define our decimal as (18,15)
 query I
 SELECT * FROM read_csv(
-    'data/csv/decimal.csv',
+    '{DATA_DIR}/csv/decimal.csv',
     columns = {'col_a': 'DECIMAL(18,15)'});
 ----
 3.521525712040701
 
 query I
 SELECT typeof(col_a) FROM read_csv(
-    'data/csv/decimal.csv',
+    '{DATA_DIR}/csv/decimal.csv',
     columns = {'col_a': 'DECIMAL(18,15)'});
 ----
 DECIMAL(18,15)
 
 query I
 SELECT typeof(col_a) FROM read_csv(
-    'data/csv/decimal.csv',
+    '{DATA_DIR}/csv/decimal.csv',
      auto_type_candidates=['NULL', 'DECIMAL', 'VARCHAR']);
 ----
 DECIMAL(18,3)
@@ -56,21 +56,21 @@ DECIMAL(18,3)
 # If we have multiple decimal values being defined, it defaults to the last one here
 query I
 SELECT typeof(col_a) FROM read_csv(
-    'data/csv/decimal.csv',
+    '{DATA_DIR}/csv/decimal.csv',
      auto_type_candidates=['NULL', 'DECIMAL(18,3)','DECIMAL(18,15)', 'VARCHAR']);
 ----
 DECIMAL(18,15)
 
 query I
 SELECT typeof(col_a) FROM read_csv(
-    'data/csv/decimal.csv',
+    '{DATA_DIR}/csv/decimal.csv',
      auto_type_candidates=['NULL','DECIMAL(18,15)', 'DECIMAL(18,3)', 'VARCHAR']);
 ----
 DECIMAL(18,3)
 
 query I
 SELECT typeof(col_a) FROM read_csv(
-    'data/csv/decimal.csv',
+    '{DATA_DIR}/csv/decimal.csv',
      auto_type_candidates=['NULL', 'DECIMAL(18,15)', 'VARCHAR']);
 ----
 DECIMAL(18,15)
