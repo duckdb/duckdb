@@ -192,6 +192,19 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 //===--------------------------------------------------------------------===//
 enum class AsOfJoinSourceStage : uint8_t { INNER, RIGHT, DONE };
 
+struct AsOfSourceTask {
+	AsOfSourceTask() {
+	}
+
+	AsOfJoinSourceStage stage = AsOfJoinSourceStage::DONE;
+	//! The hash group
+	idx_t group_idx = 0;
+	//! The first block index count
+	idx_t begin_idx = 0;
+	//! The end block index count
+	idx_t end_idx = 0;
+};
+
 class AsOfPayloadScanner {
 public:
 	using Types = vector<LogicalType>;
@@ -526,7 +539,7 @@ public:
 	bool Scanning() const {
 		return lhs_scanner.get();
 	}
-	void BeginLeftScan(hash_t scan_bin);
+	void BeginLeftScan(AsOfSourceTask &task_p);
 	bool NextLeft();
 	void ScanLeft();
 	void EndLeftScan();
@@ -552,7 +565,7 @@ public:
 	//	Chunk may be empty
 	void GetData(ExecutionContext &context, DataChunk &chunk);
 	bool HasMoreData() const {
-		return !fetch_next_left || (lhs_scanner && lhs_scanner->Remaining());
+		return !fetch_next_left || (left_task.begin_idx < left_task.end_idx);
 	}
 
 	ClientContext &client;
@@ -565,6 +578,7 @@ public:
 	optional_ptr<AsOfHashGroup> asof_hash_group;
 
 	//	LHS scanning
+	AsOfSourceTask left_task;
 	optional_ptr<SortedRun> left_group;
 	OuterJoinMarker left_outer;
 	unique_ptr<ExternalBlockIteratorState> left_itr;
@@ -642,8 +656,10 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	}
 }
 
-void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
+void AsOfProbeBuffer::BeginLeftScan(AsOfSourceTask &task) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
+	left_task = task;
+	const auto scan_bin = task.group_idx;
 
 	asof_hash_group = gsource.asof_groups[scan_bin].get();
 
@@ -692,6 +708,7 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	}
 
 	lhs_scanner = make_uniq<AsOfPayloadScanner>(*left_group, *gsink.hashed_sorts[0]);
+	lhs_scanner->Seek(left_task.begin_idx);
 	left_itr = CreateIteratorState(*left_group);
 
 	// We are only probing the corresponding right side bin, which may be empty
@@ -707,17 +724,14 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 }
 
 bool AsOfProbeBuffer::NextLeft() {
-	if (!lhs_scanner || !lhs_scanner->Remaining()) {
-		return false;
-	}
-
-	return true;
+	return left_task.begin_idx < left_task.end_idx;
 }
 
 void AsOfProbeBuffer::ScanLeft() {
 	//	Scan the next sorted chunk
 	lhs_payload.Reset();
 	lhs_scanner->Scan(lhs_payload);
+	++left_task.begin_idx;
 
 	//	Compute the join keys
 	lhs_keys.Reset();
@@ -987,7 +1001,7 @@ public:
 		}
 	}
 
-	idx_t BeginRightScan(const idx_t hash_bin);
+	idx_t BeginRightScan(const AsOfSourceTask &task);
 
 	AsOfGlobalSourceState &gsource;
 	ExecutionContext &context;
@@ -995,8 +1009,9 @@ public:
 	//! The left side partition being probed
 	AsOfProbeBuffer probe_buffer;
 
+	//! The rhs task
+	AsOfSourceTask right_task;
 	//! The rhs group
-	idx_t hash_bin;
 	HashGroupPtr hash_group;
 	//! The read cursor
 	unique_ptr<AsOfPayloadScanner> scanner;
@@ -1015,8 +1030,9 @@ AsOfLocalSourceState::AsOfLocalSourceState(ExecutionContext &context, AsOfGlobal
 	rhs_chunk.Initialize(context.client, op.children[1].get().GetTypes());
 }
 
-idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
-	hash_bin = hash_bin_p;
+idx_t AsOfLocalSourceState::BeginRightScan(const AsOfSourceTask &task) {
+	right_task = task;
+	const auto hash_bin = right_task.group_idx;
 
 	auto &asof_groups = gsource.asof_groups;
 	if (hash_bin >= asof_groups.size()) {
@@ -1029,6 +1045,7 @@ idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	}
 	auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
 	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsink.hashed_sorts[1]);
+	scanner->Seek(right_task.begin_idx);
 
 	rhs_matches = asof_groups[hash_bin]->right_outer.GetMatches();
 
@@ -1069,8 +1086,16 @@ bool AsOfGlobalSourceState::AssignTask(AsOfLocalSourceState &lsource) {
 	case AsOfJoinSourceStage::INNER:
 		while (next_left < asof_groups.size()) {
 			//	More to flush
-			const auto left_bin = next_left++;
-			lsource.probe_buffer.BeginLeftScan(left_bin);
+			AsOfSourceTask left_task;
+			left_task.stage = AsOfJoinSourceStage::INNER;
+			left_task.group_idx = next_left++;
+			if (left_task.group_idx < asof_groups.size()) {
+				auto &left_group = asof_groups[left_task.group_idx]->left_group;
+				if (left_group) {
+					left_task.end_idx = left_group->key_data->ChunkCount();
+				}
+			}
+			lsource.probe_buffer.BeginLeftScan(left_task);
 			if (!lsource.TaskFinished()) {
 				return true;
 			} else {
@@ -1080,8 +1105,16 @@ bool AsOfGlobalSourceState::AssignTask(AsOfLocalSourceState &lsource) {
 		break;
 	case AsOfJoinSourceStage::RIGHT:
 		while (next_right < asof_groups.size()) {
-			const auto right_bin = next_right++;
-			lsource.BeginRightScan(right_bin);
+			AsOfSourceTask right_task;
+			right_task.stage = AsOfJoinSourceStage::RIGHT;
+			right_task.group_idx = next_right++;
+			if (right_task.group_idx < asof_groups.size()) {
+				auto &right_group = asof_groups[right_task.group_idx]->right_group;
+				if (right_group) {
+					right_task.end_idx = right_group->key_data->ChunkCount();
+				}
+			}
+			lsource.BeginRightScan(right_task);
 			if (!lsource.TaskFinished()) {
 				return true;
 			} else {
@@ -1135,6 +1168,7 @@ void AsOfLocalSourceState::ExecuteOuterTask(DataChunk &chunk) {
 	while (!result_count) {
 		const auto rhs_position = scanner->Scanned();
 		scanner->Scan(rhs_chunk);
+		++right_task.begin_idx;
 
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
