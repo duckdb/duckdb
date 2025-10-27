@@ -5,13 +5,11 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -363,12 +361,12 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	auto &rhs_groups = hashed_groups[1];
 	right_outers.reserve(rhs_groups.size());
 	for (const auto &hash_group : rhs_groups) {
-		right_outers.emplace_back(OuterJoinMarker(is_right_outer));
+		right_outers.emplace_back(is_right_outer);
 		right_outers.back().Initialize(hash_group ? hash_group->Count() : 0);
 	}
 }
 
-enum class SortKeyPrefixComparisonType : uint8_t { FIXED, VARCHAR, BLOB, STRUCT, LIST, ARRAY };
+enum class SortKeyPrefixComparisonType : uint8_t { FIXED, VARCHAR, NESTED };
 
 struct SortKeyPrefixComparisonColumn {
 	SortKeyPrefixComparisonType type;
@@ -385,45 +383,63 @@ struct SortKeyPrefixComparisonResult {
 
 struct SortKeyPrefixComparison {
 	unsafe_vector<SortKeyPrefixComparisonColumn> columns;
+	//! Two row buffer for measuring lhs and rhs widths for nested types.
+	//! Gross, but there is currently no way to measure the width of a single key
+	//! except as a side-effect of decoding it...
+	DataChunk decoded;
 
 	template <class SORT_KEY>
-	SortKeyPrefixComparisonResult Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) const {
+	SortKeyPrefixComparisonResult Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) {
 		SortKeyPrefixComparisonResult result {0, ExpressionType::COMPARE_EQUAL};
 
 		auto lhs_copy = lhs;
-		string_t lhs_bytes;
-		lhs_copy.Deconstruct(lhs_bytes);
-		auto lhs_ptr = lhs_bytes.GetData();
+		string_t lhs_key;
+		lhs_copy.Deconstruct(lhs_key);
+		auto lhs_ptr = lhs_key.GetData();
 
 		auto rhs_copy = rhs;
-		string_t rhs_bytes;
-		rhs_copy.Deconstruct(rhs_bytes);
-		auto rhs_ptr = rhs_bytes.GetData();
+		string_t rhs_key;
+		rhs_copy.Deconstruct(rhs_key);
+		auto rhs_ptr = rhs_key.GetData();
 
-		for (const auto &col : columns) {
-			auto width = col.size;
+		//	Partition keys are always sorted this way.
+		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST);
+
+		for (column_t col_idx = 0; col_idx < columns.size(); ++col_idx) {
+			const auto &col = columns[col_idx];
+			auto &vec = decoded.data[col_idx];
+			auto lhs_width = col.size;
+			auto rhs_width = col.size;
 			int cmp = 1;
 			switch (col.type) {
 			case SortKeyPrefixComparisonType::FIXED:
+				cmp = memcmp(lhs_ptr, rhs_ptr, lhs_width);
 				break;
-			case SortKeyPrefixComparisonType::BLOB:
 			case SortKeyPrefixComparisonType::VARCHAR:
 				//	Include first null byte.
-				width = 1 + MinValue<size_t>(strlen(lhs_ptr), strlen(rhs_ptr));
+				lhs_width = 1 + strlen(lhs_ptr);
+				rhs_width = 1 + strlen(rhs_ptr);
+				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
 				break;
-			default:
+			case SortKeyPrefixComparisonType::NESTED:
+				decoded.Reset();
+				lhs_width = CreateSortKeyHelpers::DecodeSortKey(lhs_key, vec, 0, modifiers);
+				rhs_width = CreateSortKeyHelpers::DecodeSortKey(rhs_key, vec, 1, modifiers);
+				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
+				if (!cmp) {
+					cmp = (rhs_width < lhs_width) - (lhs_width < rhs_width);
+				}
 				break;
 			}
 
-			cmp = memcmp(lhs_ptr, rhs_ptr, width);
 			if (cmp) {
 				result.type = (cmp < 0) ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_GREATERTHAN;
 				return result;
 			}
 
 			++result.column_index;
-			lhs_ptr += width;
-			rhs_ptr += width;
+			lhs_ptr += lhs_width;
+			rhs_ptr += rhs_width;
 		}
 
 		return result;
@@ -552,26 +568,22 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
 	//	If we have equality predicates, set up the prefix data.
+	vector<LogicalType> prefix_types;
 	for (idx_t i = 0; i < op.conditions.size() - 1; ++i) {
 		const auto &cond = op.conditions[i];
 		const auto &type = cond.left->return_type;
+		prefix_types.emplace_back(type);
 		SortKeyPrefixComparisonColumn col;
 		col.size = DConstants::INVALID_INDEX;
 		switch (type.id()) {
 		case LogicalTypeId::VARCHAR:
+		case LogicalTypeId::BLOB:
 			col.type = SortKeyPrefixComparisonType::VARCHAR;
 			break;
-		case LogicalTypeId::BLOB:
-			col.type = SortKeyPrefixComparisonType::BLOB;
-			break;
 		case LogicalTypeId::STRUCT:
-			col.type = SortKeyPrefixComparisonType::STRUCT;
-			break;
 		case LogicalTypeId::LIST:
-			col.type = SortKeyPrefixComparisonType::LIST;
-			break;
 		case LogicalTypeId::ARRAY:
-			col.type = SortKeyPrefixComparisonType::ARRAY;
+			col.type = SortKeyPrefixComparisonType::NESTED;
 			break;
 		default:
 			col.type = SortKeyPrefixComparisonType::FIXED;
@@ -579,6 +591,10 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 			break;
 		}
 		prefix.columns.emplace_back(col);
+	}
+	if (!prefix_types.empty()) {
+		//	LHS, RHS
+		prefix.decoded.Initialize(client, prefix_types, 2);
 	}
 }
 
