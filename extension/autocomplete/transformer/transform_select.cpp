@@ -134,7 +134,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWhereClause(PEGTran
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformTargetList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformTargetList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto target_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
 	vector<unique_ptr<ParsedExpression>> result;
@@ -144,13 +145,15 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformTargetList(
 	return result;
 }
 
-
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAliasedExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAliasedExpression(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionAsCollabel(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformExpressionAsCollabel(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto collabel_or_string = list_pr.Child<ListParseResult>(2);
@@ -158,7 +161,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionAsCollabe
 	return expr;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColIdExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColIdExpression(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto colid = list_pr.Child<ListParseResult>(0);
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
@@ -166,7 +170,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColIdExpression(PEG
 	return expr;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionOptIdentifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformExpressionOptIdentifier(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto opt_identifier = list_pr.Child<OptionalParseResult>(1);

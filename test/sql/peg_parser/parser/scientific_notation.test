@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/parser/recursive.test
+# name: test/sql/peg_parser/parser/scientific_notation.test
 # description: Test scientific notation in peg parser
 # group: [parser]
 

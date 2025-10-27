@@ -198,6 +198,10 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformSliceBound);
 	REGISTER_TRANSFORM(TransformEndSliceBound);
 	REGISTER_TRANSFORM(TransformStepSliceBound);
+
+	REGISTER_TRANSFORM(TransformTableReservedColumnName);
+	REGISTER_TRANSFORM(TransformTableQualification);
+	REGISTER_TRANSFORM(TransformStarExpression);
 }
 
 void PEGTransformerFactory::RegisterInsert() {
@@ -285,6 +289,8 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
 	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
 	Register("SettingName", &TransformIdentifierOrKeyword);
+
+	Register("ReservedSchemaQualification", &TransformSchemaQualification);
 }
 
 void PEGTransformerFactory::RegisterEnums() {
