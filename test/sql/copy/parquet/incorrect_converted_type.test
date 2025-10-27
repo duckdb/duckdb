@@ -5,46 +5,46 @@
 require parquet
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_bigint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_bigint.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_date.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_date.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_int.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_int.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_smallint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_smallint.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_timestamp.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_timestamp.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_timestamp_ms.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_timestamp_ms.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_tinyint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_tinyint.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_ubigint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_ubigint.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_uinteger.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_uinteger.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_usmallint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_usmallint.parquet';
 ----
 
 statement error
-SELECT * FROM 'data/parquet-testing/broken/broken_utinyint.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_utinyint.parquet';
 ----
 

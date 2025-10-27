@@ -54,8 +54,6 @@ static const TestConfigOption test_config_options[] = {
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
-    {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
-     nullptr},
     {"select_tag", "Select tests which match named tag (as singleton set; multiple sets are OR'd)",
      LogicalType::VARCHAR, TestConfiguration::AppendSelectTagSet},
     {"select_tag_set", "Select tests which match _all_ named tags (multiple sets are OR'd)",
@@ -106,6 +104,42 @@ void TestConfiguration::Initialize() {
 			ParseOption("summarize_failures", Value(true));
 		}
 	}
+
+	working_dir = FileSystem::GetWorkingDirectory();
+	test_uuid = UUID::ToString(UUID::GenerateRandomUUID());
+	UpdateEnvironment();
+}
+
+void TestConfiguration::UpdateEnvironment() {
+	// Setup standard vars
+
+	// XXX: UUID used by ducklake to avoid collisions, is there a better way?
+	test_env["TEST_UUID"] = test_uuid;
+	test_env["BUILD_DIR"] = string(DUCKDB_BUILD_DIRECTORY);
+	test_env["WORKING_DIR"] = working_dir;        // can be overridden per runner
+	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
+
+	string temp_dir = TestDirectoryPath();
+	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
+	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
+}
+
+string TestConfiguration::GetWorkingDirectory() {
+	return working_dir;
+}
+
+bool TestConfiguration::ChangeWorkingDirectory(const string &dir) {
+	bool rv = false;
+	// set CWD first, then get it -- this gets us normalized absolute path for free
+	// making the comparison below meaningful
+	FileSystem::SetWorkingDirectory(dir);
+	const auto &normalized = FileSystem::GetWorkingDirectory();
+	if (working_dir != normalized) {
+		rv = true;
+		working_dir = normalized;
+		UpdateEnvironment();
+	}
+	return rv;
 }
 
 bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv, idx_t &i) {
@@ -208,15 +242,6 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	return tests_to_be_skipped.count(test_name);
-}
-
-string TestConfiguration::DataLocation() {
-	string res = GetOptionOrDefault("data_location", string("data/"));
-	// Force DataLocation to end with a '/'
-	if (res.back() != '/') {
-		res += "/";
-	}
-	return res;
 }
 
 string TestConfiguration::OnInitCommand() {
