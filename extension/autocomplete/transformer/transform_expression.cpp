@@ -286,7 +286,7 @@ PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer
 	return expr;
 }
 
-// IsExpression <- IsDistinctFromExpression (IsTest)*
+// IsExpression <- IsDistinctFromExpression IsTest*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsExpression(PEGTransformer &transformer,
                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -297,13 +297,46 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsExpression(PEGTra
 	}
 	auto is_test_expr_repeat = is_test_opt.optional_result->Cast<RepeatParseResult>();
 	for (auto &is_test_expr : is_test_expr_repeat.children) {
-		throw NotImplementedException("IsTest has not yet been implemented.");
-		auto expr_type = transformer.Transform<ExpressionType>(is_test_expr);
-		vector<unique_ptr<ParsedExpression>> inner_list_children;
-		inner_list_children.push_back(std::move(expr));
-		expr = make_uniq<OperatorExpression>(expr_type, std::move(inner_list_children));
+		auto is_expr = transformer.Transform<unique_ptr<ParsedExpression>>(is_test_expr);
+		if (is_expr->GetExpressionClass() == ExpressionClass::COMPARISON) {
+			auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(is_expr));
+			compare_expr->left = std::move(expr);
+			expr = std::move(compare_expr);
+		} else if (is_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+			auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(is_expr));
+			operator_expr->children.insert(operator_expr->children.begin(), std::move(expr));
+			expr = std::move(operator_expr);
+		} else {
+			throw InternalException("Unexpected expression encountered in IsExpression: %s", ExpressionClassToString(is_expr->GetExpressionClass()));
+		}
 	}
 	return expr;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsTest(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto not_expr = list_pr.Child<OptionalParseResult>(1);
+	auto inner_list_pr = list_pr.Child<ListParseResult>(2);
+	auto literal_value = transformer.TransformEnum<Value>(inner_list_pr.Child<ChoiceParseResult>(0).result);
+	if (literal_value.IsNull()) {
+		auto expr_type = not_expr.HasResult() ? ExpressionType::OPERATOR_IS_NOT_NULL : ExpressionType::OPERATOR_IS_NULL;
+		return make_uniq<OperatorExpression>(expr_type, nullptr);
+	}
+	auto expr_type = not_expr.HasResult() ? ExpressionType::COMPARE_NOT_DISTINCT_FROM : ExpressionType::COMPARE_DISTINCT_FROM;
+	return make_uniq<ComparisonExpression>(expr_type, nullptr, make_uniq<ConstantExpression>(literal_value));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNotNull(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, nullptr);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNull(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, nullptr);
 }
 
 // IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*

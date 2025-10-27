@@ -147,6 +147,10 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformLogicalAndExpression);
 	REGISTER_TRANSFORM(TransformLogicalNotExpression);
 	REGISTER_TRANSFORM(TransformIsExpression);
+	REGISTER_TRANSFORM(TransformIsTest);
+	REGISTER_TRANSFORM(TransformIsLiteral);
+	REGISTER_TRANSFORM(TransformIsNotNull);
+	REGISTER_TRANSFORM(TransformIsNull);
 	REGISTER_TRANSFORM(TransformIsDistinctFromExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeOp);
@@ -286,6 +290,7 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<Value>("FalseLiteral", Value(false));
 	RegisterEnum<Value>("TrueLiteral", Value(true));
 	RegisterEnum<Value>("NullLiteral", Value());
+	RegisterEnum<Value>("UnknownLiteral", Value());
 
 	RegisterEnum<TransactionModifierType>("ReadOnly", TransactionModifierType::TRANSACTION_READ_ONLY);
 	RegisterEnum<TransactionModifierType>("ReadWrite", TransactionModifierType::TRANSACTION_READ_WRITE);

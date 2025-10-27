@@ -45,8 +45,8 @@ DELETE FROM integers WHERE i <> i::DECIMAL(9,1);
 statement ok
 DELETE FROM integers WHERE i%3=0;
 
-# statement ok
-# DELETE FROM integers WHERE i IS NULL;
+statement ok
+DELETE FROM integers WHERE i IS NULL;
 
 statement ok
 DELETE FROM integers WHERE i BETWEEN 200 AND 300;

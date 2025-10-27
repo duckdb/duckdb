@@ -104,7 +104,9 @@ LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
 LogicalNotExpression <- 'NOT'* IsExpression
 # LEVEL 4
 IsExpression <- IsDistinctFromExpression IsTest*
-IsTest <- ('IS' 'NOT'? ('TRUE' / 'FALSE' / 'UNKNOWN' / 'NULL')) / NotNull / IsNull
+IsTest <- IsLiteral / NotNull / IsNull
+IsLiteral <- 'IS' 'NOT'? (TrueLiteral / FalseLiteral / NullLiteral / UnknownLiteral)
+UnknownLiteral <- 'UNKNOWN'
 NotNull <- ('NOT' 'NULL') / 'NOTNULL'
 IsNull <- 'ISNULL'
 # LEVEL 5 (Split because IsDistinctFromExpression allows post expression while IsOperator does not)
