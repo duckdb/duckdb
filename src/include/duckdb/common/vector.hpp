@@ -22,9 +22,18 @@ class vector : public std::vector<DATA_TYPE, ALLOCATOR> { // NOLINT: matching na
 public:
 	using original = std::vector<DATA_TYPE, ALLOCATOR>;
 	using original::original;
+	using value_type = typename original::value_type;
+	using allocator_type = typename original::allocator_type;
 	using size_type = typename original::size_type;
-	using const_reference = typename original::const_reference;
+	using difference_type = typename original::difference_type;
 	using reference = typename original::reference;
+	using const_reference = typename original::const_reference;
+	using pointer = typename original::pointer;
+	using const_pointer = typename original::const_pointer;
+	using iterator = typename original::iterator;
+	using const_iterator = typename original::const_iterator;
+	using reverse_iterator = typename original::reverse_iterator;
+	using const_reverse_iterator = typename original::const_reverse_iterator;
 
 private:
 	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
