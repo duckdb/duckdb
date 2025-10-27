@@ -70,6 +70,11 @@ struct GeoParquetColumnMetadata {
 
 	// Used to track the "primary" geometry column (if any)
 	idx_t insertion_index = 0;
+
+	GeoParquetColumnMetadata() {
+		geometry_encoding = GeoParquetColumnEncoding::WKB;
+		stats.SetEmpty();
+	}
 };
 
 class GeoParquetFileMetadata {
@@ -91,7 +96,6 @@ public:
 	bool IsGeometryColumn(const string &column_name) const;
 
 	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
-	static LogicalType GeometryType();
 
 private:
 	mutex write_lock;
