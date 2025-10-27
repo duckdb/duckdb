@@ -53,7 +53,7 @@ struct DictionaryCompressionStorage {
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
-	                                                    unique_ptr<AnalyzeState> state);
+	                                                    const unique_ptr<AnalyzeState> &state);
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
@@ -82,12 +82,18 @@ unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnD
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = state_p.Cast<DictionaryCompressionAnalyzeState>();
+	state.analyze_state->dict_sizes_per_segment.reserve(count);
+	state.analyze_state->unique_counts_per_segment.reserve(count);
 	return state.analyze_state->UpdateState(input, count);
 }
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &analyze_state = state_p.Cast<DictionaryCompressionAnalyzeState>();
 	auto &state = *analyze_state.analyze_state;
+
+	if (state.current_tuple_count != 0) {
+		state.Flush(true);
+	}
 
 	auto width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);
 	auto req_space = DictionaryCompression::RequiredSpace(state.current_tuple_count, state.current_unique_count,
@@ -101,8 +107,15 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 // Compress
 //===--------------------------------------------------------------------===//
 unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
-                                                                           unique_ptr<AnalyzeState> state) {
-	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state->info);
+                                                                           const unique_ptr<AnalyzeState> &state) {
+	const auto &analyze_state = state->Cast<DictionaryCompressionAnalyzeState>();
+	auto &actual_state = *analyze_state.analyze_state;
+	const idx_t curr_segment_idx = checkpoint_data.GetCheckpointState().column_data.data.ReferenceSegments().size() - 1;
+	return make_uniq<DictionaryCompressionCompressState>(
+		checkpoint_data,
+		state->info,
+		actual_state.unique_counts_per_segment[curr_segment_idx],
+		actual_state.dict_sizes_per_segment[curr_segment_idx]);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {

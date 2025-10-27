@@ -26,16 +26,14 @@ struct StringCastOperator {
 	static TGT Operation(SRC input) {
 		return input;
 	}
-	// Taken from ParquetBaseStringOperator in parquet_write_operators.hpp
+	// Not needed for our use-case
 	template <class SRC, class TGT>
 	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
-		ser.Write<uint32_t>(target_value.GetSize());
-		ser.WriteData(const_data_ptr_cast(target_value.GetData()), target_value.GetSize());
 	}
-	// Taken from ParquetBaseStringOperator in parquet_write_operators.hpp
+	// Not needed for our use-case
 	template <class SRC, class TGT>
 	static idx_t WriteSize(const TGT &target_value) {
-		return sizeof(uint32_t) + target_value.GetSize();
+		return 0;
 	}
 };
 
@@ -79,7 +77,7 @@ public:
 	void Replace(uint32_t index, SRC &value) {
 		dictionary[index].value = value;
 	}
-
+	//TODO: Possibly create a new InsertWithoutChecking() method that doesn't check if full, as we know we allocated exactly enough.
 	//! Insert value into dictionary (if not full)
 	void Insert(SRC value) {
 		if (full) {
