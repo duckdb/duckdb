@@ -373,7 +373,6 @@ TEST_CASE("Test profiling with the appender", "[capi]") {
 TEST_CASE("Test profiling with the non-query appender", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
-	duckdb_state status;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	tester.Query("CREATE TABLE test (i INTEGER)");
