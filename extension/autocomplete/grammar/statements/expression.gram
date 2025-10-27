@@ -153,11 +153,7 @@ PlusOperator <- '+'
 MinusOperator <- '-'
 # LEVEL 11
 MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
-Factor <- MultiplyOperator / DivisionOperator / FloorDivisionOperator / ModuloOperator
-MultiplyOperator <- '*'
-DivisionOperator <- '/'
-FloorDivisionOperator <- '//'
-ModuloOperator <- '%'
+Factor <- '*' / '/' / '//' / '%'
 # LEVEL 12
 ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
 ExponentOperator <- '^' / '**'

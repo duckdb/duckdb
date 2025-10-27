@@ -298,6 +298,7 @@ private:
                                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformMultiplicativeExpression(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result);
+	static string TransformFactor(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformExponentiationExpression(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformCollateExpression(PEGTransformer &transformer,

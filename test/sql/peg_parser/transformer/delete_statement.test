@@ -25,16 +25,19 @@ set allow_parser_override_extension=strict_when_supported;
 query I
 DELETE FROM integers WHERE i%2 AND i<157353;
 ----
-1
+2
 
 statement ok
 DELETE FROM integers WHERE i=2;
 
 statement ok
+create table test (pk bigint);
+
+statement ok
 DELETE FROM test WHERE pk > 738645 AND pk < 978908;
 
-# statement ok
-# DELETE FROM integers WHERE i%3=0;
+statement ok
+DELETE FROM integers WHERE i%3=0;
 #
 # statement ok
 # DELETE FROM integers WHERE i BETWEEN 200 AND 300;

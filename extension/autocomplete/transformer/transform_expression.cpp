@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 
 namespace duckdb {
 
@@ -247,7 +248,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalOrExpression
 	for (auto &or_expr : or_expr_repeat.children) {
 		auto &inner_list_pr = or_expr->Cast<ListParseResult>();
 		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
-		expr = make_uniq<OperatorExpression>(ExpressionType::CONJUNCTION_OR, std::move(expr), std::move(right_expr));
+		expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(expr), std::move(right_expr));
 	}
 	return expr;
 }
@@ -265,7 +266,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalAndExpressio
 	for (auto &and_expr : and_expr_repeat.children) {
 		auto &inner_list_pr = and_expr->Cast<ListParseResult>();
 		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
-		expr = make_uniq<OperatorExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr), std::move(right_expr));
+		expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr), std::move(right_expr));
 	}
 	return expr;
 }
@@ -335,7 +336,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformComparisonExpressio
 		auto &inner_list_pr = comparison_expr->Cast<ListParseResult>();
 		auto comparison_operator = transformer.Transform<ExpressionType>(inner_list_pr.Child<ListParseResult>(0));
 		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
-		expr = make_uniq<OperatorExpression>(comparison_operator, std::move(expr), std::move(right_expr));
+		expr = make_uniq<ComparisonExpression>(comparison_operator, std::move(expr), std::move(right_expr));
 	}
 	return expr;
 }
@@ -402,7 +403,22 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMultiplicativeExpre
 	if (!factor_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("Factor has not yet been implemented");
+	auto factor_repeat = factor_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &factor_expr : factor_repeat.children) {
+		auto &inner_list_pr = factor_expr->Cast<ListParseResult>();
+		auto factor = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
+		vector<unique_ptr<ParsedExpression>> factor_children;
+		factor_children.push_back(std::move(expr));
+		factor_children.push_back( transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
+		expr = make_uniq<FunctionExpression>(factor, std::move(factor_children));
+	}
+	return expr;
+}
+
+string PEGTransformerFactory::TransformFactor(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
 // ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
