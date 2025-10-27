@@ -44,7 +44,8 @@ static ART &GetARTIndex(Connection &con, const string &table_name, const string 
 // work -- it includes a "regular case" with an index on the first two physical columns, and an index on
 // physical columns that are interleaved between  generated columns to test that the buffered mappings work as
 // intended.
-TEST_CASE("Test ART index with WAL replay - generated columns and interleaved inserts/deletes", "[wal][art-wal-replay]") {
+TEST_CASE("Test ART index with WAL replay - generated columns and interleaved inserts/deletes",
+          "[wal][art-wal-replay]") {
 	duckdb::unique_ptr<QueryResult> result;
 	auto db_path = TestCreatePath("art_wal_gen_test.db");
 	DeleteDatabase(db_path);

@@ -16,11 +16,15 @@ namespace duckdb {
 
 class ColumnDataCollection;
 
-enum class BufferedIndexReplay : uint8_t { IDX_INSERT = 0, IDX_DELETE = 1 };
+enum class BufferedIndexReplay : uint8_t { INSERT = 0, DELETE = 1 };
 
 struct BufferedIndexData {
 	BufferedIndexReplay type;
 	unique_ptr<ColumnDataCollection> data;
+
+	BufferedIndexData(BufferedIndexReplay replay_type, unique_ptr<ColumnDataCollection> data_p)
+	    : type(replay_type), data(std::move(data_p)) {
+	}
 };
 
 class UnboundIndex final : public Index {

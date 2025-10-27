@@ -159,15 +159,15 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
                                       const vector<StorageIndex> &mapped_column_ids) {
 	for (auto &replay : buffered_replays) {
 		ColumnDataScanState state;
-		std::unique_ptr<ColumnDataCollection> buffered_data = std::move(replay.data);
-		buffered_data->InitializeScan(state);
+		auto &buffered_data = *replay.data;
+		buffered_data.InitializeScan(state);
 
 		DataChunk scan_chunk;
-		buffered_data->InitializeScanChunk(scan_chunk);
+		buffered_data.InitializeScanChunk(scan_chunk);
 		DataChunk table_chunk;
 		table_chunk.InitializeEmpty(table_types);
 
-		while (buffered_data->Scan(state, scan_chunk)) {
+		while (buffered_data.Scan(state, scan_chunk)) {
 			for (idx_t i = 0; i < scan_chunk.ColumnCount() - 1; i++) {
 				auto col_id = mapped_column_ids[i].GetPrimaryIndex();
 				table_chunk.data[col_id].Reference(scan_chunk.data[i]);
@@ -175,7 +175,7 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
 			table_chunk.SetCardinality(scan_chunk.size());
 
 			switch (replay.type) {
-			case BufferedIndexReplay::IDX_INSERT: {
+			case BufferedIndexReplay::INSERT: {
 				IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
 				auto error = Append(table_chunk, scan_chunk.data.back(), index_append_info);
 				if (error.HasError()) {
@@ -183,7 +183,7 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
 				}
 				continue;
 			}
-			case BufferedIndexReplay::IDX_DELETE: {
+			case BufferedIndexReplay::DELETE: {
 				Delete(table_chunk, scan_chunk.data.back());
 			}
 			}

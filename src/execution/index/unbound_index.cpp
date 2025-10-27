@@ -1,6 +1,5 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -44,7 +43,7 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 
 	auto &allocator = Allocator::Get(db);
 
-	BufferedIndexData buffered_data {replay_type, make_uniq<ColumnDataCollection>(allocator, types)};
+	BufferedIndexData buffered_data(replay_type, make_uniq<ColumnDataCollection>(allocator, types));
 
 	//! First time we are buffering data, canonical column_id mapping is stored.
 	//! This should be a sorted list of all the physical offsets of Indexed columns on this table.

@@ -605,16 +605,8 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		}
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
 		if (leaf) {
-			if (leaf->GetType() == NType::LEAF_INLINED) {
-				D_ASSERT(leaf->GetRowId() != row_id_keys[i].GetRowId());
-				continue;
-			}
-			auto lookup_result = ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]);
-			D_ASSERT(!lookup_result);
-		}
-
-		if (leaf && leaf->GetType() == NType::LEAF_INLINED) {
-			D_ASSERT(leaf->GetRowId() != row_id_keys[i].GetRowId());
+			auto contains_row_id = ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]);
+			D_ASSERT(!contains_row_id);
 		}
 	}
 #endif
