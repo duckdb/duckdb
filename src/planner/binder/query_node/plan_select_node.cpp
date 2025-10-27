@@ -59,7 +59,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		// Introduce a global aggregate (with zero aggregate expressions) so that HAVING is evaluated once
 		// over a single row result, matching PostgreSQL semantics.
 		auto aggregate = make_uniq<LogicalAggregate>(statement.group_index, statement.aggregate_index,
-		                                         std::move(statement.aggregates));
+		                                             std::move(statement.aggregates));
 		// no groups
 		aggregate->groupings_index = statement.groupings_index;
 		// grouping sets/functions are irrelevant here but keep structure intact
