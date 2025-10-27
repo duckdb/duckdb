@@ -4,7 +4,7 @@
 
 # issue #6214
 
-load __TEST_DIR__/test_unique_index.db
+load {LOCAL_TEMP_DIR}/test_unique_index.db
 
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER);

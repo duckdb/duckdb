@@ -2,7 +2,7 @@
 # description: Test simple external join
 # group: [external]
 
-load __TEST_DIR__/simple_external_join.db
+load {LOCAL_TEMP_DIR}/simple_external_join.db
 
 statement ok
 create table t1 (i varchar)

@@ -2,7 +2,7 @@
 # description: Test parallel insert with a selective filter
 # group: [parallel]
 
-load __TEST_DIR__/parallel_insert_selective.db
+load {LOCAL_TEMP_DIR}/parallel_insert_selective.db
 
 query I
 CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);

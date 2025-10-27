@@ -1,7 +1,7 @@
 # name: test/sql/catalog/dependencies/test_write_after_rename.test
 # group: [dependencies]
 
-load __TEST_DIR__/create_after_rename.db
+load {LOCAL_TEMP_DIR}/create_after_rename.db
 
 # Create 'tbl'
 statement ok

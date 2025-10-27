@@ -3,7 +3,7 @@
 # group: [struct]
 
 # load the DB from disk
-load __TEST_DIR__/struct_default_test.db
+load {LOCAL_TEMP_DIR}/struct_default_test.db
 
 statement ok
 CREATE TABLE a(i ROW(a INT, b INT) DEFAULT ({'a': 7, 'b': 2}))

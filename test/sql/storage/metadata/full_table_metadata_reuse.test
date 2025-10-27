@@ -2,7 +2,7 @@
 # description: Test full table metadata reuse
 # group: [metadata]
 
-load __TEST_DIR__/full_table_metadata_reuse.test.db
+load {LOCAL_TEMP_DIR}/full_table_metadata_reuse.test.db
 
 statement ok
 BEGIN

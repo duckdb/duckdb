@@ -4,7 +4,7 @@
 statement ok
 SET storage_compatibility_version='v1.2.0'
 
-load __TEST_DIR__/zstd_vector_skipping.db
+load {LOCAL_TEMP_DIR}/zstd_vector_skipping.db
 
 statement ok
 pragma force_compression='zstd';

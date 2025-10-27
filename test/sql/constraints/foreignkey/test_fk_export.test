@@ -16,7 +16,7 @@ INSERT INTO fk_integers VALUES (1), (2)
 
 # now export the db
 statement ok
-EXPORT DATABASE '__TEST_DIR__/fk_constraint'
+EXPORT DATABASE '{TEMP_DIR}/fk_constraint'
 
 statement ok
 DROP TABLE fk_integers;
@@ -25,7 +25,7 @@ statement ok
 DROP TABLE pk_integers;
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/fk_constraint'
+IMPORT DATABASE '{TEMP_DIR}/fk_constraint'
 
 # check foreign key constraint
 statement error

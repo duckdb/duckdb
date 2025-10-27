@@ -398,10 +398,10 @@ statement ok
 CREATE TABLE assorted_structs(col1 STRUCT(a INT, b VARCHAR));
 
 statement ok
-COPY (SELECT '{a: 8, b: "hello, DuckDB"}') TO '__TEST_DIR__/assorted_structs.csv';
+COPY (SELECT '{a: 8, b: "hello, DuckDB"}') TO '{TEMP_DIR}/assorted_structs.csv';
 
 statement ok
-COPY assorted_structs FROM '__TEST_DIR__/assorted_structs.csv';
+COPY assorted_structs FROM '{TEMP_DIR}/assorted_structs.csv';
 
 query I
 SELECT * FROM assorted_structs;

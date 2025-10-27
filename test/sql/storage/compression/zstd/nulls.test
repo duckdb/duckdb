@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/zstd/nulls.test
 # group: [zstd]
 
-load __TEST_DIR__/zstd_nulls.db readwrite v1.2.0
+load {LOCAL_TEMP_DIR}/zstd_nulls.db readwrite v1.2.0
 
 statement ok
 create table tbl (

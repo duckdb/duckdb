@@ -12,13 +12,13 @@ statement ok
 insert into integers values (42);
 
 statement ok
-export database '__TEST_DIR__/test_export' (force_quote *);
+export database '{TEMP_DIR}/test_export' (force_quote *);
 
 statement ok
 drop table integers;
 
 statement ok
-import database '__TEST_DIR__/test_export';
+import database '{TEMP_DIR}/test_export';
 
 query I
 select * from integers;

@@ -3,7 +3,7 @@
 # group: [delete]
 
 # load the DB from disk
-load __TEST_DIR__/test_repeated_deletes.db
+load {LOCAL_TEMP_DIR}/test_repeated_deletes.db
 
 statement ok
 CREATE TABLE test (i INTEGER);

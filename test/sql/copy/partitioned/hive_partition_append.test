@@ -16,10 +16,10 @@ INSERT INTO sensor_data VALUES
 
 statement ok
 COPY (SELECT YEAR(ts) AS year, MONTH(ts) AS month, * FROM sensor_data)
-TO '__TEST_DIR__/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND);
+TO '{TEMP_DIR}/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND);
 
 query III
-SELECT year, month, SUM(value) FROM '__TEST_DIR__/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
+SELECT year, month, SUM(value) FROM '{TEMP_DIR}/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
 ----
 2000	1	42
 2000	2	100
@@ -36,10 +36,10 @@ INSERT INTO sensor_data VALUES
 
 statement ok
 COPY (SELECT YEAR(ts) AS year, MONTH(ts) AS month, * FROM sensor_data)
-TO '__TEST_DIR__/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND, FILENAME_PATTERN 'my_pattern_{uuid}');
+TO '{TEMP_DIR}/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND, FILENAME_PATTERN 'my_pattern_{uuid}');
 
 query III
-SELECT year, month, SUM(value) FROM '__TEST_DIR__/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
+SELECT year, month, SUM(value) FROM '{TEMP_DIR}/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
 ----
 2000	1	104
 2000	2	100
@@ -47,10 +47,10 @@ SELECT year, month, SUM(value) FROM '__TEST_DIR__/partitioned_append/**/*.parque
 
 statement ok
 COPY (SELECT YEAR(ts) AS year, MONTH(ts) AS month, * FROM sensor_data)
-TO '__TEST_DIR__/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), FILENAME_PATTERN 'my_pattern_{uuid}', APPEND);
+TO '{TEMP_DIR}/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), FILENAME_PATTERN 'my_pattern_{uuid}', APPEND);
 
 query III
-SELECT year, month, SUM(value) FROM '__TEST_DIR__/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
+SELECT year, month, SUM(value) FROM '{TEMP_DIR}/partitioned_append/**/*.parquet' GROUP BY ALL ORDER BY ALL
 ----
 2000	1	166
 2000	2	100
@@ -58,6 +58,6 @@ SELECT year, month, SUM(value) FROM '__TEST_DIR__/partitioned_append/**/*.parque
 
 statement error
 COPY (SELECT YEAR(ts) AS year, MONTH(ts) AS month, * FROM sensor_data)
-TO '__TEST_DIR__/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND, FILENAME_PATTERN 'my_pattern_without_uuid');
+TO '{TEMP_DIR}/partitioned_append' (FORMAT PARQUET, PARTITION_BY (year, month), APPEND, FILENAME_PATTERN 'my_pattern_without_uuid');
 ----
 APPEND mode requires a {uuid} label in filename_pattern

@@ -4,10 +4,10 @@
 
 # attach multiple different databases
 statement ok
-ATTACH '__TEST_DIR__/attach_access1.db' AS a1
+ATTACH '{LOCAL_TEMP_DIR}/attach_access1.db' AS a1
 
 statement ok
-ATTACH '__TEST_DIR__/attach_access2.db' AS a2
+ATTACH '{LOCAL_TEMP_DIR}/attach_access2.db' AS a2
 
 statement ok
 SET enable_external_access=false
@@ -27,6 +27,6 @@ statement ok
 CHECKPOINT a2
 
 statement error
-ATTACH '__TEST_DIR__/attach_access3.db' AS a2
+ATTACH '{LOCAL_TEMP_DIR}/attach_access3.db' AS a2
 ----
 Permission Error

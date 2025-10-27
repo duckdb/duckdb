@@ -5,7 +5,7 @@
 # issue 5984, number 41
 
 # load the DB from disk
-load __TEST_DIR__/create_idx.db
+load {LOCAL_TEMP_DIR}/create_idx.db
 
 statement ok
 CREATE TABLE t1 AS (SELECT 1 c1, 'a' c2);

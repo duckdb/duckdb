@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/zstd/zstd_force_compression.test
 # group: [zstd]
 
-load __TEST_DIR__/zstd_force.test readwrite v1.2.0
+load {LOCAL_TEMP_DIR}/zstd_force.test readwrite v1.2.0
 
 statement ok
 SET force_compression='zstd';

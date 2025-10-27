@@ -14,7 +14,7 @@ set max_temp_directory_size='15gb'
 
 # When we change the temp_directory to something that doesnt exist
 statement ok
-set temp_directory = '__TEST_DIR__/this_directory_should_not_exist__swap_space'
+set temp_directory = '{LOCAL_TEMP_DIR}/this_directory_should_not_exist__swap_space'
 
 query I nosort explicitly_set
 select current_setting('max_temp_directory_size')

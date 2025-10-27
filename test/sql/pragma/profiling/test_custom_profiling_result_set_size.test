@@ -11,7 +11,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"RESULT_SET_SIZE": "true", "OPERATOR_CARDINALITY": "true"}'
@@ -23,7 +23,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement ok
 CREATE TYPE Result AS UNION (

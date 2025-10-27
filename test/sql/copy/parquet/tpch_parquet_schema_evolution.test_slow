@@ -28,7 +28,7 @@ COPY (
 	l_quantity,
 	l_orderkey,
 	l_shipmode FROM tpch.lineitem LIMIT 30000
-) TO '__TEST_DIR__/schema_evolution_lineitem1.parquet' (FORMAT PARQUET);
+) TO '{TEMP_DIR}/schema_evolution_lineitem1.parquet' (FORMAT PARQUET);
 
 # complete schema, with casts
 statement ok
@@ -50,10 +50,10 @@ COPY (
 	l_discount::DECIMAL(8,3) l_discount,
 	l_shipdate::TIMESTAMP l_shipdate,
 	l_tax FROM tpch.lineitem OFFSET 30000
-) TO '__TEST_DIR__/schema_evolution_lineitem2.parquet' (FORMAT PARQUET);
+) TO '{TEMP_DIR}/schema_evolution_lineitem2.parquet' (FORMAT PARQUET);
 
 statement ok
-CREATE VIEW lineitem AS SELECT * FROM '__TEST_DIR__/schema_evolution_lineitem*.parquet'
+CREATE VIEW lineitem AS SELECT * FROM '{TEMP_DIR}/schema_evolution_lineitem*.parquet'
 
 query I
 PRAGMA tpch(1)

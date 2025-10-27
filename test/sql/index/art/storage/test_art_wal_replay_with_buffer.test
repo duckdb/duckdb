@@ -2,7 +2,7 @@
 # description: Test replaying the WAL and buffering outstanding appends.
 # group: [storage]
 
-load __TEST_DIR__/test_art_wal_buffer.db
+load {LOCAL_TEMP_DIR}/test_art_wal_buffer.db
 
 statement ok
 SET wal_autocheckpoint = '1TB';

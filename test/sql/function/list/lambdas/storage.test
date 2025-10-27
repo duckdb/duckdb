@@ -2,7 +2,7 @@
 # description: Test storing lambda functions
 # group: [lambdas]
 
-load __TEST_DIR__/lambda_storage.db
+load {LOCAL_TEMP_DIR}/lambda_storage.db
 
 statement ok
 SET lambda_syntax='DISABLE_SINGLE_ARROW'

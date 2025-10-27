@@ -12,19 +12,19 @@ statement ok
 PRAGMA enable_verification
 
 # unzip to specific path
-unzip data/storage/test.db.gz __TEST_DIR__/test.db
+unzip data/storage/test.db.gz {LOCAL_TEMP_DIR}/test.db
 
-load  __TEST_DIR__/test.db readonly
+load  {LOCAL_TEMP_DIR}/test.db readonly
 
 query I
 SELECT a+1 FROM tbl;
 ----
 6
 
-# unzip a 1.8M file into the default extraction path -> __TEST_DIR__/
-unzip data/storage/index_0-9-1.db.gz
+# unzip a 1.8M file into the default extraction path -> {LOCAL_TEMP_DIR}/
+unzip data/storage/index_0-9-1.db.gz {LOCAL_TEMP_DIR}/index_0-9-1.db
 
-load __TEST_DIR__/index_0-9-1.db readonly
+load {LOCAL_TEMP_DIR}/index_0-9-1.db readonly
 
 query II
 SELECT table_name, index_count FROM duckdb_tables() ORDER BY table_name;
@@ -36,7 +36,7 @@ pk_tbl	2
 # unzip to default extraction path from NULL input
 unzip data/storage/test.db.gz NULL
 
-load __TEST_DIR__/test.db readonly
+load {LOCAL_TEMP_DIR}/test.db readonly
 
 query I
 SELECT a+2 FROM tbl;
@@ -67,5 +67,5 @@ SELECT a+2 FROM tbl;
 # unzip data/storage/test.db.gz data/storage/wal_test_092.db
 
 ## extraction path to directory
-# unzip data/storage/test.db.gz __TEST_DIR__/
-# unzip data/storage/test.db.gz __TEST_DIR__
+# unzip data/storage/test.db.gz {LOCAL_TEMP_DIR}/
+# unzip data/storage/test.db.gz {LOCAL_TEMP_DIR}

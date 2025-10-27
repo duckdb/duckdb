@@ -8,7 +8,7 @@ statement ok
 call dbgen(sf=0.1);
 
 statement ok
-PRAGMA temp_directory='__TEST_DIR__/window_spooling'
+PRAGMA temp_directory='{LOCAL_TEMP_DIR}/window_spooling'
 
 # Force paging
 statement ok

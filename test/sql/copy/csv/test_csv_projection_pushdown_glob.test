@@ -6,19 +6,19 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-COPY (SELECT DATE '1992-01-01' d, 42 i, 'hello' s) TO '__TEST_DIR__/projection_pushdown_f1.csv' (HEADER, DELIMITER '|')
+COPY (SELECT DATE '1992-01-01' d, 42 i, 'hello' s) TO '{TEMP_DIR}/projection_pushdown_f1.csv' (HEADER, DELIMITER '|')
 
 statement ok
-COPY (SELECT DATE '1993-01-01' d, 84 i, 'world' s) TO '__TEST_DIR__/projection_pushdown_f2.csv' (HEADER, DELIMITER '|')
+COPY (SELECT DATE '1993-01-01' d, 84 i, 'world' s) TO '{TEMP_DIR}/projection_pushdown_f2.csv' (HEADER, DELIMITER '|')
 
 statement ok
-COPY (SELECT DATE '1994-01-01' d, 100 i, 'this is a long string' s) TO '__TEST_DIR__/projection_pushdown_f3.csv' (HEADER, DELIMITER '|')
+COPY (SELECT DATE '1994-01-01' d, 100 i, 'this is a long string' s) TO '{TEMP_DIR}/projection_pushdown_f3.csv' (HEADER, DELIMITER '|')
 
 statement ok
-CREATE VIEW glob_view AS SELECT * FROM read_csv_auto('__TEST_DIR__/projection_pushdown_f*.csv')
+CREATE VIEW glob_view AS SELECT * FROM read_csv_auto('{TEMP_DIR}/projection_pushdown_f*.csv')
 
 statement ok
-CREATE VIEW list_view AS SELECT * FROM read_csv_auto(['__TEST_DIR__/projection_pushdown_f1.csv', '__TEST_DIR__/projection_pushdown_f2.csv', '__TEST_DIR__/projection_pushdown_f3.csv'])
+CREATE VIEW list_view AS SELECT * FROM read_csv_auto(['{TEMP_DIR}/projection_pushdown_f1.csv', '{TEMP_DIR}/projection_pushdown_f2.csv', '{TEMP_DIR}/projection_pushdown_f3.csv'])
 
 foreach tbl glob_view list_view
 

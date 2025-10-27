@@ -14,13 +14,13 @@ PRAGMA enable_verification
 
 statement ok
 COPY (SELECT l_orderkey, l_partkey, l_suppkey FROM lineitem) 
-TO '__TEST_DIR__/union_by_name_lineitem1.parquet' (FORMAT PARQUET);
+TO '{TEMP_DIR}/union_by_name_lineitem1.parquet' (FORMAT PARQUET);
 
 statement ok
 COPY (SELECT l_partkey, l_suppkey, l_orderkey FROM lineitem) 
-TO '__TEST_DIR__/union_by_name_lineitem2.parquet' (FORMAT PARQUET);
+TO '{TEMP_DIR}/union_by_name_lineitem2.parquet' (FORMAT PARQUET);
 
 query III
-SELECT SUM(l_partkey), SUM(l_suppkey), SUM(l_orderkey) FROM parquet_scan('__TEST_DIR__/union_by_name_lineitem*.parquet', union_by_name=TRUE)
+SELECT SUM(l_partkey), SUM(l_suppkey), SUM(l_orderkey) FROM parquet_scan('{TEMP_DIR}/union_by_name_lineitem*.parquet', union_by_name=TRUE)
 ----
 12016239468	601239036	360448084286

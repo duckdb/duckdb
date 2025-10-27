@@ -3,7 +3,7 @@
 # group: [attach]
 
 statement ok
-ATTACH DATABASE '__TEST_DIR__/attach_seq.db' AS db1;
+ATTACH DATABASE '{LOCAL_TEMP_DIR}/attach_seq.db' AS db1;
 
 statement ok
 CREATE SEQUENCE seq;
@@ -38,4 +38,4 @@ statement ok
 detach db1;
 
 statement ok
-ATTACH DATABASE '__TEST_DIR__/attach_seq.db' AS db1;
+ATTACH DATABASE '{LOCAL_TEMP_DIR}/attach_seq.db' AS db1;

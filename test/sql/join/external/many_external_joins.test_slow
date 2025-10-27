@@ -2,7 +2,7 @@
 # description: Test many external joins (TemporaryMemoryManager)
 # group: [external]
 
-load __TEST_DIR__/many_external_joins.db
+load {LOCAL_TEMP_DIR}/many_external_joins.db
 
 statement ok
 CREATE TABLE tbl AS

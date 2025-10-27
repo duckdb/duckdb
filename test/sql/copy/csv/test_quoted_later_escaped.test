@@ -12,10 +12,10 @@ statement ok
 insert into T values ('2, """sir"" Oogie Boogie"')
 
 statement ok
-COPY T to '__TEST_DIR__/out.csv' (FORMAT CSV, HEADER 0, QUOTE '');
+COPY T to '{TEMP_DIR}/out.csv' (FORMAT CSV, HEADER 0, QUOTE '');
 
 query II
-SELECT quote, escape FROM sniff_csv('__TEST_DIR__/out.csv');
+SELECT quote, escape FROM sniff_csv('{TEMP_DIR}/out.csv');
 ----
 "	"
 
@@ -27,9 +27,9 @@ statement ok
 insert into T_2 values ('2, "\"sir\" Oogie Boogie"')
 
 statement ok
-COPY T_2 to '__TEST_DIR__/out_2.csv' (FORMAT CSV, HEADER 0, QUOTE '');
+COPY T_2 to '{TEMP_DIR}/out_2.csv' (FORMAT CSV, HEADER 0, QUOTE '');
 
 query II
-SELECT quote, escape FROM sniff_csv('__TEST_DIR__/out_2.csv');
+SELECT quote, escape FROM sniff_csv('{TEMP_DIR}/out_2.csv');
 ----
 "	\

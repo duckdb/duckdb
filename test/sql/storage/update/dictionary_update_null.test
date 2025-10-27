@@ -3,7 +3,7 @@
 # group: [update]
 
 # load the DB from disk
-load __TEST_DIR__/dictionary_update_null.db
+load {LOCAL_TEMP_DIR}/dictionary_update_null.db
 
 statement ok
 SET force_compression='dictionary'

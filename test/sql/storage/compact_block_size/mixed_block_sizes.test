@@ -3,13 +3,13 @@
 # group: [compact_block_size]
 
 statement ok
-ATTACH '__TEST_DIR__/small.db' (BLOCK_SIZE 16384);
+ATTACH '{LOCAL_TEMP_DIR}/small.db' (BLOCK_SIZE 16384);
 
 statement ok
 CREATE TABLE small.tbl AS SELECT range AS i FROM range(10000);
 
 statement ok
-ATTACH '__TEST_DIR__/large.db' (BLOCK_SIZE 262144);
+ATTACH '{LOCAL_TEMP_DIR}/large.db' (BLOCK_SIZE 262144);
 
 statement ok
 CREATE TABLE large.tbl AS SELECT range AS i FROM range(10000);

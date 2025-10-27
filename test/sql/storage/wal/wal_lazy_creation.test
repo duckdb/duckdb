@@ -9,7 +9,7 @@ require no_alternative_verify
 require skip_reload
 
 statement ok
-ATTACH '__TEST_DIR__/attach_no_wal.db';
+ATTACH '{LOCAL_TEMP_DIR}/attach_no_wal.db';
 
 statement ok
 CREATE TABLE attach_no_wal.integers(i INTEGER);
@@ -21,11 +21,11 @@ statement ok
 DETACH attach_no_wal;
 
 statement ok
-ATTACH '__TEST_DIR__/attach_no_wal.db';
+ATTACH '{LOCAL_TEMP_DIR}/attach_no_wal.db';
 
 # Verify that we don't have a WAL after attaching.
 query I
-SELECT COUNT(*) FROM glob('__TEST_DIR__/attach_no_wal.db.wal');
+SELECT COUNT(*) FROM glob('{LOCAL_TEMP_DIR}/attach_no_wal.db.wal');
 ----
 0
 

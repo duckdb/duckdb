@@ -18,10 +18,10 @@ statement ok
 CREATE UNIQUE INDEX tracking_key_idx ON tracking (gameId, playId, frameId, nflId)
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/index';
+EXPORT DATABASE '{TEMP_DIR}/index';
 
 statement ok
 ROLLBACK
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/index'
+IMPORT DATABASE '{TEMP_DIR}/index'

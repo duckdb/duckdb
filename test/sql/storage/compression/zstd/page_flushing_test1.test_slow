@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/zstd/page_flushing_test1.test_slow
 # group: [zstd]
 
-load __TEST_DIR__/zstd_page_flushing_test1.db readwrite v1.2.0
+load {LOCAL_TEMP_DIR}/zstd_page_flushing_test1.db readwrite v1.2.0
 
 statement ok
 create table tbl (

@@ -5,7 +5,7 @@
 # There is also a catalog dependency conflict,
 # which prevents altering a table with a dependency (index) on it.
 
-load __TEST_DIR__/test_add_pk_naming_conflict.db
+load {LOCAL_TEMP_DIR}/test_add_pk_naming_conflict.db
 
 statement ok
 PRAGMA enable_verification;

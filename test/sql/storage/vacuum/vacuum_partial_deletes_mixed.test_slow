@@ -2,7 +2,7 @@
 # description: Verify that deletes get vacuumed correctly through merging of adjacent row groups
 # group: [vacuum]
 
-load __TEST_DIR__/vacuum_partial_deletes_mixed.db
+load {LOCAL_TEMP_DIR}/vacuum_partial_deletes_mixed.db
 
 statement ok
 CREATE TABLE integers(i INTEGER);

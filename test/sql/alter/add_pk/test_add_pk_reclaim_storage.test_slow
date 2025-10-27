@@ -2,7 +2,7 @@
 # description: Test that we reclaim the storage after adding and dropping a PK.
 # group: [add_pk]
 
-load __TEST_DIR__/test_add_pk_reclaim_storage.db
+load {LOCAL_TEMP_DIR}/test_add_pk_reclaim_storage.db
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown

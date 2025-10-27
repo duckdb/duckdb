@@ -3,7 +3,7 @@
 # group: [buffer_manager]
 
 # load the DB from disk
-load __TEST_DIR__/larger_than_memory_aggregate.db
+load {LOCAL_TEMP_DIR}/larger_than_memory_aggregate.db
 
 statement ok
 PRAGMA force_compression='uncompressed'

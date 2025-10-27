@@ -3,7 +3,7 @@
 # group: [catalog]
 
 # load the DB from disk
-load __TEST_DIR__/prepared_storage.db
+load {LOCAL_TEMP_DIR}/prepared_storage.db
 
 # insert values in a database using prepared statements
 statement ok

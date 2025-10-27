@@ -14,7 +14,7 @@ require vector_size 2048
 
 # Set a temp_directory to offload data
 statement ok
-set temp_directory='__TEST_DIR__/max_swap_space_reached'
+set temp_directory='{LOCAL_TEMP_DIR}/max_swap_space_reached'
 
 # Ensure the temp_directory is used
 statement ok

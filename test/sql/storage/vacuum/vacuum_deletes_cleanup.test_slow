@@ -2,7 +2,7 @@
 # description: Verify that deleting rows and re-appending does not increase storage size
 # group: [vacuum]
 
-load __TEST_DIR__/vacuum_deletes_cleanup.db
+load {LOCAL_TEMP_DIR}/vacuum_deletes_cleanup.db
 
 statement ok
 CREATE TABLE integers(i INTEGER);

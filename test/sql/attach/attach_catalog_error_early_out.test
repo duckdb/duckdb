@@ -8,7 +8,7 @@ SET catalog_error_max_schemas = 0;
 loop i 0 10
 
 statement ok
-ATTACH '__TEST_DIR__/did_you_mean_db_${i}.db';
+ATTACH '{LOCAL_TEMP_DIR}/did_you_mean_db_${i}.db';
 
 endloop
 

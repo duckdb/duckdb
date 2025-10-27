@@ -3,7 +3,7 @@
 
 # Test arrays that span row groups
 
-load __TEST_DIR__/temp_array_storage_3.db
+load {LOCAL_TEMP_DIR}/temp_array_storage_3.db
 
 statement ok
 PRAGMA enable_verification

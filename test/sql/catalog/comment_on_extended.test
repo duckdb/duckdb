@@ -4,10 +4,10 @@
 
 ### Create some test data
 statement ok
-ATTACH '__TEST_DIR__/comment_on_extended_1.db' AS db1
+ATTACH '{LOCAL_TEMP_DIR}/comment_on_extended_1.db' AS db1
 
 statement ok
-ATTACH '__TEST_DIR__/comment_on_extended_2.db' AS db2
+ATTACH '{LOCAL_TEMP_DIR}/comment_on_extended_2.db' AS db2
 
 statement ok
 CREATE SCHEMA db1.s1;

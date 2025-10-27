@@ -7,10 +7,10 @@ select $$[\"abc\", def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b
 ['"abc"', def, ghi]	['"abc"', def, ghi]	true
 
 statement ok
-COPY (select $$[\"abc\", def, ghi]$$::VARCHAR[] a) TO '__TEST_DIR__/copy_test.csv' (FORMAT CSV);
+COPY (select $$[\"abc\", def, ghi]$$::VARCHAR[] a) TO '{TEMP_DIR}/copy_test.csv' (FORMAT CSV);
 
 query II
-select a, a::VARCHAR[] from read_csv('__TEST_DIR__/copy_test.csv') t(a);
+select a, a::VARCHAR[] from read_csv('{TEMP_DIR}/copy_test.csv') t(a);
 ----
 ['"abc"', def, ghi]	['"abc"', def, ghi]
 

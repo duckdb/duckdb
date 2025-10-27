@@ -2,7 +2,7 @@
 # description: Test trying to disable database invalidation after opening the database.
 # group: [pragma]
 
-load __TEST_DIR__/db_invalidation.db
+load {LOCAL_TEMP_DIR}/db_invalidation.db
 
 statement error
 SET disable_database_invalidation=true;

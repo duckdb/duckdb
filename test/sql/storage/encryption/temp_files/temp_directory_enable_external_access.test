@@ -7,10 +7,10 @@ foreach cipher GCM CTR
 require block_size 262144
 
 statement ok
-SET temp_directory='__TEST_DIR__/test_temp_dir'
+SET temp_directory='{LOCAL_TEMP_DIR}/test_temp_dir'
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 statement ok
 USE enc;
@@ -23,7 +23,7 @@ SET enable_external_access=false
 
 # cannot modify the temp directory when enable_external_access is set
 statement error
-SET temp_directory='__TEST_DIR__/new_temp_dir'
+SET temp_directory='{LOCAL_TEMP_DIR}/new_temp_dir'
 ----
 disabled by configuration
 

@@ -6,7 +6,7 @@
 loop db_index 0 20
 
 statement ok
-attach '__TEST_DIR__/attached_db${db_index}.duckdb' AS db_name
+ATTACH '{LOCAL_TEMP_DIR}/attached_db${db_index}.duckdb' AS db_name
 
 statement ok
 create table db_name.integers(i integer);
@@ -17,7 +17,7 @@ detach db_name
 endloop
 
 statement ok
-attach '__TEST_DIR__/attached_db0.duckdb' AS db_name
+ATTACH '{LOCAL_TEMP_DIR}/attached_db0.duckdb' AS db_name
 
 concurrentloop i 0 10
 
@@ -29,7 +29,7 @@ begin
 
 onlyif i<1
 statement ok
-attach or replace '__TEST_DIR__/attached_db${db_index}.duckdb' AS db_name
+attach or replace '{TEMP_DIR}/attached_db${db_index}.duckdb' AS db_name
 
 onlyif i<1
 statement ok

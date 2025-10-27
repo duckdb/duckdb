@@ -3,7 +3,7 @@
 # group: [optimistic_write]
 
 # load the DB from disk
-load __TEST_DIR__/optimistic_write_temp.db
+load {LOCAL_TEMP_DIR}/optimistic_write_temp.db
 
 statement ok
 CREATE TABLE integers AS SELECT 42 i

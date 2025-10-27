@@ -16,22 +16,22 @@ insert into orders select i%12+1,i,j from range(360)t(i),range(1000)s(j);
 foreach format parquet csv
 
 statement ok
-copy (select 2000+(v//12)y,m,v,j from orders where m IN (1, 2, 3)) TO '__TEST_DIR__/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND);
+copy (select 2000+(v//12)y,m,v,j from orders where m IN (1, 2, 3)) TO '{TEMP_DIR}/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND);
 
 statement ok
-copy (select 2000+(v//12)y,m,v from orders where m IN (4, 5)) TO '__TEST_DIR__/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND);
+copy (select 2000+(v//12)y,m,v from orders where m IN (4, 5)) TO '{TEMP_DIR}/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND);
 
 statement ok
-copy (select 2000+(v//12)y,m,j from orders where m IN (6, 7)) TO '__TEST_DIR__/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND);
+copy (select 2000+(v//12)y,m,j from orders where m IN (6, 7)) TO '{TEMP_DIR}/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND);
 
 statement ok
-copy (select 2000+(v//12)y,m,v,j from orders where m IN (8, 9, 10)) TO '__TEST_DIR__/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND);
+copy (select 2000+(v//12)y,m,v,j from orders where m IN (8, 9, 10)) TO '{TEMP_DIR}/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND);
 
 statement ok
-copy (select 2000+(v//12)y,m from orders where m IN (11, 12)) TO '__TEST_DIR__/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND, WRITE_PARTITION_COLUMNS);
+copy (select 2000+(v//12)y,m from orders where m IN (11, 12)) TO '{TEMP_DIR}/many_files_${format}' (FORMAT ${format}, PARTITION_BY (y,m), APPEND, WRITE_PARTITION_COLUMNS);
 
 query IIIIIII
-SELECT COUNT(*), MIN(m), MAX(m), MIN(y), MAX(y), COUNT(v), COUNT(j) FROM read_${format}('__TEST_DIR__/many_files_${format}/**/*.${format}', union_by_name=true)
+SELECT COUNT(*), MIN(m), MAX(m), MIN(y), MAX(y), COUNT(v), COUNT(j) FROM read_${format}('{TEMP_DIR}/many_files_${format}/**/*.${format}', union_by_name=true)
 ----
 360000	1	12	2000	2029	240000	240000
 

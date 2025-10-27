@@ -12,10 +12,10 @@ CALL dbgen(sf=1, suffix='_original');
 foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
 statement ok
-COPY ${tpch_tbl}_original TO '__TEST_DIR__/${tpch_tbl}.parquet';
+COPY ${tpch_tbl}_original TO '{TEMP_DIR}/${tpch_tbl}.parquet';
 
 statement ok
-CREATE VIEW ${tpch_tbl} AS FROM read_parquet('__TEST_DIR__/${tpch_tbl}.parquet');
+CREATE VIEW ${tpch_tbl} AS FROM read_parquet('{TEMP_DIR}/${tpch_tbl}.parquet');
 
 endloop
 

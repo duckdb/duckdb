@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/many_checkpoints.db
+load {LOCAL_TEMP_DIR}/many_checkpoints.db
 
 statement ok
 CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);

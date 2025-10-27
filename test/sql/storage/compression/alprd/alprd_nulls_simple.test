@@ -2,7 +2,7 @@
 # group: [alprd]
 
 # load the DB from disk
-load __TEST_DIR__/test_alprd_nulls.db
+load {LOCAL_TEMP_DIR}/test_alprd_nulls.db
 
 foreach compression uncompressed alprd
 

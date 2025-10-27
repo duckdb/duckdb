@@ -2,7 +2,7 @@
 # group: [function]
 
 statement ok
-ATTACH '__TEST_DIR__/macro_default_arg.db' (STORAGE_VERSION 'v1.0.0');
+ATTACH '{LOCAL_TEMP_DIR}/macro_default_arg.db' (STORAGE_VERSION 'v1.0.0');
 
 statement ok
 USE macro_default_arg

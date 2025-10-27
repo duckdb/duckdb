@@ -1,7 +1,7 @@
 # name: test/sql/create/create_as_issue_11968.test
 # group: [create]
 
-load __TEST_DIR__/temp_create_as.db
+load {LOCAL_TEMP_DIR}/temp_create_as.db
 
 statement ok
 CREATE TABLE test (x INTEGER[]);

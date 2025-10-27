@@ -5,7 +5,7 @@
 statement ok
 SET storage_compatibility_version='v1.2.0'
 
-load __TEST_DIR__/reclaim_space_drop_column_overflow_strings.db
+load {LOCAL_TEMP_DIR}/reclaim_space_drop_column_overflow_strings.db
 
 statement ok
 PRAGMA force_compression='ZSTD';

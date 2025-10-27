@@ -9,13 +9,13 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-ATTACH '__TEST_DIR__/no_bitpacking.db' (BLOCK_SIZE 16384);
+ATTACH '{LOCAL_TEMP_DIR}/no_bitpacking.db' (BLOCK_SIZE 16384);
 
 statement ok
 CREATE TABLE no_bitpacking.tbl AS SELECT range AS i FROM range(10000);
 
 statement ok
-ATTACH '__TEST_DIR__/has_bitpacking.db' (BLOCK_SIZE 262144);
+ATTACH '{LOCAL_TEMP_DIR}/has_bitpacking.db' (BLOCK_SIZE 262144);
 
 statement ok
 CREATE TABLE has_bitpacking.tbl AS SELECT range AS i FROM range(10000);

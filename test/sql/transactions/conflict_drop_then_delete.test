@@ -2,7 +2,7 @@
 # description: Conflict: drop a table, then delete from a table in another transaction
 # group: [transactions]
 
-load __TEST_DIR__/conflict_drop_then_delete.db
+load {LOCAL_TEMP_DIR}/conflict_drop_then_delete.db
 
 statement ok
 create or replace table original_table as from range(10) select 1 as col

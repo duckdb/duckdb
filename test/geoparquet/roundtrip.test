@@ -18,11 +18,11 @@ SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data
 # Now write it back to parquet
 statement ok
 COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv')
-TO '__TEST_DIR__/data-point-out.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-point-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort point_result
-SELECT col, geometry FROM '__TEST_DIR__/data-point-out.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-point-out.parquet'
 
 
 
@@ -39,11 +39,11 @@ SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data
 # Now write it back to parquet
 statement ok
 COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-linestring-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-linestring-out.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-linestring-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort linestring_result
-SELECT col, geometry FROM '__TEST_DIR__/data-linestring-out.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-linestring-out.parquet'
 
 
 
@@ -60,11 +60,11 @@ SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data
 # Now write it back to parquet
 statement ok
 COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-polygon-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-polygon-out.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-polygon-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort polygon_result
-SELECT col, geometry FROM '__TEST_DIR__/data-polygon-out.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-polygon-out.parquet'
 
 
 
@@ -81,11 +81,11 @@ SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipoint
 # Now write it back to parquet
 statement ok
 COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipoint-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-multipoint-out.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-multipoint-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort multipoint_result
-SELECT col, geometry FROM '__TEST_DIR__/data-multipoint-out.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-multipoint-out.parquet'
 
 
 
@@ -102,11 +102,11 @@ SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data
 # Now write it back to parquet
 statement ok
 COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multilinestring-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-multilinestring-out.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-multilinestring-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort multilinestring_result
-SELECT col, geometry FROM '__TEST_DIR__/data-multilinestring-out.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-multilinestring-out.parquet'
 
 
 
@@ -123,11 +123,11 @@ SELECT col, st_astext(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data
 # Now write it back to parquet
 statement ok
 COPY (SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipolygon-encoding_wkb.parquet')
-TO '__TEST_DIR__/data-multipolygon-out.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-multipolygon-out.parquet' (FORMAT PARQUET)
 
 # Test that the data is the same
 query II nosort multipolygon_result
-SELECT col, geometry FROM '__TEST_DIR__/data-multipolygon-out.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-multipolygon-out.parquet'
 
 
 #------------------------------------------------------------------------------
@@ -136,6 +136,6 @@ SELECT col, geometry FROM '__TEST_DIR__/data-multipolygon-out.parquet'
 
 query I
 SELECT decode(value) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-multipolygon-out.parquet') WHERE key = 'geo';
+FROM parquet_kv_metadata('{TEMP_DIR}/data-multipolygon-out.parquet') WHERE key = 'geo';
 ----
 {"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["MultiPolygon"],"bbox":[5.0,5.0,45.0,45.0]}}}

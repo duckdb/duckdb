@@ -10,7 +10,7 @@ PRAGMA wal_autocheckpoint='1TB';
 
 # create a table with hugeints
 statement ok
-attach '__TEST_DIR__/attach_wal_with_sequence.db' as db1;
+ATTACH '{LOCAL_TEMP_DIR}/attach_wal_with_sequence.db' as db1;
 
 statement ok
 CREATE SEQUENCE db1.seq;
@@ -37,7 +37,7 @@ statement ok
 DETACH db1
 
 statement ok
-attach '__TEST_DIR__/attach_wal_with_sequence.db' as db2;
+ATTACH '{LOCAL_TEMP_DIR}/attach_wal_with_sequence.db' as db2;
 
 statement ok
 INSERT INTO db2.blubb (b) VALUES (100);

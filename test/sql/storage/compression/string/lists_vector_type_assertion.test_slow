@@ -2,7 +2,7 @@
 # description: For smaller block sizes, this test ensures that the vector type of result vectors does not change for partial scans
 # group: [string]
 
-load __TEST_DIR__/test_string_compression.db
+load {LOCAL_TEMP_DIR}/test_string_compression.db
 
 statement ok
 SET enable_fsst_vectors='true'

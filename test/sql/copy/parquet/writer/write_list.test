@@ -14,10 +14,10 @@ CREATE TABLE list AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY list TO '__TEST_DIR__/test_list.parquet' (FORMAT 'parquet');
+COPY list TO '{TEMP_DIR}/test_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT i FROM parquet_scan('__TEST_DIR__/test_list.parquet');
+SELECT i FROM parquet_scan('{TEMP_DIR}/test_list.parquet');
 ----
 [1, 2, 3]
 [4, 5]
@@ -40,10 +40,10 @@ CREATE TABLE null_empty_list AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY null_empty_list TO '__TEST_DIR__/test_list.parquet' (FORMAT 'parquet');
+COPY null_empty_list TO '{TEMP_DIR}/test_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM parquet_scan('__TEST_DIR__/test_list.parquet');
+SELECT * FROM parquet_scan('{TEMP_DIR}/test_list.parquet');
 ----
 [1, 2, 3]
 [4, 5]
@@ -58,18 +58,18 @@ NULL
 
 # empty list
 statement ok
-COPY (SELECT []::INT[]) TO '__TEST_DIR__/test_empty_list.parquet' (FORMAT 'parquet');
+COPY (SELECT []::INT[]) TO '{TEMP_DIR}/test_empty_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM '__TEST_DIR__/test_empty_list.parquet'
+SELECT * FROM '{TEMP_DIR}/test_empty_list.parquet'
 ----
 []
 
 # null list
 statement ok
-COPY (SELECT NULL::INT[]) TO '__TEST_DIR__/test_null_list.parquet' (FORMAT 'parquet');
+COPY (SELECT NULL::INT[]) TO '{TEMP_DIR}/test_null_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM '__TEST_DIR__/test_null_list.parquet'
+SELECT * FROM '{TEMP_DIR}/test_null_list.parquet'
 ----
 NULL

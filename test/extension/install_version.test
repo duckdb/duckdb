@@ -10,7 +10,7 @@ require notwindows
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/install_version'
+set extension_directory='{TEMP_DIR}/install_version'
 
 statement ok
 set custom_extension_repository='${LOCAL_EXTENSION_REPO}'

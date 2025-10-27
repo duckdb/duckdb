@@ -24,19 +24,19 @@ SELECT * FROM timestamps
 ----
 
 statement ok
-COPY timestamps TO '__TEST_DIR__/timestamps.parquet' (FORMAT 'parquet');
+COPY timestamps TO '{TEMP_DIR}/timestamps.parquet' (FORMAT 'parquet');
 
 query I nosort ts_scan
-SELECT * FROM '__TEST_DIR__/timestamps.parquet'
+SELECT * FROM '{TEMP_DIR}/timestamps.parquet'
 ----
 
 query I
-SELECT * FROM '__TEST_DIR__/timestamps.parquet' WHERE d='1992-01-01 12:03:27'
+SELECT * FROM '{TEMP_DIR}/timestamps.parquet' WHERE d='1992-01-01 12:03:27'
 ----
 1992-01-01 12:03:27
 
 query I
-SELECT typeof(d) FROM '__TEST_DIR__/timestamps.parquet' LIMIT 1
+SELECT typeof(d) FROM '{TEMP_DIR}/timestamps.parquet' LIMIT 1
 ----
 TIMESTAMP
 
@@ -62,18 +62,18 @@ NULL
 2020-09-27 13:12:01
 
 statement ok
-COPY timestamps TO '__TEST_DIR__/timestamps.parquet' (FORMAT 'parquet');
+COPY timestamps TO '{TEMP_DIR}/timestamps.parquet' (FORMAT 'parquet');
 
 query I nosort ns_scan
-SELECT * FROM '__TEST_DIR__/timestamps.parquet'
+SELECT * FROM '{TEMP_DIR}/timestamps.parquet'
 ----
 
 query I
-SELECT * FROM '__TEST_DIR__/timestamps.parquet' WHERE d='1992-01-01 12:03:27.123456789'
+SELECT * FROM '{TEMP_DIR}/timestamps.parquet' WHERE d='1992-01-01 12:03:27.123456789'
 ----
 1992-01-01 12:03:27.123456789
 
 query I
-SELECT typeof(d) FROM '__TEST_DIR__/timestamps.parquet' LIMIT 1
+SELECT typeof(d) FROM '{TEMP_DIR}/timestamps.parquet' LIMIT 1
 ----
 TIMESTAMP_NS

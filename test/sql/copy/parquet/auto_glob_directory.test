@@ -5,10 +5,10 @@
 require parquet
 
 statement ok
-COPY (SELECT i%2 AS grp, i FROM range(1000) t(i)) TO '__TEST_DIR__/partitioned_glob.parquet' (PARTITION_BY (grp));
+COPY (SELECT i%2 AS grp, i FROM range(1000) t(i)) TO '{TEMP_DIR}/partitioned_glob.parquet' (PARTITION_BY (grp));
 
 query II
-SELECT grp, COUNT(*) FROM '__TEST_DIR__/partitioned_glob.parquet' GROUP BY ALL ORDER BY ALL
+SELECT grp, COUNT(*) FROM '{TEMP_DIR}/partitioned_glob.parquet' GROUP BY ALL ORDER BY ALL
 ----
 0	500
 1	500

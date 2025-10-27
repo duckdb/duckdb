@@ -4,7 +4,7 @@
 require ram 16gb
 
 statement ok
-ATTACH '__TEST_DIR__/zstd_giant_string.db' (STORAGE_VERSION 'v1.3.2');
+ATTACH '{LOCAL_TEMP_DIR}/zstd_giant_string.db' (STORAGE_VERSION 'v1.3.2');
 
 statement ok
 CREATE TABLE zstd_giant_string.foo (bar VARCHAR USING COMPRESSION zstd);
@@ -16,7 +16,7 @@ statement ok
 DETACH zstd_giant_string
 
 statement ok
-ATTACH '__TEST_DIR__/zstd_giant_string.db'
+ATTACH '{LOCAL_TEMP_DIR}/zstd_giant_string.db'
 
 query I
 select max(length(bar)) from zstd_giant_string.foo;

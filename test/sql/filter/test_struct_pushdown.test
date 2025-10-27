@@ -1,7 +1,7 @@
 # name: test/sql/filter/test_struct_pushdown.test
 # group: [filter]
 
-load __TEST_DIR__/test_struct_pushdown.test
+load {LOCAL_TEMP_DIR}/test_struct_pushdown.test
 
 statement ok
 PRAGMA enable_verification
@@ -160,25 +160,25 @@ SELECT * FROM nested_structs WHERE s.d.f = 'bar';
 require parquet
 
 statement ok
-COPY (FROM test_structs) TO '__TEST_DIR__/test_structs.parquet' (FORMAT PARQUET);
+COPY (FROM test_structs) TO '{TEMP_DIR}/test_structs.parquet' (FORMAT PARQUET);
 
 query II
-EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.a < 2;
+EXPLAIN SELECT * FROM read_parquet('{TEMP_DIR}/test_structs.parquet') WHERE i.a < 2;
 ----
 physical_plan	<REGEX>:.*Filters:.*i\.a<2.*
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.a < 2;
+SELECT * FROM read_parquet('{TEMP_DIR}/test_structs.parquet') WHERE i.a < 2;
 ----
 {'a': 1, 'b': true}
 
 query II
-EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.b = true or i.a IS NULL;
+EXPLAIN SELECT * FROM read_parquet('{TEMP_DIR}/test_structs.parquet') WHERE i.b = true or i.a IS NULL;
 ----
 physical_plan	<REGEX>:.*Filters:.*
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.b = true or i.a IS NULL ORDER BY ALL;
+SELECT * FROM read_parquet('{TEMP_DIR}/test_structs.parquet') WHERE i.b = true or i.a IS NULL ORDER BY ALL;
 ----
 {'a': 1, 'b': true}
 {'a': 3, 'b': true}
@@ -187,55 +187,55 @@ NULL
 
 # String structs
 statement ok
-COPY (FROM string_structs) TO '__TEST_DIR__/string_structs.parquet' (FORMAT PARQUET);
+COPY (FROM string_structs) TO '{TEMP_DIR}/string_structs.parquet' (FORMAT PARQUET);
 
 query II
-EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/string_structs.parquet') WHERE s.a = 'foo';
+EXPLAIN SELECT * FROM read_parquet('{TEMP_DIR}/string_structs.parquet') WHERE s.a = 'foo';
 ----
 physical_plan	<REGEX>:.*Filters:.*s\.a='foo'.*
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/string_structs.parquet') WHERE s.a = 'foo';
+SELECT * FROM read_parquet('{TEMP_DIR}/string_structs.parquet') WHERE s.a = 'foo';
 ----
 {'a': foo, 'b': bar}
 {'a': foo, 'b': NULL}
 
 # Nested structs
 statement ok
-COPY (FROM nested_structs) TO '__TEST_DIR__/nested_structs.parquet' (FORMAT PARQUET);
+COPY (FROM nested_structs) TO '{TEMP_DIR}/nested_structs.parquet' (FORMAT PARQUET);
 
 query II
-EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.b < 2;
+EXPLAIN SELECT * FROM read_parquet('{TEMP_DIR}/nested_structs.parquet') WHERE s.a.b < 2;
 ----
 physical_plan	<REGEX>:.*Filters:.*s\.a\.b<2.*
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.b < 2;
+SELECT * FROM read_parquet('{TEMP_DIR}/nested_structs.parquet') WHERE s.a.b < 2;
 ----
 {'a': {'b': 1, 'c': false}, 'd': {'e': 2, 'f': foo}}
 
 query II
-EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
+EXPLAIN SELECT * FROM read_parquet('{TEMP_DIR}/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
 ----
 physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.d\.e=5.*
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
+SELECT * FROM read_parquet('{TEMP_DIR}/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
 ----
 {'a': {'b': NULL, 'c': true}, 'd': {'e': 5, 'f': qux}}
 
 # Test with large (multi-row-group) parquet files
 
 statement ok
-COPY (SELECT {'i': n} as s FROM generate_series(100000) as t(n)) TO '__TEST_DIR__/large.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 3000);
+COPY (SELECT {'i': n} as s FROM generate_series(100000) as t(n)) TO '{TEMP_DIR}/large.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 3000);
 
 query II
-EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
+EXPLAIN SELECT * FROM read_parquet('{TEMP_DIR}/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
 ----
 physical_plan	<REGEX>:.*Filters:.*s\.i>=500 AND s\.i<5000.*
 
 query II
-SELECT min(s.i), max(s.i) FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
+SELECT min(s.i), max(s.i) FROM read_parquet('{TEMP_DIR}/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
 ----
 500	4999
 

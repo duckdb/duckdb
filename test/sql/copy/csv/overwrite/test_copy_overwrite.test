@@ -21,13 +21,13 @@ SELECT * FROM test ORDER BY 1;
 
 # copy to the CSV file
 query I
-COPY test TO '__TEST_DIR__/overwrite.csv';
+COPY test TO '{TEMP_DIR}/overwrite.csv';
 ----
 3
 
 # now copy to the file again
 query I
-COPY (SELECT * FROM test LIMIT 2) TO '__TEST_DIR__/overwrite.csv';
+COPY (SELECT * FROM test LIMIT 2) TO '{TEMP_DIR}/overwrite.csv';
 ----
 2
 
@@ -36,7 +36,7 @@ statement ok
 DELETE FROM test;
 
 query I
-COPY test FROM '__TEST_DIR__/overwrite.csv';
+COPY test FROM '{TEMP_DIR}/overwrite.csv';
 ----
 2
 
@@ -48,7 +48,7 @@ SELECT * FROM test ORDER BY 1;
 
 # test query returning error does not export to file
 statement error
-COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv';
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '{TEMP_DIR}/overwrite.csv';
 ----
 Could not convert string 'hello0' to INT32
 
@@ -56,7 +56,7 @@ statement ok
 DELETE FROM test;
 
 query I
-COPY test FROM '__TEST_DIR__/overwrite.csv';
+COPY test FROM '{TEMP_DIR}/overwrite.csv';
 ----
 2
 
@@ -69,12 +69,12 @@ SELECT * FROM test ORDER BY 1;
 
 # Test USE_TMP_FILE flag
 statement error
-COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '__TEST_DIR__/overwrite.csv' (USE_TMP_FILE FALSE);
+COPY (SELECT i FROM range(1) tbl(i) UNION ALL SELECT concat('hello', i)::INT i FROM range(1) tbl(i)) to '{TEMP_DIR}/overwrite.csv' (USE_TMP_FILE FALSE);
 ----
 Could not convert string 'hello0' to INT32
 
 # File is overwritten
 query I
-SELECT * FROM '__TEST_DIR__/overwrite.csv';
+SELECT * FROM '{TEMP_DIR}/overwrite.csv';
 ----
 

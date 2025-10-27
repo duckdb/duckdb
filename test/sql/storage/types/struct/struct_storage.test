@@ -3,7 +3,7 @@
 # group: [struct]
 
 # load the DB from disk
-load __TEST_DIR__/struct_storage_test.db
+load {LOCAL_TEMP_DIR}/struct_storage_test.db
 
 statement ok
 CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));

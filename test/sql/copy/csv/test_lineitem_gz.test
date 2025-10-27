@@ -15,7 +15,7 @@ statement ok
 CALL dbgen(sf=10);
 
 statement ok
-copy lineitem to '__TEST_DIR__/lineitem1.csv.gz'
+copy lineitem to '{TEMP_DIR}/lineitem1.csv.gz'
 
 statement ok
 set memory_limit='32gb';
@@ -23,16 +23,16 @@ set memory_limit='32gb';
 # Run it over 50 TPCHs
 query I
 select count(*) from read_csv([
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz',
-'__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz','__TEST_DIR__/lineitem1.csv.gz'
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz',
+'{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz','{TEMP_DIR}/lineitem1.csv.gz'
 ]);
 ----
 0

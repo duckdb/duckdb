@@ -2,7 +2,7 @@
 # description: Test lists with aggregations on a table with dictionary compression
 # group: [list]
 
-load {TEMP_DIR}/store_dict.db
+load {LOCAL_TEMP_DIR}/store_dict.db
 
 statement ok
 pragma force_compression='dictionary';

@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 
 # load the DB from disk
-load {TEMP_DIR}/test_csv_enum.db
+load {LOCAL_TEMP_DIR}/test_csv_enum.db
 
 statement ok
 CREATE TYPE bla AS ENUM ('Y', 'N');

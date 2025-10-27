@@ -14,7 +14,7 @@ statement ok
 insert into todos values (42, 42, 'duck', true)
 
 statement ok
-copy todos to '__TEST_DIR__/todos.json' (ARRAY)
+copy todos to '{TEMP_DIR}/todos.json' (ARRAY)
 
 statement ok
-copy todos from '__TEST_DIR__/todos.json'
+copy todos from '{TEMP_DIR}/todos.json'

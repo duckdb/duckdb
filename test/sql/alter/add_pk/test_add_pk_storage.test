@@ -2,7 +2,7 @@
 # description: Test adding and persisting a PRIMARY KEY.
 # group: [add_pk]
 
-load __TEST_DIR__/test_add_pk.db
+load {LOCAL_TEMP_DIR}/test_add_pk.db
 
 statement ok
 PRAGMA enable_verification

@@ -2,7 +2,7 @@
 # description: Issue #5675: Follow up test to cover issue when the 1+th segment of a rowgroup is flushed with 1 value
 # group: [dict_fsst]
 
-load __TEST_DIR__/issue_5675_followup.db readwrite v1.3.0
+load {LOCAL_TEMP_DIR}/issue_5675_followup.db readwrite v1.3.0
 
 require parquet
 

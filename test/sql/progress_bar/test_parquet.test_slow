@@ -10,10 +10,10 @@ statement ok
 CALL dbgen(sf=0.1)
 
 statement ok
-copy lineitem TO '__TEST_DIR__/progress_bar_lineitem.parquet' (FORMAT 'parquet');
+copy lineitem TO '{TEMP_DIR}/progress_bar_lineitem.parquet' (FORMAT 'parquet');
 
 statement ok
-copy lineitem TO '__TEST_DIR__/progress_bar_lineitem2.parquet' (FORMAT 'parquet');
+copy lineitem TO '{TEMP_DIR}/progress_bar_lineitem2.parquet' (FORMAT 'parquet');
 
 statement ok
 PRAGMA progress_bar_time=1
@@ -34,7 +34,7 @@ SELECT
     avg(l_discount) AS avg_disc,
     count(*) AS count_order
 FROM
-     parquet_scan('__TEST_DIR__/progress_bar_lineitem.parquet')
+     parquet_scan('{TEMP_DIR}/progress_bar_lineitem.parquet')
 WHERE
     l_shipdate <= CAST('1998-09-02' AS date)
 GROUP BY
@@ -58,7 +58,7 @@ SELECT
     avg(l_discount) AS avg_disc,
     count(*) AS count_order
 FROM
-     parquet_scan('__TEST_DIR__/progress_bar_*.parquet')
+     parquet_scan('{TEMP_DIR}/progress_bar_*.parquet')
 WHERE
     l_shipdate <= CAST('1998-09-02' AS date)
 GROUP BY
@@ -87,7 +87,7 @@ SELECT
     avg(l_discount) AS avg_disc,
     count(*) AS count_order
 FROM
-     parquet_scan('__TEST_DIR__/progress_bar_lineitem.parquet')
+     parquet_scan('{TEMP_DIR}/progress_bar_lineitem.parquet')
 WHERE
     l_shipdate <= CAST('1998-09-02' AS date)
 GROUP BY
@@ -111,7 +111,7 @@ SELECT
     avg(l_discount) AS avg_disc,
     count(*) AS count_order
 FROM
-     parquet_scan('__TEST_DIR__/progress_bar_*.parquet')
+     parquet_scan('{TEMP_DIR}/progress_bar_*.parquet')
 WHERE
     l_shipdate <= CAST('1998-09-02' AS date)
 GROUP BY

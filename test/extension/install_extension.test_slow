@@ -10,7 +10,7 @@ statement ok
 PRAGMA enable_verification
 
 # we need a persistent database because otherwise we are not allowed to restart
-load __TEST_DIR__/dummy_database_for_extension_installation.db
+load {LOCAL_TEMP_DIR}/dummy_database_for_extension_installation.db
 
 statement error
 INSTALL 'asdf';
@@ -52,7 +52,7 @@ restart
 
 # can't find extension in non-default extension location
 statement ok
-SET extension_directory='__TEST_DIR__/extension_directory'
+SET extension_directory='{TEMP_DIR}/extension_directory'
 
 statement error
 LOAD 'loadable_extension_demo';
@@ -68,7 +68,7 @@ LOAD 'loadable_extension_demo';
 
 # ensure file is there
 query I
-select count(*) from glob('__TEST_DIR__/extension_directory/**/loadable_extension_demo.duckdb_extension')
+select count(*) from glob('{TEMP_DIR}/extension_directory/**/loadable_extension_demo.duckdb_extension')
 ----
 1
 
@@ -83,7 +83,7 @@ SET extension_directory=''
 
 # can't find extension in non-default home location
 statement ok
-SET home_directory='__TEST_DIR__/home_directory'
+SET home_directory='{TEMP_DIR}/home_directory'
 
 statement error
 LOAD 'loadable_extension_demo';
@@ -96,13 +96,13 @@ INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_exten
 
 # but this one should exist
 statement ok
-SET home_directory='__TEST_DIR__'
+SET home_directory='{TEMP_DIR}'
 
 statement ok
 INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
 query I
-select COUNT(*) from glob('__TEST_DIR__/.duckdb/**/loadable_extension_demo.duckdb_extension')
+select COUNT(*) from glob('{TEMP_DIR}/.duckdb/**/loadable_extension_demo.duckdb_extension')
 ----
 1
 

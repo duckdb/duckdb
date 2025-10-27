@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/test_ignore_duplicate_delete.db
+load {LOCAL_TEMP_DIR}/test_ignore_duplicate_delete.db
 
 statement ok
 CREATE TABLE TBL (id INT NOT NULL, age INT NOT NULL, PRIMARY KEY ( id ))

@@ -11,11 +11,11 @@ statement ok
 CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 1779793 UNION ALL SELECT 4779793;
 
 statement ok
-COPY (SELECT * FROM range(5000000) tbl(i)) TO '__TEST_DIR__/integers1.parquet' (FORMAT PARQUET);
-COPY (SELECT * FROM range(5000000, 10000000) tbl(i)) TO '__TEST_DIR__/integers2.parquet' (FORMAT PARQUET);
+COPY (SELECT * FROM range(5000000) tbl(i)) TO '{TEMP_DIR}/integers1.parquet' (FORMAT PARQUET);
+COPY (SELECT * FROM range(5000000, 10000000) tbl(i)) TO '{TEMP_DIR}/integers2.parquet' (FORMAT PARQUET);
 
 statement ok
-CREATE VIEW integers AS SELECT * FROM parquet_scan(['__TEST_DIR__/integers1.parquet', '__TEST_DIR__/integers2.parquet'])
+CREATE VIEW integers AS SELECT * FROM parquet_scan(['{TEMP_DIR}/integers1.parquet', '{TEMP_DIR}/integers2.parquet'])
 
 query I
 SELECT * FROM integers LIMIT 5

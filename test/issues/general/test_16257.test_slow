@@ -23,4 +23,4 @@ SET preserve_insertion_order=false;
 
 # added NULLs for issue #16306
 statement ok
-COPY (SELECT CASE WHEN random() < 0.01 THEN NULL ELSE lorem_sentence(random(), 20) END FROM range(1_000_000)) TO '__TEST_DIR__/16257.parquet' (PARQUET_VERSION V2, ROW_GROUP_SIZE 2_000_000);
+COPY (SELECT CASE WHEN random() < 0.01 THEN NULL ELSE lorem_sentence(random(), 20) END FROM range(1_000_000)) TO '{TEMP_DIR}/16257.parquet' (PARQUET_VERSION V2, ROW_GROUP_SIZE 2_000_000);

@@ -102,7 +102,7 @@ DROP TABLE integers
 
 # test insertion after matching prefixes
 
-load __TEST_DIR__/test_index.db
+load {LOCAL_TEMP_DIR}/test_index.db
 
 statement ok
 CREATE TABLE tbl_leaf_cov (id INTEGER);

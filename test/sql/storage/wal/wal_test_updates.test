@@ -3,7 +3,7 @@
 # group: [wal]
 
 # load the DB from disk
-load __TEST_DIR__/test_store_updates.db
+load {LOCAL_TEMP_DIR}/test_store_updates.db
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown

@@ -2,7 +2,7 @@
 # description: Issue 14132 - Out of memory on basic hash aggregations with large values/aggregates
 # group: [aggregates]
 
-load __TEST_DIR__/first_memory_usage.db
+load {LOCAL_TEMP_DIR}/first_memory_usage.db
 
 statement ok
 set threads=1;

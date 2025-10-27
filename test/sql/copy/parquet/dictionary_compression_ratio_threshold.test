@@ -10,46 +10,46 @@ statement ok
 CREATE TABLE test AS SELECT 'thisisaverylongstringbutitrepeatsmanytimessoitshighlycompressible' || (range % 10) i FROM range(100000)
 
 statement ok
-COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold -2)
+COPY test TO '{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold -2)
 
 
 # default is 1.0
 statement ok
-COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet'
+COPY test TO '{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet'
 
 # dictionary compression is applied so page offset is non-null
 query I
-SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet')
 ----
 false
 
 # -1 to disable
 statement ok
-COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold -1)
+COPY test TO '{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold -1)
 
 # ignored, still dictionary compression
 query I
-SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet')
 ----
 false
 
 # the data compresses more than 10x
 statement ok
-COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 10)
+COPY test TO '{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 10)
 
 # dictionary compression should be enabled
 query I
-SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet')
 ----
 false
 
 # compresses less than 20x
 statement ok
-COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 20)
+COPY test TO '{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 20)
 
 # dictionary compression still enabled, setting is deprecated
 query I
-SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet')
 ----
 false
 
@@ -59,18 +59,18 @@ CREATE OR REPLACE TABLE test AS SELECT 'coolstring' || range i FROM range(100000
 
 # should still have compression, setting is deprecated
 statement ok
-COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet'
+COPY test TO '{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet'
 
 query I
-SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet')
 ----
 true
 
 # but if we set our threshold to 0 we create a dictionary anyway
 statement ok
-COPY test TO '__TEST_DIR__/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 0)
+COPY test TO '{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet' (dictionary_compression_ratio_threshold 0)
 
 query I
-SELECT dictionary_page_offset IS NULL FROM parquet_metadata('__TEST_DIR__/dictionary_compression_ratio_threshold.parquet')
+SELECT dictionary_page_offset IS NULL FROM parquet_metadata('{TEMP_DIR}/dictionary_compression_ratio_threshold.parquet')
 ----
 true

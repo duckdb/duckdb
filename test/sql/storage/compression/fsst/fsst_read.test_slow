@@ -4,9 +4,9 @@
 # The database is written with a vector size of 2048.
 require vector_size 2048
 
-unzip data/storage/fsst.db.gz __TEST_DIR__/fsst.db
+unzip data/storage/fsst.db.gz {TEMP_DIR}/fsst.db
 
-load __TEST_DIR__/fsst.db readonly
+load {LOCAL_TEMP_DIR}/fsst.db readonly
 
 query I
 select count(street) from tbl;

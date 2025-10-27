@@ -19,7 +19,7 @@ statement ok
 INSERT INTO table1 VALUES ('Test value 2!');
 
 statement ok
-COPY table1 TO '__TEST_DIR__/output1.parquet' (FORMAT PARQUET);
+COPY table1 TO '{TEMP_DIR}/output1.parquet' (FORMAT PARQUET);
 
 statement ok
 CREATE TABLE table2 (
@@ -34,13 +34,13 @@ statement ok
 INSERT INTO table2 VALUES ('Other test value', 2);
 
 statement ok
-COPY table2 TO '__TEST_DIR__/output2.parquet' (FORMAT PARQUET);
+COPY table2 TO '{TEMP_DIR}/output2.parquet' (FORMAT PARQUET);
 
 statement ok
 set parquet_metadata_cache=true;
 
 query II
-SELECT name, number FROM read_parquet(['__TEST_DIR__/output*.parquet'], union_by_name=True) ORDER BY name, number
+SELECT name, number FROM read_parquet(['{TEMP_DIR}/output*.parquet'], union_by_name=True) ORDER BY name, number
 ----
 Other test value	1
 Other test value	2

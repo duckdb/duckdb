@@ -10,7 +10,7 @@ require vector_size 2048
 # table samples first collect only 1% of the table, until the table has a cardinality of 2048.
 # then the sample stays at a fixed 2048 values.
 
-load __TEST_DIR__/test_sample_converts_after_load.db
+load {LOCAL_TEMP_DIR}/test_sample_converts_after_load.db
 
 statement ok
 create table materialized_range as select 1 a from range(102400);

@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH DATABASE '__TEST_DIR__/view_search_path.db' AS view_search_path;
+ATTACH DATABASE '{LOCAL_TEMP_DIR}/view_search_path.db' AS view_search_path;
 
 statement ok
 USE view_search_path
@@ -46,7 +46,7 @@ FROM my_view
 84
 
 statement ok
-ATTACH DATABASE '__TEST_DIR__/view_search_path_other.db';
+ATTACH DATABASE '{LOCAL_TEMP_DIR}/view_search_path_other.db';
 
 statement ok
 USE view_search_path_other;
@@ -65,7 +65,7 @@ statement ok
 DETACH view_search_path
 
 statement ok
-ATTACH DATABASE '__TEST_DIR__/view_search_path.db' AS view_search_path;
+ATTACH DATABASE '{LOCAL_TEMP_DIR}/view_search_path.db' AS view_search_path;
 
 query I
 FROM view_search_path.my_view

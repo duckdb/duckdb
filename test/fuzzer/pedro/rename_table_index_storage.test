@@ -2,7 +2,7 @@
 # description: Index not correctly serialized after rename table
 # group: [pedro]
 
-load __TEST_DIR__/wal_rename_table.db
+load {LOCAL_TEMP_DIR}/wal_rename_table.db
 
 statement ok
 CREATE TABLE t0 (c0 INT);

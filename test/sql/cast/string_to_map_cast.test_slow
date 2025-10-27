@@ -323,10 +323,10 @@ statement ok
 CREATE TABLE assembled_maps(col1 MAP(INT, VARCHAR));
 
 statement ok
-COPY (SELECT '{8="hello, DuckDB"}') TO '__TEST_DIR__/assembled_maps.csv';
+COPY (SELECT '{8="hello, DuckDB"}') TO '{TEMP_DIR}/assembled_maps.csv';
 
 statement ok
-COPY assembled_maps FROM '__TEST_DIR__/assembled_maps.csv';
+COPY assembled_maps FROM '{TEMP_DIR}/assembled_maps.csv';
 
 query I
 SELECT * FROM assembled_maps;

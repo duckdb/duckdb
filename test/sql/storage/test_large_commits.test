@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/large_commits.db
+load {LOCAL_TEMP_DIR}/large_commits.db
 
 foreach compression <compression>
 

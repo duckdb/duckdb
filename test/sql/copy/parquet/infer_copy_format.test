@@ -8,17 +8,17 @@ statement ok
 CREATE TABLE integers AS SELECT * FROM range(6) tbl(i);
 
 statement ok
-COPY integers TO '__TEST_DIR__/integers.parquet';
+COPY integers TO '{TEMP_DIR}/integers.parquet';
 
 query I
-SELECT SUM(i) FROM '__TEST_DIR__/integers.parquet';
+SELECT SUM(i) FROM '{TEMP_DIR}/integers.parquet';
 ----
 15
 
 statement ok
-COPY integers TO '__TEST_DIR__/integers.csv';
+COPY integers TO '{TEMP_DIR}/integers.csv';
 
 query I
-SELECT SUM(i) FROM '__TEST_DIR__/integers.csv' tbl(i);
+SELECT SUM(i) FROM '{TEMP_DIR}/integers.csv' tbl(i);
 ----
 15

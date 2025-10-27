@@ -4,7 +4,7 @@
 
 require tpch
 
-load __TEST_DIR__/tpch_storage.db
+load {LOCAL_TEMP_DIR}/tpch_storage.db
 
 foreach compression <compression>
 

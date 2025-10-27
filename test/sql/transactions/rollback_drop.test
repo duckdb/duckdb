@@ -2,7 +2,7 @@
 # description: Rollback a drop then try to delete
 # group: [transactions]
 
-load __TEST_DIR__/rollback_drop.db
+load {LOCAL_TEMP_DIR}/rollback_drop.db
 
 statement ok
 create or replace table original_table as from range(10) select 1 as col

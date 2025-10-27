@@ -11,10 +11,10 @@ statement ok
 CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 1779793 UNION ALL SELECT 4779793;
 
 statement ok
-COPY (SELECT * FROM range(10000000) tbl(i)) TO '__TEST_DIR__/integers.parquet' (FORMAT PARQUET);
+COPY (SELECT * FROM range(10000000) tbl(i)) TO '{TEMP_DIR}/integers.parquet' (FORMAT PARQUET);
 
 statement ok
-CREATE VIEW integers AS SELECT * FROM '__TEST_DIR__/integers.parquet'
+CREATE VIEW integers AS SELECT * FROM '{TEMP_DIR}/integers.parquet'
 
 query I
 SELECT * FROM integers LIMIT 5

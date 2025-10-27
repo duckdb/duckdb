@@ -13,7 +13,7 @@ statement ok
 PRAGMA add_parquet_key('key128', '0123456789112345')
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION_CONFIG {footer_key: 'key128'})
+EXPORT DATABASE '{TEMP_DIR}/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION_CONFIG {footer_key: 'key128'})
 
 load :memory:
 
@@ -22,7 +22,7 @@ statement ok
 PRAGMA add_parquet_key('key128', '0123456789112345')
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/tpch_encrypted'
+IMPORT DATABASE '{TEMP_DIR}/tpch_encrypted'
 
 loop i 1 9
 
@@ -50,28 +50,28 @@ statement ok
 PRAGMA add_parquet_key('key128', '0123456789112345')
 
 statement ok
-CREATE VIEW lineitem AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/lineitem.parquet', encryption_config={footer_key: 'key128'});
+CREATE VIEW lineitem AS SELECT * FROM read_parquet('{TEMP_DIR}/tpch_encrypted/lineitem.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW orders AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/orders.parquet', encryption_config={footer_key: 'key128'});
+CREATE VIEW orders AS SELECT * FROM read_parquet('{TEMP_DIR}/tpch_encrypted/orders.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW partsupp AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/partsupp.parquet', encryption_config={footer_key: 'key128'});
+CREATE VIEW partsupp AS SELECT * FROM read_parquet('{TEMP_DIR}/tpch_encrypted/partsupp.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW part AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/part.parquet', encryption_config={footer_key: 'key128'});
+CREATE VIEW part AS SELECT * FROM read_parquet('{TEMP_DIR}/tpch_encrypted/part.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW customer AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/customer.parquet', encryption_config={footer_key: 'key128'});
+CREATE VIEW customer AS SELECT * FROM read_parquet('{TEMP_DIR}/tpch_encrypted/customer.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW supplier AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/supplier.parquet', encryption_config={footer_key: 'key128'});
+CREATE VIEW supplier AS SELECT * FROM read_parquet('{TEMP_DIR}/tpch_encrypted/supplier.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW nation AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/nation.parquet', encryption_config={footer_key: 'key128'});
+CREATE VIEW nation AS SELECT * FROM read_parquet('{TEMP_DIR}/tpch_encrypted/nation.parquet', encryption_config={footer_key: 'key128'});
 
 statement ok
-CREATE VIEW region AS SELECT * FROM read_parquet('__TEST_DIR__/tpch_encrypted/region.parquet', encryption_config={footer_key: 'key128'});
+CREATE VIEW region AS SELECT * FROM read_parquet('{TEMP_DIR}/tpch_encrypted/region.parquet', encryption_config={footer_key: 'key128'});
 
 loop i 1 9
 

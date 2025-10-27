@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/shutdown_running_transaction_updates.db
+load {LOCAL_TEMP_DIR}/shutdown_running_transaction_updates.db
 
 # create a database and insert values
 

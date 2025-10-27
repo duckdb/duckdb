@@ -3,7 +3,7 @@
 # group: [buffer_manager]
 
 # load the DB from disk
-load __TEST_DIR__/test_table_exceeding_limit.db
+load {LOCAL_TEMP_DIR}/test_table_exceeding_limit.db
 
 statement ok
 SET force_compression='uncompressed'

@@ -10,7 +10,7 @@ statement ok
 call dbgen(sf=1)
 
 statement ok
-export database '__TEST_DIR__/tpch_json' (format json)
+export database '{TEMP_DIR}/tpch_json' (format json)
 
 statement ok
 DROP TABLE customer;
@@ -48,7 +48,7 @@ SELECT
 	json['c_mktsegment']::VARCHAR AS c_mktsegment,
 	json['c_comment']::VARCHAR AS c_comment,
 FROM
-	read_json_auto('__TEST_DIR__/tpch_json/customer.json', records=false)
+	read_json_auto('{TEMP_DIR}/tpch_json/customer.json', records=false)
 
 statement ok
 CREATE VIEW lineitem AS
@@ -70,7 +70,7 @@ SELECT
 	json['l_shipmode']::VARCHAR AS l_shipmode,
 	json['l_comment']::VARCHAR AS l_comment,
 FROM
-	read_json_auto('__TEST_DIR__/tpch_json/lineitem.json', records=false)
+	read_json_auto('{TEMP_DIR}/tpch_json/lineitem.json', records=false)
 
 statement ok
 CREATE VIEW nation AS
@@ -80,7 +80,7 @@ SELECT
 	json['n_regionkey']::INTEGER AS n_regionkey,
 	json['n_comment']::VARCHAR AS n_comment,
 FROM
-	read_json_auto('__TEST_DIR__/tpch_json/nation.json', records=false)
+	read_json_auto('{TEMP_DIR}/tpch_json/nation.json', records=false)
 
 statement ok
 CREATE VIEW orders AS
@@ -95,7 +95,7 @@ SELECT
 	json['o_shippriority']::INTEGER AS o_shippriority,
 	json['o_comment']::VARCHAR AS o_comment,
 FROM
-	read_json_auto('__TEST_DIR__/tpch_json/orders.json', records=false)
+	read_json_auto('{TEMP_DIR}/tpch_json/orders.json', records=false)
 
 statement ok
 CREATE VIEW part AS
@@ -110,7 +110,7 @@ SELECT
 	json['p_retailprice']::DECIMAL(15,2) AS p_retailprice,
 	json['p_comment']::VARCHAR AS p_comment,
 FROM
-	read_json_auto('__TEST_DIR__/tpch_json/part.json', records=false)
+	read_json_auto('{TEMP_DIR}/tpch_json/part.json', records=false)
 
 statement ok
 CREATE VIEW partsupp AS
@@ -121,7 +121,7 @@ SELECT
 	json['ps_supplycost']::DECIMAL(15,2) AS ps_supplycost,
 	json['ps_comment']::VARCHAR AS ps_comment,
 FROM
-	read_json_auto('__TEST_DIR__/tpch_json/partsupp.json', records=false)
+	read_json_auto('{TEMP_DIR}/tpch_json/partsupp.json', records=false)
 
 statement ok
 CREATE VIEW region AS
@@ -130,7 +130,7 @@ SELECT
 	json['r_name']::VARCHAR AS r_name,
 	json['r_comment']::VARCHAR AS r_comment,
 FROM
-	read_json_auto('__TEST_DIR__/tpch_json/region.json', records=false)
+	read_json_auto('{TEMP_DIR}/tpch_json/region.json', records=false)
 
 statement ok
 CREATE VIEW supplier AS
@@ -143,7 +143,7 @@ SELECT
 	json['s_acctbal']::DECIMAL(15,2) AS s_acctbal,
 	json['s_comment']::VARCHAR AS s_comment,
 FROM
-	read_json_auto('__TEST_DIR__/tpch_json/supplier.json', records=false)
+	read_json_auto('{TEMP_DIR}/tpch_json/supplier.json', records=false)
 
 loop i 1 9
 

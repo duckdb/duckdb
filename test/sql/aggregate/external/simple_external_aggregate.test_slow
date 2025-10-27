@@ -2,7 +2,7 @@
 # description: Test simple external aggregate
 # group: [external]
 
-load __TEST_DIR__/simple_external_aggregate.db
+load {LOCAL_TEMP_DIR}/simple_external_aggregate.db
 
 statement ok
 create table random as select hash(range + 42) % 10_000_000 rand from range(10_000_000)

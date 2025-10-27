@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH DATABASE '__TEST_DIR__/wal_crash.db' as db1;
+ATTACH DATABASE '{LOCAL_TEMP_DIR}/wal_crash.db' as db1;
 
 statement ok
 USE db1;
@@ -36,7 +36,7 @@ statement ok
 detach db1;
 
 statement ok
-ATTACH DATABASE '__TEST_DIR__/wal_crash.db' as db1;
+ATTACH DATABASE '{LOCAL_TEMP_DIR}/wal_crash.db' as db1;
 
 statement ok
 INSERT INTO db1.t2 DEFAULT VALUES

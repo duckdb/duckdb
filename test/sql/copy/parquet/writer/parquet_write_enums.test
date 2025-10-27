@@ -25,10 +25,10 @@ INSERT INTO enums VALUES
     ('happy'), ('happy'), ('joy'), ('joy'), ('joy')
 
 statement ok
-COPY enums TO '__TEST_DIR__/enums.parquet' (FORMAT PARQUET);
+COPY enums TO '{TEMP_DIR}/enums.parquet' (FORMAT PARQUET);
 
 query I
-SELECT * FROM '__TEST_DIR__/enums.parquet'
+SELECT * FROM '{TEMP_DIR}/enums.parquet'
 ----
 happy
 happy
@@ -65,10 +65,10 @@ statement ok
 UPDATE enums SET m=NULL WHERE m='joy'
 
 statement ok
-COPY enums TO '__TEST_DIR__/enums.parquet' (FORMAT PARQUET);
+COPY enums TO '{TEMP_DIR}/enums.parquet' (FORMAT PARQUET);
 
 query I
-SELECT * FROM '__TEST_DIR__/enums.parquet'
+SELECT * FROM '{TEMP_DIR}/enums.parquet'
 ----
 happy
 happy
@@ -105,10 +105,10 @@ statement ok
 UPDATE enums SET m=NULL
 
 statement ok
-COPY enums TO '__TEST_DIR__/enums.parquet' (FORMAT PARQUET);
+COPY enums TO '{TEMP_DIR}/enums.parquet' (FORMAT PARQUET);
 
 query I
-SELECT * FROM '__TEST_DIR__/enums.parquet'
+SELECT * FROM '{TEMP_DIR}/enums.parquet'
 ----
 NULL
 NULL

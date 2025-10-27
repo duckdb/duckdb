@@ -4,12 +4,12 @@
 
 require tpcds
 
-load __TEST_DIR__/test_dsdgen_ro.db
+load {LOCAL_TEMP_DIR}/test_dsdgen_ro.db
 
 statement ok
 CREATE TABLE tbl (i INTEGER);
 
-load __TEST_DIR__/test_dsdgen_ro.db readonly
+load {LOCAL_TEMP_DIR}/test_dsdgen_ro.db readonly
 
 statement error
 CALL dsdgen(sf=0);
@@ -19,7 +19,7 @@ read-only
 load
 
 statement ok
-ATTACH '__TEST_DIR__/test_dsdgen_ro.db' AS dsdgentest (READ_ONLY)
+ATTACH '{LOCAL_TEMP_DIR}/test_dsdgen_ro.db' AS dsdgentest (READ_ONLY)
 
 statement error
 CALL dsdgen(sf=0, catalog='dsdgentest');

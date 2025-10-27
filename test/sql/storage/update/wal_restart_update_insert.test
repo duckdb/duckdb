@@ -3,7 +3,7 @@
 # group: [update]
 
 # load the DB from disk
-load __TEST_DIR__/wal_restart_update_insert.test.db
+load {LOCAL_TEMP_DIR}/wal_restart_update_insert.test.db
 
 statement ok
 CREATE TABLE test(i INTEGER PRIMARY KEY, j INTEGER);

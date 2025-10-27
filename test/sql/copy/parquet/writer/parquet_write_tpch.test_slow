@@ -15,10 +15,10 @@ CALL dbgen(sf=1, schema='tpch');
 foreach tbl lineitem nation orders supplier part partsupp region customer
 
 statement ok
-COPY tpch.${tbl} TO '__TEST_DIR__/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+COPY tpch.${tbl} TO '{TEMP_DIR}/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
 
 statement ok
-CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('__TEST_DIR__/${tbl}.parquet');
+CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('{TEMP_DIR}/${tbl}.parquet');
 
 endloop
 

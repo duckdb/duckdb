@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/large_delete_wal.db
+load {LOCAL_TEMP_DIR}/large_delete_wal.db
 
 statement ok
 SET checkpoint_threshold='1MB'

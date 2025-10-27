@@ -33,7 +33,7 @@ CREATE TABLE other.dont_export_me (i integer);
 
 # now export the db
 statement ok
-EXPORT DATABASE db1 TO '__TEST_DIR__/export_test' (FORMAT CSV)
+EXPORT DATABASE db1 TO '{TEMP_DIR}/export_test' (FORMAT CSV)
 
 statement ok
 rollback;
@@ -50,7 +50,7 @@ statement ok
 drop view integers_view;
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/export_test'
+IMPORT DATABASE '{TEMP_DIR}/export_test'
 
 query I nosort q1
 SELECT * FROM integers ORDER BY i NULLS LAST

@@ -2,7 +2,7 @@
 # description: Temp sequence durability
 # group: [pedro]
 
-load __TEST_DIR__/temp_sequence_durability.db
+load {LOCAL_TEMP_DIR}/temp_sequence_durability.db
 
 statement ok
 PRAGMA DISABLE_CHECKPOINT_ON_SHUTDOWN;

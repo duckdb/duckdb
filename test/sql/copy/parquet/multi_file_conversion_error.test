@@ -5,13 +5,13 @@
 require parquet
 
 statement ok
-copy (select 42 as a) to '__TEST_DIR__/conversion_error1.parquet';
+copy (select 42 as a) to '{TEMP_DIR}/conversion_error1.parquet';
 
 statement ok
-copy (select blob 'hello world' as a) to '__TEST_DIR__/conversion_error2.parquet';
+copy (select blob 'hello world' as a) to '{TEMP_DIR}/conversion_error2.parquet';
 
 statement error
-SELECT * FROM read_parquet(['__TEST_DIR__/conversion_error1.parquet', '__TEST_DIR__/conversion_error2.parquet'])
+SELECT * FROM read_parquet(['{TEMP_DIR}/conversion_error1.parquet', '{TEMP_DIR}/conversion_error2.parquet'])
 ----
 failed to cast column "a" from type BLOB to INTEGER
 
@@ -19,6 +19,6 @@ statement ok
 CREATE TABLE integers(i INT);
 
 statement error
-COPY integers FROM '__TEST_DIR__/conversion_error*.parquet'
+COPY integers FROM '{TEMP_DIR}/conversion_error*.parquet'
 ----
 column "a" has type BLOB, but we are trying to load it into column "i" with type INTEGER

@@ -3,7 +3,7 @@
 # group: [catalog]
 
 # load the DB from disk
-load __TEST_DIR__/test_drop_table.db
+load {LOCAL_TEMP_DIR}/test_drop_table.db
 
 
 # create a schema and table and insert values

@@ -2,7 +2,7 @@
 # description: Test rolling back writes to many tables
 # group: [vacuum]
 
-load __TEST_DIR__/art_vacuum_rollback.db
+load {LOCAL_TEMP_DIR}/art_vacuum_rollback.db
 
 loop i 0 10
 

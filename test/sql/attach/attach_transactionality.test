@@ -10,7 +10,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/attach_transaction.db'
+ATTACH '{LOCAL_TEMP_DIR}/attach_transaction.db'
 
 statement ok
 ROLLBACK
@@ -21,7 +21,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/attach_transaction.db'
+ATTACH '{LOCAL_TEMP_DIR}/attach_transaction.db'
 
 statement ok
 CREATE TABLE attach_transaction.integers(i INTEGER)
@@ -37,7 +37,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/attach_transaction.db'
+ATTACH '{LOCAL_TEMP_DIR}/attach_transaction.db'
 
 statement ok
 CREATE TABLE attach_transaction.integers(i INTEGER)
@@ -68,7 +68,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/attach_transaction.db'
+ATTACH '{LOCAL_TEMP_DIR}/attach_transaction.db'
 
 statement ok
 INSERT INTO attach_transaction.integers VALUES (84)
@@ -84,7 +84,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-ATTACH '__TEST_DIR__/attach_transaction.db'
+ATTACH '{LOCAL_TEMP_DIR}/attach_transaction.db'
 
 # verify the previous data was not written
 query I
@@ -103,7 +103,7 @@ COMMIT
 
 # now if we attach we should see [42, 84]
 statement ok
-ATTACH '__TEST_DIR__/attach_transaction.db'
+ATTACH '{LOCAL_TEMP_DIR}/attach_transaction.db'
 
 query I
 SELECT * FROM attach_transaction.integers ORDER BY 1

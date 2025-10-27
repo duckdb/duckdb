@@ -5,7 +5,7 @@
 foreach cipher GCM CTR
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 statement ok
 SET temp_file_encryption=true;
@@ -20,7 +20,7 @@ statement ok
 PRAGMA threads=4
 
 statement ok
-SET temp_directory='__TEST_DIR__/temp.tmp'
+SET temp_directory='{LOCAL_TEMP_DIR}/temp.tmp'
 
 # Force PhysicalAsOfJoin
 statement ok

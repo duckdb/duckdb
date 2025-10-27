@@ -5,7 +5,7 @@ statement ok
 pragma enable_verification;
 
 statement ok
-attach '__TEST_DIR__/backup.db';
+ATTACH '{LOCAL_TEMP_DIR}/backup.db';
 
 ## Only specifying a sequence name
 

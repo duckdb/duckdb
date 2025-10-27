@@ -36,10 +36,10 @@ SET enable_geoparquet_conversion = true;
 
 statement ok
 COPY (SELECT col, ST_GeomFromText(geometry) as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv')
-TO '__TEST_DIR__/data-point-out-enabled.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-point-out-enabled.parquet' (FORMAT PARQUET)
 
 query II rowsort
-SELECT col, st_astext(geometry) FROM '__TEST_DIR__/data-point-out-enabled.parquet'
+SELECT col, st_astext(geometry) FROM '{TEMP_DIR}/data-point-out-enabled.parquet'
 ----
 0	POINT (30 10)
 1	POINT EMPTY
@@ -49,7 +49,7 @@ SELECT col, st_astext(geometry) FROM '__TEST_DIR__/data-point-out-enabled.parque
 # Check that we wrote GeoParquet metadata to the footer
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-enabled.parquet');
+FROM parquet_kv_metadata('{TEMP_DIR}/data-point-out-enabled.parquet');
 ----
 {"version":"1.0.0","primary_column":"geometry","columns":{"geometry":{"encoding":"WKB","geometry_types":["Point"],"bbox":[30.0,10.0,40.0,40.0]}}}
 
@@ -61,11 +61,11 @@ SET enable_geoparquet_conversion = false;
 
 statement ok
 COPY (SELECT col, ST_GeomFromText(geometry) as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv')
-TO '__TEST_DIR__/data-point-out-disabled.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-point-out-disabled.parquet' (FORMAT PARQUET)
 
 # The bytes differ because this is serialized GEOMETRY, not WKB
 query II rowsort
-SELECT col, geometry FROM '__TEST_DIR__/data-point-out-disabled.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-point-out-disabled.parquet'
 ----
 0	\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\x00\x00\x00\x00\x00\x00$@
 1	\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
@@ -75,7 +75,7 @@ SELECT col, geometry FROM '__TEST_DIR__/data-point-out-disabled.parquet'
 # Check that we didnt write any GeoParquet metadata to the footer
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-disabled.parquet');
+FROM parquet_kv_metadata('{TEMP_DIR}/data-point-out-disabled.parquet');
 ----
 
 
@@ -83,10 +83,10 @@ FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-disabled.parquet');
 
 statement ok
 COPY (SELECT col, ST_AsWKB(ST_GeomFromText(geometry)) as geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-wkt.csv')
-TO '__TEST_DIR__/data-point-out-disabled-wkb.parquet' (FORMAT PARQUET)
+TO '{TEMP_DIR}/data-point-out-disabled-wkb.parquet' (FORMAT PARQUET)
 
 query II rowsort
-SELECT col, geometry FROM '__TEST_DIR__/data-point-out-disabled-wkb.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-point-out-disabled-wkb.parquet'
 ----
 0	\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\x00\x00\x00\x00\x00\x00$@
 1	\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F
@@ -95,5 +95,5 @@ SELECT col, geometry FROM '__TEST_DIR__/data-point-out-disabled-wkb.parquet'
 
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-disabled-wkb.parquet');
+FROM parquet_kv_metadata('{TEMP_DIR}/data-point-out-disabled-wkb.parquet');
 ----

@@ -16,10 +16,10 @@ SET preserve_insertion_order=false
 foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
 statement ok
-COPY ${tpch_tbl}_original TO '__TEST_DIR__/${tpch_tbl}.csv' (DELIMITER '|', HEADER);
+COPY ${tpch_tbl}_original TO '{TEMP_DIR}/${tpch_tbl}.csv' (DELIMITER '|', HEADER);
 
 statement ok
-COPY ${tpch_tbl} FROM '__TEST_DIR__/${tpch_tbl}.csv' (DELIMITER '|', HEADER);
+COPY ${tpch_tbl} FROM '{TEMP_DIR}/${tpch_tbl}.csv' (DELIMITER '|', HEADER);
 
 endloop
 

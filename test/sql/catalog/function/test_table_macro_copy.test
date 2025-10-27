@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-load __TEST_DIR__/table_macro.db
+load {LOCAL_TEMP_DIR}/table_macro.db
 
 statement ok
 CREATE TABLE test_tbl (id INT, name string);
@@ -125,7 +125,7 @@ main	sgreek	table_macro	NULL	NULL	[a, b, c]	[NULL, NULL, NULL]	NULL	SELECT a, b 
 main	xt	table_macro	NULL	NULL	[id, imax]	[NULL, NULL]	NULL	SELECT id, "name" FROM test_tbl WHERE (id <= imax)
 
 statement ok
-ATTACH '__TEST_DIR__/table_macro2.db'
+ATTACH '{LOCAL_TEMP_DIR}/table_macro2.db'
 
 statement ok
 COPY FROM DATABASE table_macro TO table_macro2

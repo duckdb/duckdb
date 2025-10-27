@@ -18,7 +18,7 @@ system	true	false	NULL	duckdb
 temp	true	false	NULL	duckdb
 
 statement ok
-ATTACH '__TEST_DIR__/duckdb_databases.db' AS new_duckdb_database
+ATTACH '{LOCAL_TEMP_DIR}/duckdb_databases.db' AS new_duckdb_database
 
 query IIII
 SELECT database_name, internal, split(replace(path, '\', '/'), '/')[-1], type FROM duckdb_databases() WHERE path IS NOT NULL;
@@ -50,7 +50,7 @@ statement ok
 DETACH new_duckdb_database;
 
 statement ok
-ATTACH '__TEST_DIR__/duckdb_databases.db' AS readonly_duckdb_database (READONLY 1);
+ATTACH '{LOCAL_TEMP_DIR}/duckdb_databases.db' AS readonly_duckdb_database (READONLY 1);
 
 query I
 SELECT readonly FROM duckdb_databases WHERE database_name='readonly_duckdb_database';

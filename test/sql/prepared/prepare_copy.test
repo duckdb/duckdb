@@ -8,7 +8,7 @@ statement ok
 PREPARE q1 AS
 	COPY (
 		select $1 as 'col'
-	) to '__TEST_DIR__/res.csv' (
+	) to '{TEMP_DIR}/res.csv' (
 		FORMAT csv
 	);
 
@@ -16,7 +16,7 @@ statement ok
 execute q1 (42);
 
 query I
-select i from '__TEST_DIR__/res.csv' tbl(i);
+select i from '{TEMP_DIR}/res.csv' tbl(i);
 ----
 42
 
@@ -29,9 +29,9 @@ PREPARE q2 AS
 	);
 
 statement ok
-EXECUTE q2('__TEST_DIR__/res2.csv')
+EXECUTE q2('{TEMP_DIR}/res2.csv')
 
 query I
-select i from '__TEST_DIR__/res2.csv' tbl(i);
+select i from '{TEMP_DIR}/res2.csv' tbl(i);
 ----
 42

@@ -6,25 +6,25 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-copy (select 'name' as name, 1 as i from range(10000000) union all select 'name', 'hello world' union all select 'name', 'xxxxx' union all select 'name', 1 from range(10000)) to '__TEST_DIR__/bigcsv.csv';
+copy (select 'name' as name, 1 as i from range(10000000) union all select 'name', 'hello world' union all select 'name', 'xxxxx' union all select 'name', 1 from range(10000)) to '{TEMP_DIR}/bigcsv.csv';
 
 query I
-select count(*) from '__TEST_DIR__/bigcsv.csv';
+select count(*) from '{TEMP_DIR}/bigcsv.csv';
 ----
 10010002
 
 statement error
-select count(i), count(*) from '__TEST_DIR__/bigcsv.csv';
+select count(i), count(*) from '{TEMP_DIR}/bigcsv.csv';
 ----
 Error when converting column "i".
 
 statement error
-select name, i, count(*) from read_csv('__TEST_DIR__/bigcsv.csv') group by all;
+select name, i, count(*) from read_csv('{TEMP_DIR}/bigcsv.csv') group by all;
 ----
 Error when converting column "i".
 
 query III
-select name, i, count(*) from read_csv('__TEST_DIR__/bigcsv.csv', types={'i': 'VARCHAR'}) group by all order by all;
+select name, i, count(*) from read_csv('{TEMP_DIR}/bigcsv.csv', types={'i': 'VARCHAR'}) group by all order by all;
 ----
 name	1	10010000
 name	hello world	1

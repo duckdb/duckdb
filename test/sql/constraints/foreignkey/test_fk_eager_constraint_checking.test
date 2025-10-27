@@ -6,7 +6,7 @@ statement ok
 SET storage_compatibility_version = 'v0.10.3';
 
 statement ok
-ATTACH '__TEST_DIR__/test_fk_eager.db' AS fk_db;
+ATTACH '{LOCAL_TEMP_DIR}/test_fk_eager.db' AS fk_db;
 
 statement ok
 USE fk_db;
@@ -28,7 +28,7 @@ statement ok
 INSERT INTO tbl_fk VALUES (1), (1), (1);
 
 statement ok
-ATTACH '__TEST_DIR__/test_other_fk_eager.db' AS other_fk_db;
+ATTACH '{LOCAL_TEMP_DIR}/test_other_fk_eager.db' AS other_fk_db;
 
 statement ok
 USE other_fk_db;
@@ -41,7 +41,7 @@ statement ok
 DETACH fk_db;
 
 statement ok
-ATTACH '__TEST_DIR__/test_fk_eager.db' AS fk_db;
+ATTACH '{LOCAL_TEMP_DIR}/test_fk_eager.db' AS fk_db;
 
 # Now, we try to update the PK table.
 # The over-eager constraint checking fix is not yet supported for FKs, thus, we throw a constraint violation.

@@ -4,7 +4,7 @@
 require block_size 262144
 
 statement ok
-SET temp_directory='__TEST_DIR__/test_temp_dir'
+SET temp_directory='{LOCAL_TEMP_DIR}/test_temp_dir'
 
 statement ok
 SET memory_limit = '8MB';
@@ -14,7 +14,7 @@ SET enable_external_access=false
 
 # cannot modify the temp directory when enable_external_access is set
 statement error
-SET temp_directory='__TEST_DIR__/new_temp_dir'
+SET temp_directory='{LOCAL_TEMP_DIR}/new_temp_dir'
 ----
 disabled by configuration
 

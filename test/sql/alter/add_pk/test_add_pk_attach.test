@@ -4,7 +4,7 @@
 
 require skip_reload
 
-load __TEST_DIR__/test_add_pk_attach.db
+load {LOCAL_TEMP_DIR}/test_add_pk_attach.db
 
 statement ok
 PRAGMA enable_verification
@@ -28,7 +28,7 @@ statement ok
 DETACH test_add_pk_attach
 
 statement ok
-ATTACH '__TEST_DIR__/test_add_pk_attach.db' as test_add_pk_attach
+ATTACH '{LOCAL_TEMP_DIR}/test_add_pk_attach.db' as test_add_pk_attach
 
 statement ok
 USE test_add_pk_attach

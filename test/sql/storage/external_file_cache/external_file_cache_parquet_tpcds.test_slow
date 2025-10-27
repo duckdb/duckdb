@@ -20,7 +20,7 @@ CALL dsdgen(sf=1, schema='tpcds');
 foreach tpcds_tbl call_center household_demographics store_returns catalog_page income_band store_sales catalog_returns inventory time_dim catalog_sales item warehouse customer promotion web_page customer_address reason web_returns customer_demographics ship_mode web_sales date_dim store web_site
 
 statement ok
-COPY tpcds.${tpcds_tbl} TO '__TEST_DIR__/efc_${tpcds_tbl}.parquet';
+COPY tpcds.${tpcds_tbl} TO '{TEMP_DIR}/efc_${tpcds_tbl}.parquet';
 
 endloop
 
@@ -35,7 +35,7 @@ sleep 11 seconds
 foreach tpcds_tbl call_center household_demographics store_returns catalog_page income_band store_sales catalog_returns inventory time_dim catalog_sales item warehouse customer promotion web_page customer_address reason web_returns customer_demographics ship_mode web_sales date_dim store web_site
 
 statement ok
-CREATE VIEW ${tpcds_tbl} AS FROM read_parquet('__TEST_DIR__/efc_${tpcds_tbl}.parquet');
+CREATE VIEW ${tpcds_tbl} AS FROM read_parquet('{TEMP_DIR}/efc_${tpcds_tbl}.parquet');
 
 endloop
 

@@ -11,7 +11,7 @@ copy (
     range % 10000 l_suppkey,
     range % 7 l_linenumber,
     from range(6_000_000)
-) to '__TEST_DIR__/test_efc_lineitem.parquet' (row_group_size 6_000_000);
+) to '{TEMP_DIR}/test_efc_lineitem.parquet' (row_group_size 6_000_000);
 
 # this is empty since we didn't query anything yet
 # throughout this file we round the bytes to whole MBs due to small differences between OSs somehow
@@ -25,7 +25,7 @@ statement ok
 set prefetch_all_parquet_files=true;
 
 statement ok
-create view lineitem as from '__TEST_DIR__/test_efc_lineitem.parquet';
+create view lineitem as from '{TEMP_DIR}/test_efc_lineitem.parquet';
 
 # we require that the last modified time is more than 10 seconds in the past
 # otherwise, we run into problems with file systems with low time resolution for last modified time
@@ -102,10 +102,10 @@ set enable_external_file_cache=true;
 loop i 0 100
 
 statement ok
-copy (select ${i} i) to '__TEST_DIR__/test_efc_i.parquet';
+copy (select ${i} i) to '{TEMP_DIR}/test_efc_i.parquet';
 
 query I
-select i = ${i} from '__TEST_DIR__/test_efc_i.parquet';
+select i = ${i} from '{TEMP_DIR}/test_efc_i.parquet';
 ----
 true
 

@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification;
 
 statement ok
-ATTACH '__TEST_DIR__/copy_db_old.db' AS old;
+ATTACH '{LOCAL_TEMP_DIR}/copy_db_old.db' AS old;
 
 statement ok
 CREATE TABLE old.items (id INT, uniq INT UNIQUE);
@@ -18,7 +18,7 @@ statement ok
 CREATE UNIQUE INDEX idx_id ON old.items(id);
 
 statement ok
-ATTACH '__TEST_DIR__/copy_db_new1.db' AS new1;
+ATTACH '{LOCAL_TEMP_DIR}/copy_db_new1.db' AS new1;
 
 statement ok
 COPY FROM DATABASE old TO new1 (SCHEMA);
@@ -47,7 +47,7 @@ statement ok
 DETACH new1;
 
 statement ok
-ATTACH '__TEST_DIR__/copy_db_new1.db' AS new1;
+ATTACH '{LOCAL_TEMP_DIR}/copy_db_new1.db' AS new1;
 
 statement error
 INSERT INTO new1.items VALUES (1, 4);

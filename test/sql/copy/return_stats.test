@@ -89,113 +89,113 @@ SET preserve_insertion_order=${PRESERVE_INSERTION_ORDER};
 
 # single column
 query IIIIII
-COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
+COPY integers TO '{TEMP_DIR}/test_copy_to_file.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"i"'={column_size_bytes=\d+, max=199999, min=0, null_count=0}}	NULL
 
 # multi-column
 query IIIIII
-COPY multi_column_test TO '__TEST_DIR__/multi_column_copy.parquet' (RETURN_STATS);
+COPY multi_column_test TO '{TEMP_DIR}/multi_column_copy.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"i"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}, '"j"'={column_size_bytes=\d+, max=9, min=0, null_count=0}, '"k"'={column_size_bytes=\d+, max=2499, min=1, null_count=1250}}	NULL
 
 # strings
 query IIIIII
-COPY string_test TO '__TEST_DIR__/string_test.parquet' (RETURN_STATS);
+COPY string_test TO '{TEMP_DIR}/string_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*string_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"s"'={column_size_bytes=\d+, max=thisisalongstring_999, min=thisisalongstring_0, null_count=0}}	NULL
 
 # timestamps/dates
 query IIIIII
-COPY date_test TO '__TEST_DIR__/date_test.parquet' (RETURN_STATS);
+COPY date_test TO '{TEMP_DIR}/date_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*date_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dt"'={column_size_bytes=\d+, max=2006-11-04, min=2000-01-01, null_count=0}, '"t"'={column_size_bytes=\d+, max='06:56:30', min='00:00:00', null_count=0}, '"ts"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123456', min='2000-01-01 12:12:12.123456', null_count=0}, '"ts_ms"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123', min='2000-01-01 12:12:12.123', null_count=0}, '"ts_ns"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123456789', min='2000-01-01 12:12:12.123456789', null_count=0}, '"ts_s"'={column_size_bytes=\d+, max='2006-11-04 12:12:12', min='2000-01-01 12:12:12', null_count=0}}	NULL
 
 # empty table
 query IIIIII
-COPY empty_test TO '__TEST_DIR__/empty_test.parquet' (RETURN_STATS);
+COPY empty_test TO '{TEMP_DIR}/empty_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*empty_test.parquet	0	<REGEX>:\d+	<REGEX>:\d+	{'"range"'={column_size_bytes=0, null_count=0}}	NULL
 
 # blobs
 query IIIIII
-COPY blob_test TO '__TEST_DIR__/blob_test.parquet' (RETURN_STATS);
+COPY blob_test TO '{TEMP_DIR}/blob_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*blob_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"bl"'={column_size_bytes=\d+, max=800080, min='', null_count=0}}	NULL
 
 # decimal
 query IIIIII
-COPY decimal_test TO '__TEST_DIR__/decimal_test.parquet' (RETURN_STATS);
+COPY decimal_test TO '{TEMP_DIR}/decimal_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dec_i16"'={column_size_bytes=\d+, max=25.3, min=1.1, null_count=0}, '"dec_i32"'={column_size_bytes=\d+, max=123456.789, min=2.123, null_count=0}, '"dec_i64"'={column_size_bytes=\d+, max=123456789123.456, min=3.456, null_count=0}}	NULL
 
 # floating point numbers
 query IIIIII
-COPY floating_point_test TO '__TEST_DIR__/fp.parquet' (RETURN_STATS);
+COPY floating_point_test TO '{TEMP_DIR}/fp.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*fp.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=false, max=249.9, min=0.1, null_count=250}}	NULL
 
 query IIIIII
-COPY floating_point_nan TO '__TEST_DIR__/fp_nan.parquet' (RETURN_STATS);
+COPY floating_point_nan TO '{TEMP_DIR}/fp_nan.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*fp_nan.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=true, max=249.9, min=0.1, null_count=500}}	NULL
 
 query IIIIII
-COPY fp_nan_only TO '__TEST_DIR__/fp_nan_only.parquet' (RETURN_STATS);
+COPY fp_nan_only TO '{TEMP_DIR}/fp_nan_only.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*fp_nan_only.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"float_val"'={column_size_bytes=\d+, has_nan=true, null_count=0}}	NULL
 
 # large strings are truncated to the nearest valid UTF8 string
 query IIIIII
-COPY large_string TO '__TEST_DIR__/test_large_string.parquet' (RETURN_STATS);
+COPY large_string TO '{TEMP_DIR}/test_large_string.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*test_large_string.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max='ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\[', min=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA, null_count=0}}	NULL
 
 # large blobs are just truncated to 256 bytes
 query IIIIII
-COPY large_blob TO '__TEST_DIR__/test_large_blob.parquet' (RETURN_STATS);
+COPY large_blob TO '{TEMP_DIR}/test_large_blob.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*test_large_blob.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=81818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818182, min=80808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080, null_count=0}}	NULL
 
 # uuid value
 query IIIIII
-COPY uuids TO '__TEST_DIR__/test_uuids.parquet' (RETURN_STATS);
+COPY uuids TO '{TEMP_DIR}/test_uuids.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*test_uuids.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"uuid_val"'={column_size_bytes=\d+, max=47183823-2574-4bfd-b411-99ed177d3e43, min=00112233-4455-6677-8899-aabbccddeeff, null_count=0}}	NULL
 
 # struct
 query IIIIII
-COPY struct_test TO '__TEST_DIR__/struct_test.parquet' (RETURN_STATS);
+COPY struct_test TO '{TEMP_DIR}/struct_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"struct_val"."x"'={column_size_bytes=\d+, max=2499, min=1, null_count=250}, '"struct_val"."y"'={column_size_bytes=\d+, max=2598, min=102, null_count=1500}}	NULL
 
 # list
 query IIIIII
-COPY list_test TO '__TEST_DIR__/list_test.parquet' (RETURN_STATS);
+COPY list_test TO '{TEMP_DIR}/list_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*list_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"l1"."element"'={column_size_bytes=\d+, max=2499, min=0}, '"l2"."element"'={column_size_bytes=\d+, max=2598, min=102}}	NULL
 
 # nested struct
 query IIIIII
-COPY nested_struct_test TO '__TEST_DIR__/nested_struct_test.parquet' (RETURN_STATS);
+COPY nested_struct_test TO '{TEMP_DIR}/nested_struct_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*nested_struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"n"."s1"."x"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}, '"n"."s2"."l"."element"'={column_size_bytes=\d+, max=2499, min=0}, '"n"."s2"."s3"."y"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}}	NULL
 
 # quoted/funky column names
 query IIIIII
-COPY funky_names TO '__TEST_DIR__/funky_names.parquet' (RETURN_STATS);
+COPY funky_names TO '{TEMP_DIR}/funky_names.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*funky_names.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"""quoted col name"""."quoted \\'""field name"""'={column_size_bytes=\d+, max=42, min=42, null_count=0}}	NULL
 
 # map
 query IIIIII
-COPY map_test TO '__TEST_DIR__/map_test.parquet' (RETURN_STATS);
+COPY map_test TO '{TEMP_DIR}/map_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*map_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"map_val"."key"'={column_size_bytes=\d+, max=key999, min=key0}, '"map_val"."value"'={column_size_bytes=\d+, max=2499, min=0}}	NULL
 
 # array
 query IIIIII
-COPY array_test TO '__TEST_DIR__/array_test.parquet' (RETURN_STATS);
+COPY array_test TO '{TEMP_DIR}/array_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*array_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"array_val"."element"'={column_size_bytes=\d+, max=2501, min=0}}	NULL
 
@@ -203,13 +203,13 @@ endloop
 
 # partition_by
 query IIIIII rowsort
-COPY partitioned_test TO '__TEST_DIR__/partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key), RETURN_STATS, OVERWRITE);
+COPY partitioned_test TO '{TEMP_DIR}/partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key), RETURN_STATS);
 ----
 <REGEX>:.*partitioned_test.*partition_key=0.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2498, min=0, null_count=0}}	{partition_key=0}
 <REGEX>:.*partitioned_test.*partition_key=1.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2499, min=1, null_count=0}}	{partition_key=1}
 
 query IIIIII rowsort
-COPY multi_partitioned_test TO '__TEST_DIR__/multi_partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key, partition_key2), RETURN_STATS, OVERWRITE);
+COPY multi_partitioned_test TO '{TEMP_DIR}/multi_partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key, partition_key2), RETURN_STATS);
 ----
 <REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=0.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2496, min=0, null_count=0}}	{partition_key=0, partition_key2=0}
 <REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=1.*[.]parquet	416	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"val"'={column_size_bytes=\d+, max=2494, min=4, null_count=0}}	{partition_key=0, partition_key2=1}
@@ -220,10 +220,10 @@ COPY multi_partitioned_test TO '__TEST_DIR__/multi_partitioned_test' (FORMAT PAR
 
 # test all types
 statement ok
-COPY (FROM test_all_types()) TO '__TEST_DIR__/test_all_types.parquet' (RETURN_STATS);
+COPY (FROM test_all_types()) TO '{TEMP_DIR}/test_all_types.parquet' (RETURN_STATS);
 
 # unsupported format (CSV)
 statement error
-COPY integers TO '__TEST_DIR__/test_copy_to_file.csv' (RETURN_STATS);
+COPY integers TO '{TEMP_DIR}/test_copy_to_file.csv' (RETURN_STATS);
 ----
 not supported

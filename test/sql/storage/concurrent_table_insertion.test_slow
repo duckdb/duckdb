@@ -9,7 +9,7 @@ require no_vector_verification
 
 mode skip
 
-load __TEST_DIR__/concurrent_table_insertions.db
+load {LOCAL_TEMP_DIR}/concurrent_table_insertions.db
 
 statement ok
 CREATE OR REPLACE TABLE d (x INT, y INT, z INT);

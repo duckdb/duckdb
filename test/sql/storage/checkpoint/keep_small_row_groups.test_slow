@@ -2,7 +2,7 @@
 # description: Test keeping small row groups
 # group: [checkpoint]
 
-load __TEST_DIR__/keep_small_row_groups.db
+load {LOCAL_TEMP_DIR}/keep_small_row_groups.db
 
 foreach type noindex index
 

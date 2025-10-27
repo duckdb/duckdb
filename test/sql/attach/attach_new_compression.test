@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/test_new_compression.db' AS db1 (STORAGE_VERSION 'v1.0.0');
+ATTACH '{LOCAL_TEMP_DIR}/test_new_compression.db' AS db1 (STORAGE_VERSION 'v1.0.0');
 
 statement ok
 SET force_compression='roaring'
@@ -36,7 +36,7 @@ DETACH db1
 
 # attach with a new storage version and re-write the table
 statement ok
-ATTACH '__TEST_DIR__/test_new_compression.db' AS db1 (STORAGE_VERSION 'v1.2.0');
+ATTACH '{LOCAL_TEMP_DIR}/test_new_compression.db' AS db1 (STORAGE_VERSION 'v1.2.0');
 
 statement ok
 SET force_compression='roaring'

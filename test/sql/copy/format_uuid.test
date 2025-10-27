@@ -43,61 +43,61 @@ SELECT * FROM test2;
 
 # Test with the FILENAME_PATTERN option. "{uuid}" will be replaced with a unique string.
 statement ok
-COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "leading_{uuid}");
+COPY test2 TO '{TEMP_DIR}/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "leading_{uuid}");
 
 # the filename contains a uuid
 query III
-SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????.parquet';
+SELECT * FROM '{TEMP_DIR}/part/a=9/leading_????????-????-4???-????-????????????.parquet';
 ----
 18	81	9
 
 statement ok
-COPY test2 TO '__TEST_DIR__/trailing' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "{uuid}_trailing");
+COPY test2 TO '{TEMP_DIR}/trailing' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "{uuid}_trailing");
 
 # the filename contains a uuid
 query III
-SELECT * FROM '__TEST_DIR__/trailing/a=9/????????-????-4???-????-????????????_trailing.parquet';
+SELECT * FROM '{TEMP_DIR}/trailing/a=9/????????-????-4???-????-????????????_trailing.parquet';
 ----
 18	81	9
 
 statement ok
-COPY test2 TO '__TEST_DIR__/only_offset' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "{i}");
+COPY test2 TO '{TEMP_DIR}/only_offset' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "{i}");
 
 query III
-SELECT * FROM '__TEST_DIR__/only_offset/a=9/?.parquet';
+SELECT * FROM '{TEMP_DIR}/only_offset/a=9/?.parquet';
 ----
 18	81	9
 
 # create a second file in the same partition dirs. This is the append workflow
 statement ok
-COPY test3 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "leading_{uuid}_trailing");
+COPY test3 TO '{TEMP_DIR}/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "leading_{uuid}_trailing");
 
 # the filename contains a uuid
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????_trailing.parquet';
+SELECT * FROM '{TEMP_DIR}/part/a=9/leading_????????-????-4???-????-????????????_trailing.parquet';
 ----
 27	729	9
 
 # the partition dir contains the files from previous 2 queries
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????*.parquet';
+SELECT * FROM '{TEMP_DIR}/part/a=9/leading_????????-????-4???-????-????????????*.parquet';
 ----
 18	81	9
 27	729	9
 
 # Test without a specified format name for the outputfile.
 statement ok
-COPY test4 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE);
+COPY test4 TO '{TEMP_DIR}/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE);
 
 # the filename is the default: "data_{i}"
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/data_[0-9]*.parquet';
+SELECT * FROM '{TEMP_DIR}/part/a=9/data_[0-9]*.parquet';
 ----
 36	6561	9
 
 # the partition dir contains the files from test[2-4]
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+SELECT * FROM '{TEMP_DIR}/part/a=9/*.parquet';
 ----
 18	81	9
 27	729	9
@@ -105,17 +105,17 @@ SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 
 # Test where the FILENAME_PATTERN does not contain "{i}" or "{uuid}". 
 statement ok
-COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "basename");
+COPY test5 TO '{TEMP_DIR}/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "basename");
 
 # the file has the name of the given input
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/basename[0-9]*.parquet';
+SELECT * FROM '{TEMP_DIR}/part/a=9/basename[0-9]*.parquet';
 ----
 45	59049	9
 
 # the partition dir contains the files from test[2-5]
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+SELECT * FROM '{TEMP_DIR}/part/a=9/*.parquet';
 ----
 18	81	9
 27	729	9
@@ -124,68 +124,68 @@ SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 
 # Test without the overwrite_or_ignore param, that tries to add a file to an existing directory
 statement error
-COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
+COPY test5 TO '{TEMP_DIR}/part' (FORMAT PARQUET, PARTITION_BY (a));
 ----
 Directory
 
 # Test where the FILENAME_PATTERN param has no value
 statement error
-COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
+COPY test4 TO '{TEMP_DIR}/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
 ----
 Copy option "FILENAME_PATTERN" requires an argument of type VARCHAR
 
 statement ok
-COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN a_file_name);
+COPY test4 TO '{TEMP_DIR}/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN a_file_name);
 
 query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten/a=9/a_file_name*');
+SELECT COUNT(*) FROM GLOB('{TEMP_DIR}/to_be_overwritten/a=9/a_file_name*');
 ----
 1
 
 query III sort
-SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/a_file_name*.parquet';
+SELECT * FROM '{TEMP_DIR}/to_be_overwritten/a=9/a_file_name*.parquet';
 ----
 36	6561	9
 
 # Test with a combination of {i} and {uuid}
 statement ok
-COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name{i}_with_{uuid}_numbers");
+COPY test5 TO '{TEMP_DIR}/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name{i}_with_{uuid}_numbers");
 
 query III sort
-SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name?_with_????????-????-4???-????-????????????_numbers.parquet';
+SELECT * FROM '{TEMP_DIR}/incorrect_pos/a=5/a_name?_with_????????-????-4???-????-????????????_numbers.parquet';
 ----
 25	3125	5
 
 # Test UUID v7
 statement ok
-COPY test5 TO '__TEST_DIR__/uuid_v7' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name_with_{uuidv7}");
+COPY test5 TO '{TEMP_DIR}/uuid_v7' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name_with_{uuidv7}");
 
 query III sort
-SELECT * FROM '__TEST_DIR__/uuid_v7/a=5/a_name_with_????????-????-7???-????-????????????.parquet';
+SELECT * FROM '{TEMP_DIR}/uuid_v7/a=5/a_name_with_????????-????-7???-????-????????????.parquet';
 ----
 25	3125	5
 
 # Test UUID v7 mixed with UUID v4
 statement ok
-COPY test5 TO '__TEST_DIR__/mixed_uuid_types' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name{uuid}_with_{uuidv7}_numbers");
+COPY test5 TO '{TEMP_DIR}/mixed_uuid_types' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name{uuid}_with_{uuidv7}_numbers");
 
 query III sort
-SELECT * FROM '__TEST_DIR__/mixed_uuid_types/a=5/a_name????????-????-4???-????-????????????_with_????????-????-7???-????-????????????_numbers.parquet';
+SELECT * FROM '{TEMP_DIR}/mixed_uuid_types/a=5/a_name????????-????-4???-????-????????????_with_????????-????-7???-????-????????????_numbers.parquet';
 ----
 25	3125	5
 
 
 # Test "{uuid}" with per_thread_output TRUE
 statement ok
-COPY testpto TO '__TEST_DIR__/pto' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, OVERWRITE_OR_IGNORE TRUE, FILENAME_PATTERN "basename_{uuid}");
+COPY testpto TO '{TEMP_DIR}/pto' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, OVERWRITE_OR_IGNORE TRUE, FILENAME_PATTERN "basename_{uuid}");
 
 query I sort
-SELECT COUNT(*) FROM '__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet';
+SELECT COUNT(*) FROM '{TEMP_DIR}/pto/basename_????????-????-4???-????-????????????.parquet';
 ----
 10000
 
 query I
-SELECT COUNT(*) >= 1 FROM GLOB('__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet');
+SELECT COUNT(*) >= 1 FROM GLOB('{TEMP_DIR}/pto/basename_????????-????-4???-????-????????????.parquet');
 ----
 true
 
@@ -194,42 +194,42 @@ PRAGMA threads=1;
 
 # Test where overwrite_or_ignore param has no value -> will be true -> overwrite previous test
 statement ok
-COPY test5 TO '__TEST_DIR__/to_be_overwritten2' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE);
+COPY test5 TO '{TEMP_DIR}/to_be_overwritten2' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE);
 
 query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten2/a=9/*');
+SELECT COUNT(*) FROM GLOB('{TEMP_DIR}/to_be_overwritten2/a=9/*');
 ----
 1
 
 query III sort
-SELECT * FROM '__TEST_DIR__/to_be_overwritten2/a=9/data_0*.parquet';
+SELECT * FROM '{TEMP_DIR}/to_be_overwritten2/a=9/data_0*.parquet';
 ----
 45	59049	9
 
 # Test where overwrite_or_ignore param == true, and filename_pattern is set to an existing file
 statement ok
-COPY test5 TO '__TEST_DIR__/directory0' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "my_filename");
+COPY test5 TO '{TEMP_DIR}/directory0' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "my_filename");
 
 query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/directory0/a=7/*');
+SELECT COUNT(*) FROM GLOB('{TEMP_DIR}/directory0/a=7/*');
 ----
 1
 
 query III sort
-SELECT * FROM '__TEST_DIR__/directory0/a=7/my_filename0.parquet';
+SELECT * FROM '{TEMP_DIR}/directory0/a=7/my_filename0.parquet';
 ----
 35	16807	7
 
 # When partition columns are written to files, `select *` returns in order of columns
 statement ok
-COPY test5 TO '__TEST_DIR__/to_be_overwritten2' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE, WRITE_PARTITION_COLUMNS);
+COPY test5 TO '{TEMP_DIR}/to_be_overwritten2' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE, WRITE_PARTITION_COLUMNS);
 
 query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten2/a=9/*');
+SELECT COUNT(*) FROM GLOB('{TEMP_DIR}/to_be_overwritten2/a=9/*');
 ----
 1
 
 query III sort
-SELECT * FROM '__TEST_DIR__/to_be_overwritten2/a=9/data_0*.parquet';
+SELECT * FROM '{TEMP_DIR}/to_be_overwritten2/a=9/data_0*.parquet';
 ----
 9	45	59049

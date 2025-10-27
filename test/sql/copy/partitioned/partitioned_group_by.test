@@ -10,13 +10,13 @@ statement ok
 CREATE TABLE partitioned_tbl AS SELECT i%2 AS partition, i col1, i // 7 col2, (i%3)::VARCHAR col3 FROM range(10000) t(i)
 
 statement ok
-COPY partitioned_tbl TO '__TEST_DIR__/partition_group_by' (FORMAT parquet, PARTITION_BY (partition))
+COPY partitioned_tbl TO '{TEMP_DIR}/partition_group_by' (FORMAT parquet, PARTITION_BY (partition))
 
 statement ok
 DROP TABLE partitioned_tbl
 
 statement ok
-CREATE VIEW partitioned_tbl AS FROM '__TEST_DIR__/partition_group_by/**/*.parquet'
+CREATE VIEW partitioned_tbl AS FROM '{TEMP_DIR}/partition_group_by/**/*.parquet'
 
 query II
 SELECT partition, SUM(col1)
@@ -93,13 +93,13 @@ statement ok
 CREATE TABLE partitioned_tbl2 AS SELECT i%2 AS partition1, i%3 AS partition2, i col1, i + 1 col2 FROM range(10000) t(i)
 
 statement ok
-COPY partitioned_tbl2 TO '__TEST_DIR__/partition_group_by_multiple' (FORMAT parquet, PARTITION_BY (partition1, partition2))
+COPY partitioned_tbl2 TO '{TEMP_DIR}/partition_group_by_multiple' (FORMAT parquet, PARTITION_BY (partition1, partition2))
 
 statement ok
 DROP TABLE partitioned_tbl2
 
 statement ok
-CREATE VIEW partitioned_tbl2 AS FROM '__TEST_DIR__/partition_group_by_multiple/**/*.parquet'
+CREATE VIEW partitioned_tbl2 AS FROM '{TEMP_DIR}/partition_group_by_multiple/**/*.parquet'
 
 query III
 SELECT partition1, partition2, SUM(col1)

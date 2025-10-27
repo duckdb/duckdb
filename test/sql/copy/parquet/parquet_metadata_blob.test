@@ -5,26 +5,26 @@
 require parquet
 
 statement ok
-copy (select * from values ('\x0An\xC3\xB5'::blob), ('\xFFXl\x9D'::blob) tbl(b)) to '__TEST_DIR__/blobs.parquet'
+copy (select * from values ('\x0An\xC3\xB5'::blob), ('\xFFXl\x9D'::blob) tbl(b)) to '{TEMP_DIR}/blobs.parquet'
 
 # blob should be converted properly
 query I
-select stats_min_value from parquet_metadata('__TEST_DIR__/blobs.parquet')
+select stats_min_value from parquet_metadata('{TEMP_DIR}/blobs.parquet')
 ----
 \x0An\xC3\xB5
 
 query I
-select min(b) from '__TEST_DIR__/blobs.parquet'
+select min(b) from '{TEMP_DIR}/blobs.parquet'
 ----
 \x0An\xC3\xB5
 
 query I
-select stats_max_value from parquet_metadata('__TEST_DIR__/blobs.parquet')
+select stats_max_value from parquet_metadata('{TEMP_DIR}/blobs.parquet')
 ----
 \xFFXl\x9D
 
 query I
-select max(b) from '__TEST_DIR__/blobs.parquet'
+select max(b) from '{TEMP_DIR}/blobs.parquet'
 ----
 \xFFXl\x9D
 
@@ -32,21 +32,21 @@ select max(b) from '__TEST_DIR__/blobs.parquet'
 # note that we need to cast to BLOB for this to be the same
 # stats_{min,max}_value is VARCHAR
 query I
-select hex(stats_min_value::BLOB) from parquet_metadata('__TEST_DIR__/blobs.parquet')
+select hex(stats_min_value::BLOB) from parquet_metadata('{TEMP_DIR}/blobs.parquet')
 ----
 0A6EC3B5
 
 query I
-select hex(min(b)) from '__TEST_DIR__/blobs.parquet'
+select hex(min(b)) from '{TEMP_DIR}/blobs.parquet'
 ----
 0A6EC3B5
 
 query I
-select hex(stats_max_value::BLOB) from parquet_metadata('__TEST_DIR__/blobs.parquet')
+select hex(stats_max_value::BLOB) from parquet_metadata('{TEMP_DIR}/blobs.parquet')
 ----
 FF586C9D
 
 query I
-select hex(max(b)) from '__TEST_DIR__/blobs.parquet'
+select hex(max(b)) from '{TEMP_DIR}/blobs.parquet'
 ----
 FF586C9D

@@ -12,10 +12,10 @@ set threads=2;
 # before we combined data from threads into multiple row groups,
 # this would create 4 row groups, now it should create 3
 statement ok
-copy (with cte as (from range(2049) union all from range(2049)) from cte) to '__TEST_DIR__/parquet_combine.parquet' (row_group_size 2048);
+copy (with cte as (from range(2049) union all from range(2049)) from cte) to '{TEMP_DIR}/parquet_combine.parquet' (row_group_size 2048);
 
 query I
-select count(*) from parquet_metadata('__TEST_DIR__/parquet_combine.parquet')
+select count(*) from parquet_metadata('{TEMP_DIR}/parquet_combine.parquet')
 ----
 3
 
@@ -25,9 +25,9 @@ set preserve_insertion_order=false;
 
 # used to create 4, now it should create 3
 statement ok
-copy (with cte as (from range(100_000) union all from range(100_000)) from cte) to '__TEST_DIR__/parquet_combine.parquet' (row_group_size_bytes 750_000);
+copy (with cte as (from range(100_000) union all from range(100_000)) from cte) to '{TEMP_DIR}/parquet_combine.parquet' (row_group_size_bytes 750_000);
 
 query I
-select count(*) from parquet_metadata('__TEST_DIR__/parquet_combine.parquet')
+select count(*) from parquet_metadata('{TEMP_DIR}/parquet_combine.parquet')
 ----
 3

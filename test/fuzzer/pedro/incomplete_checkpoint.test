@@ -4,7 +4,7 @@
 
 require skip_reload
 
-load __TEST_DIR__/incomplete_checkpoint.db
+load {LOCAL_TEMP_DIR}/incomplete_checkpoint.db
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';

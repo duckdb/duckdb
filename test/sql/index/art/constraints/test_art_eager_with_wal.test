@@ -2,7 +2,7 @@
 # description: Test eager constraint checking with WAL replay.
 # group: [constraints]
 
-load __TEST_DIR__/pk_duplicate_key_wal.db
+load {LOCAL_TEMP_DIR}/pk_duplicate_key_wal.db
 
 statement ok
 SET checkpoint_threshold = '10.0 GB';

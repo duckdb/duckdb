@@ -4,7 +4,7 @@
 
 require no_alternative_verify
 
-load __TEST_DIR__/nullif_map_issue.db
+load {LOCAL_TEMP_DIR}/nullif_map_issue.db
 
 statement ok
 PRAGMA enable_verification
@@ -19,7 +19,7 @@ statement ok
 SET max_memory = '1234kb';
 
 statement ok
-ATTACH '__TEST_DIR__/issue5232.db' AS issue5232 (STORAGE_VERSION 'latest');
+ATTACH '{LOCAL_TEMP_DIR}/issue5232.db' AS issue5232 (STORAGE_VERSION 'latest');
 
 statement ok
 USE issue5232;
@@ -57,7 +57,7 @@ statement ok
 SET max_memory = '1234kb';
 
 statement ok
-ATTACH '__TEST_DIR__/issue5232_small.db' (STORAGE_VERSION 'latest');
+ATTACH '{LOCAL_TEMP_DIR}/issue5232_small.db' (STORAGE_VERSION 'latest');
 
 statement ok
 USE issue5232_small;

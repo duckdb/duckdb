@@ -233,7 +233,7 @@ SELECT COUNT(*), MIN(i), MAX(i) FROM t_14133;
 
 # Original issue: 6500
 
-load __TEST_DIR__/eager_constraint_issue.db
+load {LOCAL_TEMP_DIR}/eager_constraint_issue.db
 
 statement ok
 CREATE TABLE tbl_6500 (i INTEGER, j INTEGER);

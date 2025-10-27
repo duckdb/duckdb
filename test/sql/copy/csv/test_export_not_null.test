@@ -15,7 +15,7 @@ statement ok
 insert into tbl values ('');
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/broken_empty_string';
+EXPORT DATABASE '{TEMP_DIR}/broken_empty_string';
 
 statement ok
 abort;
@@ -25,11 +25,11 @@ begin transaction;
 
 # Very that the table can be imported
 statement ok
-IMPORT DATABASE '__TEST_DIR__/broken_empty_string';
+IMPORT DATABASE '{TEMP_DIR}/broken_empty_string';
 
 # Force not null can't be used explicitly
 statement error
-EXPORT DATABASE '__TEST_DIR__/broken_empty_string_2' (FORCE_NOT_NULL ['A']);
+EXPORT DATABASE '{TEMP_DIR}/broken_empty_string_2' (FORCE_NOT_NULL ['A']);
 ----
 "FORCE_NOT_NULL" is not supported for writing - only for reading
 
@@ -48,13 +48,13 @@ statement ok
 insert into tbl_2 values ('','','','');
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/multiple';
+EXPORT DATABASE '{TEMP_DIR}/multiple';
 
 statement ok
 abort;
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/multiple';
+IMPORT DATABASE '{TEMP_DIR}/multiple';
 
 query IIII
 select * from tbl_2

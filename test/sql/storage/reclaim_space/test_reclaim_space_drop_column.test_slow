@@ -2,7 +2,7 @@
 # description: Test that we reclaim space when dropping and adding columns
 # group: [reclaim_space]
 
-load __TEST_DIR__/test_reclaim_space_drop_column.db
+load {LOCAL_TEMP_DIR}/test_reclaim_space_drop_column.db
 
 statement ok
 PRAGMA force_checkpoint;

@@ -6,7 +6,7 @@
 ### The variation is that con1's query is now *also* in a transaction, we first commit the CREATE TABLE (con1's query)
 ###
 
-load __TEST_DIR__/broken.db
+load {LOCAL_TEMP_DIR}/broken.db
 
 statement ok
 CREATE SCHEMA foo;

@@ -2,7 +2,7 @@
 # description: Test running repeated deletes and checkpoints
 # group: [vacuum]
 
-load __TEST_DIR__/repeated_deletes_and_checkpoints.db
+load {LOCAL_TEMP_DIR}/repeated_deletes_and_checkpoints.db
 
 statement ok
 CREATE TABLE test (pk INT);

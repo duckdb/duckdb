@@ -13,34 +13,34 @@ statement ok
 insert into orders select i%12+1,i,j from range(360)t(i),range(1000)s(j);
 
 statement ok
-copy (select 2000+(v//12)y,m,v,j from orders) TO '__TEST_DIR__/orders_m' (FORMAT PARQUET, PARTITION_BY (m));
+copy (select 2000+(v//12)y,m,v,j from orders) TO '{TEMP_DIR}/orders_m' (FORMAT PARQUET, PARTITION_BY (m));
 
 query IIII
-SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '__TEST_DIR__/orders_m/**/*.parquet'
+SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '{TEMP_DIR}/orders_m/**/*.parquet'
 ----
 2014.5	6.5	179.5	499.5
 
 statement ok
-copy (select 2000+(v//12)y,m,v,j from orders) TO '__TEST_DIR__/orders_y' (FORMAT PARQUET, PARTITION_BY (y));
+copy (select 2000+(v//12)y,m,v,j from orders) TO '{TEMP_DIR}/orders_y' (FORMAT PARQUET, PARTITION_BY (y));
 
 query IIII
-SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '__TEST_DIR__/orders_y/**/*.parquet'
+SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '{TEMP_DIR}/orders_y/**/*.parquet'
 ----
 2014.5	6.5	179.5	499.5
 
 statement ok
-copy (select 2000+(v//12)y,m,v,j from orders) TO '__TEST_DIR__/orders_ym' (FORMAT PARQUET,PARTITION_BY (y,m));
+copy (select 2000+(v//12)y,m,v,j from orders) TO '{TEMP_DIR}/orders_ym' (FORMAT PARQUET,PARTITION_BY (y,m));
 
 query IIII
-SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '__TEST_DIR__/orders_ym/**/*.parquet'
+SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '{TEMP_DIR}/orders_ym/**/*.parquet'
 ----
 2014.5	6.5	179.5	499.5
 
 # random shuffle
 statement ok
-copy (select 2000+(v//12)y,m,v,j from orders order by random()) TO '__TEST_DIR__/orders_ym_rand' (FORMAT PARQUET,PARTITION_BY (y,m));
+copy (select 2000+(v//12)y,m,v,j from orders order by random()) TO '{TEMP_DIR}/orders_ym_rand' (FORMAT PARQUET,PARTITION_BY (y,m));
 
 query IIII
-SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '__TEST_DIR__/orders_ym_rand/**/*.parquet'
+SELECT AVG(y), AVG(m), AVG(v), AVG(j) FROM '{TEMP_DIR}/orders_ym_rand/**/*.parquet'
 ----
 2014.5	6.5	179.5	499.5

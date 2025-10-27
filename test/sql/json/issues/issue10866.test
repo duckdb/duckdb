@@ -5,9 +5,9 @@
 require json
 
 statement ok
-copy (select '{"col": 277447099861456945273576150847928801582}') to '__TEST_DIR__/10866.json' (format csv, quote '', header 0)
+copy (select '{"col": 277447099861456945273576150847928801582}') to '{TEMP_DIR}/10866.json' (format csv, quote '', header 0)
 
 query II
-select col, hex(col) from read_json('__TEST_DIR__/10866.json', columns={col: 'uhugeint'})
+select col, hex(col) from read_json('{TEMP_DIR}/10866.json', columns={col: 'uhugeint'})
 ----
 277447099861456945273576150847928801582	D0BA5E258FFCFEE8C4619BA0E21A192E

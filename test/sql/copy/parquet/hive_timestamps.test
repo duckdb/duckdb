@@ -45,13 +45,13 @@ LIMIT 5
 statement ok
 COPY (
   SELECT * FROM timeseries
-) TO '__TEST_DIR__/hive' (
+) TO '{TEMP_DIR}/hive' (
   FORMAT 'PARQUET', COMPRESSION 'SNAPPY', PARTITION_BY (bucket), OVERWRITE_OR_IGNORE
 );
 
 query II
 SELECT bucket, total 
-FROM read_parquet('__TEST_DIR__/hive/*/*.parquet') 
+FROM read_parquet('{TEMP_DIR}/hive/*/*.parquet') 
 ORDER BY ALL
 LIMIT 5
 ----

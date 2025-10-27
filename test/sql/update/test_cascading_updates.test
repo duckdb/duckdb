@@ -2,7 +2,7 @@
 # description: Test many different updates
 # group: [update]
 
-load __TEST_DIR__/cascading_updates.db
+load {LOCAL_TEMP_DIR}/cascading_updates.db
 
 statement ok
 SET default_null_order='nulls_first';

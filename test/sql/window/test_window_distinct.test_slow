@@ -8,7 +8,7 @@ statement ok
 CALL dbgen(sf=1);
 
 statement ok
-PRAGMA temp_directory='__TEST_DIR__/window_distinct'
+PRAGMA temp_directory='{LOCAL_TEMP_DIR}/window_distinct'
 
 # DISTINCT aggregate over a larger data set (e.g. lineitem or so)
 query I

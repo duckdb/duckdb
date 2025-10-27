@@ -7,16 +7,16 @@
 require json
 
 statement ok
-COPY (SELECT '{}') TO '__TEST_DIR__/empty_object.json' (FORMAT CSV, HEADER FALSE)
+COPY (SELECT '{}') TO '{TEMP_DIR}/empty_object.json' (FORMAT CSV, HEADER FALSE)
 
 # for empty JSON objects we default to MAP(VARCHAR, JSON) as this is generic enough to fit any object
 query I
-SELECT typeof(json) FROM '__TEST_DIR__/empty_object.json'
+SELECT typeof(json) FROM '{TEMP_DIR}/empty_object.json'
 ----
 MAP(VARCHAR, JSON)
 
 # we can disable it with the map_inference_threshold parameter
 query I
-SELECT typeof(json) FROM read_json('__TEST_DIR__/empty_object.json', map_inference_threshold=-1)
+SELECT typeof(json) FROM read_json('{TEMP_DIR}/empty_object.json', map_inference_threshold=-1)
 ----
 JSON

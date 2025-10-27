@@ -14,10 +14,10 @@ statement ok
 CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
 
 statement ok
-COPY (FROM bigdata UNION ALL FROM bigdata) TO '__TEST_DIR__/per_thread_output' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata UNION ALL FROM bigdata) TO '{TEMP_DIR}/per_thread_output' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output/*.parquet')
+SELECT COUNT(*) FROM PARQUET_SCAN('{TEMP_DIR}/per_thread_output/*.parquet')
 ----
 20000
 
@@ -26,47 +26,47 @@ SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output/*.parquet')
 # instead of checking we have file 0, 1, 2, and 3 like we did previously,
 # we just check if we created more than one file that matches the glob pattern
 query I
-SELECT COUNT(*) > 1 f FROM GLOB('__TEST_DIR__/per_thread_output/data_*.parquet') ORDER BY f
+SELECT COUNT(*) > 1 f FROM GLOB('{TEMP_DIR}/per_thread_output/data_*.parquet') ORDER BY f
 ----
 true
 
 # CSV also works
 statement ok
-COPY (FROM bigdata UNION ALL FROM bigdata) TO '__TEST_DIR__/per_thread_output_csv' (FORMAT CSV,  PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata UNION ALL FROM bigdata) TO '{TEMP_DIR}/per_thread_output_csv' (FORMAT CSV,  PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv('__TEST_DIR__/per_thread_output_csv/*.csv', columns={'col_a': 'INT', 'col_b' : 'INT'});
+SELECT COUNT(*) FROM read_csv('{TEMP_DIR}/per_thread_output_csv/*.csv', columns={'col_a': 'INT', 'col_b' : 'INT'});
 ----
 20000
 
 query I
-SELECT COUNT(*) >= 2 f FROM GLOB('__TEST_DIR__/per_thread_output_csv/data_*.csv') ORDER BY f
+SELECT COUNT(*) >= 2 f FROM GLOB('{TEMP_DIR}/per_thread_output_csv/data_*.csv') ORDER BY f
 ----
 true
 
 # with a trailing slash
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '{TEMP_DIR}/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
+SELECT COUNT(*) FROM PARQUET_SCAN('{TEMP_DIR}/per_thread_output2/*.parquet')
 ----
 10000
 
 
 statement error
-COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '{TEMP_DIR}/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
 ----
 IO Error
 
 # we have not added anything
 query I
-SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
+SELECT COUNT(*) FROM PARQUET_SCAN('{TEMP_DIR}/per_thread_output2/*.parquet')
 ----
 10000
 
 
 statement error
-COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output3' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, USE_TMP_FILE TRUE);
+COPY (FROM bigdata) TO '{TEMP_DIR}/per_thread_output3' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, USE_TMP_FILE TRUE);
 ----
 Not implemented Error

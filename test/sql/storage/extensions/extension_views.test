@@ -3,7 +3,7 @@
 # group: [extensions]
 
 # load the DB from disk
-load __TEST_DIR__/views_with_extensions.db
+load {LOCAL_TEMP_DIR}/views_with_extensions.db
 
 statement ok
 CREATE VIEW v1 AS SELECT current_schema();

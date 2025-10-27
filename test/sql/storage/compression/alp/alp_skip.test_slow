@@ -2,7 +2,7 @@
 # group: [alp]
 
 # load the DB from disk
-load __TEST_DIR__/test_alp.db
+load {LOCAL_TEMP_DIR}/test_alp.db
 
 statement ok
 pragma enable_verification;

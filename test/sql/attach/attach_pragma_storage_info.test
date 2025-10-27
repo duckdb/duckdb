@@ -1,10 +1,10 @@
 # name: test/sql/attach/attach_pragma_storage_info.test
 # group: [attach]
 
-load __TEST_DIR__/alter_dependency_conflict.db
+load {LOCAL_TEMP_DIR}/alter_dependency_conflict.db
 
 statement ok
-ATTACH '__TEST_DIR__/database.db' as persistent;
+ATTACH '{LOCAL_TEMP_DIR}/database.db' as persistent;
 
 statement ok
 CREATE OR REPLACE TABLE persistent.T1 (A0 int);

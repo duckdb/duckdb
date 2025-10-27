@@ -24,12 +24,12 @@ Invalid Input Error: Invalid AES key. Must have a length of 128, 192, or 256 bit
 
 # we dont support this yet
 statement error
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: ['col0', 'col1']}})
+COPY (SELECT 42 i) to '{TEMP_DIR}/encrypted.parquet' (ENCRYPTION_CONFIG {column_keys: {key_name: ['col0', 'col1']}})
 ----
 Not implemented Error: Parquet encryption_config column_keys not yet implemented
 
 statement error
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'nonexistant'})
+COPY (SELECT 42 i) to '{TEMP_DIR}/encrypted.parquet' (ENCRYPTION_CONFIG {footer_key: 'nonexistant'})
 ----
 Binder Error: No key with name "nonexistant" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');
 
@@ -47,10 +47,10 @@ PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
 foreach key_len 128 192 256
 
 statement ok
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+COPY (SELECT 42 i) to '{TEMP_DIR}/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}.parquet', encryption_config={footer_key: 'key${key_len}'})
+SELECT * FROM read_parquet('{TEMP_DIR}/encrypted${key_len}.parquet', encryption_config={footer_key: 'key${key_len}'})
 ----
 42
 
@@ -58,7 +58,7 @@ statement ok
 CREATE OR REPLACE TABLE test (i INTEGER)
 
 statement ok
-COPY test FROM '__TEST_DIR__/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+COPY test FROM '{TEMP_DIR}/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
 
 query I
 SELECT * FROM test
@@ -69,22 +69,22 @@ endloop
 
 # what happens if we don't try to decrypt even if the file is encrypted?
 statement error
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet')
+SELECT * FROM read_parquet('{TEMP_DIR}/encrypted128.parquet')
 ----
 Invalid Input Error
 
 # what if we try to decrypt with the wrong key?
 statement error
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet', encryption_config={footer_key: 'key192'})
+SELECT * FROM read_parquet('{TEMP_DIR}/encrypted128.parquet', encryption_config={footer_key: 'key192'})
 ----
 Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
 
 # what if we don't encrypt, but try to decrypt?
 statement ok
-COPY (SELECT 42 i) to '__TEST_DIR__/unencrypted.parquet'
+COPY (SELECT 42 i) to '{TEMP_DIR}/unencrypted.parquet'
 
 statement error
-SELECT * FROM read_parquet('__TEST_DIR__/unencrypted.parquet', encryption_config={footer_key: 'key256'})
+SELECT * FROM read_parquet('{TEMP_DIR}/unencrypted.parquet', encryption_config={footer_key: 'key256'})
 ----
 Invalid Input Error
 
@@ -93,6 +93,6 @@ statement ok
 PRAGMA add_parquet_key('key256base64', 'MDEyMzQ1Njc4OTExMjM0NTAxMjM0NTY3ODkxMTIzNDU=')
 
 query I
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted256.parquet', encryption_config={footer_key: 'key256base64'})
+SELECT * FROM read_parquet('{TEMP_DIR}/encrypted256.parquet', encryption_config={footer_key: 'key256base64'})
 ----
 42

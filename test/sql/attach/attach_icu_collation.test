@@ -7,10 +7,10 @@ require icu
 # The database is written with a vector size of 2048.
 require vector_size 2048
 
-unzip data/storage/german_collation.db.gz __TEST_DIR__/german_collation.db
+unzip data/storage/german_collation.db.gz {TEMP_DIR}/german_collation.db
 
 statement ok
-ATTACH '__TEST_DIR__/german_collation.db' AS db
+ATTACH '{LOCAL_TEMP_DIR}/german_collation.db' AS db
 
 query I rowsort
 SELECT * FROM db.strings

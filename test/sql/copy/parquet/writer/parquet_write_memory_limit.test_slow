@@ -6,11 +6,11 @@ require parquet
 
 require 64bit
 
-load __TEST_DIR__/parquet_write_memory_limit.db
+load {LOCAL_TEMP_DIR}/parquet_write_memory_limit.db
 
 # 100M rows, 2 BIGINT columns = 1.6GB uncompressed
 statement ok
-COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/large_integers.parquet'
+COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '{TEMP_DIR}/large_integers.parquet'
 
 statement ok
 SET memory_limit='0.3GB'
@@ -22,7 +22,7 @@ set preserve_insertion_order=false
 
 # stream from one parquet file to another
 query I
-COPY '__TEST_DIR__/large_integers.parquet' TO '__TEST_DIR__/large_integers2.parquet'
+COPY '{TEMP_DIR}/large_integers.parquet' TO '{TEMP_DIR}/large_integers2.parquet'
 ----
 100000000
 
@@ -31,5 +31,5 @@ statement ok
 SET memory_limit='-1'
 
 query II
-SELECT * FROM '__TEST_DIR__/large_integers.parquet' EXCEPT FROM '__TEST_DIR__/large_integers2.parquet'
+SELECT * FROM '{TEMP_DIR}/large_integers.parquet' EXCEPT FROM '{TEMP_DIR}/large_integers2.parquet'
 ----

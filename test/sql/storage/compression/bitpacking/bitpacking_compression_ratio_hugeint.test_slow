@@ -6,7 +6,7 @@
 # because the bitpacking groups no longer fit the blocks.
 require block_size 262144
 
-load __TEST_DIR__/test_bitpacking.db
+load {LOCAL_TEMP_DIR}/test_bitpacking.db
 
 #### CONSTANT MODE:
 # Ratio ~= 1000x

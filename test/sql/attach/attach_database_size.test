@@ -3,7 +3,7 @@
 # group: [attach]
 
 statement ok
-ATTACH '__TEST_DIR__/attach_database_size.db' AS db1
+ATTACH '{LOCAL_TEMP_DIR}/attach_database_size.db' AS db1
 
 query I
 SELECT database_name FROM pragma_database_size() WHERE database_name = 'db1';

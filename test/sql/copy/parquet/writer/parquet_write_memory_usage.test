@@ -4,7 +4,7 @@
 
 require parquet
 
-load __TEST_DIR__/parquet_write_memory_usage.db
+load {LOCAL_TEMP_DIR}/parquet_write_memory_usage.db
 
 statement ok
 set threads=1
@@ -15,13 +15,13 @@ statement ok
 set memory_limit='${memory_limit}'
 
 statement ok
-copy (select * from range(163840)) to '__TEST_DIR__/parquet_write_memory_usage.parquet' (row_group_size ${row_group_size})
+copy (select * from range(163840)) to '{TEMP_DIR}/parquet_write_memory_usage.parquet' (row_group_size ${row_group_size})
 
 statement ok
 set memory_limit='4gb'
 
 query T
-select sum(range) = (count(*) * (count(*) - 1)) // 2 from '__TEST_DIR__/parquet_write_memory_usage.parquet'
+select sum(range) = (count(*) * (count(*) - 1)) // 2 from '{TEMP_DIR}/parquet_write_memory_usage.parquet'
 ----
 true
 

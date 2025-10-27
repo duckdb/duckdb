@@ -22,11 +22,11 @@ SELECT NULL FROM read_ndjson_auto(NULL, timestamp_format := 5469, "compression" 
 <REGEX>:.*NULL.*
 
 statement ok
-COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.parquet' (FORMAT PARQUET);
+COPY (VALUES (NULL), (NULL)) TO '{TEMP_DIR}/test_null_args.parquet' (FORMAT PARQUET);
 
 
 statement error
-SELECT NULL FROM read_parquet('__TEST_DIR__/test_null_args.parquet', filename = NULL);
+SELECT NULL FROM read_parquet('{TEMP_DIR}/test_null_args.parquet', filename = NULL);
 ----
 <REGEX>:.*Cannot use NULL.*
 
@@ -36,10 +36,10 @@ FROM read_ndjson(NULL, filename := NULL) AS t14(c11, c12, c13)
 <REGEX>:.*NULL.*
 
 statement ok
-COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.csv' (FORMAT CSV);
+COPY (VALUES (NULL), (NULL)) TO '{TEMP_DIR}/test_null_args.csv' (FORMAT CSV);
 
 statement error
-SELECT NULL FROM read_csv('__TEST_DIR__/test_null_args.csv', names=NULL);
+SELECT NULL FROM read_csv('{TEMP_DIR}/test_null_args.csv', names=NULL);
 ----
 <REGEX>:.*read_csv names cannot be NULL.*
 

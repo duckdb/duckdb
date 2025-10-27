@@ -82,7 +82,7 @@ updator3
 
 # Original issue.
 
-load __TEST_DIR__/list_index_compression.db
+load {LOCAL_TEMP_DIR}/list_index_compression.db
 
 statement ok
 CREATE TABLE student(id INTEGER, name VARCHAR, PRIMARY KEY(id));

@@ -8,10 +8,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-COPY (SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i)) TO '__TEST_DIR__/late_materialization.parquet';
+COPY (SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i)) TO '{TEMP_DIR}/late_materialization.parquet';
 
 statement ok
-CREATE VIEW test AS FROM '__TEST_DIR__/late_materialization.parquet';
+CREATE VIEW test AS FROM '{TEMP_DIR}/late_materialization.parquet';
 
 statement ok
 SET explain_output='optimized_only'
@@ -121,10 +121,10 @@ SELECT l FROM (
 
 # now with varchar columns
 statement ok
-COPY (SELECT i, printf('%02d', i + 1) AS j, printf('%02d', i + 2) AS k, -i AS l FROM range(10) t(i)) TO '__TEST_DIR__/late_materialization_varchar.parquet';
+COPY (SELECT i, printf('%02d', i + 1) AS j, printf('%02d', i + 2) AS k, -i AS l FROM range(10) t(i)) TO '{TEMP_DIR}/late_materialization_varchar.parquet';
 
 statement ok
-CREATE OR REPLACE VIEW test AS FROM '__TEST_DIR__/late_materialization_varchar.parquet';
+CREATE OR REPLACE VIEW test AS FROM '{TEMP_DIR}/late_materialization_varchar.parquet';
 
 query IIII
 SELECT * FROM test ORDER BY j DESC LIMIT 2;

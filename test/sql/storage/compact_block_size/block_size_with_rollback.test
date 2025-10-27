@@ -6,7 +6,7 @@ statement ok
 BEGIN TRANSACTION;
 
 statement ok
-ATTACH '__TEST_DIR__/rollback.db' (BLOCK_SIZE 16384);
+ATTACH '{LOCAL_TEMP_DIR}/rollback.db' (BLOCK_SIZE 16384);
 
 statement ok
 CREATE TABLE rollback.tbl AS SELECT range AS i FROM range(100);
@@ -15,7 +15,7 @@ statement ok
 ROLLBACK;
 
 statement error
-ATTACH '__TEST_DIR__/rollback.db' (BLOCK_SIZE 262144);
+ATTACH '{LOCAL_TEMP_DIR}/rollback.db' (BLOCK_SIZE 262144);
 ----
 block size parameter does not match
 

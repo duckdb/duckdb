@@ -3,7 +3,7 @@
 # group: [optimistic_write]
 
 statement ok
-ATTACH '__TEST_DIR__/optimistic_write_custom_row_group_size.db' AS attached_db (ROW_GROUP_SIZE 204800, STORAGE_VERSION 'v1.2.0')
+ATTACH '{LOCAL_TEMP_DIR}/optimistic_write_custom_row_group_size.db' AS attached_db (ROW_GROUP_SIZE 204800, STORAGE_VERSION 'v1.2.0')
 
 statement ok
 USE attached_db
@@ -36,7 +36,7 @@ statement ok
 DETACH attached_db
 
 statement ok
-ATTACH '__TEST_DIR__/optimistic_write_custom_row_group_size.db' AS attached_db (ROW_GROUP_SIZE 2048)
+ATTACH '{LOCAL_TEMP_DIR}/optimistic_write_custom_row_group_size.db' AS attached_db (ROW_GROUP_SIZE 2048)
 
 statement ok
 USE attached_db

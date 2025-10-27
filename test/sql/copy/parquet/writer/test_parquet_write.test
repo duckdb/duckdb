@@ -5,10 +5,10 @@
 require parquet
 
 statement ok
-COPY (SELECT 42) TO '__TEST_DIR__/scalar.parquet' (FORMAT 'parquet');
+COPY (SELECT 42) TO '{TEMP_DIR}/scalar.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM parquet_scan('__TEST_DIR__/scalar.parquet');
+SELECT * FROM parquet_scan('{TEMP_DIR}/scalar.parquet');
 ----
 42
 
@@ -17,10 +17,10 @@ statement ok
 CREATE TABLE empty(i INTEGER)
 
 statement ok
-COPY (SELECT * FROM empty) TO '__TEST_DIR__/empty.parquet' (FORMAT 'parquet')
+COPY (SELECT * FROM empty) TO '{TEMP_DIR}/empty.parquet' (FORMAT 'parquet')
 
 query I
-SELECT COUNT(*) FROM parquet_scan('__TEST_DIR__/empty.parquet')
+SELECT COUNT(*) FROM parquet_scan('{TEMP_DIR}/empty.parquet')
 ----
 0
 
@@ -29,9 +29,9 @@ SET threads=4;
 
 # empty result set, multi thread
 statement ok
-COPY (SELECT * FROM empty) TO '__TEST_DIR__/empty_multithread' (FORMAT 'parquet', PER_THREAD_OUTPUT True)
+COPY (SELECT * FROM empty) TO '{TEMP_DIR}/empty_multithread' (FORMAT 'parquet', PER_THREAD_OUTPUT True)
 
 query I
-SELECT COUNT(*) FROM parquet_scan('__TEST_DIR__/empty_multithread/*.parquet')
+SELECT COUNT(*) FROM parquet_scan('{TEMP_DIR}/empty_multithread/*.parquet')
 ----
 0

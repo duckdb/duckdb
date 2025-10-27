@@ -8,9 +8,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-COPY (SELECT 'hello' FROM range(10)) TO '__TEST_DIR__/string_dict.parquet';
+COPY (SELECT 'hello' FROM range(10)) TO '{TEMP_DIR}/string_dict.parquet';
 
 query I
-SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/string_dict.parquet');
+SELECT stats_distinct_count FROM parquet_metadata('{TEMP_DIR}/string_dict.parquet');
 ----
 1

@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/alprd/alprd_stress_test.test_slow
 # group: [alprd]
 
-load __TEST_DIR__/alprd_min_max.db
+load {LOCAL_TEMP_DIR}/alprd_min_max.db
 
 foreach type DOUBLE FLOAT
 

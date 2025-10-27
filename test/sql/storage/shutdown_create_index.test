@@ -2,7 +2,7 @@
 # description: CREATE INDEX statement after shutdown
 # group: [storage]
 
-load __TEST_DIR__/shutdown_create_index.db
+load {LOCAL_TEMP_DIR}/shutdown_create_index.db
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

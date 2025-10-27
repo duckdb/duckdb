@@ -6,7 +6,7 @@ require no_latest_storage
 
 require vector_size 2048
 
-load __TEST_DIR__/force_dictionary.db readwrite v1.0.0
+load {LOCAL_TEMP_DIR}/force_dictionary.db readwrite v1.0.0
 
 statement ok
 PRAGMA force_compression = 'dictionary'

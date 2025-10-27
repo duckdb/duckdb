@@ -4,7 +4,7 @@
 
 require parquet
 
-load __TEST_DIR__/issue7582.db
+load {LOCAL_TEMP_DIR}/issue7582.db
 
 statement ok
 SET wal_autocheckpoint='1GB';

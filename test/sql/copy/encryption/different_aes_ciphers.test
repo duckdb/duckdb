@@ -5,29 +5,29 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
 ----
 Binder Error: Not a valid key. A key cannot be empty
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'random');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'random');
 ----
 Binder Error: "random" is not a valid cipher. Try 'GCM' or 'CTR'.
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '');
 ----
 Binder Error: "" is not a valid cipher. Try 'GCM' or 'CTR'.
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 42);
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 42);
 ----
 Binder Error: "42" is not a valid cipher. Try 'GCM' or 'CTR'.
 
 foreach cipher GCM CTR
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_${cipher}.duckdb' AS encrypted_${cipher} (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_${cipher}.duckdb' AS encrypted_${cipher} (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 query I
 select encrypted from duckdb_databases() where database_name = 'encrypted_${cipher}' and cipher='${cipher}';
@@ -39,7 +39,7 @@ endloop
 
 # we can create a database with a specific cipher (CTR)
 statement ok
-ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CTR');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CTR');
 
 statement ok
 create table encrypted.fuu as select 42;
@@ -49,7 +49,7 @@ DETACH encrypted
 
 # we can open it again by specifying that same cipher again
 statement ok
-ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CTR');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CTR');
 
 query I
 FROM encrypted.fuu
@@ -61,7 +61,7 @@ DETACH encrypted
 
 # or open it without specifying the cipher, it will be read from file
 statement ok
-ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 query I
 FROM encrypted.fuu
@@ -73,13 +73,13 @@ DETACH encrypted
 
 # but it will fail if we specify the wrong one
 statement error
-ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'GCM');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'GCM');
 ----
 with a different cipher (GCM) than the one used to create it (CTR)
 
 
 # CBC is disabled (for now)
 statement error
-ATTACH '__TEST_DIR__/CBC.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CBC');
+ATTACH '{LOCAL_TEMP_DIR}/CBC.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER 'CBC');
 ----
 CBC encryption is disabled

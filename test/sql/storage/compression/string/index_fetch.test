@@ -3,10 +3,10 @@
 # group: [string]
 
 statement ok
-ATTACH '__TEST_DIR__/test_index_fetch_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
+ATTACH '{LOCAL_TEMP_DIR}/test_index_fetch_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
 
 statement ok
-ATTACH '__TEST_DIR__/test_index_fetch_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
+ATTACH '{LOCAL_TEMP_DIR}/test_index_fetch_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
 
 foreach compression fsst dictionary dict_fsst
 

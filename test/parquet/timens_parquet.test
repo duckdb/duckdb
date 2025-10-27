@@ -47,8 +47,8 @@ from times
 ----
 
 statement ok
-copy times to '__TEST_DIR__/time_ns.parquet' (PARQUET_VERSION V2);
+copy times to '{TEMP_DIR}/time_ns.parquet' (PARQUET_VERSION V2);
 
 query I nosort t0
-from '__TEST_DIR__/time_ns.parquet';
+from '{TEMP_DIR}/time_ns.parquet';
 ----

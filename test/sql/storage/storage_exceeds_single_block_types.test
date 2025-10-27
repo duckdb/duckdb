@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/exceed_single_block_types.db
+load {LOCAL_TEMP_DIR}/exceed_single_block_types.db
 
 statement ok
 SET force_compression='uncompressed'

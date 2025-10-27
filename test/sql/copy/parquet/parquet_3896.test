@@ -18,10 +18,10 @@ SELECT * FROM v1;
 
 statement ok
 COPY v1
-TO '__TEST_DIR__/map.parquet' (FORMAT 'parquet');
+TO '{TEMP_DIR}/map.parquet' (FORMAT 'parquet');
 
 query I nosort mapres1
-SELECT * FROM '__TEST_DIR__/map.parquet';
+SELECT * FROM '{TEMP_DIR}/map.parquet';
 ----
 
 # multiple struct with map and scalar key
@@ -37,10 +37,10 @@ SELECT * FROM v2;
 
 statement ok
 COPY v2
-TO '__TEST_DIR__/map.parquet' (FORMAT 'parquet');
+TO '{TEMP_DIR}/map.parquet' (FORMAT 'parquet');
 
 query I nosort mapres2
-SELECT * FROM '__TEST_DIR__/map.parquet';
+SELECT * FROM '{TEMP_DIR}/map.parquet';
 ----
 
 # struct with struct of lists and scalar key
@@ -54,10 +54,10 @@ SELECT * FROM v3;
 
 statement ok
 COPY v3
-TO '__TEST_DIR__/map.parquet' (FORMAT 'parquet');
+TO '{TEMP_DIR}/map.parquet' (FORMAT 'parquet');
 
 query I nosort structres1
-SELECT * FROM '__TEST_DIR__/map.parquet';
+SELECT * FROM '{TEMP_DIR}/map.parquet';
 ----
 
 # struct with struct of lists and scalar list key
@@ -71,8 +71,8 @@ SELECT * FROM v4;
 
 statement ok
 COPY v4
-TO '__TEST_DIR__/map.parquet' (FORMAT 'parquet');
+TO '{TEMP_DIR}/map.parquet' (FORMAT 'parquet');
 
 query I nosort structres2
-SELECT * FROM '__TEST_DIR__/map.parquet';
+SELECT * FROM '{TEMP_DIR}/map.parquet';
 ----

@@ -26,11 +26,11 @@ FROM (SELECT unnest(l) b FROM list_of_bools)
 11320	11318	4004
 
 statement ok
-COPY list_of_bools TO '__TEST_DIR__/list_of_bools.parquet' (FORMAT PARQUET)
+COPY list_of_bools TO '{TEMP_DIR}/list_of_bools.parquet' (FORMAT PARQUET)
 
 query III
 SELECT COUNT(*), COUNT(b), SUM(CASE WHEN b THEN 1 ELSE 0 END)
-FROM (SELECT unnest(l) b FROM '__TEST_DIR__/list_of_bools.parquet')
+FROM (SELECT unnest(l) b FROM '{TEMP_DIR}/list_of_bools.parquet')
 ----
 11320	11318	4004
 
@@ -54,11 +54,11 @@ FROM (SELECT unnest(l) b FROM many_ints)
 43872	33934	22622
 
 statement ok
-COPY many_ints TO '__TEST_DIR__/many_ints.parquet' (FORMAT PARQUET)
+COPY many_ints TO '{TEMP_DIR}/many_ints.parquet' (FORMAT PARQUET)
 
 query III
 SELECT COUNT(*), COUNT(b), SUM(b)
-FROM (SELECT unnest(l) b FROM '__TEST_DIR__/many_ints.parquet')
+FROM (SELECT unnest(l) b FROM '{TEMP_DIR}/many_ints.parquet')
 ----
 43872	33934	22622
 
@@ -82,10 +82,10 @@ FROM (SELECT unnest(l) b FROM many_bools)
 43872	33934	22622
 
 statement ok
-COPY many_bools TO '__TEST_DIR__/many_bools.parquet' (FORMAT PARQUET)
+COPY many_bools TO '{TEMP_DIR}/many_bools.parquet' (FORMAT PARQUET)
 
 query III
 SELECT COUNT(*), COUNT(b), SUM(CASE WHEN b THEN 1 ELSE 0 END)
-FROM (SELECT unnest(l) b FROM '__TEST_DIR__/many_bools.parquet')
+FROM (SELECT unnest(l) b FROM '{TEMP_DIR}/many_bools.parquet')
 ----
 43872	33934	22622

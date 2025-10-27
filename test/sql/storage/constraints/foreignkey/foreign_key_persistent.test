@@ -2,7 +2,7 @@
 # description: persistent storage tests with foreign key tables
 # group: [foreignkey]
 
-load __TEST_DIR__/test_fk_persistent.db
+load {LOCAL_TEMP_DIR}/test_fk_persistent.db
 
 statement ok
 CREATE TABLE pk_integers (i INTEGER PRIMARY KEY);

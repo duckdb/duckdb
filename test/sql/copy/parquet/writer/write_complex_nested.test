@@ -16,10 +16,10 @@ CREATE TABLE struct_of_lists AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY struct_of_lists TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+COPY struct_of_lists TO '{TEMP_DIR}/complex_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+SELECT i FROM parquet_scan('{TEMP_DIR}/complex_list.parquet');
 ----
 {'a': [1, 2, 3], 'b': [hello, world]}
 {'a': [4, NULL, 5], 'b': [duckduck, goose]}
@@ -38,10 +38,10 @@ CREATE TABLE list_of_structs AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY list_of_structs TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+COPY list_of_structs TO '{TEMP_DIR}/complex_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+SELECT i FROM parquet_scan('{TEMP_DIR}/complex_list.parquet');
 ----
 [{'a': 1, 'b': 100}, NULL, {'a': 2, 'b': 101}]
 NULL
@@ -59,10 +59,10 @@ CREATE TABLE list_of_struct_of_structs AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY list_of_struct_of_structs TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+COPY list_of_struct_of_structs TO '{TEMP_DIR}/complex_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+SELECT i FROM parquet_scan('{TEMP_DIR}/complex_list.parquet');
 ----
 [{'a': {'x': 33}, 'b': {'y': 42, 'z': 99}}, NULL, {'a': {'x': NULL}, 'b': {'y': 43, 'z': 100}}]
 NULL
@@ -80,10 +80,10 @@ CREATE TABLE list_of_lists_simple AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY list_of_lists_simple TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+COPY list_of_lists_simple TO '{TEMP_DIR}/complex_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+SELECT i FROM parquet_scan('{TEMP_DIR}/complex_list.parquet');
 ----
 [[1, 2, 3], [4, 5]]
 [[6, 7]]
@@ -100,10 +100,10 @@ CREATE TABLE list_of_lists AS SELECT * FROM (VALUES
 ) tbl(i);
 
 statement ok
-COPY list_of_lists TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+COPY list_of_lists TO '{TEMP_DIR}/complex_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+SELECT i FROM parquet_scan('{TEMP_DIR}/complex_list.parquet');
 ----
 [[1, 2, 3], [4, 5], [], [6, 7]]
 [[8, NULL, 10], NULL, []]
@@ -125,10 +125,10 @@ CREATE TABLE list_of_lists_of_lists_of_lists AS
    SELECT [[[NULL, NULL, [NULL]], NULL, [[], [7, 8, 9], [NULL], NULL, []]], [], [NULL]]
 
 statement ok
-COPY list_of_lists_of_lists_of_lists TO '__TEST_DIR__/complex_list.parquet' (FORMAT 'parquet');
+COPY list_of_lists_of_lists_of_lists TO '{TEMP_DIR}/complex_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT i FROM parquet_scan('__TEST_DIR__/complex_list.parquet');
+SELECT i FROM parquet_scan('{TEMP_DIR}/complex_list.parquet');
 ----
 [[[[1, 2, 3], [4, 5], [], [6, 7]], [[8, NULL, 10], NULL, []], [], NULL, [[11, 12, 13, 14], [], NULL, [], [], [15], [NULL, NULL, NULL]]]]
 NULL

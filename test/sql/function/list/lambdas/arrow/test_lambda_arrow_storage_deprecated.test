@@ -9,7 +9,7 @@ statement ok
 SET lambda_syntax='ENABLE_SINGLE_ARROW'
 
 statement ok
-ATTACH '__TEST_DIR__/deprecated_syntax.db';
+ATTACH '{LOCAL_TEMP_DIR}/deprecated_syntax.db';
 
 statement ok
 CREATE OR REPLACE FUNCTION deprecated_syntax.transpose(lst) AS (
@@ -24,4 +24,4 @@ statement ok
 DETACH deprecated_syntax;
 
 statement ok
-ATTACH '__TEST_DIR__/deprecated_syntax.db';
+ATTACH '{LOCAL_TEMP_DIR}/deprecated_syntax.db';

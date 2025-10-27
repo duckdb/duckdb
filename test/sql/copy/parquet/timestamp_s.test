@@ -18,20 +18,20 @@ select * from t limit 3;
 2024-02-03 12:12:00
 
 statement ok
-copy (select * from t) to '__TEST_DIR__/t.parquet' (format parquet);
+copy (select * from t) to '{TEMP_DIR}/t.parquet' (format parquet);
 
 query I
-select * from '__TEST_DIR__/t.parquet' limit 3;
+select * from '{TEMP_DIR}/t.parquet' limit 3;
 ----
 2024-02-03 12:00:00
 2024-02-03 12:06:00
 2024-02-03 12:12:00
 
 statement ok
-copy (select * from t) to '__TEST_DIR__/t.parquet' (format parquet);
+copy (select * from t) to '{TEMP_DIR}/t.parquet' (format parquet);
 
 query I
-select * from '__TEST_DIR__/t.parquet' limit 3;
+select * from '{TEMP_DIR}/t.parquet' limit 3;
 ----
 2024-02-03 12:00:00
 2024-02-03 12:06:00

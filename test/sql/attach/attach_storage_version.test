@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
+ATTACH '{LOCAL_TEMP_DIR}/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
 
 # exposed through tags
 query I
@@ -19,19 +19,19 @@ DETACH version_1_2_0
 
 # cannot downgrade storage version
 statement error
-ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'v1.0.0');
+ATTACH '{LOCAL_TEMP_DIR}/version_1_2_0.db' (STORAGE_VERSION 'v1.0.0');
 ----
 The storage version of an existing database cannot be lowered
 
 # unknown storage version
 statement error
-ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'non_existant');
+ATTACH '{LOCAL_TEMP_DIR}/version_1_2_0.db' (STORAGE_VERSION 'non_existant');
 ----
 not a known DuckDB version
 
 # we can open it with the current version
 statement ok
-ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
+ATTACH '{LOCAL_TEMP_DIR}/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
 
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='version_1_2_0'
@@ -44,7 +44,7 @@ DETACH version_1_2_0
 # we can also open it without specifying the version at this point
 # the version will be loaded from the file
 statement ok
-ATTACH '__TEST_DIR__/version_1_2_0.db';
+ATTACH '{LOCAL_TEMP_DIR}/version_1_2_0.db';
 
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='version_1_2_0'
@@ -59,7 +59,7 @@ set storage_compatibility_version='v0.10.2'
 
 # attach a database with the default compatibility version
 statement ok
-ATTACH '__TEST_DIR__/default_version.db';
+ATTACH '{LOCAL_TEMP_DIR}/default_version.db';
 
 statement ok
 CREATE TABLE default_version.tbl(i VARCHAR);
@@ -75,7 +75,7 @@ DETACH default_version
 
 # upgrade the database
 statement ok
-ATTACH '__TEST_DIR__/default_version.db' (STORAGE_VERSION 'v1.2.0');
+ATTACH '{LOCAL_TEMP_DIR}/default_version.db' (STORAGE_VERSION 'v1.2.0');
 
 # we have upgraded the tag now
 query I
@@ -97,7 +97,7 @@ DETACH default_version
 
 # we can attach the database again (without specifying the default)
 statement ok
-ATTACH '__TEST_DIR__/default_version.db'
+ATTACH '{LOCAL_TEMP_DIR}/default_version.db'
 
 # the upgraded tag is stored in the database file
 query I
@@ -119,7 +119,7 @@ DETACH default_version
 
 # we can also attach it by specifying v1.2.0 explicitly
 statement ok
-ATTACH '__TEST_DIR__/default_version.db' (STORAGE_VERSION 'v1.2.0')
+ATTACH '{LOCAL_TEMP_DIR}/default_version.db' (STORAGE_VERSION 'v1.2.0')
 
 query I
 FROM default_version.tbl
@@ -135,7 +135,7 @@ DETACH default_version
 
 # but not by specifying a lower version anymore at this point
 statement error
-ATTACH '__TEST_DIR__/default_version.db' (STORAGE_VERSION 'v1.0.0')
+ATTACH '{LOCAL_TEMP_DIR}/default_version.db' (STORAGE_VERSION 'v1.0.0')
 ----
 The storage version of an existing database cannot be lowered
 
@@ -144,7 +144,7 @@ statement ok
 SET storage_compatibility_version = 'v1.2.0'
 
 statement ok
-ATTACH '__TEST_DIR__/modified_default_setting.db';
+ATTACH '{LOCAL_TEMP_DIR}/modified_default_setting.db';
 
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='modified_default_setting'

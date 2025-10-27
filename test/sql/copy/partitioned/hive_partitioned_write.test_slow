@@ -11,7 +11,7 @@ pragma memory_limit='100mb'
 
 # around 200MB worth of data, will require the PartitionedColumnData to spill to disk
 statement ok
-COPY (SELECT i%2::INT32 as part_col, i::INT32 FROM range(0,25000000) tbl(i)) TO '__TEST_DIR__/partitioned_memory_spill' (FORMAT parquet, PARTITION_BY part_col);
+COPY (SELECT i%2::INT32 as part_col, i::INT32 FROM range(0,25000000) tbl(i)) TO '{TEMP_DIR}/partitioned_memory_spill' (FORMAT parquet, PARTITION_BY part_col);
 
 statement ok
 pragma memory_limit='-1'
@@ -21,13 +21,13 @@ call dbgen(sf=1);
 
 # Partition by 2 columns
 statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem_sf1_partitioned' (FORMAT PARQUET, PARTITION_BY (l_linestatus, l_returnflag));
+COPY lineitem TO '{TEMP_DIR}/lineitem_sf1_partitioned' (FORMAT PARQUET, PARTITION_BY (l_linestatus, l_returnflag));
 
 statement ok
 DROP TABLE lineitem;
 
 statement ok
-CREATE VIEW lineitem as SELECT * FROM parquet_scan('__TEST_DIR__/lineitem_sf1_partitioned/l_linestatus=*/l_returnflag=*/*.parquet', HIVE_PARTITIONING=1);
+CREATE VIEW lineitem as SELECT * FROM parquet_scan('{TEMP_DIR}/lineitem_sf1_partitioned/l_linestatus=*/l_returnflag=*/*.parquet', HIVE_PARTITIONING=1);
 
 loop i 1 9
 

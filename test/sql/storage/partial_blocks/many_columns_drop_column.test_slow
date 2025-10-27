@@ -2,7 +2,7 @@
 # description: Verify that dropping columns with multi-use blocks does not leak memory
 # group: [partial_blocks]
 
-load __TEST_DIR__/many_columns.db
+load {LOCAL_TEMP_DIR}/many_columns.db
 
 
 statement ok

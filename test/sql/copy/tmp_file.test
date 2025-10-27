@@ -2,24 +2,24 @@
 # group: [copy]
 
 statement ok
-copy (select 42 as x) to '__TEST_DIR__/foo';
+copy (select 42 as x) to '{TEMP_DIR}/foo';
 
 statement ok
-copy (select 42 as x) to '__TEST_DIR__/foo';
+copy (select 42 as x) to '{TEMP_DIR}/foo';
 
 statement ok
-COPY (SELECT 36) TO '__TEST_DIR__/.a.b';
+COPY (SELECT 36) TO '{TEMP_DIR}/.a.b';
 
 statement ok
-COPY (SELECT 37 as x) TO '__TEST_DIR__/.a.b';
+COPY (SELECT 37 as x) TO '{TEMP_DIR}/.a.b';
 
 query I
-FROM read_csv('__TEST_DIR__/.a.b');
+FROM read_csv('{TEMP_DIR}/.a.b');
 ----
 37
 
 statement ok
-COPY (SELECT 50) TO '__TEST_DIR__/.a.b.c.d.e..';
+COPY (SELECT 50) TO '{TEMP_DIR}/.a.b.c.d.e..';
 
 statement ok
-COPY (SELECT 51) TO '__TEST_DIR__/.a.b.c.d.e..';
+COPY (SELECT 51) TO '{TEMP_DIR}/.a.b.c.d.e..';

@@ -6,7 +6,7 @@ statement ok
 PRAGMA database_size;
 
 statement ok
-ATTACH '__TEST_DIR__/db_size.db' AS db1
+ATTACH '{LOCAL_TEMP_DIR}/db_size.db' AS db1
 
 statement ok
 CREATE TABLE db1.integers AS FROM range(1000000);
@@ -26,7 +26,7 @@ statement ok
 DETACH db1
 
 statement ok
-ATTACH '__TEST_DIR__/db_size.db' AS db1 (READ_ONLY)
+ATTACH '{LOCAL_TEMP_DIR}/db_size.db' AS db1 (READ_ONLY)
 
 query I
 SELECT free_blocks>0 FROM pragma_database_size() WHERE database_name='db1';

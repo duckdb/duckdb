@@ -2,7 +2,7 @@
 # description: Test replaying the WAL after creating an index in a transaction.
 # group: [storage]
 
-load __TEST_DIR__/art_wal_replay_tx.db
+load {LOCAL_TEMP_DIR}/art_wal_replay_tx.db
 
 statement ok
 SET threads=1;

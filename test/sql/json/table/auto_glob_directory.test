@@ -5,10 +5,10 @@
 require json
 
 statement ok
-COPY (SELECT i%2 AS grp, i FROM range(1000) t(i)) TO '__TEST_DIR__/glob_dir_json' (FORMAT json, PER_THREAD_OUTPUT);
+COPY (SELECT i%2 AS grp, i FROM range(1000) t(i)) TO '{TEMP_DIR}/glob_dir_json' (FORMAT json, PER_THREAD_OUTPUT);
 
 query II
-SELECT grp, COUNT(*) FROM read_json('__TEST_DIR__/glob_dir_json') GROUP BY ALL ORDER BY ALL
+SELECT grp, COUNT(*) FROM read_json('{TEMP_DIR}/glob_dir_json') GROUP BY ALL ORDER BY ALL
 ----
 0	500
 1	500

@@ -6,15 +6,15 @@ require vector_size 512
 
 require parquet
 
-load __TEST_DIR__/insert_mix_batches.db
+load {LOCAL_TEMP_DIR}/insert_mix_batches.db
 
 loop i 0 2
 
 statement ok
-COPY (FROM range(10000000)) TO '__TEST_DIR__/many_small_batches.parquet' (row_group_size 5000)
+COPY (FROM range(10000000)) TO '{TEMP_DIR}/many_small_batches.parquet' (row_group_size 5000)
 
 statement ok
-CREATE TABLE test AS FROM '__TEST_DIR__/many_small_batches.parquet' t(i) WHERE (i // 6144) % 3 = 0;
+CREATE TABLE test AS FROM '{TEMP_DIR}/many_small_batches.parquet' t(i) WHERE (i // 6144) % 3 = 0;
 
 query I
 SELECT * FROM test LIMIT 5 OFFSET 500000

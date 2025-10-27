@@ -5,38 +5,38 @@
 require parquet
 
 statement error
-copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version)
+copy (select range i from range(20000)) to '{TEMP_DIR}/parquet_version.parquet' (parquet_version)
 ----
 Invalid Input Error
 
 statement error
-copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v3)
+copy (select range i from range(20000)) to '{TEMP_DIR}/parquet_version.parquet' (parquet_version v3)
 ----
 Binder Error
 
 # defaults to V1
 statement ok
-copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet'
+copy (select range i from range(20000)) to '{TEMP_DIR}/parquet_version.parquet'
 
 query I
-select encodings from parquet_metadata('__TEST_DIR__/parquet_version.parquet')
+select encodings from parquet_metadata('{TEMP_DIR}/parquet_version.parquet')
 ----
 PLAIN
 
 # we do PLAIN if we can't do dictionary for V1
 statement ok
-copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v1)
+copy (select range i from range(20000)) to '{TEMP_DIR}/parquet_version.parquet' (parquet_version v1)
 
 query I
-select encodings from parquet_metadata('__TEST_DIR__/parquet_version.parquet')
+select encodings from parquet_metadata('{TEMP_DIR}/parquet_version.parquet')
 ----
 PLAIN
 
 # we do DELTA_BINARY_PACKED for V2
 statement ok
-copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v2)
+copy (select range i from range(20000)) to '{TEMP_DIR}/parquet_version.parquet' (parquet_version v2)
 
 query I
-select encodings from parquet_metadata('__TEST_DIR__/parquet_version.parquet')
+select encodings from parquet_metadata('{TEMP_DIR}/parquet_version.parquet')
 ----
 DELTA_BINARY_PACKED

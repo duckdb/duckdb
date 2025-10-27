@@ -5,4 +5,4 @@
 require autocomplete
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$ATTACH OR REPLACE '__TEST_DIR__/attach_or_replace.db' AS db1;$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$ATTACH OR REPLACE '{TEMP_DIR}/attach_or_replace.db' AS db1;$TEST_PEG_PARSER$);

@@ -2,7 +2,7 @@
 # description: Test back and forth update of string NULL values with many strings
 # group: [update]
 
-load __TEST_DIR__/string_null_update.db
+load {LOCAL_TEMP_DIR}/string_null_update.db
 
 statement ok
 create table t (id int, col varchar);

@@ -3,7 +3,7 @@
 # group: [dict_fsst]
 
 # load the DB from disk
-load __TEST_DIR__/test_dict_fsst_unique.db readwrite v1.3.0
+load {LOCAL_TEMP_DIR}/test_dict_fsst_unique.db readwrite v1.3.0
 
 require tpch
 

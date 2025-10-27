@@ -6,13 +6,13 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/board1.db' AS b1;
+ATTACH '{LOCAL_TEMP_DIR}/board1.db' AS b1;
 
 statement ok
-ATTACH '__TEST_DIR__/board2.db' AS b2;
+ATTACH '{LOCAL_TEMP_DIR}/board2.db' AS b2;
 
 statement ok
-ATTACH '__TEST_DIR__/board3.db' AS b3;
+ATTACH '{LOCAL_TEMP_DIR}/board3.db' AS b3;
 
 query I
 SELECT approx_count >= 3 FROM duckdb_approx_database_count();

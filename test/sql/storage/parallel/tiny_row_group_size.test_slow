@@ -3,7 +3,7 @@
 # group: [parallel]
 
 statement ok
-ATTACH '__TEST_DIR__/tiny_row_group_size.db' (ROW_GROUP_SIZE 2048)
+ATTACH '{LOCAL_TEMP_DIR}/tiny_row_group_size.db' (ROW_GROUP_SIZE 2048)
 
 statement ok
 USE tiny_row_group_size

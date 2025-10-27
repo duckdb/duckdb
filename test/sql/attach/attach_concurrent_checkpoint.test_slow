@@ -3,7 +3,7 @@
 # group: [attach]
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint.db' AS db
+ATTACH '{LOCAL_TEMP_DIR}/concurrent_checkpoint.db' AS db
 
 statement ok
 CREATE TABLE db.integers(i INTEGER);

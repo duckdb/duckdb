@@ -3,7 +3,7 @@
 # group: [optimistic_write]
 
 # load the DB from disk
-load __TEST_DIR__/optimistic_write_delete_all.db
+load {LOCAL_TEMP_DIR}/optimistic_write_delete_all.db
 
 statement ok
 create table foo  (d double);

@@ -6,13 +6,13 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/attach_or_replace.db' AS db1;
+ATTACH '{LOCAL_TEMP_DIR}/attach_or_replace.db' AS db1;
 
 statement ok
 CREATE TABLE db1.all_types AS SELECT * FROM test_all_types();
 
 statement ok
-ATTACH '__TEST_DIR__/attach_or_replace_new.db' AS db2;
+ATTACH '{LOCAL_TEMP_DIR}/attach_or_replace_new.db' AS db2;
 
 statement ok
 CREATE TABLE db2.all_types_new AS SELECT * FROM test_all_types();
@@ -22,14 +22,14 @@ DETACH db2;
 
 # ATTACH OR REPLACE same path to same alias should work
 statement ok
-ATTACH OR REPLACE '__TEST_DIR__/attach_or_replace.db' AS db1;
+ATTACH OR REPLACE '{LOCAL_TEMP_DIR}/attach_or_replace.db' AS db1;
 
 statement ok
 SELECT * FROM db1.all_types;
 
 # ATTACHing the same path to a different alias is an error
 statement error
-ATTACH OR REPLACE '__TEST_DIR__/attach_or_replace.db' AS db2;
+ATTACH OR REPLACE '{LOCAL_TEMP_DIR}/attach_or_replace.db' AS db2;
 ----
 already attached
 
@@ -38,7 +38,7 @@ SELECT * FROM db1.all_types;
 
 # ATTACHing a new path to an existing alias detaches the old path and attaches the new path in its place
 statement ok
-ATTACH OR REPLACE '__TEST_DIR__/attach_or_replace_new.db' AS db1;
+ATTACH OR REPLACE '{LOCAL_TEMP_DIR}/attach_or_replace_new.db' AS db1;
 
 # The previous database is no longer attached at this alias, so the table is not found
 statement error
@@ -52,7 +52,7 @@ SELECT * FROM db1.all_types_new;
 
 # ATTACHing the now-unattached previous path should now work
 statement ok
-ATTACH '__TEST_DIR__/attach_or_replace.db' AS db2;
+ATTACH '{LOCAL_TEMP_DIR}/attach_or_replace.db' AS db2;
 
 statement ok
 SELECT * FROM db2.all_types;
