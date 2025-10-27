@@ -8,6 +8,10 @@
 
 namespace duckdb {
 
+BufferedIndexData::BufferedIndexData(BufferedIndexReplay replay_type, unique_ptr<ColumnDataCollection> data_p)
+    : type(replay_type), data(std::move(data_p)) {
+}
+
 UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info_p,
                            TableIOManager &table_io_manager, AttachedDatabase &db)
     : Index(create_info->Cast<CreateIndexInfo>().column_ids, table_io_manager, db), create_info(std::move(create_info)),
