@@ -1,9 +1,17 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/parallel/sleep_async_task.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
 #include "duckdb/parallel/async_result.hpp"
 
 #include <chrono>
 #include <thread>
-#include <iostream>
-#pragma once
 
 namespace duckdb {
 

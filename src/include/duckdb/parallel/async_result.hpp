@@ -1,9 +1,17 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/parallel/async_result.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
-
-#pragma once
 
 namespace duckdb {
 
