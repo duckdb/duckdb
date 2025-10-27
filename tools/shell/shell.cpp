@@ -1315,11 +1315,10 @@ void ShellState::SetTableName(const char *zName) {
 ** "--" comment occurs at the end of the statement, the comment
 ** won't consume the semicolon terminator.
 */
-int ShellState::RunTableDumpQuery(const char *zSelect /* SELECT statement to extract content */
-) {
+int ShellState::RunTableDumpQuery(const string &zSelect) {
 	sqlite3_stmt *pSelect;
 	const char *z;
-	int rc = sqlite3_prepare_v2(db, zSelect, -1, &pSelect, 0);
+	int rc = sqlite3_prepare_v2(db, zSelect.c_str(), -1, &pSelect, 0);
 	if (rc != SQLITE_OK || !pSelect) {
 		utf8_printf(out, "/**** ERROR: (%d) %s *****/\n", rc, sqlite3_errmsg(db));
 		if ((rc & 0xff) != SQLITE_CORRUPT) {
@@ -1948,13 +1947,13 @@ void ShellState::AddError() {
 ** If we get a SQLITE_CORRUPT error, rerun the query after appending
 ** "ORDER BY rowid DESC" to the end.
 */
-int ShellState::RunSchemaDumpQuery(const char *zQuery) {
+int ShellState::RunSchemaDumpQuery(const string &zQuery) {
 	int rc;
 	char *zErr = 0;
-	rc = sqlite3_exec(db, zQuery, dump_callback, this, &zErr);
+	rc = sqlite3_exec(db, zQuery.c_str(), dump_callback, this, &zErr);
 	if (rc == SQLITE_CORRUPT) {
 		char *zQ2;
-		int len = StringLength(zQuery);
+		idx_t len = zQuery.size();
 		raw_printf(out, "/****** CORRUPTION ERROR *******/\n");
 		if (zErr) {
 			utf8_printf(out, "/****** %s ******/\n", zErr);
@@ -1964,7 +1963,7 @@ int ShellState::RunSchemaDumpQuery(const char *zQuery) {
 		zQ2 = (char *)malloc(len + 100);
 		if (zQ2 == 0)
 			return rc;
-		sqlite3_snprintf(len + 100, zQ2, "%s ORDER BY rowid DESC", zQuery);
+		sqlite3_snprintf(len + 100, zQ2, "%s ORDER BY rowid DESC", zQuery.c_str());
 		rc = sqlite3_exec(db, zQ2, dump_callback, this, &zErr);
 		if (rc) {
 			utf8_printf(out, "/****** ERROR: %s ******/\n", zErr);
@@ -2967,12 +2966,12 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	                          "  AND sql NOT NULL"
 	                          " ORDER BY tbl_name='sqlite_sequence'",
 	                          zLike);
-	state.RunSchemaDumpQuery(zSql.c_str());
+	state.RunSchemaDumpQuery(zSql);
 	zSql = StringUtil::Format("SELECT sql FROM sqlite_schema "
 	                          "WHERE (%s) AND sql NOT NULL"
 	                          "  AND type IN ('index','trigger','view')",
 	                          zLike);
-	state.RunTableDumpQuery(zSql.c_str());
+	state.RunTableDumpQuery(zSql);
 	raw_printf(state.out, state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
 	state.showHeader = savedShowHeader;
 	state.shellFlgs = savedShellFlags;

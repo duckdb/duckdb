@@ -159,7 +159,6 @@ public:
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
-	int RunTableDumpQuery(const char *zSelect);
 	void PrintValue(const char *str);
 	void Print(PrintOutput output, const char *str);
 	void Print(PrintOutput output, const string &str);
@@ -186,7 +185,8 @@ public:
 	int ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 	               string *pzErrMsg  /* Error msg written here */
 	);
-	int RunSchemaDumpQuery(const char *zQuery);
+	int RunSchemaDumpQuery(const string &zQuery);
+	int RunTableDumpQuery(const string &zSelect);
 	void OpenDB(int openFlags);
 
 	void SetOrClearFlag(unsigned mFlag, const string &zArg);
