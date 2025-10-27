@@ -53,7 +53,7 @@ struct DictionaryCompressionStorage {
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
-	                                                    const unique_ptr<AnalyzeState> &state);
+	                                                    unique_ptr<AnalyzeState> state);
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
@@ -107,15 +107,13 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 // Compress
 //===--------------------------------------------------------------------===//
 unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
-                                                                           const unique_ptr<AnalyzeState> &state) {
+                                                                           unique_ptr<AnalyzeState> state) {
 	const auto &analyze_state = state->Cast<DictionaryCompressionAnalyzeState>();
 	auto &actual_state = *analyze_state.analyze_state;
 	const idx_t curr_segment_idx = checkpoint_data.GetCheckpointState().column_data.data.ReferenceSegments().size() - 1;
-	return make_uniq<DictionaryCompressionCompressState>(
-		checkpoint_data,
-		state->info,
-		actual_state.unique_counts_per_segment[curr_segment_idx],
-		actual_state.dict_sizes_per_segment[curr_segment_idx]);
+	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state->info,
+	                                                     actual_state.unique_counts_per_segment[curr_segment_idx],
+	                                                     actual_state.dict_sizes_per_segment[curr_segment_idx]);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {

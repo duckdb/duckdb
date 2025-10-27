@@ -77,7 +77,8 @@ public:
 	void Replace(uint32_t index, SRC &value) {
 		dictionary[index].value = value;
 	}
-	//TODO: Possibly create a new InsertWithoutChecking() method that doesn't check if full, as we know we allocated exactly enough.
+	// TODO: Possibly create a new InsertWithoutChecking() method that doesn't check if full, as we know we allocated
+	// exactly enough.
 	//! Insert value into dictionary (if not full)
 	void Insert(SRC value) {
 		if (full) {
