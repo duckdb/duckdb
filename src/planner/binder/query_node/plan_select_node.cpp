@@ -54,6 +54,20 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		// this can only happen if we have e.g. select 1 from tbl group by ();
 		// just output a dummy scan
 		root = make_uniq_base<LogicalOperator, LogicalDummyScan>(statement.group_index);
+	} else if (statement.having) {
+		// HAVING without GROUP BY or aggregates should still operate on a single group
+		// Introduce a global aggregate (with zero aggregate expressions) so that HAVING is evaluated once
+		// over a single row result, matching PostgreSQL semantics.
+		auto aggregate = make_uniq<LogicalAggregate>(statement.group_index, statement.aggregate_index,
+		                                             std::move(statement.aggregates));
+		// no groups
+		aggregate->groupings_index = statement.groupings_index;
+		// grouping sets/functions are irrelevant here but keep structure intact
+		aggregate->grouping_sets = std::move(statement.groups.grouping_sets);
+		aggregate->grouping_functions = std::move(statement.grouping_functions);
+
+		aggregate->AddChild(std::move(root));
+		root = std::move(aggregate);
 	}
 
 	if (statement.having) {
