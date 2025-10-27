@@ -62,6 +62,10 @@ statement ok
 DELETE FROM integers WHERE i = 7 RETURNING *;
 
 statement ok
+DELETE FROM integers
+WHERE i>=10 AND i <=13  RETURNING i as aliasc;
+
+statement ok
 CREATE TABLE integers2 (i bigint);
 
 statement ok
