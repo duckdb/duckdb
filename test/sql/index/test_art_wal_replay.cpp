@@ -9,12 +9,12 @@
 #include "duckdb/execution/index/art/art_operator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 static ART &GetARTIndex(Connection &con, const string &table_name, const string &index_name) {
-	ART *art_ptr = nullptr;
+	optional_ptr<ART> art_ptr;
 	con.context->RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*con.context, "testdb");
 		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(*con.context, "main", table_name);
@@ -32,7 +32,7 @@ static ART &GetARTIndex(Connection &con, const string &table_name, const string 
 			return false;
 		});
 	});
-	REQUIRE(art_ptr != nullptr);
+	REQUIRE(art_ptr);
 	return *art_ptr;
 }
 
