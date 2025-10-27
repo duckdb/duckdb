@@ -721,6 +721,40 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
 
 //===--------------------------------------------------------------------===//
+// Copy function types
+//===--------------------------------------------------------------------===//
+
+//! A COPY function. Must be destroyed with `duckdb_destroy_copy_function`.
+typedef struct _duckdb_copy_function {
+	void *internal_ptr;
+} * duckdb_copy_function;
+
+//! Info for the sink function of a COPY function.
+typedef struct _duckdb_copy_export_sink_info {
+	void *internal_ptr;
+} * duckdb_copy_export_sink_info;
+
+//! Info for the finalize function of a COPY function.
+typedef struct _duckdb_copy_export_finalize_info {
+	void *internal_ptr;
+} * duckdb_copy_export_finalize_info;
+
+//! The bind function to use when preparing a COPY ... TO statement.
+typedef void (*duckdb_copy_function_export_bind_t)(duckdb_bind_info info);
+
+//! The initialization function to use when initializing a COPY ... TO statement.
+typedef void (*duckdb_copy_function_export_init_t)(duckdb_init_info info);
+
+//! The function to sink an input chunk into during COPY ... TO execution.
+typedef void (*duckdb_copy_function_export_sink_t)(duckdb_copy_export_sink_info, duckdb_data_chunk input);
+
+//! The function to finalize the COPY ... TO execution.
+typedef void (*duckdb_copy_function_export_finalize_t)(duckdb_copy_export_finalize_info info);
+
+//! The bind function to use when preparing a COPY ... FROM statement.
+typedef void (*duckdb_copy_import_bind_t)(duckdb_bind_info info);
+
+//===--------------------------------------------------------------------===//
 // Cast types
 //===--------------------------------------------------------------------===//
 
