@@ -70,11 +70,20 @@ private:
 	unordered_set<VariantLogicalType> variant_types;
 };
 
+struct UnshreddedValue {
+public:
+	explicit UnshreddedValue(uint32_t value_index, vector<uint32_t> &&children = {})
+	    : source_value_index(value_index), unshredded_children(std::move(children)) {
+	}
+
+public:
+	uint32_t source_value_index;
+	vector<uint32_t> unshredded_children;
+};
+
 struct DuckDBVariantShredding : public VariantShredding {
 public:
-	DuckDBVariantShredding(VariantVectorData &source, OrderedOwningStringMap<uint32_t> &dictionary,
-	                       SelectionVector &keys_selvec)
-	    : VariantShredding(), variant_source(source), dictionary(dictionary), keys_selvec(keys_selvec) {
+	explicit DuckDBVariantShredding(idx_t count) : VariantShredding(), unshredded_values(count) {
 	}
 	~DuckDBVariantShredding() override = default;
 
@@ -82,38 +91,37 @@ public:
 	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
 	                        optional_ptr<const SelectionVector> value_index_sel,
 	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
-	void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optional_ptr<const SelectionVector> sel,
-	                  optional_ptr<const SelectionVector> value_index_sel,
-	                  optional_ptr<const SelectionVector> result_sel,
-	                  optional_ptr<DuckDBVariantShreddingState> shredding_state, idx_t count);
+	void AnalyzeVariantValues(UnifiedVariantVectorData &variant, Vector &value, optional_ptr<const SelectionVector> sel,
+	                          optional_ptr<const SelectionVector> value_index_sel,
+	                          optional_ptr<const SelectionVector> result_sel,
+	                          DuckDBVariantShreddingState &shredding_state, idx_t count);
 
-private:
-	VariantVectorData &variant_source;
-	OrderedOwningStringMap<uint32_t> &dictionary;
-	SelectionVector &keys_selvec;
+public:
+	//! For each row of the variant, the value_index(es) of the values to write to the 'unshredded' Vector
+	vector<vector<UnshreddedValue>> unshredded_values;
 };
 
 } // namespace
 
 static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-                        VariantNormalizerState &state, DuckDBVariantShreddingState &shredding_state) {
-	state.blob_size += VarintEncode(nested_data.child_count, state.GetDestination());
-	if (!nested_data.child_count) {
-		return;
+                        VariantNormalizerState &state, const vector<uint32_t> &child_indices) {
+	D_ASSERT(child_indices.size() <= nested_data.child_count);
+	//! First iterate through all fields to populate the map of key -> field
+	map<string, idx_t> sorted_fields;
+	for (auto &child_idx : child_indices) {
+		auto keys_index = variant.GetKeysIndex(row, nested_data.children_idx + child_idx);
+		auto &key = variant.GetKey(row, keys_index);
+		sorted_fields.emplace(key, child_idx);
 	}
+
+	state.blob_size += VarintEncode(sorted_fields.size(), state.GetDestination());
+	D_ASSERT(!sorted_fields.empty());
+
 	uint32_t children_idx = state.children_size;
 	uint32_t keys_idx = state.keys_size;
 	state.blob_size += VarintEncode(children_idx, state.GetDestination());
-	state.children_size += nested_data.child_count;
-	state.keys_size += nested_data.child_count;
-
-	//! First iterate through all fields to populate the map of key -> field
-	map<string, idx_t> sorted_fields;
-	for (idx_t i = 0; i < nested_data.child_count; i++) {
-		auto keys_index = variant.GetKeysIndex(row, nested_data.children_idx + i);
-		auto &key = variant.GetKey(row, keys_index);
-		sorted_fields.emplace(key, i);
-	}
+	state.children_size += sorted_fields.size();
+	state.keys_size += sorted_fields.size();
 
 	//! Then visit the fields in sorted order
 	for (auto &entry : sorted_fields) {
@@ -135,13 +143,33 @@ static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, cons
 	}
 }
 
-void DuckDBVariantShredding::CreateValues(UnifiedVariantVectorData &variant, Vector &value,
-                                          optional_ptr<const SelectionVector> sel,
-                                          optional_ptr<const SelectionVector> value_index_sel,
-                                          optional_ptr<const SelectionVector> result_sel,
-                                          optional_ptr<DuckDBVariantShreddingState> shredding_state, idx_t count) {
+static vector<uint32_t> UnshreddedObjectChildren(UnifiedVariantVectorData &variant, uint32_t row, uint32_t value_index,
+                                                 DuckDBVariantShreddingState &shredding_state) {
+	auto nested_data = VariantUtils::DecodeNestedData(variant, row, value_index);
+
+	auto shredded_fields = shredding_state.ObjectFields();
+	vector<uint32_t> unshredded_children;
+	unshredded_children.reserve(nested_data.child_count);
+	for (uint32_t i = 0; i < nested_data.child_count; i++) {
+		auto keys_index = variant.GetKeysIndex(row, nested_data.children_idx + i);
+		auto &key = variant.GetKey(row, keys_index);
+		if (shredded_fields.count(key)) {
+			continue;
+		}
+		unshredded_children.emplace_back(i);
+	}
+	return unshredded_children;
+}
+
+//! ~~Write the unshredded values~~, also receiving the 'untyped_value_index' Vector to populate
+//! Marking the rows that are shredded in the shredding state
+void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &variant, Vector &value,
+                                                  optional_ptr<const SelectionVector> sel,
+                                                  optional_ptr<const SelectionVector> value_index_sel,
+                                                  optional_ptr<const SelectionVector> result_sel,
+                                                  DuckDBVariantShreddingState &shredding_state, idx_t count) {
 	auto &validity = FlatVector::Validity(value);
-	auto value_data = FlatVector::GetData<string_t>(value);
+	auto untyped_data = FlatVector::GetData<uint32_t>(value);
 
 	for (idx_t i = 0; i < count; i++) {
 		idx_t value_index = 0;
@@ -159,26 +187,39 @@ void DuckDBVariantShredding::CreateValues(UnifiedVariantVectorData &variant, Vec
 			result_index = result_sel->get_index(i);
 		}
 
-		VariantNormalizerState normalizer_state(result_index, variant_source, dictionary, keys_selvec);
-
-		bool is_shredded = false;
-		if (variant.RowIsValid(row) && shredding_state && shredding_state->ValueIsShredded(variant, row, value_index)) {
-			shredding_state->SetShredded(row, value_index, result_index);
-			is_shredded = true;
-			if (shredding_state->type.id() != LogicalTypeId::STRUCT) {
+		if (variant.RowIsValid(row) && shredding_state.ValueIsShredded(variant, row, value_index)) {
+			shredding_state.SetShredded(row, value_index, result_index);
+			if (shredding_state.type.id() != LogicalTypeId::STRUCT) {
 				//! Value is shredded, directly write a NULL to the 'value' if the type is not an OBJECT
-				//! When the type is OBJECT, all excess fields would still need to be written to the 'value'
 				validity.SetInvalid(result_index);
 				continue;
 			}
-			auto nested_data = VariantUtils::DecodeNestedData(variant, row, value_index);
-			VisitObject(variant, row, nested_data, normalizer_state, *shredding_state);
+
+			//! When the type is OBJECT, all excess fields would still need to be written to the 'value'
+			auto unshredded_children = UnshreddedObjectChildren(variant, row, value_index, shredding_state);
+			if (unshredded_children.empty()) {
+				//! Fully shredded object
+				validity.SetInvalid(result_index);
+			} else {
+				//! Deal with partially shredded objects
+				untyped_data[result_index] = unshredded_values[row].size() + 1;
+				unshredded_values[row].emplace_back(value_index, std::move(unshredded_children));
+			}
+			continue;
+		}
+
+		//! Deal with unshredded values
+		if (variant.GetTypeId(row, value_index) == VariantLogicalType::VARIANT_NULL) {
+			//! 0 is reserved for NULL
+			untyped_data[result_index] = 0;
 		} else {
-			VariantVisitor<VariantNormalizer>::Visit(variant, row, value_index, normalizer_state);
+			untyped_data[result_index] = unshredded_values[row].size() + 1;
+			unshredded_values[row].emplace_back(value_index);
 		}
 	}
 }
 
+//! Receive a 'shredded' result Vector, consisting of the 'untyped_value_index' and the 'typed_value' Vector
 void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
                                                 optional_ptr<const SelectionVector> sel,
                                                 optional_ptr<const SelectionVector> value_index_sel,
@@ -193,14 +234,13 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 	auto &typed_value = *child_vectors[1];
 
 	DuckDBVariantShreddingState shredding_state(typed_value.GetType(), count);
-	CreateValues(variant, untyped_value_index, sel, value_index_sel, result_sel, &shredding_state, count);
+	AnalyzeVariantValues(variant, untyped_value_index, sel, value_index_sel, result_sel, shredding_state, count);
 
 	SelectionVector null_values;
 	if (shredding_state.count) {
 		WriteTypedValues(variant, typed_value, shredding_state.shredded_sel, shredding_state.values_index_sel,
 		                 shredding_state.result_sel, shredding_state.count);
-		//! 'shredding_state.result_sel' will always be a subset of 'result_sel', set the rows not in the subset to
-		//! NULL
+		//! Set the rows that aren't shredded to NULL
 		idx_t sel_idx = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto original_index = result_sel ? result_sel->get_index(i) : i;
@@ -218,10 +258,6 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 	}
 }
 
-static void PrepareUnshreddedVector(UnifiedVariantVectorData &variant, Vector &input, Vector &unshredded, idx_t count) {
-	//! Take the original sizes of the lists, the result will be similar size, never bigger
-}
-
 void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t count, const LogicalType &shredded_type) {
 	RecursiveUnifiedVectorFormat recursive_format;
 	Vector::RecursiveToUnifiedFormat(input, count, recursive_format);
@@ -229,6 +265,11 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	auto &child_vectors = StructVector::GetEntries(output);
 
+	//! First traverse the Variant to write the shredded values and collect the 'untyped_value_index'es
+	DuckDBVariantShredding shredding(count);
+	shredding.WriteVariantValues(variant, *child_vectors[1], nullptr, nullptr, nullptr, count);
+
+	//! Now we can write the unshredded values
 	auto &unshredded = *child_vectors[0];
 	auto original_keys_size = ListVector::GetListSize(VariantVector::GetKeys(input));
 	auto original_children_size = ListVector::GetListSize(VariantVector::GetChildren(input));
@@ -246,30 +287,62 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 	ListVector::Reserve(values, original_values_size);
 	ListVector::SetListSize(values, 0);
 
-	VariantVectorData variant_data(unshredded);
-	for (idx_t i = 0; i < count; i++) {
-		//! Allocate for the new data, use the same size as source
-		auto &blob_data = variant_data.blob_data[i];
-		auto original_data = variant.GetData(i);
-		blob_data = StringVector::EmptyString(data, original_data.GetSize());
-
-		auto &keys_list_entry = variant_data.keys_data[i];
-		keys_list_entry.offset = ListVector::GetListSize(keys);
-
-		auto &children_list_entry = variant_data.children_data[i];
-		children_list_entry.offset = ListVector::GetListSize(children);
-
-		auto &values_list_entry = variant_data.values_data[i];
-		values_list_entry.offset = ListVector::GetListSize(values);
-	}
-
 	auto &keys_entry = ListVector::GetEntry(keys);
 	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
 	SelectionVector keys_selvec;
 	keys_selvec.Initialize(original_keys_size);
 
-	DuckDBVariantShredding shredding(variant_data, dictionary, keys_selvec);
-	shredding.WriteVariantValues(variant, *child_vectors[1], nullptr, nullptr, nullptr, count);
+	VariantVectorData variant_data(unshredded);
+	for (idx_t row = 0; row < count; row++) {
+		VariantNormalizerState normalizer_state(row, variant_data, dictionary, keys_selvec);
+		auto &unshredded_values = shredding.unshredded_values[row];
+
+		if (unshredded_values.empty()) {
+			FlatVector::SetNull(unshredded, row, true);
+			continue;
+		}
+
+		//! Allocate for the new data, use the same size as source
+		auto &blob_data = variant_data.blob_data[row];
+		auto original_data = variant.GetData(row);
+		blob_data = StringVector::EmptyString(data, original_data.GetSize());
+
+		auto &keys_list_entry = variant_data.keys_data[row];
+		keys_list_entry.offset = ListVector::GetListSize(keys);
+
+		auto &children_list_entry = variant_data.children_data[row];
+		children_list_entry.offset = ListVector::GetListSize(children);
+
+		auto &values_list_entry = variant_data.values_data[row];
+		values_list_entry.offset = ListVector::GetListSize(values);
+
+		for (idx_t i = 0; i < unshredded_values.size(); i++) {
+			auto &unshredded_value = unshredded_values[i];
+			auto value_index = unshredded_value.source_value_index;
+			if (unshredded_value.unshredded_children.empty()) {
+				D_ASSERT(variant.GetTypeId(i, value_index) == VariantLogicalType::OBJECT);
+				auto nested_data = VariantUtils::DecodeNestedData(variant, row, value_index);
+				VisitObject(variant, row, nested_data, normalizer_state, unshredded_value.unshredded_children);
+				continue;
+			}
+			VariantVisitor<VariantNormalizer>::Visit(variant, row, value_index, normalizer_state);
+		}
+		blob_data.SetSizeAndFinalize(normalizer_state.blob_size, original_data.GetSize());
+		keys_list_entry.length = normalizer_state.keys_size;
+		children_list_entry.length = normalizer_state.children_size;
+		values_list_entry.length = normalizer_state.values_size;
+
+		ListVector::SetListSize(keys, ListVector::GetListSize(keys) + normalizer_state.keys_size);
+		ListVector::SetListSize(children, ListVector::GetListSize(children) + normalizer_state.children_size);
+		ListVector::SetListSize(values, ListVector::GetListSize(values) + normalizer_state.values_size);
+	}
+
+	VariantUtils::FinalizeVariantKeys(unshredded, dictionary, keys_selvec, ListVector::GetListSize(keys));
+	keys_entry.Slice(keys_selvec, ListVector::GetListSize(keys));
+
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		unshredded.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 } // namespace duckdb
