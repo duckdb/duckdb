@@ -139,12 +139,6 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 	return transformer.Transform<QualifiedName>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
-                                                      optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return transformer.TransformEnum<string>(choice_pr.result);
-}
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListExpression(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
@@ -467,7 +461,21 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 	if (!prefix_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("AT TIME ZONE has not yet been implemented");
+	auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &prefix_expr : prefix_repeat.children) {
+		auto prefix = transformer.Transform<string>(prefix_expr);
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(std::move(expr));
+		expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+	}
+	return expr;
+}
+
+string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
+                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.TransformEnum<string>(choice_pr.result);
 }
 
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'

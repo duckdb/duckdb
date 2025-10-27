@@ -49,7 +49,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
-	Printer::PrintF("Final result %s", result->ToString());
+	// Printer::PrintF("Final result %s", result->ToString());
 	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 }
 
@@ -336,7 +336,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("MinValue", "minvalue");
 	RegisterEnum<string>("MaxValue", "maxvalue");
 
-	RegisterEnum<string>("NotPrefixOperator", "NOT");
 	RegisterEnum<string>("MinusPrefixOperator", "-");
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
