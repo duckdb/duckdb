@@ -1,9 +1,6 @@
 # name: test/sql/types/geo/geometry_intersection_filter.test_slow
 # group: [geo]
 
-# Stats are not preserved when serialized in the stats() function, so this doesnt work
-#require no_alternative_verify
-
 load __TEST_DIR__/test_geo_storage.db
 
 statement ok

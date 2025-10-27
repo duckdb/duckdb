@@ -29,7 +29,7 @@
     "name": "st_intersects_extent",
     "parameters": "geom1,geom2",
     "description": "Returns true if the geometries bounding boxes intersect",
-    "example": "TODO",
+    "example": "'POINT(5 5)'::GEOMETRY && 'LINESTRING(0 0, 10 20)'::GEOMETRY;",
     "categories": ["geometry"],
     "type": "scalar_function",
     "aliases": ["&&"]
