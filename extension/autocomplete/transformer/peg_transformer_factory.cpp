@@ -249,6 +249,36 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformExpressionAsCollabel);
 	REGISTER_TRANSFORM(TransformColIdExpression);
 	REGISTER_TRANSFORM(TransformExpressionOptIdentifier);
+
+	REGISTER_TRANSFORM(TransformTableRef);
+	REGISTER_TRANSFORM(TransformJoinOrPivot);
+	REGISTER_TRANSFORM(TransformJoinClause);
+	REGISTER_TRANSFORM(TransformRegularJoinClause);
+	REGISTER_TRANSFORM(TransformJoinType);
+	REGISTER_TRANSFORM(TransformJoinQualifier);
+	REGISTER_TRANSFORM(TransformOnClause);
+	REGISTER_TRANSFORM(TransformUsingClause);
+	REGISTER_TRANSFORM(TransformJoinWithoutOnClause);
+	REGISTER_TRANSFORM(TransformJoinPrefix);
+	REGISTER_TRANSFORM(TransformCrossJoinPrefix);
+	REGISTER_TRANSFORM(TransformNaturalJoinPrefix);
+	REGISTER_TRANSFORM(TransformPositionalJoinPrefix);
+	REGISTER_TRANSFORM(TransformInnerTableRef);
+	REGISTER_TRANSFORM(TransformTableFunction);
+	REGISTER_TRANSFORM(TransformTableFunctionLateralOpt);
+	REGISTER_TRANSFORM(TransformTableFunctionAliasColon);
+	REGISTER_TRANSFORM(TransformTableAliasColon);
+	REGISTER_TRANSFORM(TransformQualifiedTableFunction);
+	REGISTER_TRANSFORM(TransformTableSubquery);
+	REGISTER_TRANSFORM(TransformSubqueryReference);
+	REGISTER_TRANSFORM(TransformBaseTableRef);
+	REGISTER_TRANSFORM(TransformAtClause);
+	REGISTER_TRANSFORM(TransformAtSpecifier);
+	REGISTER_TRANSFORM(TransformAtUnit);
+	REGISTER_TRANSFORM(TransformValuesRef);
+	REGISTER_TRANSFORM(TransformValuesClause);
+	REGISTER_TRANSFORM(TransformValuesExpressions);
+	REGISTER_TRANSFORM(TransformTableStatement);
 }
 
 void PEGTransformerFactory::RegisterUse() {

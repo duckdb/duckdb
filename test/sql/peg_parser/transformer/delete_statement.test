@@ -72,7 +72,7 @@ statement ok
 DELETE FROM integers USING integers2;
 
 statement ok
-DELETE FROM integers WHERE a < 5 RETURNING a;
+DELETE FROM integers WHERE i < 5 RETURNING i;
 
 statement ok
 CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
