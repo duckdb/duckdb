@@ -171,15 +171,15 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 	auto &validity = FlatVector::Validity(value);
 	auto untyped_data = FlatVector::GetData<uint32_t>(value);
 
-	for (idx_t i = 0; i < count; i++) {
-		idx_t value_index = 0;
+	for (uint32_t i = 0; i < static_cast<uint32_t>(count); i++) {
+		uint32_t value_index = 0;
 		if (value_index_sel) {
-			value_index = value_index_sel->get_index(i);
+			value_index = static_cast<uint32_t>(value_index_sel->get_index(i));
 		}
 
-		idx_t row = i;
+		uint32_t row = i;
 		if (sel) {
-			row = sel->get_index(i);
+			row = static_cast<uint32_t>(sel->get_index(i));
 		}
 
 		idx_t result_index = i;
@@ -202,7 +202,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 				validity.SetInvalid(result_index);
 			} else {
 				//! Deal with partially shredded objects
-				untyped_data[result_index] = unshredded_values[row].size() + 1;
+				untyped_data[result_index] = static_cast<uint32_t>(unshredded_values[row].size()) + 1;
 				unshredded_values[row].emplace_back(value_index, std::move(unshredded_children));
 			}
 			continue;
@@ -213,7 +213,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 			//! 0 is reserved for NULL
 			untyped_data[result_index] = 0;
 		} else {
-			untyped_data[result_index] = unshredded_values[row].size() + 1;
+			untyped_data[result_index] = static_cast<uint32_t>(unshredded_values[row].size()) + 1;
 			unshredded_values[row].emplace_back(value_index);
 		}
 	}
