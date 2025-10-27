@@ -385,7 +385,22 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAdditiveExpression(
 	if (!term_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("Term has not yet been implemented");
+	auto term_repeat = term_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &term_expr : term_repeat.children) {
+		auto &inner_list_pr = term_expr->Cast<ListParseResult>();
+		auto term = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
+		vector<unique_ptr<ParsedExpression>> term_children;
+		term_children.push_back(std::move(expr));
+		term_children.push_back( transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
+		expr = make_uniq<FunctionExpression>(term, std::move(term_children));
+	}
+	return expr;
+}
+
+string PEGTransformerFactory::TransformTerm(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
 // MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
@@ -481,13 +496,22 @@ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transforme
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
-	auto &choice_result = parse_result->Cast<ListParseResult>();
-	auto &matched_rule_result = choice_result.Child<ChoiceParseResult>(0);
+	auto &list_pr= parse_result->Cast<ListParseResult>();
+	auto &matched_rule_result = list_pr.Child<ChoiceParseResult>(0);
 	if (matched_rule_result.name == "StringLiteral") {
 		return make_uniq<ConstantExpression>(Value(transformer.Transform<string>(matched_rule_result.result)));
 	}
 	return transformer.Transform<unique_ptr<ParsedExpression>>(matched_rule_result.result);
 }
+
+// ParensExpression <- Parens(Expression)
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParensExpression(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	return transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
+}
+
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformConstantLiteral(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {

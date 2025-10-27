@@ -296,6 +296,7 @@ private:
                                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformAdditiveExpression(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result);
+	static string TransformTerm(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformMultiplicativeExpression(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result);
 	static string TransformFactor(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
@@ -314,6 +315,8 @@ private:
 	static unique_ptr<ParsedExpression> TransformColumnReference(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLiteralExpression(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformParensExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSingleExpression(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);

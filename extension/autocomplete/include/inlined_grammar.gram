@@ -610,8 +610,10 @@ DefaultExpression <- 'DEFAULT'
 ListComprehensionExpression <- '[' Expression 'FOR' List(Expression) ListComprehensionFilter? ']'
 ListComprehensionFilter <- 'IF' Expression
 
+ParensExpression <- Parens(Expression)
+
 SingleExpression <-
-    Parens(Expression) /
+    ParensExpression /
 	LiteralExpression /
 	Parameter /
     SubqueryExpression /
@@ -687,9 +689,7 @@ BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
 BitOperator <- '&' / '|' / '<<' / '>>' / '||'
 # LEVEL 10
 AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
-Term <- PlusOperator / MinusOperator
-PlusOperator <- '+'
-MinusOperator <- '-'
+Term <- '+' / '-'
 # LEVEL 11
 MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
 Factor <- '*' / '/' / '//' / '%'

@@ -81,8 +81,6 @@ bool BaseTokenizer::CharacterIsNumber(char c) {
 	switch (c) {
 	case 'e': // exponents
 	case 'E':
-	case '-':
-	case '+':
 	case '_':
 		return true;
 	default:
