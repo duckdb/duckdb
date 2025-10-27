@@ -150,10 +150,9 @@ public:
 		if (*str == '\0') {
 			SkipWhitespace(); // remove trailing whitespace
 			return true;      // matched
-		} else {
-			pos = ptr;    // reset position
-			return false; // not matched
 		}
+		pos = ptr;    // reset position
+		return false; // not matched
 	}
 
 	bool TryMatch(char c) {

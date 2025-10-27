@@ -87,6 +87,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::GEOMETRY:
 		parquet_type = Type::BYTE_ARRAY;
 		break;
 	case LogicalTypeId::TIME:
@@ -151,13 +152,6 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__set_JSON(duckdb_parquet::JsonType());
-		return;
-	}
-	if (duckdb_type.GetAlias() == "WKB_BLOB" && allow_geometry) {
-		schema_ele.__isset.logicalType = true;
-		schema_ele.logicalType.__isset.GEOMETRY = true;
-		// TODO: Set CRS in the future
-		schema_ele.logicalType.GEOMETRY.__isset.crs = false;
 		return;
 	}
 	switch (duckdb_type.id()) {
@@ -264,6 +258,13 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.DECIMAL.precision = schema_ele.precision;
 		schema_ele.logicalType.DECIMAL.scale = schema_ele.scale;
 		break;
+	case LogicalTypeId::GEOMETRY:
+		if (allow_geometry) { // Don't set this if we write GeoParquet V1
+			schema_ele.__isset.logicalType = true;
+			schema_ele.logicalType.__isset.GEOMETRY = true;
+			// TODO: Set CRS in the future
+			schema_ele.logicalType.GEOMETRY.__isset.crs = false;
+		}
 	default:
 		break;
 	}
@@ -794,11 +795,9 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		}
 	}
 	case LogicalTypeId::BLOB:
-		if (type.GetAlias() == "WKB_BLOB") {
-			return make_uniq<GeoStatsUnifier>();
-		} else {
-			return make_uniq<BlobStatsUnifier>();
-		}
+		return make_uniq<BlobStatsUnifier>();
+	case LogicalTypeId::GEOMETRY:
+		return make_uniq<GeoStatsUnifier>();
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringStatsUnifier>();
 	case LogicalTypeId::UUID:
