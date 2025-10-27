@@ -1332,17 +1332,23 @@ Interval <- YearKeyword /
 
 BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
 
-NumericType <- 'INT' /
-               'INTEGER' /
-               'SMALLINT' /
-               'BIGINT' /
-               'REAL' /
-               'BOOLEAN' /
-               ('FLOAT' Parens(NumberLiteral)?) /
-               ('DOUBLE' 'PRECISION') /
-               ('DECIMAL' TypeModifiers?) /
-               ('DEC' TypeModifiers?) /
-               ('NUMERIC' TypeModifiers?)
+NumericType <- SimpleNumericType / DecimalNumericType
+SimpleNumericType <- IntType / IntegerType / SmallintType /
+                BigintType / RealType / BooleanType / DoubleType
+DecimalNumericType <- FloatType / DecimalType / DecType / NumericModType
+
+IntType <- 'INT'
+IntegerType <- 'INTEGER'
+SmallintType <- 'SMALLINT'
+BigintType <- 'BIGINT'
+RealType <- 'REAL'
+BooleanType <- 'BOOLEAN'
+DoubleType <- ('DOUBLE' 'PRECISION')
+
+FloatType <- 'FLOAT' Parens(NumberLiteral)?
+DecimalType <- 'DECIMAL' TypeModifiers?
+DecType <- 'DEC' TypeModifiers?
+NumericModType <- 'NUMERIC' TypeModifiers?
 
 QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
 TypeModifiers <- Parens(List(Expression)?)
