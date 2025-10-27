@@ -1195,7 +1195,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		if (!index.IsBound()) {
 			// Buffer only the key columns, and store their mapping.
 			auto &unbound_index = index.Cast<UnboundIndex>();
-			unbound_index.BufferChunk(index_chunk, row_ids, mapped_column_ids, BufferedIndexReplay::INSERT);
+			unbound_index.BufferChunk(index_chunk, row_ids, mapped_column_ids, BufferedIndexReplay::INS_ENTRY);
 			return false;
 		}
 

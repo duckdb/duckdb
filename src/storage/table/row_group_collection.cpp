@@ -766,7 +766,8 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 				}
 				index_column_chunk.SetCardinality(result_chunk.size());
 				auto &unbound_index = index.Cast<UnboundIndex>();
-				unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids, BufferedIndexReplay::DELETE);
+				unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids,
+				                          BufferedIndexReplay::DEL_ENTRY);
 			}
 			return false;
 		});

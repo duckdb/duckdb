@@ -710,8 +710,8 @@ BlockState EnumUtil::FromString<BlockState>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetBufferedIndexReplayValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(BufferedIndexReplay::INSERT), "INSERT" },
-		{ static_cast<uint32_t>(BufferedIndexReplay::DELETE), "DELETE" }
+		{ static_cast<uint32_t>(BufferedIndexReplay::INS_ENTRY), "INS_ENTRY" },
+		{ static_cast<uint32_t>(BufferedIndexReplay::DEL_ENTRY), "DEL_ENTRY" }
 	};
 	return values;
 }

@@ -175,7 +175,7 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
 			table_chunk.SetCardinality(scan_chunk.size());
 
 			switch (replay.type) {
-			case BufferedIndexReplay::INSERT: {
+			case BufferedIndexReplay::INS_ENTRY: {
 				IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
 				auto error = Append(table_chunk, scan_chunk.data.back(), index_append_info);
 				if (error.HasError()) {
@@ -183,7 +183,7 @@ void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
 				}
 				continue;
 			}
-			case BufferedIndexReplay::DELETE: {
+			case BufferedIndexReplay::DEL_ENTRY: {
 				Delete(table_chunk, scan_chunk.data.back());
 			}
 			}
