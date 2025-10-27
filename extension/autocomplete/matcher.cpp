@@ -658,7 +658,17 @@ private:
 		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
+		bool scientific_notation = false;
 		for (idx_t i = 1; i < token_text.size(); i++) {
+			if (BaseTokenizer::CharacterIsScientific(token_text[i])) {
+				if (scientific_notation) {
+					throw ParserException("Already found scientific notation");
+				}
+				scientific_notation = true;
+			}
+			if (scientific_notation && (token_text[i] == '+' || token_text[i] == '-')) {
+				continue;
+			}
 			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
 				return false;
 			}

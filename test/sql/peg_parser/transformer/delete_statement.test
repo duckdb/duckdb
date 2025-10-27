@@ -55,6 +55,9 @@ statement ok
 DELETE FROM integers
 WHERE i < 5 RETURNING i;
 
+statement ok
+DELETE FROM integers WHERE integers.rowid;
+
 # statement ok
 # CREATE TABLE integers2 (i bigint);
 #
