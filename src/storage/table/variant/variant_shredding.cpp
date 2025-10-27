@@ -294,7 +294,6 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	VariantVectorData variant_data(unshredded);
 	for (idx_t row = 0; row < count; row++) {
-		VariantNormalizerState normalizer_state(row, variant_data, dictionary, keys_selvec);
 		auto &unshredded_values = shredding.unshredded_values[row];
 
 		if (unshredded_values.empty()) {
@@ -316,6 +315,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 		auto &values_list_entry = variant_data.values_data[row];
 		values_list_entry.offset = ListVector::GetListSize(values);
 
+		VariantNormalizerState normalizer_state(row, variant_data, dictionary, keys_selvec);
 		for (idx_t i = 0; i < unshredded_values.size(); i++) {
 			auto &unshredded_value = unshredded_values[i];
 			auto value_index = unshredded_value.source_value_index;
