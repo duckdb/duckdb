@@ -18,6 +18,8 @@ HPP_HEADER = """//--------------------------------------------------------------
 #pragma once
 
 #include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiling_node.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
