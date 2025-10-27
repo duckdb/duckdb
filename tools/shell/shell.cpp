@@ -917,28 +917,6 @@ void ShellState::OutputHexBlob(const void *pBlob, int nBlob) {
 }
 
 /*
-** Find a string that is not found anywhere in z[].  Return a pointer
-** to that string.
-**
-** Try to use zA and zB first.  If both of those are already found in z[]
-** then make up some string and store it in the buffer zBuf.
-*/
-static const char *unused_string(const char *z,                  /* Result must not appear anywhere in z */
-                                 const char *zA, const char *zB, /* Try these first */
-                                 char *zBuf                      /* Space to store a generated string */
-) {
-	unsigned i = 0;
-	if (strstr(z, zA) == 0)
-		return zA;
-	if (strstr(z, zB) == 0)
-		return zB;
-	do {
-		sqlite3_snprintf(20, zBuf, "(%s%u)", zA, i++);
-	} while (strstr(z, zBuf) != 0);
-	return zBuf;
-}
-
-/*
 ** Output the given string as a quoted string using SQL quoting conventions.
 **
 ** See also: output_quoted_escaped_string()
