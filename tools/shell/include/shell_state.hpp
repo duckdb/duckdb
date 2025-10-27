@@ -144,13 +144,13 @@ public:
 	void OutputJSONString(const char *z, int n);
 	void PrintDashes(idx_t N);
 	void UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool right_align);
-	bool SetOutputMode(const char *mode, const char *tbl_name);
-	bool ImportData(const char **azArg, idx_t nArg);
-	bool OpenDatabase(const char **azArg, idx_t nArg);
-	bool SetOutputFile(const char **azArg, idx_t nArg, char output_mode);
+	bool SetOutputMode(const string &mode, const char *tbl_name);
+	bool ImportData(const vector<string> &args);
+	bool OpenDatabase(const vector<string> &args);
+	bool SetOutputFile(const vector<string> &args, char output_mode);
 	bool ReadFromFile(const string &file);
-	bool DisplaySchemas(const char **azArg, idx_t nArg);
-	MetadataResult DisplayEntries(const char **azArg, idx_t nArg, char type);
+	bool DisplaySchemas(const vector<string> &args);
+	MetadataResult DisplayEntries(const vector<string> &args, char type);
 	void ShowConfiguration();
 
 	idx_t RenderLength(const char *z);
@@ -184,12 +184,12 @@ public:
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
 	int ExecuteSQL(const char *zSql, /* SQL to be evaluated */
-	               string *pzErrMsg   /* Error msg written here */
+	               string *pzErrMsg  /* Error msg written here */
 	);
 	int RunSchemaDumpQuery(const char *zQuery);
 	void OpenDB(int openFlags);
 
-	void SetOrClearFlag(unsigned mFlag, const char *zArg);
+	void SetOrClearFlag(unsigned mFlag, const string &zArg);
 	bool ShellHasFlag(int flag) {
 		return (shellFlgs & flag) != 0;
 	}
@@ -204,7 +204,7 @@ public:
 	void ResetOutput();
 	void ClearTempFile();
 	void NewTempFile(const char *zSuffix);
-	int DoMetaCommand(char *zLine);
+	int DoMetaCommand(const string &zLine);
 
 	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();

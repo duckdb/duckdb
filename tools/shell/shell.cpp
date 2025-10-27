@@ -807,7 +807,7 @@ static int hexDigitValue(char c) {
 /*
 ** Interpret zArg as an integer value, possibly with suffixes.
 */
-static sqlite3_int64 integerValue(const char *zArg) {
+static sqlite3_int64 integerValue(const string &arg) {
 	sqlite3_int64 v = 0;
 	static const struct {
 		const char *zSuffix;
@@ -819,6 +819,7 @@ static sqlite3_int64 integerValue(const char *zArg) {
 	};
 	int i;
 	int isNeg = 0;
+	auto zArg = arg.c_str();
 	if (zArg[0] == '-') {
 		isNeg = 1;
 		zArg++;
@@ -1694,7 +1695,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 ** and callback data argument.
 */
 int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
-                           string *pzErrMsg   /* Error msg written here */
+                           string *pzErrMsg  /* Error msg written here */
 ) {
 	sqlite3_stmt *pStmt = NULL; /* Statement to execute. */
 	int rc = SQLITE_OK;         /* Return Code */
@@ -2371,14 +2372,12 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 **    \\    -> backslash
 **    \NNN  -> ascii character NNN in octal
 */
-static void resolve_backslashes(char *z) {
-	int i, j;
-	char c;
-	while (*z && *z != '\\')
-		z++;
-	for (i = j = 0; (c = z[i]) != 0; i++, j++) {
-		if (c == '\\' && z[i + 1] != 0) {
-			c = z[++i];
+static string resolve_backslashes(const string &z) {
+	string result;
+	for (idx_t pos = 0; pos < z.size(); pos++) {
+		auto c = z[pos];
+		if (c == '\\' && pos + 1 < z.size()) {
+			c = z[++pos];
 			if (c == 'a') {
 				c = '\a';
 			} else if (c == 'b') {
@@ -2401,27 +2400,26 @@ static void resolve_backslashes(char *z) {
 				c = '\\';
 			} else if (c >= '0' && c <= '7') {
 				c -= '0';
-				if (z[i + 1] >= '0' && z[i + 1] <= '7') {
-					i++;
-					c = (c << 3) + z[i] - '0';
-					if (z[i + 1] >= '0' && z[i + 1] <= '7') {
-						i++;
-						c = (c << 3) + z[i] - '0';
+				if (pos + 1 < z.size() && z[pos + 1] >= '0' && z[pos + 1] <= '7') {
+					pos++;
+					c = (c << 3) + z[pos] - '0';
+					if (pos + 1 < z.size() && z[pos + 1] >= '0' && z[pos + 1] <= '7') {
+						pos++;
+						c = (c << 3) + z[pos] - '0';
 					}
 				}
 			}
 		}
-		z[j] = c;
+		result += c;
 	}
-	if (j < i)
-		z[j] = 0;
+	return result;
 }
 
 /*
 ** Interpret zArg as either an integer or a boolean value.  Return 1 or 0
 ** for TRUE and FALSE.  Return the integer value if appropriate.
 */
-static bool booleanValue(const char *zArg) {
+static bool booleanValue(const string &zArg) {
 	idx_t i;
 	if (zArg[0] == '0' && zArg[1] == 'x') {
 		for (i = 2; hexDigitValue(zArg[i]) >= 0; i++) {
@@ -2430,22 +2428,23 @@ static bool booleanValue(const char *zArg) {
 		for (i = 0; zArg[i] >= '0' && zArg[i] <= '9'; i++) {
 		}
 	}
-	if (i > 0 && zArg[i] == 0)
+	if (i > 0 && zArg[i] == 0) {
 		return bool(integerValue(zArg) & 0xffffffff);
+	}
 	if (StringUtil::CIEquals(zArg, "on") || StringUtil::CIEquals(zArg, "yes")) {
 		return true;
 	}
 	if (StringUtil::CIEquals(zArg, "off") || StringUtil::CIEquals(zArg, "no")) {
 		return false;
 	}
-	utf8_printf(stderr, "ERROR: Not a boolean value: \"%s\". Assuming \"no\".\n", zArg);
+	utf8_printf(stderr, "ERROR: Not a boolean value: \"%s\". Assuming \"no\".\n", zArg.c_str());
 	return false;
 }
 
 /*
 ** Set or clear a shell flag according to a boolean value.
 */
-void ShellState::SetOrClearFlag(unsigned mFlag, const char *zArg) {
+void ShellState::SetOrClearFlag(unsigned mFlag, const string &zArg) {
 	if (booleanValue(zArg)) {
 		ShellSetFlag(mFlag);
 	} else {
@@ -2720,13 +2719,16 @@ int ShellState::ShellDatabaseError(sqlite3 *db) {
 ** Compare the string as a command-line option with either one or two
 ** initial "-" characters.
 */
-static int optionMatch(const char *zStr, const char *zOpt) {
-	if (zStr[0] != '-')
-		return 0;
+static bool optionMatch(const string &str, const string &zOpt) {
+	auto zStr = str.c_str();
+	if (zStr[0] != '-') {
+		return false;
+	}
 	zStr++;
-	if (zStr[0] == '-')
+	if (zStr[0] == '-') {
 		zStr++;
-	return strcmp(zStr, zOpt) == 0;
+	}
+	return StringUtil::Equals(zStr, zOpt);
 }
 
 /*
@@ -2798,7 +2800,7 @@ void ShellState::NewTempFile(const char *zSuffix) {
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
-typedef MetadataResult (*metadata_command_t)(ShellState &state, const char **azArg, idx_t nArg);
+typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
 
 struct MetadataCommand {
 	const char *command;
@@ -2809,13 +2811,13 @@ struct MetadataCommand {
 	idx_t match_size;
 };
 
-MetadataResult ToggleBail(ShellState &state, const char **azArg, idx_t nArg) {
-	bail_on_error = booleanValue(azArg[1]);
+MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
+	bail_on_error = booleanValue(args[1]);
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ToggleBinary(ShellState &state, const char **azArg, idx_t nArg) {
-	if (booleanValue(azArg[1])) {
+MetadataResult ToggleBinary(ShellState &state, const vector<string> &args) {
+	if (booleanValue(args[1])) {
 		state.SetBinaryMode();
 	} else {
 		state.SetTextMode();
@@ -2823,32 +2825,32 @@ MetadataResult ToggleBinary(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ChangeDirectory(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ChangeDirectory(ShellState &state, const vector<string> &args) {
 	if (safe_mode) {
 		utf8_printf(stderr, ".cd cannot be used in -safe mode\n");
 		return MetadataResult::FAIL;
 	}
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
-	wchar_t *z = sqlite3_win32_utf8_to_unicode(azArg[1]);
+	wchar_t *z = sqlite3_win32_utf8_to_unicode(args[1].c_str());
 	rc = !SetCurrentDirectoryW(z);
 	sqlite3_free(z);
 #else
-	rc = chdir(azArg[1]);
+	rc = chdir(args[1].c_str());
 #endif
 	if (rc) {
-		utf8_printf(stderr, "Cannot change to directory \"%s\"\n", azArg[1]);
+		utf8_printf(stderr, "Cannot change to directory \"%s\"\n", args[1].c_str());
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ToggleChanges(ShellState &state, const char **azArg, idx_t nArg) {
-	state.SetOrClearFlag(SHFLG_CountChanges, azArg[1]);
+MetadataResult ToggleChanges(ShellState &state, const vector<string> &args) {
+	state.SetOrClearFlag(SHFLG_CountChanges, args[1]);
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ShowDatabases(ShellState &state, const vector<string> &args) {
 	char *zErrMsg = 0;
 	state.OpenDB(0);
 
@@ -2864,40 +2866,40 @@ MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) 
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetSeparator(ShellState &state, const char **azArg, idx_t nArg, const char *separator_name,
+MetadataResult SetSeparator(ShellState &state, const vector<string> &args, const char *separator_name,
                             char &separator) {
-	if (nArg == 1) {
+	if (args.size() == 1) {
 		raw_printf(state.out, "current %s separator: %c\n", separator_name, separator);
-	} else if (nArg != 2) {
+	} else if (args.size() != 2) {
 		return MetadataResult::PRINT_USAGE;
-	} else if (strcmp(azArg[1], "space") == 0) {
+	} else if (StringUtil::Equals(args[1], "space")) {
 		separator = ' ';
-	} else if (strcmp(azArg[1], "none") == 0) {
+	} else if (StringUtil::Equals(args[1], "none")) {
 		separator = '\0';
-	} else if (strlen(azArg[1]) != 1) {
+	} else if (args[1].size() != 1) {
 		raw_printf(stderr, ".%s_sep SEP must be one byte, \"space\" or \"none\"\n", separator_name);
 		return MetadataResult::FAIL;
 	} else {
-		separator = azArg[1][0];
+		separator = args[1][0];
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetDecimalSep(ShellState &state, const char **azArg, idx_t nArg) {
-	return SetSeparator(state, azArg, nArg, "decimal", state.decimal_separator);
+MetadataResult SetDecimalSep(ShellState &state, const vector<string> &args) {
+	return SetSeparator(state, args, "decimal", state.decimal_separator);
 }
 
-MetadataResult SetThousandSep(ShellState &state, const char **azArg, idx_t nArg) {
-	return SetSeparator(state, azArg, nArg, "thousand", state.thousand_separator);
+MetadataResult SetThousandSep(ShellState &state, const vector<string> &args) {
+	return SetSeparator(state, args, "thousand", state.thousand_separator);
 }
 
-MetadataResult SetLargeNumberRendering(ShellState &state, const char **azArg, idx_t nArg) {
-	if (strcmp(azArg[1], "all") == 0) {
+MetadataResult SetLargeNumberRendering(ShellState &state, const vector<string> &args) {
+	if (StringUtil::Equals(args[1], "all")) {
 		state.large_number_rendering = LargeNumberRendering::ALL;
-	} else if (strcmp(azArg[1], "footer") == 0) {
+	} else if (StringUtil::Equals(args[1], "footer")) {
 		state.large_number_rendering = LargeNumberRendering::FOOTER;
 	} else {
-		if (booleanValue(azArg[1])) {
+		if (booleanValue(args[1])) {
 			state.large_number_rendering = LargeNumberRendering::DEFAULT;
 		} else {
 			state.large_number_rendering = LargeNumberRendering::NONE;
@@ -2906,26 +2908,26 @@ MetadataResult SetLargeNumberRendering(ShellState &state, const char **azArg, id
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	string zLike;
 	bool savedShowHeader = state.showHeader;
 	int savedShellFlags = state.shellFlgs;
 	state.ShellClearFlag(SHFLG_Newlines | SHFLG_Echo);
-	for (idx_t i = 1; i < nArg; i++) {
-		if (azArg[i][0] == '-') {
-			const char *z = azArg[i] + 1;
+	for (idx_t i = 1; i < args.size(); i++) {
+		if (args[i][0] == '-') {
+			const char *z = args[i].c_str() + 1;
 			if (z[0] == '-')
 				z++;
-			if (strcmp(z, "newlines") == 0) {
+			if (StringUtil::Equals(z, "newlines")) {
 				state.ShellSetFlag(SHFLG_Newlines);
 			} else {
-				raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", azArg[i]);
+				raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", args[i].c_str());
 				return MetadataResult::FAIL;
 			}
 		} else if (!zLike.empty()) {
-			zLike = StringUtil::Format("%s OR name LIKE %s ESCAPE '\\'", zLike, SQLString(azArg[i]));
+			zLike = StringUtil::Format("%s OR name LIKE %s ESCAPE '\\'", zLike, SQLString(args[i]));
 		} else {
-			zLike = StringUtil::Format("name LIKE %s ESCAPE '\\'", SQLString(azArg[i]));
+			zLike = StringUtil::Format("name LIKE %s ESCAPE '\\'", SQLString(args[i]));
 		}
 	}
 
@@ -2977,55 +2979,55 @@ MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ToggleEcho(ShellState &state, const char **azArg, idx_t nArg) {
-	state.SetOrClearFlag(SHFLG_Echo, azArg[1]);
+MetadataResult ToggleEcho(ShellState &state, const vector<string> &args) {
+	state.SetOrClearFlag(SHFLG_Echo, args[1]);
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg > 2) {
+MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	int rc = 0;
-	if (nArg > 1 && (rc = (int)integerValue(azArg[1])) != 0) {
+	if (args.size() > 1 && (rc = (int)integerValue(args[1])) != 0) {
 		// exit immediately if a custom error code is provided
 		exit(rc);
 	}
 	return MetadataResult::EXIT;
 }
 
-MetadataResult ToggleHeaders(ShellState &state, const char **azArg, idx_t nArg) {
-	state.showHeader = booleanValue(azArg[1]);
+MetadataResult ToggleHeaders(ShellState &state, const vector<string> &args) {
+	state.showHeader = booleanValue(args[1]);
 	state.shellFlgs |= SHFLG_HeaderSet;
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetHighlightColors(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg < 3 || nArg > 4) {
+MetadataResult SetHighlightColors(ShellState &state, const vector<string> &args) {
+	if (args.size() < 3 || args.size() > 4) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	ShellHighlight highlighter(state);
-	if (!highlighter.SetColor(azArg[1], azArg[2], nArg == 3 ? nullptr : azArg[3])) {
+	if (!highlighter.SetColor(args[1].c_str(), args[2].c_str(), args.size() == 3 ? nullptr : args[3].c_str())) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ToggleHighlighErrors(ShellState &state, const char **azArg, idx_t nArg) {
-	highlight_errors = booleanValue(azArg[1]) ? OptionType::ON : OptionType::OFF;
+MetadataResult ToggleHighlighErrors(ShellState &state, const vector<string> &args) {
+	highlight_errors = booleanValue(args[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ToggleHighlightResult(ShellState &state, const char **azArg, idx_t nArg) {
-	highlight_results = booleanValue(azArg[1]) ? OptionType::ON : OptionType::OFF;
+MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &args) {
+	highlight_results = booleanValue(args[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ShowHelp(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg >= 2) {
-		int n = showHelp(state.out, azArg[1]);
+MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
+	if (args.size() >= 2) {
+		int n = showHelp(state.out, args[1].c_str());
 		if (n == 0) {
-			utf8_printf(state.out, "Nothing matches '%s'\n", azArg[1]);
+			utf8_printf(state.out, "Nothing matches '%s'\n", args[1].c_str());
 		}
 	} else {
 		showHelp(state.out, 0);
@@ -3033,52 +3035,52 @@ MetadataResult ShowHelp(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ToggleLog(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 	if (safe_mode) {
 		utf8_printf(stderr, ".log cannot be used in -safe mode\n");
 		return MetadataResult::FAIL;
 	}
-	const char *zFile = azArg[1];
+	const char *zFile = args[1].c_str();
 	output_file_close(state.pLog);
 	state.pLog = output_file_open(zFile, 0);
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetMaxRows(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg > 2) {
+MetadataResult SetMaxRows(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	if (nArg == 1) {
+	if (args.size() == 1) {
 		raw_printf(state.out, "current max rows: %zu\n", state.max_rows);
 	} else {
-		state.max_rows = (size_t)integerValue(azArg[1]);
+		state.max_rows = (size_t)integerValue(args[1]);
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetMaxWidth(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg > 2) {
+MetadataResult SetMaxWidth(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	if (nArg == 1) {
+	if (args.size() == 1) {
 		raw_printf(state.out, "current max rows: %zu\n", state.max_width);
 	} else {
-		state.max_width = (size_t)integerValue(azArg[1]);
+		state.max_width = (size_t)integerValue(args[1]);
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetColumnRendering(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult SetColumnRendering(ShellState &state, const vector<string> &args) {
 	state.columns = 1;
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetRowRendering(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult SetRowRendering(ShellState &state, const vector<string> &args) {
 	state.columns = 0;
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult EnableSafeMode(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args) {
 	safe_mode = true;
 	if (state.db) {
 		// db has been opened - disable external access
@@ -3087,8 +3089,9 @@ MetadataResult EnableSafeMode(ShellState &state, const char **azArg, idx_t nArg)
 	return MetadataResult::SUCCESS;
 }
 
-bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
-	idx_t n2 = StringLength(mode_str);
+bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
+	auto mode_str = mode_name.c_str();
+	idx_t n2 = mode_name.size();
 	char c2 = mode_str[0];
 	if (tbl_name && !(c2 == 'i' && strncmp(mode_str, "insert", n2) == 0)) {
 		raw_printf(stderr, "TABLE argument can only be used with .mode insert");
@@ -3157,26 +3160,26 @@ bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
 	return true;
 }
 
-MetadataResult SetOutputMode(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg > 3) {
+MetadataResult SetOutputMode(ShellState &state, const vector<string> &args) {
+	if (args.size() > 3) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	if (nArg == 1) {
+	if (args.size() == 1) {
 		raw_printf(state.out, "current output mode: %s\n", modeDescr[int(state.mode)]);
 	} else {
-		if (!state.SetOutputMode(azArg[1], nArg > 2 ? azArg[2] : nullptr)) {
+		if (!state.SetOutputMode(args[1], args.size() > 2 ? args[2].c_str() : nullptr)) {
 			return MetadataResult::FAIL;
 		}
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetNullValue(ShellState &state, const char **azArg, idx_t nArg) {
-	state.nullValue = azArg[1];
+MetadataResult SetNullValue(ShellState &state, const vector<string> &args) {
+	state.nullValue = args[1];
 	return MetadataResult::SUCCESS;
 }
 
-bool ShellState::ImportData(const char **azArg, idx_t nArg) {
+bool ShellState::ImportData(const vector<string> &args) {
 	if (safe_mode) {
 		utf8_printf(stderr, ".import cannot be used in -safe mode\n");
 		return false;
@@ -3199,14 +3202,15 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	} else {
 		xRead = csv_read_one_field;
 	}
-	for (idx_t i = 1; i < nArg; i++) {
-		auto z = azArg[i];
-		if (z[0] == '-' && z[1] == '-')
+	for (idx_t i = 1; i < args.size(); i++) {
+		auto z = args[i].c_str();
+		if (z[0] == '-' && z[1] == '-') {
 			z++;
+		}
 		if (z[0] != '-') {
-			if (zFile == 0) {
+			if (zFile == nullptr) {
 				zFile = z;
-			} else if (zTable == 0) {
+			} else if (zTable == nullptr) {
 				zTable = z;
 			} else {
 				utf8_printf(out, "ERROR: extra argument: \"%s\".  Usage:\n", z);
@@ -3215,8 +3219,8 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 			}
 		} else if (strcmp(z, "-v") == 0) {
 			eVerbose++;
-		} else if (strcmp(z, "-skip") == 0 && i < nArg - 1) {
-			nSkip = (int)integerValue(azArg[++i]);
+		} else if (strcmp(z, "-skip") == 0 && i < args.size() - 1) {
+			nSkip = (int)integerValue(args[++i]);
 		} else if (strcmp(z, "-ascii") == 0) {
 			sCtx.cColSep = SEP_Unit[0];
 			sCtx.cRowSep = SEP_Record[0];
@@ -3436,14 +3440,14 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	return true;
 }
 
-MetadataResult ImportData(ShellState &state, const char **azArg, idx_t nArg) {
-	if (!state.ImportData(azArg, nArg)) {
+MetadataResult ImportData(ShellState &state, const vector<string> &args) {
+	if (!state.ImportData(args)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
-bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
+bool ShellState::OpenDatabase(const vector<string> &args) {
 	if (safe_mode) {
 		utf8_printf(stderr, ".open cannot be used in -safe mode\n");
 		return false;
@@ -3460,8 +3464,8 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
 	szMax = 0;
 	/* Check for command-line arguments */
-	for (iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
-		const char *z = azArg[iName];
+	for (iName = 1; iName < args.size() && args[iName][0] == '-'; iName++) {
+		const char *z = args[iName].c_str();
 		if (optionMatch(z, "new")) {
 			newFlag = true;
 		} else if (optionMatch(z, "readonly")) {
@@ -3474,8 +3478,8 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 		}
 	}
 	/* If a filename is specified, try to open it first */
-	if (nArg > iName) {
-		zNewFilename = azArg[iName];
+	if (args.size() > iName) {
+		zNewFilename = args[iName];
 	}
 	if (!zNewFilename.empty() || openMode == SHELL_OPEN_HEXDB) {
 		if (newFlag) {
@@ -3495,53 +3499,53 @@ bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
 	return true;
 }
 
-MetadataResult OpenDatabase(ShellState &state, const char **azArg, idx_t nArg) {
-	if (!state.OpenDatabase(azArg, nArg)) {
+MetadataResult OpenDatabase(ShellState &state, const vector<string> &args) {
+	if (!state.OpenDatabase(args)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult PrintArguments(ShellState &state, const char **azArg, idx_t nArg) {
-	for (idx_t i = 1; i < nArg; i++) {
+MetadataResult PrintArguments(ShellState &state, const vector<string> &args) {
+	for (idx_t i = 1; i < args.size(); i++) {
 		if (i > 1) {
 			raw_printf(state.out, " ");
 		}
-		utf8_printf(state.out, "%s", azArg[i]);
+		utf8_printf(state.out, "%s", args[i].c_str());
 	}
 	raw_printf(state.out, "\n");
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetPrompt(ShellState &, const char **azArg, idx_t nArg) {
-	if (nArg >= 2) {
-		strncpy(mainPrompt, azArg[1], (int)ArraySize(mainPrompt) - 1);
+MetadataResult SetPrompt(ShellState &, const vector<string> &args) {
+	if (args.size() >= 2) {
+		strncpy(mainPrompt, args[1].c_str(), (int)ArraySize(mainPrompt) - 1);
 	}
-	if (nArg >= 3) {
-		strncpy(continuePrompt, azArg[2], (int)ArraySize(continuePrompt) - 1);
+	if (args.size() >= 3) {
+		strncpy(continuePrompt, args[2].c_str(), (int)ArraySize(continuePrompt) - 1);
 	}
-	if (nArg >= 4) {
-		strncpy(continuePromptSelected, azArg[3], (int)ArraySize(continuePromptSelected) - 1);
+	if (args.size() >= 4) {
+		strncpy(continuePromptSelected, args[3].c_str(), (int)ArraySize(continuePromptSelected) - 1);
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetSeparator(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg < 2 || nArg > 3) {
+MetadataResult SetSeparator(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2 || args.size() > 3) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	state.colSeparator = azArg[1];
-	if (nArg >= 3) {
-		state.rowSeparator = azArg[2];
+	state.colSeparator = args[1];
+	if (args.size() >= 3) {
+		state.rowSeparator = args[2];
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult QuitProcess(ShellState &, const char **azArg, idx_t nArg) {
+MetadataResult QuitProcess(ShellState &, const vector<string> &args) {
 	return MetadataResult::EXIT;
 }
 
-bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode) {
+bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 	if (safe_mode) {
 		utf8_printf(stderr, ".output/.once/.excel cannot be used in -safe mode\n");
 		return false;
@@ -3560,8 +3564,8 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 		// .once
 		bOnce = 1;
 	}
-	for (idx_t i = 1; i < nArg; i++) {
-		const char *z = azArg[i];
+	for (idx_t i = 1; i < args.size(); i++) {
+		const char *z = args[i].c_str();
 		if (z[0] == '-') {
 			if (z[1] == '-') {
 				z++;
@@ -3573,15 +3577,15 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 			} else if (output_mode != 'e' && strcmp(z, "-e") == 0) {
 				eMode = 'e'; /* text editor */
 			} else {
-				utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", azArg[i]);
-				showHelp(out, azArg[0]);
+				utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", args[i].c_str());
+				showHelp(out, args[0].c_str());
 				return false;
 			}
 		} else if (zFile.empty()) {
 			zFile = z;
 		} else {
-			utf8_printf(out, "ERROR: extra parameter: \"%s\".  Usage:\n", azArg[i]);
-			showHelp(out, azArg[0]);
+			utf8_printf(out, "ERROR: extra parameter: \"%s\".  Usage:\n", args[i].c_str());
+			showHelp(out, args[0].c_str());
 			return false;
 		}
 	}
@@ -3650,22 +3654,22 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 	return true;
 }
 
-MetadataResult SetOutput(ShellState &state, const char **azArg, idx_t nArg) {
-	if (!state.SetOutputFile(azArg, nArg, '\0')) {
+MetadataResult SetOutput(ShellState &state, const vector<string> &args) {
+	if (!state.SetOutputFile(args, '\0')) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetOutputOnce(ShellState &state, const char **azArg, idx_t nArg) {
-	if (!state.SetOutputFile(azArg, nArg, 'o')) {
+MetadataResult SetOutputOnce(ShellState &state, const vector<string> &args) {
+	if (!state.SetOutputFile(args, 'o')) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetOutputExcel(ShellState &state, const char **azArg, idx_t nArg) {
-	if (!state.SetOutputFile(azArg, nArg, 'e')) {
+MetadataResult SetOutputExcel(ShellState &state, const vector<string> &args) {
+	if (!state.SetOutputFile(args, 'e')) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
@@ -3691,14 +3695,14 @@ bool ShellState::ReadFromFile(const string &file) {
 	return rc == 0;
 }
 
-MetadataResult ReadFromFile(ShellState &state, const char **azArg, idx_t nArg) {
-	if (!state.ReadFromFile(azArg[1])) {
+MetadataResult ReadFromFile(ShellState &state, const vector<string> &args) {
+	if (!state.ReadFromFile(args[1])) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
-bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
+bool ShellState::DisplaySchemas(const vector<string> &args) {
 	string sSelect;
 	char *zErrMsg = 0;
 	const char *zDiv = "(";
@@ -3709,13 +3713,13 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 	OpenDB(0);
 
 	RenderMode mode = RenderMode::SEMI;
-	for (idx_t ii = 1; ii < nArg; ii++) {
-		if (optionMatch(azArg[ii], "indent")) {
+	for (idx_t ii = 1; ii < args.size(); ii++) {
+		if (optionMatch(args[ii], "indent")) {
 			mode = RenderMode::PRETTY;
-		} else if (optionMatch(azArg[ii], "debug")) {
+		} else if (optionMatch(args[ii], "debug")) {
 			bDebug = 1;
 		} else if (zName == 0) {
-			zName = azArg[ii];
+			zName = args[ii].c_str();
 		} else {
 			raw_printf(stderr, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
 			return false;
@@ -3760,25 +3764,25 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 	}
 }
 
-MetadataResult DisplaySchemas(ShellState &state, const char **azArg, idx_t nArg) {
-	if (!state.DisplaySchemas(azArg, nArg)) {
+MetadataResult DisplaySchemas(ShellState &state, const vector<string> &args) {
+	if (!state.DisplaySchemas(args)) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult RunShellCommand(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult RunShellCommand(ShellState &state, const vector<string> &args) {
 	if (safe_mode) {
 		utf8_printf(stderr, ".sh/.system cannot be used in -safe mode\n");
 		return MetadataResult::FAIL;
 	}
 	int x;
-	if (nArg < 2) {
+	if (args.size() < 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	auto zCmd = StringUtil::Format(strchr(azArg[1], ' ') == 0 ? "%s" : "\"%s\"", azArg[1]);
-	for (idx_t i = 2; i < nArg; i++) {
-		zCmd += StringUtil::Format(strchr(azArg[i], ' ') == 0 ? " %s" : " \"%s\"", azArg[i]);
+	auto zCmd = StringUtil::Format(StringUtil::Contains(args[1], ' ') ? "%s" : "\"%s\"", args[1]);
+	for (idx_t i = 2; i < args.size(); i++) {
+		zCmd += StringUtil::Format(StringUtil::Contains(args[i], ' ') ? " %s" : " \"%s\"", args[i]);
 	}
 	x = system(zCmd.c_str());
 	if (x) {
@@ -3809,13 +3813,13 @@ void ShellState::ShowConfiguration() {
 	utf8_printf(out, "%12.12s: %s\n", "filename", zDbFilename.c_str());
 }
 
-MetadataResult ShowConfiguration(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ShowConfiguration(ShellState &state, const vector<string> &args) {
 	state.ShowConfiguration();
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ToggleTimer(ShellState &state, const char **azArg, idx_t nArg) {
-	enableTimer = booleanValue(azArg[1]);
+MetadataResult ToggleTimer(ShellState &state, const vector<string> &args) {
+	enableTimer = booleanValue(args[1]);
 	if (enableTimer && !HAS_TIMER) {
 		raw_printf(stderr, "Error: timer not available on this system.\n");
 		enableTimer = false;
@@ -3823,7 +3827,7 @@ MetadataResult ToggleTimer(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ShowVersion(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult ShowVersion(ShellState &state, const vector<string> &args) {
 	utf8_printf(state.out, "DuckDB %s (%s) %s\n" /*extra-version-info*/, duckdb::DuckDB::LibraryVersion(),
 	            duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
 #define CTIMEOPT_VAL_(opt) #opt
@@ -3839,26 +3843,25 @@ MetadataResult ShowVersion(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult SetWidths(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult SetWidths(ShellState &state, const vector<string> &args) {
 	state.colWidth.clear();
-	for (idx_t j = 1; j < nArg; j++) {
-		state.colWidth.push_back((int)integerValue(azArg[j]));
+	for (idx_t j = 1; j < args.size(); j++) {
+		state.colWidth.push_back((int)integerValue(args[j]));
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char type) {
+MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
 	sqlite3_stmt *pStmt;
-	int ii;
 	string s;
 	OpenDB(0);
 
-	if (nArg > 2) {
+	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
 
 	// Parse the filter pattern to check for schema qualification
-	string filter_pattern = nArg > 1 ? azArg[1] : "%";
+	string filter_pattern = args.size() > 1 ? args[1] : "%";
 	string schema_filter = "";
 	string table_filter = filter_pattern;
 
@@ -3934,8 +3937,8 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 		}
 	} else {
 		// Original binding for indexes
-		if (nArg > 1) {
-			sqlite3_bind_text(pStmt, 1, azArg[1], -1, SQLITE_TRANSIENT);
+		if (args.size() > 1) {
+			sqlite3_bind_text(pStmt, 1, args[1].c_str(), -1, SQLITE_TRANSIENT);
 		} else {
 			sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
 		}
@@ -3974,31 +3977,31 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 	return rc == 0 ? MetadataResult::SUCCESS : MetadataResult::FAIL;
 }
 
-MetadataResult ShowIndexes(ShellState &state, const char **azArg, idx_t nArg) {
-	return state.DisplayEntries(azArg, nArg, 'i');
+MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
+	return state.DisplayEntries(args, 'i');
 }
 
-MetadataResult ShowTables(ShellState &state, const char **azArg, idx_t nArg) {
-	return state.DisplayEntries(azArg, nArg, 't');
+MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
+	return state.DisplayEntries(args, 't');
 }
 
-MetadataResult SetUICommand(ShellState &state, const char **azArg, idx_t nArg) {
-	if (nArg < 1) {
+MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
+	if (args.size() < 1) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	string command;
-	for (idx_t i = 1; i < nArg; i++) {
+	for (idx_t i = 1; i < args.size(); i++) {
 		if (i > 1) {
 			command += " ";
 		}
-		command += azArg[i];
+		command += args[i];
 	}
 	state.ui_command = "CALL " + command;
 	return MetadataResult::SUCCESS;
 }
 
 #if defined(_WIN32) || defined(WIN32)
-MetadataResult SetUTF8Mode(ShellState &state, const char **azArg, idx_t nArg) {
+MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
 	win_utf8_mode = 1;
 	return MetadataResult::SUCCESS;
 }
@@ -4080,60 +4083,66 @@ static const MetadataCommand metadata_commands[] = {
 **
 ** Return 1 on error, 2 to exit, and 0 otherwise.
 */
-int ShellState::DoMetaCommand(char *zLine) {
-	int h = 1;
-	int nArg = 0;
+int ShellState::DoMetaCommand(const string &zLine) {
 	int n, c;
 	int rc = 0;
-	char *azArg[52];
-
-	/* Parse the input line into tokens.
-	 */
-	while (zLine[h] && nArg < ArraySize(azArg) - 1) {
-		while (IsSpace(zLine[h])) {
-			h++;
+	vector<string> args;
+	// skip initial dot
+	idx_t pos = 1;
+	while (pos < zLine.size()) {
+		// skip initial spaces
+		while (pos < zLine.size() && IsSpace(zLine[pos])) {
+			pos++;
 		}
-		if (zLine[h] == 0)
+		if (pos >= zLine.size()) {
 			break;
-		if (zLine[h] == '\'' || zLine[h] == '"') {
-			int delim = zLine[h++];
-			azArg[nArg++] = &zLine[h];
-			while (zLine[h] && zLine[h] != delim) {
-				if (zLine[h] == '\\' && delim == '"' && zLine[h + 1] != 0)
-					h++;
-				h++;
-			}
-			if (zLine[h] == delim) {
-				zLine[h++] = 0;
-			}
-			if (delim == '"')
-				resolve_backslashes(azArg[nArg - 1]);
-		} else {
-			azArg[nArg++] = &zLine[h];
-			while (zLine[h] && !IsSpace(zLine[h])) {
-				h++;
-			}
-			if (zLine[h])
-				zLine[h++] = 0;
-			resolve_backslashes(azArg[nArg - 1]);
 		}
+		string arg;
+		if (zLine[pos] == '\'' || zLine[pos] == '"') {
+			// quoted argument - scan until next quote
+			auto quote = zLine[pos];
+			// skip over the initial quote
+			pos++;
+
+			while (pos < zLine.size() && zLine[pos] != quote) {
+				if (zLine[pos] == '\\' && quote == '"' && pos + 1 < zLine.size()) {
+					// skip over any escaped characters
+					arg += zLine[pos++];
+				}
+				arg += zLine[pos++];
+			}
+			if (pos < zLine.size()) {
+				// skip over the final quote
+				pos++;
+			}
+			if (quote == '"') {
+				arg = resolve_backslashes(arg);
+			}
+		} else {
+			// unquoted argument - scan until the next space
+			while (pos < zLine.size() && !IsSpace(zLine[pos])) {
+				arg += zLine[pos];
+				pos++;
+			}
+			arg = resolve_backslashes(arg);
+		}
+		args.push_back(std::move(arg));
 	}
-	azArg[nArg] = 0;
 
 	/* Process the input line.
 	 */
-	if (nArg == 0) {
+	if (args.empty()) {
 		return 0; /* no tokens, no error */
 	}
-	n = StringLength(azArg[0]);
-	c = azArg[0][0];
+	n = args[0].size();
+	c = args[0][0];
 	ClearTempFile();
 
 	bool found_argument = false;
 	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
 		auto &command = metadata_commands[command_idx];
 		idx_t match_size = command.match_size ? command.match_size : n;
-		if (n < int(match_size) || c != *command.command || strncmp(azArg[0], command.command, n) != 0) {
+		if (n < int(match_size) || c != *command.command || strncmp(args[0].c_str(), command.command, n) != 0) {
 			continue;
 		}
 		found_argument = true;
@@ -4141,8 +4150,8 @@ int ShellState::DoMetaCommand(char *zLine) {
 		if (!command.callback) {
 			raw_printf(stderr, "Command \"%s\" is unsupported in the current version of the CLI\n", command.command);
 			result = MetadataResult::FAIL;
-		} else if (command.argument_count == 0 || int(command.argument_count) == nArg) {
-			result = command.callback(*this, (const char **)azArg, nArg);
+		} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
+			result = command.callback(*this, args);
 		}
 		if (result == MetadataResult::PRINT_USAGE) {
 			raw_printf(stderr, "Usage: .%s %s\n", command.command, command.usage);
@@ -4155,7 +4164,12 @@ int ShellState::DoMetaCommand(char *zLine) {
 	} else {
 #ifdef HAVE_LINENOISE
 		const char *error = NULL;
-		if (linenoiseParseOption((const char **)azArg, nArg, &error)) {
+		// FIXME: we shouldn't be parsing options in linenoise
+		vector<const char *> zArgs;
+		for (auto &arg : args) {
+			zArgs.push_back(arg.c_str());
+		}
+		if (linenoiseParseOption(zArgs.data(), zArgs.size(), &error)) {
 			if (error) {
 				PrintDatabaseError(error);
 				rc = 1;
@@ -4165,7 +4179,7 @@ int ShellState::DoMetaCommand(char *zLine) {
 			utf8_printf(stderr,
 			            "Error: unknown command or invalid arguments: "
 			            " \"%s\". Enter \".help\" for help\n",
-			            azArg[0]);
+			            args[0].c_str());
 			rc = 1;
 #ifdef HAVE_LINENOISE
 		}
@@ -4174,8 +4188,9 @@ int ShellState::DoMetaCommand(char *zLine) {
 
 	if (outCount) {
 		outCount--;
-		if (outCount == 0)
+		if (outCount == 0) {
 			ResetOutput();
+		}
 	}
 	return rc;
 }
@@ -4558,8 +4573,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	int rc = 0;
 	bool warnInmemoryDb = false;
 	bool readStdin = true;
-	int nCmd = 0;
-	char **azCmd = nullptr;
+	vector<string> extra_commands;
 #if !SQLITE_SHELL_IS_UTF8
 	char **argvToFree = 0;
 	int argcToFree = 0;
@@ -4649,12 +4663,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				/* Excesss arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
 				readStdin = false;
-				nCmd++;
-				azCmd = (char **)realloc(azCmd, sizeof(azCmd[0]) * nCmd);
-				if (azCmd == 0) {
-					shell_out_of_memory();
-				}
-				azCmd[nCmd - 1] = z;
+				extra_commands.push_back(z);
 			}
 		}
 		if (z[1] == '-') {
@@ -4808,7 +4817,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-version") == 0) {
 			printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
 			       duckdb::DuckDB::SourceID());
-			free(azCmd);
 			return 0;
 		} else if (strcmp(z, "-interactive") == 0) {
 			stdin_is_interactive = true;
@@ -4827,7 +4835,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			bail_on_error = true;
 			z = cmdline_option_value(argc, argv, ++i);
 			if (!data.ProcessFile(string(z))) {
-				free(azCmd);
 				return 1;
 			}
 			bail_on_error = old_bail;
@@ -4847,7 +4854,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			z = cmdline_option_value(argc, argv, ++i);
 			rc = data.RunInitialCommand(z, bail);
 			if (rc != 0) {
-				free(azCmd);
 				return rc;
 			}
 		} else if (strcmp(z, "-safe") == 0) {
@@ -4856,7 +4862,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			// run the UI command
 			rc = data.RunInitialCommand((char *)data.ui_command.c_str(), true);
 			if (rc != 0) {
-				free(azCmd);
 				return rc;
 			}
 		} else if (strcmp(z, "-storage_version") == 0) {
@@ -4864,7 +4869,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else {
 			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
 			raw_printf(stderr, "Use -help for a list of options.\n");
-			free(azCmd);
 			return 1;
 		}
 		data.cMode = data.mode;
@@ -4875,29 +4879,25 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		** command-line inputs, except for the argToSkip argument which contains
 		** the database filename.
 		*/
-		for (i = 0; i < nCmd; i++) {
-			if (azCmd[i][0] == '.') {
-				rc = data.DoMetaCommand(azCmd[i]);
+		for (auto &cmd : extra_commands) {
+			if (cmd[0] == '.') {
+				rc = data.DoMetaCommand(cmd);
 				if (rc) {
-					free(azCmd);
 					return rc == 2 ? 0 : rc;
 				}
 			} else {
 				data.OpenDB(0);
 				string errMsg;
-				rc = data.ExecuteSQL(azCmd[i], &errMsg);
+				rc = data.ExecuteSQL(cmd.c_str(), &errMsg);
 				if (!errMsg.empty()) {
 					data.PrintDatabaseError(errMsg);
-					free(azCmd);
 					return rc != 0 ? rc : 1;
 				} else if (rc != 0) {
-					utf8_printf(stderr, "Error: unable to process SQL: %s\n", azCmd[i]);
-					free(azCmd);
+					utf8_printf(stderr, "Error: unable to process SQL: %s\n", cmd.c_str());
 					return rc;
 				}
 			}
 		}
-		free(azCmd);
 	} else {
 		/* Run commands received from standard input
 		 */
