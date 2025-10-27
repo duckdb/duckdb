@@ -1804,22 +1804,6 @@ vector<string> ShellState::TableColumnList(const char *zTab) {
 }
 
 /*
-** Toggle the reverse_unordered_selects setting.
-*/
-static void toggleSelectOrder(sqlite3 *db) {
-	sqlite3_stmt *pStmt = 0;
-	int iSetting = 0;
-	char zStmt[100];
-	sqlite3_prepare_v2(db, "PRAGMA reverse_unordered_selects", -1, &pStmt, 0);
-	if (sqlite3_step(pStmt) == SQLITE_ROW) {
-		iSetting = sqlite3_column_int(pStmt, 0);
-	}
-	sqlite3_finalize(pStmt);
-	sqlite3_snprintf(sizeof(zStmt), zStmt, "PRAGMA reverse_unordered_selects(%d)", !iSetting);
-	sqlite3_exec(db, zStmt, 0, 0, 0);
-}
-
-/*
 ** Lookup the schema for a table using the information schema.
 */
 static string getTableSchema(sqlite3 *db, const char *zTable) {
@@ -1924,10 +1908,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 		p->mode = p->cMode = RenderMode::INSERT;
 		rc = p->ExecuteSQL(sSelect.c_str(), 0);
 		if ((rc & 0xff) == SQLITE_CORRUPT) {
-			raw_printf(p->out, "/****** CORRUPTION ERROR *******/\n");
-			toggleSelectOrder(p->db);
-			p->ExecuteSQL(sSelect.c_str(), 0);
-			toggleSelectOrder(p->db);
+			throw std::runtime_error("EEK SHOULD NOT HAPPEN");
 		}
 		p->zDestTable = savedDestTable;
 		p->mode = savedMode;
@@ -1952,26 +1933,7 @@ int ShellState::RunSchemaDumpQuery(const string &zQuery) {
 	char *zErr = 0;
 	rc = sqlite3_exec(db, zQuery.c_str(), dump_callback, this, &zErr);
 	if (rc == SQLITE_CORRUPT) {
-		char *zQ2;
-		idx_t len = zQuery.size();
-		raw_printf(out, "/****** CORRUPTION ERROR *******/\n");
-		if (zErr) {
-			utf8_printf(out, "/****** %s ******/\n", zErr);
-			sqlite3_free(zErr);
-			zErr = 0;
-		}
-		zQ2 = (char *)malloc(len + 100);
-		if (zQ2 == 0)
-			return rc;
-		sqlite3_snprintf(len + 100, zQ2, "%s ORDER BY rowid DESC", zQuery.c_str());
-		rc = sqlite3_exec(db, zQ2, dump_callback, this, &zErr);
-		if (rc) {
-			utf8_printf(out, "/****** ERROR: %s ******/\n", zErr);
-		} else {
-			rc = SQLITE_CORRUPT;
-		}
-		sqlite3_free(zErr);
-		free(zQ2);
+		throw std::runtime_error("EEK SHOULD NOT HAPPEN");
 	} else if (zErr) {
 		sqlite3_free(zErr);
 		zErr = 0;
@@ -4532,9 +4494,9 @@ static void main_init(ShellState *data) {
 	sqlite3_config(SQLITE_CONFIG_URI, 1);
 	sqlite3_config(SQLITE_CONFIG_LOG, shellLog, data);
 	sqlite3_config(SQLITE_CONFIG_MULTITHREAD);
-	sqlite3_snprintf(sizeof(mainPrompt), mainPrompt, "D ");
-	sqlite3_snprintf(sizeof(continuePrompt), continuePrompt, "· ");
-	sqlite3_snprintf(sizeof(continuePromptSelected), continuePromptSelected, "‣ ");
+	strcpy(mainPrompt, "D ");
+	strcpy(continuePrompt, "· ");
+	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
 	linenoiseSetPrompt(continuePrompt, continuePromptSelected);
 #endif
