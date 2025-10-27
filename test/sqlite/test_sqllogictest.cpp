@@ -80,11 +80,10 @@ static void testRunner() {
 	}
 
 	// setup this test runner with Config-based env, then override with ephemerals (only WORKING_DIR at this point)
-	for (auto &kv : test_config.GetTestEnvMap()) {
+	for (auto &kv : test_config.GetVariables()) {
 		runner.environment_variables[kv.first] = kv.second;
 	}
 	// Per runner vars
-	runner.environment_variables["WORKING_DIR"] = TestGetCurrentDirectory();
 	runner.environment_variables["TEST_NAME"] = name;
 	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
 

@@ -24,8 +24,17 @@ int main(int argc_in, char *argv[]) {
 		if (argument == "--test-dir") {
 			test_directory = string(argv[++i]);
 		} else if (argument == "--test-temp-dir") {
+			// NOTE: making this fully compatible with TEMP_DIR and TEMP_DIR_BASE is tricky; instead get
+			// 99% there by having the TEMP_DIR* variables source this temp-dir if specified, prevent this
+			// option from accepting remote dirs
 			SetDeleteTestPath(false);
 			auto test_dir = string(argv[++i]);
+			if (fs->IsRemoteFile(test_dir)) {
+				std::cerr << "usage error: --test-temp-dir accepts only local dirs\n\n"
+				          << "\tto test with a remote directory, use --temp-dir-base;\n"
+				          << "\tfor now --test-temp-dir is kept as-is for compatibility" << std::endl;
+				return 1;
+			}
 			if (fs->DirectoryExists(test_dir)) {
 				fprintf(stderr, "--test-temp-dir cannot point to a directory that already exists (%s)\n",
 				        test_dir.c_str());
@@ -40,6 +49,7 @@ int main(int argc_in, char *argv[]) {
 		}
 	}
 	test_config.ChangeWorkingDirectory(test_directory);
+	test_config.Finalize();
 
 	// delete the testing directory if it exists
 	auto dir = TestCreatePath("");

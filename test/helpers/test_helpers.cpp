@@ -19,8 +19,6 @@
 
 using namespace std;
 
-#define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
-
 namespace duckdb {
 static string custom_test_directory;
 static case_insensitive_set_t required_requires;
@@ -96,7 +94,7 @@ bool IsRequired(string require) {
 
 string GetTestDirectory() {
 	if (custom_test_directory.empty()) {
-		return TESTING_DIRECTORY_NAME;
+		return TestConfiguration::TEMP_DIR_BASE_DEFAULT;
 	}
 	return custom_test_directory;
 }

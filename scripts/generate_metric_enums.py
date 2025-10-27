@@ -298,7 +298,9 @@ ORDER BY ALL \
     f.write("\"OPTIMIZER_JOIN_ORDER\": \"true\"\n\n")
 
     write_statement(
-        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+        f,
+        "ok",
+        "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';",
     )
 
     query = """
@@ -321,7 +323,9 @@ FROM metrics_output;
     write_default_query(f)
 
     write_statement(
-        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+        f,
+        "ok",
+        "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';",
     )
 
     query = """
@@ -371,7 +375,11 @@ for test_file, name, description in zip(test_files, test_names, test_description
 
         write_statement(f, "ok", "PRAGMA enable_verification;")
         write_statement(f, "ok", "PRAGMA enable_profiling = 'json';")
-        write_statement(f, "ok", "PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';")
+        write_statement(
+            f,
+            "ok",
+            "PRAGMA profiling_output = '{LOCAL_TEMP_DIR}/profiling_output.json';",
+        )
 
         if name == "test_custom_profiling_optimizer":
             write_custom_profiling_optimizer(f)
@@ -386,6 +394,12 @@ for test_file, name, description in zip(test_files, test_names, test_description
         f.write("\n")
 
         write_statement(
-            f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+            f,
+            "ok",
+            "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';",
         )
-        write_statement(f, "ok", "SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;")
+        write_statement(
+            f,
+            "ok",
+            "SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;",
+        )
