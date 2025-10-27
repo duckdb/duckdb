@@ -292,6 +292,18 @@ private:
                                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBitwiseExpression(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformAdditiveExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformMultiplicativeExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformExponentiationExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCollateExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformAtTimeZoneExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformConstantLiteral(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ColumnRefExpression> TransformNestedColumnName(PEGTransformer &transformer,
@@ -301,9 +313,6 @@ private:
 	static unique_ptr<ParsedExpression> TransformLiteralExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSingleExpression(PEGTransformer &transformer,
-	                                                              optional_ptr<ParseResult> parse_result);
-
-	static unique_ptr<ParsedExpression> TransformPrefixExpression(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static string TransformPrefixOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformListExpression(PEGTransformer &transformer,

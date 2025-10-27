@@ -150,9 +150,13 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformIsDistinctFromExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
-
-
-
+	REGISTER_TRANSFORM(TransformBitwiseExpression);
+	REGISTER_TRANSFORM(TransformAdditiveExpression);
+	REGISTER_TRANSFORM(TransformMultiplicativeExpression);
+	REGISTER_TRANSFORM(TransformExponentiationExpression);
+	REGISTER_TRANSFORM(TransformCollateExpression);
+	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
+	REGISTER_TRANSFORM(TransformPrefixExpression);
 
 	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformColumnReference);

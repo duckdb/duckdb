@@ -33,7 +33,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 			expr = std::move(function_expr);
 		}
 	}
-
 	return expr;
 }
 
@@ -137,21 +136,6 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(list_pr.Child<ChoiceParseResult>(0).result);
-}
-
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
-                                                                              optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto prefix = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
-	if (prefix == "NOT") {
-		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(expr));
-	}
-	vector<unique_ptr<ParsedExpression>> expr_children;
-	expr_children.push_back(std::move(expr));
-	auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(expr_children));
-	func_expr->is_operator = true;
-	return func_expr;
 }
 
 string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
@@ -384,6 +368,78 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitwiseExpression(P
 	throw NotImplementedException("BitOperator has not yet been implemented");
 }
 
+// AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAdditiveExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto term_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!term_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("Term has not yet been implemented");
+}
+
+// MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMultiplicativeExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto factor_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!factor_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("Factor has not yet been implemented");
+}
+
+// ExponentiationExpression <- CollateExpression (ExponentOperator CollateExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExponentiationExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto exponent_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!exponent_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("Exponent has not yet been implemented");
+}
+
+// CollateExpression <- AtTimeZoneExpression (CollateOperator AtTimeZoneExpression)*
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto collate_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!collate_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("Collate has not yet been implemented");
+}
+
+// AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto at_time_zone_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!at_time_zone_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("AT TIME ZONE has not yet been implemented");
+}
+
+// PrefixExpression <- PrefixOperator* BaseExpression
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto prefix_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!prefix_opt.HasResult()) {
+		return expr;
+	}
+	throw NotImplementedException("AT TIME ZONE has not yet been implemented");
+}
 
 // LiteralExpression <- StringLiteral / NumberLiteral / 'NULL' / 'TRUE' / 'FALSE'
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(PEGTransformer &transformer,
