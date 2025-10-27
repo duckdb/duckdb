@@ -61,7 +61,7 @@ struct StIntersectsExtentFun {
 	static constexpr const char *Name = "st_intersects_extent";
 	static constexpr const char *Parameters = "geom1,geom2";
 	static constexpr const char *Description = "Returns true if the geometries bounding boxes intersect";
-	static constexpr const char *Example = "TODO";
+	static constexpr const char *Example = "'POINT(5 5)'::GEOMETRY && 'LINESTRING(0 0, 10 20)'::GEOMETRY;";
 	static constexpr const char *Categories = "geometry";
 
 	static ScalarFunction GetFunction();
