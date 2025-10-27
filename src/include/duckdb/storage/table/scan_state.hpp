@@ -323,7 +323,7 @@ private:
 
 struct ParallelTableScanState {
 	//! Parallel scan state for the table
-	ParallelCollectionScanState scan_state;
+	ParallelCollectionScanState scan_state; // TODO: Make this a uniq_ptr to enable hot-swapping with OrderedParallel
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading

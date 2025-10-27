@@ -20,7 +20,6 @@ PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<Logical
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
       table_filters(std::move(table_filters_p)), extra_info(std::move(extra_info)), parameters(std::move(parameters_p)),
       virtual_columns(std::move(virtual_columns_p)) {
-	order_row_groups_by = make_uniq<pair<column_t, bool>>(0, true);
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -35,9 +34,7 @@ public:
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
 			                             op.extra_info.sample_options, &op);
 			// TODO: wrap this information somewhere else
-			if (op.order_row_groups_by) {
-				input.order_row_groups_by = op.order_row_groups_by;
-			}
+			input.order_row_groups_by = make_shared_ptr<pair<idx_t, bool>>(0, true);
 
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
@@ -83,9 +80,7 @@ public:
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
 			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
 			// TODO: wrap this information somewhere else
-			if (op.order_row_groups_by) {
-				input.order_row_groups_by = op.order_row_groups_by;
-			}
+			input.order_row_groups_by = make_shared_ptr<pair<idx_t, bool>>(0, true);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}

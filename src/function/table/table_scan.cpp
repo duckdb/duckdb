@@ -249,6 +249,11 @@ public:
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 		if (input.order_row_groups_by) {
+			auto &params = *input.order_row_groups_by;
+			idx_t param_1 = params.first;
+			bool param_2 = params.second;
+			OrderedCollectionScanState ts(l_state->scan_state, param_1, param_2);
+			void;
 			l_state->scan_state.table_state = make_shared_ptr<OrderedCollectionScanState>(
 			    l_state->scan_state, input.order_row_groups_by->first, input.order_row_groups_by->second);
 			l_state->scan_state.local_state = make_shared_ptr<OrderedCollectionScanState>(
