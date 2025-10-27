@@ -37,6 +37,7 @@
         "test/sql/peg_parser/parser/with_ordinality.test",
         "test/sql/peg_parser/parser/recursive.test",
         "test/sql/peg_parser/parser/analyze_vacuum.test",
+        "test/sql/peg_parser/parser/scientific_notation.test",
         "test/sql/peg_parser/parser/index.test",
         "test/sql/peg_parser/parser/type.test",
         "test/sql/peg_parser/parser/empty_map.test",
