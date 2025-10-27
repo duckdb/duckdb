@@ -640,7 +640,7 @@ LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
 # LEVEL 3
 LogicalNotExpression <- 'NOT'* IsExpression
 # LEVEL 4
-IsExpression <- IsDistinctFromExpression (IsTest)*
+IsExpression <- IsDistinctFromExpression IsTest*
 IsTest <- ('IS' 'NOT'? ('TRUE' / 'FALSE' / 'UNKNOWN' / 'NULL')) / NotNull / IsNull
 NotNull <- ('NOT' 'NULL') / 'NOTNULL'
 IsNull <- 'ISNULL'
@@ -649,9 +649,22 @@ IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExp
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 # LEVEL 6
 ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
-ComparisonOperator <- '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
+ComparisonOperator <-
+    OperatorEqual /
+    OperatorNotEqual /
+    OperatorLessThan /
+    OperatorGreaterThan /
+    OperatorLessThanEquals /
+    OperatorGreaterThanEquals
+
+OperatorEqual <- '=' / '=='
+OperatorNotEqual <- '!=' / '<>'
+OperatorLessThan <- '<'
+OperatorGreaterThan <- '>'
+OperatorLessThanEquals <- '<='
+OperatorGreaterThanEquals <- '>='
 # LEVEL 7
-BetweenInLikeExpression <- OtherOperatorExpression (BetweenInLikeOp)?
+BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
 BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
 LikeClause <- LikeVariations OtherOperatorExpression ('ESCAPE' OtherOperatorExpression)?
 LikeVariations <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO') / '~' / '~~' / '!~' / '!~~' / '!~~*'
@@ -699,7 +712,7 @@ PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
-# LEVEL 16
+# LEVEL 16 (Highest)
 BaseExpression <- SingleExpression Indirection*
 
 Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator

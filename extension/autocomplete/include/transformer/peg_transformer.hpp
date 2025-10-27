@@ -286,6 +286,8 @@ private:
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformComparisonExpression(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
+	static ExpressionType TransformComparisonOperator(PEGTransformer &transformer,
+		optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBetweenInLikeExpression(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,

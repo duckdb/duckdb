@@ -231,7 +231,7 @@ PEGTransformerFactory::TransformBoundedListExpression(PEGTransformer &transforme
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 }
 
 // LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
@@ -280,7 +280,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalNotExpressio
 		return expr;
 	}
 	auto not_expr_repeat = not_expr_opt.optional_result->Cast<RepeatParseResult>();
-	for (auto &_: not_expr_repeat.children) {
+	size_t n = not_expr_repeat.children.size();
+	for (size_t i = 0; i < n; i++) {
 		vector<unique_ptr<ParsedExpression>> inner_list_children;
 		inner_list_children.push_back(std::move(expr));
 		expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
@@ -329,7 +330,19 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformComparisonExpressio
 	if (!comparison_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("ComparisonOperator has not yet been implemented");
+	auto comparison_repeat = comparison_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &comparison_expr : comparison_repeat.children) {
+		auto &inner_list_pr = comparison_expr->Cast<ListParseResult>();
+		auto comparison_operator = transformer.Transform<ExpressionType>(inner_list_pr.Child<ListParseResult>(0));
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+		expr = make_uniq<OperatorExpression>(comparison_operator, std::move(expr), std::move(right_expr));
+	}
+	return expr;
+}
+
+ExpressionType PEGTransformerFactory::TransformComparisonOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<ExpressionType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 // BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
@@ -433,8 +446,8 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
-	auto prefix_opt = list_pr.Child<OptionalParseResult>(1);
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
 	if (!prefix_opt.HasResult()) {
 		return expr;
 	}
