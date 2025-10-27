@@ -55,7 +55,8 @@
         "test/sql/peg_parser/parser/window_function.test",
         "test/sql/peg_parser/parser/create_table.test",
         "test/sql/peg_parser/parser/sample.test",
-        "test/sql/peg_parser/parser/merge_into.test"
+        "test/sql/peg_parser/parser/merge_into.test",
+        "test/sql/peg_parser/parser/custom_operator.test"
       ]
     },
     {

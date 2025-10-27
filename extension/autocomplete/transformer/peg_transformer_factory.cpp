@@ -149,6 +149,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformIsExpression);
 	REGISTER_TRANSFORM(TransformIsDistinctFromExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);
+	REGISTER_TRANSFORM(TransformBetweenInLikeOp);
+	REGISTER_TRANSFORM(TransformBetweenClause);
 	REGISTER_TRANSFORM(TransformComparisonExpression);
 	REGISTER_TRANSFORM(TransformComparisonOperator);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
