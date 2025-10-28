@@ -353,7 +353,7 @@ public:
 		return function;
 	}
 	SourceResultType SimpleScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) const {
-		data.async_result = AsyncResult(AsyncResultType::IMPLICIT);
+		data.async_result = AsyncResult();
 		function(context, data, output);
 		AsyncResultType table_res = data.async_result.GetResultType();
 		SourceResultType source_res;
