@@ -494,9 +494,7 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 			// fallback to writing old style windows unicode
 			char *z2 = sqlite3_win32_utf8_to_mbcs_v2(z1, 0);
 			fputs(z2, out);
-			sqlite3_free(z2);
 		}
-		sqlite3_free(z1);
 	} else {
 		vfprintf(out, zFormat, ap);
 	}
