@@ -7,7 +7,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
@@ -792,7 +792,7 @@ static bool IsTypeLossy(const LogicalType &type) {
 	return type.id() == LogicalTypeId::HUGEINT || type.id() == LogicalTypeId::UHUGEINT;
 }
 
-static bool IsGeometryType(const LogicalType &type, ClientContext &context) {
+static bool IsExtensionGeometryType(const LogicalType &type, ClientContext &context) {
 	if (type.id() != LogicalTypeId::BLOB) {
 		return false;
 	}
@@ -838,7 +838,6 @@ static string GetShredding(case_insensitive_map_t<vector<Value>> &options, const
 }
 
 static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
-
 	auto &context = input.context;
 
 	vector<unique_ptr<Expression>> result;
@@ -846,18 +845,15 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	bool any_change = false;
 
 	for (auto &expr : input.select_list) {
-
 		const auto &type = expr->return_type;
 		const auto &name = expr->GetAlias();
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
-		if (input.copy_to_type == CopyToType::COPY_TO_FILE && IsGeometryType(type, context)) {
-
-			LogicalType wkb_blob_type(LogicalTypeId::BLOB);
-			wkb_blob_type.SetAlias("WKB_BLOB");
-
-			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), wkb_blob_type, false);
+		if (input.copy_to_type == CopyToType::COPY_TO_FILE && IsExtensionGeometryType(type, context)) {
+			// Cast the column to GEOMETRY
+			auto cast_expr =
+			    BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::GEOMETRY(), false);
 			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;

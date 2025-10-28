@@ -123,7 +123,6 @@ public:
 	                        aggregate_combine_t combine, aggregate_finalize_t finalize,
 	                        aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
 	                        aggregate_destructor_t destructor = nullptr) {
-
 		AggregateFunction aggr_function(name, arguments, return_type, state_size, initialize, update, combine, finalize,
 		                                simple_update, bind, destructor);
 		aggr_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;

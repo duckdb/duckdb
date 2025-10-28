@@ -255,6 +255,21 @@ typedef enum duckdb_file_flag {
 	DUCKDB_FILE_FLAG_APPEND = 5,
 } duckdb_file_flag;
 
+//! An enum over DuckDB's configuration option scopes.
+//! This enum can be used to specify the default scope when creating a custom configuration option,
+//! but it is also be used to determine the scope in which a configuration option is set when it is
+//! changed or retrieved.
+typedef enum duckdb_config_option_scope {
+	DUCKDB_CONFIG_OPTION_SCOPE_INVALID = 0,
+	// The option is set for the duration of the current transaction only.
+	// !! CURRENTLY NOT IMPLEMENTED !!
+	DUCKDB_CONFIG_OPTION_SCOPE_LOCAL = 1,
+	// The option is set for the current session/connection only.
+	DUCKDB_CONFIG_OPTION_SCOPE_SESSION = 2,
+	// Set the option globally for all sessions/connections.
+	DUCKDB_CONFIG_OPTION_SCOPE_GLOBAL = 3,
+} duckdb_config_option_scope;
+
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -547,6 +562,12 @@ typedef struct _duckdb_table_description {
 typedef struct _duckdb_config {
 	void *internal_ptr;
 } * duckdb_config;
+
+//! A custom configuration option instance. Used to register custom options that can be set on a duckdb_config.
+//! or by the user in SQL using `SET <option_name> = <value>`.
+typedef struct _duckdb_config_option {
+	void *internal_ptr;
+} * duckdb_config_option;
 
 //! A logical type.
 //! Must be destroyed with `duckdb_destroy_logical_type`.
@@ -5351,6 +5372,89 @@ Closes the given file handle.
 `duckdb_file_handle_error_data`.
 */
 DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handle);
+
+//===--------------------------------------------------------------------===//
+// Config Options Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a configuration option instance.
+
+* @return The resulting configuration option instance. Must be destroyed with `duckdb_destroy_config_option`.
+*/
+DUCKDB_C_API duckdb_config_option duckdb_create_config_option();
+
+/*!
+Destroys the given configuration option instance.
+* @param option The configuration option instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_config_option(duckdb_config_option *option);
+
+/*!
+Sets the name of the configuration option.
+
+* @param option The configuration option instance.
+* @param name The name to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_name(duckdb_config_option option, const char *name);
+
+/*!
+Sets the type of the configuration option.
+
+* @param option The configuration option instance.
+* @param type The type to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_type(duckdb_config_option option, duckdb_logical_type type);
+
+/*!
+Sets the default value of the configuration option.
+If the type of this option has already been set with `duckdb_config_option_set_type`, the value is cast to the type.
+Otherwise, the type is inferred from the value.
+
+* @param option The configuration option instance.
+* @param default_value The default value to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_default_value(duckdb_config_option option, duckdb_value default_value);
+
+/*!
+Sets the default scope of the configuration option.
+If not set, this defaults to `DUCKDB_CONFIG_OPTION_SCOPE_SESSION`.
+
+* @param option The configuration option instance.
+* @param default_scope The default scope to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_default_scope(duckdb_config_option option,
+                                                         duckdb_config_option_scope default_scope);
+
+/*!
+Sets the description of the configuration option.
+
+* @param option The configuration option instance.
+* @param description The description to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_description(duckdb_config_option option, const char *description);
+
+/*!
+Registers the given configuration option on the specified connection.
+
+* @param connection The connection to register the option on.
+* @param option The configuration option instance to register.
+* @return A duckdb_state indicating success or failure.
+*/
+DUCKDB_C_API duckdb_state duckdb_register_config_option(duckdb_connection connection, duckdb_config_option option);
+
+/*!
+Retrieves the value of a configuration option by name from the given client context.
+
+* @param context The client context.
+* @param name The name of the configuration option to retrieve.
+* @param out_scope Output parameter to optionally store the scope that the configuration option was retrieved from.
+If this is `nullptr`, the scope is not returned.
+If the requested option does not exist the scope is set to `DUCKDB_CONFIG_OPTION_SCOPE_INVALID`.
+* @return The value of the configuration option. Returns `nullptr` if the option does not exist.
+*/
+DUCKDB_C_API duckdb_value duckdb_client_context_get_config_option(duckdb_client_context context, const char *name,
+                                                                  duckdb_config_option_scope *out_scope);
 
 #endif
 

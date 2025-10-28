@@ -161,7 +161,6 @@ template <typename INPUT_TYPE, typename INDEX_TYPE, typename OP>
 void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vector, Vector &end_vector,
                           optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
                           optional_ptr<Vector> result_child_vector, bool begin_is_empty, bool end_is_empty) {
-
 	// check all this nullness early
 	auto str_valid = !ConstantVector::IsNull(str_vector);
 	auto begin_valid = !ConstantVector::IsNull(begin_vector);

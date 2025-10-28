@@ -36,7 +36,6 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
-
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
@@ -391,7 +390,6 @@ static bool KeysAreSkewed(const HashJoinGlobalSinkState &sink) {
 //! If we have only one thread, always finalize single-threaded. Otherwise, we finalize in parallel if we
 //! have more than 1M rows or if we want to verify parallelism.
 static bool FinalizeSingleThreaded(const HashJoinGlobalSinkState &sink, const bool consider_skew) {
-
 	// if only one thread, finalize single-threaded
 	const auto num_threads = NumericCast<idx_t>(sink.num_threads);
 	if (num_threads == 1) {

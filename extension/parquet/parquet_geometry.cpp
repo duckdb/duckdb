@@ -1,5 +1,5 @@
 
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 
 #include "column_reader.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
@@ -22,7 +22,6 @@ using namespace duckdb_yyjson; // NOLINT
 
 unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
                                                                    const ClientContext &context) {
-
 	// Conversion not enabled, or spatial is not loaded!
 	if (!IsGeoParquetConversionEnabled(context)) {
 		return nullptr;
@@ -130,7 +129,6 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 
 void GeoParquetFileMetadata::AddGeoParquetStats(const string &column_name, const LogicalType &type,
                                                 const GeometryStatsData &stats) {
-
 	// Lock the metadata
 	lock_guard<mutex> glock(write_lock);
 
@@ -146,7 +144,6 @@ void GeoParquetFileMetadata::AddGeoParquetStats(const string &column_name, const
 }
 
 void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data) {
-
 	// GeoParquet does not support M or ZM coordinates. So remove any columns that have them.
 	unordered_set<string> invalid_columns;
 	for (auto &column : geometry_columns) {
@@ -202,7 +199,6 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 	const auto json_columns = yyjson_mut_obj_add_obj(doc, root, "columns");
 
 	for (auto &column : geometry_columns) {
-
 		const auto column_json = yyjson_mut_obj_add_obj(doc, json_columns, column.first.c_str());
 		yyjson_mut_obj_add_str(doc, column_json, "encoding", "WKB");
 		const auto geometry_types = yyjson_mut_obj_add_arr(doc, column_json, "geometry_types");
@@ -214,7 +210,6 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data)
 		const auto &bbox = column.second.stats.extent;
 
 		if (bbox.HasXY()) {
-
 			const auto bbox_arr = yyjson_mut_obj_add_arr(doc, column_json, "bbox");
 
 			if (!column.second.stats.extent.HasZ()) {
@@ -281,17 +276,7 @@ bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &
 		// Disabled by setting
 		return false;
 	}
-	if (!context.db->ExtensionIsLoaded("spatial")) {
-		// Spatial extension is not loaded, we cant convert anyway
-		return false;
-	}
 	return true;
-}
-
-LogicalType GeoParquetFileMetadata::GeometryType() {
-	auto blob_type = LogicalType(LogicalTypeId::BLOB);
-	blob_type.SetAlias("GEOMETRY");
-	return blob_type;
 }
 
 const unordered_map<string, GeoParquetColumnMetadata> &GeoParquetFileMetadata::GetColumnMeta() const {
@@ -301,7 +286,6 @@ const unordered_map<string, GeoParquetColumnMetadata> &GeoParquetFileMetadata::G
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,
                                                                     const ParquetColumnSchema &schema,
                                                                     ClientContext &context) {
-
 	// Get the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
 

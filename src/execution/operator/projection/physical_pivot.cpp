@@ -9,7 +9,6 @@ PhysicalPivot::PhysicalPivot(PhysicalPlan &physical_plan, vector<LogicalType> ty
                              BoundPivotInfo bound_pivot_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::PIVOT, std::move(types_p), child.estimated_cardinality),
       bound_pivot(std::move(bound_pivot_p)) {
-
 	children.push_back(child);
 	for (idx_t p = 0; p < bound_pivot.pivot_values.size(); p++) {
 		auto entry = pivot_map.find(bound_pivot.pivot_values[p]);

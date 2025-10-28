@@ -720,7 +720,6 @@ public:
 		// This skips straight to the correct metadata group
 		idx_t meta_groups_to_skip = (skip_count + current_group_offset) / BITPACKING_METADATA_GROUP_SIZE;
 		if (meta_groups_to_skip) {
-
 			// bitpacking_metadata_ptr points to the next metadata: this means we need to advance the pointer by n-1
 			bitpacking_metadata_ptr -= (meta_groups_to_skip - 1) * sizeof(bitpacking_metadata_encoded_t);
 			LoadNextGroup();

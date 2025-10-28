@@ -40,7 +40,6 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		if (existing_db) {
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
-
 				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
 				auto existing_mode_str = EnumUtil::ToString(existing_mode);
 				auto attached_mode = EnumUtil::ToString(options.access_mode);
