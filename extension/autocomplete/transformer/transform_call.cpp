@@ -14,7 +14,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCallStatement(PEGTransf
 	auto result = make_uniq<CallStatement>();
 	auto function_expression = make_uniq<FunctionExpression>(table_function_name, std::move(function_children));
 	result->function = std::move(function_expression);
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
