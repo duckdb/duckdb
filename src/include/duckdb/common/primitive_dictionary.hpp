@@ -77,8 +77,6 @@ public:
 	void Replace(uint32_t index, SRC &value) {
 		dictionary[index].value = value;
 	}
-	// TODO: Possibly create a new InsertWithoutChecking() method that doesn't check if full, as we know we allocated
-	// exactly enough.
 	//! Insert value into dictionary (if not full)
 	void Insert(SRC value) {
 		if (full) {
@@ -87,6 +85,23 @@ public:
 		auto &entry = Lookup(value);
 		if (entry.IsEmpty()) {
 			if (size + 1 > maximum_size || !AddToTarget(value)) {
+				full = true;
+				return;
+			}
+			entry.value = value;
+			entry.index = size++;
+		}
+	}
+
+	//! Insert value into dictionary without calling AddToTarget()
+	void InsertRaw(SRC value) {
+		// TODO: We probably don't need check if it's full, as we know we allocated exactly enough with max_unique_count_across_all_segments. Try without checks and see if there's a difference with benchmarking.
+		if (full) {
+			return;
+		}
+		auto &entry = Lookup(value);
+		if (entry.IsEmpty()) {
+			if (size + 1 > maximum_size) {
 				full = true;
 				return;
 			}
