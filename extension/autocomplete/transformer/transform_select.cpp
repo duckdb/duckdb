@@ -249,7 +249,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransf
 	} else {
 		throw InternalException("Invalid join qualifier found.");
 	}
-	return result;
+	return std::move(result);
 }
 
 JoinType PEGTransformerFactory::TransformJoinType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
@@ -292,7 +292,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformJoinWithoutOnClause(PEGTran
 	result->ref_type = join_prefix.ref_type;
 	result->type = join_prefix.join_type;
 	result->right = std::move(table_ref);
-	return result;
+	return std::move(result);
 }
 
 JoinPrefix PEGTransformerFactory::TransformJoinPrefix(PEGTransformer &transformer,
@@ -345,7 +345,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	auto result = make_uniq<TableFunctionRef>();
 
 	// TODO(Dtenwolde) Figure out what to do with lateral
-	auto lateral_opt = list_pr.Child<OptionalParseResult>(0).HasResult();
+	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
+		throw NotImplementedException("Lateral has not yet been implemented");
+	};
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
 	auto table_function_arguments =
 	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
@@ -359,7 +361,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 		result->alias = table_alias.name;
 		result->column_name_alias = table_alias.column_name_alias;
 	}
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEGTransformer &transformer,
@@ -377,7 +379,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEG
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
 	result->alias = table_alias;
-	return result;
+	return std::move(result);
 }
 
 string PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &transformer,
@@ -410,7 +412,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransforme
                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	// TODO(Dtenwolde)
-	auto lateral_opt = list_pr.Child<OptionalParseResult>(0).HasResult();
+	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
+		throw NotImplementedException("LATERAL has not yet been implemented");
+	};
 	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(1));
 	auto table_alias_opt = list_pr.Child<OptionalParseResult>(2);
 	if (table_alias_opt.HasResult()) {
@@ -418,7 +422,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransforme
 		subquery_reference->alias = table_alias.name;
 		subquery_reference->column_name_alias = table_alias.column_name_alias;
 	}
-	return subquery_reference;
+	return std::move(subquery_reference);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformSubqueryReference(PEGTransformer &transformer,
@@ -427,7 +431,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformSubqueryReference(PEGTransf
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select_statement));
-	return subquery_ref;
+	return std::move(subquery_ref);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer &transformer,
@@ -448,7 +452,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer
 		result->column_name_alias = table_alias.column_name_alias;
 	}
 	transformer.TransformOptional<unique_ptr<AtClause>>(list_pr, 3, result->at_clause);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<AtClause> PEGTransformerFactory::TransformAtClause(PEGTransformer &transformer,
@@ -484,7 +488,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &t
 		subquery_ref->alias = table_alias.name;
 		subquery_ref->column_name_alias = table_alias.column_name_alias;
 	}
-	return subquery_ref;
+	return std::move(subquery_ref);
 }
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformValuesClause(PEGTransformer &transformer,
@@ -513,7 +517,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformValuesClause(PEGTran
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	auto select_statement = make_uniq<SelectStatement>();
 	select_statement->node = std::move(select_node);
-	return select_statement;
+	return std::move(select_statement);
 }
 
 vector<unique_ptr<ParsedExpression>>

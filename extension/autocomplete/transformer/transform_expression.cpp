@@ -429,7 +429,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenClause(PEGTr
 	auto lower = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 	auto higher = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
 	auto result = make_uniq<BetweenExpression>(nullptr, std::move(lower), std::move(higher));
-	return result;
+	return std::move(result);
 }
 
 // OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
@@ -770,7 +770,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceBound(PEGTr
 		auto choice_pr = nested_list.Child<ChoiceParseResult>(0);
 		if (choice_pr.result->type == ParseResultType::KEYWORD) {
 			// We have hit the '-'
-			return const_list;
+			return std::move(const_list);
 		}
 		if (choice_pr.result->type == ParseResultType::LIST) {
 			return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.result);
@@ -778,7 +778,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformEndSliceBound(PEGTr
 		throw InternalException("Unexpected parse result type encountered");
 	}
 	// return empty list here
-	return const_list;
+	return std::move(const_list);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStepSliceBound(PEGTransformer &transformer,
@@ -826,7 +826,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	if (rename_list_opt.HasResult()) {
 		result->rename_list = transformer.Transform<qualified_column_map_t<string>>(rename_list_opt.optional_result);
 	}
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
