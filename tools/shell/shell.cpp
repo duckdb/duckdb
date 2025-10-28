@@ -236,20 +236,9 @@ static void setTextMode(FILE *file, int isOutput) {
 static bool enableTimer = false;
 
 /* Return the current wall-clock time */
-static sqlite3_int64 timeOfDay(void) {
-	static sqlite3_vfs *clockVfs = nullptr;
-	sqlite3_int64 t;
-	if (!clockVfs) {
-		clockVfs = sqlite3_vfs_find(0);
-	}
-	if (clockVfs->iVersion >= 2 && clockVfs->xCurrentTimeInt64 != 0) {
-		clockVfs->xCurrentTimeInt64(clockVfs, &t);
-	} else {
-		double r;
-		clockVfs->xCurrentTime(clockVfs, &r);
-		t = (sqlite3_int64)(r * 86400000.0);
-	}
-	return t;
+static int64_t timeOfDay(void) {
+	using namespace std::chrono;
+	return (int64_t)duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 #if !defined(_WIN32) && !defined(WIN32) && !defined(__minux)
@@ -267,7 +256,7 @@ struct rusage {
 
 /* Saved resource information for the beginning of an operation */
 static struct rusage sBegin; /* CPU time at start */
-static sqlite3_int64 iBegin; /* Wall-clock time at start */
+static int64_t iBegin; /* Wall-clock time at start */
 
 /*
 ** Begin timing an operation
@@ -289,7 +278,7 @@ static double timeDiff(struct timeval *pStart, struct timeval *pEnd) {
 */
 static void endTimer(void) {
 	if (enableTimer) {
-		sqlite3_int64 iEnd = timeOfDay();
+		int64_t iEnd = timeOfDay();
 		struct rusage sEnd;
 		getrusage(RUSAGE_SELF, &sEnd);
 		printf("Run Time (s): real %.3f user %f sys %f\n", (iEnd - iBegin) * 0.001,
@@ -307,7 +296,7 @@ static void endTimer(void) {
 static HANDLE hProcess;
 static FILETIME ftKernelBegin;
 static FILETIME ftUserBegin;
-static sqlite3_int64 ftWallBegin;
+static int64_t ftWallBegin;
 typedef BOOL(WINAPI *GETPROCTIMES)(HANDLE, LPFILETIME, LPFILETIME, LPFILETIME, LPFILETIME);
 static GETPROCTIMES getProcessTimesAddr = NULL;
 
@@ -364,7 +353,7 @@ static double timeDiff(FILETIME *pStart, FILETIME *pEnd) {
 static void endTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit, ftKernelEnd, ftUserEnd;
-		sqlite3_int64 ftWallEnd = timeOfDay();
+		int64_t ftWallEnd = timeOfDay();
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelEnd, &ftUserEnd);
 		printf("Run Time (s): real %.3f user %f sys %f\n", (ftWallEnd - ftWallBegin) * 0.001,
 		       timeDiff(&ftUserBegin, &ftUserEnd), timeDiff(&ftKernelBegin, &ftKernelEnd));
@@ -2481,7 +2470,7 @@ static const char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p) {
 	c = fgetc(p->in);
 	if (c == EOF || seenInterrupt) {
 		p->cTerm = EOF;
-		return 0;
+		return nullptr;
 	}
 	while (c != EOF && c != cSep && c != rSep) {
 		import_append_char(p, c);
@@ -2544,15 +2533,6 @@ void ShellState::PrintDatabaseError(const string &zErr) {
 	}
 	ShellHighlight shell_highlight(*this);
 	shell_highlight.PrintError(zErr);
-}
-
-/*
-** Print the current sqlite3_errmsg() value to stderr and return 1.
-*/
-int ShellState::ShellDatabaseError(sqlite3 *db) {
-	const char *zErr = sqlite3_errmsg(db);
-	PrintDatabaseError(zErr);
-	return 1;
 }
 
 /*

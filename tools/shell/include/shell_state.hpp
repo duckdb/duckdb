@@ -174,7 +174,6 @@ public:
 	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
 
 	void PrintDatabaseError(const string &zErr);
-	int ShellDatabaseError(sqlite3 *db);
 	int RunInitialCommand(char *sql, bool bail);
 	void AddError();
 
