@@ -14,6 +14,7 @@
 #include <memory>
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 struct sqlite3;
 struct sqlite3_stmt;
@@ -108,7 +109,6 @@ public:
 	int columns = 0;                          /* Column-wise DuckBox rendering */
 	string outfile;                           /* Filename for *out */
 	string zDbFilename;                       /* name of the database file */
-	sqlite3_stmt *pStmt = nullptr;            /* Current statement if any. */
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
@@ -168,7 +168,8 @@ public:
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
 	void ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt);
 	vector<string> TableColumnList(const char *zTab);
-	void ExecutePreparedStatement(sqlite3_stmt *pStmt);
+	SuccessState ExecuteStatement(duckdb::SQLStatement &statement);
+	SuccessState ExecutePreparedStatement(sqlite3_stmt *pStmt);
 
 	void PrintDatabaseError(const string &zErr);
 	int ShellDatabaseError(sqlite3 *db);
@@ -177,9 +178,7 @@ public:
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
-	int ExecuteSQL(const char *zSql, /* SQL to be evaluated */
-	               string *pzErrMsg  /* Error msg written here */
-	);
+	SuccessState ExecuteSQL(const string &zSql);
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
 	void OpenDB(int openFlags);

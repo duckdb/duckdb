@@ -84,6 +84,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "sqlite3.h"
 #include <ctype.h>
@@ -660,7 +661,7 @@ idx_t ShellState::RenderLength(const string &str) {
 }
 
 int ShellState::RunInitialCommand(char *sql, bool bail) {
-	int rc;
+	int rc = 0;
 	if (sql[0] == '.') {
 		rc = DoMetaCommand(sql);
 		if (rc && bail) {
@@ -670,18 +671,10 @@ int ShellState::RunInitialCommand(char *sql, bool bail) {
 		string zErrMsg;
 		OpenDB(0);
 		BEGIN_TIMER;
-		rc = ExecuteSQL(sql, &zErrMsg);
+		auto res = ExecuteSQL(sql);
 		END_TIMER;
-		if (!zErrMsg.empty()) {
-			PrintDatabaseError(zErrMsg);
-			if (bail) {
-				return rc != 0 ? rc : 1;
-			}
-		} else if (rc != 0) {
-			utf8_printf(stderr, "Error: unable to process SQL: \"%s\"\n", sql);
-			if (bail) {
-				return rc;
-			}
+		if (res == SuccessState::FAILURE && bail) {
+			return 1;
 		}
 	}
 	return 0;
@@ -1319,14 +1312,6 @@ void ShellState::RunTableDumpQuery(const string &zSelect) {
 	}
 }
 
-/*
-** Allocate space and save off current error string.
-*/
-static string SaveErrorMessage(sqlite3 *db) {
-	auto err_msg = sqlite3_errmsg(db);
-	return err_msg ? err_msg : string();
-}
-
 string ShellState::strdup_handle_newline(const char *z) {
 	static constexpr idx_t MAX_SIZE = 80;
 	if (!z) {
@@ -1557,10 +1542,30 @@ public:
 	}
 };
 
-/*
-** Run a prepared statement
-*/
-void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
+SuccessState ShellState::ExecuteStatement(duckdb::SQLStatement &stmt) {
+	sqlite3_stmt *pStmt = nullptr;
+	int rc = sqlite3_prepare_v2(db, stmt.query.c_str(), -1, &pStmt, nullptr);
+	if (rc != SQLITE_OK) {
+		ShellDatabaseError(db);
+		sqlite3_finalize(pStmt);
+		return SuccessState::FAILURE;
+	}
+	if (sqlite3_bind_parameter_count(pStmt) != 0) {
+		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
+		                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
+		sqlite3_finalize(pStmt);
+		return SuccessState::FAILURE;
+	}
+	ExecutePreparedStatement(pStmt);
+	rc = sqlite3_finalize(pStmt);
+	if (rc != SQLITE_OK) {
+		ShellDatabaseError(db);
+		return SuccessState::FAILURE;
+	}
+	return SuccessState::SUCCESS;
+}
+
+SuccessState ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = this->max_rows;
 		size_t max_width = this->max_width;
@@ -1579,17 +1584,17 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
 		                      decimal_separator, int(large_rendering), &renderer);
-		return;
+		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::TRASH) {
 		TrashRenderer renderer;
 		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', 0, &renderer);
-		return;
+		return SuccessState::SUCCESS;
 	}
 
 	if (ShellRenderer::IsColumnar(cMode)) {
 		ExecutePreparedStatementColumnar(pStmt);
-		return;
+		return SuccessState::SUCCESS;
 	}
 
 	/* perform the first step.  this will tell us if we
@@ -1598,7 +1603,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	int rc = sqlite3_step(pStmt);
 	/* if we have a result set... */
 	if (SQLITE_ROW != rc) {
-		return;
+		return SuccessState::SUCCESS;
 	}
 	RowResult result;
 	// initialize the result and the column names
@@ -1638,6 +1643,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	} while (SQLITE_ROW == rc);
 
 	renderer->RenderFooter(result);
+	return SuccessState::SUCCESS;
 }
 
 /*
@@ -1649,85 +1655,37 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 ** function except it takes a slightly different callback
 ** and callback data argument.
 */
-int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
-                           string *pzErrMsg  /* Error msg written here */
-) {
-	sqlite3_stmt *pStmt = NULL; /* Statement to execute. */
-	int rc = SQLITE_OK;         /* Return Code */
-	int rc2;
-	const char *zLeftover; /* Tail of unprocessed SQL */
-
-	if (pzErrMsg) {
-		*pzErrMsg = string();
-	}
-
-	while (zSql[0] && (SQLITE_OK == rc)) {
-		static const char *zStmtSql;
-		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zLeftover);
-		if (SQLITE_OK != rc) {
-			if (pzErrMsg) {
-				*pzErrMsg = SaveErrorMessage(db);
+SuccessState ShellState::ExecuteSQL(const string &zSql) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	try {
+		auto statements = con.ExtractStatements(zSql);
+		for (auto &statement : statements) {
+			idx_t start_pos = statement->stmt_location;
+			idx_t len = statement->stmt_length;
+			while (len > 0 && IsSpace(zSql[start_pos])) {
+				start_pos++;
+				len--;
 			}
-		} else {
-			if (!pStmt) {
-				/* this happens for a comment or white-space */
-				zSql = zLeftover;
-				while (IsSpace(zSql[0]))
-					zSql++;
-				continue;
-			}
-			if (sqlite3_bind_parameter_count(pStmt) != 0) {
-				zSql = zLeftover;
-				while (IsSpace(zSql[0]))
-					zSql++;
-				if (pzErrMsg) {
-					*pzErrMsg = strdup("Prepared statement parameters cannot be used directly\nTo use prepared "
-					                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
-				}
-				sqlite3_finalize(pStmt);
-				continue;
-			}
-			zStmtSql = sqlite3_sql(pStmt);
-			if (zStmtSql == 0)
-				zStmtSql = "";
-			while (IsSpace(zStmtSql[0]))
-				zStmtSql++;
-
-			/* save off the prepared statment handle and reset row count */
-			this->pStmt = pStmt;
+			auto zStmtSql = zSql.substr(start_pos, len);
 
 			/* echo the sql statement if echo on */
 			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
-				utf8_printf(out, "%s\n", zStmtSql ? zStmtSql : zSql);
+				utf8_printf(out, "%s\n", !zStmtSql.empty() ? zStmtSql.c_str() : zSql.c_str());
 			}
 
 			cMode = mode;
-			if (sqlite3_stmt_isexplain(pStmt) == 1) {
+			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
 			}
 
-			ExecutePreparedStatement(pStmt);
-
-			/* Finalize the statement just executed. If this fails, save a
-			** copy of the error message. Otherwise, set zSql to point to the
-			** next statement to execute. */
-			rc2 = sqlite3_finalize(pStmt);
-			if (rc != SQLITE_NOMEM)
-				rc = rc2;
-			if (rc == SQLITE_OK) {
-				zSql = zLeftover;
-				while (IsSpace(zSql[0]))
-					zSql++;
-			} else if (pzErrMsg) {
-				*pzErrMsg = SaveErrorMessage(db);
-			}
-
-			/* clear saved stmt handle */
-			pStmt = NULL;
-		}
-	} /* end while */
-
-	return rc;
+			ExecuteStatement(*statement);
+		} /* end while */
+	} catch (std::exception &ex) {
+		duckdb::ErrorData error(ex);
+		PrintDatabaseError(error.Message());
+		return SuccessState::FAILURE;
+	}
+	return SuccessState::SUCCESS;
 }
 
 /*
@@ -1841,13 +1799,10 @@ void ShellState::RunSchemaDumpQuery(const string &zQuery) {
 			auto savedMode = mode;
 			zDestTable = sTable;
 			mode = cMode = RenderMode::INSERT;
-			int rc = ExecuteSQL(sSelect.c_str(), 0);
-			if ((rc & 0xff) == SQLITE_CORRUPT) {
-				throw std::runtime_error("EEK SHOULD NOT HAPPEN");
-			}
+			auto res = ExecuteSQL(sSelect);
 			zDestTable = savedDestTable;
 			mode = savedMode;
-			if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+			if (res != SuccessState::SUCCESS) {
 				AddError();
 			}
 		}
@@ -4385,7 +4340,6 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 ** Run a single line of SQL.  Return the number of errors.
 */
 int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
-	int rc;
 	string zErrMsg;
 
 	OpenDB(0);
@@ -4395,14 +4349,9 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	}
 #endif
 	BEGIN_TIMER;
-	rc = ExecuteSQL(zSql, &zErrMsg);
+	auto success = ExecuteSQL(zSql);
 	END_TIMER;
-	if (rc || !zErrMsg.empty()) {
-		if (!zErrMsg.empty()) {
-			PrintDatabaseError(zErrMsg);
-		} else {
-			ShellDatabaseError(db);
-		}
+	if (success != SuccessState::SUCCESS) {
 		return 1;
 	} else if (ShellHasFlag(ShellFlags::SHFLG_CountChanges)) {
 		raw_printf(out, "changes: %3lld   total_changes: %lld\n", sqlite3_changes64(db), sqlite3_total_changes64(db));
@@ -4955,14 +4904,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				}
 			} else {
 				data.OpenDB(0);
-				string errMsg;
-				rc = data.ExecuteSQL(cmd.c_str(), &errMsg);
-				if (!errMsg.empty()) {
-					data.PrintDatabaseError(errMsg);
+				auto success = data.ExecuteSQL(cmd.c_str());
+				if (success != SuccessState::SUCCESS) {
 					return rc != 0 ? rc : 1;
-				} else if (rc != 0) {
-					utf8_printf(stderr, "Error: unable to process SQL: %s\n", cmd.c_str());
-					return rc;
 				}
 			}
 		}
