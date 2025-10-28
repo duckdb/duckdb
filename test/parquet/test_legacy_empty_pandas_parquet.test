@@ -6,7 +6,5 @@ require parquet
 # This file includes the unsupported NULL (24) ConvertedType
 # Which is not supported by the spec, but written by some ancient versions of Pandas (pre-2020)
 
-statement error
+statement ok
 select * from '{DATA_DIR}/parquet-testing/empty.parquet'
-----
-Invalid data

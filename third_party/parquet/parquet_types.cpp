@@ -184,7 +184,14 @@ int _kConvertedTypeValues[] = {
    * the provided duration.  This duration of time is independent of any
    * particular timezone or date.
    */
-  ConvertedType::INTERVAL
+  ConvertedType::INTERVAL,
+  /**
+   * Non-standard NULL value
+   * 
+   * This was written by old writers - it is kept here for compatibility purposes.
+   * See https://github.com/duckdb/duckdb/pull/11774
+   */
+  ConvertedType::PARQUET_NULL
 };
 const char* _kConvertedTypeNames[] = {
   /**
@@ -308,9 +315,16 @@ const char* _kConvertedTypeNames[] = {
    * the provided duration.  This duration of time is independent of any
    * particular timezone or date.
    */
-  "INTERVAL"
+  "INTERVAL",
+  /**
+   * Non-standard NULL value
+   * 
+   * This was written by old writers - it is kept here for compatibility purposes.
+   * See https://github.com/duckdb/duckdb/pull/11774
+   */
+  "PARQUET_NULL"
 };
-const std::map<int, const char*> _ConvertedType_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(22, _kConvertedTypeValues, _kConvertedTypeNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
+const std::map<int, const char*> _ConvertedType_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(23, _kConvertedTypeValues, _kConvertedTypeNames), ::apache::thrift::TEnumIterator(-1, nullptr, nullptr));
 
 std::ostream& operator<<(std::ostream& out, const ConvertedType::type& val) {
   std::map<int, const char*>::const_iterator it = _ConvertedType_VALUES_TO_NAMES.find(val);
