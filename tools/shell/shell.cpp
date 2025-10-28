@@ -579,6 +579,14 @@ void ShellState::UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool rig
 	}
 }
 
+bool ShellState::IsSpace(char c) {
+	return duckdb::StringUtil::CharacterIsSpace(c);
+}
+
+bool ShellState::IsDigit(char c) {
+	return isdigit(c);
+}
+
 /*
 ** Determines if a string is a number of not.
 */
@@ -807,8 +815,8 @@ static int hexDigitValue(char c) {
 /*
 ** Interpret zArg as an integer value, possibly with suffixes.
 */
-static sqlite3_int64 integerValue(const string &arg) {
-	sqlite3_int64 v = 0;
+int64_t ShellState::StringToInt(const string &arg) {
+	int64_t v = 0;
 	static const struct {
 		const char *zSuffix;
 		int iMult;
@@ -2237,7 +2245,8 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			}
 			int found_match = 1;
 			size_t line_pos;
-			for (line_pos = 0; !IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf); line_pos++) {
+			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf);
+			     line_pos++) {
 				zBuf[line_pos] = line[line_pos];
 				if (line_pos < nLine && line[line_pos] != zLine[line_pos]) {
 					// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
@@ -2357,7 +2366,7 @@ static bool booleanValue(const string &zArg) {
 		}
 	}
 	if (i > 0 && zArg[i] == 0) {
-		return bool(integerValue(zArg) & 0xffffffff);
+		return bool(ShellState::StringToInt(zArg) & 0xffffffff);
 	}
 	if (StringUtil::CIEquals(zArg, "on") || StringUtil::CIEquals(zArg, "yes")) {
 		return true;
@@ -2918,7 +2927,7 @@ MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	int rc = 0;
-	if (args.size() > 1 && (rc = (int)integerValue(args[1])) != 0) {
+	if (args.size() > 1 && (rc = (int)ShellState::StringToInt(args[1])) != 0) {
 		// exit immediately if a custom error code is provided
 		exit(rc);
 	}
@@ -2982,7 +2991,7 @@ MetadataResult SetMaxRows(ShellState &state, const vector<string> &args) {
 	if (args.size() == 1) {
 		raw_printf(state.out, "current max rows: %zu\n", state.max_rows);
 	} else {
-		state.max_rows = (size_t)integerValue(args[1]);
+		state.max_rows = (size_t)ShellState::StringToInt(args[1]);
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -2994,7 +3003,7 @@ MetadataResult SetMaxWidth(ShellState &state, const vector<string> &args) {
 	if (args.size() == 1) {
 		raw_printf(state.out, "current max rows: %zu\n", state.max_width);
 	} else {
-		state.max_width = (size_t)integerValue(args[1]);
+		state.max_width = (size_t)ShellState::StringToInt(args[1]);
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -3149,7 +3158,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 		} else if (strcmp(z, "-v") == 0) {
 			eVerbose++;
 		} else if (strcmp(z, "-skip") == 0 && i < args.size() - 1) {
-			nSkip = (int)integerValue(args[++i]);
+			nSkip = (int)StringToInt(args[++i]);
 		} else if (strcmp(z, "-ascii") == 0) {
 			sCtx.cColSep = SEP_Unit[0];
 			sCtx.cRowSep = SEP_Record[0];
@@ -3775,7 +3784,7 @@ MetadataResult ShowVersion(ShellState &state, const vector<string> &args) {
 MetadataResult SetWidths(ShellState &state, const vector<string> &args) {
 	state.colWidth.clear();
 	for (idx_t j = 1; j < args.size(); j++) {
-		state.colWidth.push_back((int)integerValue(args[j]));
+		state.colWidth.push_back((int)ShellState::StringToInt(args[j]));
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -4142,7 +4151,7 @@ static bool line_contains_semicolon(const char *z, idx_t N) {
 */
 static bool _all_whitespace(const char *z) {
 	for (; *z; z++) {
-		if (IsSpace(z[0])) {
+		if (ShellState::IsSpace(z[0])) {
 			continue;
 		}
 		if (*z == '/' && z[1] == '*') {

@@ -70,11 +70,6 @@ enum class ShellFlags : uint32_t {
 	SHFLG_HeaderSet = 0x00000080     /* .header has been used */
 };
 
-/* ctype macros that work with signed characters */
-#define IsSpace(X) duckdb::StringUtil::CharacterIsSpace((unsigned char)X)
-#define IsDigit(X) isdigit((unsigned char)X)
-#define ToLower(X) (char)tolower((unsigned char)X)
-
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -210,6 +205,9 @@ public:
 	bool ProcessFile(const string &file, bool is_duckdb_rc = false);
 	int ProcessInput(InputMode mode);
 	static bool SQLIsComplete(const char *zSql);
+	static bool IsSpace(char c);
+	static bool IsDigit(char c);
+	static int64_t StringToInt(const string &arg);
 };
 
 } // namespace duckdb_shell

@@ -705,6 +705,10 @@ public:
 	explicit ModePrettyRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
+	static bool IsSpace(char c) {
+		return duckdb::StringUtil::CharacterIsSpace(c);
+	}
+
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		/* .schema and .fullschema with --indent */
