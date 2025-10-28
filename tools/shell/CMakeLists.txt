@@ -6,8 +6,8 @@ if(NOT WIN32)
   include_directories(../../third_party/utf8proc/include)
   include_directories(linenoise/include)
 endif()
-set(SHELL_SOURCES ${SHELL_SOURCES} shell.cpp shell_renderer.cpp
-                  shell_highlight.cpp)
+set(SHELL_SOURCES ${SHELL_SOURCES} shell.cpp shell_helpers.cpp
+                  shell_renderer.cpp shell_highlight.cpp)
 
 option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)
 

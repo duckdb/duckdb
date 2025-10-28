@@ -1173,7 +1173,7 @@ void ShellState::PrintSchemaLine(const char *z, const char *zTail) {
 	if (!z || !zTail) {
 		return;
 	}
-	if (sqlite3_strglob("CREATE TABLE ['\"]*", z) == 0) {
+	if (StringGlob("CREATE TABLE ['\"]*", z) == 0) {
 		utf8_printf(out, "CREATE TABLE IF NOT EXISTS %s%s", z + 13, zTail);
 	} else {
 		utf8_printf(out, "%s%s", z, zTail);
@@ -1830,7 +1830,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
 
 	if (strcmp(zTable, "sqlite_sequence") == 0) {
 		raw_printf(p->out, "DELETE FROM sqlite_sequence;\n");
-	} else if (sqlite3_strglob("sqlite_stat?", zTable) == 0) {
+	} else if (ShellState::StringGlob("sqlite_stat?", zTable) == 0) {
 		raw_printf(p->out, "ANALYZE sqlite_schema;\n");
 	} else if (strncmp(zTable, "sqlite_", 7) == 0) {
 		return 0;
@@ -2083,7 +2083,7 @@ static int showHelp(FILE *out, const char *zPattern) {
 		/* Look for commands that for which zPattern is an exact prefix */
 		zPat = StringUtil::Format(".%s*", zPattern);
 		for (i = 0; i < ArraySize(azHelp); i++) {
-			if (sqlite3_strglob(zPat.c_str(), azHelp[i]) == 0) {
+			if (ShellState::StringGlob(zPat.c_str(), azHelp[i]) == 0) {
 				utf8_printf(out, "%s\n", azHelp[i]);
 				j = i + 1;
 				n++;
@@ -2106,7 +2106,7 @@ static int showHelp(FILE *out, const char *zPattern) {
 		for (i = 0; i < ArraySize(azHelp); i++) {
 			if (azHelp[i][0] == '.')
 				j = i;
-			if (sqlite3_strlike(zPat.c_str(), azHelp[i], 0) == 0) {
+			if (ShellState::StringLike(zPat.c_str(), azHelp[i], 0) == 0) {
 				utf8_printf(out, "%s\n", azHelp[j]);
 				while (j < ArraySize(azHelp) - 1 && azHelp[j + 1][0] != '.') {
 					j++;
@@ -2681,15 +2681,12 @@ void ShellState::ClearTempFile() {
 void ShellState::NewTempFile(const char *zSuffix) {
 	ClearTempFile();
 	zTempFile = string();
-	if (db) {
-		sqlite3_file_control(db, 0, SQLITE_FCNTL_TEMPFILENAME, &zTempFile);
-	}
 	if (zTempFile.empty()) {
 		/* If db is an in-memory database then the TEMPFILENAME file-control
 		** will not work and we will need to fallback to guessing */
 		const char *zTemp;
-		sqlite3_uint64 r;
-		sqlite3_randomness(sizeof(r), &r);
+		uint64_t r;
+		GenerateRandomBytes(sizeof(r), &r);
 		zTemp = getenv("TEMP");
 		if (zTemp == 0)
 			zTemp = getenv("TMP");
@@ -3229,7 +3226,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 	auto zSql = StringUtil::Format("SELECT * FROM %s", zTable);
 	rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
 	import_append_char(&sCtx, 0); /* To ensure sCtx.z is allocated */
-	if (rc && sqlite3_strglob("Catalog Error: Table with name *", sqlite3_errmsg(db)) == 0) {
+	if (rc && StringGlob("Catalog Error: Table with name *", sqlite3_errmsg(db)) == 0) {
 		char *zCreate = sqlite3_mprintf("CREATE TABLE %s", zTable);
 		char cSep = '(';
 		while (xRead(&sCtx)) {

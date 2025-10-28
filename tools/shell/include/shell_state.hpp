@@ -208,6 +208,9 @@ public:
 	static bool IsSpace(char c);
 	static bool IsDigit(char c);
 	static int64_t StringToInt(const string &arg);
+	static void GenerateRandomBytes(int N, void *pBuf);
+	static bool StringGlob(const char *zGlobPattern, const char *zString);
+	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 };
 
 } // namespace duckdb_shell
