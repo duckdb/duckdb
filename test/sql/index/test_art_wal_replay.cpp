@@ -13,27 +13,29 @@
 
 using namespace duckdb;
 
-static ART &GetARTIndex(Connection &con, const string &table_name, const string &index_name) {
-	optional_ptr<ART> art_ptr;
-	con.context->RunFunctionInTransaction([&]() {
-		auto &catalog = Catalog::GetCatalog(*con.context, "testdb");
-		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(*con.context, "main", table_name);
-		auto &duck_table = table_entry.Cast<DuckTableEntry>();
-		auto &storage = duck_table.GetStorage();
-		auto &data_table_info = storage.GetDataTableInfo();
-		auto &indexes = data_table_info->GetIndexes();
+namespace {
+	ART &GetARTIndex(Connection &con, const string &table_name, const string &index_name) {
+		optional_ptr<ART> art_ptr;
+		con.context->RunFunctionInTransaction([&]() {
+			auto &catalog = Catalog::GetCatalog(*con.context, "testdb");
+			auto &table_entry = catalog.GetEntry<TableCatalogEntry>(*con.context, "main", table_name);
+			auto &duck_table = table_entry.Cast<DuckTableEntry>();
+			auto &storage = duck_table.GetStorage();
+			auto &data_table_info = storage.GetDataTableInfo();
+			auto &indexes = data_table_info->GetIndexes();
 
-		indexes.Scan([&](Index &index) {
-			if (index.GetIndexName() == index_name) {
-				REQUIRE(index.IsBound());
-				art_ptr = &index.Cast<ART>();
-				return true;
-			}
-			return false;
+			indexes.Scan([&](Index &index) {
+				if (index.GetIndexName() == index_name) {
+					REQUIRE(index.IsBound());
+					art_ptr = &index.Cast<ART>();
+					return true;
+				}
+				return false;
+			});
 		});
-	});
-	REQUIRE(art_ptr);
-	return *art_ptr;
+		REQUIRE(art_ptr);
+		return *art_ptr;
+	}
 }
 
 // This test inspects the ART tree to check that index WAL operations are properly replayed after
