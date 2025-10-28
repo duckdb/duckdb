@@ -2043,13 +2043,9 @@ static const char *azHelp[] = {
     "     Options:",
     "         --indent            Try to pretty-print the schema",
     ".separator COL ?ROW?     Change the column and row separators",
-#ifndef SQLITE_NOHAVE_SYSTEM
     ".shell CMD ARGS...       Run CMD ARGS... in a system shell",
-#endif
     ".show                    Show the current values for various settings",
-#ifndef SQLITE_NOHAVE_SYSTEM
     ".system CMD ARGS...      Run CMD ARGS... in a system shell",
-#endif
     ".tables ?TABLE?          List names of tables matching LIKE pattern TABLE",
     ".testcase NAME           Begin redirecting output to 'testcase-out.txt'",
     ".thousand_sep SEP        Sets the thousand separator used when rendering numbers. Only for duckbox mode.",
@@ -3945,6 +3941,116 @@ MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
 }
 #endif
 
+#ifdef HAVE_LINENOISE
+MetadataResult ToggleHighlighting(ShellState &state, const vector<string> &args) {
+	linenoiseSetHighlighting(booleanValue(args[1]));
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleErrorRendering(ShellState &state, const vector<string> &args) {
+	linenoiseSetErrorRendering(booleanValue(args[1]));
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleCompletionRendering(ShellState &state, const vector<string> &args) {
+	linenoiseSetCompletionRendering(booleanValue(args[1]));
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleMultiLine(ShellState &state, const vector<string> &args) {
+	if (!args.empty()) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	linenoiseSetMultiLine(true);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleSingleLine(ShellState &state, const vector<string> &args) {
+	if (!args.empty()) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	linenoiseSetMultiLine(false);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult TrySetHighlightColor(const string &component, const string &code) {
+	char error[1024];
+	if (!linenoiseTrySetHighlightColor(component.c_str(), code.c_str(), error, 1024)) {
+		utf8_printf(stderr, "%s\n", error);
+		return MetadataResult::FAIL;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetRenderHighlightColor(ShellState &state, const vector<string> &args) {
+	return TrySetHighlightColor(args[1], args[2]);
+}
+
+enum class DeprecatedHighlightColors {
+	COMMENT,
+	COMMENT_CODE,
+	CONSTANT,
+	CONSTANT_CODE,
+	KEYWORD,
+	KEYWORD_CODE,
+	ERROR,
+	ERROR_CODE,
+	CONT,
+	CONT_CODE,
+	CONT_SEL,
+	CONT_SEL_CODE
+};
+
+template <DeprecatedHighlightColors T>
+MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &args) {
+	string literal;
+	switch (T) {
+	case DeprecatedHighlightColors::COMMENT:
+		literal = "comment";
+		break;
+	case DeprecatedHighlightColors::COMMENT_CODE:
+		literal = "commentcode";
+		break;
+	case DeprecatedHighlightColors::CONSTANT:
+		literal = "constant";
+		break;
+	case DeprecatedHighlightColors::CONSTANT_CODE:
+		literal = "constantcode";
+		break;
+	case DeprecatedHighlightColors::KEYWORD:
+		literal = "keyword";
+		break;
+	case DeprecatedHighlightColors::KEYWORD_CODE:
+		literal = "keywordcode";
+		break;
+	case DeprecatedHighlightColors::ERROR:
+		literal = "error";
+		break;
+	case DeprecatedHighlightColors::ERROR_CODE:
+		literal = "errorcode";
+		break;
+	case DeprecatedHighlightColors::CONT:
+		literal = "cont";
+		break;
+	case DeprecatedHighlightColors::CONT_CODE:
+		literal = "contcode";
+		break;
+	case DeprecatedHighlightColors::CONT_SEL:
+		literal = "cont_sel";
+		break;
+	case DeprecatedHighlightColors::CONT_SEL_CODE:
+		literal = "cont_selcode";
+		break;
+	default:
+		throw std::runtime_error("eek");
+	}
+	utf8_printf(stderr, "WARNING: .%s [COLOR] will be removed in a future release, use .render_color %s %s instead\n",
+	            literal.c_str(), literal.c_str(), args[1].c_str());
+	return TrySetHighlightColor(literal, args[1]);
+}
+
+#endif
+
 static const MetadataCommand metadata_commands[] = {
     {"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3},
@@ -3952,7 +4058,24 @@ static const MetadataCommand metadata_commands[] = {
     {"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0},
     {"changes", 2, ToggleChanges, "on|off", "Show number of rows changed by SQL", 3},
     {"columns", 1, SetColumnRendering, "", "Column-wise rendering of query results", 0},
-
+#ifdef HAVE_LINENOISE
+    {"comment", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT>, "?COLOR?",
+     "DEPRECATED: Sets the syntax highlighting color used for comment values", 0},
+    {"commentcode", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT_CODE>, "?CODE?",
+     "DEPRECATED: Sets the syntax highlighting terminal code used for comment values", 0},
+    {"constant", 2, SetHighlightingColor<DeprecatedHighlightColors::CONSTANT>, "?COLOR?",
+     "DEPRECATED: Sets the syntax highlighting color used for constant values", 0},
+    {"constantcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONSTANT_CODE>, "?CODE?",
+     "DEPRECATED: Sets the syntax highlighting terminal code used for constant values", 0},
+    {"cont", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT>, "?COLOR?",
+     "DEPRECATED: Sets the syntax highlighting color used for continuation markers", 0},
+    {"contcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_CODE>, "?CODE?",
+     "DEPRECATED: Sets the syntax highlighting terminal code used for continuation markers", 0},
+    {"cont_sel", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_SEL>, "?COLOR?",
+     "DEPRECATED: Sets the syntax highlighting color used for continuation markers", 0},
+    {"cont_selcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_SEL_CODE>, "?CODE?",
+     "DEPRECATED: Sets the syntax highlighting terminal code used for continuation markers", 0},
+#endif
     {"decimal_sep", 0, SetDecimalSep, "SEP",
      "Sets the decimal separator used when rendering numbers. Only for duckbox mode.", 3},
     {"databases", 1, ShowDatabases, "", "List names and files of attached databases", 2},
@@ -3962,11 +4085,20 @@ static const MetadataCommand metadata_commands[] = {
      "subsequent arguments",
      0},
     {"echo", 2, ToggleEcho, "on|off", "Turn command echo on or off", 3},
+#ifdef HAVE_LINENOISE
+    {"error", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR>, "?COLOR?",
+     "DEPRECATED: Sets the syntax highlighting color used for errors", 0},
+    {"errorcode", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR_CODE>, "?CODE?",
+     "DEPRECATED: Sets the syntax highlighting terminal code used for errors", 0},
+#endif
     {"excel", 0, SetOutputExcel, "", "Display the output of next command in spreadsheet", 0},
     {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0},
     {"fullschema", 0, nullptr, "", "", 0},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
+#ifdef HAVE_LINENOISE
+    {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0},
+#endif
     {"highlight_colors", 0, SetHighlightColors, "[element] [color] ([bold])?", "Configure highlighting colors", 0},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0},
@@ -3974,6 +4106,12 @@ static const MetadataCommand metadata_commands[] = {
 
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
     {"indices", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
+#ifdef HAVE_LINENOISE
+    {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
+     "DEPRECATED: Sets the syntax highlighting color used for keywords", 0},
+    {"keywordcode", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD_CODE>, "?CODE?",
+     "DEPRECATED: Sets the syntax highlighting terminal code used for keywords", 0},
+#endif
     {"large_number_rendering", 2, SetLargeNumberRendering, "all|footer|off",
      "Toggle readable rendering of large numbers (duckbox only)", 0},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
@@ -3982,6 +4120,9 @@ static const MetadataCommand metadata_commands[] = {
     {"maxwidth", 0, SetMaxWidth, "COUNT",
      "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0},
     {"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0},
+#ifdef HAVE_LINENOISE
+    {"multiline", 1, ToggleMultiLine, "", "Sets the render mode to multi-line", 0},
+#endif
     {"nullvalue", 2, SetNullValue, "STRING", "Use STRING in place of NULL values", 0},
 
     {"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2},
@@ -3992,6 +4133,13 @@ static const MetadataCommand metadata_commands[] = {
 
     {"quit", 0, QuitProcess, "", "Exit this program", 0},
     {"read", 2, ReadFromFile, "FILE", "Read input from FILE", 3},
+#ifdef HAVE_LINENOISE
+    {"render_color", 3, SetRenderHighlightColor, "?COMP? ?COLOR?",
+     "Configure highlighting colors for the interactive prompt", 0},
+    {"render_completion", 2, ToggleCompletionRendering, "on|off",
+     "Toggle displaying of completion prompts in the shell on/off", 0},
+    {"render_errors", 2, ToggleErrorRendering, "on|off", "Toggle rendering of errors in the shell on/off", 0},
+#endif
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
     {"restore", 0, nullptr, "", "", 3},
     {"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
@@ -4000,6 +4148,9 @@ static const MetadataCommand metadata_commands[] = {
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0},
     {"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
     {"show", 1, ShowConfiguration, "", "Show the current values for various settings", 0},
+#ifdef HAVE_LINENOISE
+    {"singleline", 1, ToggleSingleLine, "", "Sets the render mode to single-line", 0},
+#endif
     {"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
     {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2},
     {"thousand_sep", 0, SetThousandSep, "SEP",
@@ -4098,30 +4249,12 @@ int ShellState::DoMetaCommand(const string &zLine) {
 		rc = int(result);
 		break;
 	}
-	if (found_argument) {
-	} else {
-#ifdef HAVE_LINENOISE
-		const char *error = NULL;
-		// FIXME: we shouldn't be parsing options in linenoise
-		vector<const char *> zArgs;
-		for (auto &arg : args) {
-			zArgs.push_back(arg.c_str());
-		}
-		if (linenoiseParseOption(zArgs.data(), zArgs.size(), &error)) {
-			if (error) {
-				PrintDatabaseError(error);
-				rc = 1;
-			}
-		} else {
-#endif
-			utf8_printf(stderr,
-			            "Error: unknown command or invalid arguments: "
-			            " \"%s\". Enter \".help\" for help\n",
-			            args[0].c_str());
-			rc = 1;
-#ifdef HAVE_LINENOISE
-		}
-#endif
+	if (!found_argument) {
+		utf8_printf(stderr,
+		            "Error: unknown command or invalid arguments: "
+		            " \"%s\". Enter \".help\" for help\n",
+		            args[0].c_str());
+		rc = 1;
 	}
 
 	if (outCount) {
