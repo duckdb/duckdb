@@ -248,10 +248,14 @@ public:
 		for (auto &col : input.column_indexes) {
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
-		l_state->scan_state.table_state = make_uniq<CustomOrderCollectionScanState>(
-		    l_state->scan_state, 0, OrderByStatistics::MAX, RowGroupOrderType::DESC, OrderByColumnType::NUMERIC);
-		l_state->scan_state.local_state = make_uniq<CustomOrderCollectionScanState>(
-		    l_state->scan_state, 0, OrderByStatistics::MAX, RowGroupOrderType::DESC, OrderByColumnType::NUMERIC);
+
+		if (input.row_group_order) {
+			auto &options = *input.row_group_order;
+			l_state->scan_state.table_state = make_uniq<CustomOrderCollectionScanState>(
+			    l_state->scan_state, options.column_idx, options.order_by, options.order_type, options.column_type);
+			l_state->scan_state.local_state = make_uniq<CustomOrderCollectionScanState>(
+			    l_state->scan_state, options.column_idx, options.order_by, options.order_type, options.column_type);
+		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
@@ -333,10 +337,13 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
                                                              DataTable &storage, const TableScanBindData &bind_data) {
 	auto g_state = make_uniq<DuckTableScanState>(context, input.bind_data.get());
-	g_state->state.scan_state = make_uniq<CustomOrderParallelCollectionScanState>(
-	    0, OrderByStatistics::MAX, RowGroupOrderType::DESC, OrderByColumnType::NUMERIC);
-	g_state->state.local_state = make_uniq<CustomOrderParallelCollectionScanState>(
-	    0, OrderByStatistics::MAX, RowGroupOrderType::DESC, OrderByColumnType::NUMERIC);
+	if (input.row_group_order) {
+		auto &options = *input.row_group_order;
+		g_state->state.scan_state = make_uniq<CustomOrderParallelCollectionScanState>(
+		    options.column_idx, options.order_by, options.order_type, options.column_type);
+		g_state->state.local_state = make_uniq<CustomOrderParallelCollectionScanState>(
+		    options.column_idx, options.order_by, options.order_type, options.column_type);
+	}
 
 	storage.InitializeParallelScan(context, g_state->state);
 	if (!input.CanRemoveFilterColumns()) {

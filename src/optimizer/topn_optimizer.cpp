@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -122,6 +123,15 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		// push the filter into the table scan
 		auto &column_index = get.GetColumnIds()[col_idx];
 		get.table_filters.PushFilter(column_index, std::move(optional_filter));
+
+		// Scan rowgroups in custom order
+		if (colref.return_type.IsNumeric() || colref.return_type == LogicalType::VARCHAR) {
+			auto column_type = colref.return_type.IsNumeric() ? OrderByColumnType::NUMERIC : OrderByColumnType::STRING;
+			auto order_type =
+			    op.orders[0].type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
+			auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+			get.row_group_order = make_shared_ptr<RowGroupOrderOptions>(col_idx, order_by, order_type, column_type);
+		}
 	}
 }
 

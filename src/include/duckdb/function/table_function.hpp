@@ -22,7 +22,6 @@
 #include <functional>
 
 namespace duckdb {
-
 class BaseStatistics;
 class LogicalDependencyList;
 class LogicalGet;
@@ -34,6 +33,9 @@ class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
+enum class OrderByColumnType;
+enum class RowGroupOrderType;
+enum class OrderByStatistics;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -108,13 +110,26 @@ struct TableFunctionBindInput {
 	const TableFunctionRef &ref;
 };
 
+struct RowGroupOrderOptions {
+	RowGroupOrderOptions(column_t column_idx_p, OrderByStatistics order_by_p, RowGroupOrderType order_type_p,
+	                     OrderByColumnType column_type_p)
+	    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p) {
+	}
+
+	const column_t column_idx;
+	const OrderByStatistics order_by;
+	const RowGroupOrderType order_type;
+	const OrderByColumnType column_type;
+};
+
 struct TableFunctionInitInput {
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<column_t> column_ids_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
+	                       shared_ptr<RowGroupOrderOptions> row_group_order_p = nullptr,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr,
 	                       optional_ptr<const PhysicalOperator> op_p = nullptr)
 	    : bind_data(bind_data_p), column_ids(std::move(column_ids_p)), projection_ids(projection_ids_p),
-	      filters(filters_p), sample_options(sample_options_p), op(op_p) {
+	      filters(filters_p), sample_options(sample_options_p), op(op_p), row_group_order(row_group_order_p) {
 		for (auto &col_id : column_ids) {
 			column_indexes.emplace_back(col_id);
 		}
@@ -122,10 +137,11 @@ struct TableFunctionInitInput {
 
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<ColumnIndex> column_indexes_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
+	                       shared_ptr<RowGroupOrderOptions> row_group_order_p = nullptr,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr,
 	                       optional_ptr<const PhysicalOperator> op_p = nullptr)
 	    : bind_data(bind_data_p), column_indexes(std::move(column_indexes_p)), projection_ids(projection_ids_p),
-	      filters(filters_p), sample_options(sample_options_p), op(op_p) {
+	      filters(filters_p), sample_options(sample_options_p), op(op_p), row_group_order(row_group_order_p) {
 		for (auto &col_id : column_indexes) {
 			column_ids.emplace_back(col_id.GetPrimaryIndex());
 		}
@@ -138,7 +154,8 @@ struct TableFunctionInitInput {
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
 	optional_ptr<const PhysicalOperator> op;
-	optional_ptr<pair<column_t, bool>> order_row_groups_by; // TODO
+
+	shared_ptr<RowGroupOrderOptions> row_group_order;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {

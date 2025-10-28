@@ -54,7 +54,8 @@ public:
 	//! Virtual columns
 	virtual_column_map_t virtual_columns;
 	optional_ptr<const PhysicalOperator> op;
-	optional_ptr<pair<column_t, bool>> order_row_groups_by; // TODO
+
+	shared_ptr<RowGroupOrderOptions> row_group_order;
 
 public:
 	string GetName() const override;
