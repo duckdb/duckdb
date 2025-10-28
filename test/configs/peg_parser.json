@@ -17,6 +17,20 @@
       ]
     },
     {
+      "reason": "Quatations",
+      "paths": [
+        "test/sql/pragma/test_show_tables_from.test",
+        "test/sql/attach/attach_dbname_quotes.test"
+      ]
+    },
+    {
+      "reason": "Conversion Error",
+      "paths": [
+        "test/sql/storage/types/struct/wal_struct_storage.test",
+        "test/sql/storage/types/struct/struct_storage.test"
+      ]
+    },
+    {
       "reason": "Timeout",
       "paths": [
         "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",

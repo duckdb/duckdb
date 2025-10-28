@@ -71,7 +71,7 @@ PEGTransformerFactory::TransformCatalogReservedSchemaTable(PEGTransformer &trans
 	auto catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
 	auto table_name = list_pr.Child<IdentifierParseResult>(2).identifier;
-	const auto description = TableDescription(catalog, catalog, table_name);
+	const auto description = TableDescription(catalog, schema, table_name);
 	return make_uniq<BaseTableRef>(description);
 }
 
