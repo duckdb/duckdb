@@ -107,10 +107,8 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		if (res == SourceResultType::BLOCKED) {
 			D_ASSERT(data.async_result.HasTasks());
 			auto guard = g_state.Lock();
-			auto can_block = g_state.CanBlock(guard);
 			if (g_state.CanBlock(guard)) {
-				AsyncResult async_handler(std::move(data.async_result));
-				async_handler.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
+				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
 				return SourceResultType::BLOCKED;
 			} else {
 				return SourceResultType::FINISHED;
