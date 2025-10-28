@@ -35,32 +35,37 @@ WindowExpression::WindowExpression(ExpressionType type, string catalog_name, str
 	}
 }
 
-const case_insensitive_map_t<ExpressionType> &WindowExpression::WindowFunctions() {
-	static case_insensitive_map_t<ExpressionType> functions = {{"rank", ExpressionType::WINDOW_RANK},
-	                                                           {"rank_dense", ExpressionType::WINDOW_RANK_DENSE},
-	                                                           {"dense_rank", ExpressionType::WINDOW_RANK_DENSE},
-	                                                           {"percent_rank", ExpressionType::WINDOW_PERCENT_RANK},
-	                                                           {"row_number", ExpressionType::WINDOW_ROW_NUMBER},
-	                                                           {"first_value", ExpressionType::WINDOW_FIRST_VALUE},
-	                                                           {"first", ExpressionType::WINDOW_FIRST_VALUE},
-	                                                           {"last_value", ExpressionType::WINDOW_LAST_VALUE},
-	                                                           {"last", ExpressionType::WINDOW_LAST_VALUE},
-	                                                           {"nth_value", ExpressionType::WINDOW_NTH_VALUE},
-	                                                           {"cume_dist", ExpressionType::WINDOW_CUME_DIST},
-	                                                           {"lead", ExpressionType::WINDOW_LEAD},
-	                                                           {"lag", ExpressionType::WINDOW_LAG},
-	                                                           {"ntile", ExpressionType::WINDOW_NTILE},
-	                                                           {"fill", ExpressionType::WINDOW_FILL}};
-	return functions;
+static const WindowFunctionDefinition internal_window_functions[] = {
+    {"rank", ExpressionType::WINDOW_RANK},
+    {"rank_dense", ExpressionType::WINDOW_RANK_DENSE},
+    {"dense_rank", ExpressionType::WINDOW_RANK_DENSE},
+    {"percent_rank", ExpressionType::WINDOW_PERCENT_RANK},
+    {"row_number", ExpressionType::WINDOW_ROW_NUMBER},
+    {"first_value", ExpressionType::WINDOW_FIRST_VALUE},
+    {"first", ExpressionType::WINDOW_FIRST_VALUE},
+    {"last_value", ExpressionType::WINDOW_LAST_VALUE},
+    {"last", ExpressionType::WINDOW_LAST_VALUE},
+    {"nth_value", ExpressionType::WINDOW_NTH_VALUE},
+    {"cume_dist", ExpressionType::WINDOW_CUME_DIST},
+    {"lead", ExpressionType::WINDOW_LEAD},
+    {"lag", ExpressionType::WINDOW_LAG},
+    {"ntile", ExpressionType::WINDOW_NTILE},
+    {"fill", ExpressionType::WINDOW_FILL},
+    {nullptr, ExpressionType::INVALID}};
+
+const WindowFunctionDefinition *WindowExpression::WindowFunctions() {
+	return internal_window_functions;
 }
 
 ExpressionType WindowExpression::WindowToExpressionType(string &fun_name) {
-	auto &functions = WindowFunctions();
-	auto it = functions.find(fun_name);
-	if (it == functions.end()) {
-		return ExpressionType::WINDOW_AGGREGATE;
+	D_ASSERT(StringUtil::IsLower(fun_name));
+	auto functions = WindowFunctions();
+	for (idx_t i = 0; functions[i].name != nullptr; i++) {
+		if (fun_name == functions[i].name) {
+			return functions[i].expression_type;
+		}
 	}
-	return it->second;
+	return ExpressionType::WINDOW_AGGREGATE;
 }
 
 string WindowExpression::ToString() const {

@@ -21,12 +21,11 @@ namespace duckdb {
 constexpr const char *AggregateFunctionCatalogEntry::Name;
 
 struct DuckDBFunctionsData : public GlobalTableFunctionState {
-	DuckDBFunctionsData()
-	    : window_iterator(WindowExpression::WindowFunctions().begin()), offset(0), offset_in_entry(0) {
+	DuckDBFunctionsData() : window_iterator(WindowExpression::WindowFunctions()), offset(0), offset_in_entry(0) {
 	}
 
 	vector<reference<CatalogEntry>> entries;
-	case_insensitive_map_t<ExpressionType>::const_iterator window_iterator;
+	const WindowFunctionDefinition *window_iterator;
 	idx_t offset;
 	idx_t offset_in_entry;
 };
@@ -649,14 +648,14 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	return function_idx + 1 == OP::FunctionCount(function);
 }
 
-void ExtractWindowFunctionData(case_insensitive_map_t<ExpressionType>::const_iterator it, DataChunk &output,
-                               idx_t output_offset) {
+void ExtractWindowFunctionData(const WindowFunctionDefinition *it, DataChunk &output, idx_t output_offset) {
+	D_ASSERT(it && it->name != nullptr);
 	Value parameter_types;
 	Value parameter_names;
 	Value return_type;
-	Value name(it->first);
+	Value name(it->name);
 
-	switch (it->second) {
+	switch (it->expression_type) {
 	case ExpressionType::WINDOW_FILL:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_FIRST_VALUE: {
@@ -770,7 +769,7 @@ static bool Finished(const DuckDBFunctionsData &data) {
 	if (data.offset < data.entries.size()) {
 		return false;
 	}
-	if (data.window_iterator == WindowExpression::WindowFunctions().end()) {
+	if (data.window_iterator->name == nullptr) {
 		return true;
 	}
 	return false;
@@ -827,7 +826,7 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 		count++;
 	}
-	while (data.window_iterator != WindowExpression::WindowFunctions().end() && count < STANDARD_VECTOR_SIZE) {
+	while (data.window_iterator->name != nullptr && count < STANDARD_VECTOR_SIZE) {
 		ExtractWindowFunctionData(data.window_iterator, output, count);
 		count++;
 		data.window_iterator++;

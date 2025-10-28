@@ -13,6 +13,11 @@
 
 namespace duckdb {
 
+struct WindowFunctionDefinition {
+	const char *name;
+	ExpressionType expression_type;
+};
+
 enum class WindowBoundary : uint8_t {
 	INVALID = 0,
 	UNBOUNDED_PRECEDING = 1,
@@ -92,7 +97,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
-	static const case_insensitive_map_t<ExpressionType> &WindowFunctions();
+	static const WindowFunctionDefinition *WindowFunctions();
 	static ExpressionType WindowToExpressionType(string &fun_name);
 
 public:
