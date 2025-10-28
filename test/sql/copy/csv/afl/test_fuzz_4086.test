@@ -7,15 +7,15 @@ require json
 loop i 0 2
 
 statement maybe
-FROM read_csv('data/csv/afl/4086/case_1.csv', auto_detect=false, columns={'json': 'JSON'}, delim=NULL, buffer_size=42, store_rejects=true, rejects_limit=658694493994253607);
+FROM read_csv('{DATA_DIR}/csv/afl/4086/case_1.csv', auto_detect=false, columns={'json': 'JSON'}, delim=NULL, buffer_size=42, store_rejects=true, rejects_limit=658694493994253607);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/4086/case_2.csv', auto_detect=false, columns={'json': 'JSON'}, delim=NULL, buffer_size=42, store_rejects=true, rejects_limit=658694493994253607);
+FROM read_csv('{DATA_DIR}/csv/afl/4086/case_2.csv', auto_detect=false, columns={'json': 'JSON'}, delim=NULL, buffer_size=42, store_rejects=true, rejects_limit=658694493994253607);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/4086/case_3.csv', auto_detect=false, columns={'json': 'JSON'}, delim='\0', buffer_size=42, store_rejects=true, rejects_limit=658694493994253607);
+FROM read_csv('{DATA_DIR}/csv/afl/4086/case_3.csv', auto_detect=false, columns={'json': 'JSON'}, delim='\0', buffer_size=42, store_rejects=true, rejects_limit=658694493994253607);
 ----
 
 statement ok

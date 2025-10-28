@@ -6,11 +6,11 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select count(*) from read_csv_auto('data/csv/borked_date.csv', header = 0)
+select count(*) from read_csv_auto('{DATA_DIR}/csv/borked_date.csv', header = 0)
 ----
 2070
 
 query I
-select count(*) from read_csv_auto('data/csv/big_not_bool.csv', header = 0)
+select count(*) from read_csv_auto('{DATA_DIR}/csv/big_not_bool.csv', header = 0)
 ----
 2450

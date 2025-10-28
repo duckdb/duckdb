@@ -71,23 +71,6 @@ void QueryNode::ExtractCTENodes(unique_ptr<QueryNode> &query_node) {
 	query_node = std::move(root);
 }
 
-void CTENode::Serialize(Serializer &serializer) const {
-	if (materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
-		// for non-materialized CTEs - don't serialize CTENode
-		// older DuckDB versions only expect a CTENode to be there for materialized CTEs
-		child->Serialize(serializer);
-		return;
-	}
-	QueryNode::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "cte_name", ctename);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "child", child);
-	serializer.WritePropertyWithDefault<vector<string>>(203, "aliases", aliases);
-}
-
-// In QueryNode::ExtractCTENodes we create a bunch of CTENodes from the CommonTableExpressionMap in the QueryNode
-// however, we might ALSO have a CTENode present depending on how the serialization is set up
-// if we ended up creating duplicate CTE nodes in QueryNode::ExtractCTENodes - this ends up de-duplicating them again
 void EraseDuplicateCTE(unique_ptr<QueryNode> &node, const string &ctename) {
 	if (node->type != QueryNodeType::CTE_NODE) {
 		// not a CTE
@@ -104,6 +87,23 @@ void EraseDuplicateCTE(unique_ptr<QueryNode> &node, const string &ctename) {
 	}
 }
 
+void CTENode::Serialize(Serializer &serializer) const {
+	if (materialized != CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+		// for non-materialized CTEs - don't serialize CTENode
+		// older DuckDB versions only expect a CTENode to be there for materialized CTEs
+		child->Serialize(serializer);
+		return;
+	}
+	auto child_copy = child->Copy();
+	EraseDuplicateCTE(child_copy, ctename);
+
+	QueryNode::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "cte_name", ctename);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(202, "child", child_copy);
+	serializer.WritePropertyWithDefault<vector<string>>(203, "aliases", aliases);
+}
+
 unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CTENode>(new CTENode());
 	deserializer.ReadPropertyWithDefault<string>(200, "cte_name", result->ctename);
@@ -113,8 +113,7 @@ unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 	// v1.4.0 and v1.4.1 wrote this property - deserialize it for BC with these versions
 	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(204, "materialized", result->materialized,
 	                                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-	EraseDuplicateCTE(result->child, result->ctename);
-	return std::move(result);
+	return std::move(result->child);
 }
 // TEMPORARY BUGFIX WARNING - none of this code should make it into main - this is a temporary work-around for v1.4
 // TEMPORARY BUGFIX END
