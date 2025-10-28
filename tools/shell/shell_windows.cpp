@@ -116,7 +116,6 @@ static unique_ptr<uint8_t[]> winUnicodeToMbcs(LPCWSTR zWideText, bool useAnsi) {
 **
 */
 static string winMbcsToUtf8(const char *zText, bool useAnsi) {
-
 	auto zTmpWide = winMbcsToUnicode(zText, useAnsi);
 	if (!zTmpWide) {
 		return 0;
