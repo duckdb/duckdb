@@ -52,6 +52,8 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 	}
 
 	auto files = state.file_list;
+
+	auto &regular_fs = FileSystem::GetFileSystem(context);
 	auto fs = CachingFileSystem::Get(context);
 	idx_t out_idx = 0;
 
@@ -65,6 +67,14 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		}
 		file_handle = fs.OpenFile(QueryContext(context), file, flags);
+	} else {
+		// At least verify that the file exist
+		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
+		if (FileSystem::IsRemoteFile(file.path) && !regular_fs.FileExists(file.path)) {
+			output.SetCardinality(0);
+			done = true;
+			return;
+		}
 	}
 
 	for (idx_t col_idx = 0; col_idx < state.column_ids.size(); col_idx++) {
