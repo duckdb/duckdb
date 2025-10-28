@@ -211,6 +211,7 @@ public:
 	bool ProcessDuckDBRC(const char *file);
 	bool ProcessFile(const string &file, bool is_duckdb_rc = false);
 	int ProcessInput(InputMode mode);
+	static bool SQLIsComplete(const char *zSql);
 };
 
 } // namespace duckdb_shell

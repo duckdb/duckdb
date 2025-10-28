@@ -992,7 +992,7 @@ SQLITE_API sqlite3_int64 sqlite3_last_insert_rowid(sqlite3 *db) {
 
 enum class SQLParseState { SEMICOLON, WHITESPACE, NORMAL };
 
-const char *skipDollarQuotedString(const char *zSql, const char *delimiterStart, idx_t delimiterLength) {
+static const char *skipDollarQuotedString(const char *zSql, const char *delimiterStart, idx_t delimiterLength) {
 	for (; *zSql; zSql++) {
 		if (*zSql == '$') {
 			// found a dollar
