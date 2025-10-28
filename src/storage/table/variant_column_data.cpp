@@ -113,18 +113,8 @@ idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 idx_t VariantColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
                                        idx_t target_count) {
 	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
-	auto &child_entries = StructVector::GetEntries(result);
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
-		auto &target_vector = *child_entries[i];
-		if (!state.scan_child_column[i]) {
-			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
-			continue;
-		}
-		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], target_vector, allow_updates,
-		                              target_count);
-	}
+	//! TODO: implement the 'unshredding' logic here, to output a regular VARIANT when the VARIANT is stored shredded
+	sub_columns[0]->ScanCommitted(vector_index, state.child_states[1], result, allow_updates, target_count);
 	return scan_count;
 }
 
@@ -331,18 +321,20 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	auto &scan_vector = scan_chunk.data[0];
 
 	//! append_chunk
-	auto &old_unshredded = sub_columns[0]->Cast<StructColumnData>();
 	auto &child_types = StructType::GetChildTypes(shredded_type);
-	D_ASSERT(child_types.size() == 2);
 
 	DataChunk append_chunk;
 	append_chunk.Initialize(Allocator::DefaultAllocator(), {shredded_type}, STANDARD_VECTOR_SIZE);
 	auto &append_vector = append_chunk.data[0];
 
 	//! Create the new column data for the shredded data
+	D_ASSERT(child_types.size() == 2);
+	auto &unshredded_type = child_types[0].second;
+	auto &typed_value_type = child_types[1].second;
+
 	vector<unique_ptr<ColumnData>> ret(2);
-	ret[0] = CreateColumnUnique(block_manager, info, 1, start, old_unshredded.type, this);
-	ret[1] = CreateColumnUnique(block_manager, info, 2, start, child_types[1].second, this);
+	ret[0] = CreateColumnUnique(block_manager, info, 1, start, unshredded_type, this);
+	ret[1] = CreateColumnUnique(block_manager, info, 2, start, typed_value_type, this);
 	auto &unshredded = ret[0];
 	auto &shredded = ret[1];
 
@@ -358,26 +350,27 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	InitializeScan(scan_state, true);
 	//! Scan + transform + append
 	idx_t total_count = count.load();
+
+	auto transformed_stats = VariantStats::CreateShredded(typed_value_type).ToUnique();
+	auto &unshredded_stats = VariantStats::GetUnshreddedStats(*transformed_stats);
+	auto &shredded_stats = VariantStats::GetShreddedStats(*transformed_stats);
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
-		CheckpointScan(nullptr, scan_state, row_group.start, to_scan, scan_vector);
+
+		auto scanned_count = ScanCommitted(0, scan_state, scan_vector, false, to_scan);
 
 		append_chunk.Reset();
-		VariantColumnData::ShredVariantData(scan_vector, append_vector, to_scan, child_types[1].second);
+		VariantColumnData::ShredVariantData(scan_vector, append_vector, to_scan, typed_value_type);
 
 		auto &unshredded_vector = *StructVector::GetEntries(append_vector)[0];
 		auto &shredded_vector = *StructVector::GetEntries(append_vector)[1];
-		unshredded->Append(unshredded_append_state, unshredded_vector, scan_chunk.size());
-		shredded->Append(shredded_append_state, shredded_vector, scan_chunk.size());
+
+		unshredded->Append(unshredded_stats, unshredded_append_state, unshredded_vector, to_scan);
+		shredded->Append(shredded_stats, shredded_append_state, shredded_vector, to_scan);
 	}
-	// for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-	//	auto &segment = *nodes[segment_idx].node;
-	//	ColumnScanState scan_state;
-	//	scan_state.current = &segment;
-	//	segment.InitializeScan(scan_state);
-	//}
+	stats->statistics.Copy(*transformed_stats);
 	return ret;
 }
 
@@ -450,10 +443,22 @@ PersistentColumnData VariantColumnData::Serialize() {
 
 void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);
-	auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
-	sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
+
 	if (column_data.child_columns.size() == 3) {
-		sub_columns[1]->InitializeColumn(column_data.child_columns[2], unshredded_stats);
+		//! This means the VARIANT is shredded
+		auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
+		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
+
+		auto &shredded_type = column_data.child_columns[2].logical_type;
+		if (!is_shredded) {
+			VariantStats::SetShreddedStats(target_stats, BaseStatistics::CreateEmpty(shredded_type));
+			sub_columns.push_back(ColumnData::CreateColumnUnique(block_manager, info, 2, start, shredded_type, this));
+		}
+		auto &shredded_stats = VariantStats::GetShreddedStats(target_stats);
+		sub_columns[1]->InitializeColumn(column_data.child_columns[2], shredded_stats);
+	} else {
+		auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
+		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
 	}
 	this->count = validity.count.load();
 }

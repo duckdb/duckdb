@@ -353,11 +353,6 @@ public:
 	}
 };
 
-void ListColumnData::CheckpointScan(optional_ptr<ColumnSegment> segment, ColumnScanState &state, idx_t row_group_start,
-                                    idx_t count, Vector &scan_vector) {
-	ScanCount(state, scan_vector, count, 0);
-}
-
 unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group,
                                                                         PartialBlockManager &partial_block_manager) {
 	return make_uniq<ListColumnCheckpointState>(row_group, *this, partial_block_manager);

@@ -39,6 +39,7 @@ public:
 public:
 	//! Nested type analysis
 	vector<VariantColumnStatsData> columns;
+	bool is_shredded = false;
 };
 
 struct VariantStats {
@@ -50,12 +51,19 @@ public:
 	DUCKDB_API static void Construct(BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
 	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
+	DUCKDB_API static BaseStatistics CreateShredded(const LogicalType &shredded_type);
 
 	DUCKDB_API static const BaseStatistics &GetUnshreddedStats(const BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics &GetUnshreddedStats(BaseStatistics &stats);
 
+	DUCKDB_API static const BaseStatistics &GetShreddedStats(const BaseStatistics &stats);
+	DUCKDB_API static BaseStatistics &GetShreddedStats(BaseStatistics &stats);
+
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
+
+	// DUCKDB_API static void SetShreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
+	DUCKDB_API static void SetShreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
 
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
 	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &base);
