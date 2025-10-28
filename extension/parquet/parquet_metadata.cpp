@@ -334,7 +334,7 @@ static Value ConvertParquetGeoStatsTypes(const duckdb_parquet::GeospatialStatist
 	vector<Value> types;
 	types.reserve(stats.geospatial_types.size());
 
-	GeometryTypeSet type_set;
+	GeometryTypeSet type_set = GeometryTypeSet::Empty();
 	for (auto &type : stats.geospatial_types) {
 		const auto geom_type = (type % 1000);
 		const auto vert_type = (type / 1000);
