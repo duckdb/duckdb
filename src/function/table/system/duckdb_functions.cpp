@@ -660,14 +660,14 @@ void ExtractWindowFunctionData(case_insensitive_map_t<ExpressionType>::const_ite
 	case ExpressionType::WINDOW_FILL:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_FIRST_VALUE: {
-		return_type = Value("ANY");
-		parameter_types = Value::LIST({Value("ANY")});
+		return_type = Value("T");
+		parameter_types = Value::LIST({Value("T")});
 		parameter_names = Value::LIST({Value("expr")});
 		break;
 	}
 	case ExpressionType::WINDOW_NTH_VALUE: {
-		return_type = Value("ANY");
-		parameter_types = Value::LIST({Value("ANY"), Value("BIGINT")});
+		return_type = Value("T");
+		parameter_types = Value::LIST({Value("T"), Value("BIGINT")});
 		parameter_names = Value::LIST({Value("expr"), Value("nth")});
 		break;
 	}
@@ -694,9 +694,9 @@ void ExtractWindowFunctionData(case_insensitive_map_t<ExpressionType>::const_ite
 	}
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG: {
-		return_type = Value("ANY");
-		parameter_types = Value::LIST({Value("ANY"), Value("BIGINT"), Value("ANY")});
-		parameter_names = Value::LIST({Value("expr"), Value("offset"), Value("default")});
+		return_type = Value("T");
+		parameter_types = Value::LIST({Value("T"), Value("BIGINT"), Value("T")});
+		parameter_names = Value::LIST({Value("expr["), Value("offset"), Value("default]")});
 		break;
 	default:
 		return;
