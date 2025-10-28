@@ -77,4 +77,16 @@ void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &execu
 	}
 }
 
+AsyncResultType AsyncResult::GetAsyncResultType(SourceResultType s) {
+	switch (s) {
+	case SourceResultType::HAVE_MORE_OUTPUT:
+		return AsyncResultType::HAVE_MORE_OUTPUT;
+	case SourceResultType::FINISHED:
+		return AsyncResultType::FINISHED;
+	case SourceResultType::BLOCKED:
+		return AsyncResultType::BLOCKED;
+	}
+	throw InternalException("GetAsyncResultType has an unexpected input");
+}
+
 } // namespace duckdb

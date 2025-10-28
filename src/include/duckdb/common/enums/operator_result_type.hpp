@@ -55,8 +55,6 @@ enum class AsyncResultType : uint8_t {
 
 bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out);
 
-AsyncResultType GetAsyncResultType(SourceResultType s);
-
 //! The SinkResultType is used to indicate the result of data flowing into a sink
 //! There are three possible results:
 //! NEED_MORE_INPUT means the sink needs more input

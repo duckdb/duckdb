@@ -93,18 +93,4 @@ bool ExtractSourceResultType(AsyncResultType in, SourceResultType &out) {
 	return true;
 }
 
-AsyncResultType GetAsyncResultType(SourceResultType s) {
-	switch (s) {
-	case SourceResultType::HAVE_MORE_OUTPUT:
-		return AsyncResultType::HAVE_MORE_OUTPUT;
-	case SourceResultType::FINISHED:
-		return AsyncResultType::FINISHED;
-	case SourceResultType::BLOCKED:
-		return AsyncResultType::BLOCKED;
-	}
-	D_ASSERT(false);
-	// This is an impossible path
-	return AsyncResultType::INVALID;
-}
-
 } // namespace duckdb
