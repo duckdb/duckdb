@@ -223,10 +223,13 @@ public:
 	idx_t NextSize() const {
 		return MinValue<idx_t>(Remaining(), STANDARD_VECTOR_SIZE);
 	}
-	void Seek(idx_t row_idx) {
-		chunk_idx = row_idx / STANDARD_VECTOR_SIZE;
+	void SeekBlock(idx_t block_idx) {
+		chunk_idx = block_idx;
 		base = MinValue<idx_t>(chunk_idx * STANDARD_VECTOR_SIZE, count);
 		scanned = base;
+	}
+	inline void SeekRow(idx_t row_idx) {
+		SeekBlock(row_idx / STANDARD_VECTOR_SIZE);
 	}
 	bool Scan(DataChunk &chunk) {
 		//  Free the previous blocks
@@ -708,7 +711,7 @@ void AsOfProbeBuffer::BeginLeftScan(AsOfSourceTask &task) {
 	}
 
 	lhs_scanner = make_uniq<AsOfPayloadScanner>(*left_group, *gsink.hashed_sorts[0]);
-	lhs_scanner->Seek(left_task.begin_idx);
+	lhs_scanner->SeekBlock(left_task.begin_idx);
 	left_itr = CreateIteratorState(*left_group);
 
 	// We are only probing the corresponding right side bin, which may be empty
@@ -899,7 +902,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 				rhs_match_count = 0;
 			}
 			rhs_payload.Reset();
-			rhs_scanner->Seek(match_pos);
+			rhs_scanner->SeekRow(match_pos);
 			rhs_scanner->Scan(rhs_payload);
 		}
 		// Select the individual values
@@ -1045,7 +1048,7 @@ idx_t AsOfLocalSourceState::BeginRightScan(const AsOfSourceTask &task) {
 	}
 	auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
 	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsink.hashed_sorts[1]);
-	scanner->Seek(right_task.begin_idx);
+	scanner->SeekBlock(right_task.begin_idx);
 
 	rhs_matches = asof_groups[hash_bin]->right_outer.GetMatches();
 
