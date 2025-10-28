@@ -2344,16 +2344,14 @@ struct ImportCtx {
 	const char *zFile;                  /* Name of the input file */
 	FILE *in;                           /* Read the CSV text from this input stream */
 	int(SQLITE_CDECL *xCloser)(FILE *); /* Func to close in */
-	char *z;                            /* Accumulated text for a field */
-	int n;                              /* Number of bytes in z */
-	int nAlloc;                         /* Space allocated for z[] */
-	int nLine;                          /* Current line number */
-	int nRow;                           /* Number of rows imported */
-	int nErr;                           /* Number of errors encountered */
-	int bNotFirst;                      /* True if one or more bytes already read */
-	int cTerm;                          /* Character that terminated the most recent field */
-	int cColSep;                        /* The column separator character.  (Usually ",") */
-	int cRowSep;                        /* The row separator character.  (Usually "\n") */
+	string z;
+	int nLine;     /* Current line number */
+	int nRow;      /* Number of rows imported */
+	int nErr;      /* Number of errors encountered */
+	int bNotFirst; /* True if one or more bytes already read */
+	int cTerm;     /* Character that terminated the most recent field */
+	int cColSep;   /* The column separator character.  (Usually ",") */
+	int cRowSep;   /* The row separator character.  (Usually "\n") */
 
 	void AddError() {
 		nErr++;
@@ -2366,19 +2364,12 @@ static void import_cleanup(ImportCtx *p) {
 		p->xCloser(p->in);
 		p->in = 0;
 	}
-	sqlite3_free(p->z);
-	p->z = 0;
+	p->z = string();
 }
 
 /* Append a single byte to z[] */
 static void import_append_char(ImportCtx *p, int c) {
-	if (p->n + 1 >= p->nAlloc) {
-		p->nAlloc += p->nAlloc + 100;
-		p->z = (char *)sqlite3_realloc64(p->z, p->nAlloc);
-		if (p->z == 0)
-			shell_out_of_memory();
-	}
-	p->z[p->n++] = (char)c;
+	p->z += char(c);
 }
 
 /* Read a single field of CSV text.  Compatible with rfc4180 and extended
@@ -2394,11 +2385,11 @@ static void import_append_char(ImportCtx *p, int c) {
 **      EOF on end-of-file.
 **   +  Report syntax errors on stderr
 */
-static char *SQLITE_CDECL csv_read_one_field(ImportCtx *p) {
+static const char *csv_read_one_field(ImportCtx *p) {
 	int c;
 	int cSep = p->cColSep;
 	int rSep = p->cRowSep;
-	p->n = 0;
+	p->z.clear();
 	c = fgetc(p->in);
 	if (c == EOF || seenInterrupt) {
 		p->cTerm = EOF;
@@ -2422,8 +2413,8 @@ static char *SQLITE_CDECL csv_read_one_field(ImportCtx *p) {
 			if ((c == cSep && pc == cQuote) || (c == rSep && pc == cQuote) ||
 			    (c == rSep && pc == '\r' && ppc == cQuote) || (c == EOF && pc == cQuote)) {
 				do {
-					p->n--;
-				} while (p->z[p->n] != cQuote);
+					p->z.pop_back();
+				} while (!p->z.empty() && p->z.back() != cQuote);
 				p->cTerm = c;
 				break;
 			}
@@ -2450,7 +2441,7 @@ static char *SQLITE_CDECL csv_read_one_field(ImportCtx *p) {
 				c = fgetc(p->in);
 				if ((c & 0xff) == 0xbf) {
 					p->bNotFirst = 1;
-					p->n = 0;
+					p->z.clear();
 					return csv_read_one_field(p);
 				}
 			}
@@ -2461,15 +2452,13 @@ static char *SQLITE_CDECL csv_read_one_field(ImportCtx *p) {
 		}
 		if (c == rSep) {
 			p->nLine++;
-			if (p->n > 0 && p->z[p->n - 1] == '\r')
-				p->n--;
+			if (!p->z.empty() && p->z.back() == '\r')
+				p->z.pop_back();
 		}
 		p->cTerm = c;
 	}
-	if (p->z)
-		p->z[p->n] = 0;
 	p->bNotFirst = 1;
-	return p->z;
+	return p->z.c_str();
 }
 
 /* Read a single field of ASCII delimited text.
@@ -2484,11 +2473,11 @@ static char *SQLITE_CDECL csv_read_one_field(ImportCtx *p) {
 **      EOF on end-of-file.
 **   +  Report syntax errors on stderr
 */
-static char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p) {
+static const char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p) {
 	int c;
 	int cSep = p->cColSep;
 	int rSep = p->cRowSep;
-	p->n = 0;
+	p->z.clear();
 	c = fgetc(p->in);
 	if (c == EOF || seenInterrupt) {
 		p->cTerm = EOF;
@@ -2502,9 +2491,7 @@ static char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p) {
 		p->nLine++;
 	}
 	p->cTerm = c;
-	if (p->z)
-		p->z[p->n] = 0;
-	return p->z;
+	return p->z.c_str();
 }
 
 /*
@@ -3029,13 +3016,13 @@ bool ShellState::ImportData(const vector<string> &args) {
 		utf8_printf(stderr, ".import cannot be used in -safe mode\n");
 		return false;
 	}
-	const char *zTable = nullptr;              /* Insert data into this table */
-	const char *zFile = nullptr;               /* Name of file to extra content from */
-	ImportCtx sCtx;                            /* Reader context */
-	char *(SQLITE_CDECL * xRead)(ImportCtx *); /* Func to read one value */
-	int eVerbose = 0;                          /* Larger for more console output */
-	int nSkip = 0;                             /* Initial lines to skip */
-	int useOutputMode = 1;                     /* Use output mode to determine separators */
+	const char *zTable = nullptr;                    /* Insert data into this table */
+	const char *zFile = nullptr;                     /* Name of file to extra content from */
+	ImportCtx sCtx;                                  /* Reader context */
+	const char *(SQLITE_CDECL * xRead)(ImportCtx *); /* Func to read one value */
+	int eVerbose = 0;                                /* Larger for more console output */
+	int nSkip = 0;                                   /* Initial lines to skip */
+	int useOutputMode = 1;                           /* Use output mode to determine separators */
 
 	memset(&sCtx, 0, sizeof(sCtx));
 	if (mode == RenderMode::ASCII) {
@@ -3218,12 +3205,12 @@ bool ShellState::ImportData(const vector<string> &args) {
 		int startLine = sCtx.nLine;
 		int i;
 		for (i = 0; i < nCol; i++) {
-			char *z = xRead(&sCtx);
+			const char *z = xRead(&sCtx);
 			/*
 			** Did we reach end-of-file before finding any columns?
 			** If so, stop instead of NULL filling the remaining columns.
 			*/
-			if (z == 0 && i == 0) {
+			if (z == nullptr && i == 0) {
 				break;
 			}
 			/*
@@ -3231,7 +3218,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 			** columns in ASCII mode?  If so, stop instead of NULL filling
 			** the remaining columns.
 			*/
-			if (mode == RenderMode::ASCII && (z == 0 || z[0] == 0) && i == 0) {
+			if (mode == RenderMode::ASCII && (z == nullptr || z[0] == 0) && i == 0) {
 				break;
 			}
 			if (!duckdb::Value::StringIsValid(z, strlen(z))) {
