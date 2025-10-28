@@ -99,6 +99,10 @@ unique_ptr<QueryResult> Connection::SendQuery(const string &query) {
 	return context->Query(query, true);
 }
 
+unique_ptr<QueryResult> Connection::SendQuery(unique_ptr<SQLStatement> statement) {
+	return context->Query(std::move(statement), true);
+}
+
 unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	auto result = context->Query(query, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);

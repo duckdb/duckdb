@@ -1601,18 +1601,27 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
-	auto res = con.Query(std::move(statement));
+	unique_ptr<duckdb::QueryResult> res;
+	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX) {
+		// for row-wise rendering we can use streaming results
+		res = con.SendQuery(std::move(statement));
+	} else {
+		res = con.Query(std::move(statement));
+	}
 	if (res->HasError()) {
 		PrintDatabaseError(res->GetError());
 		return SuccessState::FAILURE;
 	}
-	auto properties = res->properties;
-	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS && res->RowCount() > 0) {
-		// update total changes
-		auto row_changes = res->Collection().GetRows().GetValue(0, 0);
-		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
-			last_changes = row_changes.GetValue<int64_t>();
-			total_changes += last_changes;
+	auto &properties = res->properties;
+	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
+		auto result_chunk = res->Fetch();
+		if (result_chunk && result_chunk->size() == 1) {
+			// update total changes
+			auto row_changes = result_chunk->GetValue(0, 0);
+			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
+				last_changes = row_changes.GetValue<int64_t>();
+				total_changes += last_changes;
+			}
 		}
 	}
 	if (properties.return_type != duckdb::StatementReturnType::QUERY_RESULT) {
