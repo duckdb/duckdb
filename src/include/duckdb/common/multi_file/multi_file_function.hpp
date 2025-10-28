@@ -101,6 +101,11 @@ public:
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
+			// TODO: find earliest place to do this check
+			if (result->file_options.union_by_name) {
+				// union_by_name requires reading all files eagerly
+				result->file_options.hive_lazy_listing = false;
+			}
 			result->multi_file_reader->BindOptions(result->file_options, *result->file_list, result->types,
 			                                       result->names, result->reader_bind);
 			bound_on_first_file = false;
@@ -729,8 +734,12 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
-		for (const auto &file : bind_data.file_list->Files()) {
-			file_path.emplace_back(file.path);
+		if (bind_data.file_options.hive_lazy_listing) {
+			file_path.emplace_back(bind_data.file_list->PeekFirstFile().path);
+		} else {
+			for (const auto &file : bind_data.file_list->Files()) {
+				file_path.emplace_back(file.path);
+			}
 		}
 
 		// LCOV_EXCL_START

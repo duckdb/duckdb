@@ -50,7 +50,8 @@ public:
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-
+	vector<OpenFileInfo> Glob(const string &path, const FileGlobInput &glob_input,
+	                          optional_ptr<FileOpener> opener) override;
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 
 	void UnregisterSubSystem(const string &name) override;

@@ -22,11 +22,30 @@
 #include "duckdb/common/open_file_info.hpp"
 #include <functional>
 
+#undef max
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
 
 namespace duckdb {
+
+// Forward declarations
+class Expression;
+struct MultiFileOptions;
+struct MultiFilePushdownInfo;
+
+//! Wrapper struct for hive filtering parameters passed to Glob
+struct HiveFilterParams {
+	ClientContext &context;
+	vector<unique_ptr<Expression>> &filters;
+	const MultiFileOptions &options;
+	MultiFilePushdownInfo &info;
+
+	HiveFilterParams(ClientContext &context, vector<unique_ptr<Expression>> &filters, const MultiFileOptions &options,
+	                 MultiFilePushdownInfo &info)
+	    : context(context), filters(filters), options(options), info(info) {
+	}
+};
 
 class AttachedDatabase;
 class DatabaseInstance;
@@ -233,8 +252,9 @@ public:
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
-	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
-	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
+	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, const FileGlobInput &glob_input,
+	                                             optional_ptr<FileOpener> opener);
+	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context, const FileGlobInput &input);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
@@ -294,6 +314,9 @@ protected:
 	                                          const std::function<void(OpenFileInfo &info)> &callback,
 	                                          optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsListFilesExtended() const;
+	DUCKDB_API virtual vector<OpenFileInfo> GlobExtended(const string &path, const FileGlobInput &glob_input,
+	                                                     optional_ptr<FileOpener> opener = nullptr);
+	DUCKDB_API virtual bool SupportsGlobExtended() const;
 
 public:
 	template <class TARGET>

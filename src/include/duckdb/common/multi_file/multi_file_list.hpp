@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/common/open_file_info.hpp"
 
@@ -85,7 +86,11 @@ public:
 	bool Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file);
 
 	//! Returns the first file or an empty string if GetTotalFileCount() == 0
-	OpenFileInfo GetFirstFile();
+	virtual OpenFileInfo GetFirstFile();
+	//! Get the i-th sampled file used for metadata in binding
+	virtual vector<OpenFileInfo> PeekFiles(idx_t count);
+	//! Returns an initial file used for metadata sampling, may differ from first file in expanded file list
+	virtual OpenFileInfo PeekFirstFile();
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
 	bool IsEmpty();
 
@@ -114,7 +119,7 @@ protected:
 protected:
 	//! The unexpanded input paths
 	const vector<OpenFileInfo> paths;
-	//! Whether paths can expand to 0 files
+	//! File globbing parameters and state
 	const FileGlobInput glob_input;
 
 public:
@@ -169,6 +174,7 @@ public:
 	                                                TableFilterSet &filters) const override;
 
 	//! Main MultiFileList API
+	vector<OpenFileInfo> PeekFiles(idx_t count) override;
 	vector<OpenFileInfo> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
@@ -176,22 +182,30 @@ public:
 protected:
 	//! Main MultiFileList API
 	OpenFileInfo GetFile(idx_t i) override;
+	OpenFileInfo PeekFirstFile() override;
 
 	//! Get the i-th expanded file
-	OpenFileInfo GetFileInternal(idx_t i);
+	OpenFileInfo GetFileInternal(idx_t i, bool peek);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandNextPath();
+	bool ExpandNextPath(const FileGlobInput &file_glob_input, bool peek = false);
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result) const;
+	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
+	                        const FileGlobInput &file_glob_input) const;
 	//! Whether all files have been expanded
 	bool IsFullyExpanded() const;
+	//! Clear the first expanded files
+	void ClearPeekInternal();
 
 	//! The ClientContext for globbing
 	ClientContext &context;
 	//! The current path to expand
 	idx_t current_path;
+	//! The current path to expand for the first files
+	idx_t peeked_current_path;
 	//! The expanded files
 	vector<OpenFileInfo> expanded_files;
+	//! The first expanded files used during binding
+	vector<OpenFileInfo> peeked_files;
 
 	mutable mutex lock;
 };
