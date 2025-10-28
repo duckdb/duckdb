@@ -791,12 +791,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStepSliceBound(PEGT
 	return make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 }
 
-unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformTableReservedColumnName(PEGTransformer &transformer,
-                                                                            optional_ptr<ParseResult> parse_result) {
+unique_ptr<ColumnRefExpression>
+PEGTransformerFactory::TransformTableReservedColumnName(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto table = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto column = list_pr.Child<IdentifierParseResult>(1).identifier;
-	return make_uniq<ColumnRefExpression>(column, table);;
+	return make_uniq<ColumnRefExpression>(column, table);
+	;
 }
 
 string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transformer,
@@ -805,7 +807,8 @@ string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transf
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 
 	auto result = make_uniq<StarExpression>();
@@ -816,7 +819,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	transformer.TransformOptional<qualified_column_set_t>(list_pr, 2, result->exclude_list);
 	auto replace_list_opt = list_pr.Child<OptionalParseResult>(3);
 	if (replace_list_opt.HasResult()) {
-		result->replace_list = transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(replace_list_opt.optional_result);
+		result->replace_list = transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(
+		    replace_list_opt.optional_result);
 	}
 	auto rename_list_opt = list_pr.Child<OptionalParseResult>(4);
 	if (rename_list_opt.HasResult()) {

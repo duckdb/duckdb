@@ -1,7 +1,7 @@
 #pragma once
 
 namespace duckdb {
-struct TableAlias{
+struct TableAlias {
 	string name;
 	vector<string> column_name_alias;
 };

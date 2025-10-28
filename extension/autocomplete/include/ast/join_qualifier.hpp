@@ -7,5 +7,4 @@ struct JoinQualifier {
 	vector<string> using_columns;
 };
 
-
 } // namespace duckdb
