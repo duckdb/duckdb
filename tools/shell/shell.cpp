@@ -1141,7 +1141,8 @@ static void interrupt_handler(int NotUsed) {
 		exit(1);
 	}
 	if (globalDb) {
-		sqlite3_interrupt(globalDb);
+		auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(globalDb));
+		con.Interrupt();
 	}
 }
 
