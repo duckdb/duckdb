@@ -80,7 +80,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include "duckdb_shell_wrapper.h"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -90,7 +89,6 @@
 #include "autocomplete_extension.hpp"
 #endif
 #include "shell_extension.hpp"
-#include "sqlite3.h"
 #include <ctype.h>
 
 #if !defined(_WIN32) && !defined(WIN32)
@@ -256,7 +254,7 @@ struct rusage {
 
 /* Saved resource information for the beginning of an operation */
 static struct rusage sBegin; /* CPU time at start */
-static int64_t iBegin; /* Wall-clock time at start */
+static int64_t iBegin;       /* Wall-clock time at start */
 
 /*
 ** Begin timing an operation
@@ -486,7 +484,7 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 		} else {
 			// fallback to writing old style windows unicode
 			auto z2 = ShellState::Win32Utf8ToMbcs(z1, false);
-			fputs((const char *) z2.get(), out);
+			fputs((const char *)z2.get(), out);
 		}
 	} else {
 		vfprintf(out, zFormat, ap);
@@ -513,10 +511,10 @@ static void shell_out_of_memory(void) {
 
 ShellState::ShellState() {
 	config.error_manager->AddCustomError(
-		duckdb::ErrorType::UNSIGNED_EXTENSION,
-		"Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
-		"extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
-		"(e.g. duckdb -unsigned).");
+	    duckdb::ErrorType::UNSIGNED_EXTENSION,
+	    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
+	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
+	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
 }
 
@@ -581,46 +579,6 @@ bool ShellState::IsSpace(char c) {
 
 bool ShellState::IsDigit(char c) {
 	return isdigit(c);
-}
-
-/*
-** Determines if a string is a number of not.
-*/
-bool ShellState::IsNumber(const char *z, int *realnum) {
-	if (*z == '-' || *z == '+')
-		z++;
-	if (!IsDigit(*z)) {
-		return false;
-	}
-	z++;
-	if (realnum)
-		*realnum = 0;
-	while (IsDigit(*z)) {
-		z++;
-	}
-	if (*z == '.') {
-		z++;
-		if (!IsDigit(*z))
-			return false;
-		while (IsDigit(*z)) {
-			z++;
-		}
-		if (realnum)
-			*realnum = 1;
-	}
-	if (*z == 'e' || *z == 'E') {
-		z++;
-		if (*z == '+' || *z == '-')
-			z++;
-		if (!IsDigit(*z))
-			return false;
-		while (IsDigit(*z)) {
-			z++;
-		}
-		if (realnum)
-			*realnum = 1;
-	}
-	return *z == 0;
 }
 
 /*
@@ -738,14 +696,14 @@ static char *local_getline(char *zLine, FILE *in) {
 	** multi-byte characterset characters into UTF-8. */
 	if (is_stdin && !is_utf8) {
 		auto zTrans = ShellState::Win32MbcsToUtf8(zLine, 0);
-        idx_t nTrans = zTrans.size() + 1;
-        if (nTrans > nLine) {
-            zLine = (char *)realloc(zLine, nTrans);
-            if (zLine == 0) {
-                shell_out_of_memory();
-            }
-        }
-        memcpy(zLine, zTrans.data(), nTrans);
+		idx_t nTrans = zTrans.size() + 1;
+		if (nTrans > nLine) {
+			zLine = (char *)realloc(zLine, nTrans);
+			if (zLine == 0) {
+				shell_out_of_memory();
+			}
+		}
+		memcpy(zLine, zTrans.data(), nTrans);
 	}
 #endif /* defined(_WIN32) || defined(WIN32) */
 	return zLine;
@@ -1183,12 +1141,12 @@ void ShellState::PrintRowSeparator(idx_t nArg, const char *zSep, const vector<id
 	fputs("\n", out);
 }
 
-void ShellState::PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
+void ShellState::PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<duckdb::LogicalType> &colTypes,
                                         const vector<idx_t> &actualWidth) {
 	if (nArg > 0) {
 		for (idx_t i = 0; i < nArg; i++) {
 			Print(zSep);
-			if (colTypes[i] == SQLITE_INTEGER || colTypes[i] == SQLITE_FLOAT) {
+			if (colTypes[i].IsNumeric()) {
 				// right-align numerics in tables
 				PrintDashes(actualWidth[i] + 1);
 				Print(":");
@@ -1376,49 +1334,6 @@ string GetTypeName(duckdb::LogicalType &type) {
 	}
 }
 
-int GetLegacySQLiteType(const duckdb::LogicalType &column_type) {
-	if (column_type.IsJSONType()) {
-		return 0; // Does not need to be surrounded in quotes like VARCHAR
-	}
-	if (column_type.HasAlias()) {
-		// Use the text representation for aliased types
-		return SQLITE_TEXT;
-	}
-	switch (column_type.id()) {
-	case duckdb::LogicalTypeId::BOOLEAN:
-	case duckdb::LogicalTypeId::TINYINT:
-	case duckdb::LogicalTypeId::SMALLINT:
-	case duckdb::LogicalTypeId::INTEGER:
-	case duckdb::LogicalTypeId::BIGINT: /* TODO: Maybe blob? */
-	case duckdb::LogicalTypeId::USMALLINT:
-	case duckdb::LogicalTypeId::UINTEGER:
-	case duckdb::LogicalTypeId::UBIGINT:
-	case duckdb::LogicalTypeId::UHUGEINT:
-	case duckdb::LogicalTypeId::HUGEINT:
-	case duckdb::LogicalTypeId::BIGNUM:
-		return SQLITE_INTEGER;
-	case duckdb::LogicalTypeId::FLOAT:
-	case duckdb::LogicalTypeId::DOUBLE:
-	case duckdb::LogicalTypeId::DECIMAL:
-		return SQLITE_FLOAT;
-	case duckdb::LogicalTypeId::DATE:
-	case duckdb::LogicalTypeId::TIME:
-	case duckdb::LogicalTypeId::TIMESTAMP:
-	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
-	case duckdb::LogicalTypeId::TIMESTAMP_MS:
-	case duckdb::LogicalTypeId::TIMESTAMP_NS:
-	case duckdb::LogicalTypeId::VARCHAR:
-	case duckdb::LogicalTypeId::LIST:
-	case duckdb::LogicalTypeId::STRUCT:
-	case duckdb::LogicalTypeId::MAP:
-		return SQLITE_TEXT;
-	case duckdb::LogicalTypeId::BLOB:
-		return SQLITE_BLOB;
-	default:
-		return SQLITE_TEXT;
-	}
-}
-
 SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &query_result) {
 	RowResult result;
 	// initialize the result and the column names
@@ -1426,18 +1341,22 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 	result.column_names.reserve(nCol);
 	result.data.reserve(nCol);
 	result.types.reserve(nCol);
+	result.is_null.resize(nCol, false);
 	for (idx_t c = 0; c < nCol; c++) {
 		result.column_names.push_back(query_result.names[c]);
-		result.types.push_back(GetLegacySQLiteType(query_result.types[c]));
+		result.types.push_back(query_result.types[c]);
 	}
 	for (auto &row : query_result) {
 		if (seenInterrupt) {
 			utf8_printf(out, "Interrupt\n");
 			return SuccessState::FAILURE;
 		}
+		result.is_null.clear();
+		result.is_null.resize(nCol, false);
 		result.data.clear();
 		for (idx_t c = 0; c < nCol; c++) {
 			if (row.IsNull(c)) {
+				result.is_null[c] = true;
 				result.data.push_back(renderer.NullValue());
 			} else {
 				result.data.push_back(row.GetValue<string>(c));
@@ -1455,7 +1374,7 @@ void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult 
 	result.data.reserve(result.column_count * 4);
 	for (idx_t c = 0; c < result.column_count; c++) {
 		result.data.push_back(strdup_handle_newline(res.names[c].c_str()));
-		result.types.push_back(GetLegacySQLiteType(res.types[c]));
+		result.types.push_back(res.types[c]);
 		result.type_names.push_back(GetTypeName(res.types[c]));
 	}
 
@@ -2046,7 +1965,7 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		try {
 			db = make_uniq<duckdb::DuckDB>(zDbFilename.c_str(), &config);
 			conn = make_uniq<duckdb::Connection>(*db);
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			duckdb::ErrorData error(ex);
 			PrintDatabaseError(error.Message());
 			if (flags == ShellOpenFlags::KEEP_ALIVE_ON_FAILURE) {
@@ -2057,7 +1976,7 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 			}
 		}
 #ifdef SHELL_INLINE_AUTOCOMPLETE
-		db->LoadStaticExtension<AutocompleteExtension>();
+		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
 		if (safe_mode) {
@@ -2273,9 +2192,9 @@ static FILE *output_file_open(const char *zFile, int bTextMode) {
 */
 typedef struct ImportCtx ImportCtx;
 struct ImportCtx {
-	const char *zFile;                  /* Name of the input file */
-	FILE *in;                           /* Read the CSV text from this input stream */
-	int(SQLITE_CDECL *xCloser)(FILE *); /* Func to close in */
+	const char *zFile;      /* Name of the input file */
+	FILE *in;               /* Read the CSV text from this input stream */
+	int (*xCloser)(FILE *); /* Func to close in */
 	string z;
 	int nLine;     /* Current line number */
 	int nRow;      /* Number of rows imported */
@@ -2405,7 +2324,7 @@ static const char *csv_read_one_field(ImportCtx *p) {
 **      EOF on end-of-file.
 **   +  Report syntax errors on stderr
 */
-static const char *SQLITE_CDECL ascii_read_one_field(ImportCtx *p) {
+static const char *ascii_read_one_field(ImportCtx *p) {
 	int c;
 	int cSep = p->cColSep;
 	int rSep = p->cRowSep;
@@ -2501,7 +2420,7 @@ int shellDeleteFile(const char *zFilename) {
 	int rc;
 #ifdef _WIN32
 	auto z = ShellState::Win32Utf8ToUnicode(zFilename);
-	rc = _wunlink((wchar_t *) z.get());
+	rc = _wunlink((wchar_t *)z.get());
 #else
 	rc = unlink(zFilename);
 #endif
@@ -2591,8 +2510,8 @@ MetadataResult ChangeDirectory(ShellState &state, const vector<string> &args) {
 	}
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
-    auto z = ShellState::Win32Utf8ToUnicode(args[1].c_str());
-	rc = !SetCurrentDirectoryW((wchar_t *) z.get());
+	auto z = ShellState::Win32Utf8ToUnicode(args[1].c_str());
+	rc = !SetCurrentDirectoryW((wchar_t *)z.get());
 #else
 	rc = chdir(args[1].c_str());
 #endif
@@ -2935,13 +2854,13 @@ bool ShellState::ImportData(const vector<string> &args) {
 		utf8_printf(stderr, ".import cannot be used in -safe mode\n");
 		return false;
 	}
-	const char *zTable = nullptr;                    /* Insert data into this table */
-	const char *zFile = nullptr;                     /* Name of file to extra content from */
-	ImportCtx sCtx;                                  /* Reader context */
-	const char *(SQLITE_CDECL * xRead)(ImportCtx *); /* Func to read one value */
-	int eVerbose = 0;                                /* Larger for more console output */
-	int nSkip = 0;                                   /* Initial lines to skip */
-	int useOutputMode = 1;                           /* Use output mode to determine separators */
+	const char *zTable = nullptr;      /* Insert data into this table */
+	const char *zFile = nullptr;       /* Name of file to extra content from */
+	ImportCtx sCtx;                    /* Reader context */
+	const char *(*xRead)(ImportCtx *); /* Func to read one value */
+	int eVerbose = 0;                  /* Larger for more console output */
+	int nSkip = 0;                     /* Initial lines to skip */
+	int useOutputMode = 1;             /* Use output mode to determine separators */
 
 	memset(&sCtx, 0, sizeof(sCtx));
 	if (mode == RenderMode::ASCII) {
@@ -4559,9 +4478,9 @@ static char *cmdline_option_value(int argc, char **argv, int i) {
 #endif
 
 #if SQLITE_SHELL_IS_UTF8
-int SQLITE_CDECL main(int argc, char **argv) {
+int main(int argc, char **argv) {
 #else
-int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
+int wmain(int argc, wchar_t **wargv) {
 	char **argv;
 #endif
 	ShellState data;
@@ -4603,7 +4522,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		argv[i] = (char *)malloc(z.size() + 1);
 		if (argv[i] == 0) {
 			shell_out_of_memory();
-        }
+		}
 		memcpy(argv[i], z.c_str(), z.size() + 1);
 		argvToFree[i] = argv[i];
 	}
@@ -4672,7 +4591,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				    "%s: Error: unknown argument (%s) for '-storage-version', only 'latest' is supported currently\n",
 				    program_name, storage_version.c_str());
 			} else {
-				data.config.options.serialization_compatibility = duckdb::SerializationCompatibility::FromString("latest");
+				data.config.options.serialization_compatibility =
+				    duckdb::SerializationCompatibility::FromString("latest");
 			}
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;

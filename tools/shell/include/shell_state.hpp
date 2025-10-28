@@ -21,8 +21,8 @@
 enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
-using duckdb::unique_ptr;
 using duckdb::make_uniq;
+using duckdb::unique_ptr;
 using std::string;
 using std::vector;
 struct ColumnarResult;
@@ -72,10 +72,7 @@ enum class ShellFlags : uint32_t {
 	SHFLG_HeaderSet = 0x00000080     /* .header has been used */
 };
 
-enum class ShellOpenFlags {
-	EXIT_ON_FAILURE,
-	KEEP_ALIVE_ON_FAILURE
-};
+enum class ShellOpenFlags { EXIT_ON_FAILURE, KEEP_ALIVE_ON_FAILURE };
 enum class SuccessState { SUCCESS, FAILURE };
 
 /*
@@ -133,7 +130,7 @@ public:
 	void PopOutputMode();
 	void OutputCSV(const char *z, int bSep);
 	void PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth);
-	void PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
+	void PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<duckdb::LogicalType> &colTypes,
 	                            const vector<idx_t> &actualWidth);
 	void OutputCString(const char *z);
 	void OutputQuotedString(const char *z);
@@ -142,7 +139,6 @@ public:
 	void PrintSchemaLine(const char *z, const char *zTail);
 	void PrintSchemaLineN(char *z, int n, const char *zTail);
 	void PrintOptionallyQuotedIdentifier(const char *z);
-	bool IsNumber(const char *z, int *realnum);
 	void OutputJSONString(const char *z, int n);
 	void PrintDashes(idx_t N);
 	void UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool right_align);
@@ -219,12 +215,11 @@ public:
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 	static void Sleep(idx_t ms);
 #if defined(_WIN32) || defined(WIN32)
-    static unique_ptr<uint8_t[]> Win32Utf8ToUnicode(const char *zText);
-    static string Win32UnicodeToUtf8(void * zWideText);
-    static string Win32MbcsToUtf8(const char *zText, bool useAnsi);
-    static unique_ptr<uint8_t[]> Win32Utf8ToMbcs(const char *zText, bool useAnsi);
+	static unique_ptr<uint8_t[]> Win32Utf8ToUnicode(const char *zText);
+	static string Win32UnicodeToUtf8(void *zWideText);
+	static string Win32MbcsToUtf8(const char *zText, bool useAnsi);
+	static unique_ptr<uint8_t[]> Win32Utf8ToMbcs(const char *zText, bool useAnsi);
 #endif
-
 
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE

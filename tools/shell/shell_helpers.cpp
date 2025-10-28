@@ -292,6 +292,4 @@ bool ShellState::StringLike(const char *zPattern, const char *zStr, unsigned int
 	return patternCompare((uint8_t *)zPattern, (uint8_t *)zStr, &likeInfoNorm, esc);
 }
 
-
-
 } // namespace duckdb_shell

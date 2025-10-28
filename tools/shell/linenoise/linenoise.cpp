@@ -11,9 +11,7 @@
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
 #include <vector>
-#include "duckdb_shell_wrapper.h"
 #include <string>
-#include "sqlite3.h"
 #include "duckdb/common/string_util.hpp"
 #include "shell_state.hpp"
 #ifdef __MVS__

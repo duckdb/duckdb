@@ -30,7 +30,7 @@ public:
 struct ColumnarResult {
 	idx_t column_count = 0;
 	vector<string> data;
-	vector<int> types;
+	vector<duckdb::LogicalType> types;
 	vector<idx_t> column_width;
 	vector<bool> right_align;
 	vector<string> type_names;
@@ -39,7 +39,8 @@ struct ColumnarResult {
 struct RowResult {
 	vector<string> column_names;
 	vector<string> data;
-	vector<int> types;
+	vector<duckdb::LogicalType> types;
+	vector<bool> is_null;
 };
 
 class ColumnRenderer : public ShellRenderer {

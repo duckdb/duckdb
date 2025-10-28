@@ -72,9 +72,9 @@ public:
 		return &x;
 	}
 
-    ArenaAllocator &GetAllocator() const {
-        return arena_allocator.get();
-    }
+	ArenaAllocator &GetAllocator() const {
+		return arena_allocator.get();
+	}
 
 public:
 	bool operator==(const arena_stl_allocator &other) const noexcept {
