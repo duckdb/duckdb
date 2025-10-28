@@ -95,8 +95,8 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 }
 
 void Iterator::FindMinimum(const Node &node) {
-	Node current_node = node;
-	reference<Node> ref(current_node);
+	Node node_copy = node;
+	reference<Node> ref(node_copy);
 
 	while (ref.get().HasMetadata()) {
 		// Found the minimum.
@@ -145,12 +145,12 @@ void Iterator::FindMinimum(const Node &node) {
 		ref = *next;
 	}
 	// Should always have a node with metadata.
-	throw InternalException("Iterator::FindMinimum: Reached node without metadata");
+	throw InternalException("ART Iterator::FindMinimum: Reached node without metadata");
 }
 
 bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal) {
-	Node current_node = node;
-	reference<Node> ref(current_node);
+	Node node_copy = node;
+	reference<Node> ref(node_copy);
 	idx_t depth = 0;
 
 	while (ref.get().HasMetadata()) {
@@ -225,7 +225,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 		ref = *prefix.ptr;
 	}
 	// Should always have a node with metadata.
-	throw InternalException("Iterator::LowerBound: Reached node without metadata");
+	throw InternalException("ART Iterator::LowerBound: Reached node without metadata");
 }
 
 bool Iterator::Next() {
