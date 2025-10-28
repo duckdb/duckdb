@@ -2152,8 +2152,6 @@ void close_db(sqlite3 *db) {
 static int linenoise_open_flags = 0;
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	idx_t nLine = ShellState::StringLength(zLine);
-	int copiedSuggestion = 0;
-	sqlite3_stmt *pStmt = 0;
 	char zBuf[1000];
 
 	if (nLine > sizeof(zBuf) - 30) {
@@ -2192,26 +2190,29 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	//  if( i==nLine-1 ) return;
 	auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
 	sqlite3 *localDb = NULL;
+	sqlite3 *db;
 	if (!globalDb) {
 		sqlite3_open_v2(":memory:", &localDb, linenoise_open_flags, 0);
-		sqlite3_prepare_v2(localDb, zSql.c_str(), -1, &pStmt, 0);
+		db = localDb;
 	} else {
-		sqlite3_prepare_v2(globalDb, zSql.c_str(), -1, &pStmt, 0);
+		db = globalDb;
 	}
-	while (sqlite3_step(pStmt) == SQLITE_ROW) {
-		const char *zCompletion = (const char *)sqlite3_column_text(pStmt, 0);
-		int nCompletion = sqlite3_column_bytes(pStmt, 0);
-		int iStart = sqlite3_column_int(pStmt, 1);
-		if (iStart + nCompletion < int(sizeof(zBuf) - 1)) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	bool copiedSuggestion = false;
+	auto result = con.Query(zSql);
+	for (auto &row : *result) {
+		auto zCompletion = row.GetValue<string>(0);
+		auto nCompletion = zCompletion.size();
+		idx_t iStart = row.GetValue<idx_t>(1);
+		if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
 			if (!copiedSuggestion) {
 				memcpy(zBuf, zLine, iStart);
-				copiedSuggestion = 1;
+				copiedSuggestion = true;
 			}
-			memcpy(zBuf + iStart, zCompletion, nCompletion + 1);
+			memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
 			linenoiseAddCompletion(lc, zBuf);
 		}
 	}
-	sqlite3_finalize(pStmt);
 	if (localDb) {
 		sqlite3_close(localDb);
 	}
