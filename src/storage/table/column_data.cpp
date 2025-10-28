@@ -181,9 +181,10 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 }
 
 void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
+	D_ASSERT(state.current);
+
 	state.previous_states.clear();
 	if (!state.initialized) {
-		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
 		state.internal_index = state.current->start;
 		state.initialized = true;

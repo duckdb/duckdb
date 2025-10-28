@@ -75,6 +75,7 @@ public:
 
 private:
 	void ShredVariantData(Vector &input, Vector &output, idx_t count, const LogicalType &shredded_type);
+	void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 	vector<unique_ptr<ColumnData>> WriteShreddedData(RowGroup &row_group, const LogicalType &shredded_type);
 	idx_t SubColumnsSize() const;
 	void ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded);

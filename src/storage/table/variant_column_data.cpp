@@ -106,11 +106,23 @@ void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
-	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
 	if (is_shredded) {
+		child_list_t<LogicalType> child_types;
+		child_types.emplace_back("unshredded", sub_columns[0]->type);
+		child_types.emplace_back("shredded", sub_columns[1]->type);
+		auto intermediate_type = LogicalType::STRUCT(child_types);
+		Vector intermediate(intermediate_type, target_count);
+
+		auto &child_vectors = StructVector::GetEntries(intermediate);
+		sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], *child_vectors[0], target_count);
+		sub_columns[1]->Scan(transaction, vector_index, state.child_states[2], *child_vectors[1], target_count);
+		auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], intermediate, target_count);
+
+		VariantColumnData::UnshredVariantData(intermediate, result, target_count);
 		throw NotImplementedException("Can't scan shredded VARIANT column");
 	}
 	//! TODO: implement the 'unshredding' logic here, to output a regular VARIANT when the VARIANT is stored shredded
+	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
 	sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], result, target_count);
 	return scan_count;
 }
