@@ -182,6 +182,18 @@ private:
 	idx_t always_true_filters = 0;
 };
 
+enum class OrderByStatistics { MIN, MAX };
+enum class RowGroupOrderType { ASC, DESC };
+enum class OrderByColumnType { NUMERIC, STRING };
+
+struct CollectionScanStateHelper {
+	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
+	static multimap<Value, RowGroup *> OrderRowGroups(RowGroupSegmentTree *row_groups, column_t column_idx,
+	                                                  OrderByStatistics order_by, OrderByColumnType column_type);
+	static unordered_map<RowGroup *, RowGroup *> CreateRowGroupMap(const multimap<Value, RowGroup *> &row_groups,
+	                                                               RowGroupOrderType order_type, RowGroup *&root);
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -212,7 +224,7 @@ public:
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
-	virtual RowGroup *GetNextRowGroup();
+	virtual RowGroup *GetNextRowGroup(RowGroup *row_group);
 	virtual RowGroup *GetRootSegment();
 	virtual RowGroup *GetSegment(idx_t start_idx);
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
@@ -223,18 +235,21 @@ private:
 	TableScanState &parent;
 };
 
-// TODO: Rename to CustomOrderCollectionScanState?
-class OrderedCollectionScanState : public CollectionScanState {
+class CustomOrderCollectionScanState : public CollectionScanState {
 public:
-	OrderedCollectionScanState(TableScanState &parent_p, column_t column_idx, bool sort_asc);
-	RowGroup *GetNextRowGroup() override;
+	CustomOrderCollectionScanState(TableScanState &parent_p, column_t column_idx_p, OrderByStatistics order_by_p,
+	                               RowGroupOrderType order_type_p, OrderByColumnType column_type_p);
+	RowGroup *GetNextRowGroup(RowGroup *row_group) override;
 	RowGroup *GetRootSegment() override;
 
 private:
 	const column_t column_idx;
-	const bool sort_asc;
-	optional_ptr<vector<idx_t>> row_group_idxs;
-	idx_t current_row_group = 0;
+	const OrderByStatistics order_by;
+	const RowGroupOrderType order_type;
+	const OrderByColumnType column_type;
+
+	RowGroup *root;
+	unordered_map<RowGroup *, RowGroup *> ordered_row_groups;
 };
 
 struct ScanSamplingInfo {
@@ -264,9 +279,9 @@ public:
 	~TableScanState();
 
 	//! The underlying table scan state
-	shared_ptr<CollectionScanState> table_state;
+	unique_ptr<CollectionScanState> table_state;
 	//! Transaction-local scan state
-	shared_ptr<CollectionScanState> local_state;
+	unique_ptr<CollectionScanState> local_state;
 	//! Options for scanning
 	TableScanOptions options;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
@@ -296,7 +311,7 @@ struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
 	virtual ~ParallelCollectionScanState() = default;
 	virtual RowGroup *GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups);
-	virtual RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups);
+	virtual RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups, RowGroup *row_group);
 
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
@@ -308,24 +323,28 @@ struct ParallelCollectionScanState {
 	mutex lock;
 };
 
-class OrderedParallelCollectionScanState : public ParallelCollectionScanState {
+class CustomOrderParallelCollectionScanState : public ParallelCollectionScanState {
 public:
-	OrderedParallelCollectionScanState(column_t column_idx, bool sort_asc);
+	CustomOrderParallelCollectionScanState(column_t column_idx_p, OrderByStatistics order_by_p,
+	                                       RowGroupOrderType order_type_p, OrderByColumnType column_type_p);
 	RowGroup *GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) override;
-	RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups) override;
+	RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups, RowGroup *row_group) override;
 
 private:
 	const column_t column_idx;
-	const bool sort_asc;
-	optional_ptr<vector<idx_t>> row_group_idxs;
-	idx_t current_row_group = 0;
+	const OrderByStatistics order_by;
+	const RowGroupOrderType order_type;
+	const OrderByColumnType column_type;
+
+	RowGroup *root;
+	unordered_map<RowGroup *, RowGroup *> ordered_row_groups;
 };
 
 struct ParallelTableScanState {
 	//! Parallel scan state for the table
-	ParallelCollectionScanState scan_state; // TODO: Make this a uniq_ptr to enable hot-swapping with OrderedParallel
+	unique_ptr<ParallelCollectionScanState> scan_state = make_uniq<ParallelCollectionScanState>();
 	//! Parallel scan state for the transaction-local state
-	ParallelCollectionScanState local_state;
+	unique_ptr<ParallelCollectionScanState> local_state = make_uniq<ParallelCollectionScanState>();
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
 	shared_ptr<CheckpointLock> checkpoint_lock;
 };

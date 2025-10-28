@@ -11,8 +11,7 @@
 namespace duckdb {
 
 TableScanState::TableScanState()
-    : table_state(make_shared_ptr<CollectionScanState>(*this)),
-      local_state(make_shared_ptr<CollectionScanState>(*this)) {
+    : table_state(make_uniq<CollectionScanState>(*this)), local_state(make_uniq<CollectionScanState>(*this)) {
 }
 
 TableScanState::~TableScanState() {
@@ -180,43 +179,88 @@ RowGroup *ParallelCollectionScanState::GetRootSegment(const shared_ptr<RowGroupS
 	return row_groups->GetRootSegment();
 }
 
-RowGroup *ParallelCollectionScanState::GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups) {
-	return row_groups->GetNextSegment(current_row_group);
+RowGroup *ParallelCollectionScanState::GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups,
+                                                       RowGroup *row_group) {
+	return row_groups->GetNextSegment(row_group);
 }
 
-OrderedParallelCollectionScanState::OrderedParallelCollectionScanState(column_t column_idx_p, bool sort_asc_p)
-    : column_idx(column_idx_p), sort_asc(sort_asc_p) {
+CustomOrderParallelCollectionScanState::CustomOrderParallelCollectionScanState(column_t column_idx_p,
+                                                                               OrderByStatistics order_by_p,
+                                                                               RowGroupOrderType order_type_p,
+                                                                               OrderByColumnType column_type_p)
+    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p),
+      root(nullptr) {
 }
 
-RowGroup *OrderedParallelCollectionScanState::GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) {
-	if (!row_group_idxs) {
+RowGroup *CustomOrderParallelCollectionScanState::GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) {
+	if (!root) {
 		D_ASSERT(row_groups);
+		auto preordered_row_groups =
+		    CollectionScanStateHelper::OrderRowGroups(row_groups.get(), column_idx, order_by, column_type);
+		ordered_row_groups = CollectionScanStateHelper::CreateRowGroupMap(preordered_row_groups, order_type, root);
+	}
+	return root;
+}
 
-		std::multimap<Value, idx_t> ordered_row_group_idxs;
-		idx_t row_group_idx = 0;
-		auto row_group = row_groups->GetRootSegment();
-		while (row_group) {
-			auto stats = row_group->GetStatistics(column_idx);
-			D_ASSERT(!sort_asc); // TODO
-			Value max_val;
-			if (NumericStats::HasMax(*stats)) {
-				max_val = NumericStats::Max(*stats);
-			}
-			ordered_row_group_idxs.insert({max_val, row_group_idx++});
+RowGroup *CustomOrderParallelCollectionScanState::GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups,
+                                                                  RowGroup *row_group) {
+	return ordered_row_groups[row_group];
+}
+
+Value CollectionScanStateHelper::RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by,
+                                              OrderByColumnType column_type) {
+	switch (order_by) {
+	case OrderByStatistics::MIN:
+		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Min(stats) : StringStats::Min(stats);
+	case OrderByStatistics::MAX:
+		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Max(stats) : StringStats::Max(stats);
+	}
+	return Value();
+}
+
+std::multimap<Value, RowGroup *> CollectionScanStateHelper::OrderRowGroups(RowGroupSegmentTree *row_groups,
+                                                                           column_t column_idx,
+                                                                           OrderByStatistics order_by,
+                                                                           OrderByColumnType column_type) {
+	std::multimap<Value, RowGroup *> ordered_row_groups;
+	auto row_group = row_groups->GetRootSegment();
+	while (row_group) {
+		auto stats = row_group->GetStatistics(column_idx);
+		Value comparison_value = RetrieveStat(*stats, order_by, column_type);
+		ordered_row_groups.emplace(comparison_value, row_group);
+		row_group = row_groups->GetNextSegment(row_group);
+	}
+
+	return ordered_row_groups;
+}
+
+unordered_map<RowGroup *, RowGroup *>
+CollectionScanStateHelper::CreateRowGroupMap(const multimap<Value, RowGroup *> &row_groups,
+                                             RowGroupOrderType order_type, RowGroup *&root) {
+	if (row_groups.empty()) {
+		return {};
+	}
+
+	unordered_map<RowGroup *, RowGroup *> row_group_map;
+
+	RowGroup *current_row_group;
+	if (order_type == RowGroupOrderType::ASC) {
+		root = row_groups.begin()->second;
+		current_row_group = root;
+		for (auto it = std::next(row_groups.begin()); it != row_groups.end(); ++it) {
+			row_group_map[current_row_group] = it->second;
+			current_row_group = it->second;
 		}
-		D_ASSERT(!sort_asc); // TODO
-		row_group_idxs = make_uniq<vector<idx_t>>();
-		row_group_idxs->reserve(ordered_row_group_idxs.size());
-
-		for (auto it = ordered_row_group_idxs.rbegin(); it != ordered_row_group_idxs.rend(); ++it) {
-			row_group_idxs->push_back(it->second);
+	} else {
+		root = row_groups.rbegin()->second;
+		current_row_group = root;
+		for (auto it = std::next(row_groups.rbegin()); it != row_groups.rend(); ++it) {
+			row_group_map[current_row_group] = it->second;
+			current_row_group = it->second;
 		}
 	}
-	return row_group_idxs->empty() ? nullptr
-	                               : row_groups->GetSegmentByIndex(static_cast<int64_t>(row_group_idxs->front()));
-}
-RowGroup *OrderedParallelCollectionScanState::GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups) {
-	return row_groups->GetSegment(++current_row_group);
+
+	return row_group_map;
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
@@ -224,9 +268,10 @@ CollectionScanState::CollectionScanState(TableScanState &parent_p)
       valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
 }
 
-RowGroup *CollectionScanState::GetNextRowGroup() {
+RowGroup *CollectionScanState::GetNextRowGroup(RowGroup *row_group) {
 	return row_groups->GetNextSegment(row_group);
 }
+
 RowGroup *CollectionScanState::GetRootSegment() {
 	return row_groups->GetRootSegment();
 }
@@ -245,7 +290,7 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 			return false;
 		} else {
 			do {
-				row_group = GetNextRowGroup();
+				row_group = GetNextRowGroup(row_group);
 				if (row_group) {
 					if (row_group->start >= max_row) {
 						row_group = nullptr;
@@ -269,7 +314,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 		if (result.size() > 0) {
 			return true;
 		} else {
-			row_group = row_groups->GetNextSegment(l, row_group); // TODO
+			row_group = row_groups->GetNextSegment(l, row_group); // TODO?
 			if (row_group) {
 				row_group->InitializeScan(*this);
 			}
@@ -278,40 +323,26 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 	return false;
 }
 
-OrderedCollectionScanState::OrderedCollectionScanState(TableScanState &parent_p, column_t column_idx_p, bool sort_asc_p)
-    : CollectionScanState(parent_p), column_idx(column_idx_p), sort_asc(sort_asc_p) {
+CustomOrderCollectionScanState::CustomOrderCollectionScanState(TableScanState &parent_p, column_t column_idx_p,
+                                                               OrderByStatistics order_by_p,
+                                                               RowGroupOrderType order_type_p,
+                                                               OrderByColumnType column_type_p)
+    : CollectionScanState(parent_p), column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p),
+      column_type(column_type_p), root(nullptr) {
 }
 
-RowGroup *OrderedCollectionScanState::GetNextRowGroup() {
-	return row_groups->GetSegment(++current_row_group);
+RowGroup *CustomOrderCollectionScanState::GetNextRowGroup(RowGroup *row_group) {
+	return ordered_row_groups[row_group];
 }
 
-RowGroup *OrderedCollectionScanState::GetRootSegment() {
-	if (!row_group_idxs) {
+RowGroup *CustomOrderCollectionScanState::GetRootSegment() {
+	if (!root) {
 		D_ASSERT(row_groups);
-
-		std::multimap<Value, idx_t> ordered_row_group_idxs;
-		idx_t row_group_idx = 0;
-		auto row_group = row_groups->GetRootSegment();
-		while (row_group) {
-			auto stats = row_group->GetStatistics(column_idx);
-			D_ASSERT(!sort_asc); // TODO
-			Value max_val;
-			if (NumericStats::HasMax(*stats)) {
-				max_val = NumericStats::Max(*stats);
-			}
-			ordered_row_group_idxs.insert({max_val, row_group_idx++});
-		}
-		D_ASSERT(!sort_asc); // TODO
-		row_group_idxs = make_uniq<vector<idx_t>>();
-		row_group_idxs->reserve(ordered_row_group_idxs.size());
-
-		for (auto it = ordered_row_group_idxs.rbegin(); it != ordered_row_group_idxs.rend(); ++it) {
-			row_group_idxs->push_back(it->second);
-		}
+		auto preordered_row_groups =
+		    CollectionScanStateHelper::OrderRowGroups(row_groups, column_idx, order_by, column_type);
+		ordered_row_groups = CollectionScanStateHelper::CreateRowGroupMap(preordered_row_groups, order_type, root);
 	}
-	return row_group_idxs->empty() ? nullptr
-	                               : row_groups->GetSegmentByIndex(static_cast<int64_t>(row_group_idxs->front()));
+	return root;
 }
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {

@@ -282,17 +282,17 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 	auto &local_storage = LocalStorage::Get(context, db);
 	auto &transaction = DuckTransaction::Get(context, db);
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
-	row_groups->InitializeParallelScan(state.scan_state);
+	row_groups->InitializeParallelScan(*state.scan_state);
 
-	local_storage.InitializeParallelScan(*this, state.local_state);
+	local_storage.InitializeParallelScan(*this, *state.local_state);
 }
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state) {
-	if (row_groups->NextParallelScan(context, state.scan_state, *scan_state.table_state)) {
+	if (row_groups->NextParallelScan(context, *state.scan_state, *scan_state.table_state)) {
 		return true;
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
-	if (local_storage.NextParallelScan(context, *this, state.local_state, *scan_state.local_state)) {
+	if (local_storage.NextParallelScan(context, *this, *state.local_state, *scan_state.local_state)) {
 		return true;
 	} else {
 		// finished all scans: no more scans remaining

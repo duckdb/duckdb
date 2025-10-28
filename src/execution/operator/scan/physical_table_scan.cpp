@@ -33,9 +33,6 @@ public:
 			auto filters = table_filters ? *table_filters : GetTableFilters(op);
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
 			                             op.extra_info.sample_options, &op);
-			// TODO: wrap this information somewhere else
-			input.order_row_groups_by = make_shared_ptr<pair<idx_t, bool>>(0, true);
-
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -79,8 +76,6 @@ public:
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
 			                             gstate.GetTableFilters(op), op.extra_info.sample_options, &op);
-			// TODO: wrap this information somewhere else
-			input.order_row_groups_by = make_shared_ptr<pair<idx_t, bool>>(0, true);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}

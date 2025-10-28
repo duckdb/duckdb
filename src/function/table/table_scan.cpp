@@ -248,13 +248,10 @@ public:
 		for (auto &col : input.column_indexes) {
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
-		if (input.order_row_groups_by) {
-			l_state->scan_state.table_state = make_shared_ptr<OrderedCollectionScanState>(
-			    l_state->scan_state, 0, true);
-			l_state->scan_state.local_state = make_shared_ptr<OrderedCollectionScanState>(
-			    l_state->scan_state, 0, true);
-			// TODO: initialize this->state = mk_shared<OrderedParallelCollectionScanState>
-		}
+		l_state->scan_state.table_state = make_uniq<CustomOrderCollectionScanState>(
+		    l_state->scan_state, 0, OrderByStatistics::MAX, RowGroupOrderType::DESC, OrderByColumnType::NUMERIC);
+		l_state->scan_state.local_state = make_uniq<CustomOrderCollectionScanState>(
+		    l_state->scan_state, 0, OrderByStatistics::MAX, RowGroupOrderType::DESC, OrderByColumnType::NUMERIC);
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
@@ -302,8 +299,8 @@ public:
 			return 100;
 		}
 
-		idx_t scanned_rows = state.scan_state.processed_rows;
-		scanned_rows += state.local_state.processed_rows;
+		idx_t scanned_rows = state.scan_state->processed_rows;
+		scanned_rows += state.local_state->processed_rows;
 		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 		if (percentage > 100) {
 			// If the last chunk has fewer elements than STANDARD_VECTOR_SIZE, and if our percentage is over 100,
@@ -336,6 +333,11 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
                                                              DataTable &storage, const TableScanBindData &bind_data) {
 	auto g_state = make_uniq<DuckTableScanState>(context, input.bind_data.get());
+	g_state->state.scan_state = make_uniq<CustomOrderParallelCollectionScanState>(
+	    0, OrderByStatistics::MAX, RowGroupOrderType::DESC, OrderByColumnType::NUMERIC);
+	g_state->state.local_state = make_uniq<CustomOrderParallelCollectionScanState>(
+	    0, OrderByStatistics::MAX, RowGroupOrderType::DESC, OrderByColumnType::NUMERIC);
+
 	storage.InitializeParallelScan(context, g_state->state);
 	if (!input.CanRemoveFilterColumns()) {
 		return std::move(g_state);
