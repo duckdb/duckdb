@@ -19,7 +19,6 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
                                idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info)
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
                         estimated_cardinality, std::move(pushdown_info)) {
-
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
 	D_ASSERT(conditions.size() >= 2);
 	for (idx_t i = 0; i < 2; ++i) {
@@ -125,7 +124,6 @@ public:
 
 	IEJoinLocalState(ExecutionContext &context, const PhysicalRangeJoin &op, IEJoinGlobalState &gstate)
 	    : table(context, *gstate.tables[gstate.child], gstate.child) {
-
 		if (op.filter_pushdown) {
 			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
 		}
@@ -463,7 +461,6 @@ bool IEJoinUnion::TemplatedCompareKeys(ExternalBlockIteratorState &state1, const
 
 bool IEJoinUnion::CompareKeys(ExternalBlockIteratorState &state1, const idx_t pos1, ExternalBlockIteratorState &state2,
                               const idx_t pos2, bool strict, const SortKeyType &sort_key_type) {
-
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
 		return TemplatedCompareKeys<SortKeyType::NO_PAYLOAD_FIXED_8>(state1, pos1, state2, pos2, strict);

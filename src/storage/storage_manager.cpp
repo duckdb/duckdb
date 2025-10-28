@@ -81,7 +81,6 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, const AttachOptions &options)
     : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY),
       in_memory_change_size(0) {
-
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
 		return;
@@ -509,7 +508,6 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	// We only need to checkpoint if there is anything in the WAL.
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		try {
-
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
 			if (client_context) {

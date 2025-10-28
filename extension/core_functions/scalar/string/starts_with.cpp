@@ -17,7 +17,6 @@ static bool StartsWith(const unsigned char *haystack, idx_t haystack_size, const
 }
 
 static bool StartsWith(const string_t &haystack_s, const string_t &needle_s) {
-
 	auto haystack = const_uchar_ptr_cast(haystack_s.GetData());
 	auto haystack_size = haystack_s.GetSize();
 	auto needle = const_uchar_ptr_cast(needle_s.GetData());

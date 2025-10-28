@@ -18,7 +18,6 @@ using duckdb::QueryResultType;
 
 duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
                                          const char **names, idx_t column_count, struct ArrowSchema *out_schema) {
-
 	if (!types || !names || !arrow_options || !out_schema) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
 	}
@@ -298,7 +297,6 @@ void duckdb_destroy_arrow(duckdb_arrow *result) {
 }
 
 void duckdb_destroy_arrow_stream(duckdb_arrow_stream *stream_p) {
-
 	auto stream = reinterpret_cast<ArrowArrayStream *>(*stream_p);
 	if (!stream) {
 		return;

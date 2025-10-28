@@ -79,7 +79,6 @@ public:
 template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,
           DUCKDB_PHYSICAL_TYPE (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
 struct CallbackParquetValueConversion {
-
 	template <bool CHECKED>
 	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		if (CHECKED) {
