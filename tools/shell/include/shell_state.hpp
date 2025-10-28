@@ -70,6 +70,8 @@ enum class ShellFlags : uint32_t {
 	SHFLG_HeaderSet = 0x00000080     /* .header has been used */
 };
 
+enum class SuccessState { SUCCESS, FAILURE };
+
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -212,11 +214,12 @@ public:
 	static bool StringGlob(const char *zGlobPattern, const char *zString);
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 
-	//! Execute a SQL query - prints a warning if the query fails to execute
-	void ExecuteQuery(const string &query);
+	//! Execute a SQL query
+	// On fail - print the error and returns FAILURE
+	SuccessState ExecuteQuery(const string &query);
 	//! Execute a SQL query and renders the result using the given renderer.
-	//! On fail - prints the error and returns false
-	bool RenderQuery(RowRenderer &renderer, const string &query);
+	//! On fail - prints the error and returns FAILURE
+	SuccessState RenderQuery(RowRenderer &renderer, const string &query);
 };
 
 } // namespace duckdb_shell

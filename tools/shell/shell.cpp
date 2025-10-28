@@ -1249,27 +1249,12 @@ int ShellState::RenderRow(RowRenderer &renderer, RowResult &result) {
 	return 0;
 }
 
-/*
-** This is the callback routine that the SQLite library
-** invokes for each row of a query result.
-*/
-static int callback(void *pArg, int nArg, char **azArg, char **azCol) {
-	/* since we don't have type info, call the shell_callback with a NULL value */
-	auto renderer = (RowRenderer *)pArg;
-	RowResult result;
-	for (int i = 0; i < nArg; i++) {
-		result.column_names.push_back(azCol[i]);
-		result.data.push_back(azArg[i]);
-	}
-	return renderer->state.RenderRow(*renderer, result);
-}
-
-bool ShellState::RenderQuery(RowRenderer &renderer, const string &query) {
+SuccessState ShellState::RenderQuery(RowRenderer &renderer, const string &query) {
 	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
 	auto result = con.SendQuery(query);
 	if (result->HasError()) {
 		PrintDatabaseError(result->GetError());
-		return false;
+		return SuccessState::FAILURE;
 	}
 	RowResult row_result;
 	for (auto &col_name : result->names) {
@@ -1285,7 +1270,7 @@ bool ShellState::RenderQuery(RowRenderer &renderer, const string &query) {
 		}
 		renderer.state.RenderRow(renderer, row_result);
 	}
-	return true;
+	return SuccessState::SUCCESS;
 }
 
 /*
@@ -2091,12 +2076,14 @@ static int showHelp(FILE *out, const char *zPattern) {
 	return n;
 }
 
-void ShellState::ExecuteQuery(const string &query) {
+SuccessState ShellState::ExecuteQuery(const string &query) {
 	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
 	auto res = con.Query(query);
 	if (res->HasError()) {
 		utf8_printf(stderr, "Failed to execute query \"%s\": %s\n", query.c_str(), res->GetError().c_str());
+		return SuccessState::FAILURE;
 	}
+	return SuccessState::SUCCESS;
 }
 
 /* Flags for open_db().
@@ -2744,8 +2731,8 @@ MetadataResult ShowDatabases(ShellState &state, const vector<string> &args) {
 	auto renderer = state.GetRowRenderer(RenderMode::LIST);
 	renderer->show_header = false;
 	renderer->col_sep = ": ";
-	bool success = state.RenderQuery(*renderer, "SELECT name, file FROM pragma_database_list");
-	if (!success) {
+	auto res = state.RenderQuery(*renderer, "SELECT name, file FROM pragma_database_list");
+	if (res == SuccessState::FAILURE) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
@@ -3218,10 +3205,8 @@ bool ShellState::ImportData(const vector<string> &args) {
 		if (eVerbose >= 1) {
 			utf8_printf(out, "%s\n", zCreate);
 		}
-		rc = sqlite3_exec(db, zCreate, 0, 0, 0);
-		sqlite3_free(zCreate);
-		if (rc) {
-			utf8_printf(stderr, "CREATE TABLE %s(...) failed: %s\n", zTable, sqlite3_errmsg(db));
+		auto res = ExecuteQuery(zCreate);
+		if (res == SuccessState::FAILURE) {
 			import_cleanup(&sCtx);
 			return false;
 		}
@@ -3251,14 +3236,16 @@ bool ShellState::ImportData(const vector<string> &args) {
 	rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
 	if (rc) {
 		ShellDatabaseError(db);
-		if (pStmt)
+		if (pStmt) {
 			sqlite3_finalize(pStmt);
+		}
 		import_cleanup(&sCtx);
 		return false;
 	}
 	needCommit = sqlite3_get_autocommit(db);
-	if (needCommit)
+	if (needCommit) {
 		ExecuteQuery("BEGIN");
+	}
 	do {
 		int startLine = sCtx.nLine;
 		int i;
@@ -3314,8 +3301,9 @@ bool ShellState::ImportData(const vector<string> &args) {
 
 	import_cleanup(&sCtx);
 	sqlite3_finalize(pStmt);
-	if (needCommit)
+	if (needCommit) {
 		ExecuteQuery("COMMIT");
+	}
 	if (eVerbose > 0) {
 		utf8_printf(out, "Added %d rows with %d errors using %d lines of input\n", sCtx.nRow, sCtx.nErr,
 		            sCtx.nLine - 1);
@@ -3586,12 +3574,9 @@ MetadataResult ReadFromFile(ShellState &state, const vector<string> &args) {
 }
 
 bool ShellState::DisplaySchemas(const vector<string> &args) {
-	string sSelect;
-	char *zErrMsg = 0;
-	const char *zDiv = "(";
-	const char *zName = 0;
-	int bDebug = 0;
-	int rc;
+	const char *zName = nullptr;
+	bool bDebug = 0;
+	SuccessState rc = SuccessState::SUCCESS;
 
 	OpenDB(0);
 
@@ -3600,7 +3585,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 		if (optionMatch(args[ii], "indent")) {
 			mode = RenderMode::PRETTY;
 		} else if (optionMatch(args[ii], "debug")) {
-			bDebug = 1;
+			bDebug = true;
 		} else if (zName == 0) {
 			zName = args[ii].c_str();
 		} else {
@@ -3610,36 +3595,32 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 	}
 	auto renderer = GetRowRenderer(mode);
 	renderer->show_header = false;
-	if (zDiv) {
-		sSelect += "SELECT sql FROM sqlite_master WHERE ";
-		if (zName) {
-			auto zQarg = StringUtil::Format("%s", SQLString(zName));
-			int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 || strchr(zName, '[') != 0;
-			if (strchr(zName, '.')) {
-				sSelect += "lower(printf('%s.%s',sname,tbl_name))";
-			} else {
-				sSelect += "lower(tbl_name)";
-			}
-			sSelect += bGlob ? " GLOB " : " LIKE ";
-			sSelect += zQarg.c_str();
-			if (!bGlob) {
-				sSelect += " ESCAPE '\\' ";
-			}
-			sSelect += " AND ";
-		}
-		sSelect += "type!='meta' AND sql IS NOT NULL"
-		           " ORDER BY name";
-		if (bDebug) {
-			utf8_printf(out, "SQL: %s;\n", sSelect.c_str());
+
+	string sSelect;
+	sSelect += "SELECT sql FROM sqlite_master WHERE ";
+	if (zName) {
+		auto zQarg = StringUtil::Format("%s", SQLString(zName));
+		int bGlob = strchr(zName, '*') != 0 || strchr(zName, '?') != 0 || strchr(zName, '[') != 0;
+		if (strchr(zName, '.')) {
+			sSelect += "lower(printf('%s.%s',sname,tbl_name))";
 		} else {
-			rc = sqlite3_exec(db, sSelect.c_str(), callback, renderer.get(), &zErrMsg);
+			sSelect += "lower(tbl_name)";
 		}
+		sSelect += bGlob ? " GLOB " : " LIKE ";
+		sSelect += zQarg.c_str();
+		if (!bGlob) {
+			sSelect += " ESCAPE '\\' ";
+		}
+		sSelect += " AND ";
 	}
-	if (zErrMsg) {
-		PrintDatabaseError(zErrMsg);
-		sqlite3_free(zErrMsg);
-		return false;
-	} else if (rc != SQLITE_OK) {
+	sSelect += "type!='meta' AND sql IS NOT NULL"
+	           " ORDER BY name";
+	if (bDebug) {
+		utf8_printf(out, "SQL: %s;\n", sSelect.c_str());
+	} else {
+		rc = RenderQuery(*renderer, sSelect);
+	}
+	if (rc == SuccessState::FAILURE) {
 		raw_printf(stderr, "Error: querying schema information\n");
 		return false;
 	} else {
