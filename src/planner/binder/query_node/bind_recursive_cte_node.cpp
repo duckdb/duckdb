@@ -1,9 +1,13 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
@@ -132,7 +136,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 		// Find the best matching aggregate function
 		auto best_function_idx =
-		    function_binder.BindFunction(func.name, func.functions, std::move(aggregation_input_types), error);
+		    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
 		if (!best_function_idx.IsValid()) {
 			throw BinderException("No matching aggregate function\n%s", error.Message());
 		}
