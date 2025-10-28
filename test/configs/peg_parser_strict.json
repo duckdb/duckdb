@@ -14,6 +14,34 @@
       ]
     },
     {
+      "reason": "Requires implementing SelectStatement",
+      "paths": [
+        "test/fuzzer/pedro/segment_tree_index_issue.test",
+        "test/fuzzer/pedro/delete_using_bindings.test",
+        "test/issues/general/test_3997.test",
+        "test/issues/fuzz/sqlite_wrapper_crash.test",
+        "test/sql/returning/no_crash_when_no_returning_columns.test",
+        "test/sql/returning/returning_delete.test",
+        "test/sql/returning/returning_delete_list.test",
+        "test/sql/update/test_big_string_update.test",
+        "test/sql/delete/test_using_delete.test",
+        "test/sql/optimizer/test_rowid_pushdown_deletes.test",
+        "test/sql/subquery/lateral/pg_lateral.test",
+        "test/sql/subquery/scalar/test_delete_subquery.test",
+        "test/sql/index/art/constraints/test_art_eager_constraint_checking.test",
+        "test/sql/index/art/scan/test_art_scan_coverage.test",
+        "test/sql/index/art/storage/test_art_storage.test",
+        "test/sql/cte/materialized/dml_materialized_cte.test"
+      ]
+    },
+    {
+      "reason": "Conversion Error",
+      "paths": [
+        "test/sql/storage/types/struct/wal_struct_storage.test",
+        "test/sql/storage/types/struct/struct_storage.test"
+      ]
+    },
+    {
       "reason": "Parser exception because of dollar-quoted strings",
       "paths": [
         "test/sql/peg_parser/parser/create_macro.test",
