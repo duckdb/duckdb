@@ -353,7 +353,7 @@ public:
 	AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op);
 
 	//! Assign a new task to the local state
-	bool AssignTask(AsOfLocalSourceState &lsource);
+	bool TryNextTask(AsOfLocalSourceState &lsource);
 	//! Can we shift to the next stage?
 	bool TryPrepareNextStage();
 
@@ -535,9 +535,6 @@ public:
 	using resolve_join_t = void (duckdb::AsOfProbeBuffer::*)(idx_t *);
 	resolve_join_t resolve_join_func;
 
-	bool Scanning() const {
-		return lhs_scanner.get();
-	}
 	void BeginLeftScan(AsOfSourceTask &task_p);
 	bool NextLeft();
 	void ScanLeft();
@@ -760,6 +757,10 @@ void AsOfProbeBuffer::ScanLeft() {
 }
 
 void AsOfProbeBuffer::EndLeftScan() {
+	if (left_task.stage != AsOfJoinSourceStage::INNER) {
+		return;
+	}
+
 	right_group = nullptr;
 	right_itr.reset();
 	rhs_scanner.reset();
@@ -777,6 +778,8 @@ void AsOfProbeBuffer::EndLeftScan() {
 	if (left_bin < asof_groups.size()) {
 		asof_groups[left_bin]->left_group.reset();
 	}
+
+	++gsource.flushed_left;
 }
 
 template <SortKeyType SORT_KEY_TYPE>
@@ -984,7 +987,7 @@ public:
 		if (hash_group) {
 			return !scanner.get();
 		} else {
-			return !probe_buffer.Scanning();
+			return !probe_buffer.HasMoreData();
 		}
 	}
 
@@ -1076,12 +1079,13 @@ bool AsOfGlobalSourceState::TryPrepareNextStage() {
 	return false;
 }
 
-bool AsOfGlobalSourceState::AssignTask(AsOfLocalSourceState &lsource) {
+bool AsOfGlobalSourceState::TryNextTask(AsOfLocalSourceState &lsource) {
 	auto guard = Lock();
 
 	switch (stage.load()) {
 	case AsOfJoinSourceStage::INNER:
-		while (next_left < asof_groups.size()) {
+		lsource.probe_buffer.EndLeftScan();
+		if (next_left < asof_groups.size()) {
 			//	More to flush
 			AsOfSourceTask left_task;
 			left_task.stage = AsOfJoinSourceStage::INNER;
@@ -1093,11 +1097,7 @@ bool AsOfGlobalSourceState::AssignTask(AsOfLocalSourceState &lsource) {
 				}
 			}
 			lsource.probe_buffer.BeginLeftScan(left_task);
-			if (!lsource.TaskFinished()) {
-				return true;
-			} else {
-				++flushed_left;
-			}
+			return true;
 		}
 		break;
 	case AsOfJoinSourceStage::RIGHT:
@@ -1133,8 +1133,6 @@ void AsOfLocalSourceState::ExecuteInnerTask(DataChunk &chunk) {
 			return;
 		}
 	}
-	probe_buffer.EndLeftScan();
-	gsource.flushed_left++;
 }
 
 SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
@@ -1145,7 +1143,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gsource.stage != AsOfJoinSourceStage::DONE && chunk.size() == 0) {
-		if (!lsource.TaskFinished() || gsource.AssignTask(lsource)) {
+		if (!lsource.TaskFinished() || gsource.TryNextTask(lsource)) {
 			lsource.ExecuteTask(chunk);
 		} else {
 			auto guard = gsource.Lock();
