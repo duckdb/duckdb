@@ -476,7 +476,17 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 	va_list ap;
 	va_start(ap, zFormat);
 	if (stdout_is_console && (out == stdout || out == stderr)) {
-		char *z1 = sqlite3_vmprintf(zFormat, ap);
+		char buffer[2048];
+		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
+		const char *z1;
+		unique_ptr<char[]> zbuf;
+		if (required_characters > 2048) {
+			zbuf = unique_ptr<char[]>(new char[required_characters + 1]);
+			vsnprintf(zbuf.get(), required_characters + 1, zFormat, ap);
+			z1 = zbuf.get();
+		} else {
+			z1 = buffer;
+		}
 		if (win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
 			// we can write UTF8 directly
 			fputs(z1, out);
