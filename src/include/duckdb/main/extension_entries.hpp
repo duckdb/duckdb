@@ -1082,7 +1082,6 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ui_remote_url", "ui"},
     {"unsafe_disable_etag_checks", "httpfs"},
     {"unsafe_enable_version_guessing", "iceberg"},
-    {"variant_legacy_encoding", "parquet"},
 }; // END_OF_EXTENSION_SETTINGS
 
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {

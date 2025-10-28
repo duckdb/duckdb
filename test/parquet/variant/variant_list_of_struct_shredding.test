@@ -3,8 +3,6 @@
 
 require parquet
 
-require json
-
 statement ok
 create macro data() AS TABLE (
 	FROM (VALUES
@@ -42,7 +40,7 @@ create macro data() AS TABLE (
 );
 
 query I nosort expected_res
-select IF(VARIANT_TYPEOF(COLUMNS(*)) == 'VARIANT_NULL', NULL, COLUMNS(*)::JSON) from data();
+select * from data();
 ----
 
 statement ok
