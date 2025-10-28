@@ -626,7 +626,7 @@ public:
 			}
 		} while (true);
 		// This is not expected to be ever taken
-		D_ASSERT(false);
+		throw InternalException("MultiFileScan is malformed");
 	}
 
 	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
