@@ -159,7 +159,7 @@ def _generate_group_test(f, groups: list[str], all_metrics: Dict[str, List[str]]
             continue
         cols.append(m)
 
-    select = "SELECT " + ",\n\t".join(cols) + " FROM metrics_output"
+    select = "SELECT " + ",\n\t".join(cols)
 
     if "operator" in groups:
         select += "\nFROM (\n"

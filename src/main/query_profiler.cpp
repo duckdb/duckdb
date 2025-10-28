@@ -223,7 +223,7 @@ void QueryProfiler::EndQuery() {
 			}
 
 			MoveOptimizerPhasesToRoot();
-			for (auto metric : info.metrics) {
+			for (auto &metric : info.metrics) {
 				if (info.Enabled(settings, metric.first)) {
 					ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, *root, child_info);
 				}
