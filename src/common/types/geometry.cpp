@@ -496,8 +496,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 	}
 
 	const auto meta = reader.Read<uint32_t>();
-	const auto type = static_cast<GeometryType>(meta % 1000);
-	const auto flag = meta / 1000;
+	const auto type = static_cast<GeometryType>((meta & 0x0000FFFF) % 1000);
+	const auto flag = (meta & 0x0000FFFF) / 1000;
 	const auto has_z = (flag & 0x01) != 0;
 	const auto has_m = (flag & 0x02) != 0;
 
@@ -607,8 +607,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 				throw InvalidInputException("Unsupported byte order %d in WKB", part_byte_order);
 			}
 			const auto part_meta = reader.Read<uint32_t>();
-			const auto part_type = static_cast<GeometryType>(part_meta % 1000);
-			const auto part_flag = part_meta / 1000;
+			const auto part_type = static_cast<GeometryType>((part_meta & 0x0000FFFF) % 1000);
+			const auto part_flag = (part_meta & 0x0000FFFF) / 1000;
 			const auto part_has_z = (part_flag & 0x01) != 0;
 			const auto part_has_m = (part_flag & 0x02) != 0;
 
@@ -661,8 +661,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 				throw InvalidInputException("Unsupported byte order %d in WKB", part_byte_order);
 			}
 			const auto part_meta = reader.Read<uint32_t>();
-			const auto part_type = static_cast<GeometryType>(part_meta % 1000);
-			const auto part_flag = part_meta / 1000;
+			const auto part_type = static_cast<GeometryType>((part_meta & 0x0000FFFF) % 1000);
+			const auto part_flag = (part_meta & 0x0000FFFF) / 1000;
 			const auto part_has_z = (part_flag & 0x01) != 0;
 			const auto part_has_m = (part_flag & 0x02) != 0;
 
@@ -719,8 +719,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 				throw InvalidInputException("Unsupported byte order %d in WKB", part_byte_order);
 			}
 			const auto part_meta = reader.Read<uint32_t>();
-			const auto part_type = static_cast<GeometryType>(part_meta % 1000);
-			const auto part_flag = part_meta / 1000;
+			const auto part_type = static_cast<GeometryType>((part_meta & 0x0000FFFF) % 1000);
+			const auto part_flag = (part_meta & 0x0000FFFF) / 1000;
 			const auto part_has_z = (part_flag & 0x01) != 0;
 			const auto part_has_m = (part_flag & 0x02) != 0;
 			if (part_type != GeometryType::POLYGON) {
@@ -795,6 +795,7 @@ struct WKBAnalysis {
 	bool any_z = false;
 	bool any_m = false;
 	bool any_unknown = false;
+	bool any_ewkb = false;
 };
 
 WKBAnalysis AnalyzeWKB(BlobReader &reader) {
@@ -805,10 +806,28 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 		const auto le = reader.Read<uint8_t>() == 1;
 
 		const auto meta = reader.Read<uint32_t>(le);
-		const auto type_id = meta % 1000;
-		const auto flag_id = meta / 1000;
-		const auto has_z = (flag_id & 0x01) != 0;
-		const auto has_m = (flag_id & 0x02) != 0;
+		const auto type_id = (meta & 0x0000FFFF) % 1000;
+		const auto flag_id = (meta & 0x0000FFFF) / 1000;
+
+		// Extended WKB detection
+		const auto has_extz = (meta & 0x80000000) != 0;
+		const auto has_extm = (meta & 0x40000000) != 0;
+		const auto has_srid = (meta & 0x20000000) != 0;
+
+		const auto has_z = ((flag_id & 0x01) != 0) || has_extz;
+		const auto has_m = ((flag_id & 0x02) != 0) || has_extm;
+
+		if (has_srid) {
+			result.any_ewkb = true;
+			reader.Skip(sizeof(uint32_t)); // Skip SRID
+			                               // Do not include SRID in the size
+		}
+
+		if (has_extz || has_extm || has_srid) {
+			// EWKB flags are set
+			result.any_ewkb = true;
+		}
+
 		const auto v_size = (2 + (has_z ? 1 : 0) + (has_m ? 1 : 0)) * sizeof(double);
 
 		result.any_z |= has_z;
@@ -857,14 +876,25 @@ void ConvertWKB(BlobReader &reader, FixedSizeBlobWriter &writer) {
 
 		const auto le = reader.Read<uint8_t>() == 1;
 		const auto meta = reader.Read<uint32_t>(le);
-		const auto type_id = meta % 1000;
-		const auto flag_id = meta / 1000;
-		const auto has_z = (flag_id & 0x01) != 0;
-		const auto has_m = (flag_id & 0x02) != 0;
+		const auto type_id = (meta & 0x0000FFFF) % 1000;
+		const auto flag_id = (meta & 0x0000FFFF) / 1000;
+
+		// Extended WKB detection
+		const auto has_extz = (meta & 0x80000000) != 0;
+		const auto has_extm = (meta & 0x40000000) != 0;
+		const auto has_srid = (meta & 0x20000000) != 0;
+
+		const auto has_z = ((flag_id & 0x01) != 0) || has_extz;
+		const auto has_m = ((flag_id & 0x02) != 0) || has_extm;
+
+		if (has_srid) {
+			reader.Skip(sizeof(uint32_t)); // Skip SRID
+		}
+
 		const auto v_width = static_cast<uint32_t>((2 + (has_z ? 1 : 0) + (has_m ? 1 : 0)));
 
-		writer.Write<uint8_t>(1);     // Always write LE
-		writer.Write<uint32_t>(meta); // Write meta
+		writer.Write<uint8_t>(1);                                          // Always write LE
+		writer.Write<uint32_t>(type_id + (1000 * has_z) + (2000 * has_m)); // Write meta
 
 		switch (type_id) {
 		case 1: { // POINT
@@ -933,7 +963,7 @@ bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_
 		return false;
 	}
 
-	if (analysis.any_be) {
+	if (analysis.any_be || analysis.any_ewkb) {
 		reader.Reset();
 		// Make a new WKB with all LE
 		auto blob = StringVector::EmptyString(result_vector, analysis.size);
@@ -950,7 +980,7 @@ bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_
 }
 
 void Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
-	if (!strict) {
+	if (strict) {
 		UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) {
 			string_t geom;
 			FromBinary(wkb, geom, result, strict);
@@ -1001,8 +1031,8 @@ pair<GeometryType, VertexType> Geometry::GetType(const string_t &wkb) {
 	}
 
 	const auto meta = reader.Read<uint32_t>();
-	const auto type_id = meta % 1000;
-	const auto flag_id = meta / 1000;
+	const auto type_id = (meta & 0x0000FFFF) % 1000;
+	const auto flag_id = (meta & 0x0000FFFF) / 1000;
 
 	if (type_id < 1 || type_id > 7) {
 		throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
@@ -1063,8 +1093,8 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent) {
 			throw InvalidInputException("Unsupported byte order %d in WKB", byte_order);
 		}
 		const auto meta = reader.Read<uint32_t>();
-		const auto type_id = meta % 1000;
-		const auto flag_id = meta / 1000;
+		const auto type_id = (meta & 0x0000FFFF) % 1000;
+		const auto flag_id = (meta & 0x0000FFFF) / 1000;
 		if (type_id < 1 || type_id > 7) {
 			throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
 		}
