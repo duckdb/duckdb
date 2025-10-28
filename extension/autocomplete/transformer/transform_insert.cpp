@@ -22,7 +22,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 	transformer.TransformOptional<InsertColumnOrder>(list_pr, 5, result->column_order);
 	transformer.TransformOptional<vector<string>>(list_pr, 6, result->columns);
 	auto insert_values = transformer.Transform<InsertValues>(list_pr.Child<ListParseResult>(7));
-	result->default_values = insert_values.default_values;
+	if (insert_values.default_values) {
+		throw NotImplementedException("DEFAULT Values for insert statement are not yet implemented.");
+	}
 	if (insert_values.select_statement) {
 		result->select_statement = std::move(insert_values.select_statement);
 	}
