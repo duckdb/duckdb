@@ -162,13 +162,13 @@ public:
 	void PrintPadded(const char *str, idx_t len);
 	bool ColumnTypeIsInteger(const char *type);
 	string strdup_handle_newline(const char *z);
-	ColumnarResult ExecuteColumnar(sqlite3_stmt *pStmt);
+	SuccessState TryExecuteColumnar(unique_ptr<duckdb::SQLStatement> statement, ColumnarResult &result);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
-	void ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt);
+	SuccessState ExecutePreparedStatementColumnar(unique_ptr<duckdb::SQLStatement> statement);
 	vector<string> TableColumnList(const char *zTab);
-	SuccessState ExecuteStatement(duckdb::SQLStatement &statement);
+	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
 	SuccessState ExecutePreparedStatement(sqlite3_stmt *pStmt);
 
 	void PrintDatabaseError(const string &zErr);

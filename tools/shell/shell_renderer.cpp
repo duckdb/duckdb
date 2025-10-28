@@ -220,7 +220,7 @@ public:
 	void RenderHeader(ColumnarResult &result) override {
 		state.Print("\\begin{tabular}{|");
 		for (idx_t i = 0; i < result.column_count; i++) {
-			if (state.ColumnTypeIsInteger(result.type_names[i])) {
+			if (state.ColumnTypeIsInteger(result.type_names[i].c_str())) {
 				state.Print("r");
 			} else {
 				state.Print("l");

@@ -1370,29 +1370,114 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 	return false;
 }
 
-ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt) {
-	ColumnarResult result;
-
-	int rc = sqlite3_step(pStmt);
-	if (rc != SQLITE_ROW) {
-		return result;
+string GetTypeName(duckdb::LogicalType &type) {
+	switch (type.id()) {
+	case duckdb::LogicalTypeId::BOOLEAN:
+		return "BOOLEAN";
+	case duckdb::LogicalTypeId::TINYINT:
+		return "TINYINT";
+	case duckdb::LogicalTypeId::SMALLINT:
+		return "SMALLINT";
+	case duckdb::LogicalTypeId::INTEGER:
+		return "INTEGER";
+	case duckdb::LogicalTypeId::BIGINT:
+		return "BIGINT";
+	case duckdb::LogicalTypeId::FLOAT:
+		return "FLOAT";
+	case duckdb::LogicalTypeId::DOUBLE:
+		return "DOUBLE";
+	case duckdb::LogicalTypeId::DECIMAL:
+		return "DECIMAL";
+	case duckdb::LogicalTypeId::DATE:
+		return "DATE";
+	case duckdb::LogicalTypeId::TIME:
+		return "TIME";
+	case duckdb::LogicalTypeId::TIMESTAMP:
+	case duckdb::LogicalTypeId::TIMESTAMP_NS:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+		return "TIMESTAMP";
+	case duckdb::LogicalTypeId::VARCHAR:
+		return "VARCHAR";
+	case duckdb::LogicalTypeId::LIST:
+		return "LIST";
+	case duckdb::LogicalTypeId::MAP:
+		return "MAP";
+	case duckdb::LogicalTypeId::STRUCT:
+		return "STRUCT";
+	case duckdb::LogicalTypeId::BLOB:
+		return "BLOB";
+	default:
+		return "NULL";
 	}
+}
+
+int GetLegacySQLiteType(const duckdb::LogicalType &column_type) {
+	if (column_type.IsJSONType()) {
+		return 0; // Does not need to be surrounded in quotes like VARCHAR
+	}
+	if (column_type.HasAlias()) {
+		// Use the text representation for aliased types
+		return SQLITE_TEXT;
+	}
+	switch (column_type.id()) {
+	case duckdb::LogicalTypeId::BOOLEAN:
+	case duckdb::LogicalTypeId::TINYINT:
+	case duckdb::LogicalTypeId::SMALLINT:
+	case duckdb::LogicalTypeId::INTEGER:
+	case duckdb::LogicalTypeId::BIGINT: /* TODO: Maybe blob? */
+	case duckdb::LogicalTypeId::USMALLINT:
+	case duckdb::LogicalTypeId::UINTEGER:
+	case duckdb::LogicalTypeId::UBIGINT:
+	case duckdb::LogicalTypeId::UHUGEINT:
+	case duckdb::LogicalTypeId::HUGEINT:
+	case duckdb::LogicalTypeId::BIGNUM:
+		return SQLITE_INTEGER;
+	case duckdb::LogicalTypeId::FLOAT:
+	case duckdb::LogicalTypeId::DOUBLE:
+	case duckdb::LogicalTypeId::DECIMAL:
+		return SQLITE_FLOAT;
+	case duckdb::LogicalTypeId::DATE:
+	case duckdb::LogicalTypeId::TIME:
+	case duckdb::LogicalTypeId::TIMESTAMP:
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
+	case duckdb::LogicalTypeId::TIMESTAMP_NS:
+	case duckdb::LogicalTypeId::VARCHAR:
+	case duckdb::LogicalTypeId::LIST:
+	case duckdb::LogicalTypeId::STRUCT:
+	case duckdb::LogicalTypeId::MAP:
+		return SQLITE_TEXT;
+	case duckdb::LogicalTypeId::BLOB:
+		return SQLITE_BLOB;
+	default:
+		return SQLITE_TEXT;
+	}
+}
+
+SuccessState ShellState::TryExecuteColumnar(unique_ptr<duckdb::SQLStatement> statement, ColumnarResult &result) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto res = con.Query(std::move(statement));
+	if (res->HasError()) {
+		PrintDatabaseError(res->GetError());
+		return SuccessState::FAILURE;
+	}
+
 	// fetch the column count, column names and types
-	result.column_count = sqlite3_column_count(pStmt);
+	result.column_count = res->ColumnCount();
 	result.data.reserve(result.column_count * 4);
-	for (idx_t i = 0; i < result.column_count; i++) {
-		result.data.push_back(strdup_handle_newline(sqlite3_column_name(pStmt, i)));
-		result.types.push_back(sqlite3_column_type(pStmt, i));
-		result.type_names.push_back(sqlite3_column_decltype(pStmt, i));
+	for (idx_t c = 0; c < result.column_count; c++) {
+		result.data.push_back(strdup_handle_newline(res->names[c].c_str()));
+		result.types.push_back(GetLegacySQLiteType(res->types[c]));
+		result.type_names.push_back(GetTypeName(res->types[c]));
 	}
 
-	// execute the query and fetch the entire result set
-	do {
-		for (idx_t i = 0; i < result.column_count; i++) {
-			auto z = (const char *)sqlite3_column_text(pStmt, i);
-			result.data.push_back(strdup_handle_newline(z));
+	for (auto &row : *res) {
+		for (idx_t c = 0; c < result.column_count; c++) {
+			auto str_val = row.GetValue<string>(c);
+			result.data.push_back(strdup_handle_newline(str_val.c_str()));
 		}
-	} while ((rc = sqlite3_step(pStmt)) == SQLITE_ROW);
+	}
 
 	// compute the column widths
 	for (idx_t i = 0; i < result.column_count; i++) {
@@ -1412,7 +1497,7 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt) {
 			result.column_width[column_idx] = width;
 		}
 	}
-	return result;
+	return SuccessState::SUCCESS;
 }
 
 /*
@@ -1425,15 +1510,18 @@ ColumnarResult ShellState::ExecuteColumnar(sqlite3_stmt *pStmt) {
 ** first, in order to determine column widths, before providing
 ** any output.
 */
-void ShellState::ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt) {
-	auto result = ExecuteColumnar(pStmt);
+SuccessState ShellState::ExecutePreparedStatementColumnar(unique_ptr<duckdb::SQLStatement> statement) {
+	ColumnarResult result;
+	if (TryExecuteColumnar(std::move(statement), result) == SuccessState::FAILURE) {
+		return SuccessState::FAILURE;
+	}
 	if (seenInterrupt) {
 		utf8_printf(out, "Interrupt\n");
-		return;
+		return SuccessState::FAILURE;
 	}
 	if (result.data.empty()) {
 		// nothing to render
-		return;
+		return SuccessState::SUCCESS;
 	}
 
 	auto column_renderer = GetColumnRenderer();
@@ -1463,6 +1551,7 @@ columnar_end:
 	if (seenInterrupt) {
 		utf8_printf(out, "Interrupt\n");
 	}
+	return SuccessState::SUCCESS;
 }
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
@@ -1542,9 +1631,14 @@ public:
 	}
 };
 
-SuccessState ShellState::ExecuteStatement(duckdb::SQLStatement &stmt) {
+SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
+	if (ShellRenderer::IsColumnar(cMode)) {
+		return ExecutePreparedStatementColumnar(std::move(statement));
+	}
+
+	// TEMPORARY FALLBACK - use old mechanism for rendering
 	sqlite3_stmt *pStmt = nullptr;
-	int rc = sqlite3_prepare_v2(db, stmt.query.c_str(), -1, &pStmt, nullptr);
+	int rc = sqlite3_prepare_v2(db, statement->query.c_str(), -1, &pStmt, nullptr);
 	if (rc != SQLITE_OK) {
 		ShellDatabaseError(db);
 		sqlite3_finalize(pStmt);
@@ -1589,11 +1683,6 @@ SuccessState ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	if (cMode == RenderMode::TRASH) {
 		TrashRenderer renderer;
 		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', 0, &renderer);
-		return SuccessState::SUCCESS;
-	}
-
-	if (ShellRenderer::IsColumnar(cMode)) {
-		ExecutePreparedStatementColumnar(pStmt);
 		return SuccessState::SUCCESS;
 	}
 
@@ -1678,7 +1767,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::EXPLAIN;
 			}
 
-			ExecuteStatement(*statement);
+			ExecuteStatement(std::move(statement));
 		} /* end while */
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);

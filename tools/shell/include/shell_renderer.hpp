@@ -33,7 +33,7 @@ struct ColumnarResult {
 	vector<int> types;
 	vector<idx_t> column_width;
 	vector<bool> right_align;
-	vector<const char *> type_names;
+	vector<string> type_names;
 };
 
 struct RowResult {
