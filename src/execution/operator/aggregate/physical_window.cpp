@@ -218,7 +218,6 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
                                PhysicalOperatorType type)
     : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
       select_list(std::move(select_list_p)), order_idx(0), is_order_dependent(false) {
-
 	idx_t max_orders = 0;
 	for (idx_t i = 0; i < select_list.size(); ++i) {
 		auto &expr = select_list[i];
@@ -271,7 +270,6 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 
 WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &client)
     : op(op), client(client), count(0) {
-
 	D_ASSERT(op.select_list[op.order_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 	auto &wexpr = op.select_list[op.order_idx]->Cast<BoundWindowExpression>();
 
@@ -404,7 +402,6 @@ protected:
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &client, WindowGlobalSinkState &gsink_p)
     : client(client), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false), completed(0) {
-
 	auto &global_partition = *gsink.global_partition;
 	auto hashed_source = global_partition.GetGlobalSourceState(client, *gsink.hashed_sink);
 	auto &hash_groups = global_partition.GetHashGroups(*hashed_source);

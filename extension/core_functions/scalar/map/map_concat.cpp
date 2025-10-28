@@ -132,7 +132,6 @@ bool IsEmptyMap(const LogicalType &map) {
 
 unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &bound_function,
                                        vector<unique_ptr<Expression>> &arguments) {
-
 	auto arg_count = arguments.size();
 	if (arg_count < 2) {
 		throw InvalidInputException("The provided amount of arguments is incorrect, please provide 2 or more maps");

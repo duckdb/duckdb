@@ -154,7 +154,6 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-
 			auto &order = mod->Cast<OrderModifier>();
 			auto bound_order = make_uniq<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
@@ -468,7 +467,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		unbound_groups.resize(group_expressions.size());
 		GroupBinder group_binder(*this, context, statement, result.group_index, bind_state, info.alias_map);
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
-
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
 			// the reason we want the unbound copy is because we want to figure out whether an expression

@@ -363,7 +363,6 @@ void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 }
 
 void Vector::FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier) {
-
 	ResizeInfo resize_info(*this, data, buffer.get(), multiplier);
 	resize_infos.emplace_back(resize_info);
 
@@ -816,7 +815,6 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
 	}
 	if (v_p.GetType().id() != LogicalTypeId::AGGREGATE_STATE && value.type().id() != LogicalTypeId::AGGREGATE_STATE) {
-
 		D_ASSERT(v_p.GetType() == value.type());
 	}
 	return value;
@@ -1233,7 +1231,6 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 }
 
 void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
-
 	input.ToUnifiedFormat(count, data.unified);
 	data.logical_type = input.GetType();
 
@@ -2348,7 +2345,6 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 }
 
 MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
-
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 
 	// unify the MAP vector, which is a physical LIST vector
@@ -2363,7 +2359,6 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 	keys.ToUnifiedFormat(maps_length, key_data);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-
 		auto mapped_row = sel.get_index(row_idx);
 		auto map_idx = map_data.sel->get_index(mapped_row);
 
@@ -2534,7 +2529,6 @@ void ListVector::PushBack(Vector &target, const Value &insert) {
 }
 
 idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
-
 	auto info = ListVector::GetConsecutiveChildListInfo(list, offset, count);
 	if (info.needs_slicing) {
 		SelectionVector sel(info.child_list_info.length);
@@ -2547,7 +2541,6 @@ idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t of
 }
 
 ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count) {
-
 	ConsecutiveChildListInfo info;
 	UnifiedVectorFormat unified_list_data;
 	list.ToUnifiedFormat(offset + count, unified_list_data);

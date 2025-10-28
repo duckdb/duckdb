@@ -17,7 +17,6 @@ struct SizeModifiers {
 };
 
 static SizeModifiers GetSizeModifiers(duckdb_libpgquery::PGTypeName &type_name, LogicalTypeId base_type) {
-
 	SizeModifiers result;
 
 	if (base_type == LogicalTypeId::DECIMAL) {

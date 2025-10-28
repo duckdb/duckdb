@@ -379,7 +379,6 @@ void Executor::Initialize(PhysicalOperator &plan) {
 }
 
 void Executor::InitializeInternal(PhysicalOperator &plan) {
-
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	{
 		lock_guard<mutex> elock(executor_lock);

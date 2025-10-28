@@ -105,7 +105,6 @@ public:
 };
 
 struct GeometryStatsData {
-
 	GeometryTypeSet types;
 	GeometryExtent extent;
 
@@ -125,7 +124,6 @@ struct GeometryStatsData {
 	}
 
 	void Update(const string_t &geom_blob) {
-
 		// Parse type
 		const auto type_info = Geometry::GetType(geom_blob);
 		types.Add(type_info.first, type_info.second);

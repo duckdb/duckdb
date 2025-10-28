@@ -838,7 +838,6 @@ static string GetShredding(case_insensitive_map_t<vector<Value>> &options, const
 }
 
 static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
-
 	auto &context = input.context;
 
 	vector<unique_ptr<Expression>> result;
@@ -846,14 +845,12 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	bool any_change = false;
 
 	for (auto &expr : input.select_list) {
-
 		const auto &type = expr->return_type;
 		const auto &name = expr->GetAlias();
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
 		if (input.copy_to_type == CopyToType::COPY_TO_FILE && IsExtensionGeometryType(type, context)) {
-
 			// Cast the column to GEOMETRY
 			auto cast_expr =
 			    BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::GEOMETRY(), false);

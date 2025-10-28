@@ -231,7 +231,6 @@ public:
 	      checkpoint_data(checkpoint_data),
 	      partial_block_manager(checkpoint_data.GetCheckpointState().GetPartialBlockManager()),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
-
 		total_vector_count = GetVectorCount(analyze_state->count);
 		total_segment_count = analyze_state->segment_count;
 		vectors_per_segment = analyze_state->vectors_per_segment;
