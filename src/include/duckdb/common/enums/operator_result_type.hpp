@@ -44,6 +44,7 @@ enum class SourceResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
 
 //! AsyncResultType is used to indicate the result of a AsyncResult, in the context of a wider operation being executed
 enum class AsyncResultType : uint8_t {
+	INVALID,  // current result is in an invalid state (eg: it's in the process of being initialized)
 	IMPLICIT, // current result depends on external context (eg: in the context of TableFunctions, either FINISHED or
 	          // HAVE_MORE_OUTPUT depending on output_chunk.size())
 	HAVE_MORE_OUTPUT,  // current result is not completed, finished (eg: in the context of TableFunctions, function accept more
