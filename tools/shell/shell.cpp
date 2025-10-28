@@ -467,6 +467,13 @@ static char mainPrompt[20];             /* First line prompt. default: "D "*/
 static char continuePrompt[20];         /* Continuation prompt. default: "   ...> " */
 static char continuePromptSelected[20]; /* Selected continuation prompt. default: "   ...> " */
 
+extern "C" {
+extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
+                                  int columns, char thousands, char decimal, int large_number_rendering,
+                                  duckdb::BaseResultRenderer *renderer);
+void *sqlite3_get_duckdb_connection(sqlite3 *db);
+}
+
 /*
 ** Render output like fprintf().  Except, if the output is going to the
 ** console and if this is running on a Windows machine, translate the
@@ -879,17 +886,6 @@ static const char *modeDescr[] = {"line",     "column", "list",    "semi",  "htm
 #define SEP_CrLf   "\r\n"
 #define SEP_Unit   "\x1F"
 #define SEP_Record "\x1E"
-
-/*
-** A callback for the sqlite3_log() interface.
-*/
-static void shellLog(void *pArg, int iErrCode, const char *zMsg) {
-	ShellState *p = (ShellState *)pArg;
-	if (p->pLog == 0)
-		return;
-	utf8_printf(p->pLog, "(%d) %s\n", iErrCode, zMsg);
-	fflush(p->pLog);
-}
 
 /*
 ** Save or restore the current output mode
@@ -1490,12 +1486,6 @@ columnar_end:
 	}
 }
 
-extern "C" {
-extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                  int columns, char thousands, char decimal, int large_number_rendering,
-                                  duckdb::BaseResultRenderer *renderer);
-}
-
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
 public:
 	DuckBoxRenderer(ShellState &state, bool highlight)
@@ -1808,88 +1798,6 @@ static string buildQualifiedName(const char *zSchema, const char *zTable) {
 	return StringUtil::Format("%s.%s", SQLIdentifier(zSchema), SQLIdentifier(zTable));
 }
 
-/*
-** This is a different callback routine used for dumping the database.
-** Each row received by this callback consists of a table name,
-** the table type ("index" or "table") and SQL to create the table.
-** This routine should print text sufficient to recreate the table.
-*/
-static int dump_callback(void *pArg, int nArg, char **azArg, char **azNotUsed) {
-	int rc;
-	const char *zTable;
-	const char *zType;
-	const char *zSql;
-	ShellState *p = (ShellState *)pArg;
-
-	UNUSED_PARAMETER(azNotUsed);
-	if (nArg != 3 || azArg == 0)
-		return 0;
-	zTable = azArg[0];
-	zType = azArg[1];
-	zSql = azArg[2];
-
-	if (strcmp(zTable, "sqlite_sequence") == 0) {
-		raw_printf(p->out, "DELETE FROM sqlite_sequence;\n");
-	} else if (ShellState::StringGlob("sqlite_stat?", zTable) == 0) {
-		raw_printf(p->out, "ANALYZE sqlite_schema;\n");
-	} else if (strncmp(zTable, "sqlite_", 7) == 0) {
-		return 0;
-	} else if (strncmp(zSql, "CREATE VIRTUAL TABLE", 20) == 0) {
-		auto zIns = StringUtil::Format("INSERT INTO sqlite_schema(type,name,tbl_name,rootpage,sql)"
-		                               "VALUES('table',%s,%s,0,%s);",
-		                               SQLString(zTable), SQLString(zTable), SQLString(zSql));
-		utf8_printf(p->out, "%s\n", zIns.c_str());
-		return 0;
-	} else {
-		p->PrintSchemaLine(zSql, ";\n");
-	}
-
-	if (strcmp(zType, "table") == 0) {
-		string sSelect;
-		string sTable;
-
-		auto zSchema = getTableSchema(p->db, zTable);
-		auto zQualifiedName = buildQualifiedName(zSchema.c_str(), zTable);
-
-		auto table_columns = p->TableColumnList(zQualifiedName.c_str());
-		if (table_columns.empty()) {
-			p->AddError();
-			return 0;
-		}
-
-		if (!zSchema.empty()) {
-			sTable += zQualifiedName;
-		} else {
-			sTable += StringUtil::Format("%s", SQLIdentifier(zTable));
-		}
-
-		/* Build an appropriate SELECT statement */
-		sSelect += "SELECT ";
-		for (idx_t i = 0; i < table_columns.size(); i++) {
-			if (i > 0) {
-				sSelect += ", ";
-			}
-			sSelect += StringUtil::Format("%s", SQLIdentifier(table_columns[i]));
-		}
-		sSelect += " FROM ";
-		sSelect += zQualifiedName;
-
-		auto savedDestTable = p->zDestTable;
-		auto savedMode = p->mode;
-		p->zDestTable = sTable;
-		p->mode = p->cMode = RenderMode::INSERT;
-		rc = p->ExecuteSQL(sSelect.c_str(), 0);
-		if ((rc & 0xff) == SQLITE_CORRUPT) {
-			throw std::runtime_error("EEK SHOULD NOT HAPPEN");
-		}
-		p->zDestTable = savedDestTable;
-		p->mode = savedMode;
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			p->AddError();
-	}
-	return 0;
-}
-
 void ShellState::AddError() {
 	nErr++;
 }
@@ -1900,17 +1808,62 @@ void ShellState::AddError() {
 ** If we get a SQLITE_CORRUPT error, rerun the query after appending
 ** "ORDER BY rowid DESC" to the end.
 */
-int ShellState::RunSchemaDumpQuery(const string &zQuery) {
-	int rc;
-	char *zErr = 0;
-	rc = sqlite3_exec(db, zQuery.c_str(), dump_callback, this, &zErr);
-	if (rc == SQLITE_CORRUPT) {
-		throw std::runtime_error("EEK SHOULD NOT HAPPEN");
-	} else if (zErr) {
-		sqlite3_free(zErr);
-		zErr = 0;
+void ShellState::RunSchemaDumpQuery(const string &zQuery) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto result = con.Query(zQuery);
+	for (auto &row : *result) {
+		auto zTable = row.GetValue<string>(0);
+		auto zType = row.GetValue<string>(1);
+		auto zSql = row.GetValue<string>(2);
+
+		// print sql
+		PrintSchemaLine(zSql.c_str(), ";\n");
+		if (zType == "table") {
+			// dump table contents
+			string sSelect;
+			string sTable;
+
+			auto zSchema = getTableSchema(db, zTable.c_str());
+			auto zQualifiedName = buildQualifiedName(zSchema.c_str(), zTable.c_str());
+
+			auto table_columns = TableColumnList(zQualifiedName.c_str());
+			if (table_columns.empty()) {
+				AddError();
+				break;
+			}
+
+			if (!zSchema.empty()) {
+				sTable += zQualifiedName;
+			} else {
+				sTable += StringUtil::Format("%s", SQLIdentifier(zTable));
+			}
+
+			/* Build an appropriate SELECT statement */
+			sSelect += "SELECT ";
+			for (idx_t i = 0; i < table_columns.size(); i++) {
+				if (i > 0) {
+					sSelect += ", ";
+				}
+				sSelect += StringUtil::Format("%s", SQLIdentifier(table_columns[i]));
+			}
+			sSelect += " FROM ";
+			sSelect += zQualifiedName;
+
+			auto savedDestTable = zDestTable;
+			auto savedMode = mode;
+			zDestTable = sTable;
+			mode = cMode = RenderMode::INSERT;
+			int rc = ExecuteSQL(sSelect.c_str(), 0);
+			if ((rc & 0xff) == SQLITE_CORRUPT) {
+				throw std::runtime_error("EEK SHOULD NOT HAPPEN");
+			}
+			zDestTable = savedDestTable;
+			mode = savedMode;
+			if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+				AddError();
+			}
+		}
 	}
-	return rc;
 }
 
 /*
@@ -2860,16 +2813,13 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	                               "AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
 	                               "ORDER BY table_schema",
 	                               zLike);
-	sqlite3_stmt *pStmt = NULL;
-	if (sqlite3_prepare_v2(state.db, zSql.c_str(), -1, &pStmt, 0) == SQLITE_OK) {
-		while (sqlite3_step(pStmt) == SQLITE_ROW) {
-			const char *schema = (const char *)sqlite3_column_text(pStmt, 0);
-			if (schema) {
-				auto create_schema = StringUtil::Format("CREATE SCHEMA IF NOT EXISTS %s;", SQLIdentifier(schema));
-				raw_printf(state.out, "%s;\n", create_schema.c_str());
-			}
-		}
-		sqlite3_finalize(pStmt);
+
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(state.db));
+	auto result = con.Query(zSql);
+	for (auto &row : *result) {
+		auto schema = row.GetValue<string>(0);
+		auto create_schema = StringUtil::Format("CREATE SCHEMA IF NOT EXISTS %s;", SQLIdentifier(schema));
+		raw_printf(state.out, "%s;\n", create_schema.c_str());
 	}
 
 	zSql = StringUtil::Format("SELECT name, type, sql FROM sqlite_schema "

@@ -21,6 +21,7 @@
 #define sqlite3_bind_pointer           duckdb_shell_sqlite3_bind_pointer
 #define sqlite3_bind_text              duckdb_shell_sqlite3_bind_text
 #define sqlite3_bind_value             duckdb_shell_sqlite3_bind_value
+#define sqlite3_get_duckdb_connection  duckdb_shell_sqlite3_get_duckdb_connection
 #define sqlite3_bind_zeroblob          duckdb_shell_sqlite3_bind_zeroblob
 #define sqlite3_blob_open              duckdb_shell_sqlite3_blob_open
 #define sqlite3_blob_write             duckdb_shell_sqlite3_blob_write

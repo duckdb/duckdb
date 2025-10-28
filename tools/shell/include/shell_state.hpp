@@ -178,7 +178,7 @@ public:
 	int ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 	               string *pzErrMsg  /* Error msg written here */
 	);
-	int RunSchemaDumpQuery(const string &zQuery);
+	void RunSchemaDumpQuery(const string &zQuery);
 	int RunTableDumpQuery(const string &zSelect);
 	void OpenDB(int openFlags);
 

@@ -37,6 +37,7 @@ extern "C" {
 void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value, int columnar,
                            char thousands, char decimal_sep, int large_number_rendering,
                            duckdb::BaseResultRenderer *renderer);
+void *sqlite3_get_duckdb_connection(sqlite3 *db);
 }
 
 static char *sqlite3_strdup(const char *str);
@@ -159,6 +160,10 @@ int sqlite3_close(sqlite3 *db) {
 
 int sqlite3_shutdown(void) {
 	return SQLITE_OK;
+}
+
+void *sqlite3_get_duckdb_connection(sqlite3 *db) {
+	return (void *)db->con.get();
 }
 
 /* In SQLite this function compiles the query into VDBE bytecode,
