@@ -42,7 +42,7 @@ public:
 	}
 	template <class U>
 	arena_stl_allocator(const arena_stl_allocator<U> &other) noexcept // NOLINT: allow implicit conversion
-	    : arena_allocator(other.arena_allocator) {
+	    : arena_allocator(other.GetAllocator()) {
 	}
 
 public:
@@ -71,6 +71,10 @@ public:
 	const_pointer address(const_reference x) const { // NOLINT: match stl case
 		return &x;
 	}
+
+    ArenaAllocator &GetAllocator() const {
+        return arena_allocator.get();
+    }
 
 public:
 	bool operator==(const arena_stl_allocator &other) const noexcept {
