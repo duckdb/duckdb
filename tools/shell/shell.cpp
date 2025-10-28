@@ -1264,6 +1264,30 @@ static int callback(void *pArg, int nArg, char **azArg, char **azCol) {
 	return renderer->state.RenderRow(*renderer, result);
 }
 
+bool ShellState::RenderQuery(RowRenderer &renderer, const string &query) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto result = con.SendQuery(query);
+	if (result->HasError()) {
+		PrintDatabaseError(result->GetError());
+		return false;
+	}
+	RowResult row_result;
+	for (auto &col_name : result->names) {
+		row_result.column_names.push_back(col_name.c_str());
+	}
+	for (auto &row : *result) {
+		row_result.data.clear();
+		vector<string> string_data;
+		string_data.reserve(result->ColumnCount());
+		for (idx_t c = 0; c < result->ColumnCount(); c++) {
+			string_data.push_back(row.GetValue<string>(c));
+			row_result.data.push_back(string_data[c].c_str());
+		}
+		renderer.state.RenderRow(renderer, row_result);
+	}
+	return true;
+}
+
 /*
 ** Set the destination table field of the ShellState structure to
 ** the name of the table given.  Escape any quote characters in the
@@ -2715,16 +2739,13 @@ MetadataResult ToggleChanges(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ShowDatabases(ShellState &state, const vector<string> &args) {
-	char *zErrMsg = 0;
 	state.OpenDB(0);
 
 	auto renderer = state.GetRowRenderer(RenderMode::LIST);
 	renderer->show_header = false;
 	renderer->col_sep = ": ";
-	sqlite3_exec(state.db, "SELECT name, file FROM pragma_database_list", callback, renderer.get(), &zErrMsg);
-	if (zErrMsg) {
-		state.PrintDatabaseError(zErrMsg);
-		sqlite3_free(zErrMsg);
+	bool success = state.RenderQuery(*renderer, "SELECT name, file FROM pragma_database_list");
+	if (!success) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;

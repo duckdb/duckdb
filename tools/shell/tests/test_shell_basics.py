@@ -855,10 +855,12 @@ def test_clone(shell, random_filepath):
 def test_databases(shell):
     test = (
         ShellTest(shell)
+        .statement("ATTACH ':memory:' AS xx")
         .statement(".databases")
     )
     result = test.run()
     result.check_stdout('memory')
+    result.check_stdout('xx')
 
 def test_invalid_csv(shell, tmp_path):
     file = tmp_path / 'nonsencsv.csv'

@@ -214,6 +214,9 @@ public:
 
 	//! Execute a SQL query - prints a warning if the query fails to execute
 	void ExecuteQuery(const string &query);
+	//! Execute a SQL query and renders the result using the given renderer.
+	//! On fail - prints the error and returns false
+	bool RenderQuery(RowRenderer &renderer, const string &query);
 };
 
 } // namespace duckdb_shell
