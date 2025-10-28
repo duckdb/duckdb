@@ -1604,36 +1604,20 @@ private:
 	bool highlight = true;
 };
 
-class TrashRenderer : public duckdb::BaseResultRenderer {
-public:
-	TrashRenderer() {
-	}
-
-	void RenderLayout(const string &) override {
-	}
-
-	void RenderColumnName(const string &) override {
-	}
-
-	void RenderType(const string &) override {
-	}
-
-	void RenderValue(const string &, const duckdb::LogicalType &) override {
-	}
-
-	void RenderNull(const string &, const duckdb::LogicalType &) override {
-	}
-
-	void RenderFooter(const string &) override {
-	}
-
-	void PrintText(const string &, HighlightElementType) {
-	}
-};
-
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
+	// FIXME: unify execution here, switch only on rendering
 	if (ShellRenderer::IsColumnar(cMode)) {
 		return ExecutePreparedStatementColumnar(std::move(statement));
+	}
+	if (cMode == RenderMode::TRASH) {
+		// execute the query but don't render anything
+		auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+		auto res = con.Query(std::move(statement));
+		if (res->HasError()) {
+			PrintDatabaseError(res->GetError());
+			return SuccessState::FAILURE;
+		}
+		return SuccessState::SUCCESS;
 	}
 
 	// TEMPORARY FALLBACK - use old mechanism for rendering
@@ -1680,12 +1664,6 @@ SuccessState ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		                      decimal_separator, int(large_rendering), &renderer);
 		return SuccessState::SUCCESS;
 	}
-	if (cMode == RenderMode::TRASH) {
-		TrashRenderer renderer;
-		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', 0, &renderer);
-		return SuccessState::SUCCESS;
-	}
-
 	/* perform the first step.  this will tell us if we
 	** have a result set or not and how wide it is.
 	*/
