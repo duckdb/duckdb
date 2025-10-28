@@ -48,7 +48,7 @@ public:
 			payload_aggregates_ptr.push_back(&bound_aggr_expr);
 		}
 
-		payload_rows.Initialize(Allocator::DefaultAllocator(), aggr_input_types);
+		payload_rows.Initialize(Allocator::Get(context), aggr_input_types);
 
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
 		                                          op.payload_types, payload_aggregates_ptr);

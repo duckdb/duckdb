@@ -129,7 +129,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			if (bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 				// No alias and no way to infer target column through first argument
 				throw BinderException(expr->GetQueryLocation(),
-				                      "An aggregate must either have a column reference or an alias.");
+				                      "In USING KEY, an aggregate must either have a column reference or an alias.");
 			}
 			aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
 		}
