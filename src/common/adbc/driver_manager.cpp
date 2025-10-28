@@ -1080,7 +1080,6 @@ AdbcStatusCode AdbcConnectionGetTableTypes(struct AdbcConnection *connection, st
 
 AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
                                   struct AdbcError *error) {
-
 	if (!connection->private_data) {
 		SetError(error, "Must call AdbcConnectionNew first");
 		return ADBC_STATUS_INVALID_STATE;

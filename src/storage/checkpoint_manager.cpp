@@ -565,7 +565,6 @@ void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &d
 
 void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserializer &deserializer,
                                      BoundCreateTableInfo &bound_info) {
-
 	// written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");

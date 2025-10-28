@@ -8,4 +8,4 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SELECT * FROM 'data/parquet-testing/issue6990.parquet';
+SELECT * FROM '{DATA_DIR}/parquet-testing/issue6990.parquet';

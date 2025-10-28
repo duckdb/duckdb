@@ -72,7 +72,6 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 
 	// we zero-out the iv and the (not yet) encrypted canary

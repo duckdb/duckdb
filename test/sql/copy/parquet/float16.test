@@ -8,17 +8,17 @@ statement ok
 PRAGMA enable_verification
 
 query III
-select type, type_length, logical_type from parquet_schema('data/parquet-testing/float16.parquet') where name = 'x'
+select type, type_length, logical_type from parquet_schema('{DATA_DIR}/parquet-testing/float16.parquet') where name = 'x'
 ----
 FIXED_LEN_BYTE_ARRAY	2	Float16Type()
 
 query I
-select typeof(x) from read_parquet('data/parquet-testing/float16.parquet') limit 1;
+select typeof(x) from read_parquet('{DATA_DIR}/parquet-testing/float16.parquet') limit 1;
 ----
 FLOAT
 
 query I
-select x from read_parquet('data/parquet-testing/float16.parquet') order by x;
+select x from read_parquet('{DATA_DIR}/parquet-testing/float16.parquet') order by x;
 ----
 -inf
 0.0
@@ -30,7 +30,7 @@ nan
 -nan
 
 query I
-select x from read_parquet('data/parquet-testing/float16.parquet') where x > 1.1 order by x;
+select x from read_parquet('{DATA_DIR}/parquet-testing/float16.parquet') where x > 1.1 order by x;
 ----
 1.5
 inf
