@@ -1758,7 +1758,7 @@ vector<string> ShellState::TableColumnList(const char *zTab) {
 	if (query_result->HasError()) {
 		return result;
 	}
-	for(auto &row : *query_result) {
+	for (auto &row : *query_result) {
 		result.push_back(row.GetValue<string>(1));
 	}
 	return result;
@@ -1774,19 +1774,14 @@ static string getTableSchema(sqlite3 *db, const char *zTable) {
 	                               "ORDER BY (table_schema='main') DESC LIMIT 1",
 	                               SQLString(zTable));
 
-	sqlite3_stmt *pStmt = NULL;
-	int rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
-
-	if (rc == SQLITE_OK && pStmt) {
-		if (sqlite3_step(pStmt) == SQLITE_ROW) {
-			const char *schema = (const char *)sqlite3_column_text(pStmt, 0);
-			if (schema) {
-				zSchema = schema;
-			}
-		}
-		sqlite3_finalize(pStmt);
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto query_result = con.Query(zSql);
+	if (query_result->HasError()) {
+		return zSchema;
 	}
-
+	for (auto &row : *query_result) {
+		zSchema = row.GetValue<string>(0);
+	}
 	return zSchema;
 }
 
@@ -2072,6 +2067,14 @@ static int showHelp(FILE *out, const char *zPattern) {
 	return n;
 }
 
+void ShellState::ExecuteQuery(const string &query) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto res = con.Query(query);
+	if (res->HasError()) {
+		utf8_printf(stderr, "Failed to execute query \"%s\": %s\n", query.c_str(), res->GetError().c_str());
+	}
+}
+
 /* Flags for open_db().
 **
 ** The default behavior of open_db() is to exit(1) if the database fails to
@@ -2128,11 +2131,11 @@ void ShellState::OpenDB(int flags) {
 			exit(1);
 		}
 		if (safe_mode) {
-			sqlite3_exec(db, "SET enable_external_access=false", NULL, NULL, NULL);
+			ExecuteQuery("SET enable_external_access=false");
 		}
 		if (stdout_is_console) {
-			sqlite3_exec(db, "PRAGMA enable_progress_bar", NULL, NULL, NULL);
-			sqlite3_exec(db, "PRAGMA enable_print_progress_bar", NULL, NULL, NULL);
+			ExecuteQuery("PRAGMA enable_progress_bar");
+			ExecuteQuery("PRAGMA enable_print_progress_bar");
 		}
 	}
 }
@@ -2943,7 +2946,7 @@ MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args) {
 	safe_mode = true;
 	if (state.db) {
 		// db has been opened - disable external access
-		sqlite3_exec(state.db, "SET enable_external_access=false", NULL, NULL, NULL);
+		state.ExecuteQuery("SET enable_external_access=false");
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -3234,7 +3237,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 	}
 	needCommit = sqlite3_get_autocommit(db);
 	if (needCommit)
-		sqlite3_exec(db, "BEGIN", 0, 0, 0);
+		ExecuteQuery("BEGIN");
 	do {
 		int startLine = sCtx.nLine;
 		int i;
@@ -3291,7 +3294,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 	import_cleanup(&sCtx);
 	sqlite3_finalize(pStmt);
 	if (needCommit)
-		sqlite3_exec(db, "COMMIT", 0, 0, 0);
+		ExecuteQuery("COMMIT");
 	if (eVerbose > 0) {
 		utf8_printf(out, "Added %d rows with %d errors using %d lines of input\n", sCtx.nRow, sCtx.nErr,
 		            sCtx.nLine - 1);

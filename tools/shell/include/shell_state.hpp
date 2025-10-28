@@ -211,6 +211,9 @@ public:
 	static void GenerateRandomBytes(int N, void *pBuf);
 	static bool StringGlob(const char *zGlobPattern, const char *zString);
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
+
+	//! Execute a SQL query - prints a warning if the query fails to execute
+	void ExecuteQuery(const string &query);
 };
 
 } // namespace duckdb_shell
