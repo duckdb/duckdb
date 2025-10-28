@@ -39,8 +39,10 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	state.child_states.resize(sub_columns.size() + 1);
 
 	auto unshredded_type = VariantStats::GetUnshreddedType();
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		state.child_states[i + 1].Initialize(state.context, unshredded_type, state.scan_options);
+	state.child_states[1].Initialize(state.context, unshredded_type, state.scan_options);
+	if (is_shredded) {
+		auto &shredded_column = sub_columns[1];
+		state.child_states[2].Initialize(state.context, shredded_column->type, state.scan_options);
 	}
 	state.child_states[0].scan_options = state.scan_options;
 }
@@ -105,6 +107,9 @@ void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
 	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
+	if (is_shredded) {
+		throw NotImplementedException("Can't scan shredded VARIANT column");
+	}
 	//! TODO: implement the 'unshredding' logic here, to output a regular VARIANT when the VARIANT is stored shredded
 	sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], result, target_count);
 	return scan_count;
@@ -113,6 +118,9 @@ idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 idx_t VariantColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
                                        idx_t target_count) {
 	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
+	if (is_shredded) {
+		throw NotImplementedException("Can't scan shredded VARIANT column");
+	}
 	//! TODO: implement the 'unshredding' logic here, to output a regular VARIANT when the VARIANT is stored shredded
 	sub_columns[0]->ScanCommitted(vector_index, state.child_states[1], result, allow_updates, target_count);
 	return scan_count;
@@ -453,6 +461,7 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 		if (!is_shredded) {
 			VariantStats::SetShreddedStats(target_stats, BaseStatistics::CreateEmpty(shredded_type));
 			sub_columns.push_back(ColumnData::CreateColumnUnique(block_manager, info, 2, start, shredded_type, this));
+			is_shredded = true;
 		}
 		auto &shredded_stats = VariantStats::GetShreddedStats(target_stats);
 		sub_columns[1]->InitializeColumn(column_data.child_columns[2], shredded_stats);
