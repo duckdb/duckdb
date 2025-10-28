@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
@@ -95,20 +96,18 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 }
 
 void Iterator::FindMinimum(const Node &node) {
+	Node current_node = node;
+	reference<Node> ref(current_node);
 
-	auto current_node = node;
-
-	while (true) {
-		D_ASSERT(current_node.HasMetadata());
-
+	while (ref.get().HasMetadata()) {
 		// Found the minimum.
-		if (current_node.IsAnyLeaf()) {
-			last_leaf = current_node;
+		if (ref.get().IsAnyLeaf()) {
+			last_leaf = ref.get();
 			return;
 		}
 
 		// We are passing a gate node.
-		if (current_node.GetGateStatus() == GateStatus::GATE_SET) {
+		if (ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 			D_ASSERT(status == GateStatus::GATE_NOT_SET);
 			status = GateStatus::GATE_SET;
 			entered_nested_leaf = true;
@@ -116,8 +115,8 @@ void Iterator::FindMinimum(const Node &node) {
 		}
 
 		// Traverse the prefix.
-		if (current_node.GetType() == NType::PREFIX) {
-			Prefix prefix(art, current_node);
+		if (ref.get().GetType() == NType::PREFIX) {
+			Prefix prefix(art, ref.get());
 			for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 				current_key.Push(prefix.data[i]);
 				if (status == GateStatus::GATE_SET) {
@@ -126,14 +125,14 @@ void Iterator::FindMinimum(const Node &node) {
 					D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 				}
 			}
-			nodes.emplace(current_node, 0);
-			current_node = *prefix.ptr;
+			nodes.emplace(ref.get(), 0);
+			ref = *prefix.ptr;
 			continue;
 		}
 
 		// Go to the leftmost entry in the current node.
 		uint8_t byte = 0;
-		auto next = current_node.GetNextChild(art, byte);
+		auto next = ref.get().GetNextChild(art, byte);
 		D_ASSERT(next);
 
 		// Move to the leftmost node.
@@ -143,40 +142,39 @@ void Iterator::FindMinimum(const Node &node) {
 			nested_depth++;
 			D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 		}
-		nodes.emplace(current_node, byte);
-		current_node = *next;
+		nodes.emplace(ref.get(), byte);
+		ref = *next;
 	}
+	// Should always have a node with metadata.
+	throw InternalException("Iterator::FindMinimum: Reached node without metadata");
 }
 
 bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal) {
-	auto current_node = node;
+	Node current_node = node;
+	reference<Node> ref(current_node);
 	idx_t depth = 0;
 
-	while (true) {
-		if (!current_node.HasMetadata()) {
-			return false;
-		}
-
+	while (ref.get().HasMetadata()) {
 		// We found any leaf node, or a gate.
-		if (current_node.IsAnyLeaf() || current_node.GetGateStatus() == GateStatus::GATE_SET) {
+		if (ref.get().IsAnyLeaf() || ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 			D_ASSERT(status == GateStatus::GATE_NOT_SET);
 			D_ASSERT(current_key.Size() == key.len);
 			if (!equal && current_key.Contains(key)) {
 				return Next();
 			}
 
-			if (current_node.GetGateStatus() == GateStatus::GATE_SET) {
-				FindMinimum(current_node);
+			if (ref.get().GetGateStatus() == GateStatus::GATE_SET) {
+				FindMinimum(ref.get());
 			} else {
-				last_leaf = current_node;
+				last_leaf = ref.get();
 			}
 			return true;
 		}
 
-		D_ASSERT(current_node.GetGateStatus() == GateStatus::GATE_NOT_SET);
-		if (current_node.GetType() != NType::PREFIX) {
+		D_ASSERT(ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET);
+		if (ref.get().GetType() != NType::PREFIX) {
 			auto next_byte = key[depth];
-			auto child = current_node.GetNextChild(art, next_byte);
+			auto child = ref.get().GetNextChild(art, next_byte);
 
 			// The key is greater than any key in this subtree.
 			if (!child) {
@@ -184,7 +182,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 			}
 
 			current_key.Push(next_byte);
-			nodes.emplace(current_node, next_byte);
+			nodes.emplace(ref.get(), next_byte);
 
 			// We return the minimum because all keys are greater than the lower bound.
 			if (next_byte > key[depth]) {
@@ -193,17 +191,17 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 			}
 
 			// Move to the child and increment depth.
-			current_node = *child;
+			ref = *child;
 			depth++;
 			continue;
 		}
 
 		// Push back all prefix bytes.
-		Prefix prefix(art, current_node);
+		Prefix prefix(art, ref.get());
 		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
-		nodes.emplace(current_node, 0);
+		nodes.emplace(ref.get(), 0);
 
 		// We compare the prefix bytes with the key bytes.
 		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
@@ -225,8 +223,10 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 
 		// The prefix matches the key. Move to the child and update depth.
 		depth += prefix.data[Prefix::Count(art)];
-		current_node = *prefix.ptr;
+		ref = *prefix.ptr;
 	}
+	// Should always have a node with metadata.
+	throw InternalException("Iterator::LowerBound: Reached node without metadata");
 }
 
 bool Iterator::Next() {
