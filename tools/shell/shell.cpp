@@ -1751,17 +1751,16 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 */
 vector<string> ShellState::TableColumnList(const char *zTab) {
 	vector<string> result;
-	sqlite3_stmt *pStmt;
 
 	auto zSql = StringUtil::Format("PRAGMA table_info=%s", SQLString(zTab));
-	int rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
-	if (rc) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto query_result = con.Query(zSql);
+	if (query_result->HasError()) {
 		return result;
 	}
-	while (sqlite3_step(pStmt) == SQLITE_ROW) {
-		result.push_back(string((const char *)sqlite3_column_text(pStmt, 1)));
+	for(auto &row : *query_result) {
+		result.push_back(row.GetValue<string>(1));
 	}
-	sqlite3_finalize(pStmt);
 	return result;
 }
 
