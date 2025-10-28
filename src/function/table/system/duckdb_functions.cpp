@@ -696,7 +696,7 @@ void ExtractWindowFunctionData(case_insensitive_map_t<ExpressionType>::const_ite
 	case ExpressionType::WINDOW_LAG: {
 		return_type = Value("T");
 		parameter_types = Value::LIST({Value("T"), Value("BIGINT"), Value("T")});
-		parameter_names = Value::LIST({Value("expr["), Value("offset"), Value("default]")});
+		parameter_names = Value::LIST({Value("expr["), Value("offset["), Value("default]]")});
 		break;
 	default:
 		return;
