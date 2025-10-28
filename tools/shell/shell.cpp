@@ -3218,20 +3218,19 @@ bool ShellState::ImportData(const vector<string> &args) {
 	if (eVerbose >= 2) {
 		utf8_printf(out, "Insert using: %s\n", zSql.c_str());
 	}
-	rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
-	if (rc) {
-		ShellDatabaseError(db);
-		if (pStmt) {
-			sqlite3_finalize(pStmt);
-		}
-		import_cleanup(&sCtx);
-		return false;
-	}
 	needCommit = sqlite3_get_autocommit(db);
 	if (needCommit) {
 		ExecuteQuery("BEGIN");
 	}
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto prepared = con.Prepare(zSql);
+	if (prepared->HasError()) {
+		PrintDatabaseError(prepared->GetError());
+		import_cleanup(&sCtx);
+		return false;
+	}
 	do {
+		duckdb::vector<duckdb::Value> bind_values;
 		int startLine = sCtx.nLine;
 		int i;
 		for (i = 0; i < nCol; i++) {
@@ -3240,16 +3239,22 @@ bool ShellState::ImportData(const vector<string> &args) {
 			** Did we reach end-of-file before finding any columns?
 			** If so, stop instead of NULL filling the remaining columns.
 			*/
-			if (z == 0 && i == 0)
+			if (z == 0 && i == 0) {
 				break;
+			}
 			/*
 			** Did we reach end-of-file OR end-of-line before finding any
 			** columns in ASCII mode?  If so, stop instead of NULL filling
 			** the remaining columns.
 			*/
-			if (mode == RenderMode::ASCII && (z == 0 || z[0] == 0) && i == 0)
+			if (mode == RenderMode::ASCII && (z == 0 || z[0] == 0) && i == 0) {
 				break;
-			sqlite3_bind_text(pStmt, i + 1, z, -1, SQLITE_TRANSIENT);
+			}
+			if (!duckdb::Value::StringIsValid(z, strlen(z))) {
+				bind_values.emplace_back();
+			} else {
+				bind_values.emplace_back(z);
+			}
 			if (i < nCol - 1 && sCtx.cTerm != sCtx.cColSep) {
 				utf8_printf(stderr,
 				            "%s:%d: expected %d columns but found %d - "
@@ -3257,7 +3262,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 				            sCtx.zFile, startLine, nCol, i + 1);
 				i += 2;
 				while (i <= nCol) {
-					sqlite3_bind_null(pStmt, i);
+					bind_values.emplace_back();
 					i++;
 				}
 			}
@@ -3273,10 +3278,9 @@ bool ShellState::ImportData(const vector<string> &args) {
 			            sCtx.zFile, startLine, nCol, i);
 		}
 		if (i >= nCol) {
-			sqlite3_step(pStmt);
-			rc = sqlite3_reset(pStmt);
-			if (rc != SQLITE_OK) {
-				utf8_printf(stderr, "%s:%d: INSERT failed: %s\n", sCtx.zFile, startLine, sqlite3_errmsg(db));
+			auto result = prepared->Execute(bind_values);
+			if (result->HasError()) {
+				utf8_printf(stderr, "%s:%d: INSERT failed: %s\n", sCtx.zFile, startLine, result->GetError().c_str());
 				sCtx.AddError();
 			} else {
 				sCtx.nRow++;
@@ -3284,8 +3288,8 @@ bool ShellState::ImportData(const vector<string> &args) {
 		}
 	} while (sCtx.cTerm != EOF);
 
+	prepared.reset();
 	import_cleanup(&sCtx);
-	sqlite3_finalize(pStmt);
 	if (needCommit) {
 		ExecuteQuery("COMMIT");
 	}
@@ -3701,7 +3705,6 @@ MetadataResult SetWidths(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
-	sqlite3_stmt *pStmt;
 	string s;
 	OpenDB(0);
 
@@ -3771,38 +3774,43 @@ sqlite_schema
 WHERE type='index' AND tbl_name LIKE ?1)";
 	}
 
-	int rc = sqlite3_prepare_v2(db, s.c_str(), -1, &pStmt, 0);
-	if (rc) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto prepared = con.Prepare(s);
+	if (prepared->HasError()) {
+		PrintDatabaseError(prepared->GetError());
 		return MetadataResult::FAIL;
 	}
+
+	duckdb::vector<duckdb::Value> bind_values;
 
 	if (type == 't') {
 		// Bind parameters for the new DuckDB query
 		if (!schema_filter.empty()) {
-			sqlite3_bind_text(pStmt, 1, schema_filter.c_str(), -1, SQLITE_TRANSIENT);
-			sqlite3_bind_text(pStmt, 2, table_filter.c_str(), -1, SQLITE_TRANSIENT);
+			bind_values.emplace_back(schema_filter);
+			bind_values.emplace_back(table_filter);
 		} else {
-			sqlite3_bind_text(pStmt, 1, filter_pattern.c_str(), -1, SQLITE_TRANSIENT);
+			bind_values.emplace_back(filter_pattern);
 		}
 	} else {
 		// Original binding for indexes
 		if (args.size() > 1) {
-			sqlite3_bind_text(pStmt, 1, args[1].c_str(), -1, SQLITE_TRANSIENT);
+			bind_values.emplace_back(args[1]);
 		} else {
-			sqlite3_bind_text(pStmt, 1, "%", -1, SQLITE_STATIC);
+			bind_values.emplace_back("%");
 		}
 	}
 
-	vector<string> result;
-	while (sqlite3_step(pStmt) == SQLITE_ROW) {
-		result.push_back((const char *)sqlite3_column_text(pStmt, 0));
+	auto query_result = prepared->Execute(bind_values);
+	if (query_result->HasError()) {
+		PrintDatabaseError(query_result->GetError());
 	}
-	if (sqlite3_finalize(pStmt) != SQLITE_OK) {
-		rc = ShellDatabaseError(db);
+	vector<string> result;
+	for (auto &row : *query_result) {
+		result.push_back(row.GetValue<string>(0));
 	}
 
 	/* Pretty-print the contents of array azResult[] to the output */
-	if (rc == 0 && !result.empty()) {
+	if (!result.empty()) {
 		idx_t maxlen = 0;
 		for (auto &r : result) {
 			idx_t len = r.size();
@@ -3823,7 +3831,7 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 			raw_printf(out, "\n");
 		}
 	}
-	return rc == 0 ? MetadataResult::SUCCESS : MetadataResult::FAIL;
+	return MetadataResult::SUCCESS;
 }
 
 MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
