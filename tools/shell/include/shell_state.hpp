@@ -16,13 +16,13 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb.hpp"
 
-struct sqlite3;
-struct sqlite3_stmt;
 enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
 using duckdb::unique_ptr;
+using duckdb::make_uniq;
 using std::string;
 using std::vector;
 struct ColumnarResult;
@@ -72,6 +72,10 @@ enum class ShellFlags : uint32_t {
 	SHFLG_HeaderSet = 0x00000080     /* .header has been used */
 };
 
+enum class ShellOpenFlags {
+	EXIT_ON_FAILURE,
+	KEEP_ALIVE_ON_FAILURE
+};
 enum class SuccessState { SUCCESS, FAILURE };
 
 /*
@@ -82,12 +86,12 @@ struct ShellState {
 public:
 	ShellState();
 
-	sqlite3 *db = nullptr;                    /* The database */
-	uint8_t openMode = 0;                     /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
+	unique_ptr<duckdb::DuckDB> db;            /* The database */
+	unique_ptr<duckdb::Connection> conn;      /* The primary connection to the database */
+	duckdb::DBConfig config;                  /* Config used for opening the database */
 	uint8_t doXdgOpen = 0;                    /* Invoke start/open/xdg-open in output_reset() */
 	int outCount = 0;                         /* Revert to stdout when reaching zero */
 	int lineno = 0;                           /* Line number of last line read from in */
-	int openFlags = 0;                        /* Additional flags to open.  (SQLITE_OPEN_NOFOLLOW) */
 	FILE *in = nullptr;                       /* Read commands from this stream */
 	FILE *out = nullptr;                      /* Write results here */
 	int nErr = 0;                             /* Number of errors seen */
@@ -182,7 +186,7 @@ public:
 	SuccessState ExecuteSQL(const string &zSql);
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
-	void OpenDB(int openFlags);
+	void OpenDB(ShellOpenFlags open_flags = ShellOpenFlags::EXIT_ON_FAILURE);
 
 	void SetOrClearFlag(ShellFlags mFlag, const string &zArg);
 	bool ShellHasFlag(ShellFlags flag) {

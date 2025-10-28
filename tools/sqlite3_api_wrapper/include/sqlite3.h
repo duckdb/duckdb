@@ -576,11 +576,6 @@ SQLITE_API int sqlite3_exec(
 /* Legacy compatibility: */
 #define SQLITE_OPEN_MASTER_JOURNAL   0x00004000  /* VFS only */
 
-// we need to somehow communicate this through open_v2
-#define DUCKDB_UNSIGNED_EXTENSIONS   0x10000000
-#define DUCKDB_UNREDACTED_SECRETS    0x20000000
-#define DUCKDB_LATEST_STORAGE_VERSION 0x40000000
-
 /*
 ** CAPI3REF: Device Characteristics
 **

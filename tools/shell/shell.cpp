@@ -86,6 +86,10 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+#include "autocomplete_extension.hpp"
+#endif
+#include "shell_extension.hpp"
 #include "sqlite3.h"
 #include <ctype.h>
 
@@ -147,6 +151,7 @@
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 using duckdb::KeywordHelper;
 using duckdb::SQLIdentifier;
@@ -396,11 +401,11 @@ static bool stdout_is_console = true;
 static bool stderr_is_console = true;
 
 /*
-** The following is the open SQLite database.  We make a pointer
+** The following is the open database.  We make a pointer
 ** to this database a static variable so that it can be accessed
 ** by the SIGINT handler to interrupt database processing.
 */
-static sqlite3 *globalDb = nullptr;
+static duckdb_shell::ShellState *globalState = nullptr;
 
 /*
 ** True if an interrupt (Control-C) has been received.
@@ -451,13 +456,6 @@ static bool HighlightResults() {
 static char mainPrompt[20];             /* First line prompt. default: "D "*/
 static char continuePrompt[20];         /* Continuation prompt. default: "   ...> " */
 static char continuePromptSelected[20]; /* Selected continuation prompt. default: "   ...> " */
-
-extern "C" {
-extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                  int columns, char thousands, char decimal, int large_number_rendering,
-                                  duckdb::BaseResultRenderer *renderer);
-void *sqlite3_get_duckdb_connection(sqlite3 *db);
-}
 
 /*
 ** Render output like fprintf().  Except, if the output is going to the
@@ -514,6 +512,11 @@ static void shell_out_of_memory(void) {
 }
 
 ShellState::ShellState() {
+	config.error_manager->AddCustomError(
+		duckdb::ErrorType::UNSIGNED_EXTENSION,
+		"Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
+		"extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
+		"(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
 }
 
@@ -657,7 +660,7 @@ int ShellState::RunInitialCommand(char *sql, bool bail) {
 		}
 	} else {
 		string zErrMsg;
-		OpenDB(0);
+		OpenDB();
 		BEGIN_TIMER;
 		auto res = ExecuteSQL(sql);
 		END_TIMER;
@@ -838,16 +841,6 @@ int64_t ShellState::StringToInt(const string &arg) {
 	}
 	return isNeg ? -v : v;
 }
-
-/* Allowed values for ShellState.openMode
- */
-#define SHELL_OPEN_UNSPEC      0 /* No open-mode specified */
-#define SHELL_OPEN_NORMAL      1 /* Normal database file */
-#define SHELL_OPEN_APPENDVFS   2 /* Use appendvfs */
-#define SHELL_OPEN_ZIPFILE     3 /* Use the zipfile virtual table */
-#define SHELL_OPEN_READONLY    4 /* Open a normal database read-only */
-#define SHELL_OPEN_DESERIALIZE 5 /* Open using sqlite3_deserialize() */
-#define SHELL_OPEN_HEXDB       6 /* Use "dbtotxt" output as data source */
 
 static const char *modeDescr[] = {"line",     "column", "list",    "semi",  "html",        "insert",    "quote",
                                   "tcl",      "csv",    "explain", "ascii", "prettyprint", "eqp",       "json",
@@ -1119,9 +1112,8 @@ static void interrupt_handler(int NotUsed) {
 	if (seenInterrupt > 2) {
 		exit(1);
 	}
-	if (globalDb) {
-		auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(globalDb));
-		con.Interrupt();
+	if (globalState && globalState->conn) {
+		globalState->conn->Interrupt();
 	}
 }
 
@@ -1230,7 +1222,7 @@ int ShellState::RenderRow(RowRenderer &renderer, RowResult &result) {
 }
 
 SuccessState ShellState::RenderQuery(RowRenderer &renderer, const string &query) {
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	auto result = con.SendQuery(query);
 	if (result->HasError()) {
 		PrintDatabaseError(result->GetError());
@@ -1259,7 +1251,7 @@ void ShellState::SetTableName(const char *zName) {
 ** won't consume the semicolon terminator.
 */
 void ShellState::RunTableDumpQuery(const string &zSelect) {
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	auto result = con.Query(zSelect);
 	if (result->HasError()) {
 		utf8_printf(out, "/**** ERROR: %s *****/\n", result->GetError().c_str());
@@ -1590,7 +1582,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
 		return SuccessState::FAILURE;
 	}
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	unique_ptr<duckdb::QueryResult> res;
 	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX) {
 		// for row-wise rendering we can use streaming results
@@ -1661,7 +1653,7 @@ SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
 		config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
 		duckdb::BoxRenderer renderer(config);
 		auto &materialized = res.Cast<duckdb::MaterializedQueryResult>();
-		auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+		auto &con = *conn;
 		renderer.Render(*con.context, res.names, materialized.Collection(), result_renderer);
 		return SuccessState::SUCCESS;
 	} catch (std::exception &ex) {
@@ -1680,7 +1672,7 @@ SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
 ** and callback data argument.
 */
 SuccessState ShellState::ExecuteSQL(const string &zSql) {
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	try {
 		auto statements = con.ExtractStatements(zSql);
 		for (auto &statement : statements) {
@@ -1729,7 +1721,7 @@ vector<string> ShellState::TableColumnList(const char *zTab) {
 	vector<string> result;
 
 	auto zSql = StringUtil::Format("PRAGMA table_info=%s", SQLString(zTab));
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	auto query_result = con.Query(zSql);
 	if (query_result->HasError()) {
 		return result;
@@ -1743,14 +1735,13 @@ vector<string> ShellState::TableColumnList(const char *zTab) {
 /*
 ** Lookup the schema for a table using the information schema.
 */
-static string getTableSchema(sqlite3 *db, const char *zTable) {
+static string getTableSchema(duckdb::Connection &con, const char *zTable) {
 	string zSchema;
 	auto zSql = StringUtil::Format("SELECT table_schema FROM information_schema.tables "
 	                               "WHERE table_name = %s AND table_type='BASE TABLE' "
 	                               "ORDER BY (table_schema='main') DESC LIMIT 1",
 	                               SQLString(zTable));
 
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
 	auto query_result = con.Query(zSql);
 	if (query_result->HasError()) {
 		return zSchema;
@@ -1779,7 +1770,7 @@ void ShellState::AddError() {
 ** "ORDER BY rowid DESC" to the end.
 */
 void ShellState::RunSchemaDumpQuery(const string &zQuery) {
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	auto result = con.Query(zQuery);
 	for (auto &row : *result) {
 		auto zTable = row.GetValue<string>(0);
@@ -1793,7 +1784,7 @@ void ShellState::RunSchemaDumpQuery(const string &zQuery) {
 			string sSelect;
 			string sTable;
 
-			auto zSchema = getTableSchema(db, zTable.c_str());
+			auto zSchema = getTableSchema(con, zTable.c_str());
 			auto zQualifiedName = buildQualifiedName(zSchema.c_str(), zTable.c_str());
 
 			auto table_columns = TableColumnList(zQualifiedName.c_str());
@@ -2041,7 +2032,7 @@ static int showHelp(FILE *out, const char *zPattern) {
 }
 
 SuccessState ShellState::ExecuteQuery(const string &query) {
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	auto res = con.Query(query);
 	if (res->HasError()) {
 		utf8_printf(stderr, "Failed to execute query \"%s\": %s\n", query.c_str(), res->GetError().c_str());
@@ -2050,61 +2041,25 @@ SuccessState ShellState::ExecuteQuery(const string &query) {
 	return SuccessState::SUCCESS;
 }
 
-/* Flags for open_db().
-**
-** The default behavior of open_db() is to exit(1) if the database fails to
-** open.  The OPEN_DB_KEEPALIVE flag changes that so that it prints an error
-** but still returns without calling exit.
-**
-** The OPEN_DB_ZIPFILE flag causes open_db() to prefer to open files as a
-** ZIP archive if the file does not exist or is empty and its name matches
-** the *.zip pattern.
-*/
-#define OPEN_DB_KEEPALIVE 0x001 /* Return after error if true */
-/*
-** Make sure the database is open.  If it is not, then open it.  If
-** the database fails to open, print an error message and exit.
-*/
-void ShellState::OpenDB(int flags) {
-
-	if (db == 0) {
-		if (openMode == SHELL_OPEN_UNSPEC) {
-			openMode = SHELL_OPEN_NORMAL;
-		}
-		switch (openMode) {
-		case SHELL_OPEN_APPENDVFS: {
-			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | openFlags,
-			                "apndvfs");
-			break;
-		}
-		case SHELL_OPEN_HEXDB:
-		case SHELL_OPEN_DESERIALIZE: {
-			sqlite3_open(0, &db);
-			break;
-		}
-		case SHELL_OPEN_ZIPFILE: {
-			sqlite3_open(":memory:", &db);
-			break;
-		}
-		case SHELL_OPEN_READONLY: {
-			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READONLY | openFlags, 0);
-			break;
-		}
-		case SHELL_OPEN_UNSPEC:
-		case SHELL_OPEN_NORMAL: {
-			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | openFlags, 0);
-			break;
-		}
-		}
-		globalDb = db;
-		if (db == 0 || SQLITE_OK != sqlite3_errcode(db)) {
-			utf8_printf(stderr, "Error: unable to open database \"%s\": %s\n", zDbFilename.c_str(), sqlite3_errmsg(db));
-			if (flags & OPEN_DB_KEEPALIVE) {
-				sqlite3_open(":memory:", &db);
-				return;
+void ShellState::OpenDB(ShellOpenFlags flags) {
+	if (!db) {
+		try {
+			db = make_uniq<duckdb::DuckDB>(zDbFilename.c_str(), &config);
+			conn = make_uniq<duckdb::Connection>(*db);
+		} catch(std::exception &ex) {
+			duckdb::ErrorData error(ex);
+			PrintDatabaseError(error.Message());
+			if (flags == ShellOpenFlags::KEEP_ALIVE_ON_FAILURE) {
+				db = make_uniq<duckdb::DuckDB>(":memory:", &config);
+				conn = make_uniq<duckdb::Connection>(*db);
+			} else {
+				exit(1);
 			}
-			exit(1);
 		}
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+		db->LoadStaticExtension<AutocompleteExtension>();
+#endif
+		db->LoadStaticExtension<duckdb::ShellExtension>();
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
 		}
@@ -2115,26 +2070,18 @@ void ShellState::OpenDB(int flags) {
 	}
 }
 
-/*
-** Attempt to close the databaes connection.  Report errors.
-*/
-void close_db(sqlite3 *db) {
-	int rc = sqlite3_close(db);
-	if (rc) {
-		utf8_printf(stderr, "Error: sqlite3_close() returns %d: %s\n", rc, sqlite3_errmsg(db));
-	}
-}
-
 #ifdef HAVE_LINENOISE
 /*
 ** Linenoise completion callback
 */
-static int linenoise_open_flags = 0;
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	idx_t nLine = ShellState::StringLength(zLine);
 	char zBuf[1000];
 
 	if (nLine > sizeof(zBuf) - 30) {
+		return;
+	}
+	if (!globalState) {
 		return;
 	}
 	if (zLine[0] == '.') {
@@ -2169,15 +2116,13 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	}
 	//  if( i==nLine-1 ) return;
 	auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
-	sqlite3 *localDb = NULL;
-	sqlite3 *db;
-	if (!globalDb) {
-		sqlite3_open_v2(":memory:", &localDb, linenoise_open_flags, 0);
-		db = localDb;
-	} else {
-		db = globalDb;
+	unique_ptr<duckdb::DuckDB> localDB;
+	unique_ptr<duckdb::Connection> localCon;
+
+	if (!globalState->conn) {
+		globalState->OpenDB();
 	}
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *globalState->conn;
 	bool copiedSuggestion = false;
 	auto result = con.Query(zSql);
 	for (auto &row : *result) {
@@ -2192,9 +2137,6 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
 			linenoiseAddCompletion(lc, zBuf);
 		}
-	}
-	if (localDb) {
-		sqlite3_close(localDb);
 	}
 }
 #endif
@@ -2667,7 +2609,7 @@ MetadataResult ToggleChanges(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ShowDatabases(ShellState &state, const vector<string> &args) {
-	state.OpenDB(0);
+	state.OpenDB();
 
 	auto renderer = state.GetRowRenderer(RenderMode::LIST);
 	renderer->show_header = false;
@@ -2745,7 +2687,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 		}
 	}
 
-	state.OpenDB(0);
+	state.OpenDB();
 
 	/* When playing back a "dump", the content might appear in an order
 	** which causes immediate foreign key constraints to be violated.
@@ -2764,9 +2706,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	                               "AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
 	                               "ORDER BY table_schema",
 	                               zLike);
-
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(state.db));
-	auto result = con.Query(zSql);
+	auto result = state.conn->Query(zSql);
 	for (auto &row : *result) {
 		auto schema = row.GetValue<string>(0);
 		auto create_schema = StringUtil::Format("CREATE SCHEMA IF NOT EXISTS %s;", SQLIdentifier(schema));
@@ -3050,7 +2990,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 		return false;
 	}
 	seenInterrupt = 0;
-	OpenDB(0);
+	OpenDB();
 	if (useOutputMode) {
 		/* If neither the --csv or --ascii options are specified, then set
 		** the column and row separator characters from the output mode. */
@@ -3121,7 +3061,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 		}
 	}
 	// check if the table exists
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
 	if (needCommit) {
 		ExecuteQuery("BEGIN");
@@ -3266,22 +3206,19 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 	idx_t iName = 1;      /* Index in azArg[] of the filename */
 	bool newFlag = false; /* True to delete file before opening */
 	/* Close the existing database */
-	close_db(db);
-	db = nullptr;
-	globalDb = nullptr;
+	db.reset();
+	conn.reset();
 	zDbFilename = string();
-	openMode = SHELL_OPEN_UNSPEC;
-	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
 	szMax = 0;
 	/* Check for command-line arguments */
+	config.options.access_mode = duckdb::AccessMode::READ_WRITE;
 	for (iName = 1; iName < args.size() && args[iName][0] == '-'; iName++) {
 		const char *z = args[iName].c_str();
 		if (optionMatch(z, "new")) {
 			newFlag = true;
 		} else if (optionMatch(z, "readonly")) {
-			openMode = SHELL_OPEN_READONLY;
+			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		} else if (optionMatch(z, "nofollow")) {
-			openFlags |= SQLITE_OPEN_NOFOLLOW;
 		} else if (z[0] == '-') {
 			utf8_printf(stderr, "unknown option: %s\n", z);
 			return false;
@@ -3291,12 +3228,12 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 	if (args.size() > iName) {
 		zNewFilename = args[iName];
 	}
-	if (!zNewFilename.empty() || openMode == SHELL_OPEN_HEXDB) {
+	if (!zNewFilename.empty()) {
 		if (newFlag) {
 			shellDeleteFile(zNewFilename.c_str());
 		}
 		zDbFilename = zNewFilename;
-		OpenDB(OPEN_DB_KEEPALIVE);
+		OpenDB(ShellOpenFlags::KEEP_ALIVE_ON_FAILURE);
 		if (!db) {
 			utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename.c_str());
 		}
@@ -3304,7 +3241,7 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 	if (!db) {
 		/* As a fall-back open a TEMP database */
 		zDbFilename = string();
-		OpenDB(0);
+		OpenDB();
 	}
 	return true;
 }
@@ -3517,7 +3454,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 	bool bDebug = 0;
 	SuccessState rc = SuccessState::SUCCESS;
 
-	OpenDB(0);
+	OpenDB();
 
 	RenderMode mode = RenderMode::SEMI;
 	for (idx_t ii = 1; ii < args.size(); ii++) {
@@ -3656,7 +3593,7 @@ MetadataResult SetWidths(ShellState &state, const vector<string> &args) {
 
 MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
 	string s;
-	OpenDB(0);
+	OpenDB();
 
 	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
@@ -3724,7 +3661,7 @@ sqlite_schema
 WHERE type='index' AND tbl_name LIKE ?1)";
 	}
 
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto &con = *conn;
 	auto prepared = con.Prepare(s);
 	if (prepared->HasError()) {
 		PrintDatabaseError(prepared->GetError());
@@ -4342,7 +4279,7 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	string zErrMsg;
 
-	OpenDB(0);
+	OpenDB();
 #ifndef SHELL_USE_LOCAL_GETLINE
 	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
 		shell_add_history(zSql);
@@ -4639,6 +4576,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	int argcToFree = 0;
 #endif
 
+	globalState = &data;
+
 	setBinaryMode(stdin, 0);
 	setvbuf(stderr, 0, _IONBF, 0); /* Make sure stderr is unbuffered */
 	stdin_is_interactive = isatty(0);
@@ -4718,11 +4657,11 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			*/
 			stdin_is_interactive = false;
 		} else if (strcmp(z, "-readonly") == 0) {
-			data.openMode = SHELL_OPEN_READONLY;
+			data.config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		} else if (strcmp(z, "-unredacted") == 0) {
-			data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
+			data.config.options.allow_unsigned_extensions = true;
 		} else if (strcmp(z, "-unsigned") == 0) {
-			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
+			data.config.options.allow_unsigned_extensions = true;
 		} else if (strcmp(z, "-safe") == 0) {
 			safe_mode = true;
 		} else if (strcmp(z, "-storage_version") == 0 || strcmp(z, "-storage-version") == 0) {
@@ -4733,7 +4672,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				    "%s: Error: unknown argument (%s) for '-storage-version', only 'latest' is supported currently\n",
 				    program_name, storage_version.c_str());
 			} else {
-				data.openFlags |= DUCKDB_LATEST_STORAGE_VERSION;
+				data.config.options.serialization_compatibility = duckdb::SerializationCompatibility::FromString("latest");
 			}
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
@@ -4752,7 +4691,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	** to the sqlite command-line tool.
 	*/
 	if (access(data.zDbFilename.c_str(), 0) == 0) {
-		data.OpenDB(0);
+		data.OpenDB();
 	}
 
 	/* Process the initialization file if there is one.  If no -init option
@@ -4804,7 +4743,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.mode = RenderMode::CSV;
 			data.colSeparator = ",";
 		} else if (strcmp(z, "-readonly") == 0) {
-			data.openMode = SHELL_OPEN_READONLY;
+			data.config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		} else if (strcmp(z, "-ascii") == 0) {
 			data.mode = RenderMode::ASCII;
 			data.colSeparator = SEP_Unit;
@@ -4822,9 +4761,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-echo") == 0) {
 			data.ShellSetFlag(ShellFlags::SHFLG_Echo);
 		} else if (strcmp(z, "-unsigned") == 0) {
-			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
+			data.config.options.allow_unsigned_extensions = true;
 		} else if (strcmp(z, "-unredacted") == 0) {
-			data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
+			data.config.options.allow_unredacted_secrets = true;
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-version") == 0) {
@@ -4899,7 +4838,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 					return rc == 2 ? 0 : rc;
 				}
 			} else {
-				data.OpenDB(0);
+				data.OpenDB();
 				auto success = data.ExecuteSQL(cmd.c_str());
 				if (success != SuccessState::SUCCESS) {
 					return rc != 0 ? rc : 1;
@@ -4934,7 +4873,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 #if HAVE_READLINE || HAVE_EDITLINE
 			rl_attempted_completion_function = readline_completion;
 #elif HAVE_LINENOISE
-			linenoise_open_flags = data.openFlags;
 			linenoiseSetCompletionCallback(linenoise_completion);
 #endif
 			data.in = 0;
@@ -4949,15 +4887,15 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		}
 	}
 	data.SetTableName(0);
-	if (data.db) {
-		close_db(data.db);
-	}
+	data.db.reset();
+	data.conn.reset();
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
 #if !SQLITE_SHELL_IS_UTF8
-	for (i = 0; i < argcToFree; i++)
+	for (i = 0; i < argcToFree; i++) {
 		free(argvToFree[i]);
+	}
 	free(argvToFree);
 #endif
 	return rc;
