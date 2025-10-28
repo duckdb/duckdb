@@ -785,6 +785,7 @@ def test_profiling_select(shell):
     result.check_stderr('Query Profiling Information')
     result.check_stdout('42')
 
+@pytest.mark.skipif(os.name == 'nt', reason="echo does not exist on Windows")
 @pytest.mark.parametrize("command", [
     "system",
     "shell"
@@ -796,6 +797,14 @@ def test_echo_command(shell, command):
     )
     result = test.run()
     result.check_stdout('42')
+
+def test_system_pwd_command(shell):
+    test = (
+        ShellTest(shell)
+        .statement(f".sh pwd")
+    )
+    result = test.run()
+    result.check_stdout('duckdb')
 
 def test_profiling_optimizer(shell):
     test = (
