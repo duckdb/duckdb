@@ -124,6 +124,8 @@ struct QueryMetrics {
 		attach_load_storage_latency.Reset();
 		attach_replay_wal_latency.Reset();
 		checkpoint_latency.Reset();
+		commit_write_wal_latency.Reset();
+		wal_replay_entry_count = 0;
 		total_bytes_read = 0;
 		total_bytes_written = 0;
 	}

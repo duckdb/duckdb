@@ -369,6 +369,9 @@ void QueryProfiler::StartTimer(MetricsType type) {
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.Start();
 		return;
+	case MetricsType::COMMIT_WRITE_WAL_LATENCY:
+		query_metrics.commit_write_wal_latency.Start();
+		return;
 	default:
 		return;
 	}
