@@ -59,12 +59,9 @@ public:
 	}
 
 	void Subtract(idx_t &block_idx, idx_t &tuple_idx, const idx_t &value) const {
-		tuple_idx -= value;
-		if (tuple_idx >= fast_mod.GetDivisor()) {
-			const auto div = fast_mod.Div(-tuple_idx);
-			tuple_idx += (div + 1) * fast_mod.GetDivisor();
-			block_idx -= div + 1;
-		}
+		// Might be able to do this more efficiently but at least this is correct
+		const auto n = block_idx * fast_mod.GetDivisor() + tuple_idx - value;
+		RandomAccess(block_idx, tuple_idx, n);
 	}
 
 	void Increment(idx_t &block_idx, idx_t &tuple_idx) const {
