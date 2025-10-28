@@ -22,6 +22,7 @@
 #include <functional>
 
 namespace duckdb {
+
 class BaseStatistics;
 class LogicalDependencyList;
 class LogicalGet;

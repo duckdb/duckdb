@@ -250,11 +250,9 @@ public:
 		}
 
 		if (input.row_group_order) {
-			auto &options = *input.row_group_order;
-			l_state->scan_state.table_state = make_uniq<CustomOrderCollectionScanState>(
-			    l_state->scan_state, options.column_idx, options.order_by, options.order_type, options.column_type);
-			l_state->scan_state.local_state = make_uniq<CustomOrderCollectionScanState>(
-			    l_state->scan_state, options.column_idx, options.order_by, options.order_type, options.column_type);
+			const auto &options = *input.row_group_order;
+			l_state->scan_state.table_state = make_uniq<CustomOrderCollectionScanState>(l_state->scan_state, options);
+			l_state->scan_state.local_state = make_uniq<CustomOrderCollectionScanState>(l_state->scan_state, options);
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
@@ -338,11 +336,9 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
                                                              DataTable &storage, const TableScanBindData &bind_data) {
 	auto g_state = make_uniq<DuckTableScanState>(context, input.bind_data.get());
 	if (input.row_group_order) {
-		auto &options = *input.row_group_order;
-		g_state->state.scan_state = make_uniq<CustomOrderParallelCollectionScanState>(
-		    options.column_idx, options.order_by, options.order_type, options.column_type);
-		g_state->state.local_state = make_uniq<CustomOrderParallelCollectionScanState>(
-		    options.column_idx, options.order_by, options.order_type, options.column_type);
+		const auto &options = *input.row_group_order;
+		g_state->state.scan_state = make_uniq<CustomOrderParallelCollectionScanState>(options);
+		g_state->state.local_state = make_uniq<CustomOrderParallelCollectionScanState>(options);
 	}
 
 	storage.InitializeParallelScan(context, g_state->state);

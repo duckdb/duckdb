@@ -184,12 +184,9 @@ RowGroup *ParallelCollectionScanState::GetNextRowGroup(const shared_ptr<RowGroup
 	return row_groups->GetNextSegment(row_group);
 }
 
-CustomOrderParallelCollectionScanState::CustomOrderParallelCollectionScanState(column_t column_idx_p,
-                                                                               OrderByStatistics order_by_p,
-                                                                               RowGroupOrderType order_type_p,
-                                                                               OrderByColumnType column_type_p)
-    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p),
-      root(nullptr) {
+CustomOrderParallelCollectionScanState::CustomOrderParallelCollectionScanState(const RowGroupOrderOptions &options)
+    : column_idx(options.column_idx), order_by(options.order_by), order_type(options.order_type),
+      column_type(options.column_type), root(nullptr) {
 }
 
 RowGroup *CustomOrderParallelCollectionScanState::GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) {
@@ -272,12 +269,12 @@ RowGroup *CollectionScanState::GetNextRowGroup(RowGroup *row_group) {
 	return row_groups->GetNextSegment(row_group);
 }
 
-RowGroup *CollectionScanState::GetRootSegment() {
-	return row_groups->GetRootSegment();
+RowGroup *CollectionScanState::GetNextRowGroup(SegmentLock &l, RowGroup *row_group) {
+	return row_groups->GetNextSegment(l, row_group);
 }
 
-RowGroup *CollectionScanState::GetSegment(idx_t start_idx) {
-	return row_groups->GetSegment(start_idx);
+RowGroup *CollectionScanState::GetRootSegment() {
+	return row_groups->GetRootSegment();
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
@@ -314,7 +311,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 		if (result.size() > 0) {
 			return true;
 		} else {
-			row_group = row_groups->GetNextSegment(l, row_group); // TODO?
+			row_group = GetNextRowGroup(l, row_group);
 			if (row_group) {
 				row_group->InitializeScan(*this);
 			}
@@ -323,12 +320,10 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 	return false;
 }
 
-CustomOrderCollectionScanState::CustomOrderCollectionScanState(TableScanState &parent_p, column_t column_idx_p,
-                                                               OrderByStatistics order_by_p,
-                                                               RowGroupOrderType order_type_p,
-                                                               OrderByColumnType column_type_p)
-    : CollectionScanState(parent_p), column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p),
-      column_type(column_type_p), root(nullptr) {
+CustomOrderCollectionScanState::CustomOrderCollectionScanState(TableScanState &parent_p,
+                                                               const RowGroupOrderOptions &options)
+    : CollectionScanState(parent_p), column_idx(options.column_idx), order_by(options.order_by),
+      order_type(options.order_type), column_type(options.column_type), root(nullptr) {
 }
 
 RowGroup *CustomOrderCollectionScanState::GetNextRowGroup(RowGroup *row_group) {
@@ -350,12 +345,11 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 		row_group->ScanCommitted(*this, result, type);
 		if (result.size() > 0) {
 			return true;
-		} else {
-			// row_group = GetNextRowGroup();
-			row_group = row_groups->GetNextSegment(row_group);
-			if (row_group) {
-				row_group->InitializeScan(*this);
-			}
+		}
+
+		row_group = GetNextRowGroup(row_group);
+		if (row_group) {
+			row_group->InitializeScan(*this);
 		}
 	}
 	return false;

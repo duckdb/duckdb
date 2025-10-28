@@ -161,7 +161,6 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
 	auto row_group = state.GetRootSegment();
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
-
 	state.max_row = row_start + total_rows;
 	state.Initialize(context, GetTypes());
 	while (row_group && !row_group->InitializeScan(state)) {
@@ -176,8 +175,7 @@ void RowGroupCollection::InitializeCreateIndexScan(CreateIndexScanState &state) 
 void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
                                                   const vector<StorageIndex> &column_ids, idx_t start_row,
                                                   idx_t end_row) {
-	state.row_groups = row_groups.get();
-	auto row_group = state.GetSegment(start_row);
+	auto row_group = row_groups->GetSegment(start_row);
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
 	state.max_row = end_row;

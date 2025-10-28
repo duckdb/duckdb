@@ -225,8 +225,8 @@ public:
 	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
 	virtual RowGroup *GetNextRowGroup(RowGroup *row_group);
+	virtual RowGroup *GetNextRowGroup(SegmentLock &l, RowGroup *row_group);
 	virtual RowGroup *GetRootSegment();
-	virtual RowGroup *GetSegment(idx_t start_idx);
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
@@ -237,8 +237,7 @@ private:
 
 class CustomOrderCollectionScanState : public CollectionScanState {
 public:
-	CustomOrderCollectionScanState(TableScanState &parent_p, column_t column_idx_p, OrderByStatistics order_by_p,
-	                               RowGroupOrderType order_type_p, OrderByColumnType column_type_p);
+	CustomOrderCollectionScanState(TableScanState &parent_p, const RowGroupOrderOptions &options);
 	RowGroup *GetNextRowGroup(RowGroup *row_group) override;
 	RowGroup *GetRootSegment() override;
 
@@ -325,8 +324,7 @@ struct ParallelCollectionScanState {
 
 class CustomOrderParallelCollectionScanState : public ParallelCollectionScanState {
 public:
-	CustomOrderParallelCollectionScanState(column_t column_idx_p, OrderByStatistics order_by_p,
-	                                       RowGroupOrderType order_type_p, OrderByColumnType column_type_p);
+	CustomOrderParallelCollectionScanState(const RowGroupOrderOptions &options);
 	RowGroup *GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) override;
 	RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups, RowGroup *row_group) override;
 
