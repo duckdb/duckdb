@@ -1292,25 +1292,18 @@ void ShellState::SetTableName(const char *zName) {
 ** "--" comment occurs at the end of the statement, the comment
 ** won't consume the semicolon terminator.
 */
-int ShellState::RunTableDumpQuery(const string &zSelect) {
-	sqlite3_stmt *pSelect;
-	const char *z;
-	int rc = sqlite3_prepare_v2(db, zSelect.c_str(), -1, &pSelect, 0);
-	if (rc != SQLITE_OK || !pSelect) {
-		utf8_printf(out, "/**** ERROR: (%d) %s *****/\n", rc, sqlite3_errmsg(db));
-		if ((rc & 0xff) != SQLITE_CORRUPT) {
-			AddError();
-		}
-		return rc;
+void ShellState::RunTableDumpQuery(const string &zSelect) {
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto result = con.Query(zSelect);
+	if (result->HasError()) {
+		utf8_printf(out, "/**** ERROR: %s *****/\n", result->GetError().c_str());
+		AddError();
+		return;
 	}
-	rc = sqlite3_step(pSelect);
-	idx_t nResult = sqlite3_column_count(pSelect);
-	while (rc == SQLITE_ROW) {
-		z = (const char *)sqlite3_column_text(pSelect, 0);
-		Print(z);
-		for (idx_t i = 1; i < nResult; i++) {
-			Print((const char *)sqlite3_column_text(pSelect, static_cast<int>(i)));
-		}
+	for (auto &row : *result) {
+		auto zStr = row.GetValue<string>(0);
+		Print(zStr);
+		auto z = zStr.c_str();
 		if (!z) {
 			z = "";
 		}
@@ -1322,16 +1315,7 @@ int ShellState::RunTableDumpQuery(const string &zSelect) {
 		} else {
 			raw_printf(out, ";\n");
 		}
-		rc = sqlite3_step(pSelect);
 	}
-	rc = sqlite3_finalize(pSelect);
-	if (rc != SQLITE_OK) {
-		utf8_printf(out, "/**** ERROR: (%d) %s *****/\n", rc, sqlite3_errmsg(db));
-		if ((rc & 0xff) != SQLITE_CORRUPT) {
-			AddError();
-		}
-	}
-	return rc;
 }
 
 /*

@@ -181,7 +181,7 @@ public:
 	               string *pzErrMsg  /* Error msg written here */
 	);
 	void RunSchemaDumpQuery(const string &zQuery);
-	int RunTableDumpQuery(const string &zSelect);
+	void RunTableDumpQuery(const string &zSelect);
 	void OpenDB(int openFlags);
 
 	void SetOrClearFlag(ShellFlags mFlag, const string &zArg);

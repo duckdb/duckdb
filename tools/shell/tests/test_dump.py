@@ -70,6 +70,26 @@ def test_dump_newline(shell):
     result.check_stdout("concat")
     result.check_stdout("chr(10)")
 
+def test_dump_indexes(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table integer(i int);")
+        .statement("create index i_index on integer(i);")
+        .statement(".dump")
+    )
+    result = test.run()
+    result.check_stdout("CREATE INDEX i_index")
+
+def test_dump_views(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table integer(i int);")
+        .statement("create view v1 as select * from integer;")
+        .statement(".dump")
+    )
+    result = test.run()
+    result.check_stdout("CREATE VIEW v1")
+
 def test_dump_schema_qualified(shell):
     test = (
         ShellTest(shell)
