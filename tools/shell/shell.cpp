@@ -203,11 +203,6 @@ extern int pclose(FILE *);
 #endif
 #include <windows.h>
 
-/* string conversion routines only needed on Win32 */
-extern char *sqlite3_win32_unicode_to_utf8(LPCWSTR);
-extern char *sqlite3_win32_mbcs_to_utf8_v2(const char *, int);
-extern char *sqlite3_win32_utf8_to_mbcs_v2(const char *, int);
-extern LPWSTR sqlite3_win32_utf8_to_unicode(const char *zText);
 #endif
 
 /* On Windows, we normally run with output mode of TEXT so that \n characters
@@ -492,8 +487,8 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 			fputs(z1, out);
 		} else {
 			// fallback to writing old style windows unicode
-			char *z2 = sqlite3_win32_utf8_to_mbcs_v2(z1, 0);
-			fputs(z2, out);
+			auto z2 = ShellState::Win32Utf8ToMbcs(z1, false);
+			fputs((const char *) z2.get(), out);
 		}
 	} else {
 		vfprintf(out, zFormat, ap);
@@ -739,17 +734,15 @@ static char *local_getline(char *zLine, FILE *in) {
 	/* For interactive input on Windows systems, translate the
 	** multi-byte characterset characters into UTF-8. */
 	if (is_stdin && !is_utf8) {
-		char *zTrans = sqlite3_win32_mbcs_to_utf8_v2(zLine, 0);
-		if (zTrans) {
-			idx_t nTrans = ShellState::StringLength(zTrans) + 1;
-			if (nTrans > nLine) {
-				zLine = (char *)realloc(zLine, nTrans);
-				if (zLine == 0)
-					shell_out_of_memory();
-			}
-			memcpy(zLine, zTrans, nTrans);
-			sqlite3_free(zTrans);
-		}
+		auto zTrans = ShellState::Win32MbcsToUtf8(zLine, 0);
+        idx_t nTrans = zTrans.size() + 1;
+        if (nTrans > nLine) {
+            zLine = (char *)realloc(zLine, nTrans);
+            if (zLine == 0) {
+                shell_out_of_memory();
+            }
+        }
+        memcpy(zLine, zTrans.data(), nTrans);
 	}
 #endif /* defined(_WIN32) || defined(WIN32) */
 	return zLine;
@@ -2565,9 +2558,8 @@ static bool optionMatch(const string &str, const string &zOpt) {
 int shellDeleteFile(const char *zFilename) {
 	int rc;
 #ifdef _WIN32
-	wchar_t *z = sqlite3_win32_utf8_to_unicode(zFilename);
-	rc = _wunlink(z);
-	sqlite3_free(z);
+	auto z = ShellState::Win32Utf8ToUnicode(zFilename);
+	rc = _wunlink((wchar_t *) z.get());
 #else
 	rc = unlink(zFilename);
 #endif
@@ -2657,9 +2649,8 @@ MetadataResult ChangeDirectory(ShellState &state, const vector<string> &args) {
 	}
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
-	wchar_t *z = sqlite3_win32_utf8_to_unicode(args[1].c_str());
-	rc = !SetCurrentDirectoryW(z);
-	sqlite3_free(z);
+    auto z = ShellState::Win32Utf8ToUnicode(args[1].c_str());
+	rc = !SetCurrentDirectoryW((wchar_t *) z.get());
 #else
 	rc = chdir(args[1].c_str());
 #endif
@@ -4669,17 +4660,13 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	if (argv == 0)
 		shell_out_of_memory();
 	for (i = 0; i < argc; i++) {
-		char *z = sqlite3_win32_unicode_to_utf8(wargv[i]);
-		int n;
-		if (z == 0)
+		auto z = ShellState::Win32UnicodeToUtf8(wargv[i]);
+		argv[i] = (char *)malloc(z.size() + 1);
+		if (argv[i] == 0) {
 			shell_out_of_memory();
-		n = (int)strlen(z);
-		argv[i] = (char *)malloc(n + 1);
-		if (argv[i] == 0)
-			shell_out_of_memory();
-		memcpy(argv[i], z, n + 1);
+        }
+		memcpy(argv[i], z.c_str(), z.size() + 1);
 		argvToFree[i] = argv[i];
-		sqlite3_free(z);
 	}
 #endif
 
