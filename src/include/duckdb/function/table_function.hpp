@@ -129,7 +129,8 @@ struct TableFunctionInitInput {
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr,
 	                       optional_ptr<const PhysicalOperator> op_p = nullptr)
 	    : bind_data(bind_data_p), column_ids(std::move(column_ids_p)), projection_ids(projection_ids_p),
-	      filters(filters_p), sample_options(sample_options_p), op(op_p), row_group_order(row_group_order_p) {
+	      filters(filters_p), sample_options(sample_options_p), op(op_p),
+	      row_group_order(std::move(row_group_order_p)) {
 		for (auto &col_id : column_ids) {
 			column_indexes.emplace_back(col_id);
 		}
@@ -141,7 +142,8 @@ struct TableFunctionInitInput {
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr,
 	                       optional_ptr<const PhysicalOperator> op_p = nullptr)
 	    : bind_data(bind_data_p), column_indexes(std::move(column_indexes_p)), projection_ids(projection_ids_p),
-	      filters(filters_p), sample_options(sample_options_p), op(op_p), row_group_order(row_group_order_p) {
+	      filters(filters_p), sample_options(sample_options_p), op(op_p),
+	      row_group_order(std::move(row_group_order_p)) {
 		for (auto &col_id : column_indexes) {
 			column_ids.emplace_back(col_id.GetPrimaryIndex());
 		}

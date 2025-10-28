@@ -125,12 +125,15 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		get.table_filters.PushFilter(column_index, std::move(optional_filter));
 
 		// Scan rowgroups in custom order
-		if (colref.return_type.IsNumeric() || colref.return_type == LogicalType::VARCHAR) {
-			auto column_type = colref.return_type.IsNumeric() ? OrderByColumnType::NUMERIC : OrderByColumnType::STRING;
+		if (colref.return_type.IsNumeric() || colref.return_type.IsTemporal() ||
+		    colref.return_type == LogicalType::VARCHAR) {
+			auto column_type =
+			    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
 			auto order_type =
 			    op.orders[0].type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
 			auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-			get.row_group_order = make_shared_ptr<RowGroupOrderOptions>(col_idx, order_by, order_type, column_type);
+			get.row_group_order = make_shared_ptr<RowGroupOrderOptions>(column_index.GetPrimaryIndex(), order_by,
+			                                                            order_type, column_type);
 		}
 	}
 }
