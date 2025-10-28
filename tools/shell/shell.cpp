@@ -4718,17 +4718,6 @@ static void usage(int showDetail) {
 }
 
 /*
-** Internal check:  Verify that the SQLite is uninitialized.  Print a
-** error message if it is initialized.
-*/
-static void verify_uninitialized(void) {
-	if (sqlite3_config(-1) == SQLITE_MISUSE) {
-		utf8_printf(stdout, "WARNING: attempt to configure SQLite after"
-		                    " initialization.\n");
-	}
-}
-
-/*
 ** Initialize the state information in data
 */
 static void main_init(ShellState *data) {
@@ -4737,10 +4726,6 @@ static void main_init(ShellState *data) {
 	data->colSeparator = SEP_Column;
 	data->rowSeparator = SEP_Row;
 	data->showHeader = true;
-	verify_uninitialized();
-	sqlite3_config(SQLITE_CONFIG_URI, 1);
-	sqlite3_config(SQLITE_CONFIG_LOG, shellLog, data);
-	sqlite3_config(SQLITE_CONFIG_MULTITHREAD);
 	strcpy(mainPrompt, "D ");
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
@@ -4853,7 +4838,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	** the size of the alternative malloc heap,
 	** and the first command to execute.
 	*/
-	verify_uninitialized();
 	for (i = 1; i < argc; i++) {
 		char *z;
 		z = argv[i];
@@ -4906,7 +4890,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			bail_on_error = true;
 		}
 	}
-	verify_uninitialized();
 
 #ifdef SQLITE_SHELL_INIT_PROC
 	{
