@@ -38,11 +38,11 @@ private:
 	shared_ptr<Counter> counter;
 };
 
-AsyncResult::AsyncResult(AsyncResultType t) : result_type(t) {
-	D_ASSERT(t != AsyncResultType::BLOCKED);
-}
 
-AsyncResult::AsyncResult(SourceResultType t) : AsyncResult(GetAsyncResultType(t)) {
+AsyncResult::AsyncResult(SourceResultType t) : result_type(GetAsyncResultType(t)) {
+	if (result_type == AsyncResultType::BLOCKED) {
+		throw InternalException("AsyncResult constructed with a BLOCKED state, do provide AsyncTasks");
+	}
 }
 
 AsyncResult::AsyncResult(vector<unique_ptr<AsyncTask>> &&tasks)

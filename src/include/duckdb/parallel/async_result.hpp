@@ -29,8 +29,7 @@ class AsyncResult {
 public:
 	AsyncResult() = default;
 	AsyncResult(AsyncResult &&) = default;
-	explicit AsyncResult(SourceResultType t);
-	explicit AsyncResult(AsyncResultType t);
+	AsyncResult(SourceResultType t); // NOLINT
 	explicit AsyncResult(vector<unique_ptr<AsyncTask>> &&task);
 	AsyncResult &operator=(SourceResultType t);
 	AsyncResult &operator=(AsyncResultType t);
@@ -39,14 +38,26 @@ public:
 	static AsyncResultType GetAsyncResultType(SourceResultType s);
 
 	bool HasTasks() const {
-		D_ASSERT((result_type == AsyncResultType::BLOCKED) != async_tasks.empty());
-		return !async_tasks.empty();
+		D_ASSERT(result_type != AsyncResultType::INVALID);
+		if (async_result.empty()) {
+			D_ASSERT(result_type != AsyncResultType::BLOCKED);
+			return false;
+		} else {
+			D_ASSERT(result_type == AsyncResultType::BLOCKED);
+			return true;
+		}
 	}
 	AsyncResultType GetResultType() const {
-		D_ASSERT((result_type == AsyncResultType::BLOCKED) != async_tasks.empty());
+		D_ASSERT(result_type != AsyncResultType::INVALID);
+		if (async_result.empty()) {
+			D_ASSERT(result_type != AsyncResultType::BLOCKED);
+		} else {
+			D_ASSERT(result_type == AsyncResultType::BLOCKED);
+		}
 		return result_type;
 	}
-	vector<unique_ptr<AsyncTask>> &&GetAsyncTasks() {
+	vector<unique_ptr<AsyncTask>> &&ExtractAsyncTasks() {
+		D_ASSERT(result_type != AsyncResultType::INVALID);
 		result_type = AsyncResultType::INVALID;
 		return std::move(async_tasks);
 	}
