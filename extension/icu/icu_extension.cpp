@@ -362,7 +362,6 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-
 	// iterate over all the collations
 	int32_t count;
 	auto locales = icu::Collator::getAvailableLocales(count);

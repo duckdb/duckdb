@@ -185,7 +185,6 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
-
 	// grab the aggregate type and bind the aggregate again
 
 	// the aggregate name and types are in the logical type of the aggregate state, make sure its sane

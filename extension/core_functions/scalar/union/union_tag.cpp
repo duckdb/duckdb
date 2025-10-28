@@ -10,7 +10,6 @@ namespace {
 
 unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bound_function,
                                       vector<unique_ptr<Expression>> &arguments) {
-
 	if (arguments.empty()) {
 		throw BinderException("Missing required arguments for union_tag function.");
 	}

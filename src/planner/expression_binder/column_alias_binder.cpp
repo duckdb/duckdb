@@ -13,7 +13,6 @@ ColumnAliasBinder::ColumnAliasBinder(SelectBindState &bind_state) : bind_state(b
 
 bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr<ParsedExpression> &expr_ptr,
                                   idx_t depth, bool root_expression, BindResult &result) {
-
 	D_ASSERT(expr_ptr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
 	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
 

@@ -27,7 +27,6 @@ public:
 	explicit DeleteGlobalState(ClientContext &context, const vector<LogicalType> &return_types,
 	                           TableCatalogEntry &table, const vector<unique_ptr<BoundConstraint>> &bound_constraints)
 	    : deleted_count(0), return_collection(context, return_types), has_unique_indexes(false) {
-
 		// We need to append deletes to the local delete-ART.
 		auto &storage = table.GetStorage();
 		if (storage.HasUniqueIndexes()) {

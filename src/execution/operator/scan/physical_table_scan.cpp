@@ -110,7 +110,6 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		function.in_out_function_final(context, data, chunk);
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
-
 	case OperatorResultType::BLOCKED: {
 		auto guard = g_state.Lock();
 		return g_state.BlockSource(guard, input.interrupt_state);

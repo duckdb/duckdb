@@ -18,7 +18,6 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
                              op.estimated_cardinality),
       comparison_type(ExpressionType::INVALID) {
-
 	// Convert the conditions partitions and sorts
 	D_ASSERT(!op.predicate.get());
 	for (auto &cond : conditions) {
@@ -210,6 +209,11 @@ public:
 	idx_t NextSize() const {
 		return MinValue<idx_t>(Remaining(), STANDARD_VECTOR_SIZE);
 	}
+	void Seek(idx_t row_idx) {
+		chunk_idx = row_idx / STANDARD_VECTOR_SIZE;
+		base = MinValue<idx_t>(chunk_idx * STANDARD_VECTOR_SIZE, count);
+		scanned = base;
+	}
 	bool Scan(DataChunk &chunk) {
 		//  Free the previous blocks
 		block_state.SetKeepPinned(true);
@@ -262,7 +266,6 @@ private:
 AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const HashedSort &hashed_sort)
     : sorted_run(sorted_run), block_state(*sorted_run.key_data, sorted_run.payload_data.get()),
       scan_state(sorted_run.context, sorted_run.sort), scan_ids(hashed_sort.scan_ids), count(sorted_run.Count()) {
-
 	scan_chunk.Initialize(sorted_run.context, hashed_sort.payload_types);
 	const auto sort_key_type = sorted_run.key_data->GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
@@ -340,7 +343,6 @@ public:
 AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op)
     : op(op), stage(AsOfJoinSourceStage::INNER), is_right_outer(IsRightOuterJoin(op.join_type)), next_left(0),
       flushed_left(0), next_right(0), flushed_right(0) {
-
 	//	 Take ownership of the hash groups
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 	hashed_groups.resize(2);
@@ -542,6 +544,7 @@ public:
 	unique_ptr<AsOfPayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
 	DataChunk rhs_input;
+	SelectionVector rhs_match_sel;
 	idx_t right_bin = 0;
 
 	//	Predicate evaluation
@@ -554,7 +557,6 @@ public:
 AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op, AsOfGlobalSourceState &gsource)
     : client(client), op(op), gsource(gsource), strict(IsStrictComparison(op.comparison_type)),
       left_outer(IsLeftOuterJoin(op.join_type)), lhs_executor(client), fetch_next_left(true) {
-
 	lhs_keys.Initialize(client, op.join_key_types);
 	for (const auto &cond : op.conditions) {
 		lhs_executor.AddExpression(*cond.left);
@@ -565,6 +567,7 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 	lhs_match_sel.Initialize();
+	rhs_match_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
 	//	If we have equality predicates, set up the prefix data.
@@ -844,24 +847,25 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 
 	//	Extract the rhs input columns from the match
 	rhs_input.Reset();
+	idx_t rhs_match_count = 0;
 	for (idx_t i = 0; i < lhs_match_count; ++i) {
 		const auto idx = lhs_match_sel[i];
 		const auto match_pos = matches[idx];
 		// Skip to the range containing the match
-		while (match_pos >= rhs_scanner->Scanned()) {
+		if (match_pos >= rhs_scanner->Scanned()) {
+			if (rhs_match_count) {
+				rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
+				rhs_match_count = 0;
+			}
 			rhs_payload.Reset();
+			rhs_scanner->Seek(match_pos);
 			rhs_scanner->Scan(rhs_payload);
 		}
-		// Append the individual values
-		// TODO: Batch the copies
-		const auto source_offset = match_pos - (rhs_scanner->Scanned() - rhs_payload.size());
-		for (column_t col_idx = 0; col_idx < rhs_payload.data.size(); ++col_idx) {
-			auto &source = rhs_payload.data[col_idx];
-			auto &target = rhs_input.data[col_idx];
-			VectorOperations::Copy(source, target, source_offset + 1, source_offset, i);
-		}
+		// Select the individual values
+		const auto source_offset = match_pos - rhs_scanner->Base();
+		rhs_match_sel.set_index(rhs_match_count++, source_offset);
 	}
-	rhs_input.SetCardinality(lhs_match_count);
+	rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
 
 	//	Slice the left payload into the result
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
@@ -980,7 +984,6 @@ public:
 AsOfLocalSourceState::AsOfLocalSourceState(ExecutionContext &context, AsOfGlobalSourceState &gsource,
                                            const PhysicalAsOfJoin &op)
     : gsource(gsource), context(context), probe_buffer(context.client, op, gsource), rsel(STANDARD_VECTOR_SIZE) {
-
 	rhs_chunk.Initialize(context.client, op.children[1].get().GetTypes());
 }
 

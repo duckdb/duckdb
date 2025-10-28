@@ -146,7 +146,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
     : db(parent.db), info(parent.info), row_groups(parent.row_groups), version(DataTableVersion::MAIN_TABLE) {
-
 	// ALTER COLUMN to add a new constraint.
 
 	// Clone the storage info vector or the table.
@@ -173,7 +172,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
-
 	auto &local_storage = LocalStorage::Get(context, db);
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
@@ -768,7 +766,6 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, ClientContext &context, DataChunk &chunk,
                                         optional_ptr<LocalTableStorage> storage,
                                         optional_ptr<ConflictManager> manager) {
-
 	auto &table = constraint_state.table;
 	if (table.HasGeneratedColumns()) {
 		// Verify the generated columns against the inserted values.
@@ -958,7 +955,6 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Da
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
                             const vector<unique_ptr<BoundConstraint>> &bound_constraints,
                             optional_ptr<const vector<LogicalIndex>> column_ids) {
-
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);

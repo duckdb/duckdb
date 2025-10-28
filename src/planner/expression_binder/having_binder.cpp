@@ -39,7 +39,6 @@ unique_ptr<ParsedExpression> HavingBinder::QualifyColumnName(ColumnRefExpression
 }
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-
 	// Keep the original column name to return a meaningful error message.
 	auto col_ref = expr_ptr->Cast<ColumnRefExpression>();
 	const auto &column_name = col_ref.GetColumnName();

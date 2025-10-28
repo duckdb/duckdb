@@ -179,7 +179,6 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		auto type = PhysicalOperatorType(info.GetMetricValue<uint8_t>(MetricsType::OPERATOR_TYPE));
 		if (type == PhysicalOperatorType::UNION &&
 		    info.Enabled(info.expanded_settings, MetricsType::OPERATOR_CARDINALITY)) {
-
 			auto &child_info = child->GetProfilingInfo();
 			auto value = child_info.metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>();
 			info.MetricSum(MetricsType::OPERATOR_CARDINALITY, value);

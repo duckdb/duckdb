@@ -29,7 +29,6 @@ struct ParseLogMessageData : FunctionData {
 
 unique_ptr<FunctionData> ParseLogMessageBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
-
 	if (arguments.size() != 2) {
 		throw BinderException("structured_log_schema: expects 1 argument", arguments[0]->alias);
 	}

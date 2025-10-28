@@ -11,7 +11,6 @@ namespace duckdb {
 
 void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
                                                       vector<unordered_set<string>> &lambda_params) {
-
 	for (auto &child : function.children) {
 		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			ReplaceMacroParameters(child, lambda_params);
@@ -47,7 +46,6 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 
 void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr,
                                               vector<unordered_set<string>> &lambda_params) {
-
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
 		// If the expression is a column reference, we replace it with its argument.
