@@ -27,3 +27,12 @@ SELECT count(*) FROM pragma_version() WHERE library_version LIKE 'v%';
 
 statement ok
 pragma extension_versions;
+
+statement ok
+SET VARIABLE v = (select library_version  from pragma_version());
+
+statement ok
+SET VARIABLE v_or_latest = (select CASE WHEN getvariable('v') ILIKE 'v%-dev%' THEN 'latest' WHEN getvariable('v') ILIKE 'v0.0.1' THEN 'latest' ELSE getvariable('v') END);
+
+statement ok
+ATTACH 'somefile.db' (STORAGE_VERSION getvariable('v_or_latest'));
