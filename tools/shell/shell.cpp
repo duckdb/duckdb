@@ -340,8 +340,8 @@ static void beginTimer(void) {
 
 /* Return the difference of two FILETIME structs in seconds */
 static double timeDiff(FILETIME *pStart, FILETIME *pEnd) {
-	sqlite_int64 i64Start = *((sqlite_int64 *)pStart);
-	sqlite_int64 i64End = *((sqlite_int64 *)pEnd);
+	int64_t i64Start = *((int64_t *)pStart);
+	int64_t i64End = *((int64_t *)pEnd);
 	return (double)((i64End - i64Start) / 10000000.0);
 }
 
@@ -1585,10 +1585,6 @@ SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
 ** Execute a statement or set of statements.  Print
 ** any result rows/columns depending on the current mode
 ** set via the supplied callback.
-**
-** This is very similar to SQLite's built-in sqlite3_exec()
-** function except it takes a slightly different callback
-** and callback data argument.
 */
 SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	auto &con = *conn;
@@ -2227,8 +2223,7 @@ static void import_append_char(ImportCtx *p, int c) {
 ** with the option of having a separator other than ",".
 **
 **   +  Input comes from p->in.
-**   +  Store results in p->z of length p->n.  Space to hold p->z comes
-**      from sqlite3_malloc64().
+**   +  Store results in p->z of length p->n.
 **   +  Use p->cSep as the column separator.  The default is ",".
 **   +  Use p->rSep as the row separator.  The default is "\n".
 **   +  Keep track of the line number in p->nLine.
@@ -2315,8 +2310,7 @@ static const char *csv_read_one_field(ImportCtx *p) {
 /* Read a single field of ASCII delimited text.
 **
 **   +  Input comes from p->in.
-**   +  Store results in p->z of length p->n.  Space to hold p->z comes
-**      from sqlite3_malloc64().
+**   +  Store results in p->z of length p->n.
 **   +  Use p->cSep as the column separator.  The default is "\x1F".
 **   +  Use p->rSep as the row separator.  The default is "\x1E".
 **   +  Keep track of the row number in p->nLine.
@@ -4506,11 +4500,7 @@ int wmain(int argc, wchar_t **wargv) {
 	main_init(&data);
 
 	/* On Windows, we must translate command-line arguments into UTF-8.
-	** The SQLite memory allocator subsystem has to be enabled in order to
-	** do this.  But we want to run an sqlite3_shutdown() afterwards so that
-	** subsequent sqlite3_config() calls will work.  So copy all results into
-	** memory that does not come from the SQLite memory allocator.
-	*/
+	 */
 #if !SQLITE_SHELL_IS_UTF8
 	argvToFree = (char **)malloc(sizeof(argv[0]) * argc * 2);
 	argcToFree = argc;
