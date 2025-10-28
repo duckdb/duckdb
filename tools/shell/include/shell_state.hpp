@@ -121,6 +121,8 @@ public:
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::DEFAULT;
 	//! The command to execute when `-ui` is passed in
 	string ui_command = "CALL start_ui()";
+	idx_t last_changes = 0;
+	idx_t total_changes = 0;
 
 public:
 	void PushOutputMode();
@@ -169,7 +171,7 @@ public:
 	SuccessState ExecutePreparedStatementColumnar(unique_ptr<duckdb::SQLStatement> statement);
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
-	SuccessState ExecutePreparedStatement(sqlite3_stmt *pStmt);
+	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
 
 	void PrintDatabaseError(const string &zErr);
 	int ShellDatabaseError(sqlite3 *db);

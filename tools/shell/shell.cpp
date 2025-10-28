@@ -1613,79 +1613,82 @@ private:
 };
 
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
+	if (!statement->named_param_map.empty()) {
+		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
+		                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
+		return SuccessState::FAILURE;
+	}
 	// FIXME: unify execution here, switch only on rendering
 	if (ShellRenderer::IsColumnar(cMode)) {
 		return ExecutePreparedStatementColumnar(std::move(statement));
 	}
-	if (cMode == RenderMode::TRASH) {
-		// execute the query but don't render anything
-		auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
-		auto res = con.Query(std::move(statement));
-		if (res->HasError()) {
-			PrintDatabaseError(res->GetError());
-			return SuccessState::FAILURE;
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto res = con.Query(std::move(statement));
+	if (res->HasError()) {
+		PrintDatabaseError(res->GetError());
+		return SuccessState::FAILURE;
+	}
+	auto properties = res->properties;
+	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS && res->RowCount() > 0) {
+		// update total changes
+		auto row_changes = res->Collection().GetRows().GetValue(0, 0);
+		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(duckdb::LogicalType::BIGINT)) {
+			last_changes = row_changes.GetValue<int64_t>();
+			total_changes += last_changes;
 		}
+	}
+	if (properties.return_type != duckdb::StatementReturnType::QUERY_RESULT) {
+		// only SELECT statements return results that need to be rendered
 		return SuccessState::SUCCESS;
 	}
-	if (cMode != RenderMode::DUCKBOX) {
-		auto renderer = GetRowRenderer();
-		// row rendering
-		auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
-		auto res = con.Query(std::move(statement));
-		if (res->HasError()) {
-			PrintDatabaseError(res->GetError());
-			return SuccessState::FAILURE;
-		}
-		return RenderQueryResult(*renderer, *res);
+	if (cMode == RenderMode::TRASH) {
+		// execute the query but don't render anything
+		return SuccessState::SUCCESS;
 	}
-
-	// TEMPORARY FALLBACK - use old mechanism for rendering
-	sqlite3_stmt *pStmt = nullptr;
-	int rc = sqlite3_prepare_v2(db, statement->query.c_str(), -1, &pStmt, nullptr);
-	if (rc != SQLITE_OK) {
-		ShellDatabaseError(db);
-		sqlite3_finalize(pStmt);
-		return SuccessState::FAILURE;
+	if (cMode == RenderMode::DUCKBOX) {
+		return RenderDuckBoxResult(*res);
 	}
-	if (sqlite3_bind_parameter_count(pStmt) != 0) {
-		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
-		                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
-		sqlite3_finalize(pStmt);
-		return SuccessState::FAILURE;
-	}
-	ExecutePreparedStatement(pStmt);
-	rc = sqlite3_finalize(pStmt);
-	if (rc != SQLITE_OK) {
-		ShellDatabaseError(db);
-		return SuccessState::FAILURE;
-	}
-	return SuccessState::SUCCESS;
+	// row rendering
+	auto renderer = GetRowRenderer();
+	return RenderQueryResult(*renderer, *res);
 }
 
-SuccessState ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
-	if (cMode == RenderMode::DUCKBOX) {
-		size_t max_rows = this->max_rows;
-		size_t max_width = this->max_width;
+SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
+	DuckBoxRenderer result_renderer(*this, HighlightResults());
+	try {
+		duckdb::BoxRendererConfig config;
+		config.max_rows = max_rows;
+		config.max_width = max_width;
 		if (!outfile.empty() && outfile[0] != '|') {
-			max_rows = (size_t)-1;
-			max_width = (size_t)-1;
+			config.max_rows = (size_t)-1;
+			config.max_width = (size_t)-1;
 		}
 		LargeNumberRendering large_rendering = large_number_rendering;
 		if (!stdout_is_console) {
-			max_width = (size_t)-1;
+			config.max_width = (size_t)-1;
 		}
 		if (large_rendering == LargeNumberRendering::DEFAULT) {
 			large_rendering = stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
 		}
-
-		DuckBoxRenderer renderer(*this, HighlightResults());
-		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
-		                      decimal_separator, int(large_rendering), &renderer);
+		config.null_value = nullValue;
+		if (columns) {
+			config.render_mode = duckdb::RenderMode::COLUMNS;
+		}
+		config.decimal_separator = decimal_separator;
+		config.thousand_separator = thousand_separator;
+		config.max_width = max_width;
+		config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
+		duckdb::BoxRenderer renderer(config);
+		auto &materialized = res.Cast<duckdb::MaterializedQueryResult>();
+		auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+		renderer.Render(*con.context, res.names, materialized.Collection(), result_renderer);
 		return SuccessState::SUCCESS;
+	} catch (std::exception &ex) {
+		string error_str = duckdb::ErrorData(ex).Message() + "\n";
+		result_renderer.RenderLayout(error_str);
+		return SuccessState::FAILURE;
 	}
-	throw std::runtime_error("eek unsupported");
 }
-
 /*
 ** Execute a statement or set of statements.  Print
 ** any result rows/columns depending on the current mode
@@ -4394,7 +4397,7 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	if (success != SuccessState::SUCCESS) {
 		return 1;
 	} else if (ShellHasFlag(ShellFlags::SHFLG_CountChanges)) {
-		raw_printf(out, "changes: %3lld   total_changes: %lld\n", sqlite3_changes64(db), sqlite3_total_changes64(db));
+		raw_printf(out, "changes: %3llu   total_changes: %llu\n", last_changes, total_changes);
 	}
 	return 0;
 }
