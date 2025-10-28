@@ -1,6 +1,5 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
