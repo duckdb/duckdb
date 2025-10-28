@@ -679,7 +679,7 @@ public:
 				state.Print("NULL");
 			} else if (state.IsNumber(data[i], nullptr)) {
 				state.Print(data[i]);
-			} else if (state.ShellHasFlag(SHFLG_Newlines)) {
+			} else if (state.ShellHasFlag(ShellFlags::SHFLG_Newlines)) {
 				state.OutputQuotedString(data[i]);
 			} else {
 				state.OutputQuotedEscapedString(data[i]);

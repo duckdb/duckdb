@@ -1708,7 +1708,7 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 			this->pStmt = pStmt;
 
 			/* echo the sql statement if echo on */
-			if (ShellHasFlag(SHFLG_Echo)) {
+			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
 				utf8_printf(out, "%s\n", zStmtSql ? zStmtSql : zSql);
 			}
 
@@ -2372,7 +2372,7 @@ static bool booleanValue(const string &zArg) {
 /*
 ** Set or clear a shell flag according to a boolean value.
 */
-void ShellState::SetOrClearFlag(unsigned mFlag, const string &zArg) {
+void ShellState::SetOrClearFlag(ShellFlags mFlag, const string &zArg) {
 	if (booleanValue(zArg)) {
 		ShellSetFlag(mFlag);
 	} else {
@@ -2774,7 +2774,7 @@ MetadataResult ChangeDirectory(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ToggleChanges(ShellState &state, const vector<string> &args) {
-	state.SetOrClearFlag(SHFLG_CountChanges, args[1]);
+	state.SetOrClearFlag(ShellFlags::SHFLG_CountChanges, args[1]);
 	return MetadataResult::SUCCESS;
 }
 
@@ -2840,14 +2840,15 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	string zLike;
 	bool savedShowHeader = state.showHeader;
 	int savedShellFlags = state.shellFlgs;
-	state.ShellClearFlag(SHFLG_Newlines | SHFLG_Echo);
+	state.ShellClearFlag(ShellFlags::SHFLG_Newlines);
+	state.ShellClearFlag(ShellFlags::SHFLG_Echo);
 	for (idx_t i = 1; i < args.size(); i++) {
 		if (args[i][0] == '-') {
 			const char *z = args[i].c_str() + 1;
 			if (z[0] == '-')
 				z++;
 			if (StringUtil::Equals(z, "newlines")) {
-				state.ShellSetFlag(SHFLG_Newlines);
+				state.ShellSetFlag(ShellFlags::SHFLG_Newlines);
 			} else {
 				raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", args[i].c_str());
 				return MetadataResult::FAIL;
@@ -2908,7 +2909,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ToggleEcho(ShellState &state, const vector<string> &args) {
-	state.SetOrClearFlag(SHFLG_Echo, args[1]);
+	state.SetOrClearFlag(ShellFlags::SHFLG_Echo, args[1]);
 	return MetadataResult::SUCCESS;
 }
 
@@ -2926,7 +2927,7 @@ MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
 
 MetadataResult ToggleHeaders(ShellState &state, const vector<string> &args) {
 	state.showHeader = booleanValue(args[1]);
-	state.shellFlgs |= SHFLG_HeaderSet;
+	state.ShellSetFlag(ShellFlags::SHFLG_HeaderSet);
 	return MetadataResult::SUCCESS;
 }
 
@@ -3030,7 +3031,7 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 		rowSeparator = SEP_Row;
 	} else if (c2 == 'c' && strncmp(mode_str, "columns", n2) == 0) {
 		mode = RenderMode::COLUMN;
-		if ((shellFlgs & SHFLG_HeaderSet) == 0) {
+		if (ShellHasFlag(ShellFlags::SHFLG_HeaderSet)) {
 			showHeader = true;
 		}
 		rowSeparator = SEP_Row;
@@ -3533,7 +3534,7 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 		if (eMode == 'x') {
 			/* spreadsheet mode.  Output as CSV. */
 			NewTempFile("csv");
-			ShellClearFlag(SHFLG_Echo);
+			ShellClearFlag(ShellFlags::SHFLG_Echo);
 			mode = RenderMode::CSV;
 			colSeparator = SEP_Comma;
 			rowSeparator = SEP_CrLf;
@@ -3720,7 +3721,7 @@ MetadataResult RunShellCommand(ShellState &state, const vector<string> &args) {
 }
 
 void ShellState::ShowConfiguration() {
-	utf8_printf(out, "%12.12s: %s\n", "echo", ShellHasFlag(SHFLG_Echo) ? "on" : "off");
+	utf8_printf(out, "%12.12s: %s\n", "echo", ShellHasFlag(ShellFlags::SHFLG_Echo) ? "on" : "off");
 	utf8_printf(out, "%12.12s: %s\n", "headers", showHeader ? "on" : "off");
 	utf8_printf(out, "%12.12s: %s\n", "mode", modeDescr[int(mode)]);
 	utf8_printf(out, "%12.12s: ", "nullvalue");
@@ -4169,7 +4170,6 @@ static bool _all_whitespace(const char *z) {
 	return true;
 }
 
-
 enum class SQLParseState { SEMICOLON, WHITESPACE, NORMAL };
 
 static const char *skipDollarQuotedString(const char *zSql, const char *delimiterStart, idx_t delimiterLength) {
@@ -4321,7 +4321,6 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 	return state == SQLParseState::SEMICOLON;
 }
 
-
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
@@ -4330,9 +4329,6 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	string zErrMsg;
 
 	OpenDB(0);
-	if (ShellHasFlag(SHFLG_Backslash)) {
-		resolve_backslashes(zSql);
-	}
 #ifndef SHELL_USE_LOCAL_GETLINE
 	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
 		shell_add_history(zSql);
@@ -4348,7 +4344,7 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 			ShellDatabaseError(db);
 		}
 		return 1;
-	} else if (ShellHasFlag(SHFLG_CountChanges)) {
+	} else if (ShellHasFlag(ShellFlags::SHFLG_CountChanges)) {
 		raw_printf(out, "changes: %3lld   total_changes: %lld\n", sqlite3_changes64(db), sqlite3_total_changes64(db));
 	}
 	return 0;
@@ -4407,13 +4403,13 @@ int ShellState::ProcessInput(InputMode mode) {
 		}
 		lineno++;
 		if (nSql == 0 && _all_whitespace(zLine)) {
-			if (ShellHasFlag(SHFLG_Echo)) {
+			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
 				printf("%s\n", zLine);
 			}
 			continue;
 		}
 		if (zLine && (zLine[0] == '.' || zLine[0] == '#') && nSql == 0) {
-			if (ShellHasFlag(SHFLG_Echo)) {
+			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
 				printf("%s\n", zLine);
 			}
 			if (zLine[0] == '.') {
@@ -4461,7 +4457,7 @@ int ShellState::ProcessInput(InputMode mode) {
 				ClearTempFile();
 			}
 		} else if (nSql && _all_whitespace(zSql)) {
-			if (ShellHasFlag(SHFLG_Echo)) {
+			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
 				printf("%s\n", zSql);
 			}
 			nSql = 0;
@@ -4599,7 +4595,6 @@ static void main_init(ShellState *data) {
 	data->colSeparator = SEP_Column;
 	data->rowSeparator = SEP_Row;
 	data->showHeader = true;
-	data->shellFlgs = SHFLG_Lookaside;
 	verify_uninitialized();
 	sqlite3_config(SQLITE_CONFIG_URI, 1);
 	sqlite3_config(SQLITE_CONFIG_LOG, shellLog, data);
@@ -4871,7 +4866,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-noheader") == 0) {
 			data.showHeader = 0;
 		} else if (strcmp(z, "-echo") == 0) {
-			data.ShellSetFlag(SHFLG_Echo);
+			data.ShellSetFlag(ShellFlags::SHFLG_Echo);
 		} else if (strcmp(z, "-unsigned") == 0) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-unredacted") == 0) {

@@ -63,14 +63,12 @@ enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 /*
 ** These are the allowed shellFlgs values
 */
-#define SHFLG_Pagecache     0x00000001 /* The --pagecache option is used */
-#define SHFLG_Lookaside     0x00000002 /* Lookaside memory is used */
-#define SHFLG_Backslash     0x00000004 /* The --backslash option is used */
-#define SHFLG_PreserveRowid 0x00000008 /* .dump preserves rowid values */
-#define SHFLG_Newlines      0x00000010 /* .dump --newline flag */
-#define SHFLG_CountChanges  0x00000020 /* .changes setting */
-#define SHFLG_Echo          0x00000040 /* .echo or --echo setting */
-#define SHFLG_HeaderSet     0x00000080 /* .header has been used */
+enum class ShellFlags : uint32_t {
+	SHFLG_Newlines = 0x00000010,     /* .dump --newline flag */
+	SHFLG_CountChanges = 0x00000020, /* .changes setting */
+	SHFLG_Echo = 0x00000040,         /* .echo or --echo setting */
+	SHFLG_HeaderSet = 0x00000080     /* .header has been used */
+};
 
 /* ctype macros that work with signed characters */
 #define IsSpace(X) duckdb::StringUtil::CharacterIsSpace((unsigned char)X)
@@ -99,8 +97,8 @@ public:
 	RenderMode cMode = RenderMode::LINE;      /* temporary output mode for the current query */
 	RenderMode normalMode = RenderMode::LINE; /* Output mode before ".explain on" */
 	bool showHeader = false;                  /* True to show column names in List or Column mode */
-	unsigned shellFlgs = 0;                   /* Various flags */
-	unsigned priorShFlgs = 0;                 /* Saved copy of flags */
+	uint32_t shellFlgs = 0;                   /* Various flags */
+	uint32_t priorShFlgs = 0;                 /* Saved copy of flags */
 	int64_t szMax = 0;                        /* --maxsize argument to .open */
 	string zDestTable;                        /* Name of destination table when RenderMode::Insert */
 	string zTempFile;                         /* Temporary file that might need deleting */
@@ -189,17 +187,17 @@ public:
 	int RunTableDumpQuery(const string &zSelect);
 	void OpenDB(int openFlags);
 
-	void SetOrClearFlag(unsigned mFlag, const string &zArg);
-	bool ShellHasFlag(int flag) {
-		return (shellFlgs & flag) != 0;
+	void SetOrClearFlag(ShellFlags mFlag, const string &zArg);
+	bool ShellHasFlag(ShellFlags flag) {
+		return (shellFlgs & static_cast<uint32_t>(flag)) != 0;
 	}
 
-	void ShellSetFlag(int flag) {
-		shellFlgs |= flag;
+	void ShellSetFlag(ShellFlags flag) {
+		shellFlgs |= static_cast<uint32_t>(flag);
 	}
 
-	void ShellClearFlag(int flag) {
-		shellFlgs &= ~flag;
+	void ShellClearFlag(ShellFlags flag) {
+		shellFlgs &= ~static_cast<uint32_t>(flag);
 	}
 	void ResetOutput();
 	void ClearTempFile();
