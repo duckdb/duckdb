@@ -4787,7 +4787,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	** memory that does not come from the SQLite memory allocator.
 	*/
 #if !SQLITE_SHELL_IS_UTF8
-	sqlite3_initialize();
 	argvToFree = (char **)malloc(sizeof(argv[0]) * argc * 2);
 	argcToFree = argc;
 	argv = argvToFree + argc;
@@ -4806,7 +4805,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		argvToFree[i] = argv[i];
 		sqlite3_free(z);
 	}
-	sqlite3_shutdown();
 #endif
 
 	assert(argc >= 1 && argv && argv[0]);
@@ -4819,18 +4817,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	signal(SIGINT, interrupt_handler);
 #elif (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
-#endif
-
-#ifdef SQLITE_SHELL_DBNAME_PROC
-	{
-		/* If the SQLITE_SHELL_DBNAME_PROC macro is defined, then it is the name
-		** of a C-function that will provide the name of the database file.  Use
-		** this compile-time option to embed this shell program in larger
-		** applications. */
-		extern void SQLITE_SHELL_DBNAME_PROC(const char **);
-		SQLITE_SHELL_DBNAME_PROC(&data.zDbFilename);
-		warnInmemoryDb = false;
-	}
 #endif
 
 	/* Do an initial pass through the command-line argument to locate
@@ -4891,29 +4877,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		}
 	}
 
-#ifdef SQLITE_SHELL_INIT_PROC
-	{
-		/* If the SQLITE_SHELL_INIT_PROC macro is defined, then it is the name
-		** of a C-function that will perform initialization actions on SQLite that
-		** occur just before or after sqlite3_initialize(). Use this compile-time
-		** option to embed this shell program in larger applications. */
-		extern void SQLITE_SHELL_INIT_PROC(void);
-		SQLITE_SHELL_INIT_PROC();
-	}
-#else
-	/* All the sqlite3_config() calls have now been made. So it is safe
-	** to call sqlite3_initialize() and process any command line -vfs option. */
-	sqlite3_initialize();
-#endif
-
 	if (data.zDbFilename.empty()) {
-#ifndef SQLITE_OMIT_MEMORYDB
 		data.zDbFilename = ":memory:";
 		warnInmemoryDb = argc == 1;
-#else
-		utf8_printf(stderr, "%s: Error: no database filename specified\n", program_name);
-		return 1;
-#endif
 	}
 	data.out = stdout;
 
