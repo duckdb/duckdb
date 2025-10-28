@@ -144,9 +144,9 @@ struct QueryMetrics {
 	Profiler attach_replay_wal_latency;
 	//! The timer for running checkpoints.
 	Profiler checkpoint_latency;
-	//! The timer for the WAL writes
+	//! The timer for the WAL writes during COMMIT.
 	Profiler commit_write_wal_latency;
-	//! The total times WAL is replayed
+	//! The total number of entries to replay in the WAL.
 	atomic<idx_t> wal_replay_entry_count;
 	//! The total bytes read by the file system.
 	atomic<idx_t> total_bytes_read;

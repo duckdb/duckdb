@@ -331,7 +331,7 @@ void QueryProfiler::EndQuery() {
 	}
 }
 
-void QueryProfiler::AddToCounter(MetricsType type, const idx_t amount) {
+void QueryProfiler::AddToCounter(const MetricsType type, const idx_t amount) {
 	if (!IsEnabled()) {
 		return;
 	}
@@ -351,7 +351,7 @@ void QueryProfiler::AddToCounter(MetricsType type, const idx_t amount) {
 	}
 }
 
-void QueryProfiler::StartTimer(MetricsType type) {
+void QueryProfiler::StartTimer(const MetricsType type) {
 	if (!IsEnabled()) {
 		return;
 	}

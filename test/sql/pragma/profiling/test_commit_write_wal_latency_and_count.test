@@ -86,6 +86,6 @@ SELECT CASE WHEN wal_replay_entry_count > 0 THEN 'true' ELSE 'false' END FROM re
 true
 
 query I
-SELECT CASE WHEN attach_replay_wal_latency >= 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
+SELECT CASE WHEN attach_replay_wal_latency > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
 ----
 true
