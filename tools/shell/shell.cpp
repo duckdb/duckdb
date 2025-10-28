@@ -1099,7 +1099,7 @@ void ShellState::PrintSchemaLine(const char *z, const char *zTail) {
 	if (!z || !zTail) {
 		return;
 	}
-	if (StringGlob("CREATE TABLE ['\"]*", z) == 0) {
+	if (StringGlob("CREATE TABLE ['\"]*", z)) {
 		utf8_printf(out, "CREATE TABLE IF NOT EXISTS %s%s", z + 13, zTail);
 	} else {
 		utf8_printf(out, "%s%s", z, zTail);
@@ -1909,7 +1909,7 @@ static int showHelp(FILE *out, const char *zPattern) {
 		/* Look for commands that for which zPattern is an exact prefix */
 		zPat = StringUtil::Format(".%s*", zPattern);
 		for (i = 0; i < ArraySize(azHelp); i++) {
-			if (ShellState::StringGlob(zPat.c_str(), azHelp[i]) == 0) {
+			if (ShellState::StringGlob(zPat.c_str(), azHelp[i])) {
 				utf8_printf(out, "%s\n", azHelp[i]);
 				j = i + 1;
 				n++;
@@ -1932,7 +1932,7 @@ static int showHelp(FILE *out, const char *zPattern) {
 		for (i = 0; i < ArraySize(azHelp); i++) {
 			if (azHelp[i][0] == '.')
 				j = i;
-			if (ShellState::StringLike(zPat.c_str(), azHelp[i], 0) == 0) {
+			if (ShellState::StringLike(zPat.c_str(), azHelp[i], 0)) {
 				utf8_printf(out, "%s\n", azHelp[j]);
 				while (j < ArraySize(azHelp) - 1 && azHelp[j + 1][0] != '.') {
 					j++;

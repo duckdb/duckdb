@@ -137,10 +137,10 @@ static const struct compareInfo likeInfoNorm = {'%', '_', 0, 1};
 **
 ** This routine is usually quick, but can be N**2 in the worst case.
 */
-static bool patternCompare(const uint8_t *zPattern,         /* The glob pattern */
-                           const uint8_t *zString,          /* The string to compare against the glob */
-                           const struct compareInfo *pInfo, /* Information about how to do the compare */
-                           uint32_t matchOther              /* The escape char (LIKE) or '[' (GLOB) */
+static int patternCompare(const uint8_t *zPattern,         /* The glob pattern */
+                          const uint8_t *zString,          /* The string to compare against the glob */
+                          const struct compareInfo *pInfo, /* Information about how to do the compare */
+                          uint32_t matchOther              /* The escape char (LIKE) or '[' (GLOB) */
 ) {
 	uint32_t c, c2;                      /* Next pattern and input string chars */
 	uint32_t matchOne = pInfo->matchOne; /* "?" or "_" */
@@ -276,20 +276,12 @@ static bool patternCompare(const uint8_t *zPattern,         /* The glob pattern 
 	return *zString == 0 ? SQLITE_MATCH : SQLITE_NOMATCH;
 }
 
-/*
-** The sqlite3_strglob() interface.  Return 0 on a match (like strcmp()) and
-** non-zero if there is no match.
-*/
 bool ShellState::StringGlob(const char *zGlobPattern, const char *zString) {
-	return patternCompare((uint8_t *)zGlobPattern, (uint8_t *)zString, &globInfo, '[');
+	return patternCompare((uint8_t *)zGlobPattern, (uint8_t *)zString, &globInfo, '[') == SQLITE_MATCH;
 }
 
-/*
-** The sqlite3_strlike() interface.  Return 0 on a match and non-zero for
-** a miss - like strcmp().
-*/
 bool ShellState::StringLike(const char *zPattern, const char *zStr, unsigned int esc) {
-	return patternCompare((uint8_t *)zPattern, (uint8_t *)zStr, &likeInfoNorm, esc);
+	return patternCompare((uint8_t *)zPattern, (uint8_t *)zStr, &likeInfoNorm, esc) == SQLITE_MATCH;
 }
 
 } // namespace duckdb_shell
