@@ -86,9 +86,6 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "sqlite3.h"
-typedef sqlite3_int64 i64;
-typedef sqlite3_uint64 u64;
-typedef unsigned char u8;
 #include <ctype.h>
 
 #if !defined(_WIN32) && !defined(WIN32)
@@ -2123,19 +2120,6 @@ static int showHelp(FILE *out, const char *zPattern) {
 	return n;
 }
 
-/*
-** Try to deduce the type of file for zName based on its content.  Return
-** one of the SHELL_OPEN_* constants.
-**
-** If the file does not exist or is empty but its name looks like a ZIP
-** archive and the dfltZip flag is true, then assume it is a ZIP archive.
-** Otherwise, assume an ordinary database regardless of the filename if
-** the type cannot be determined from content.
-*/
-int deduceDatabaseType(const char *zName, int dfltZip) {
-	return SHELL_OPEN_NORMAL;
-}
-
 /* Flags for open_db().
 **
 ** The default behavior of open_db() is to exit(1) if the database fails to
@@ -2147,7 +2131,6 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 ** the *.zip pattern.
 */
 #define OPEN_DB_KEEPALIVE 0x001 /* Return after error if true */
-#define OPEN_DB_ZIPFILE   0x002 /* Open as ZIP if name matches *.zip */
 /*
 ** Make sure the database is open.  If it is not, then open it.  If
 ** the database fails to open, print an error message and exit.
@@ -2156,11 +2139,7 @@ void ShellState::OpenDB(int flags) {
 
 	if (db == 0) {
 		if (openMode == SHELL_OPEN_UNSPEC) {
-			if (zDbFilename.empty()) {
-				openMode = SHELL_OPEN_NORMAL;
-			} else {
-				openMode = (u8)deduceDatabaseType(zDbFilename.c_str(), (flags & OPEN_DB_ZIPFILE) != 0);
-			}
+			openMode = SHELL_OPEN_NORMAL;
 		}
 		switch (openMode) {
 		case SHELL_OPEN_APPENDVFS: {
