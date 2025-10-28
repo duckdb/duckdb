@@ -21,6 +21,7 @@
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "parser/peg_parser.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
