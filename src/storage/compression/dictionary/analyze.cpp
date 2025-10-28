@@ -44,9 +44,8 @@ bool DictionaryAnalyzeState::CalculateSpaceRequirements(bool new_string, idx_t s
 void DictionaryAnalyzeState::Flush(bool final) {
 	segment_count++;
 	current_tuple_count = 0;
-	unique_counts_per_segment.push_back(current_unique_count);
+	max_unique_count_across_all_segments = std::max(max_unique_count_across_all_segments, current_unique_count);
 	current_unique_count = 0;
-	dict_sizes_per_segment.push_back(current_dict_size);
 	current_dict_size = 0;
 	current_set.clear();
 }

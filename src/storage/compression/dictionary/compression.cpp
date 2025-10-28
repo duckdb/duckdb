@@ -1,17 +1,15 @@
 #include "duckdb/storage/compression/dictionary/compression.hpp"
-#include "duckdb/storage/segment/uncompressed.hpp"
 
 namespace duckdb {
 
 DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
-                                                                       const CompressionInfo &info, idx_t unique_count,
-                                                                       idx_t dict_size)
+                                                                       const CompressionInfo &info, const idx_t max_unique_count_across_all_segments)
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
       current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
-                         unique_count,                                 // maximum_size_p (amount of elements)
-                         dict_size + (sizeof(uint32_t) * unique_count) // maximum_target_capacity_p (byte capacity)
-      ) {
+                         max_unique_count_across_all_segments+1, // maximum_size_p (amount of elements)
+						1 // maximum_target_capacity_p, 0 because we don't care about target for our use-case, as we are using PrimitiveDictionary for duplicate checks
+                         ) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 

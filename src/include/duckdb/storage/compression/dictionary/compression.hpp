@@ -25,7 +25,7 @@ namespace duckdb {
 struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 public:
 	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info,
-	                                   idx_t unique_count, idx_t dict_size);
+	                                   idx_t max_unique_count_across_all_segments);
 
 public:
 	void CreateEmptySegment(idx_t row_start);

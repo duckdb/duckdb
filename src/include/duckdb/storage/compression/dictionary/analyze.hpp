@@ -26,7 +26,7 @@ public:
 	idx_t segment_count;
 	idx_t current_tuple_count;
 	idx_t current_unique_count;
-	std::vector<idx_t> unique_counts_per_segment;
+	idx_t max_unique_count_across_all_segments = 0;
 	idx_t current_dict_size;
 	std::vector<idx_t> dict_sizes_per_segment;
 	StringHeap heap;
