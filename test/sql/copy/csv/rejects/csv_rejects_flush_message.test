@@ -9,7 +9,7 @@ require notwindows
 
 query I
 SELECT * FROM read_csv(
-    'data/csv/rejects/flush.csv',
+    '{DATA_DIR}/csv/rejects/flush.csv',
     columns = {'a': 'DECIMAL'},
     store_rejects = true);
 ----
