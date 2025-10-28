@@ -39,7 +39,7 @@ public:
 
 	bool HasTasks() const {
 		D_ASSERT(result_type != AsyncResultType::INVALID);
-		if (async_result.empty()) {
+		if (async_tasks.empty()) {
 			D_ASSERT(result_type != AsyncResultType::BLOCKED);
 			return false;
 		} else {
@@ -49,7 +49,7 @@ public:
 	}
 	AsyncResultType GetResultType() const {
 		D_ASSERT(result_type != AsyncResultType::INVALID);
-		if (async_result.empty()) {
+		if (async_tasks.empty()) {
 			D_ASSERT(result_type != AsyncResultType::BLOCKED);
 		} else {
 			D_ASSERT(result_type == AsyncResultType::BLOCKED);
