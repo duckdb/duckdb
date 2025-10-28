@@ -633,9 +633,8 @@ ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *va
 
 const StringUtil::EnumStringLiteral *GetAsyncResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(AsyncResultType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(AsyncResultType::IMPLICIT), "IMPLICIT" },
-		{ static_cast<uint32_t>(AsyncResultType::ONGOING), "ONGOING" },
+		{ static_cast<uint32_t>(AsyncResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
 		{ static_cast<uint32_t>(AsyncResultType::FINISHED), "FINISHED" },
 		{ static_cast<uint32_t>(AsyncResultType::BLOCKED), "BLOCKED" }
 	};
@@ -644,12 +643,12 @@ const StringUtil::EnumStringLiteral *GetAsyncResultTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<AsyncResultType>(AsyncResultType value) {
-	return StringUtil::EnumToString(GetAsyncResultTypeValues(), 5, "AsyncResultType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAsyncResultTypeValues(), 4, "AsyncResultType", static_cast<uint32_t>(value));
 }
 
 template<>
 AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value) {
-	return static_cast<AsyncResultType>(StringUtil::StringToEnum(GetAsyncResultTypeValues(), 5, "AsyncResultType", value));
+	return static_cast<AsyncResultType>(StringUtil::StringToEnum(GetAsyncResultTypeValues(), 4, "AsyncResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBinderTypeValues() {
