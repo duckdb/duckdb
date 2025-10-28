@@ -3039,12 +3039,8 @@ bool ShellState::ImportData(const vector<string> &args) {
 		utf8_printf(stderr, ".import cannot be used in -safe mode\n");
 		return false;
 	}
-	int rc;
 	const char *zTable = nullptr;              /* Insert data into this table */
 	const char *zFile = nullptr;               /* Name of file to extra content from */
-	sqlite3_stmt *pStmt = nullptr;             /* A statement */
-	int nCol;                                  /* Number of columns in the table */
-	int needCommit;                            /* True to COMMIT or ROLLBACK at end */
 	ImportCtx sCtx;                            /* Reader context */
 	char *(SQLITE_CDECL * xRead)(ImportCtx *); /* Func to read one value */
 	int eVerbose = 0;                          /* Larger for more console output */
@@ -3168,61 +3164,59 @@ bool ShellState::ImportData(const vector<string> &args) {
 		while (xRead(&sCtx) && sCtx.cTerm == sCtx.cColSep) {
 		}
 	}
-	auto zSql = StringUtil::Format("SELECT * FROM %s", zTable);
-	rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
+	// check if the table exists
+	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+	auto needCommit = con.context->transaction.IsAutoCommit();
+	if (needCommit) {
+		ExecuteQuery("BEGIN");
+	}
+	auto table_info = con.TableInfo(zTable);
+
 	import_append_char(&sCtx, 0); /* To ensure sCtx.z is allocated */
-	if (rc && StringGlob("Catalog Error: Table with name *", sqlite3_errmsg(db)) == 0) {
-		char *zCreate = sqlite3_mprintf("CREATE TABLE %s", zTable);
+	idx_t nCol;
+	if (!table_info) {
+		// table does not exist - read the first line and create it based on the row values in the first line
+		string zCreate = "CREATE TABLE ";
+		zCreate += zTable;
 		char cSep = '(';
+		nCol = 0;
 		while (xRead(&sCtx)) {
-			zCreate = sqlite3_mprintf("%z%c\n  \"%w\" TEXT", zCreate, cSep, sCtx.z);
+			zCreate += cSep;
+			zCreate += "\"";
+			zCreate += sCtx.z;
+			zCreate += "\"";
+			zCreate += " TEXT";
 			cSep = ',';
-			if (sCtx.cTerm != sCtx.cColSep)
+			nCol++;
+			if (sCtx.cTerm != sCtx.cColSep) {
 				break;
+			}
 		}
-		if (cSep == '(') {
-			sqlite3_free(zCreate);
+		if (nCol == 0) {
 			import_cleanup(&sCtx);
 			utf8_printf(stderr, "%s: empty file\n", sCtx.zFile);
 			return false;
 		}
-		zCreate = sqlite3_mprintf("%z\n)", zCreate);
+		zCreate += "\n)";
 		if (eVerbose >= 1) {
-			utf8_printf(out, "%s\n", zCreate);
+			utf8_printf(out, "%s\n", zCreate.c_str());
 		}
 		auto res = ExecuteQuery(zCreate);
 		if (res == SuccessState::FAILURE) {
 			import_cleanup(&sCtx);
 			return false;
 		}
-		rc = sqlite3_prepare_v2(db, zSql.c_str(), -1, &pStmt, 0);
+	} else {
+		nCol = table_info->columns.size();
 	}
-	if (rc) {
-		if (pStmt)
-			sqlite3_finalize(pStmt);
-		ShellDatabaseError(db);
-		import_cleanup(&sCtx);
-		return false;
-	}
-	nCol = sqlite3_column_count(pStmt);
-	sqlite3_finalize(pStmt);
-	pStmt = 0;
-	if (nCol == 0) {
-		return 0; /* no columns, no error */
-	}
-	zSql = StringUtil::Format("INSERT INTO %s VALUES(?", SQLIdentifier(zTable));
-	for (int i = 1; i < nCol; i++) {
+	string zSql = StringUtil::Format("INSERT INTO %s VALUES(?", SQLIdentifier(zTable));
+	for (idx_t i = 1; i < nCol; i++) {
 		zSql += ",?";
 	}
 	zSql += ")";
 	if (eVerbose >= 2) {
 		utf8_printf(out, "Insert using: %s\n", zSql.c_str());
 	}
-	needCommit = sqlite3_get_autocommit(db);
-	if (needCommit) {
-		ExecuteQuery("BEGIN");
-	}
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
 	auto prepared = con.Prepare(zSql);
 	if (prepared->HasError()) {
 		PrintDatabaseError(prepared->GetError());
@@ -3257,7 +3251,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 			}
 			if (i < nCol - 1 && sCtx.cTerm != sCtx.cColSep) {
 				utf8_printf(stderr,
-				            "%s:%d: expected %d columns but found %d - "
+				            "%s:%d: expected %llu columns but found %d - "
 				            "filling the rest with NULL\n",
 				            sCtx.zFile, startLine, nCol, i + 1);
 				i += 2;
@@ -3273,7 +3267,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 				i++;
 			} while (sCtx.cTerm == sCtx.cColSep);
 			utf8_printf(stderr,
-			            "%s:%d: expected %d columns but found %d - "
+			            "%s:%d: expected %llu columns but found %d - "
 			            "extras ignored\n",
 			            sCtx.zFile, startLine, nCol, i);
 		}
