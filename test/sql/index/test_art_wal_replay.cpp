@@ -140,8 +140,8 @@ TEST_CASE("Test ART index with WAL replay - nested leaf row ID lookups", "[wal][
 	duckdb::unique_ptr<QueryResult> result;
 	auto db_path = TestCreatePath("art_wal_nested_test.db");
 	DeleteDatabase(db_path);
-	const int INSERT_COUNT = 50;
-	const int DELETE_COUNT = 10;
+	const int64_t INSERT_COUNT = 50;
+	const int64_t DELETE_COUNT = 10;
 
 	{
 		DuckDB db(nullptr);
@@ -188,7 +188,7 @@ TEST_CASE("Test ART index with WAL replay - nested leaf row ID lookups", "[wal][
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
 		result = con.Query("SELECT COUNT(*) FROM tbl WHERE a = 42");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(static_cast<int64_t>(INSERT_COUNT - DELETE_COUNT))}));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(INSERT_COUNT - DELETE_COUNT)}));
 
 		auto &idx_a = GetARTIndex(con, "tbl", "idx_a");
 		ArenaAllocator arena(BufferAllocator::Get(idx_a.db));
@@ -224,16 +224,16 @@ TEST_CASE("Test ART index with WAL replay - nested leaf row ID lookups", "[wal][
 }
 
 // Similar to the first test, but do a tighter interleaving between inserts and deletes.
-TEST_CASE("Test ART index with WAL replay - interleaved inserts and deletes with generated columns",
+TEST_CASE("Test ART index with WAL replay - tightly interleaved inserts and deletes with generated columns",
           "[wal][art-wal-replay]") {
 	duckdb::unique_ptr<QueryResult> result;
 	auto db_path = TestCreatePath("art_wal_interleaved_test.db");
 	DeleteDatabase(db_path);
-	std::vector<int> values;
-	std::vector<int> deleted_values;
+	std::vector<int32_t> values;
+	std::vector<int32_t> deleted_values;
 
 	{
-		constexpr int OPERATION_COUNT = 100;
+		constexpr int64_t OPERATION_COUNT = 100;
 		DuckDB db(nullptr);
 		Connection con(db);
 
@@ -247,27 +247,27 @@ TEST_CASE("Test ART index with WAL replay - interleaved inserts and deletes with
 		REQUIRE_NO_FAIL(con.Query("CREATE INDEX idx_df ON tbl(d, f)"));
 
 		for (idx_t i = 0; i < OPERATION_COUNT; i++) {
-			idx_t val_a = (i + 1) * 10;
-			idx_t val_b = val_a * 2;
+			int32_t val_a = i * 10;
+			int32_t val_b = val_a * 2;
 			string val_d = "val_" + to_string(val_a);
 			string val_f = "tag_" + to_string(val_a);
 
 			if (i % 3 == 0) {
-				// Insert and delete (0, 3, 6, 9, ...)
+				// Insert and delete (0, 30, 60, ...)
 				REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl(a, b, d, f) VALUES (" + to_string(val_a) + ", " +
 				                          to_string(val_b) + ", '" + val_d + "', '" + val_f + "')"));
 				REQUIRE_NO_FAIL(con.Query("DELETE FROM tbl WHERE a = " + to_string(val_a)));
-				deleted_values.push_back(static_cast<int>(val_a));
+				deleted_values.push_back(static_cast<int32_t>(val_a));
 			} else {
-				// Insert and keep (pattern: 1, 2, 4, 5, 7, 8, ...)
+				// Insert and keep (10, 20, 40, 50, 70, ...)
 				REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl(a, b, d, f) VALUES (" + to_string(val_a) + ", " +
 				                          to_string(val_b) + ", '" + val_d + "', '" + val_f + "')"));
-				values.push_back(static_cast<int>(val_a));
+				values.push_back(static_cast<int32_t>(val_a));
 			}
 		}
 
 		result = con.Query("SELECT COUNT(*) FROM tbl");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(static_cast<int64_t>(kept_values.size()))}));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(static_cast<int64_t>(values.size()))}));
 
 		REQUIRE_NO_FAIL(con.Query("USE memory"));
 		REQUIRE_NO_FAIL(con.Query("DETACH testdb"));
@@ -296,21 +296,21 @@ TEST_CASE("Test ART index with WAL replay - interleaved inserts and deletes with
 		ArenaAllocator arena_df(BufferAllocator::Get(idx_df.db));
 
 		// Verify idx_ab
-		for (auto val_a : values) {
-			Value val_a_obj(static_cast<int32_t>(val_a));
-			Value val_b_obj(static_cast<int32_t>(val_a * 2));
-			auto key = ARTKey::CreateARTKey<int32_t>(arena_ab, val_a_obj);
-			auto key_b = ARTKey::CreateARTKey<int32_t>(arena_ab, val_b_obj);
+		for (auto val_a_ : values) {
+			Value val_a(static_cast<int32_t>(val_a_));
+			Value val_b(static_cast<int32_t>(val_a_ * 2));
+			auto key = ARTKey::CreateARTKey<int32_t>(arena_ab, val_a);
+			auto key_b = ARTKey::CreateARTKey<int32_t>(arena_ab, val_b);
 			key.Concat(arena_ab, key_b);
 			auto leaf = ARTOperator::Lookup(idx_ab, idx_ab.tree, key, 0);
 			REQUIRE(leaf);
 		}
 
-		for (auto val_a : deleted_values) {
-			Value val_a_obj(static_cast<int32_t>(val_a));
-			Value val_b_obj(static_cast<int32_t>(val_a * 2));
-			auto key = ARTKey::CreateARTKey<int32_t>(arena_ab, val_a_obj);
-			auto key_b = ARTKey::CreateARTKey<int32_t>(arena_ab, val_b_obj);
+		for (auto val_a_ : deleted_values) {
+			Value val_a(static_cast<int32_t>(val_a_));
+			Value val_b(static_cast<int32_t>(val_a_ * 2));
+			auto key = ARTKey::CreateARTKey<int32_t>(arena_ab, val_a);
+			auto key_b = ARTKey::CreateARTKey<int32_t>(arena_ab, val_b);
 			key.Concat(arena_ab, key_b);
 			auto leaf = ARTOperator::Lookup(idx_ab, idx_ab.tree, key, 0);
 			REQUIRE(!leaf);
