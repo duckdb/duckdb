@@ -164,11 +164,11 @@ public:
 	void PrintPadded(const char *str, idx_t len);
 	bool ColumnTypeIsInteger(const char *type);
 	string strdup_handle_newline(const char *z);
-	SuccessState TryExecuteColumnar(unique_ptr<duckdb::SQLStatement> statement, ColumnarResult &result);
+	void ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
-	SuccessState ExecutePreparedStatementColumnar(unique_ptr<duckdb::SQLStatement> statement);
+	void RenderColumnarResult(duckdb::QueryResult &res);
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
 	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);

@@ -1449,6 +1449,10 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 		result.types.push_back(GetLegacySQLiteType(query_result.types[c]));
 	}
 	for (auto &row : query_result) {
+		if (seenInterrupt) {
+			utf8_printf(out, "Interrupt\n");
+			return SuccessState::FAILURE;
+		}
 		result.data.clear();
 		for (idx_t c = 0; c < nCol; c++) {
 			if (row.IsNull(c)) {
@@ -1463,24 +1467,17 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 	return SuccessState::SUCCESS;
 }
 
-SuccessState ShellState::TryExecuteColumnar(unique_ptr<duckdb::SQLStatement> statement, ColumnarResult &result) {
-	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
-	auto res = con.Query(std::move(statement));
-	if (res->HasError()) {
-		PrintDatabaseError(res->GetError());
-		return SuccessState::FAILURE;
-	}
-
+void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result) {
 	// fetch the column count, column names and types
-	result.column_count = res->ColumnCount();
+	result.column_count = res.ColumnCount();
 	result.data.reserve(result.column_count * 4);
 	for (idx_t c = 0; c < result.column_count; c++) {
-		result.data.push_back(strdup_handle_newline(res->names[c].c_str()));
-		result.types.push_back(GetLegacySQLiteType(res->types[c]));
-		result.type_names.push_back(GetTypeName(res->types[c]));
+		result.data.push_back(strdup_handle_newline(res.names[c].c_str()));
+		result.types.push_back(GetLegacySQLiteType(res.types[c]));
+		result.type_names.push_back(GetTypeName(res.types[c]));
 	}
 
-	for (auto &row : *res) {
+	for (auto &row : res) {
 		for (idx_t c = 0; c < result.column_count; c++) {
 			auto str_val = row.GetValue<string>(c);
 			result.data.push_back(strdup_handle_newline(str_val.c_str()));
@@ -1505,7 +1502,6 @@ SuccessState ShellState::TryExecuteColumnar(unique_ptr<duckdb::SQLStatement> sta
 			result.column_width[column_idx] = width;
 		}
 	}
-	return SuccessState::SUCCESS;
 }
 
 /*
@@ -1518,19 +1514,9 @@ SuccessState ShellState::TryExecuteColumnar(unique_ptr<duckdb::SQLStatement> sta
 ** first, in order to determine column widths, before providing
 ** any output.
 */
-SuccessState ShellState::ExecutePreparedStatementColumnar(unique_ptr<duckdb::SQLStatement> statement) {
+void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
 	ColumnarResult result;
-	if (TryExecuteColumnar(std::move(statement), result) == SuccessState::FAILURE) {
-		return SuccessState::FAILURE;
-	}
-	if (seenInterrupt) {
-		utf8_printf(out, "Interrupt\n");
-		return SuccessState::FAILURE;
-	}
-	if (result.data.empty()) {
-		// nothing to render
-		return SuccessState::SUCCESS;
-	}
+	ConvertColumnarResult(res, result);
 
 	auto column_renderer = GetColumnRenderer();
 	column_renderer->RenderHeader(result);
@@ -1548,18 +1534,14 @@ SuccessState ShellState::ExecutePreparedStatementColumnar(unique_ptr<duckdb::SQL
 		if (j == result.column_count - 1) {
 			Print(rowSep);
 			j = -1;
-			if (seenInterrupt)
-				goto columnar_end;
+			if (seenInterrupt) {
+				return;
+			}
 		} else {
 			Print(colSep);
 		}
 	}
 	column_renderer->RenderFooter(result);
-columnar_end:
-	if (seenInterrupt) {
-		utf8_printf(out, "Interrupt\n");
-	}
-	return SuccessState::SUCCESS;
 }
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
@@ -1618,10 +1600,6 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
 		return SuccessState::FAILURE;
 	}
-	// FIXME: unify execution here, switch only on rendering
-	if (ShellRenderer::IsColumnar(cMode)) {
-		return ExecutePreparedStatementColumnar(std::move(statement));
-	}
 	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
 	auto res = con.Query(std::move(statement));
 	if (res->HasError()) {
@@ -1639,6 +1617,10 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	if (properties.return_type != duckdb::StatementReturnType::QUERY_RESULT) {
 		// only SELECT statements return results that need to be rendered
+		return SuccessState::SUCCESS;
+	}
+	if (ShellRenderer::IsColumnar(cMode)) {
+		RenderColumnarResult(*res);
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::TRASH) {
