@@ -25,7 +25,7 @@
         "type": "uint64",
         "unit": "absolute",
         "collection_method": "cumulative",
-        "child": "OPERATOR_CARDINALITY"
+        "child": "OPERATOR_ROWS_SCANNED"
       },
       {
         "name": "EXTRA_INFO",
@@ -80,15 +80,13 @@
         "name": "SYSTEM_PEAK_BUFFER_MEMORY",
         "description": "Peak memory usage of the system",
         "type": "uint64",
-        "unit": "bytes",
-        "query_root": true
+        "unit": "bytes"
       },
       {
         "name": "SYSTEM_PEAK_TEMP_DIR_SIZE",
         "description": "Peak size of the temporary directory",
         "type": "uint64",
-        "unit": "bytes",
-        "query_root": true
+        "unit": "bytes"
       }
     ]
   },

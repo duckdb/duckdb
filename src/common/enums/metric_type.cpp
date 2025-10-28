@@ -559,8 +559,6 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		MetricsType::LATENCY,
 		MetricsType::QUERY_NAME,
 		MetricsType::ROWS_RETURNED,
-		MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
-		MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 		MetricsType::TOTAL_BYTES_READ,
 		MetricsType::TOTAL_BYTES_WRITTEN,
 		MetricsType::WAITING_TO_ATTACH_LATENCY,
@@ -576,8 +574,6 @@ bool MetricsUtils::IsRootScopeMetric(MetricsType type) {
 		case MetricsType::LATENCY:
 		case MetricsType::QUERY_NAME:
 		case MetricsType::ROWS_RETURNED:
-		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
-		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 		case MetricsType::TOTAL_BYTES_READ:
 		case MetricsType::TOTAL_BYTES_WRITTEN:
 		case MetricsType::WAITING_TO_ATTACH_LATENCY:

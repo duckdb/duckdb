@@ -152,7 +152,7 @@ void ProfilingUtils::CollectMetrics(const MetricsType &type, QueryMetrics &query
 			GetCumulativeMetric<uint64_t>(node, MetricsType::CUMULATIVE_CARDINALITY, MetricsType::OPERATOR_CARDINALITY);
 			break;
 		case MetricsType::CUMULATIVE_ROWS_SCANNED:
-			GetCumulativeMetric<uint64_t>(node, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_CARDINALITY);
+			GetCumulativeMetric<uint64_t>(node, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED);
 			break;
 		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
 			metric = query_metrics.attach_load_storage_latency.Elapsed();
