@@ -353,7 +353,7 @@ jobs:
       id: build
       shell: bash
       env:
-        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;autocomplete"
         GEN: ninja
       run: make
 
