@@ -210,6 +210,11 @@ public:
 	idx_t NextSize() const {
 		return MinValue<idx_t>(Remaining(), STANDARD_VECTOR_SIZE);
 	}
+	void Seek(idx_t row_idx) {
+		chunk_idx = row_idx / STANDARD_VECTOR_SIZE;
+		base = MinValue<idx_t>(chunk_idx * STANDARD_VECTOR_SIZE, count);
+		scanned = base;
+	}
 	bool Scan(DataChunk &chunk) {
 		//  Free the previous blocks
 		block_state.SetKeepPinned(true);
@@ -542,6 +547,7 @@ public:
 	unique_ptr<AsOfPayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
 	DataChunk rhs_input;
+	SelectionVector rhs_match_sel;
 	idx_t right_bin = 0;
 
 	//	Predicate evaluation
@@ -565,6 +571,7 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 	lhs_match_sel.Initialize();
+	rhs_match_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
 	//	If we have equality predicates, set up the prefix data.
@@ -844,24 +851,25 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 
 	//	Extract the rhs input columns from the match
 	rhs_input.Reset();
+	idx_t rhs_match_count = 0;
 	for (idx_t i = 0; i < lhs_match_count; ++i) {
 		const auto idx = lhs_match_sel[i];
 		const auto match_pos = matches[idx];
 		// Skip to the range containing the match
-		while (match_pos >= rhs_scanner->Scanned()) {
+		if (match_pos >= rhs_scanner->Scanned()) {
+			if (rhs_match_count) {
+				rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
+				rhs_match_count = 0;
+			}
 			rhs_payload.Reset();
+			rhs_scanner->Seek(match_pos);
 			rhs_scanner->Scan(rhs_payload);
 		}
-		// Append the individual values
-		// TODO: Batch the copies
-		const auto source_offset = match_pos - (rhs_scanner->Scanned() - rhs_payload.size());
-		for (column_t col_idx = 0; col_idx < rhs_payload.data.size(); ++col_idx) {
-			auto &source = rhs_payload.data[col_idx];
-			auto &target = rhs_input.data[col_idx];
-			VectorOperations::Copy(source, target, source_offset + 1, source_offset, i);
-		}
+		// Select the individual values
+		const auto source_offset = match_pos - rhs_scanner->Base();
+		rhs_match_sel.set_index(rhs_match_count++, source_offset);
 	}
-	rhs_input.SetCardinality(lhs_match_count);
+	rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
 
 	//	Slice the left payload into the result
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
