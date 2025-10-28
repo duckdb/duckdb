@@ -95,7 +95,8 @@ public:
 
 	//! Insert value into dictionary without calling AddToTarget()
 	void InsertRaw(SRC value) {
-		// TODO: We probably don't need check if it's full, as we know we allocated exactly enough with max_unique_count_across_all_segments. Try without checks and see if there's a difference with benchmarking.
+		// TODO: We probably don't need check if it's full, as we know we allocated exactly enough with
+		// max_unique_count_across_all_segments. Try without checks and see if there's a difference with benchmarking.
 		if (full) {
 			return;
 		}
