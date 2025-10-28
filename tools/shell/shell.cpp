@@ -1609,7 +1609,10 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::EXPLAIN;
 			}
 
-			ExecuteStatement(std::move(statement));
+			auto rc = ExecuteStatement(std::move(statement));
+			if (rc != SuccessState::SUCCESS) {
+				return rc;
+			}
 		} /* end while */
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
