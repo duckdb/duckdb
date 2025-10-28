@@ -213,6 +213,7 @@ public:
 	static void GenerateRandomBytes(int N, void *pBuf);
 	static bool StringGlob(const char *zGlobPattern, const char *zString);
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
+	static void Sleep(idx_t ms);
 
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE

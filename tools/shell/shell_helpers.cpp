@@ -1,7 +1,12 @@
 #include "shell_state.hpp"
 #include "duckdb/common/string_util.hpp"
+#include <thread>
 
 namespace duckdb_shell {
+
+void ShellState::Sleep(idx_t ms) {
+	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
 
 // The below methods were present in the sqlite API wrappers - and have been ported to here
 // Ideally they are eventually replaced with native code

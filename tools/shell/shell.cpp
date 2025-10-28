@@ -2549,7 +2549,7 @@ void ShellState::ResetOutput() {
 				/* Give the start/open/xdg-open command some time to get
 				** going before we continue, and potential delete the
 				** zTempFile data file out from under it */
-				sqlite3_sleep(2000);
+				Sleep(2000);
 			}
 			PopOutputMode();
 			doXdgOpen = 0;
