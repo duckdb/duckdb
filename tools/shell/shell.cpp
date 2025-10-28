@@ -3060,9 +3060,9 @@ bool ShellState::ImportData(const vector<string> &args) {
 			}
 			if (i < nCol - 1 && sCtx.cTerm != sCtx.cColSep) {
 				utf8_printf(stderr,
-				            "%s:%d: expected %llu columns but found %d - "
+				            "%s:%d: expected %d columns but found %d - "
 				            "filling the rest with NULL\n",
-				            sCtx.zFile, startLine, nCol, i + 1);
+				            sCtx.zFile, startLine, (int)nCol, i + 1);
 				i += 2;
 				while (i <= nCol) {
 					bind_values.emplace_back();
@@ -3076,9 +3076,9 @@ bool ShellState::ImportData(const vector<string> &args) {
 				i++;
 			} while (sCtx.cTerm == sCtx.cColSep);
 			utf8_printf(stderr,
-			            "%s:%d: expected %llu columns but found %d - "
+			            "%s:%d: expected %d columns but found %d - "
 			            "extras ignored\n",
-			            sCtx.zFile, startLine, nCol, i);
+			            sCtx.zFile, startLine, (int)nCol, i);
 		}
 		if (i >= nCol) {
 			auto result = prepared->Execute(bind_values);
@@ -4204,7 +4204,8 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	if (success != SuccessState::SUCCESS) {
 		return 1;
 	} else if (ShellHasFlag(ShellFlags::SHFLG_CountChanges)) {
-		raw_printf(out, "changes: %3llu   total_changes: %llu\n", last_changes, total_changes);
+		raw_printf(out, "changes: %3llu   total_changes: %llu\n", (unsigned long long)last_changes,
+		           (unsigned long long)total_changes);
 	}
 	return 0;
 }
