@@ -7,9 +7,16 @@
 namespace duckdb {
 
 struct Counter {
-	explicit Counter(uint32_t size) : counter(size) {
+	explicit Counter(idx_t size) : counter(size) {
 	}
-	atomic<uint32_t> counter;
+	bool IterateAndCheckCounter() {
+		D_ASSERT(counter.load() > 0);
+		idx_t post_decreast = --counter;
+		return (post_decreast == 0);
+	}
+
+private:
+	atomic<idx_t> counter;
 };
 
 class AsyncExecutionTask : public ExecutorTask {
@@ -21,8 +28,7 @@ public:
 	}
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		async_task->Execute();
-		D_ASSERT(counter->counter.load() > 0);
-		if (--counter->counter == 0) {
+		if (counter->IterateAndCheckCounter()) {
 			interrupt_state.Callback();
 		}
 		return TaskExecutionResult::TASK_FINISHED;
@@ -37,7 +43,6 @@ private:
 	InterruptState interrupt_state;
 	shared_ptr<Counter> counter;
 };
-
 
 AsyncResult::AsyncResult(SourceResultType t) : result_type(GetAsyncResultType(t)) {
 	if (result_type == AsyncResultType::BLOCKED) {
