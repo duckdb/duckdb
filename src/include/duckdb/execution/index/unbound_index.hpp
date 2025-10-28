@@ -16,7 +16,7 @@ namespace duckdb {
 
 class ColumnDataCollection;
 
-enum class BufferedIndexReplay : uint8_t { INS_ENTRY = 0, DEL_ENTRY = 1 };
+enum class BufferedIndexReplay : uint8_t { INSERT_ENTRY = 0, DEL_ENTRY = 1 };
 
 struct BufferedIndexData {
 	BufferedIndexReplay type;

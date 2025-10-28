@@ -756,19 +756,18 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 		indexes.Scan([&](Index &index) {
 			if (index.IsBound()) {
 				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
-			} else {
-				// Buffering takes only the indexed columns in ordering of the column_ids mapping.
-				DataChunk index_column_chunk;
-				index_column_chunk.InitializeEmpty(column_types);
-				for (idx_t i = 0; i < column_types.size(); i++) {
-					auto col_id = column_ids[i].GetPrimaryIndex();
-					index_column_chunk.data[i].Reference(result_chunk.data[col_id]);
-				}
-				index_column_chunk.SetCardinality(result_chunk.size());
-				auto &unbound_index = index.Cast<UnboundIndex>();
-				unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids,
-				                          BufferedIndexReplay::DEL_ENTRY);
+				return false;
 			}
+			// Buffering takes only the indexed columns in ordering of the column_ids mapping.
+			DataChunk index_column_chunk;
+			index_column_chunk.InitializeEmpty(column_types);
+			for (idx_t i = 0; i < column_types.size(); i++) {
+				auto col_id = column_ids[i].GetPrimaryIndex();
+				index_column_chunk.data[i].Reference(result_chunk.data[col_id]);
+			}
+			index_column_chunk.SetCardinality(result_chunk.size());
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids, BufferedIndexReplay::DEL_ENTRY);
 			return false;
 		});
 	}
