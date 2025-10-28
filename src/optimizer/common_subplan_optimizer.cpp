@@ -26,18 +26,20 @@ struct PlanSignatureCreateState {
 	MemoryStream stream;
 	BinarySerializer serializer;
 
+	//! Mapping from original table index to canonical table index (and reverse mapping)
 	unordered_map<idx_t, idx_t> to_canonical;
 	unordered_map<idx_t, idx_t> from_canonical;
 
+	//! Utility vectors to temporarily store table indices and expression info
 	vector<idx_t> table_indices;
 	vector<pair<string, optional_idx>> expression_info;
 };
 
 class PlanSignature {
 private:
-	PlanSignature(const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
+	PlanSignature(const LogicalOperator &op_p, const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
 	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
-	    : stream(stream_p), offset(offset_p), length(length_p),
+	    : op(op_p), stream(stream_p), offset(offset_p), length(length_p),
 	      signature_hash(Hash(stream_p.GetData() + offset, length)), child_signatures(std::move(child_signatures_p)),
 	      operator_count(operator_count_p) {
 	}
@@ -106,7 +108,7 @@ public:
 
 		if (can_materialize) {
 			return unique_ptr<PlanSignature>(
-			    new PlanSignature(state.stream, offset, length, std::move(child_signatures), operator_count));
+			    new PlanSignature(op, state.stream, offset, length, std::move(child_signatures), operator_count));
 		}
 		return nullptr;
 	}
@@ -144,6 +146,9 @@ private:
 	}
 
 	static bool OperatorIsSupported(const LogicalOperator &op) {
+		if (!op.SupportSerialization()) {
+			return false;
+		}
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION:
 		case LogicalOperatorType::LOGICAL_FILTER:
@@ -305,6 +310,8 @@ private:
 	}
 
 private:
+	const LogicalOperator &op;
+
 	const MemoryStream &stream;
 	const idx_t offset;
 	const idx_t length;
