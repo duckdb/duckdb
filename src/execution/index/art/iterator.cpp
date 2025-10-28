@@ -150,7 +150,7 @@ void Iterator::FindMinimum(const Node &node) {
 
 bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal) {
 	auto current_node = node;
-	auto current_depth = 0;
+	idx_t depth = 0;
 
 	while (true) {
 		if (!current_node.HasMetadata()) {
@@ -175,7 +175,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 
 		D_ASSERT(current_node.GetGateStatus() == GateStatus::GATE_NOT_SET);
 		if (current_node.GetType() != NType::PREFIX) {
-			auto next_byte = key[current_depth];
+			auto next_byte = key[depth];
 			auto child = current_node.GetNextChild(art, next_byte);
 
 			// The key is greater than any key in this subtree.
@@ -187,14 +187,14 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 			nodes.emplace(current_node, next_byte);
 
 			// We return the minimum because all keys are greater than the lower bound.
-			if (next_byte > key[current_depth]) {
+			if (next_byte > key[depth]) {
 				FindMinimum(*child);
 				return true;
 			}
 
 			// Move to the child and increment depth.
 			current_node = *child;
-			current_depth++;
+			depth++;
 			continue;
 		}
 
@@ -210,21 +210,21 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 			// We found a prefix byte that is less than its corresponding key byte.
 			// I.e., the subsequent node is lesser than the key. Thus, the next node
 			// is the lower bound.
-			if (prefix.data[i] < key[current_depth + i]) {
+			if (prefix.data[i] < key[depth + i]) {
 				return Next();
 			}
 
 			// We found a prefix byte that is greater than its corresponding key byte.
 			// I.e., the subsequent node is greater than the key. Thus, the minimum is
 			// the lower bound.
-			if (prefix.data[i] > key[current_depth + i]) {
+			if (prefix.data[i] > key[depth + i]) {
 				FindMinimum(*prefix.ptr);
 				return true;
 			}
 		}
 
 		// The prefix matches the key. Move to the child and update depth.
-		current_depth += prefix.data[Prefix::Count(art)];
+		depth += prefix.data[Prefix::Count(art)];
 		current_node = *prefix.ptr;
 	}
 }
