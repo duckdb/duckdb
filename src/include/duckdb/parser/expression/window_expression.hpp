@@ -92,6 +92,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
+	static const case_insensitive_map_t<ExpressionType> &WindowFunctions();
 	static ExpressionType WindowToExpressionType(string &fun_name);
 
 public:

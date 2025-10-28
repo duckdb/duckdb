@@ -15,15 +15,18 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 namespace duckdb {
 constexpr const char *AggregateFunctionCatalogEntry::Name;
 
 struct DuckDBFunctionsData : public GlobalTableFunctionState {
-	DuckDBFunctionsData() : offset(0), offset_in_entry(0) {
+	DuckDBFunctionsData()
+	    : window_iterator(WindowExpression::WindowFunctions().begin()), offset(0), offset_in_entry(0) {
 	}
 
 	vector<reference<CatalogEntry>> entries;
+	case_insensitive_map_t<ExpressionType>::const_iterator window_iterator;
 	idx_t offset;
 	idx_t offset_in_entry;
 };
@@ -646,9 +649,136 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	return function_idx + 1 == OP::FunctionCount(function);
 }
 
+void ExtractWindowFunctionData(case_insensitive_map_t<ExpressionType>::const_iterator it, DataChunk &output,
+                               idx_t output_offset) {
+	Value parameter_types;
+	Value parameter_names;
+	Value return_type;
+	Value name(it->first);
+
+	switch (it->second) {
+	case ExpressionType::WINDOW_FILL:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_FIRST_VALUE: {
+		return_type = Value("ANY");
+		parameter_types = Value::LIST({Value("ANY")});
+		parameter_names = Value::LIST({Value("expr")});
+		break;
+	}
+	case ExpressionType::WINDOW_NTH_VALUE: {
+		return_type = Value("ANY");
+		parameter_types = Value::LIST({Value("ANY"), Value("BIGINT")});
+		parameter_names = Value::LIST({Value("expr"), Value("nth")});
+		break;
+	}
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_RANK_DENSE: {
+		return_type = Value("BIGINT");
+		parameter_types = Value::LIST(LogicalType::VARCHAR, {});
+		parameter_names = Value::LIST(LogicalType::VARCHAR, {});
+		break;
+	}
+	case ExpressionType::WINDOW_NTILE: {
+		return_type = Value("BIGINT");
+		parameter_types = Value::LIST(LogicalType::VARCHAR, {Value("BIGINT")});
+		parameter_names = Value::LIST(LogicalType::VARCHAR, {Value("num_buckets")});
+		break;
+	}
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_CUME_DIST: {
+		return_type = Value("DOUBLE");
+		parameter_types = Value::LIST(LogicalType::VARCHAR, {});
+		parameter_names = Value::LIST(LogicalType::VARCHAR, {});
+		break;
+	}
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG: {
+		return_type = Value("ANY");
+		parameter_types = Value::LIST({Value("ANY"), Value("BIGINT"), Value("ANY")});
+		parameter_names = Value::LIST({Value("expr"), Value("offset"), Value("default")});
+		break;
+	default:
+		return;
+	}
+	}
+
+	idx_t col = 0;
+
+	// database_name, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value(SYSTEM_CATALOG));
+
+	// database_oid, BIGINT
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::BIGINT));
+
+	// schema_name, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value(DEFAULT_SCHEMA));
+
+	// function_name, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, name);
+
+	// alias_of, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
+
+	// function_type, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value("window"));
+
+	// function_description, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
+
+	// comment, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
+
+	// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
+	output.SetValue(col++, output_offset, Value::MAP({}));
+
+	// return_type, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, return_type);
+
+	// parameters, LogicalType::LIST(LogicalType::VARCHAR)
+	output.SetValue(col++, output_offset, parameter_names);
+
+	// parameter_types, LogicalType::LIST(LogicalType::VARCHAR)
+	output.SetValue(col++, output_offset, parameter_types);
+
+	// varargs, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
+
+	// macro_definition, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
+
+	// has_side_effects, LogicalType::BOOLEAN
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
+
+	// internal, LogicalType::BOOLEAN
+	output.SetValue(col++, output_offset, Value::BOOLEAN(true));
+
+	// function_oid, LogicalType::BIGINT
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::BIGINT));
+
+	// examples, LogicalType::LIST(LogicalType::VARCHAR)
+	output.SetValue(col++, output_offset, Value::LIST(LogicalType::VARCHAR, {}));
+
+	// stability, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
+
+	// categories, LogicalType::LIST(LogicalType::VARCHAR)
+	output.SetValue(col++, output_offset, Value::LIST(LogicalType::VARCHAR, {}));
+}
+
+static bool Finished(const DuckDBFunctionsData &data) {
+	if (data.offset < data.entries.size()) {
+		return false;
+	}
+	if (data.window_iterator == WindowExpression::WindowFunctions().end()) {
+		return true;
+	}
+	return false;
+}
+
 void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBFunctionsData>();
-	if (data.offset >= data.entries.size()) {
+	if (Finished(data)) {
 		// finished returning values
 		return;
 	}
@@ -696,6 +826,11 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 			data.offset_in_entry++;
 		}
 		count++;
+	}
+	while (data.window_iterator != WindowExpression::WindowFunctions().end() && count < STANDARD_VECTOR_SIZE) {
+		ExtractWindowFunctionData(data.window_iterator, output, count);
+		count++;
+		data.window_iterator++;
 	}
 	output.SetCardinality(count);
 }
