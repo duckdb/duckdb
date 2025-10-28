@@ -15,6 +15,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/main/query_result.hpp"
 
 struct sqlite3;
 struct sqlite3_stmt;
@@ -154,7 +155,6 @@ public:
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
-	void PrintValue(const char *str);
 	void Print(PrintOutput output, const char *str);
 	void Print(PrintOutput output, const string &str);
 	void Print(const char *str);
@@ -220,6 +220,7 @@ public:
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
 	SuccessState RenderQuery(RowRenderer &renderer, const string &query);
+	SuccessState RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &result);
 };
 
 } // namespace duckdb_shell

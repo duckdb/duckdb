@@ -541,10 +541,6 @@ void ShellState::Print(const string &str) {
 	Print(PrintOutput::STDOUT, str.c_str());
 }
 
-void ShellState::PrintValue(const char *str) {
-	Print(str ? str : nullValue.c_str());
-}
-
 void ShellState::PrintPadded(const char *str, idx_t len) {
 	utf8_printf(out, "%*s", int(len), str);
 }
@@ -1250,21 +1246,7 @@ SuccessState ShellState::RenderQuery(RowRenderer &renderer, const string &query)
 		PrintDatabaseError(result->GetError());
 		return SuccessState::FAILURE;
 	}
-	RowResult row_result;
-	for (auto &col_name : result->names) {
-		row_result.column_names.push_back(col_name.c_str());
-	}
-	for (auto &row : *result) {
-		row_result.data.clear();
-		vector<string> string_data;
-		string_data.reserve(result->ColumnCount());
-		for (idx_t c = 0; c < result->ColumnCount(); c++) {
-			string_data.push_back(row.GetValue<string>(c));
-			row_result.data.push_back(string_data[c].c_str());
-		}
-		renderer.state.RenderRow(renderer, row_result);
-	}
-	return SuccessState::SUCCESS;
+	return RenderQueryResult(renderer, *result);
 }
 
 /*
@@ -1455,6 +1437,32 @@ int GetLegacySQLiteType(const duckdb::LogicalType &column_type) {
 	}
 }
 
+SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &query_result) {
+	RowResult result;
+	// initialize the result and the column names
+	idx_t nCol = query_result.ColumnCount();
+	result.column_names.reserve(nCol);
+	result.data.reserve(nCol);
+	result.types.reserve(nCol);
+	for (idx_t c = 0; c < nCol; c++) {
+		result.column_names.push_back(query_result.names[c]);
+		result.types.push_back(GetLegacySQLiteType(query_result.types[c]));
+	}
+	for (auto &row : query_result) {
+		result.data.clear();
+		for (idx_t c = 0; c < nCol; c++) {
+			if (row.IsNull(c)) {
+				result.data.push_back(renderer.NullValue());
+			} else {
+				result.data.push_back(row.GetValue<string>(c));
+			}
+		}
+		RenderRow(renderer, result);
+	}
+	renderer.RenderFooter(result);
+	return SuccessState::SUCCESS;
+}
+
 SuccessState ShellState::TryExecuteColumnar(unique_ptr<duckdb::SQLStatement> statement, ColumnarResult &result) {
 	auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
 	auto res = con.Query(std::move(statement));
@@ -1619,6 +1627,17 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		}
 		return SuccessState::SUCCESS;
 	}
+	if (cMode != RenderMode::DUCKBOX) {
+		auto renderer = GetRowRenderer();
+		// row rendering
+		auto &con = *((duckdb::Connection *)sqlite3_get_duckdb_connection(db));
+		auto res = con.Query(std::move(statement));
+		if (res->HasError()) {
+			PrintDatabaseError(res->GetError());
+			return SuccessState::FAILURE;
+		}
+		return RenderQueryResult(*renderer, *res);
+	}
 
 	// TEMPORARY FALLBACK - use old mechanism for rendering
 	sqlite3_stmt *pStmt = nullptr;
@@ -1664,53 +1683,7 @@ SuccessState ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		                      decimal_separator, int(large_rendering), &renderer);
 		return SuccessState::SUCCESS;
 	}
-	/* perform the first step.  this will tell us if we
-	** have a result set or not and how wide it is.
-	*/
-	int rc = sqlite3_step(pStmt);
-	/* if we have a result set... */
-	if (SQLITE_ROW != rc) {
-		return SuccessState::SUCCESS;
-	}
-	RowResult result;
-	// initialize the result and the column names
-	int nCol = sqlite3_column_count(pStmt);
-	result.column_names.reserve(nCol);
-	result.data.resize(nCol);
-	result.types.resize(nCol);
-	for (int i = 0; i < nCol; i++) {
-		result.column_names.push_back(sqlite3_column_name(pStmt, i));
-	}
-	result.pStmt = pStmt;
-
-	auto renderer = GetRowRenderer();
-
-	// iterate over the rows
-	do {
-		/* extract the data and data types */
-		for (int i = 0; i < nCol; i++) {
-			result.types[i] = sqlite3_column_type(pStmt, i);
-			result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
-			if (!result.data[i] && result.types[i] != SQLITE_NULL) {
-				// OOM
-				rc = SQLITE_NOMEM;
-				break;
-			}
-		}
-
-		/* if data and types extracted successfully... */
-		if (SQLITE_ROW == rc) {
-			/* call the supplied callback with the result row data */
-			if (RenderRow(*renderer, result)) {
-				rc = SQLITE_ABORT;
-			} else {
-				rc = sqlite3_step(pStmt);
-			}
-		}
-	} while (SQLITE_ROW == rc);
-
-	renderer->RenderFooter(result);
-	return SuccessState::SUCCESS;
+	throw std::runtime_error("eek unsupported");
 }
 
 /*

@@ -37,10 +37,9 @@ struct ColumnarResult {
 };
 
 struct RowResult {
-	vector<const char *> column_names;
-	vector<const char *> data;
+	vector<string> column_names;
+	vector<string> data;
 	vector<int> types;
-	sqlite3_stmt *pStmt = nullptr;
 };
 
 class ColumnRenderer : public ShellRenderer {
@@ -71,6 +70,8 @@ public:
 	virtual void RenderHeader(RowResult &result);
 	virtual void RenderRow(RowResult &result) = 0;
 	virtual void RenderFooter(RowResult &result);
+
+	virtual string NullValue();
 };
 
 } // namespace duckdb_shell
