@@ -121,4 +121,29 @@ AsyncResultType AsyncResult::GetAsyncResultType(SourceResultType s) {
 	throw InternalException("GetAsyncResultType has an unexpected input");
 }
 
+bool AsyncResult::HasTasks() const {
+	D_ASSERT(result_type != AsyncResultType::INVALID);
+	if (async_tasks.empty()) {
+		D_ASSERT(result_type != AsyncResultType::BLOCKED);
+		return false;
+	} else {
+		D_ASSERT(result_type == AsyncResultType::BLOCKED);
+		return true;
+	}
+}
+AsyncResultType AsyncResult::GetResultType() const {
+	D_ASSERT(result_type != AsyncResultType::INVALID);
+	if (async_tasks.empty()) {
+		D_ASSERT(result_type != AsyncResultType::BLOCKED);
+	} else {
+		D_ASSERT(result_type == AsyncResultType::BLOCKED);
+	}
+	return result_type;
+}
+vector<unique_ptr<AsyncTask>> &&AsyncResult::ExtractAsyncTasks() {
+	D_ASSERT(result_type != AsyncResultType::INVALID);
+	result_type = AsyncResultType::INVALID;
+	return std::move(async_tasks);
+}
+
 } // namespace duckdb

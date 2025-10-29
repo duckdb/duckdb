@@ -41,34 +41,22 @@ public:
 	AsyncResult &operator=(SourceResultType t);
 	AsyncResult &operator=(AsyncResultType t);
 	AsyncResult &operator=(AsyncResult &&) noexcept;
+	// Schedule held async_tasks into the Executor, eventually unblocking InterruptState
+	// needs to be called with non-emopty async_tasks and from BLOCKED state, will empty the async_tasks and transform
+	// into INVALID
 	void ScheduleTasks(InterruptState &interrupt_state, Executor &executor);
+	// Execute tasks synchronously at callsite
+	// needs to be called with non-emopty async_tasks and from BLOCKED state, will empty the async_tasks and transform
+	// into HAVE_MORE_OUTPUT
 	void ExecuteTasksSynchronously();
+
 	static AsyncResultType GetAsyncResultType(SourceResultType s);
 
-	bool HasTasks() const {
-		D_ASSERT(result_type != AsyncResultType::INVALID);
-		if (async_tasks.empty()) {
-			D_ASSERT(result_type != AsyncResultType::BLOCKED);
-			return false;
-		} else {
-			D_ASSERT(result_type == AsyncResultType::BLOCKED);
-			return true;
-		}
-	}
-	AsyncResultType GetResultType() const {
-		D_ASSERT(result_type != AsyncResultType::INVALID);
-		if (async_tasks.empty()) {
-			D_ASSERT(result_type != AsyncResultType::BLOCKED);
-		} else {
-			D_ASSERT(result_type == AsyncResultType::BLOCKED);
-		}
-		return result_type;
-	}
-	vector<unique_ptr<AsyncTask>> &&ExtractAsyncTasks() {
-		D_ASSERT(result_type != AsyncResultType::INVALID);
-		result_type = AsyncResultType::INVALID;
-		return std::move(async_tasks);
-	}
+	// Check whether there are tasks associated
+	bool HasTasks() const;
+	AsyncResultType GetResultType() const;
+	// Extract associated tasks, moving them away, will empty async_tasks and trasnform to INVALID
+	vector<unique_ptr<AsyncTask>> &&ExtractAsyncTasks();
 
 private:
 	AsyncResultType result_type {AsyncResultType::INVALID};
