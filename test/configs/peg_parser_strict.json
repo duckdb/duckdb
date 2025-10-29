@@ -10,7 +10,8 @@
     {
       "reason": "Multi-statement containing unimplemented statementType",
       "paths": [
-        "test/sql/delete/test_segment_deletes.test"
+        "test/sql/delete/test_segment_deletes.test",
+        "test/sql/types/union/union_join.test"
       ]
     },
     {
