@@ -58,6 +58,10 @@ public:
 	// Extract associated tasks, moving them away, will empty async_tasks and trasnform to INVALID
 	vector<unique_ptr<AsyncTask>> &&ExtractAsyncTasks();
 
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	static vector<unique_ptr<AsyncTask>> GenerateTestTasks();
+#endif
+
 private:
 	AsyncResultType result_type {AsyncResultType::INVALID};
 	vector<unique_ptr<AsyncTask>> async_tasks {};

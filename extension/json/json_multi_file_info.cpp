@@ -3,10 +3,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parallel/async_result.hpp"
 
-#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-#include "duckdb/parallel/sleep_async_task.hpp"
-#endif
-
 namespace duckdb {
 
 unique_ptr<MultiFileReaderInterface> JSONMultiFileInfo::CreateInterface(ClientContext &context) {
@@ -539,25 +535,7 @@ AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &g
                              LocalTableFunctionState &local_state, DataChunk &output) {
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
-		vector<unique_ptr<AsyncTask>> tasks;
-		auto random_number = rand() % 16;
-		switch (random_number) {
-		case 0:
-			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
-			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
-			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
-			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
-			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
-			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
-			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
-			tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
-#ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
-		case 1:
-			tasks.push_back(make_uniq<ThrowAsyncTask>(rand() % 32));
-#endif
-		default:
-			break;
-		}
+		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
 		if (!tasks.empty()) {
 			return AsyncResult(std::move(tasks));
 		}

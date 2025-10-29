@@ -4,6 +4,10 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/executor.hpp"
 
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+#include "duckdb/parallel/sleep_async_task.hpp"
+#endif
+
 namespace duckdb {
 
 struct Counter {
@@ -145,5 +149,30 @@ vector<unique_ptr<AsyncTask>> &&AsyncResult::ExtractAsyncTasks() {
 	result_type = AsyncResultType::INVALID;
 	return std::move(async_tasks);
 }
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+vector<unique_ptr<AsyncTask>> AsyncResult::GenerateTestTasks() {
+	vector<unique_ptr<AsyncTask>> tasks;
+	auto random_number = rand() % 16;
+	switch (random_number) {
+	case 0:
+		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+		tasks.push_back(make_uniq<SleepAsyncTask>(rand() % 32));
+#ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
+	case 1:
+		tasks.push_back(make_uniq<ThrowAsyncTask>(rand() % 32));
+#endif
+	default:
+		break;
+	}
+	return tasks;
+}
+#endif
 
 } // namespace duckdb
