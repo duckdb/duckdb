@@ -13,6 +13,6 @@ statement ok
 CREATE OR REPLACE TABLE timings(tool string, sf float, day string, batch_type string, q string, parameters string, time float);
 
 query I
-COPY timings FROM 'data/csv/timings.csv' (HEADER, DELIMITER '|')
+COPY timings FROM '{DATA_DIR}/csv/timings.csv' (HEADER, DELIMITER '|')
 ----
 1095

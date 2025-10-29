@@ -9,7 +9,7 @@ pragma enable_verification
 
 # issue #6774
 query I
-select * from read_json_auto('data/json/simple_timestamp.json', columns={"ts": "TIMESTAMP[]"});
+select * from read_json_auto('{DATA_DIR}/json/simple_timestamp.json', columns={"ts": "TIMESTAMP[]"});
 ----
 ['2022-06-01 06:41:58', '2021-08-21 08:26:55.5', '2009-11-15 21:58:54.636']
 
@@ -22,22 +22,22 @@ create table timestamp_test as select '1996-03-27 07:42:33'::TIMESTAMP t
 
 # cannot be empty
 statement error
-copy (select d from date_test) to '__TEST_DIR__/my_file.json' (dateformat)
+copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat)
 ----
 Binder Error
 
 statement error
-copy (select d from date_test) to '__TEST_DIR__/my_file.json' (timestampformat)
+copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (timestampformat)
 ----
 Binder Error
 
 statement error
-copy date_test from 'data/json/simple_timestamp.json' (dateformat)
+copy date_test from '{DATA_DIR}/json/simple_timestamp.json' (dateformat)
 ----
 Binder Error
 
 statement error
-copy date_test from 'data/json/simple_timestamp.json' (timestampformat)
+copy date_test from '{DATA_DIR}/json/simple_timestamp.json' (timestampformat)
 ----
 Binder Error
 
@@ -45,23 +45,23 @@ Binder Error
 foreach date_format '%m-%d-%Y' '%m-%d-%y' '%d-%m-%Y' '%d-%m-%y' '%Y-%m-%d' '%y-%m-%d'
 
 statement ok
-copy (select d from date_test) to '__TEST_DIR__/my_file.json' (dateformat ${date_format})
+copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat ${date_format})
 
 # auto-detect
 query II
-select typeof(d), d from '__TEST_DIR__/my_file.json'
+select typeof(d), d from '{TEMP_DIR}/my_file.json'
 ----
 DATE	1996-03-27
 
 # forced format read_ndjson
 query II
-select typeof(d), d from read_ndjson('__TEST_DIR__/my_file.json', columns={d: 'DATE'}, dateformat=${date_format})
+select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat=${date_format})
 ----
 DATE	1996-03-27
 
 # wrong format read_ndjson
 statement error
-select typeof(d), d from read_ndjson('__TEST_DIR__/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
+select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
 ----
 Invalid Input Error
 
@@ -73,7 +73,7 @@ statement ok
 create table date_copy_test (d date)
 
 statement ok
-copy date_copy_test from '__TEST_DIR__/my_file.json' (dateformat ${date_format})
+copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat ${date_format})
 
 query II
 select typeof(d), d from date_copy_test
@@ -86,23 +86,23 @@ endloop
 foreach a,b,c '%Y-%m-%d,%H:%M:%S.%f,' '%m-%d-%Y,%I:%M:%S,%p' '%m-%d-%y,%I:%M:%S,%p' '%d-%m-%Y,%H:%M:%S,' '%d-%m-%y,%H:%M:%S,' '%Y-%m-%d,%H:%M:%S,' '%y-%m-%d,%H:%M:%S,'
 
 statement ok
-copy (select t from timestamp_test) to '__TEST_DIR__/my_file.json' (format json, timestampformat ${a} ${b} ${c})
+copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat ${a} ${b} ${c})
 
 # auto-detect
 query II
-select typeof(t), t from '__TEST_DIR__/my_file.json'
+select typeof(t), t from '{TEMP_DIR}/my_file.json'
 ----
 TIMESTAMP	1996-03-27 07:42:33
 
 # forced format read_ndjson
 query II
-select typeof(t), t from read_ndjson('__TEST_DIR__/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format=${a} ${b} ${c})
+select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format=${a} ${b} ${c})
 ----
 TIMESTAMP	1996-03-27 07:42:33
 
 # wrong format read_ndjson
 statement error
-select typeof(t), t from read_ndjson('__TEST_DIR__/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
 ----
 Invalid Input Error
 
@@ -114,7 +114,7 @@ statement ok
 create table timestamp_copy_test (t timestamp)
 
 statement ok
-copy timestamp_copy_test from '__TEST_DIR__/my_file.json' (format json, timestampformat ${a} ${b} ${c})
+copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat ${a} ${b} ${c})
 
 query II
 select typeof(t), t from timestamp_copy_test
@@ -125,6 +125,6 @@ endloop
 
 # test this format too
 query II
-select typeof(createdAt), createdAt from 'data/json/timestamp_example.json'
+select typeof(createdAt), createdAt from '{DATA_DIR}/json/timestamp_example.json'
 ----
 TIMESTAMP	2023-02-07 19:12:28

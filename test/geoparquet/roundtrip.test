@@ -1,8 +1,6 @@
 # name: test/geoparquet/roundtrip.test
 # group: [geoparquet]
 
-require spatial
-
 require parquet
 
 #------------------------------------------------------------------------------
@@ -73,7 +71,7 @@ SELECT col, geometry FROM '__TEST_DIR__/data-polygon-out.parquet'
 #------------------------------------------------------------------------------
 
 query II nosort multipoint_result
-SELECT col, ST_GeomFromText(geometry) FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipoint-wkt.csv'
+SELECT col, geometry::GEOMETRY FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipoint-wkt.csv'
 
 query II nosort multipoint_result
 SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-multipoint-encoding_wkb.parquet'

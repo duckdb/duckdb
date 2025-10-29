@@ -42,7 +42,7 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$FROM database.schema.table;$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$select * from 'data/csv/nullbyte.csv';$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$select * from '{DATA_DIR}/csv/nullbyte.csv';$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE foo(try_cast INTEGER);$TEST_PEG_PARSER$);
@@ -84,7 +84,7 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT 1::SMALLINT$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$copy integers to '{TEMP_DIR}/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE OR REPLACE TABLE t(      x VARCHAR USING COMPRESSION Dictionary );$TEST_PEG_PARSER$);
@@ -99,10 +99,10 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$create table t2 (id int, v_map struct(foo integer[]));$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$ATTACH '{TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$SELECT COUNT(*) FROM glob('__TEST_DIR__/attach_no_wal.db.wal');$TEST_PEG_PARSER$);
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT COUNT(*) FROM glob('{TEMP_DIR}/attach_no_wal.db.wal');$TEST_PEG_PARSER$);
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$prepare p4 as select $name, $other_name$TEST_PEG_PARSER$);

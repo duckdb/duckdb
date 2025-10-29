@@ -30,7 +30,6 @@ namespace duckdb {
 
 template <class T>
 struct AlpRDCompressionState : public CompressionState {
-
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 

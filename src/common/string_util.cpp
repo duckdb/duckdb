@@ -738,7 +738,6 @@ string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
 }
 
 string StringUtil::GetFileName(const string &file_path) {
-
 	idx_t pos = file_path.find_last_of("/\\");
 	if (pos == string::npos) {
 		return file_path;

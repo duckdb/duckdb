@@ -79,7 +79,6 @@ void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, 
 
 void QueryGraphEdges::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
                                             const std::function<bool(NeighborInfo &)> &callback) const {
-
 	for (auto &neighbor : info.get().neighbors) {
 		if (callback(*neighbor)) {
 			return;

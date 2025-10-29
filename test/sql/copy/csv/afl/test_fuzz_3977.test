@@ -10,355 +10,355 @@ select count(file) from glob('./data/csv/afl/3977/*');
 88
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_1.csv', rejects_scan=0, buffer_size=655371, all_varchar=false, rejects_scan=0, buffer_size=42);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_1.csv', rejects_scan=0, buffer_size=655371, all_varchar=false, rejects_scan=0, buffer_size=42);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_2.csv', names=['a','b','c','d'], store_rejects=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_2.csv', names=['a','b','c','d'], store_rejects=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_3.csv', names=['a','b','c','d'], store_rejects=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_3.csv', names=['a','b','c','d'], store_rejects=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_4.csv', names=['a','b','c','d'], store_rejects=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_4.csv', names=['a','b','c','d'], store_rejects=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_5.csv', auto_detect=false, columns={'a': 'VARCHAR'}, escape='"', header=false, quote='"', strict_mode=true, store_rejects=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_5.csv', auto_detect=false, columns={'a': 'VARCHAR'}, escape='"', header=false, quote='"', strict_mode=true, store_rejects=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_6.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_6.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_7.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_7.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_8.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_8.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_9.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=false);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_9.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=false);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_10.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_10.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_11.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_11.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_12.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_12.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_13.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_13.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_14.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_14.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_15.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_15.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_16.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_16.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_17.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_17.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_18.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_18.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_19.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_19.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_20.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_20.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_21.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_21.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_22.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_22.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_23.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_23.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_24.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_24.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_25.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_25.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_26.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_26.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_27.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_27.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_28.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_28.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_29.csv', auto_detect=false, buffer_size=65536, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_29.csv', auto_detect=false, buffer_size=65536, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_30.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_30.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_31.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_31.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_32.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_32.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_33.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_33.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_34.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_34.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_35.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_35.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_36.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_36.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_37.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_37.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_38.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_38.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_39.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_39.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_40.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, comment=';', rejects_table='"', strict_mode=false);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_40.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, comment=';', rejects_table='"', strict_mode=false);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_41.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_41.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_42.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_42.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_43.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_43.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_44.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_44.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_45.csv', auto_detect=false, buffer_size=810, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_45.csv', auto_detect=false, buffer_size=810, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_46.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_46.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_47.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_47.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_48.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_48.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_49.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_49.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_50.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_50.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_51.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', '|':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_51.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', '|':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_52.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_52.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_53.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_53.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_54.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAr'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_54.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAr'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_55.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_55.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_56.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_56.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_57.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_57.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_58.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_58.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_59.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','"':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_59.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','"':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_60.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_60.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_61.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_61.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_62.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_62.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_63.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_63.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_64.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_64.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_65.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_65.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_66.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_66.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_67.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_67.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_68.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_68.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_69.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_69.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_70.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_70.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_71.csv', auto_detect=false, buffer_size=16711722, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_71.csv', auto_detect=false, buffer_size=16711722, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_72.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','F':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_72.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','F':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_73.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_73.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_74.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_74.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_75.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_75.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_76.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_76.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_77.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_77.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_78.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_78.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_79.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_79.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_80.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_80.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_81.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_81.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_82.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_82.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_83.csv', auto_detect=false, parallel=false, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_83.csv', auto_detect=false, parallel=false, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_84.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_84.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_85.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_85.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_86.csv', auto_detect=false, buffer_size=720938, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_86.csv', auto_detect=false, buffer_size=720938, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_87.csv', auto_detect=false, buffer_size=42, columns={'a2.0-22222222222222222.0222->>':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_87.csv', auto_detect=false, buffer_size=42, columns={'a2.0-22222222222222222.0222->>':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3977/case_88.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3977/case_88.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
 statement ok

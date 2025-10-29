@@ -9,7 +9,6 @@
 namespace duckdb {
 
 struct ICUCalendarSub : public ICUDateFunc {
-
 	//	ICU only has 32 bit precision for date parts, so it can overflow a high resolution.
 	//	Since there is no difference between ICU and the obvious calculations,
 	//	we make these using the DuckDB internal type.
@@ -192,7 +191,6 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 // MS-SQL differences can be computed using ICU by truncating both arguments
 // to the desired part precision and then applying ICU subtraction/difference
 struct ICUCalendarDiff : public ICUDateFunc {
-
 	template <typename T>
 	static int64_t DifferenceFunc(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date,
 	                              part_trunc_t trunc_func, part_sub_t sub_func) {

@@ -471,7 +471,6 @@ using StructEntries = vector<unique_ptr<Vector>>;
 
 void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
                             OptionalSelection &opt) {
-
 	for (idx_t i = 0; i < count;) {
 		const auto slice_idx = slice_sel.get_index(i);
 		const auto result_idx = sel.get_index(slice_idx);
@@ -482,7 +481,6 @@ void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count,
 
 void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
                        ValidityMask *child_mask_p, optional_ptr<ValidityMask> null_mask) {
-
 	if (!child_mask_p) {
 		return;
 	}
@@ -1015,7 +1013,6 @@ template <class OP>
 idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
                                        idx_t count, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
