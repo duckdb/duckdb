@@ -24,6 +24,8 @@ void ParseGroupNameList(ClientContext &context, const string &function_name, Exp
                         const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
                         vector<string> &out_names, child_list_t<LogicalType> &out_struct_children);
 
+idx_t AdvanceOneUTF8Basic(const duckdb_re2::StringPiece &input, idx_t base);
+
 inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
 }

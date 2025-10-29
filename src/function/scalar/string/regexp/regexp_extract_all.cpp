@@ -32,31 +32,6 @@ unique_ptr<FunctionLocalState> RegexpExtractAllStruct::InitLocalState(Expression
 	return nullptr;
 }
 
-// Advance exactly one UTF-8 codepoint starting at 'base'. Falls back to single byte on invalid lead.
-static inline idx_t AdvanceOneUTF8(const duckdb_re2::StringPiece &input, idx_t base) {
-	if (base >= input.length()) {
-		return 1; // Out of bounds, just advance one byte
-	}
-	unsigned char first = static_cast<unsigned char>(input[base]);
-	idx_t char_len = 1;
-	if ((first & 0x80) == 0) {
-		char_len = 1; // ASCII
-	} else if ((first & 0xE0) == 0xC0) {
-		char_len = 2;
-	} else if ((first & 0xF0) == 0xE0) {
-		char_len = 3;
-	} else if ((first & 0xF8) == 0xF0) {
-		char_len = 4;
-	} else {
-		// This should be impossible since RE2 operates on codepoints
-		throw InternalException("Invalid UTF-8 lead byte in regexp_extract_all");
-	}
-	if (base + char_len > input.length()) {
-		throw InternalException("Invalid UTF-8 sequence in regexp_extract_all");
-	}
-	return char_len;
-}
-
 // Forwards startpos automatically
 bool ExtractAll(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &pattern, idx_t *startpos,
                 duckdb_re2::StringPiece *groups, int ngroups) {
@@ -70,7 +45,7 @@ bool ExtractAll(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &pattern, idx_t 
 	idx_t consumed = static_cast<size_t>(groups[0].end() - (input.begin() + *startpos));
 	if (!consumed) {
 		// Empty match: advance exactly one UTF-8 codepoint
-		consumed = AdvanceOneUTF8(input, *startpos);
+		consumed = regexp_util::AdvanceOneUTF8Basic(input, *startpos);
 	}
 	*startpos += consumed;
 	return true;
@@ -267,7 +242,7 @@ static inline bool ExtractAllStruct(duckdb_re2::StringPiece &input, duckdb_re2::
 	}
 	idx_t consumed = static_cast<idx_t>(groups[0].end() - (input.begin() + startpos));
 	if (!consumed) {
-		consumed = AdvanceOneUTF8(input, startpos);
+		consumed = regexp_util::AdvanceOneUTF8Basic(input, startpos);
 	}
 	startpos += consumed;
 	return true;

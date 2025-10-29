@@ -119,9 +119,35 @@ void ParseGroupNameList(ClientContext &context, const string &function_name, Exp
 		}
 		if ((idx_t)group_cnt < out_names.size()) {
 			throw BinderException("Not enough capturing groups (%d) for provided names (%llu)", group_cnt,
-			                      (uint64_t)out_names.size());
+			                      NumericCast<uint64_t>(out_names.size()));
 		}
 	}
+}
+
+// Advance exactly one UTF-8 codepoint starting at 'base'. Falls back to single byte on invalid lead.
+// Does not do a full validation of UTF-8 sequence, assumes input is mostly valid UTF-8.
+idx_t AdvanceOneUTF8Basic(const duckdb_re2::StringPiece &input, idx_t base) {
+	if (base >= input.length()) {
+		return 1; // Out of bounds, just advance one byte
+	}
+	unsigned char first = static_cast<unsigned char>(input[base]);
+	idx_t char_len = 1;
+	if ((first & 0x80) == 0) {
+		char_len = 1; // ASCII
+	} else if ((first & 0xE0) == 0xC0) {
+		char_len = 2;
+	} else if ((first & 0xF0) == 0xE0) {
+		char_len = 3;
+	} else if ((first & 0xF8) == 0xF0) {
+		char_len = 4;
+	} else {
+		// This should be impossible since RE2 operates on codepoints
+		throw InternalException("Invalid UTF-8 lead byte in regexp_extract_all");
+	}
+	if (base + char_len > input.length()) {
+		throw InternalException("Invalid UTF-8 sequence in regexp_extract_all");
+	}
+	return char_len;
 }
 
 } // namespace regexp_util

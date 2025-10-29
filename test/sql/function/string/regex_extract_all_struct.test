@@ -316,3 +316,43 @@ query I
 SELECT regexp_extract_all('', '()', ['empty']) AS res;
 ----
 [{'empty': ''}]
+
+# ---------------------------------------------------------------------------
+# Group list binding errors
+# ---------------------------------------------------------------------------
+
+statement error
+WITH params(name_list) AS (SELECT ['g1','g2'])
+SELECT regexp_extract_all('abc', '(a)(b)', name_list) FROM params;
+----
+Group specification field must be a constant list
+
+statement error
+SELECT regexp_extract_all('abc', '(a)', NULL::VARCHAR[]);
+----
+Group specification must be a non-NULL LIST
+
+statement error
+SELECT regexp_extract_all('abc', '(a)(b)', []::VARCHAR[]);
+----
+Group name list must be non-empty
+
+statement error
+SELECT regexp_extract_all('abc', '(a)', ['g1', NULL::VARCHAR]);
+----
+NULL group name in regexp_extract_all
+
+statement error
+SELECT regexp_extract_all('abc', '(a)', ['dup','dup']);
+----
+Duplicate group name 'dup' in regexp_extract_all
+
+statement error
+SELECT regexp_extract_all('abc', '(', ['g1']);
+----
+Pattern failed to parse
+
+statement error
+SELECT regexp_extract_all('abc', '(a)', ['g1','g2']);
+----
+Not enough capturing groups
