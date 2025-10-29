@@ -1,5 +1,5 @@
-# name: test/sql/peg_parser/transformer/prepare.test
-# description:
+# name: test/sql/peg_parser/transformer/drop_statement.test
+# description: 
 # group: [transformer]
 
 require autocomplete
@@ -28,8 +28,12 @@ DROP MACRO plus1;
 ----
 Catalog Error: Macro Function with name plus1 does not exist!
 
-statement ok
+statement error
 DROP SEQUENCE temp.t1;
+----
+Catalog Error: Sequence with name t1 does not exist!
 
-statement ok
+statement error
 DROP MACRO test.test_macro2;
+----
+Catalog Error: Macro Function with name test_macro2 does not exist!

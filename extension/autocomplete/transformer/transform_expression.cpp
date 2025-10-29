@@ -138,6 +138,32 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 	return transformer.Transform<QualifiedName>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
+QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	QualifiedName result;
+	result.catalog = INVALID_CATALOG;
+	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	return result;
+}
+
+QualifiedName
+PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(PEGTransformer &transformer,
+                                                                  optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	QualifiedName result;
+	auto opt_schema = list_pr.Child<OptionalParseResult>(1);
+	if (opt_schema.HasResult()) {
+		result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+		result.schema = transformer.Transform<string>(opt_schema.optional_result);
+	} else {
+		result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	}
+	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	return result;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListExpression(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

@@ -2,19 +2,22 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformDropStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformDropStatement(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto drop_entry = transformer.Transform<unique_ptr<DropStatement>>(list_pr.Child<ListParseResult>(1));
 	transformer.TransformOptional<bool>(list_pr, 2, drop_entry->info->cascade);
 	return drop_entry;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropEntries(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropEntries(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<DropStatement>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransformer &transformer,
+                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -34,12 +37,14 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 	return result;
 }
 
-CatalogType PEGTransformerFactory::TransformTableOrView(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+CatalogType PEGTransformerFactory::TransformTableOrView(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<CatalogType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -58,7 +63,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGT
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -69,16 +75,17 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFunction(PEGTransf
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto function = transformer.Transform<QualifiedName>(function_list[0]);
-	info->name = function.name;
-	info->catalog = function.catalog;
+	info->catalog = function.catalog == INVALID_CATALOG ? INVALID_CATALOG : function.catalog;
 	info->schema = function.schema;
+	info->name = function.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = catalog_type;
 	result->info = std::move(info);
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -96,7 +103,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransfor
 	return result;
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedSchemaName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+QualifiedName PEGTransformerFactory::TransformQualifiedSchemaName(PEGTransformer &transformer,
+                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	QualifiedName result;
 	string catalog = INVALID_CATALOG;
@@ -106,7 +114,8 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSchemaName(PEGTransformer
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransformer &transformer,
+                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -125,7 +134,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 	return result;
 }
 
-QualifiedName PEGTransformerFactory::TransformQualifiedIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+QualifiedName PEGTransformerFactory::TransformQualifiedIndexName(PEGTransformer &transformer,
+                                                                 optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	QualifiedName result;
 	result.catalog = INVALID_CATALOG;
@@ -136,7 +146,8 @@ QualifiedName PEGTransformerFactory::TransformQualifiedIndexName(PEGTransformer 
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -155,7 +166,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSequence(PEGTransf
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -174,7 +186,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropCollation(PEGTrans
 	return result;
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -199,7 +212,8 @@ bool PEGTransformerFactory::TransformDropBehavior(PEGTransformer &transformer, o
 	return StringUtil::CIEquals(choice_pr->Cast<KeywordParseResult>().keyword, "cascade");
 }
 
-unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
@@ -217,9 +231,10 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransfor
 	return result;
 }
 
-string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transformer,
+                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(1).identifier;
 }
 
-}
+} // namespace duckdb

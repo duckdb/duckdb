@@ -141,6 +141,7 @@ public:
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);
 
 	// Registration methods
+	void RegisterAlter();
 	void RegisterAttach();
 	void RegisterCall();
 	void RegisterCheckpoint();
@@ -188,6 +189,11 @@ private:
 	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, optional_ptr<ParseResult> list);
+
+	// alter.gram
+	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static string TransformSequenceName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// attach.gram
 	static unique_ptr<SQLStatement> TransformAttachStatement(PEGTransformer &transformer,
@@ -274,21 +280,34 @@ private:
 	                                                         optional_ptr<ParseResult> parse_result);
 
 	// drop.gram
-	static unique_ptr<SQLStatement> TransformDropStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropEntries(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropTable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformDropStatement(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropEntries(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropTable(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
 	static CatalogType TransformTableOrView(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static QualifiedName TransformQualifiedSchemaName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static QualifiedName TransformQualifiedIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer,
+	                                                     optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformQualifiedSchemaName(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformQualifiedIndexName(PEGTransformer &transformer,
+	                                                 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer,
+	                                                   optional_ptr<ParseResult> parse_result);
 	static bool TransformDropBehavior(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer,
+	                                                     optional_ptr<ParseResult> parse_result);
 	static string TransformDropSecretStorage(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// expression.gram
@@ -372,6 +391,10 @@ private:
 	                                                                optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformFunctionIdentifier(PEGTransformer &transformer,
 	                                                 optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformSchemaReservedFunctionName(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformCatalogReservedSchemaFunctionName(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
 
 	static ExpressionType TransformOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformConjunctionOperator(PEGTransformer &transformer,

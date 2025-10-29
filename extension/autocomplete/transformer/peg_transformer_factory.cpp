@@ -60,6 +60,12 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 	return instance;
 }
 
+void PEGTransformerFactory::RegisterAlter() {
+	// alter.gram
+	REGISTER_TRANSFORM(TransformQualifiedSequenceName);
+	REGISTER_TRANSFORM(TransformSequenceName);
+}
+
 void PEGTransformerFactory::RegisterAttach() {
 	// attach.gram
 	REGISTER_TRANSFORM(TransformAttachStatement);
@@ -204,7 +210,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformArrayParensSelect);
 	REGISTER_TRANSFORM(TransformFunctionExpression);
 	REGISTER_TRANSFORM(TransformFunctionIdentifier);
-
+	REGISTER_TRANSFORM(TransformSchemaReservedFunctionName);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaFunctionName);
 	REGISTER_TRANSFORM(TransformOperator);
 	REGISTER_TRANSFORM(TransformConjunctionOperator);
 	REGISTER_TRANSFORM(TransformIsOperator);
@@ -445,6 +452,7 @@ void PEGTransformerFactory::RegisterEnums() {
 
 PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
+	RegisterAlter();
 	RegisterAttach();
 	RegisterCall();
 	RegisterCheckpoint();
