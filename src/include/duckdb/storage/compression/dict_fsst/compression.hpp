@@ -1,6 +1,5 @@
 #pragma once
 
-#include "duckdb/common/primitive_dictionary.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
 #include "duckdb/storage/compression/dict_fsst/analyze.hpp"
@@ -76,7 +75,7 @@ public:
 	bitpacking_width_t dictionary_indices_width = 0;
 
 	//! string -> dictionary_index (for lookups)
-	PrimitiveDictionary<string_t, string_t, StringCastOperator> current_string_map;
+	string_map_t<uint32_t> current_string_map;
 	//! strings added to the dictionary waiting to be encoded
 	vector<string_t> dictionary_encoding_buffer;
 	idx_t to_encode_string_sum = 0;
