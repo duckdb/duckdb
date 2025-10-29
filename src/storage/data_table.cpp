@@ -243,15 +243,15 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, context, table_filters);
-	row_groups->InitializeScan(context, *state.table_state, column_ids, table_filters);
-	local_storage.InitializeScan(*this, *state.local_state, table_filters);
+	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
+	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
-	row_groups->InitializeScanWithOffset(QueryContext(), *state.table_state, column_ids, start_row, end_row);
+	row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, column_ids, start_row, end_row);
 }
 
 idx_t DataTable::GetRowGroupSize() const {
@@ -280,17 +280,17 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 	auto &local_storage = LocalStorage::Get(context, db);
 	auto &transaction = DuckTransaction::Get(context, db);
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
-	row_groups->InitializeParallelScan(*state.scan_state);
+	row_groups->InitializeParallelScan(state.scan_state);
 
-	local_storage.InitializeParallelScan(*this, *state.local_state);
+	local_storage.InitializeParallelScan(*this, state.local_state);
 }
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state) {
-	if (row_groups->NextParallelScan(context, *state.scan_state, *scan_state.table_state)) {
+	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return true;
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
-	if (local_storage.NextParallelScan(context, *this, *state.local_state, *scan_state.local_state)) {
+	if (local_storage.NextParallelScan(context, *this, state.local_state, scan_state.local_state)) {
 		return true;
 	} else {
 		// finished all scans: no more scans remaining
@@ -300,18 +300,18 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 
 void DataTable::Scan(DuckTransaction &transaction, DataChunk &result, TableScanState &state) {
 	// scan the persistent segments
-	if (state.table_state->Scan(transaction, result)) {
+	if (state.table_state.Scan(transaction, result)) {
 		D_ASSERT(result.size() > 0);
 		return;
 	}
 
 	// scan the transaction-local segments
 	auto &local_storage = LocalStorage::Get(transaction);
-	local_storage.Scan(*state.local_state, state.GetColumnIds(), result);
+	local_storage.Scan(state.local_state, state.GetColumnIds(), result);
 }
 
 bool DataTable::CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type) {
-	return state.table_state->ScanCommitted(result, type);
+	return state.table_state.ScanCommitted(result, type);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1058,12 +1058,11 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 	CreateIndexScanState state;
 
 	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
-	auto row_start_aligned =
-	    state.table_state->row_group->start + state.table_state->vector_index * STANDARD_VECTOR_SIZE;
+	auto row_start_aligned = state.table_state.row_group->start + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
-		state.table_state->ScanCommitted(chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		state.table_state.ScanCommitted(chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (chunk.size() == 0) {
 			break;
 		}

@@ -61,8 +61,6 @@ public:
 	//! Information for WITH ORDINALITY
 	optional_idx ordinality_idx;
 
-	shared_ptr<RowGroupOrderOptions> row_group_order;
-
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none

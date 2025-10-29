@@ -126,12 +126,10 @@ struct RowGroupOrderOptions {
 struct TableFunctionInitInput {
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<column_t> column_ids_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
-	                       shared_ptr<RowGroupOrderOptions> row_group_order_p = nullptr,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr,
 	                       optional_ptr<const PhysicalOperator> op_p = nullptr)
 	    : bind_data(bind_data_p), column_ids(std::move(column_ids_p)), projection_ids(projection_ids_p),
-	      filters(filters_p), sample_options(sample_options_p), op(op_p),
-	      row_group_order(std::move(row_group_order_p)) {
+	      filters(filters_p), sample_options(sample_options_p), op(op_p) {
 		for (auto &col_id : column_ids) {
 			column_indexes.emplace_back(col_id);
 		}
@@ -139,12 +137,10 @@ struct TableFunctionInitInput {
 
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<ColumnIndex> column_indexes_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
-	                       shared_ptr<RowGroupOrderOptions> row_group_order_p = nullptr,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr,
 	                       optional_ptr<const PhysicalOperator> op_p = nullptr)
 	    : bind_data(bind_data_p), column_indexes(std::move(column_indexes_p)), projection_ids(projection_ids_p),
-	      filters(filters_p), sample_options(sample_options_p), op(op_p),
-	      row_group_order(std::move(row_group_order_p)) {
+	      filters(filters_p), sample_options(sample_options_p), op(op_p) {
 		for (auto &col_id : column_indexes) {
 			column_ids.emplace_back(col_id.GetPrimaryIndex());
 		}
@@ -157,8 +153,6 @@ struct TableFunctionInitInput {
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
 	optional_ptr<const PhysicalOperator> op;
-
-	shared_ptr<RowGroupOrderOptions> row_group_order;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
@@ -345,6 +339,9 @@ typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientConte
 typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &context,
                                                               optional_ptr<FunctionData> bind_data);
 
+typedef void (*table_function_set_scan_order)(shared_ptr<RowGroupOrderOptions> order_options,
+                                              optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
@@ -425,6 +422,8 @@ public:
 	table_function_get_virtual_columns_t get_virtual_columns;
 	//! (Optional) returns a list of row id columns
 	table_function_get_row_id_columns get_row_id_columns;
+	//! (Optional) sets the order to scan the row groups in
+	table_function_set_scan_order set_scan_order;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

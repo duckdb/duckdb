@@ -152,7 +152,7 @@ public:
 			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
 		}
 		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
-		local_storage.InitializeScan(storage, *l_state->scan_state.local_state, input.filters);
+		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
 	}
 
@@ -197,10 +197,10 @@ public:
 			auto &local_storage = LocalStorage::Get(tx);
 			if (CanRemoveFilterColumns()) {
 				l_state.all_columns.Reset();
-				local_storage.Scan(*l_state.scan_state.local_state, column_ids, l_state.all_columns);
+				local_storage.Scan(l_state.scan_state.local_state, column_ids, l_state.all_columns);
 				output.ReferenceColumns(l_state.all_columns, projection_ids);
 			} else {
-				local_storage.Scan(*l_state.scan_state.local_state, column_ids, output);
+				local_storage.Scan(l_state.scan_state.local_state, column_ids, output);
 			}
 		}
 	}
@@ -249,10 +249,9 @@ public:
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 
-		if (input.row_group_order) {
-			const auto &options = *input.row_group_order;
-			l_state->scan_state.table_state = make_uniq<CustomOrderCollectionScanState>(l_state->scan_state, options);
-			l_state->scan_state.local_state = make_uniq<CustomOrderCollectionScanState>(l_state->scan_state, options);
+		if (bind_data.order_options) {
+			l_state->scan_state.table_state.reorderer = make_shared_ptr<RowGroupReorderer>(*bind_data.order_options);
+			l_state->scan_state.local_state.reorderer = make_shared_ptr<RowGroupReorderer>(*bind_data.order_options);
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
@@ -301,8 +300,8 @@ public:
 			return 100;
 		}
 
-		idx_t scanned_rows = state.scan_state->processed_rows;
-		scanned_rows += state.local_state->processed_rows;
+		idx_t scanned_rows = state.scan_state.processed_rows;
+		scanned_rows += state.local_state.processed_rows;
 		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 		if (percentage > 100) {
 			// If the last chunk has fewer elements than STANDARD_VECTOR_SIZE, and if our percentage is over 100,
@@ -315,12 +314,12 @@ public:
 	OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
 	                                                TableFunctionGetPartitionInput &input) override {
 		auto &l_state = input.local_state->Cast<TableScanLocalState>();
-		if (l_state.scan_state.table_state->row_group) {
-			return OperatorPartitionData(l_state.scan_state.table_state->batch_index);
+		if (l_state.scan_state.table_state.row_group) {
+			return OperatorPartitionData(l_state.scan_state.table_state.batch_index);
 		}
-		if (l_state.scan_state.local_state->row_group) {
-			return OperatorPartitionData(l_state.scan_state.table_state->batch_index +
-			                             l_state.scan_state.local_state->batch_index);
+		if (l_state.scan_state.local_state.row_group) {
+			return OperatorPartitionData(l_state.scan_state.table_state.batch_index +
+			                             l_state.scan_state.local_state.batch_index);
 		}
 		return OperatorPartitionData(0);
 	}
@@ -335,10 +334,9 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
                                                              DataTable &storage, const TableScanBindData &bind_data) {
 	auto g_state = make_uniq<DuckTableScanState>(context, input.bind_data.get());
-	if (input.row_group_order) {
-		const auto &options = *input.row_group_order;
-		g_state->state.scan_state = make_uniq<CustomOrderParallelCollectionScanState>(options);
-		g_state->state.local_state = make_uniq<CustomOrderParallelCollectionScanState>(options);
+	if (bind_data.order_options) {
+		g_state->state.scan_state.reorderer = make_shared_ptr<RowGroupReorderer>(*bind_data.order_options);
+		g_state->state.local_state.reorderer = make_shared_ptr<RowGroupReorderer>(*bind_data.order_options);
 	}
 
 	storage.InitializeParallelScan(context, g_state->state);
@@ -752,6 +750,11 @@ vector<column_t> TableScanGetRowIdColumns(ClientContext &context, optional_ptr<F
 	return result;
 }
 
+void SetScanOrder(shared_ptr<RowGroupOrderOptions> order_options, optional_ptr<FunctionData> bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	bind_data.order_options = std::move(order_options);
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -775,6 +778,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.pushdown_expression = TableScanPushdownExpression;
 	scan_function.get_virtual_columns = TableScanGetVirtualColumns;
 	scan_function.get_row_id_columns = TableScanGetRowIdColumns;
+	scan_function.set_scan_order = SetScanOrder;
 	return scan_function;
 }
 

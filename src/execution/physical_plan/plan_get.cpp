@@ -197,7 +197,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		filter->children.push_back(table_scan);
 		return *filter;
 	}
-	cast_table_scan.row_group_order = op.row_group_order;
 	return table_scan;
 }
 

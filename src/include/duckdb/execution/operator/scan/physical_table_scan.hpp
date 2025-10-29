@@ -53,9 +53,6 @@ public:
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! Virtual columns
 	virtual_column_map_t virtual_columns;
-	optional_ptr<const PhysicalOperator> op;
-
-	shared_ptr<RowGroupOrderOptions> row_group_order;
 
 public:
 	string GetName() const override;

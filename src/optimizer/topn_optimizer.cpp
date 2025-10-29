@@ -147,14 +147,15 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		get.table_filters.PushFilter(column_index, std::move(optional_filter));
 
 		// Scan row groups in custom order
-		if (use_custom_rowgroup_order) {
+		if (get.function.set_scan_order && use_custom_rowgroup_order) {
 			auto column_type =
 			    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
 			auto order_type =
 			    op.orders[0].type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
 			auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-			get.row_group_order = make_shared_ptr<RowGroupOrderOptions>(column_index.GetPrimaryIndex(), order_by,
-			                                                            order_type, column_type);
+			auto order_options = make_shared_ptr<RowGroupOrderOptions>(column_index.GetPrimaryIndex(), order_by,
+			                                                           order_type, column_type);
+			get.function.set_scan_order(std::move(order_options), get.bind_data.get());
 		}
 	}
 }
