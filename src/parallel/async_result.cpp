@@ -75,10 +75,12 @@ AsyncResult &AsyncResult::operator=(AsyncResult &&other) noexcept {
 }
 
 void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &executor) {
-	D_ASSERT(result_type == AsyncResultType::BLOCKED);
+	if (result_type != AsyncResultType::BLOCKED) {
+		throw InternalException("AsyncResult::ScheduleTasks called on non BLOCKED AsyncResult");
+	}
 
 	if (async_tasks.empty()) {
-		throw InternalException("AsyncResultType with no task found");
+		throw InternalException("AsyncResult::ScheduleTasks called with no available tasks");
 	}
 
 	shared_ptr<Counter> counter = make_shared_ptr<Counter>(async_tasks.size());
@@ -90,10 +92,12 @@ void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &execu
 }
 
 void AsyncResult::ExecuteTasksSyncronously() {
-	D_ASSERT(result_type == AsyncResultType::BLOCKED);
+	if (result_type != AsyncResultType::BLOCKED) {
+		throw InternalException("AsyncResult::ExecuteTasksSyncronously called on non BLOCKED AsyncResult");
+	}
 
 	if (async_tasks.empty()) {
-		throw InternalException("AsyncResultType with no task found");
+		throw InternalException("AsyncResult::ExecuteTasksSyncronously called with no available tasks");
 	}
 
 	for (auto &async_task : async_tasks) {
