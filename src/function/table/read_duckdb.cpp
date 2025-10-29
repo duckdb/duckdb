@@ -316,15 +316,17 @@ AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState 
 		switch (input.async_result.GetResultType()) {
 		case AsyncResultType::BLOCKED:
 			return std::move(input.async_result);
+		case AsyncResultType::HAVE_MORE_OUTPUT:
+			return SourceResultType::HAVE_MORE_OUTPUT;
 		case AsyncResultType::IMPLICIT:
 			if (chunk.size() > 0) {
 				return SourceResultType::HAVE_MORE_OUTPUT;
 			}
+			finished = true;
 			return SourceResultType::FINISHED;
 		case AsyncResultType::FINISHED:
+			finished = true;
 			return SourceResultType::FINISHED;
-		case AsyncResultType::HAVE_MORE_OUTPUT:
-			return SourceResultType::HAVE_MORE_OUTPUT;
 		default:
 			throw InternalException("DuckDBReader call of scan_function.function returned unexpected return '%'",
 			                        EnumUtil::ToChars(input.async_result.GetResultType()));
