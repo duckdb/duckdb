@@ -589,7 +589,6 @@ public:
 	}
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-
 		if (!data_p.local_state) {
 			data_p.async_result = SourceResultType::FINISHED;
 			return;

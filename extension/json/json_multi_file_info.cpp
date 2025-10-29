@@ -537,7 +537,6 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 
 AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                              LocalTableFunctionState &local_state, DataChunk &output) {
-
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	{
 		vector<unique_ptr<AsyncTask>> tasks;

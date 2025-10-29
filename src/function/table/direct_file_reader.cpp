@@ -48,7 +48,6 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
                                    LocalTableFunctionState &local_state, DataChunk &output) {
 	auto &state = global_state.Cast<ReadFileGlobalState>();
 	if (done || file_list_idx.GetIndex() >= state.file_list->GetTotalFileCount()) {
-
 		return AsyncResult(SourceResultType::FINISHED);
 	}
 
