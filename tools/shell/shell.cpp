@@ -1742,138 +1742,6 @@ void ShellState::RunSchemaDumpQuery(const string &zQuery) {
 	}
 }
 
-static const char *azHelp[] = {
-    ".bail on|off             Stop after hitting an error.  Default OFF",
-    ".binary on|off           Turn binary output on or off.  Default OFF",
-    ".cd DIRECTORY            Change the working directory to DIRECTORY",
-    ".changes on|off          Show number of rows changed by SQL",
-    ".check GLOB              Fail if output since .testcase does not match",
-    ".columns                 Column-wise rendering of query results",
-#ifdef HAVE_LINENOISE
-    ".constant ?COLOR?        Sets the syntax highlighting color used for constant values",
-    "   COLOR is one of:",
-    "     red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen",
-    "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
-    ".constantcode ?CODE?     Sets the syntax highlighting terminal code used for constant values",
-#endif
-    ".databases               List names and files of attached databases",
-    ".decimal_sep SEP         Sets the decimal separator used when rendering numbers. Only for duckbox mode.",
-    ".dump ?TABLE?            Render database content as SQL",
-    "   Options:",
-    "     --newlines             Allow unescaped newline characters in output",
-    "   TABLE is a LIKE pattern for the tables to dump",
-    "   Additional LIKE patterns can be given in subsequent arguments",
-    ".echo on|off             Turn command echo on or off",
-    ".excel                   Display the output of next command in spreadsheet",
-    "   --bom                   Put a UTF8 byte-order mark on intermediate file",
-#ifdef HAVE_LINENOISE
-    ".edit                    Opens an external text editor to edit a query.",
-    "   Notes:",
-    "     *  The editor is read from the environment variables",
-    "        DUCKDB_EDITOR, EDITOR, VISUAL in-order",
-    "     * If none of these are set, the default editor is vi",
-    "   * \\e can be used as an alias for .edit",
-#endif
-    ".exit ?CODE?             Exit this program with return-code CODE",
-    ".explain ?on|off|auto?   Change the EXPLAIN formatting mode.  Default: auto",
-    ".fullschema ?--indent?   Show schema and the content of sqlite_stat tables",
-    ".headers on|off          Turn display of headers on or off",
-    ".help ?-all? ?PATTERN?   Show help text for PATTERN",
-#ifdef HAVE_LINENOISE
-    ".highlight [on|off]      Toggle syntax highlighting in the shell on/off",
-#endif
-    ".highlight_colors [element] [color]  ([bold])? Configure highlighting colors",
-    ".highlight_errors [on|off] Toggle highlighting of errors in the shell on/off",
-    ".highlight_results [on|off] Toggle highlighting of results in the shell on/off",
-    ".import FILE TABLE       Import data from FILE into TABLE",
-    "   Options:",
-    "     --ascii               Use \\037 and \\036 as column and row separators",
-    "     --csv                 Use , and \\n as column and row separators",
-    "     --skip N              Skip the first N rows of input",
-    "     -v                    \"Verbose\" - increase auxiliary output",
-    "   Notes:",
-    "     *  If TABLE does not exist, it is created.  The first row of input",
-    "        determines the column names.",
-    "     *  If neither --csv or --ascii are used, the input mode is derived",
-    "        from the \".mode\" output mode",
-    "     *  If FILE begins with \"|\" then it is a command that generates the",
-    "        input text.",
-    ".indexes ?TABLE?         Show names of indexes",
-    "                           If TABLE is specified, only show indexes for",
-    "                           tables matching TABLE using the LIKE operator.",
-#ifdef HAVE_LINENOISE
-    ".keyword ?COLOR?         Sets the syntax highlighting color used for keywords",
-    "   COLOR is one of:",
-    "     red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen",
-    "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
-    ".keywordcode ?CODE?      Sets the syntax highlighting terminal code used for keywords",
-#endif
-    ".large_number_rendering all|footer|off Toggle readable rendering of large numbers (duckbox only)",
-    ".log FILE|off            Turn logging on or off.  FILE can be stderr/stdout",
-    ".maxrows COUNT           Sets the maximum number of rows for display (default: 40). Only for duckbox mode.",
-    ".maxwidth COUNT          Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox "
-    "mode.",
-    ".mode MODE ?TABLE?       Set output mode",
-    "   MODE is one of:",
-    "     ascii     Columns/rows delimited by 0x1F and 0x1E",
-    "     box       Tables using unicode box-drawing characters",
-    "     csv       Comma-separated values",
-    "     column    Output in columns.  (See .width)",
-    "     duckbox   Tables with extensive features",
-    "     html      HTML <table> code",
-    "     insert    SQL insert statements for TABLE",
-    "     json      Results in a JSON array",
-    "     jsonlines Results in a NDJSON",
-    "     latex     LaTeX tabular environment code",
-    "     line      One value per line",
-    "     list      Values delimited by \"|\"",
-    "     markdown  Markdown table format",
-    "     quote     Escape answers as for SQL",
-    "     table     ASCII-art table",
-    "     tabs      Tab-separated values",
-    "     tcl       TCL list elements",
-    "     trash     No output",
-    ".nullvalue STRING        Use STRING in place of NULL values",
-    ".once ?OPTIONS? ?FILE?   Output for the next SQL command only to FILE",
-    "     If FILE begins with '|' then open as a pipe",
-    "       --bom  Put a UTF8 byte-order mark at the beginning",
-    "       -e     Send output to the system text editor",
-    "       -x     Send output as CSV to a spreadsheet (same as \".excel\")",
-    ".open ?OPTIONS? ?FILE?   Close existing database and reopen FILE",
-    "     Options:",
-    "        --new           Initialize FILE to an empty database",
-    "        --nofollow      Do not follow symbolic links",
-    "        --readonly      Open FILE readonly",
-    ".output ?FILE?           Send output to FILE or stdout if FILE is omitted",
-    "   If FILE begins with '|' then open it as a pipe.",
-    "   Options:",
-    "     --bom                 Prefix output with a UTF8 byte-order mark",
-    "     -e                    Send output to the system text editor",
-    "     -x                    Send output as CSV to a spreadsheet",
-    ".print STRING...         Print literal STRING",
-    ".prompt MAIN CONTINUE    Replace the standard prompts",
-    ".quit                    Exit this program",
-    ".read FILE               Read input from FILE",
-    ".rows                    Row-wise rendering of query results (default)",
-    ".safe_mode               Enable safe-mode",
-    ".schema ?PATTERN?        Show the CREATE statements matching PATTERN",
-    "     Options:",
-    "         --indent            Try to pretty-print the schema",
-    ".separator COL ?ROW?     Change the column and row separators",
-    ".shell CMD ARGS...       Run CMD ARGS... in a system shell",
-    ".show                    Show the current values for various settings",
-    ".system CMD ARGS...      Run CMD ARGS... in a system shell",
-    ".tables ?TABLE?          List names of tables matching LIKE pattern TABLE",
-    ".testcase NAME           Begin redirecting output to 'testcase-out.txt'",
-    ".thousand_sep SEP        Sets the thousand separator used when rendering numbers. Only for duckbox mode.",
-    ".timer on|off            Turn SQL timer on or off",
-    ".width NUM1 NUM2 ...     Set minimum column widths for columnar output",
-    "     Negative values right-justify",
-#if defined(_WIN32) || defined(WIN32)
-    ".utf8                    Enable experimental UTF-8 console output mode"
-#endif
-};
-
 SuccessState ShellState::ExecuteQuery(const string &query) {
 	auto &con = *conn;
 	auto res = con.Query(query);
@@ -1912,77 +1780,6 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		}
 	}
 }
-
-#ifdef HAVE_LINENOISE
-/*
-** Linenoise completion callback
-*/
-static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
-	idx_t nLine = ShellState::StringLength(zLine);
-	char zBuf[1000];
-
-	if (nLine > sizeof(zBuf) - 30) {
-		return;
-	}
-	if (!globalState) {
-		return;
-	}
-	if (zLine[0] == '.') {
-		// auto-complete dot command
-		// look for all completions in the help file
-		size_t line_idx;
-		for (line_idx = 0; line_idx < ArraySize(azHelp); line_idx++) {
-			const char *line = azHelp[line_idx];
-			if (line[0] != '.') {
-				continue;
-			}
-			int found_match = 1;
-			size_t line_pos;
-			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf);
-			     line_pos++) {
-				zBuf[line_pos] = line[line_pos];
-				if (line_pos < nLine && line[line_pos] != zLine[line_pos]) {
-					// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
-					found_match = 0;
-					break;
-				}
-			}
-			zBuf[line_pos] = '\0';
-			if (found_match && line_pos >= nLine) {
-				linenoiseAddCompletion(lc, zBuf);
-			}
-		}
-		return;
-	}
-	if (zLine[0] == '#') {
-		return;
-	}
-	//  if( i==nLine-1 ) return;
-	auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
-	unique_ptr<duckdb::DuckDB> localDB;
-	unique_ptr<duckdb::Connection> localCon;
-
-	if (!globalState->conn) {
-		globalState->OpenDB();
-	}
-	auto &con = *globalState->conn;
-	bool copiedSuggestion = false;
-	auto result = con.Query(zSql);
-	for (auto &row : *result) {
-		auto zCompletion = row.GetValue<string>(0);
-		auto nCompletion = zCompletion.size();
-		idx_t iStart = row.GetValue<idx_t>(1);
-		if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
-			if (!copiedSuggestion) {
-				memcpy(zBuf, zLine, iStart);
-				copiedSuggestion = true;
-			}
-			memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
-			linenoiseAddCompletion(lc, zBuf);
-		}
-	}
-}
-#endif
 
 /*
 ** Do C-language style dequoting.
@@ -4475,6 +4272,74 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 	}
 	return ProcessFile(file, true);
 }
+
+#ifdef HAVE_LINENOISE
+/*
+** Linenoise completion callback
+*/
+static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
+	idx_t nLine = ShellState::StringLength(zLine);
+	char zBuf[1000];
+
+	if (nLine > sizeof(zBuf) - 30) {
+		return;
+	}
+	if (!globalState) {
+		return;
+	}
+	if (zLine[0] == '.') {
+		// auto-complete dot command
+		for (idx_t c = 0; metadata_commands[c].command; c++) {
+			auto &command = metadata_commands[c];
+			auto &line = command.command;
+			bool found_match = true;
+			idx_t line_pos;
+			zBuf[0] = '.';
+			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf);
+			     line_pos++) {
+				zBuf[line_pos + 1] = line[line_pos];
+				if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
+					// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
+					found_match = false;
+					break;
+				}
+			}
+			zBuf[line_pos + 1] = '\0';
+			if (found_match && line_pos + 1 >= nLine) {
+				linenoiseAddCompletion(lc, zBuf);
+			}
+		}
+		return;
+	}
+	if (zLine[0] == '#') {
+		return;
+	}
+	//  if( i==nLine-1 ) return;
+	auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
+	unique_ptr<duckdb::DuckDB> localDB;
+	unique_ptr<duckdb::Connection> localCon;
+
+	if (!globalState->conn) {
+		globalState->OpenDB();
+	}
+	auto &con = *globalState->conn;
+	bool copiedSuggestion = false;
+	auto result = con.Query(zSql);
+	for (auto &row : *result) {
+		auto zCompletion = row.GetValue<string>(0);
+		auto nCompletion = zCompletion.size();
+		idx_t iStart = row.GetValue<idx_t>(1);
+		if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
+			if (!copiedSuggestion) {
+				memcpy(zBuf, zLine, iStart);
+				copiedSuggestion = true;
+			}
+			memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
+			linenoiseAddCompletion(lc, zBuf);
+		}
+	}
+}
+#endif
 
 /*
 ** Show available command line options
