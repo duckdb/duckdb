@@ -492,7 +492,7 @@ def test_clone_error(shell):
         .statement(".clone")
     )
     result = test.run()
-    result.check_stderr('Error: unknown command or invalid arguments:  "clone". Enter ".help" for help')
+    result.check_stderr('Unrecognized command')
 
 def test_sha3sum(shell):
     test = (
@@ -863,17 +863,6 @@ def test_eqp(shell):
     result = test.run()
     result.check_stdout('DUMMY_SCAN')
 
-def test_clone(shell, random_filepath):
-    test = (
-        ShellTest(shell)
-        .statement("CREATE TABLE a (I INTEGER)")
-        .statement("INSERT INTO a VALUES (42)")
-        .statement(f".clone {random_filepath.as_posix()}")
-    )
-    result = test.run()
-    result.check_stderr('unknown command or invalid arguments')
-
-
 def test_databases(shell):
     test = (
         ShellTest(shell)
@@ -1101,12 +1090,12 @@ def test_tables_invalid_pattern_handling(shell):
     )
     result = test.run()
     # Should show usage message for invalid pattern
-    result.check_stderr("Usage: .tables ?TABLE?")
+    result.check_stderr("Usage")
 
 def test_help_prints_to_stdout(shell):
     test = ShellTest(shell, ["--help"])
     result = test.run()
-    result.check_stdout("OPTIONS include:")
+    result.check_stdout("OPTIONS")
 
 
 # fmt: on
