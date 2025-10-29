@@ -2,6 +2,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/logging/log_type.hpp"
 
 #include "yyjson.hpp"
 
@@ -179,6 +180,12 @@ string ProfilingInfo::GetMetricAsString(const MetricsType metric) const {
 		return EnumUtil::ToString(type);
 	}
 	return metrics.at(metric).ToString();
+}
+
+void ProfilingInfo::WriteMetricsToLog(ClientContext &context) {
+	for (auto &metric : settings) {
+		DUCKDB_LOG(context, MetricsLogType, metric, metrics[metric]);
+	}
 }
 
 void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) {
