@@ -241,7 +241,6 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 
 void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                idx_t result_idx) {
-
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());

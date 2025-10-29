@@ -33,7 +33,7 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-	    : executor(context), intermediate_table(context, op.using_key ? op.internal_types : op.types),
+	    : executor(context), intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()),
 	      new_groups(STANDARD_VECTOR_SIZE) {
 
 		vector<LogicalType> aggr_input_types;

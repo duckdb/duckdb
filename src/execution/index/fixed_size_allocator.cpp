@@ -7,7 +7,6 @@ namespace duckdb {
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager, MemoryTag memory_tag)
     : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), memory_tag(memory_tag),
       segment_size(segment_size), total_segment_count(0) {
-
 	if (segment_size > block_manager.GetBlockSize() - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
 		                        to_string(block_manager.GetBlockSize() - sizeof(validity_t)));
@@ -321,7 +320,6 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 	total_segment_count = 0;
 
 	for (idx_t i = 0; i < info.buffer_ids.size(); i++) {
-
 		// read all FixedSizeBuffer data
 		auto buffer_id = info.buffer_ids[i];
 

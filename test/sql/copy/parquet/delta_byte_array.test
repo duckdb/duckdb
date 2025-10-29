@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIIIIIIII
-SELECT * FROM 'data/parquet-testing/delta_byte_array.parquet'
+SELECT * FROM '{DATA_DIR}/parquet-testing/delta_byte_array.parquet'
 ----
 AAAAAAAAIODAAAAA	Sir	Mark	Bailey	N	MOROCCO	NULL	Mark.Bailey@rg9qCNVJ0s7qeY.com	2452443
 AAAAAAAAHODAAAAA	Mrs.	Lisa	Clark	Y	ITALY	NULL	Lisa.Clark@goPYS4tMB0.org	2452646
@@ -1012,7 +1012,7 @@ AAAAAAAACAAAAAAA	Dr.	Amy	Moses	Y	TOGO	NULL	Amy.Moses@Ovk9KjHH.com	2452318
 AAAAAAAABAAAAAAA	Mr.	Javier	Lewis	Y	CHILE	NULL	Javier.Lewis@VFAxlnZEvOx.org	2452508
 
 query I
-SELECT * FROM 'data/parquet-testing/delta_length_byte_array.parquet'
+SELECT * FROM '{DATA_DIR}/parquet-testing/delta_length_byte_array.parquet'
 ----
 apple_banana_mango0
 apple_banana_mango1

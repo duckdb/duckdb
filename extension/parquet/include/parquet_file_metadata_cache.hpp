@@ -9,7 +9,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/storage/object_cache.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_types.h"
 
 namespace duckdb {

@@ -198,7 +198,6 @@ public:
 	}
 
 	uint32_t Finalize() {
-
 		if (read_buffer_offset != read_buffer_size) {
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer: \n"
 			                        "read buffer offset: %d, read buffer size: %d",

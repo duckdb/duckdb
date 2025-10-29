@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIIIIIII
-FROM read_csv('data/csv/customer.4.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false,  columns = {'c_custkey': 'BIGINT', 'c_name': 'VARCHAR', 'c_address': 'VARCHAR', 'c_nationkey': 'INTEGER', 'c_phone': 'VARCHAR', 'c_acctbal': 'DECIMAL(15, 2)', 'c_mktsegment': 'VARCHAR', 'c_comment': 'VARCHAR'}, parallel=true, buffer_size = 300);
+FROM read_csv('{DATA_DIR}/csv/customer.4.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=false,  columns = {'c_custkey': 'BIGINT', 'c_name': 'VARCHAR', 'c_address': 'VARCHAR', 'c_nationkey': 'INTEGER', 'c_phone': 'VARCHAR', 'c_acctbal': 'DECIMAL(15, 2)', 'c_mktsegment': 'VARCHAR', 'c_comment': 'VARCHAR'}, parallel=true, buffer_size = 300);
 ----
 750001	Customer#000750001	ocIz 2S9MsEyfkL	6	16-182-876-9496	4522.76	FURNITURE	dolites alongside of the furiously pending theodolites affix closely idly bold instruction
 750002	Customer#000750002	Y9eOW Ena8pVx	15	25-241-686-3974	1969.87	BUILDING	ide of the slyly express hockey players. slyly ironic dependencies boost furiou

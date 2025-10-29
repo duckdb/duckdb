@@ -40,7 +40,6 @@ void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &bound_function,
                                         vector<unique_ptr<Expression>> &arguments) {
-
 	if (arguments.size() != 1) {
 		throw BinderException("union_value takes exactly one argument");
 	}

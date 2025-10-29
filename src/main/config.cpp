@@ -448,7 +448,6 @@ bool DBConfig::HasExtensionOption(const string &name) {
 
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope) {
-
 	lock_guard<mutex> l(config_lock);
 	extension_parameters.insert(make_pair(
 	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope)));

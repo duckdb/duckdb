@@ -309,7 +309,6 @@ bool DeltaMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files,
 void DeltaMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files,
                                        vector<LogicalType> &return_types, vector<string> &names,
                                        MultiFileReaderBindData &bind_data) {
-
 	// Disable all other multifilereader options
 	options.auto_detect_hive_partitioning = false;
 	options.hive_partitioning = false;
