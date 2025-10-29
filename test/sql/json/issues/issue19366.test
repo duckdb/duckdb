@@ -14,6 +14,6 @@ copy (
 ) to '__TEST_DIR__/19366.parquet' (PARQUET_VERSION V2)
 
 query II
-from 'test2.parquet';
+from '__TEST_DIR__/19366.parquet';
 ----
 TEST	{'Attributes': {}, 'Nodes': {'hardware': NULL, 'networking': NULL, 'software': NULL}, 'Table': {}}
