@@ -4295,7 +4295,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			bool found_match = true;
 			idx_t line_pos;
 			zBuf[0] = '.';
-			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf);
+			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 2 < sizeof(zBuf);
 			     line_pos++) {
 				zBuf[line_pos + 1] = line[line_pos];
 				if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
