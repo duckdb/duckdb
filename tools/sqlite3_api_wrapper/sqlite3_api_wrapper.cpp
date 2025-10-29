@@ -1142,7 +1142,6 @@ int sqlite3_complete(const char *zSql) {
 
 // length of varchar or blob value
 int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol) {
-
 	if (!pStmt || iCol < 0 || pStmt->result->types.size() <= static_cast<size_t>(iCol))
 		return 0;
 

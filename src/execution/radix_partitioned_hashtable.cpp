@@ -208,7 +208,6 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
       any_combined(false), radix_ht(radix_ht_p), config(*this), stored_allocators_size(0), finalize_done(0),
       scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
       max_partition_size(0) {
-
 	// Compute minimum reservation
 	auto block_alloc_size = BufferManager::GetBufferManager(context).GetBlockAllocSize();
 	auto tuples_per_block = block_alloc_size / radix_ht.GetLayout().GetRowWidth();

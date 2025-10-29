@@ -424,7 +424,6 @@ void BaseAppender::ClearColumns() {
 //===--------------------------------------------------------------------===//
 Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
-
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
 		throw CatalogException(

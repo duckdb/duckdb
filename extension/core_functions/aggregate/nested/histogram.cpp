@@ -61,7 +61,6 @@ struct StringMapType {
 template <class OP, class T, class MAP_TYPE>
 void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
                              idx_t count) {
-
 	D_ASSERT(input_count == 1);
 
 	auto &input = inputs[0];
@@ -209,7 +208,6 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 template <bool IS_ORDERED = true>
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
-
 	D_ASSERT(arguments.size() == 1);
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
