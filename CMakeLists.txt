@@ -414,7 +414,7 @@ option(BUILD_MAIN_DUCKDB_LIBRARY
         TRUE)
 option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
-        FALSE)
+        TRUE)
 
 if(WIN32 OR ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
