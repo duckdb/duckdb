@@ -52,7 +52,6 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'b
 a	INTEGER
 bb	STRUCT(bbb INTEGER)
 
-
 # Tests unnamed structs
 
 query II
@@ -90,11 +89,12 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{}], recursive := 
 Parser Error: syntax error
 
 statement error
-SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([]), recursive := true, keep_parent_names := true);
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([]), recursive := true, keep_parent_names := true));
 ----
 Parser Error: syntax error
 
-statement error
-SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row()), recursive := true, keep_parent_names := true));
+query II
+SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42), 41), keep_parent_names := true, recursive := true));
 ----
-<REGEX>:.*Invalid Input Error: Can't pack nothing into a struct.*
+element1	INTEGER
+element2	INTEGER
