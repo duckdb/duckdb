@@ -1003,6 +1003,11 @@ public:
 	}
 
 	idx_t BeginRightScan(const AsOfSourceTask &task);
+	void EndRightScan() {
+		if (right_task.stage == AsOfJoinSourceStage::RIGHT) {
+			++gsource.flushed_right;
+		}
+	}
 
 	AsOfGlobalSourceState &gsource;
 	ExecutionContext &context;
@@ -1101,7 +1106,8 @@ bool AsOfGlobalSourceState::TryNextTask(AsOfLocalSourceState &lsource) {
 		}
 		break;
 	case AsOfJoinSourceStage::RIGHT:
-		while (next_right < asof_groups.size()) {
+		lsource.EndRightScan();
+		if (next_right < asof_groups.size()) {
 			AsOfSourceTask right_task;
 			right_task.stage = AsOfJoinSourceStage::RIGHT;
 			right_task.group_idx = next_right++;
@@ -1112,11 +1118,7 @@ bool AsOfGlobalSourceState::TryNextTask(AsOfLocalSourceState &lsource) {
 				}
 			}
 			lsource.BeginRightScan(right_task);
-			if (!lsource.TaskFinished()) {
-				return true;
-			} else {
-				++flushed_right;
-			}
+			return true;
 		}
 		break;
 	default:
@@ -1168,7 +1170,6 @@ void AsOfLocalSourceState::ExecuteOuterTask(DataChunk &chunk) {
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
 			scanner.reset();
-			++gsource.flushed_right;
 			return;
 		}
 
