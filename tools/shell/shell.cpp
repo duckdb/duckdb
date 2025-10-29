@@ -4399,6 +4399,15 @@ struct CommandLineOption {
 	const char *description;
 };
 
+struct CommandLineCall {
+	CommandLineCall(const CommandLineOption &option, vector<string> arguments_p)
+	    : option(option), arguments(std::move(arguments_p)) {
+	}
+
+	const CommandLineOption &option;
+	vector<string> arguments;
+};
+
 template <RenderMode output_mode>
 MetadataResult ToggleOutputMode(ShellState &state, const vector<string> &args) {
 	state.cMode = state.mode = output_mode;
@@ -4407,14 +4416,14 @@ MetadataResult ToggleOutputMode(ShellState &state, const vector<string> &args) {
 
 MetadataResult ToggleASCIIMode(ShellState &state, const vector<string> &args) {
 	state.cMode = state.mode = RenderMode::ASCII;
-	state.colSeparator = ",";
+	state.colSeparator = SEP_Unit;
+	state.rowSeparator = SEP_Record;
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult ToggleCSVMode(ShellState &state, const vector<string> &args) {
 	state.cMode = state.mode = RenderMode::CSV;
-	state.colSeparator = SEP_Unit;
-	state.rowSeparator = SEP_Record;
+	state.colSeparator = ",";
 	return MetadataResult::SUCCESS;
 }
 
@@ -4494,7 +4503,8 @@ MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args
 MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) {
 	auto &storage_version = args[1];
 	try {
-		state.config.options.serialization_compatibility = duckdb::SerializationCompatibility::FromString("latest");
+		state.config.options.serialization_compatibility =
+		    duckdb::SerializationCompatibility::FromString(storage_version);
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
 		utf8_printf(stderr, "%s: Error: unknown argument (%s) for '-storage-version': %s\n", program_name,
@@ -4547,7 +4557,7 @@ static const CommandLineOption command_line_options[] = {
     {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
     {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
     {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" before reading stdin"},
-    {"echo", 1, "COMMAND", nullptr, EnableEcho, "print commands before execution"},
+    {"echo", 0, "", nullptr, EnableEcho, "print commands before execution"},
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
     {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
@@ -4576,6 +4586,19 @@ static const CommandLineOption command_line_options[] = {
     {"version", 0, "", nullptr, ShowVersionAndExit, "show DuckDB version"},
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr}};
 
+duckdb::optional_idx FindOption(const char *name) {
+	for (idx_t c = 0; command_line_options[c].option; c++) {
+		auto &option = command_line_options[c];
+		if (!StringUtil::Equals(name, option.option)) {
+			// not this one
+			continue;
+		}
+		// found it!
+		return c;
+	}
+	return duckdb::optional_idx();
+}
+
 /*
 ** Initialize the state information in data
 */
@@ -4591,18 +4614,6 @@ static void main_init(ShellState *data) {
 #ifdef HAVE_LINENOISE
 	linenoiseSetPrompt(continuePrompt, continuePromptSelected);
 #endif
-}
-
-/*
-** Get the argument to an --option.  Throw an error and die if no argument
-** is available.
-*/
-static char *cmdline_option_value(int argc, char **argv, int i) {
-	if (i == argc) {
-		utf8_printf(stderr, "%s: Error: missing argument to %s\n", argv[0], argv[argc - 1]);
-		exit(1);
-	}
-	return argv[i];
 }
 
 #ifndef SQLITE_SHELL_IS_UTF8
@@ -4675,6 +4686,7 @@ int wmain(int argc, wchar_t **wargv) {
 	** the size of the alternative malloc heap,
 	** and the first command to execute.
 	*/
+	vector<CommandLineCall> command_line_calls;
 	for (i = 1; i < argc; i++) {
 		char *z;
 		z = argv[i];
@@ -4685,48 +4697,49 @@ int wmain(int argc, wchar_t **wargv) {
 				/* Excesss arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
 				data.readStdin = false;
-				extra_commands.push_back(z);
+				extra_commands.emplace_back(z);
 			}
+			continue;
 		}
-		if (z[1] == '-') {
+		z++;
+		if (z[0] == '-') {
+			// allow for double dashes, i.e. --init and -init are both valid
 			z++;
 		}
-		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
-		    strcmp(z, "-cmd") == 0) {
-			(void)cmdline_option_value(argc, argv, ++i);
-		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0 || strcmp(z, "-f") == 0) {
-			(void)cmdline_option_value(argc, argv, ++i);
-			stdin_is_interactive = false;
-		} else if (strcmp(z, "-init") == 0) {
-			data.initFile = cmdline_option_value(argc, argv, ++i);
-		} else if (strcmp(z, "-batch") == 0) {
-			/* Need to check for batch mode here to so we can avoid printing
-			** informational messages (like from process_sqliterc) before
-			** we do the actual processing of arguments later in a second pass.
-			*/
-			stdin_is_interactive = false;
-		} else if (strcmp(z, "-readonly") == 0) {
-			data.config.options.access_mode = duckdb::AccessMode::READ_ONLY;
-		} else if (strcmp(z, "-unredacted") == 0) {
-			data.config.options.allow_unsigned_extensions = true;
-		} else if (strcmp(z, "-unsigned") == 0) {
-			data.config.options.allow_unsigned_extensions = true;
-		} else if (strcmp(z, "-safe") == 0) {
-			safe_mode = true;
-		} else if (strcmp(z, "-storage_version") == 0 || strcmp(z, "-storage-version") == 0) {
-			auto storage_version = string(cmdline_option_value(argc, argv, ++i));
-			if (storage_version != "latest") {
-				utf8_printf(
-				    stderr,
-				    "%s: Error: unknown argument (%s) for '-storage-version', only 'latest' is supported currently\n",
-				    program_name, storage_version.c_str());
-			} else {
-				data.config.options.serialization_compatibility =
-				    duckdb::SerializationCompatibility::FromString("latest");
-			}
-		} else if (strcmp(z, "-bail") == 0) {
-			bail_on_error = true;
+
+		auto c = FindOption(z);
+		if (!c.IsValid()) {
+			// we haven't found it yet - try substituting all underscores with dashes
+			// this is legacy behavior - we allow e.g. "-storage_version" to be used instead of "-storage-version"
+			auto option_name = StringUtil::Replace(z, "_", "-");
+			c = FindOption(option_name.c_str());
 		}
+		if (!c.IsValid()) {
+			// not found
+			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
+			raw_printf(stderr, "Use -help for a list of options.\n");
+			return 1;
+		}
+		auto &option = command_line_options[c.GetIndex()];
+		// parse arguments
+		vector<string> arguments;
+		arguments.push_back(option.option);
+		for (idx_t arg_idx = 0; arg_idx < option.argument_count; arg_idx++) {
+			if (i + 1 >= argc) {
+				utf8_printf(stderr, "%s: Error: missing argument to %s\n", argv[0], option.option);
+				return 1;
+			}
+			arguments.emplace_back(argv[++i]);
+		}
+		if (option.pre_init_callback) {
+			// invoke the pre-init callback (if any)
+			auto result = option.pre_init_callback(data, arguments);
+			if (result == MetadataResult::EXIT) {
+				return 0;
+			}
+		}
+		// add the call to the list of options to handle
+		command_line_calls.emplace_back(option, std::move(arguments));
 	}
 
 	if (data.zDbFilename.empty()) {
@@ -4757,123 +4770,15 @@ int wmain(int argc, wchar_t **wargv) {
 	** file is processed so that the command-line arguments will override
 	** settings in the initialization file.
 	*/
-	for (i = 1; i < argc; i++) {
-		char *z = argv[i];
-		if (z[0] != '-') {
+	for (auto &call : command_line_calls) {
+		auto &option = call.option;
+		if (!option.post_init_callback) {
 			continue;
 		}
-		if (z[1] == '-') {
-			z++;
-		}
-		if (strcmp(z, "-init") == 0) {
-			i++;
-		} else if (strcmp(z, "-html") == 0) {
-			data.mode = RenderMode::HTML;
-		} else if (strcmp(z, "-list") == 0) {
-			data.mode = RenderMode::LIST;
-		} else if (strcmp(z, "-quote") == 0) {
-			data.mode = RenderMode::QUOTE;
-		} else if (strcmp(z, "-line") == 0) {
-			data.mode = RenderMode::LINE;
-		} else if (strcmp(z, "-column") == 0) {
-			data.mode = RenderMode::COLUMN;
-		} else if (strcmp(z, "-json") == 0) {
-			data.mode = RenderMode::JSON;
-		} else if (strcmp(z, "-jsonlines") == 0) {
-			data.mode = RenderMode::JSONLINES;
-		} else if (strcmp(z, "-markdown") == 0) {
-			data.mode = RenderMode::MARKDOWN;
-		} else if (strcmp(z, "-table") == 0) {
-			data.mode = RenderMode::TABLE;
-		} else if (strcmp(z, "-box") == 0) {
-			data.mode = RenderMode::BOX;
-		} else if (strcmp(z, "-latex") == 0) {
-			data.mode = RenderMode::LATEX;
-		} else if (strcmp(z, "-csv") == 0) {
-			data.mode = RenderMode::CSV;
-			data.colSeparator = ",";
-		} else if (strcmp(z, "-readonly") == 0) {
-			data.config.options.access_mode = duckdb::AccessMode::READ_ONLY;
-		} else if (strcmp(z, "-ascii") == 0) {
-			data.mode = RenderMode::ASCII;
-			data.colSeparator = SEP_Unit;
-			data.rowSeparator = SEP_Record;
-		} else if (strcmp(z, "-separator") == 0) {
-			data.colSeparator = cmdline_option_value(argc, argv, ++i);
-		} else if (strcmp(z, "-newline") == 0) {
-			data.rowSeparator = cmdline_option_value(argc, argv, ++i);
-		} else if (strcmp(z, "-nullvalue") == 0) {
-			data.nullValue = cmdline_option_value(argc, argv, ++i);
-		} else if (strcmp(z, "-header") == 0) {
-			data.showHeader = 1;
-		} else if (strcmp(z, "-noheader") == 0) {
-			data.showHeader = 0;
-		} else if (strcmp(z, "-echo") == 0) {
-			data.ShellSetFlag(ShellFlags::SHFLG_Echo);
-		} else if (strcmp(z, "-unsigned") == 0) {
-			data.config.options.allow_unsigned_extensions = true;
-		} else if (strcmp(z, "-unredacted") == 0) {
-			data.config.options.allow_unredacted_secrets = true;
-		} else if (strcmp(z, "-bail") == 0) {
-			bail_on_error = true;
-		} else if (strcmp(z, "-version") == 0) {
-			printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
-			       duckdb::DuckDB::SourceID());
+		auto result = option.post_init_callback(data, call.arguments);
+		if (result == MetadataResult::EXIT) {
 			return 0;
-		} else if (strcmp(z, "-interactive") == 0) {
-			stdin_is_interactive = true;
-		} else if (strcmp(z, "-batch") == 0) {
-			stdin_is_interactive = false;
-		} else if (strcmp(z, "-help") == 0) {
-			usage(1);
-		} else if (strcmp(z, "-no-stdin") == 0) {
-			data.readStdin = false;
-		} else if (strcmp(z, "-f") == 0) {
-			data.readStdin = false;
-			if (i == argc - 1) {
-				break;
-			}
-			auto old_bail = bail_on_error;
-			bail_on_error = true;
-			z = cmdline_option_value(argc, argv, ++i);
-			if (!data.ProcessFile(string(z))) {
-				return 1;
-			}
-			bail_on_error = old_bail;
-		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
-			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
-				data.readStdin = false;
-			}
-			/* Run commands that follow -cmd first and separately from commands
-			** that simply appear on the command-line.  This seems goofy.  It would
-			** be better if all commands ran in the order that they appear.  But
-			** we retain the goofy behavior for historical compatibility. */
-			if (i == argc - 1) {
-				break;
-			}
-			// Always bail if -c or -s fail
-			bool bail = bail_on_error || !strcmp(z, "-c") || !strcmp(z, "-s");
-			z = cmdline_option_value(argc, argv, ++i);
-			rc = data.RunInitialCommand(z, bail);
-			if (rc != 0) {
-				return rc;
-			}
-		} else if (strcmp(z, "-safe") == 0) {
-			// safe mode has been set before
-		} else if (strcmp(z, "-ui") == 0) {
-			// run the UI command
-			rc = data.RunInitialCommand((char *)data.ui_command.c_str(), true);
-			if (rc != 0) {
-				return rc;
-			}
-		} else if (strcmp(z, "-storage_version") == 0) {
-			// already processed on start-up
-		} else {
-			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
-			raw_printf(stderr, "Use -help for a list of options.\n");
-			return 1;
 		}
-		data.cMode = data.mode;
 	}
 
 	if (!data.readStdin) {
