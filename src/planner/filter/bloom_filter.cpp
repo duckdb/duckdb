@@ -45,7 +45,6 @@ inline uint64_t GetMask(const uint8_t *__restrict shifts_8, const idx_t i) {
 }
 
 static void InsertBlock(const uint64_t *__restrict keys, uint64_t *__restrict bf, const uint64_t bitmask) {
-
 	uint64_t shifts[SIMD_BATCH_SIZE];
 	const uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(shifts);
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
@@ -61,7 +60,6 @@ static void InsertBlock(const uint64_t *__restrict keys, uint64_t *__restrict bf
 }
 
 void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
-
 	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
 	while (count >= SIMD_BATCH_SIZE) {
 		InsertBlock(hashes, bf, bitmask);
@@ -75,7 +73,6 @@ void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 
 static void LookupBlock(const uint64_t *__restrict keys, const uint64_t *__restrict bf, uint64_t *__restrict found,
                         const uint64_t bitmask) {
-
 	uint64_t shifts[SIMD_BATCH_SIZE];
 	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
 		shifts[i] = keys[i] & SHIFT_MASK;
@@ -91,7 +88,6 @@ static void LookupBlock(const uint64_t *__restrict keys, const uint64_t *__restr
 
 idx_t BloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel,
                                 const idx_t count) const {
-
 	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 
@@ -119,7 +115,6 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, Selecti
 }
 
 inline void BloomFilter::InsertOne(const hash_t hash) const {
-
 	const uint64_t shifts = hash & SHIFT_MASK;
 	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
 
@@ -131,7 +126,6 @@ inline void BloomFilter::InsertOne(const hash_t hash) const {
 }
 
 inline bool BloomFilter::LookupOne(uint64_t hash) const {
-
 	const uint64_t shifts = hash & SHIFT_MASK;
 	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
 

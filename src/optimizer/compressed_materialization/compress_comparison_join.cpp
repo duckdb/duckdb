@@ -28,6 +28,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 
 	auto &left_child = *join.children[0];
 	auto &right_child = *join.children[1];
+
 #ifndef DEBUG
 	// In debug mode, we always apply compressed materialization to joins regardless of cardinalities,
 	// so that it is well-tested. In release mode, we use the thresholds defined in the header

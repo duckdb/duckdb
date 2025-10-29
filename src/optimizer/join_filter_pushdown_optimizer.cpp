@@ -272,7 +272,6 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		}
 	}
 	if (!pushdown_info->probe_info.empty()) {
-
 		const auto &rhs_child = join.children[1];
 		if (rhs_child->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
 			pushdown_info->build_side_has_filter = HasFilter(join.children[0]);
