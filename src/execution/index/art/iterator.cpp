@@ -95,8 +95,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 }
 
 void Iterator::FindMinimum(const Node &node) {
-	Node node_copy = node;
-	reference<Node> ref(node_copy);
+	reference<const Node> ref(node);
 
 	while (ref.get().HasMetadata()) {
 		// Found the minimum.
@@ -149,8 +148,7 @@ void Iterator::FindMinimum(const Node &node) {
 }
 
 bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal) {
-	Node node_copy = node;
-	reference<Node> ref(node_copy);
+	reference<const Node> ref(node);
 	idx_t depth = 0;
 
 	while (ref.get().HasMetadata()) {
