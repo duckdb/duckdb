@@ -97,11 +97,6 @@ def test_invalid_cast(shell):
     result = test.run()
     result.check_stderr("Could not convert")
 
-def test_invalid_backup(shell, random_filepath):
-    test = ShellTest(shell).statement(f'.backup {random_filepath.as_posix()}')
-    result = test.run()
-    result.check_stderr("unsupported in the current version of the CLI")
-
 def test_newline_in_value(shell):
     test = (
         ShellTest(shell)
@@ -335,31 +330,6 @@ def test_show_basic(shell):
     )
     result = test.run()
     result.check_stdout("rowseparator")
-
-def test_timeout(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".timeout")
-    )
-    result = test.run()
-    result.check_stderr("unsupported in the current version of the CLI")
-
-
-def test_save(shell, random_filepath):
-    test = (
-        ShellTest(shell)
-        .statement(f".save {random_filepath.as_posix()}")
-    )
-    result = test.run()
-    result.check_stderr("unsupported in the current version of the CLI")
-
-def test_restore(shell, random_filepath):
-    test = (
-        ShellTest(shell)
-        .statement(f".restore {random_filepath.as_posix()}")
-    )
-    result = test.run()
-    result.check_stderr("unsupported in the current version of the CLI")
 
 @pytest.mark.parametrize("cmd", [
     ".vfsinfo",
