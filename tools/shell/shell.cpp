@@ -1741,6 +1741,7 @@ void ShellState::RunSchemaDumpQuery(const string &zQuery) {
 		}
 	}
 }
+
 static const char *azHelp[] = {
     ".bail on|off             Stop after hitting an error.  Default OFF",
     ".binary on|off           Turn binary output on or off.  Default OFF",
@@ -1872,72 +1873,6 @@ static const char *azHelp[] = {
     ".utf8                    Enable experimental UTF-8 console output mode"
 #endif
 };
-
-/*
-** Output help text.
-**
-** zPattern describes the set of commands for which help text is provided.
-** If zPattern is NULL, then show all commands, but only give a one-line
-** description of each.
-**
-** Return the number of matches.
-*/
-static int showHelp(FILE *out, const char *zPattern) {
-	int i = 0;
-	int j = 0;
-	int n = 0;
-	string zPat;
-	if (zPattern == 0 || zPattern[0] == '0' || strcmp(zPattern, "-a") == 0 || strcmp(zPattern, "-all") == 0 ||
-	    strcmp(zPattern, "--all") == 0) {
-		/* Show all commands, but only one line per command */
-		if (zPattern == 0)
-			zPattern = "";
-		for (i = 0; i < ArraySize(azHelp); i++) {
-			if (azHelp[i][0] == '.' || zPattern[0]) {
-				utf8_printf(out, "%s\n", azHelp[i]);
-				n++;
-			}
-		}
-	} else {
-		/* Look for commands that for which zPattern is an exact prefix */
-		zPat = StringUtil::Format(".%s*", zPattern);
-		for (i = 0; i < ArraySize(azHelp); i++) {
-			if (ShellState::StringGlob(zPat.c_str(), azHelp[i])) {
-				utf8_printf(out, "%s\n", azHelp[i]);
-				j = i + 1;
-				n++;
-			}
-		}
-		if (n) {
-			if (n == 1) {
-				/* when zPattern is a prefix of exactly one command, then include the
-				** details of that command, which should begin at offset j */
-				while (j < ArraySize(azHelp) - 1 && azHelp[j][0] != '.') {
-					utf8_printf(out, "%s\n", azHelp[j]);
-					j++;
-				}
-			}
-			return n;
-		}
-		/* Look for commands that contain zPattern anywhere.  Show the complete
-		** text of all commands that match. */
-		zPat = StringUtil::Format("%%%s%%", zPattern);
-		for (i = 0; i < ArraySize(azHelp); i++) {
-			if (azHelp[i][0] == '.')
-				j = i;
-			if (ShellState::StringLike(zPat.c_str(), azHelp[i], 0)) {
-				utf8_printf(out, "%s\n", azHelp[j]);
-				while (j < ArraySize(azHelp) - 1 && azHelp[j + 1][0] != '.') {
-					j++;
-					utf8_printf(out, "%s\n", azHelp[j]);
-				}
-				i = j;
-				n++;
-			}
-		}
-	}
-	return n;
-}
 
 SuccessState ShellState::ExecuteQuery(const string &query) {
 	auto &con = *conn;
@@ -2683,12 +2618,12 @@ MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &ar
 
 MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
-		int n = showHelp(state.out, args[1].c_str());
+		idx_t n = state.PrintHelp(args[1].c_str());
 		if (n == 0) {
 			utf8_printf(state.out, "Nothing matches '%s'\n", args[1].c_str());
 		}
 	} else {
-		showHelp(state.out, 0);
+		state.PrintHelp(0);
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -2868,7 +2803,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 				zTable = z;
 			} else {
 				utf8_printf(out, "ERROR: extra argument: \"%s\".  Usage:\n", z);
-				showHelp(out, "import");
+				PrintHelp("import");
 				return false;
 			}
 		} else if (strcmp(z, "-v") == 0) {
@@ -2887,13 +2822,13 @@ bool ShellState::ImportData(const vector<string> &args) {
 			useOutputMode = 0;
 		} else {
 			utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", z);
-			showHelp(out, "import");
+			PrintHelp("import");
 			return false;
 		}
 	}
 	if (zTable == 0) {
 		utf8_printf(out, "ERROR: missing %s argument. Usage:\n", zFile == 0 ? "FILE" : "TABLE");
-		showHelp(out, "import");
+		PrintHelp("import");
 		return false;
 	}
 	seenInterrupt = 0;
@@ -3232,14 +3167,14 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 				eMode = 'e'; /* text editor */
 			} else {
 				utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", args[i].c_str());
-				showHelp(out, args[0].c_str());
+				PrintHelp(args[0].c_str());
 				return false;
 			}
 		} else if (zFile.empty()) {
 			zFile = z;
 		} else {
 			utf8_printf(out, "ERROR: extra parameter: \"%s\".  Usage:\n", args[i].c_str());
-			showHelp(out, args[0].c_str());
+			PrintHelp(args[0].c_str());
 			return false;
 		}
 	}
@@ -3808,8 +3743,9 @@ static const MetadataCommand metadata_commands[] = {
     },
     {"echo", 2, ToggleEcho, "on|off", "Turn command echo on or off", 3, ""},
     {"edit", 0, nullptr, "", "Opens an external text editor to edit a query.", 0,
-     "Notes:\n\t*  The editor is read from the environment variables\n\tDUCKDB_EDITOR, EDITOR, VISUAL in-order\n\t* If "
-     "none of these are set, the default editor is vi\n* \\e can be used as an alias for .edit"},
+     "Notes:\n\t* The editor is read from the environment variables\n\t  DUCKDB_EDITOR, EDITOR, VISUAL in-order\n\t* "
+     "If "
+     "none of these are set, the default editor is vi\n\t* \\e can be used as an alias for .edit"},
 #ifdef HAVE_LINENOISE
     {"error", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for errors", 0, nullptr},
@@ -3819,23 +3755,22 @@ static const MetadataCommand metadata_commands[] = {
     {"excel", 0, SetOutputExcel, "", "Display the output of next command in spreadsheet", 0,
      "--bom\tPut a UTF8 byte-order mark on intermediate file"},
     {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0, ""},
-    {"fullschema", 0, nullptr, "", "", 0, ""},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0, ""},
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0, ""},
 #ifdef HAVE_LINENOISE
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
 #endif
-    {"highlight_colors", 0, SetHighlightColors, "[element] [color] ([bold])?", "Configure highlighting colors", 0, ""},
+    {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0,
      "Options:\n\t--ascii\tUse \\037 and \\036 as column and row separators\n\t--csv\tUse , and \\n as column and row "
      "separators\n\t--skip N\tSkip the first N rows of input\n\t-v\t\"Verbose\" - increase auxiliary "
-     "output\nNotes:\n\t*  If TABLE does not exist, it is created.  The first row of input\n\tdetermines the column "
-     "names.\n\t*  If neither --csv or --ascii are used, the input mode is derived\n\tfrom the \".mode\" output "
-     "mode\n\t*  If FILE begins with \"|\" then it is a command that generates the\n\tinput text."},
+     "output\nNotes:\n\t* If TABLE does not exist, it is created. The first row of input\n\t  determines the column "
+     "names.\n\t* If neither --csv or --ascii are used, the input mode is derived\n\t  from the \".mode\" output "
+     "mode\n\t* If FILE begins with \"|\" then it is a command that generates the\n\t  input text."},
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0,
-     "Notes:\n\t* If TABLE is specified, only show indexes for\n\ttables matching TABLE using the LIKE operator."},
+     "Notes:\n\t* If TABLE is specified, only show indexes for\n\t  tables matching TABLE using the LIKE operator."},
     {"indices", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
 #ifdef HAVE_LINENOISE
     {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
@@ -3843,21 +3778,21 @@ static const MetadataCommand metadata_commands[] = {
     {"keywordcode", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD_CODE>, "?CODE?",
      "DEPRECATED: Sets the syntax highlighting terminal code used for keywords", 0, nullptr},
 #endif
-    {"large_number_rendering", 2, SetLargeNumberRendering, "all|footer|off",
-     "Toggle readable rendering of large numbers (duckbox only)", 0, ""},
+    {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
+     "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
     {"maxrows", 0, SetMaxRows, "COUNT",
      "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
     {"maxwidth", 0, SetMaxWidth, "COUNT",
      "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0, ""},
     {"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0,
-     "MODE is one of:\n\tascii\tColumns/rows delimited by 0x1F and 0x1E\n\t* box\tTables using unicode box-drawing "
-     "characters\n\t* csv\tComma-separated values\n\t* column\tOutput in columns.\t(See .width)\n\t* duckbox\tTables "
-     "with extensive features\n\t* html\tHTML <table> code\n\t* insert\tSQL insert statements for TABLE\n\t* "
-     "json\tResults in a JSON array\n\t* jsonlines Results in a NDJSON\n\t* latex\tLaTeX tabular environment code\n\t* "
-     "line\tOne value per line\n\t* list\tValues delimited by \"|\"\n\t* markdown\tMarkdown table format\n\t* "
-     "quote\tEscape answers as for SQL\n\t* table\tASCII-art table\n\t* tabs\tTab-separated values\n\t* tcl\tTCL list "
-     "elements\n\t* trash\tNo output"},
+     "MODE is one of:\n\tascii\tColumns/rows delimited by 0x1F and 0x1E\n\tbox\tTables using unicode box-drawing "
+     "characters\n\tcsv\tComma-separated values\n\tcolumn\tOutput in columns. (See .width)\n\tduckbox\tTables "
+     "with extensive features\n\thtml\tHTML <table> code\n\tinsert\tSQL insert statements for TABLE\n\t"
+     "json\tResults in a JSON array\n\tjsonlines\tResults in a NDJSON\n\tlatex\tLaTeX tabular environment code\n\t"
+     "line\tOne value per line\n\tlist\tValues delimited by \"|\"\n\tmarkdown\tMarkdown table format\n\t"
+     "quote\tEscape answers as for SQL\n\ttable\tASCII-art table\n\ttabs\tTab-separated values\n\ttcl\tTCL list "
+     "elements\n\ttrash\tNo output"},
 #ifdef HAVE_LINENOISE
     {"multiline", 1, ToggleMultiLine, "", "Sets the render mode to multi-line", 0, ""},
 #endif
@@ -3885,7 +3820,6 @@ static const MetadataCommand metadata_commands[] = {
     {"render_errors", 2, ToggleErrorRendering, "on|off", "Toggle rendering of errors in the shell on/off", 0, ""},
 #endif
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0, ""},
-    {"restore", 0, nullptr, "", "", 3, ""},
     {"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3, ""},
     {"safe_mode", 0, EnableSafeMode, "", "enable safe-mode", 0, ""},
     {"separator", 0, SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
@@ -3900,7 +3834,6 @@ static const MetadataCommand metadata_commands[] = {
     {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2, ""},
     {"thousand_sep", 0, SetThousandSep, "SEP",
      "Sets the thousand separator used when rendering numbers. Only for duckbox mode.", 4, ""},
-    {"timeout", 0, nullptr, "", "", 5, ""},
     {"timer", 2, ToggleTimer, "on|off", "Turn SQL timer on or off", 0, ""},
     {"ui_command", 0, SetUICommand, "[command]", "Set the UI command", 0, ""},
     {"version", 1, ShowVersion, "", "Show the version", 0, ""},
@@ -3910,6 +3843,143 @@ static const MetadataCommand metadata_commands[] = {
     {"utf8", 1, SetUTF8Mode, "", "Enable experimental UTF-8 console output mode", 0, ""},
 #endif
     {nullptr, 0, nullptr, 0, nullptr}};
+
+bool ShouldPrintCommand(const MetadataCommand &command, const string &glob_pattern) {
+	if (!command.extra_description) {
+		return false;
+	}
+	if (StringUtil::Contains(command.description, "DEPRECATED")) {
+		return false;
+	}
+	// check if the command matches the pattern
+	if (glob_pattern.empty()) {
+		// no pattern - always matches
+		return true;
+	}
+	// explicit pattern provided - glob
+	return ShellState::StringGlob(glob_pattern.c_str(), command.command);
+}
+
+struct PrintCommandInfo {
+	string command_name;
+	string first_part;
+	string second_part;
+	HighlightElementType first_part_highlight = HighlightElementType::NONE;
+};
+
+idx_t ShellState::PrintHelp(const char *pattern) {
+	bool print_extended = false;
+	string glob_pattern;
+	if (pattern) {
+		// if a pattern is provided we always print extended info
+		print_extended = true;
+		if (StringUtil::Equals(pattern, "-a") || StringUtil::Equals(pattern, "-all") ||
+		    StringUtil::Equals(pattern, "--all")) {
+			// --all matches all commands
+			glob_pattern = string();
+		} else {
+			glob_pattern = StringUtil::Format("%s*", pattern);
+		}
+	}
+
+	constexpr idx_t MIN_SPACING = 4;
+	constexpr idx_t SPACING_PER_LAYER = 2;
+	vector<PrintCommandInfo> print_info_list;
+	// gather a list of all print statements
+	for (idx_t i = 0; metadata_commands[i].command; i++) {
+		auto &command = metadata_commands[i];
+		if (!ShouldPrintCommand(command, glob_pattern)) {
+			continue;
+		}
+		PrintCommandInfo print_info;
+		print_info.command_name = StringUtil::Format(".%s", command.command);
+		print_info.first_part += StringUtil::Format(" %s", command.usage);
+		print_info.second_part = command.description;
+		print_info.first_part_highlight = HighlightElementType::STRING_CONSTANT;
+		print_info_list.push_back(std::move(print_info));
+
+		if (print_extended) {
+			// process extended info
+			PrintCommandInfo current_command;
+			bool first_part = true;
+			bool after_newline = true;
+			for (auto c = command.extra_description; *c; c++) {
+				if (*c == '\n') {
+					// newline - flush the current command and reset
+					print_info_list.push_back(std::move(current_command));
+					current_command = PrintCommandInfo();
+					first_part = true;
+					after_newline = true;
+				} else if (*c == '\t') {
+					// tab
+					if (after_newline) {
+						// tab right after newline - add spaces
+						current_command.first_part += string(SPACING_PER_LAYER, ' ');
+					} else {
+						// tab not right after newline move to second part
+						if (!first_part) {
+							throw duckdb::InternalException(
+							    "Failed to parse extra description for command \"%s\" - only one tab (switch from "
+							    "first -> second part) was expected",
+							    command.command);
+						}
+						first_part = false;
+					}
+				} else {
+					if (after_newline) {
+						// add one more "layer" to commands
+						current_command.first_part += string(SPACING_PER_LAYER, ' ');
+						if (*c == '-') {
+							current_command.first_part_highlight = HighlightElementType::STRING_CONSTANT;
+						}
+					}
+					after_newline = false;
+					if (first_part) {
+						current_command.first_part += *c;
+					} else {
+						current_command.second_part += *c;
+					}
+				}
+			}
+			if (!current_command.first_part.empty()) {
+				// push final command
+				print_info_list.push_back(std::move(current_command));
+			}
+		}
+	}
+	// figure out alignment based on the total first part print size
+	idx_t max_lhs_size = 0;
+	for (auto &print_info : print_info_list) {
+		if (print_info.second_part.empty()) {
+			// only print info with two parts needs to influence padding
+			continue;
+		}
+		idx_t lhs_size = print_info.command_name.size() + print_info.first_part.size() + MIN_SPACING;
+		if (lhs_size > max_lhs_size) {
+			max_lhs_size = lhs_size;
+		}
+	}
+
+	// print
+	for (auto &print_info : print_info_list) {
+		idx_t lhs_size = print_info.command_name.size() + print_info.first_part.size();
+		string spaces;
+		if (!print_info.second_part.empty()) {
+			// only add padding for lines that have extra info
+			spaces = string(max_lhs_size - lhs_size, ' ');
+		}
+		ShellHighlight highlighter(*this);
+		if (!print_info.command_name.empty()) {
+			highlighter.PrintText(print_info.command_name, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
+		}
+		highlighter.PrintText(print_info.first_part, PrintOutput::STDOUT, print_info.first_part_highlight);
+		utf8_printf(out, "%s%s\n", spaces.c_str(), print_info.second_part.c_str());
+	}
+	if (!print_extended) {
+		utf8_printf(out, "\nRun .help --all for extended information\n");
+	}
+	return print_info_list.size();
+}
 
 /*
 ** If an input line begins with "." then invoke this routine to
