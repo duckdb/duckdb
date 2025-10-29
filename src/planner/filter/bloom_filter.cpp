@@ -7,7 +7,6 @@ static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
 static constexpr idx_t MIN_NUM_BITS_PER_KEY = 12;
 static constexpr idx_t MIN_NUM_BITS = 512;
 static constexpr idx_t LOG_SECTOR_SIZE = 6; // a sector is 64 bits, log2(64) = 6
-static constexpr idx_t SIMD_BATCH_SIZE = 128;
 static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
 static constexpr idx_t N_BITS = 4;                      // the number of bits to set per hash
 
@@ -32,40 +31,24 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	status.store(BloomFilterStatus::ACTIVE);
 }
 
-inline uint64_t GetMask(const uint8_t *__restrict shifts_8, const idx_t i) {
+inline uint64_t GetMask(const hash_t hash) {
+
+	const uint64_t shifts = hash & SHIFT_MASK;
+	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
+
 	uint64_t mask = 0;
-	const uint64_t shift_8_idx = 8 * i;
 
 	for (idx_t bit_idx = 8 - N_BITS; bit_idx < 8; bit_idx++) {
-		const uint8_t bit_pos = shifts_8[shift_8_idx + bit_idx];
+		const uint8_t bit_pos = shifts_8[ bit_idx];
 		mask |= (1ULL << bit_pos);
 	}
 
 	return mask;
 }
 
-static void InsertBlock(const uint64_t *__restrict keys, uint64_t *__restrict bf, const uint64_t bitmask) {
-	uint64_t shifts[SIMD_BATCH_SIZE];
-	const uint8_t *shifts_8 = reinterpret_cast<uint8_t *>(shifts);
-	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
-		shifts[i] = keys[i] & SHIFT_MASK;
-	}
-
-	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
-		const uint64_t bf_offset = keys[i] & bitmask;
-		const uint64_t mask = GetMask(shifts_8, i);
-		std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&bf[bf_offset]);
-		slot.fetch_or(mask, std::memory_order_relaxed);
-	}
-}
 
 void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
-	while (count >= SIMD_BATCH_SIZE) {
-		InsertBlock(hashes, bf, bitmask);
-		hashes += SIMD_BATCH_SIZE;
-		count -= SIMD_BATCH_SIZE;
-	}
 	for (idx_t i = 0; i < count; i++) {
 		InsertOne(hashes[i]);
 	}
@@ -87,22 +70,16 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_
 }
 
 inline void BloomFilter::InsertOne(const hash_t hash) const {
-	const uint64_t shifts = hash & SHIFT_MASK;
-	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
-
 	const uint64_t bf_offset = hash & bitmask;
-	const uint64_t mask = GetMask(shifts_8, 0);
+	const uint64_t mask = GetMask(hash);
 	std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&bf[bf_offset]);
 
 	slot.fetch_or(mask, std::memory_order_relaxed);
 }
 
-inline bool BloomFilter::LookupOne(uint64_t hash) const {
-	const uint64_t shifts = hash & SHIFT_MASK;
-	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
-
+inline bool BloomFilter::LookupOne(const uint64_t hash) const {
 	const uint64_t bf_offset = hash & bitmask;
-	const uint64_t mask = GetMask(shifts_8, 0);
+	const uint64_t mask = GetMask(hash);
 
 	return (bf[bf_offset] & mask) == mask;
 }
