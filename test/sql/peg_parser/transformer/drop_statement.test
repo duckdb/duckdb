@@ -12,3 +12,19 @@ set allow_parser_override_extension=strict_when_supported;
 
 statement ok
 DROP TABLE integers;
+
+statement error
+DROP SCHEMA s1;
+----
+Catalog Error: Schema with name s1 does not exist!
+
+statement error
+DROP INDEX test_index;
+----
+Catalog Error: Index with name test_index does not exist!
+
+statement ok
+DROP MACRO plus1;
+
+statement ok
+DROP SEQUENCE temp.t1;

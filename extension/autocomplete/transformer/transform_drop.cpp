@@ -88,8 +88,8 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransfor
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto schema = transformer.Transform<QualifiedName>(schema_list[0]);
-	info->catalog = schema.catalog;
-	info->schema = schema.schema;
+	info->schema = schema.catalog;
+	info->name = schema.schema;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SCHEMA_ENTRY;
 	result->info = std::move(info);
@@ -132,7 +132,7 @@ QualifiedName PEGTransformerFactory::TransformQualifiedIndexName(PEGTransformer 
 	result.schema = INVALID_SCHEMA;
 	transformer.TransformOptional<string>(list_pr, 0, result.catalog);
 	transformer.TransformOptional<string>(list_pr, 1, result.schema);
-	result.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
+	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
 	return result;
 }
 
