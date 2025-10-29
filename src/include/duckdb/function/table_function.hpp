@@ -349,24 +349,6 @@ public:
 	TableFunction(const vector<LogicalType> &arguments, std::nullptr_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 
-	bool HasSimpleScan() const {
-		return function;
-	}
-	SourceResultType SimpleScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) const {
-		data.async_result = AsyncResultType::IMPLICIT;
-		function(context, data, output);
-		AsyncResultType table_res = data.async_result.GetResultType();
-		SourceResultType source_res;
-		if (ExtractSourceResultType(table_res, source_res)) {
-			return source_res;
-		}
-		// data.async_result is IMPLICIT, so implicit handling:
-		if (output.size() > 0) {
-			return SourceResultType::HAVE_MORE_OUTPUT;
-		}
-		return SourceResultType::FINISHED;
-	}
-
 	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.

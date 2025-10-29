@@ -101,28 +101,35 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
 
-	if (function.HasSimpleScan()) {
-		auto res = function.SimpleScan(context.client, data, chunk);
+	if (function.function) {
+		data.async_result = AsyncResultType::IMPLICIT;
+		function.function(context.client, data, chunk);
 
-		if (res == SourceResultType::BLOCKED) {
+		switch (data.async_result.GetResultType()) {
+		case AsyncResultType::BLOCKED: {
 			D_ASSERT(data.async_result.HasTasks());
 			auto guard = g_state.Lock();
 			if (g_state.CanBlock(guard)) {
 				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
 				return SourceResultType::BLOCKED;
-			} else {
-				return SourceResultType::FINISHED;
 			}
+			return SourceResultType::FINISHED;
 		}
-
-		auto expected_res = chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
-
-		if (res != expected_res) {
-			throw NotImplementedException(
-			    "Currently this differs from the reference implementation for `function_ext`");
+		case AsyncResultType::IMPLICIT:
+			if (chunk.size() > 0) {
+				return SourceResultType::HAVE_MORE_OUTPUT;
+			}
+			return SourceResultType::FINISHED;
+		case AsyncResultType::FINISHED:
+			return SourceResultType::FINISHED;
+		case AsyncResultType::HAVE_MORE_OUTPUT:
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		default:
+			throw InternalException(
+			    "PhysicalTableScan::GetData call of function.function returned unexpected return '%'",
+			    EnumUtil::ToChars(data.async_result.GetResultType()));
 		}
-
-		return res;
+		throw InternalException("PhysicalTableScan::GetData hasn't handled a function.function return");
 	}
 
 	if (g_state.in_out_final) {
@@ -290,7 +297,7 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 }
 
 bool PhysicalTableScan::ParallelSource() const {
-	if (!function.HasSimpleScan()) {
+	if (!function.function) {
 		// table in-out functions cannot be executed in parallel as part of a PhysicalTableScan
 		// since they have only a single input row
 		return false;

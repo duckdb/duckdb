@@ -54,7 +54,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 		}
 		if (function.in_out_function) {
 			has_in_out_function = true;
-		} else if (function.HasSimpleScan() || function.bind_replace || function.bind_operator) {
+		} else if (function.function || function.bind_replace || function.bind_operator) {
 			has_standard_table_function = true;
 		} else {
 			throw InternalException("Function \"%s\" has neither in_out_function nor function defined",
