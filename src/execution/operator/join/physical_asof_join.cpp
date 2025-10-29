@@ -323,25 +323,113 @@ public:
 
 	AsOfHashGroup(const PhysicalAsOfJoin &op, HashGroupPtr &lhs_data, HashGroupPtr &rhs_data, const idx_t hash_group);
 
-	bool IsRightOuter() const {
+	//! IS this a right join (do we have a RIGHT stage?)
+	inline bool IsRightOuter() const {
 		return right_outer.Enabled();
 	}
+
+	//! The processing stage for this group
+	AsOfJoinSourceStage GetStage() const {
+		return stage;
+	}
+	//! The total number of tasks we will execute per thread for this stage
+	idx_t GetTaskCount(AsOfJoinSourceStage task_stage) const;
+	//! try to move to the next stage
+	bool TryPrepareNextStage();
+	//! Try to get another task for this group
+	bool TryNextTask(AsOfSourceTask &task);
+
 	//! The parent operator
 	const PhysicalAsOfJoin &op;
+	//! The group number
+	const idx_t group_idx;
 	//! The left hash partition data
 	HashGroupPtr left_group;
 	//! The right hash partition data
 	HashGroupPtr right_group;
 	//! The right outer join markers
 	OuterJoinMarker right_outer;
+	// The processing stage for this group
+	AsOfJoinSourceStage stage;
+	//! The next task to process
+	idx_t next_task = 0;
+	//! Count of inner tasks completed
+	std::atomic<idx_t> inners;
+	//! Count of outer tasks completed
+	std::atomic<idx_t> outers;
 };
 
 AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, HashGroupPtr &left_group_p, HashGroupPtr &right_group_p,
                              const idx_t hash_group)
-    : op(op), left_group(std::move(left_group_p)), right_group(std::move(right_group_p)),
-      right_outer(IsRightOuterJoin(op.join_type)) {
+    : op(op), group_idx(hash_group), left_group(std::move(left_group_p)), right_group(std::move(right_group_p)),
+      right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INNER), inners(0), outers(0) {
 	right_outer.Initialize(right_group ? right_group->Count() : 0);
 };
+
+idx_t AsOfHashGroup::GetTaskCount(AsOfJoinSourceStage task_stage) const {
+	switch (task_stage) {
+	case AsOfJoinSourceStage::INNER:
+		return (left_group && left_group->Count()) ? 1 : 0;
+	case AsOfJoinSourceStage::RIGHT:
+		return (IsRightOuter() && right_group && right_group->Count()) ? 1 : 0;
+	default:
+		break;
+	}
+	return 0;
+}
+
+bool AsOfHashGroup::TryPrepareNextStage() {
+	const auto task_count = GetTaskCount(stage);
+	switch (stage) {
+	case AsOfJoinSourceStage::INNER:
+		if (inners < task_count) {
+			return false;
+		}
+		stage = IsRightOuter() ? AsOfJoinSourceStage::RIGHT : AsOfJoinSourceStage::DONE;
+		break;
+	case AsOfJoinSourceStage::RIGHT:
+		if (outers < task_count) {
+			break;
+		}
+		stage = AsOfJoinSourceStage::DONE;
+		break;
+	case AsOfJoinSourceStage::DONE:
+		break;
+	}
+
+	next_task = 0;
+
+	return true;
+}
+
+bool AsOfHashGroup::TryNextTask(AsOfSourceTask &task) {
+	task.group_idx = group_idx;
+	task.stage = GetStage();
+	task.begin_idx = 0;
+	task.end_idx = 0;
+
+	if (next_task >= GetTaskCount(task.stage)) {
+		return false;
+	}
+
+	++next_task;
+
+	switch (task.stage) {
+	case AsOfJoinSourceStage::INNER:
+		if (left_group) {
+			task.end_idx = left_group->key_data->ChunkCount();
+		}
+		return true;
+	case AsOfJoinSourceStage::RIGHT:
+		if (right_group) {
+			task.end_idx = right_group->key_data->ChunkCount();
+		}
+		return true;
+	default:
+		break;
+	}
+	return true;
+}
 
 class AsOfLocalSourceState;
 
@@ -760,6 +848,11 @@ void AsOfProbeBuffer::EndLeftScan() {
 	if (left_task.stage != AsOfJoinSourceStage::INNER) {
 		return;
 	}
+	left_task.stage = AsOfJoinSourceStage::DONE;
+
+	D_ASSERT(asof_hash_group);
+	asof_hash_group->inners++;
+	asof_hash_group->TryPrepareNextStage();
 
 	right_group = nullptr;
 	right_itr.reset();
@@ -984,10 +1077,12 @@ public:
 
 	//! Task management
 	bool TaskFinished() const {
-		if (hash_group) {
-			return !scanner.get();
-		} else {
+		if (right_task.stage == AsOfJoinSourceStage::RIGHT) {
+			return (right_task.begin_idx >= right_task.end_idx);
+		} else if (probe_buffer.left_task.stage == AsOfJoinSourceStage::INNER) {
 			return !probe_buffer.HasMoreData();
+		} else {
+			return true;
 		}
 	}
 
@@ -1002,12 +1097,8 @@ public:
 		}
 	}
 
-	idx_t BeginRightScan(const AsOfSourceTask &task);
-	void EndRightScan() {
-		if (right_task.stage == AsOfJoinSourceStage::RIGHT) {
-			++gsource.flushed_right;
-		}
-	}
+	void BeginRightScan(const AsOfSourceTask &task);
+	void EndRightScan();
 
 	AsOfGlobalSourceState &gsource;
 	ExecutionContext &context;
@@ -1035,28 +1126,39 @@ AsOfLocalSourceState::AsOfLocalSourceState(ExecutionContext &context, AsOfGlobal
 	rhs_chunk.Initialize(context.client, op.children[1].get().GetTypes());
 }
 
-idx_t AsOfLocalSourceState::BeginRightScan(const AsOfSourceTask &task) {
+void AsOfLocalSourceState::BeginRightScan(const AsOfSourceTask &task) {
 	right_task = task;
 	const auto hash_bin = right_task.group_idx;
 
 	auto &asof_groups = gsource.asof_groups;
 	if (hash_bin >= asof_groups.size()) {
-		return 0;
+		return;
 	}
 
 	hash_group = std::move(asof_groups[hash_bin]->right_group);
 	if (!hash_group || !hash_group->Count()) {
-		return 0;
+		return;
 	}
 	auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
 	scanner = make_uniq<AsOfPayloadScanner>(*hash_group, *gsink.hashed_sorts[1]);
 	scanner->SeekBlock(right_task.begin_idx);
 
 	rhs_matches = asof_groups[hash_bin]->right_outer.GetMatches();
-
-	return scanner->Remaining();
 }
+void AsOfLocalSourceState::EndRightScan() {
+	if (right_task.stage != AsOfJoinSourceStage::RIGHT) {
+		return;
+	}
+	right_task.stage = AsOfJoinSourceStage::DONE;
 
+	auto &asof_groups = gsource.asof_groups;
+	const auto hash_bin = right_task.group_idx;
+	const auto &asof_hash_group = asof_groups[hash_bin];
+	asof_hash_group->outers++;
+	asof_hash_group->TryPrepareNextStage();
+
+	++gsource.flushed_right;
+}
 unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
 	auto &gsource = gstate.Cast<AsOfGlobalSourceState>();
@@ -1091,17 +1193,10 @@ bool AsOfGlobalSourceState::TryNextTask(AsOfLocalSourceState &lsource) {
 	case AsOfJoinSourceStage::INNER:
 		lsource.probe_buffer.EndLeftScan();
 		if (next_left < asof_groups.size()) {
-			//	More to flush
 			AsOfSourceTask left_task;
-			left_task.stage = AsOfJoinSourceStage::INNER;
-			left_task.group_idx = next_left++;
-			if (left_task.group_idx < asof_groups.size()) {
-				auto &left_group = asof_groups[left_task.group_idx]->left_group;
-				if (left_group) {
-					left_task.end_idx = left_group->key_data->ChunkCount();
-				}
-			}
+			asof_groups[next_left]->TryNextTask(left_task);
 			lsource.probe_buffer.BeginLeftScan(left_task);
+			++next_left;
 			return true;
 		}
 		break;
@@ -1109,15 +1204,9 @@ bool AsOfGlobalSourceState::TryNextTask(AsOfLocalSourceState &lsource) {
 		lsource.EndRightScan();
 		if (next_right < asof_groups.size()) {
 			AsOfSourceTask right_task;
-			right_task.stage = AsOfJoinSourceStage::RIGHT;
-			right_task.group_idx = next_right++;
-			if (right_task.group_idx < asof_groups.size()) {
-				auto &right_group = asof_groups[right_task.group_idx]->right_group;
-				if (right_group) {
-					right_task.end_idx = right_group->key_data->ChunkCount();
-				}
-			}
+			asof_groups[next_right]->TryNextTask(right_task);
 			lsource.BeginRightScan(right_task);
+			++next_right;
 			return true;
 		}
 		break;
