@@ -3501,7 +3501,6 @@ MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &arg
 #endif
 
 static const MetadataCommand metadata_commands[] = {
-    {"backup", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3, ""},
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
     {"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0, ""},
@@ -3617,7 +3616,6 @@ static const MetadataCommand metadata_commands[] = {
     {"render_errors", 2, ToggleErrorRendering, "on|off", "Toggle rendering of errors in the shell on/off", 0, ""},
 #endif
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0, ""},
-    {"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3, ""},
     {"safe_mode", 0, EnableSafeMode, "", "enable safe-mode", 0, ""},
     {"separator", 0, SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0,
@@ -4295,7 +4293,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			bool found_match = true;
 			idx_t line_pos;
 			zBuf[0] = '.';
-			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 1 < sizeof(zBuf);
+			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 2 < sizeof(zBuf);
 			     line_pos++) {
 				zBuf[line_pos + 1] = line[line_pos];
 				if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
