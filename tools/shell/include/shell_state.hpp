@@ -200,6 +200,7 @@ public:
 	void ClearTempFile();
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(const string &zLine);
+	idx_t PrintHelp(const char *zPattern);
 
 	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();
