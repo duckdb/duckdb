@@ -91,26 +91,20 @@ private:
 
 	bool filters_null_values;
 	string key_column_name;
-	LogicalType key_type;
 
 public:
 	static constexpr auto TYPE = TableFilterType::BLOOM_FILTER;
 
 public:
-	explicit BFTableFilter(BloomFilter &filter_p, const bool filters_null_values_p, const string &key_column_name_p,
-	                       const LogicalType &key_type_p)
+	explicit BFTableFilter(BloomFilter &filter_p, const bool filters_null_values_p, const string &key_column_name_p)
 	    : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p),
-	      key_column_name(key_column_name_p), key_type(key_type_p) {
+	      key_column_name(key_column_name_p) {
 	}
 
 	//! If the join condition is e.g. "A = B", the bf will filter null values.
 	//! If the condition is "A is B" the filter will let nulls pass
 	bool FiltersNullValues() const {
 		return filters_null_values;
-	}
-
-	LogicalType GetKeyType() const {
-		return key_type;
 	}
 
 	string ToString(const string &column_name) const override;
