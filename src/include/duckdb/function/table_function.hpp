@@ -167,6 +167,7 @@ public:
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
 	AsyncResult async_result {};
+	AsyncResultsExecutionMode results_execution_mode {AsyncResultsExecutionMode::SYNCRONOUS};
 };
 
 struct TableFunctionPartitionInput {

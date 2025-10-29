@@ -89,6 +89,22 @@ void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &execu
 	}
 }
 
+void AsyncResult::ExecuteTasksSyncronously() {
+	D_ASSERT(result_type == AsyncResultType::BLOCKED);
+
+	if (async_tasks.empty()) {
+		throw InternalException("AsyncResultType with no task found");
+	}
+
+	for (auto &async_task : async_tasks) {
+		async_task->Execute();
+	}
+
+	async_tasks.clear();
+
+	result_type = AsyncResultType::HAVE_MORE_OUTPUT;
+}
+
 AsyncResultType AsyncResult::GetAsyncResultType(SourceResultType s) {
 	switch (s) {
 	case SourceResultType::HAVE_MORE_OUTPUT:

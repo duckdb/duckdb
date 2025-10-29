@@ -49,7 +49,7 @@ enum class AsyncResultType : uint8_t {
 	          // HAVE_MORE_OUTPUT depending on output_chunk.size())
 	HAVE_MORE_OUTPUT, // current result is not completed, finished (eg: in the context of TableFunctions, function
 	                  // accept more iterations and might produce further results)
-	FINISHED, // current result is completed, no subsequent calls on the same state should be attempted
+	FINISHED,         // current result is completed, no subsequent calls on the same state should be attempted
 	BLOCKED // current result is blocked, no subsequent calls on the same state should be attempted (eg: in the context
 	        // of AsyncResult, BLOCKED will be associated with a vector of AsyncTasks to be scheduled)
 };

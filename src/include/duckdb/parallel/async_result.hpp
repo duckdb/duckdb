@@ -19,6 +19,11 @@ class InterruptState;
 class TaskExecutor;
 class Executor;
 
+enum class AsyncResultsExecutionMode : uint8_t {
+	SYNCRONOUS,   // BLOCKED should not bubble up, and they should be executed syncronously
+	TASK_EXECUTOR // BLOCKED is allowed
+};
+
 class AsyncTask {
 public:
 	virtual ~AsyncTask() {};
@@ -37,6 +42,7 @@ public:
 	AsyncResult &operator=(AsyncResultType t);
 	AsyncResult &operator=(AsyncResult &&) noexcept;
 	void ScheduleTasks(InterruptState &interrupt_state, Executor &executor);
+	void ExecuteTasksSyncronously();
 	static AsyncResultType GetAsyncResultType(SourceResultType s);
 
 	bool HasTasks() const {

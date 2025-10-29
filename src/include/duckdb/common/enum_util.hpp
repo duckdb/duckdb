@@ -80,6 +80,8 @@ enum class ArrowVariableSizeType : uint8_t;
 
 enum class AsyncResultType : uint8_t;
 
+enum class AsyncResultsExecutionMode : uint8_t;
+
 enum class BinderType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -526,6 +528,9 @@ const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value
 
 template<>
 const char* EnumUtil::ToChars<AsyncResultType>(AsyncResultType value);
+
+template<>
+const char* EnumUtil::ToChars<AsyncResultsExecutionMode>(AsyncResultsExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<BinderType>(BinderType value);
@@ -1160,6 +1165,9 @@ ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *va
 
 template<>
 AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value);
+
+template<>
+AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const char *value);
 
 template<>
 BinderType EnumUtil::FromString<BinderType>(const char *value);

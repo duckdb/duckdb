@@ -310,6 +310,7 @@ AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState 
 		throw InternalException("DuckDBReader works only with simple table functions");
 	} else {
 		input.async_result = AsyncResultType::IMPLICIT;
+		input.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
 		scan_function.function(context, input, chunk);
 
 		switch (input.async_result.GetResultType()) {

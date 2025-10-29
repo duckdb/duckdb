@@ -605,8 +605,21 @@ public:
 			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
 			if (res.GetResultType() == AsyncResultType::BLOCKED) {
-				data_p.async_result = std::move(res);
-				return;
+				if (scan_chunk.size() != 0) {
+					throw InternalException("Unexpected behaviour from Scan, no rows should be returned");
+				}
+				switch (data_p.results_execution_mode) {
+				case AsyncResultsExecutionMode::TASK_EXECUTOR:
+					data_p.async_result = std::move(res);
+					return;
+				case AsyncResultsExecutionMode::SYNCRONOUS:
+					res.ExecuteTasksSyncronously();
+					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
+						throw InternalException("Unexpected behaviour from ExecuteTasksSyncronously");
+					}
+					// scan_chunk.size() is 0, see check above, and result is HAVE_MORE_OUTPUT, we need to loop again
+					continue;
+				}
 			}
 
 			output.SetCardinality(scan_chunk.size());

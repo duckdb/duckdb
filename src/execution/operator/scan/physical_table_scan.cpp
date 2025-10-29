@@ -103,6 +103,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 	if (function.function) {
 		data.async_result = AsyncResultType::IMPLICIT;
+		data.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
 		function.function(context.client, data, chunk);
 
 		switch (data.async_result.GetResultType()) {

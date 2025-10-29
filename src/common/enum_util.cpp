@@ -130,6 +130,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
@@ -650,6 +651,24 @@ const char* EnumUtil::ToChars<AsyncResultType>(AsyncResultType value) {
 template<>
 AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value) {
 	return static_cast<AsyncResultType>(StringUtil::StringToEnum(GetAsyncResultTypeValues(), 5, "AsyncResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAsyncResultsExecutionModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AsyncResultsExecutionMode::SYNCRONOUS), "SYNCRONOUS" },
+		{ static_cast<uint32_t>(AsyncResultsExecutionMode::TASK_EXECUTOR), "TASK_EXECUTOR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AsyncResultsExecutionMode>(AsyncResultsExecutionMode value) {
+	return StringUtil::EnumToString(GetAsyncResultsExecutionModeValues(), 2, "AsyncResultsExecutionMode", static_cast<uint32_t>(value));
+}
+
+template<>
+AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const char *value) {
+	return static_cast<AsyncResultsExecutionMode>(StringUtil::StringToEnum(GetAsyncResultsExecutionModeValues(), 2, "AsyncResultsExecutionMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBinderTypeValues() {
