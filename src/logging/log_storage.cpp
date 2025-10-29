@@ -599,7 +599,6 @@ BufferingLogStorage::~BufferingLogStorage() {
 }
 
 static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggingContext &context, idx_t &col) {
-
 	auto size = chunk.size();
 
 	auto context_id_data = FlatVector::GetData<idx_t>(chunk.data[col++]);

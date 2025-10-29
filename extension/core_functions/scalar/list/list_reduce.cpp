@@ -175,7 +175,6 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 
 unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
                                         vector<unique_ptr<Expression>> &arguments) {
-
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {

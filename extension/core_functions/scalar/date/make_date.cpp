@@ -65,7 +65,6 @@ void ExecuteStructMakeDate(DataChunk &input, ExpressionState &state, Vector &res
 struct MakeTimeOperator {
 	template <typename HH, typename MM, typename SS, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(HH hh, MM mm, SS ss) {
-
 		auto hh_32 = Cast::Operation<HH, int32_t>(hh);
 		auto mm_32 = Cast::Operation<MM, int32_t>(mm);
 		// Have to check this separately because safe casting of DOUBLE => INT32 can round.

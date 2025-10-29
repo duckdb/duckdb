@@ -3,7 +3,6 @@
 namespace duckdb {
 namespace {
 struct CFileSystem {
-
 	FileSystem &fs;
 	ErrorData error_data;
 

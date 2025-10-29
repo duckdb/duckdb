@@ -1,8 +1,6 @@
 #include "shell_renderer.hpp"
 
 #include "shell_state.hpp"
-#include "duckdb_shell_wrapper.h"
-#include "sqlite3.h"
 #include <stdexcept>
 #include <cstring>
 
@@ -220,7 +218,7 @@ public:
 	void RenderHeader(ColumnarResult &result) override {
 		state.Print("\\begin{tabular}{|");
 		for (idx_t i = 0; i < result.column_count; i++) {
-			if (state.ColumnTypeIsInteger(result.type_names[i])) {
+			if (state.ColumnTypeIsInteger(result.type_names[i].c_str())) {
 				state.Print("r");
 			} else {
 				state.Print("l");
@@ -285,6 +283,10 @@ void RowRenderer::RenderHeader(RowResult &result) {
 void RowRenderer::RenderFooter(RowResult &result) {
 }
 
+string RowRenderer::NullValue() {
+	return state.nullValue;
+}
+
 class ModeLineRenderer : public RowRenderer {
 public:
 	explicit ModeLineRenderer(ShellState &state) : RowRenderer(state) {
@@ -296,7 +298,7 @@ public:
 			// determine the render width by going over the column names
 			header_width = 5;
 			for (idx_t i = 0; i < col_names.size(); i++) {
-				auto len = ShellState::StringLength(col_names[i] ? col_names[i] : "");
+				auto len = col_names[i].size();
 				if (len > header_width) {
 					header_width = len;
 				}
@@ -313,9 +315,9 @@ public:
 		auto &data = result.data;
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < data.size(); i++) {
-			state.PrintPadded(col_names[i], header_width);
+			state.PrintPadded(col_names[i].c_str(), header_width);
 			state.Print(" = ");
-			state.PrintValue(data[i]);
+			state.Print(data[i].c_str());
 			state.Print(state.rowSeparator);
 		}
 	}
@@ -333,15 +335,15 @@ public:
 		if (data.size() != 2) {
 			return;
 		}
-		if (strcmp(data[0], "logical_plan") == 0 || strcmp(data[0], "logical_opt") == 0 ||
-		    strcmp(data[0], "physical_plan") == 0) {
+		if (duckdb::StringUtil::Equals(data[0], "logical_plan") || duckdb::StringUtil::Equals(data[0], "logical_opt") ||
+		    duckdb::StringUtil::Equals(data[0], "physical_plan")) {
 			state.Print("\n┌─────────────────────────────┐\n");
 			state.Print("│┌───────────────────────────┐│\n");
-			if (strcmp(data[0], "logical_plan") == 0) {
+			if (duckdb::StringUtil::Equals(data[0], "logical_plan")) {
 				state.Print("││ Unoptimized Logical Plan  ││\n");
-			} else if (strcmp(data[0], "logical_opt") == 0) {
+			} else if (duckdb::StringUtil::Equals(data[0], "logical_opt")) {
 				state.Print("││  Optimized Logical Plan   ││\n");
-			} else if (strcmp(data[0], "physical_plan") == 0) {
+			} else if (duckdb::StringUtil::Equals(data[0], "physical_plan")) {
 				state.Print("││       Physical Plan       ││\n");
 			}
 			state.Print("│└───────────────────────────┘│\n");
@@ -376,7 +378,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.PrintValue(data[i]);
+			state.Print(data[i]);
 		}
 		state.Print(row_sep);
 	}
@@ -406,7 +408,7 @@ public:
 		state.Print("<tr>");
 		for (idx_t i = 0; i < data.size(); i++) {
 			state.Print("<td>");
-			output_html_string(data[i] ? data[i] : state.nullValue.c_str());
+			output_html_string(data[i]);
 			state.Print("</td>\n");
 		}
 		state.Print("</tr>\n");
@@ -416,12 +418,10 @@ public:
 	** Output the given string with characters that are special to
 	** HTML escaped.
 	*/
-	void output_html_string(const char *z) {
-		if (z == 0)
-			z = "";
+	void output_html_string(const string &z) {
 		string escaped;
-		for (; *z; z++) {
-			switch (*z) {
+		for (auto c : z) {
+			switch (c) {
 			case '<':
 				escaped += "&lt;";
 				break;
@@ -438,7 +438,7 @@ public:
 				escaped += "&#39;";
 				break;
 			default:
-				escaped += *z;
+				escaped += c;
 			}
 		}
 		state.Print(escaped);
@@ -459,7 +459,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.OutputCString(col_names[i] ? col_names[i] : "");
+			state.OutputCString(col_names[i].c_str());
 		}
 		state.Print(row_sep);
 	}
@@ -470,7 +470,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.OutputCString(data[i] ? data[i] : state.nullValue.c_str());
+			state.OutputCString(data[i].c_str());
 		}
 		state.Print(row_sep);
 	}
@@ -492,7 +492,7 @@ public:
 		}
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < col_names.size(); i++) {
-			state.OutputCSV(col_names[i] ? col_names[i] : "", i < col_names.size() - 1);
+			state.OutputCSV(col_names[i].c_str(), i < col_names.size() - 1);
 		}
 		state.Print(row_sep);
 	}
@@ -500,7 +500,7 @@ public:
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		for (idx_t i = 0; i < data.size(); i++) {
-			state.OutputCSV(data[i], i < data.size() - 1);
+			state.OutputCSV(data[i].c_str(), i < data.size() - 1);
 		}
 		state.Print(row_sep);
 	}
@@ -522,7 +522,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.Print(col_names[i] ? col_names[i] : "");
+			state.Print(col_names[i]);
 		}
 		state.Print(row_sep);
 	}
@@ -533,7 +533,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.PrintValue(data[i]);
+			state.Print(data[i]);
 		}
 		state.Print(row_sep);
 	}
@@ -553,7 +553,7 @@ public:
 			if (i > 0) {
 				state.Print(col_sep);
 			}
-			state.OutputQuotedString(col_names[i]);
+			state.OutputQuotedString(col_names[i].c_str());
 		}
 		state.Print(row_sep);
 	}
@@ -561,22 +561,22 @@ public:
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		auto &types = result.types;
+		auto &is_null = result.is_null;
 		for (idx_t i = 0; i < data.size(); i++) {
-			if (i > 0)
+			if (i > 0) {
 				state.Print(col_sep);
-			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
-				state.Print("NULL");
-			} else if (!types.empty() && (types[i] == SQLITE_TEXT || types[i] == SQLITE_BLOB)) {
-				state.OutputQuotedString(data[i]);
-			} else if (!types.empty() && (types[i] == SQLITE_INTEGER || types[i] == SQLITE_FLOAT)) {
-				state.Print(data[i]);
-			} else if (state.IsNumber(data[i], 0)) {
+			}
+			if (types[i].IsNumeric() || is_null[i]) {
 				state.Print(data[i]);
 			} else {
-				state.OutputQuotedString(data[i]);
+				state.OutputQuotedString(data[i].c_str());
 			}
 		}
 		state.Print(row_sep);
+	}
+
+	string NullValue() override {
+		return "NULL";
 	}
 };
 
@@ -607,34 +607,32 @@ public:
 		auto &data = result.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
+		auto &is_null = result.is_null;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
 				state.Print(",");
 			}
-			state.OutputJSONString(col_names[i], -1);
+			state.OutputJSONString(col_names[i].c_str(), -1);
 			state.Print(":");
-			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
-				state.Print("null");
-			} else if (!types.empty() && types[i] == SQLITE_FLOAT) {
-				if (strcmp(data[i], "inf") == 0) {
+			if (is_null[i]) {
+				state.Print(data[i]);
+			} else if (types[i].id() == duckdb::LogicalTypeId::FLOAT ||
+			           types[i].id() == duckdb::LogicalTypeId::DOUBLE) {
+				if (duckdb::StringUtil::Equals(data[i], "inf")) {
 					state.Print("1e999");
-				} else if (strcmp(data[i], "-inf") == 0) {
+				} else if (duckdb::StringUtil::Equals(data[i], "-inf")) {
 					state.Print("-1e999");
-				} else if (strcmp(data[i], "nan") == 0) {
+				} else if (duckdb::StringUtil::Equals(data[i], "nan")) {
 					state.Print("null");
-				} else if (strcmp(data[i], "-nan") == 0) {
+				} else if (duckdb::StringUtil::Equals(data[i], "-nan")) {
 					state.Print("null");
 				} else {
 					state.Print(data[i]);
 				}
-			} else if (!types.empty() && types[i] == SQLITE_BLOB && result.pStmt) {
-				const void *pBlob = sqlite3_column_blob(result.pStmt, i);
-				int nBlob = sqlite3_column_bytes(result.pStmt, i);
-				state.OutputJSONString((const char *)pBlob, nBlob);
-			} else if (!types.empty() && types[i] == SQLITE_TEXT) {
-				state.OutputJSONString(data[i], -1);
-			} else {
+			} else if (types[i].IsNumeric() || types[i].IsJSONType()) {
 				state.Print(data[i]);
+			} else {
+				state.OutputJSONString(data[i].c_str(), data[i].size());
 			}
 		}
 		state.Print("}");
@@ -646,6 +644,10 @@ public:
 		} else {
 			state.Print("\n");
 		}
+	}
+
+	string NullValue() override {
+		return "null";
 	}
 
 	bool json_array;
@@ -660,6 +662,7 @@ public:
 		auto &data = result.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
+		auto &is_null = result.is_null;
 
 		state.Print("INSERT INTO ");
 		state.Print(state.zDestTable);
@@ -669,20 +672,20 @@ public:
 				if (i > 0) {
 					state.Print(",");
 				}
-				state.PrintOptionallyQuotedIdentifier(col_names[i]);
+				state.PrintOptionallyQuotedIdentifier(col_names[i].c_str());
 			}
 			state.Print(")");
 		}
 		for (idx_t i = 0; i < data.size(); i++) {
 			state.Print(i > 0 ? "," : " VALUES(");
-			if ((data[i] == 0) || (!types.empty() && types[i] == SQLITE_NULL)) {
+			if (is_null[i]) {
 				state.Print("NULL");
-			} else if (state.IsNumber(data[i], nullptr)) {
+			} else if (types[i].IsNumeric()) {
 				state.Print(data[i]);
-			} else if (state.ShellHasFlag(SHFLG_Newlines)) {
-				state.OutputQuotedString(data[i]);
+			} else if (state.ShellHasFlag(ShellFlags::SHFLG_Newlines)) {
+				state.OutputQuotedString(data[i].c_str());
 			} else {
-				state.OutputQuotedEscapedString(data[i]);
+				state.OutputQuotedEscapedString(data[i].c_str());
 			}
 		}
 		state.Print(");\n");
@@ -696,7 +699,7 @@ public:
 
 	void RenderRow(RowResult &result) override {
 		/* .schema and .fullschema output */
-		state.PrintSchemaLine(result.data[0], "\n");
+		state.PrintSchemaLine(result.data[0].c_str(), "\n");
 	}
 };
 
@@ -705,37 +708,41 @@ public:
 	explicit ModePrettyRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
+	static bool IsSpace(char c) {
+		return duckdb::StringUtil::CharacterIsSpace(c);
+	}
+
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		/* .schema and .fullschema with --indent */
 		if (data.size() != 1) {
 			throw std::runtime_error("row must have exactly one value for pretty rendering");
 		}
-		char *z;
 		int j;
 		int nParen = 0;
 		char cEnd = 0;
 		char c;
 		int nLine = 0;
-		if (!data[0]) {
-			return;
-		}
-		if (sqlite3_strlike("CREATE VIEW%", data[0], 0) == 0 || sqlite3_strlike("CREATE TRIG%", data[0], 0) == 0) {
+		if (duckdb::StringUtil::StartsWith(data[0], "CREATE VIEW") ||
+		    duckdb::StringUtil::StartsWith(data[0], "CREATE TRIG")) {
 			state.Print(data[0]);
 			state.Print(";\n");
 			return;
 		}
-		z = sqlite3_mprintf("%s", data[0]);
+		auto zStr = data[0];
+		auto z = (char *)zStr.data();
 		j = 0;
 		idx_t i;
 		for (i = 0; IsSpace(z[i]); i++) {
 		}
 		for (; (c = z[i]) != 0; i++) {
 			if (IsSpace(c)) {
-				if (z[j - 1] == '\r')
+				if (z[j - 1] == '\r') {
 					z[j - 1] = '\n';
-				if (IsSpace(z[j - 1]) || z[j - 1] == '(')
+				}
+				if (IsSpace(z[j - 1]) || z[j - 1] == '(') {
 					continue;
+				}
 			} else if ((c == '(' || c == ')') && j > 0 && IsSpace(z[j - 1])) {
 				j--;
 			}
@@ -779,7 +786,6 @@ public:
 			z[j] = 0;
 		}
 		state.PrintSchemaLine(z, ";\n");
-		sqlite3_free(z);
 	}
 
 	/*

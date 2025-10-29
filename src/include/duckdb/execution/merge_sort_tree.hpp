@@ -574,7 +574,6 @@ template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 template <typename L>
 void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, const idx_t upper, const E needle,
                                                          L aggregate) const {
-
 	if (lower >= upper) {
 		return;
 	}
