@@ -4391,15 +4391,15 @@ static void usage(int showDetail) {
 }
 
 struct CommandLineOption {
-    const char *option;
-    idx_t argument_count;
-    const char *arguments;
-    metadata_command_t pre_init_callback;
-    metadata_command_t post_init_callback;
-    const char *description;
+	const char *option;
+	idx_t argument_count;
+	const char *arguments;
+	metadata_command_t pre_init_callback;
+	metadata_command_t post_init_callback;
+	const char *description;
 };
 
-template<RenderMode output_mode>
+template <RenderMode output_mode>
 MetadataResult ToggleOutputMode(ShellState &state, const vector<string> &args) {
 	state.cMode = state.mode = output_mode;
 	return MetadataResult::SUCCESS;
@@ -4438,7 +4438,7 @@ MetadataResult SetReadOnlyMode(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
-template<bool HEADER>
+template <bool HEADER>
 MetadataResult ToggleHeader(ShellState &state, const vector<string> &args) {
 	state.showHeader = HEADER;
 	return MetadataResult::SUCCESS;
@@ -4466,7 +4466,7 @@ MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
 
 MetadataResult ShowVersionAndExit(ShellState &state, const vector<string> &args) {
 	printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
-		   duckdb::DuckDB::SourceID());
+	       duckdb::DuckDB::SourceID());
 	return MetadataResult::EXIT;
 }
 
@@ -4494,14 +4494,11 @@ MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args
 MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) {
 	auto &storage_version = args[1];
 	try {
-		state.config.options.serialization_compatibility =
-			duckdb::SerializationCompatibility::FromString("latest");
-	} catch(std::exception &ex) {
+		state.config.options.serialization_compatibility = duckdb::SerializationCompatibility::FromString("latest");
+	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
-		utf8_printf(
-			stderr,
-			"%s: Error: unknown argument (%s) for '-storage-version': %s\n",
-			program_name, storage_version.c_str(), error.Message().c_str());
+		utf8_printf(stderr, "%s: Error: unknown argument (%s) for '-storage-version': %s\n", program_name,
+		            storage_version.c_str(), error.Message().c_str());
 		return MetadataResult::EXIT;
 	}
 	return MetadataResult::SUCCESS;
@@ -4520,13 +4517,12 @@ MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
-
 MetadataResult SetInitFile(ShellState &state, const vector<string> &args) {
 	state.initFile = args[1];
 	return MetadataResult::SUCCESS;
 }
 
-template<bool EXIT>
+template <bool EXIT>
 MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	if (EXIT) {
 		state.readStdin = false;
@@ -4571,14 +4567,14 @@ static const CommandLineOption command_line_options[] = {
     {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" before reading stdin"},
     {"safe", 0, "", EnableSafeMode, nullptr, "enable safe-mode"},
     {"separator", 1, "SEP", nullptr, SetSeparator, "set output column separator. Default: '|'"},
-    {"storage-version", 1, "VERSION", SetStorageVersion, nullptr, "database storage compatibility version to use. Default: 'v0.10.0'"},
+    {"storage-version", 1, "VERSION", SetStorageVersion, nullptr,
+     "database storage compatibility version to use. Default: 'v0.10.0'"},
     {"table", 0, "", nullptr, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
     {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
     {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},
     {"version", 0, "", nullptr, ShowVersionAndExit, "show DuckDB version"},
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr}};
-
 
 /*
 ** Initialize the state information in data

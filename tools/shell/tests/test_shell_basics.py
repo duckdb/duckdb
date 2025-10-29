@@ -194,6 +194,7 @@ def test_print(shell):
 def test_headers(shell):
     test = (
         ShellTest(shell)
+        .statement(".mode csv")
         .statement(".headers on")
         .statement("SELECT 42 as wilbur")
     )
@@ -578,28 +579,43 @@ def test_log(shell, random_filepath):
     result = test.run()
     result.check_stdout('')
 
-def test_mode_ascii(shell):
+@pytest.mark.parametrize("dot_command", [
+    ".mode ascii",
+    ""
+])
+def test_mode_ascii(shell, dot_command):
+    args = ['-ascii'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode ascii")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
     )
     result = test.run()
     result.check_stdout('fourty-two')
 
-def test_mode_csv(shell):
+@pytest.mark.parametrize("dot_command", [
+    ".mode csv",
+    ""
+])
+def test_mode_csv(shell, dot_command):
+    args = ['-csv'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode csv")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
     )
     result = test.run()
     result.check_stdout(',fourty-two,')
 
-def test_mode_column(shell):
+@pytest.mark.parametrize("dot_command", [
+    ".mode column",
+    ""
+])
+def test_mode_column(shell, dot_command):
+    args = ['-column'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode column")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
     )
     result = test.run()
@@ -614,10 +630,15 @@ def test_mode_html(shell):
     result = test.run()
     result.check_stdout('<td>fourty-two</td>')
 
-def test_mode_html_escapes(shell):
+@pytest.mark.parametrize("dot_command", [
+    ".mode html",
+    ""
+])
+def test_mode_html_escapes(shell, dot_command):
+    args = ['-html'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode html")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("SELECT '<&>\"\'\'' AS \"&><\"\"\'\";")
     )
     result = test.run()
@@ -641,10 +662,16 @@ def test_mode_csv_escapes(shell):
     result = test.run()
     result.check_stdout('"BEGINHEADER"",\nENDHEADER"\r\n"BEGINVAL,\n""ENDVAL"')
 
-def test_mode_json_infinity(shell):
+
+@pytest.mark.parametrize("dot_command", [
+    ".mode json",
+    ""
+])
+def test_mode_json_infinity(shell, dot_command):
+    args = ['-json'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode json")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("SELECT 'inf'::DOUBLE AS inf, '-inf'::DOUBLE AS ninf, 'nan'::DOUBLE AS nan, '-nan'::DOUBLE AS nnan;")
     )
     result = test.run()
@@ -674,29 +701,45 @@ def test_mode_insert_table(shell):
     result = test.run()
     result.check_stdout('my_table')
 
-def test_mode_line(shell):
+@pytest.mark.parametrize("dot_command", [
+    ".mode line",
+    ""
+])
+def test_mode_line(shell, dot_command):
+    args = ['-line'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode line")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("SELECT NULL, 42, 'fourty-two' x, 42.0;")
     )
     result = test.run()
     result.check_stdout('x = fourty-two')
 
-def test_mode_list(shell):
+@pytest.mark.parametrize("dot_command", [
+    ".mode list",
+    ""
+])
+def test_mode_list(shell, dot_command):
+    args = ['-list'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode list")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("SELECT NULL, 42, 'fourty-two' x, 42.0;")
     )
     result = test.run()
     result.check_stdout('|fourty-two|')
 
 # Original comment: FIXME sqlite3_column_blob and %! format specifier
-def test_mode_quote(shell):
+
+@pytest.mark.parametrize("dot_command", [
+    ".mode quote",
+    ""
+])
+def test_mode_quote(shell, dot_command):
+    args = ['-quote'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode quote")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("SELECT NULL, 42, 'fourty-two' x, 42.0;")
     )
     result = test.run()
