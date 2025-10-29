@@ -217,6 +217,7 @@ public:
 	static bool StringGlob(const char *zGlobPattern, const char *zString);
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 	static void Sleep(idx_t ms);
+	void PrintUsage();
 #if defined(_WIN32) || defined(WIN32)
 	static unique_ptr<uint8_t[]> Win32Utf8ToUnicode(const char *zText);
 	static string Win32UnicodeToUtf8(void *zWideText);

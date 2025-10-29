@@ -4339,57 +4339,6 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 }
 #endif
 
-/*
-** Show available command line options
-*/
-static const char zOptions[] =
-    "   -ascii               set output mode to 'ascii'\n"
-    "   -bail                stop after hitting an error\n"
-    "   -batch               force batch I/O\n"
-    "   -box                 set output mode to 'box'\n"
-    "   -column              set output mode to 'column'\n"
-    "   -cmd COMMAND         run \"COMMAND\" before reading stdin\n"
-    "   -c COMMAND           run \"COMMAND\" and exit\n"
-    "   -csv                 set output mode to 'csv'\n"
-    "   -echo                print commands before execution\n"
-    "   -f FILENAME          read/process named file and exit\n"
-    "   -init FILENAME       read/process named file\n"
-    "   -[no]header          turn headers on or off\n"
-    "   -help                show this message\n"
-    "   -html                set output mode to HTML\n"
-    "   -interactive         force interactive I/O\n"
-    "   -json                set output mode to 'json'\n"
-    "   -line                set output mode to 'line'\n"
-    "   -list                set output mode to 'list'\n"
-    "   -markdown            set output mode to 'markdown'\n"
-    "   -newline SEP         set output row separator. Default: '\\n'\n"
-    "   -no-stdin            exit after processing options instead of reading stdin\n"
-    "   -nullvalue TEXT      set text string for NULL values. Default 'NULL'\n"
-    "   -quote               set output mode to 'quote'\n"
-    "   -readonly            open the database read-only\n"
-    "   -s COMMAND           run \"COMMAND\" and exit\n"
-    "   -safe                enable safe-mode\n"
-    "   -separator SEP       set output column separator. Default: '|'\n"
-    "   -storage-version V   database storage compatibility version to use. Default: 'v0.10.0'\n"
-    "   -table               set output mode to 'table'\n"
-    "   -ui                  launches a web interface using the ui extension (configurable with .ui_command)\n"
-    "   -unredacted          allow printing unredacted secrets\n"
-    "   -unsigned            allow loading of unsigned extensions\n"
-    "   -version             show DuckDB version\n";
-static void usage(int showDetail) {
-	utf8_printf(stdout,
-	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
-	            "FILENAME is the name of a DuckDB database. A new database is created\n"
-	            "if the file does not previously exist.\n",
-	            program_name);
-	if (showDetail) {
-		utf8_printf(stdout, "OPTIONS include:\n%s", zOptions);
-	} else {
-		raw_printf(stdout, "Use the -help option for additional information\n");
-	}
-	exit(0);
-}
-
 struct CommandLineOption {
 	const char *option;
 	idx_t argument_count;
@@ -4480,7 +4429,7 @@ MetadataResult ShowVersionAndExit(ShellState &state, const vector<string> &args)
 }
 
 MetadataResult PrintHelpAndExit(ShellState &state, const vector<string> &args) {
-	usage(1);
+	state.PrintUsage();
 	return MetadataResult::EXIT;
 }
 
@@ -4556,12 +4505,12 @@ static const CommandLineOption command_line_options[] = {
     {"column", 0, "", nullptr, ToggleOutputMode<RenderMode::COLUMN>, "set output mode to 'column'"},
     {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
     {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
-    {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" before reading stdin"},
+    {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"echo", 0, "", nullptr, EnableEcho, "print commands before execution"},
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
     {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
-    {"help", 0, "", nullptr, PrintHelpAndExit, "show this message"},
+    {"help", 0, "", PrintHelpAndExit, nullptr, "show this message"},
     {"html", 0, "", nullptr, ToggleOutputMode<RenderMode::HTML>, "set output mode to HTML"},
     {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
     {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
@@ -4574,10 +4523,10 @@ static const CommandLineOption command_line_options[] = {
     {"nullvalue", 1, "TEXT", nullptr, SetNullValue, "set text string for NULL values. Default 'NULL'"},
     {"quote", 0, "", nullptr, ToggleOutputMode<RenderMode::QUOTE>, "set output mode to 'quote'"},
     {"readonly", 0, "", SetReadOnlyMode, nullptr, "open the database read-only"},
-    {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" before reading stdin"},
+    {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
     {"safe", 0, "", EnableSafeMode, nullptr, "enable safe-mode"},
     {"separator", 1, "SEP", nullptr, SetSeparator, "set output column separator. Default: '|'"},
-    {"storage-version", 1, "VERSION", SetStorageVersion, nullptr,
+    {"storage-version", 1, "VER", SetStorageVersion, nullptr,
      "database storage compatibility version to use. Default: 'v0.10.0'"},
     {"table", 0, "", nullptr, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
@@ -4597,6 +4546,59 @@ duckdb::optional_idx FindOption(const char *name) {
 		return c;
 	}
 	return duckdb::optional_idx();
+}
+
+struct PrintOptionInfo {
+	string command_name;
+	string arguments;
+	string description;
+};
+
+void ShellState::PrintUsage() {
+	ShellHighlight highlighter(*this);
+	highlighter.PrintText("Usage: ", PrintOutput::STDOUT, PrintColor::STANDARD, PrintIntensity::BOLD);
+	highlighter.PrintText(program_name, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
+	highlighter.PrintText(" [OPTIONS] FILENAME [SQL]\n\n", PrintOutput::STDOUT, HighlightElementType::STRING_CONSTANT);
+	highlighter.PrintText("FILENAME", PrintOutput::STDOUT, PrintColor::STANDARD, PrintIntensity::BOLD);
+	utf8_printf(stdout, " is the name of a DuckDB database. A new database is created\n"
+	                    "if the file does not previously exist.\n\n");
+	highlighter.PrintText("OPTIONS:\n", PrintOutput::STDOUT, PrintColor::STANDARD, PrintIntensity::BOLD);
+	constexpr idx_t INITIAL_SPACING = 2;
+	constexpr idx_t MIN_SPACING = 4;
+	vector<PrintOptionInfo> print_options;
+	for (idx_t c = 0; command_line_options[c].option; c++) {
+		auto &option = command_line_options[c];
+		PrintOptionInfo print_option;
+		print_option.command_name = string(INITIAL_SPACING, ' ') + "-" + option.option;
+		print_option.arguments = option.arguments;
+		print_option.description = option.description;
+		print_options.push_back(std::move(print_option));
+	}
+	idx_t max_lhs_length = 0;
+	for (auto &option : print_options) {
+		auto lhs_length = option.command_name.size() + option.arguments.size();
+		if (!option.arguments.empty()) {
+			lhs_length++;
+		}
+		if (lhs_length > max_lhs_length) {
+			max_lhs_length = lhs_length;
+		}
+	}
+	// print the options
+	for (auto &option : print_options) {
+		auto lhs_length = option.command_name.size() + option.arguments.size();
+		if (!option.arguments.empty()) {
+			lhs_length++;
+		}
+		idx_t padding = max_lhs_length - lhs_length + MIN_SPACING;
+		string spaces(padding, ' ');
+		highlighter.PrintText(option.command_name, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
+		if (!option.arguments.empty()) {
+			highlighter.PrintText(" " + option.arguments, PrintOutput::STDOUT, HighlightElementType::STRING_CONSTANT);
+		}
+		utf8_printf(stdout, "%s%s\n", spaces.c_str(), option.description.c_str());
+	}
+	exit(0);
 }
 
 /*
@@ -4640,6 +4642,7 @@ int wmain(int argc, wchar_t **wargv) {
 	int argcToFree = 0;
 #endif
 
+	data.out = stdout;
 	globalState = &data;
 
 	setBinaryMode(stdin, 0);
@@ -4697,6 +4700,7 @@ int wmain(int argc, wchar_t **wargv) {
 				/* Excesss arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
 				data.readStdin = false;
+				stdin_is_interactive = false;
 				extra_commands.emplace_back(z);
 			}
 			continue;
