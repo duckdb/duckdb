@@ -711,7 +711,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		throw InternalException("Unrecognized type!");
 	}
 	properties.return_type = StatementReturnType::NOTHING;
-	properties.output_type = QueryResultOutputType::MATERIALIZED;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	return result;
 }
 

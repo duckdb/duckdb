@@ -68,7 +68,7 @@ class ClientContext;
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
-	    : requires_valid_transaction(true), output_type(QueryResultOutputType::MATERIALIZED),
+	    : requires_valid_transaction(true), output_type(QueryResultOutputType::FORCE_MATERIALIZED),
 	      bound_all_parameters(true), return_type(StatementReturnType::QUERY_RESULT), parameter_count(0),
 	      always_require_rebind(false) {
 	}

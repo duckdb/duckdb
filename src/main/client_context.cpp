@@ -335,7 +335,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	auto &executor = GetExecutor();
 	auto &prepared = *active_query->prepared;
 	bool create_stream_result =
-	    prepared.properties.output_type == QueryResultOutputType::STREAMING && pending.allow_stream_result;
+	    prepared.properties.output_type == QueryResultOutputType::ALLOW_STREAMING && pending.allow_stream_result;
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
@@ -540,8 +540,8 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 		query_progress.Restart();
 	}
 
-	const auto stream_result = parameters.query_parameters.output_type == QueryResultOutputType::STREAMING &&
-	                           statement_data.properties.output_type == QueryResultOutputType::STREAMING;
+	const auto stream_result = parameters.query_parameters.output_type == QueryResultOutputType::ALLOW_STREAMING &&
+	                           statement_data.properties.output_type == QueryResultOutputType::ALLOW_STREAMING;
 
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
@@ -549,7 +549,8 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 	if (!stream_result && client_config.get_result_collector) {
 		get_collector = client_config.get_result_collector;
 	}
-	statement_data.output_type = stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	statement_data.output_type =
+	    stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	statement_data.memory_type = parameters.query_parameters.memory_type;
 
 	// Get the result collector and initialize the executor.
@@ -783,7 +784,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
 	parameters.query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return Execute(query, prepared, parameters);
 }
 
@@ -962,7 +963,7 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return Query(std::move(statement), parameters);
 }
 
@@ -977,7 +978,7 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return Query(query, parameters);
 }
 
@@ -1009,7 +1010,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 		PendingQueryParameters parameters;
 		parameters.query_parameters = query_parameters;
 		if (!is_last_statement) {
-			parameters.query_parameters.output_type = QueryResultOutputType::MATERIALIZED;
+			parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 		}
 		auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
 		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
@@ -1055,7 +1056,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 	case_insensitive_map_t<BoundParameterData> empty_param_list;
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return PendingQuery(query, empty_param_list, parameters);
 }
 
@@ -1069,7 +1070,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 	case_insensitive_map_t<BoundParameterData> empty_param_list;
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return PendingQuery(std::move(statement), empty_param_list, parameters);
 }
 
@@ -1084,7 +1085,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
                                                            bool allow_stream_result) {
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return PendingQuery(query, values, parameters);
 }
 
@@ -1123,7 +1124,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
                                                            bool allow_stream_result) {
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return PendingQuery(std::move(statement), values, parameters);
 }
 
@@ -1395,7 +1396,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
                                                                    bool allow_stream_result) {
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return PendingQueryInternal(lock, relation, parameters);
 }
 
@@ -1415,7 +1416,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 			select->node = relation->GetQueryNode();
 			PendingQueryParameters parameters;
 			parameters.query_parameters = query_parameters;
-			parameters.query_parameters.output_type = QueryResultOutputType::MATERIALIZED;
+			parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 			RunStatementInternal(lock, query, std::move(select), parameters);
 		}
 	}
@@ -1430,7 +1431,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const shared_ptr<Rela
                                                            bool allow_stream_result) {
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	auto lock = LockContext();
 	return PendingQueryInternal(*lock, relation, parameters);
 }

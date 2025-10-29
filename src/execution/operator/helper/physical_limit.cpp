@@ -111,7 +111,6 @@ bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, o
 }
 
 SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
-
 	D_ASSERT(chunk.size() > 0);
 	auto &state = input.local_state.Cast<LimitLocalState>();
 	auto &limit = state.limit;

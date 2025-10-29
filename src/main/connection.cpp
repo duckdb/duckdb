@@ -96,19 +96,35 @@ void Connection::ForceParallelism() {
 }
 
 unique_ptr<QueryResult> Connection::SendQuery(const string &query) {
-	return context->Query(query, true);
+	QueryParameters parameters;
+	parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
+	return SendQuery(query, parameters);
+}
+
+unique_ptr<QueryResult> Connection::SendQuery(const string &query, QueryParameters parameters) {
+	return context->Query(query, parameters);
+}
+
+unique_ptr<QueryResult> Connection::SendQuery(unique_ptr<SQLStatement> statement) {
+	return context->Query(std::move(statement), true);
 }
 
 unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	QueryParameters parameters;
-	parameters.output_type = QueryResultOutputType::MATERIALIZED;
+	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto result = context->Query(query, parameters);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
 unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {
-	auto result = context->Query(std::move(statement), false);
+	QueryParameters parameters;
+	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	return Query(std::move(statement), parameters);
+}
+
+unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
+	auto result = context->Query(std::move(statement), parameters);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
@@ -116,7 +132,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> s
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, bool allow_stream_result) {
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return context->PendingQuery(query, parameters);
 }
 
@@ -127,7 +143,7 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, Que
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	QueryParameters parameters;
 	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return context->PendingQuery(std::move(statement), parameters);
 }
 
@@ -141,7 +157,7 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
                                                         bool allow_stream_result) {
 	QueryParameters query_parameters;
 	query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return context->PendingQuery(query, named_values, query_parameters);
 }
 
@@ -150,7 +166,7 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
                                                         bool allow_stream_result) {
 	QueryParameters query_parameters;
 	query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return context->PendingQuery(std::move(statement), named_values, query_parameters);
 }
 
@@ -168,7 +184,7 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vec
 	auto named_params = ConvertParamListToMap(values);
 	QueryParameters query_parameters;
 	query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return context->PendingQuery(query, named_params, query_parameters);
 }
 
@@ -177,7 +193,7 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
 	auto named_params = ConvertParamListToMap(values);
 	QueryParameters query_parameters;
 	query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::STREAMING : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return context->PendingQuery(std::move(statement), named_params, query_parameters);
 }
 
@@ -197,7 +213,7 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	auto named_params = ConvertParamListToMap(values);
 	PendingQueryParameters parameters;
 	parameters.parameters = &named_params;
-	parameters.query_parameters.output_type = QueryResultOutputType::MATERIALIZED;
+	parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	parameters.query_parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 	auto pending = PendingQuery(query, parameters);
 	if (pending->HasError()) {

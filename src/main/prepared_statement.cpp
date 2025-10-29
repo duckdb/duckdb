@@ -111,9 +111,9 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
 
 	D_ASSERT(data);
 	parameters.query_parameters.output_type =
-	    allow_stream_result && data->properties.output_type == QueryResultOutputType::STREAMING
-	        ? QueryResultOutputType::STREAMING
-	        : QueryResultOutputType::MATERIALIZED;
+	    allow_stream_result && data->properties.output_type == QueryResultOutputType::ALLOW_STREAMING
+	        ? QueryResultOutputType::ALLOW_STREAMING
+	        : QueryResultOutputType::FORCE_MATERIALIZED;
 	auto result = context->PendingQuery(query, data, parameters);
 	// The result should not contain any reference to the 'vector<Value> parameters.parameters'
 	return result;

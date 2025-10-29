@@ -362,7 +362,7 @@ struct ValueOrNull {
 			return false;
 		}
 
-		return is_valid ^ !NULLS_LAST;
+		return is_valid ^ NULLS_LAST;
 	}
 };
 

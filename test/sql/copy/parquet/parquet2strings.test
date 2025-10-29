@@ -23,5 +23,5 @@ require parquet
 
 
 query I
-SELECT id_string FROM 'data/parquet-testing/p2strings.parquet' limit 10;
+SELECT id_string FROM '{DATA_DIR}/parquet-testing/p2strings.parquet' limit 10;
 ----

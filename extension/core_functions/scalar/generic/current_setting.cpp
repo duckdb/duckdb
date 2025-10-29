@@ -33,7 +33,6 @@ void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
-
 	auto &key_child = arguments[0];
 	if (key_child->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();

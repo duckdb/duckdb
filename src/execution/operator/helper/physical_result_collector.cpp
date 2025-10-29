@@ -28,7 +28,7 @@ PhysicalOperator &PhysicalResultCollector::GetResultCollector(ClientContext &con
 
 	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, root)) {
 		// Not an order-preserving plan: use the parallel materialized collector.
-		if (data.output_type == QueryResultOutputType::STREAMING) {
+		if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
 			return physical_plan.Make<PhysicalBufferedCollector>(data, true);
 		}
 		return physical_plan.Make<PhysicalMaterializedCollector>(data, true);
@@ -36,14 +36,14 @@ PhysicalOperator &PhysicalResultCollector::GetResultCollector(ClientContext &con
 
 	if (!PhysicalPlanGenerator::UseBatchIndex(context, root)) {
 		// Order-preserving plan, and we cannot use the batch index: use single-threaded result collector.
-		if (data.output_type == QueryResultOutputType::STREAMING) {
+		if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
 			return physical_plan.Make<PhysicalBufferedCollector>(data, false);
 		}
 		return physical_plan.Make<PhysicalMaterializedCollector>(data, false);
 	}
 
 	// Order-preserving plan, and we can use the batch index: use a batch collector.
-	if (data.output_type == QueryResultOutputType::STREAMING) {
+	if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
 		return physical_plan.Make<PhysicalBufferedBatchCollector>(data);
 	}
 	return physical_plan.Make<PhysicalBatchCollector>(data);

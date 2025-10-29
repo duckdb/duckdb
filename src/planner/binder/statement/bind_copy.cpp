@@ -251,7 +251,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 
 		auto new_select_list = function.copy_to_select(input);
 		if (!new_select_list.empty()) {
-
 			// We have a new select list, create a projection on top of the current plan
 			auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(new_select_list));
 			projection->children.push_back(std::move(select_node.plan));
@@ -599,7 +598,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	}
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::MATERIALIZED;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt, function);

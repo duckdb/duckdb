@@ -93,7 +93,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 
-	properties.output_type = QueryResultOutputType::MATERIALIZED;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

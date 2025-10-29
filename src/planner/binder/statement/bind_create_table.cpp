@@ -673,7 +673,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::MATERIALIZED;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	return result;
 }
 

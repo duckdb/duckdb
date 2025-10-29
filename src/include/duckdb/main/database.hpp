@@ -93,7 +93,7 @@ private:
 	unique_ptr<ExtensionManager> extension_manager;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
-	shared_ptr<LogManager> log_manager;
+	unique_ptr<LogManager> log_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ResultSetManager> result_set_manager;
 

@@ -366,7 +366,6 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
                                      const string &alias, idx_t update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
-
 	vector<LogicalType> types;
 	vector<string> names;
 
@@ -411,7 +410,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	// returned, it should be guaranteed that the row has been inserted.
 	// see https://github.com/duckdb/duckdb/issues/8310
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::MATERIALIZED;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

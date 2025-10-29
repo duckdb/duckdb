@@ -33,7 +33,6 @@ static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector
 
 static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-
 	// collect names and deconflict, construct return type
 	if (arguments.empty()) {
 		throw InvalidInputException("struct_concat: At least one argument is required");
