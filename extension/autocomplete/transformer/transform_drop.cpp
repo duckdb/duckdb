@@ -95,7 +95,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransfor
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto schema = transformer.Transform<QualifiedName>(schema_list[0]);
-	info->schema = schema.catalog;
+	info->catalog = schema.catalog;
 	info->name = schema.schema;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SCHEMA_ENTRY;
@@ -157,8 +157,12 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSequence(PEGTransf
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto sequence = transformer.Transform<QualifiedName>(sequence_list[0]);
-	info->catalog = sequence.catalog;
-	info->schema = sequence.schema;
+	if (sequence.schema.empty()) {
+		info->schema = sequence.catalog;
+	} else {
+		info->catalog = sequence.catalog;
+		info->schema = sequence.schema;
+	}
 	info->name = sequence.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SEQUENCE_ENTRY;
@@ -197,8 +201,12 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto type = transformer.Transform<QualifiedName>(type_list[0]);
-	info->catalog = type.catalog;
-	info->schema = type.schema;
+	if (type.schema.empty()) {
+		info->schema = type.catalog;
+	} else {
+		info->catalog = type.catalog;
+		info->schema = type.schema;
+	}
 	info->name = type.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::TYPE_ENTRY;
