@@ -84,10 +84,10 @@ void BoundIndex::Verify() {
 	Verify(l);
 }
 
-string BoundIndex::ToString() {
+string BoundIndex::ToString(bool display_ascii) {
 	IndexLock l;
 	InitializeLock(l);
-	return ToString(l);
+	return ToString(l, display_ascii);
 }
 
 void BoundIndex::VerifyAllocations() {

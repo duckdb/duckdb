@@ -12,7 +12,7 @@ index a925782..8ffa13e 100644
 +	throw NotImplementedException("RTreeIndex::Verify() not implemented");
 +}
 +
-+string RTreeIndex::ToString(IndexLock &l) {
++string RTreeIndex::ToString(IndexLock &l, bool display_ascii) {
 +	throw NotImplementedException("RTreeIndex::ToString() not implemented");
  }
  
@@ -33,7 +33,7 @@ index 202a6c7..b4f177d 100644
 +
 +	//! Returns the string representation of an index.
 +	//! Currently not implemented.
-+	string ToString(IndexLock &l) override;
++	string ToString(IndexLock &l, bool display_ascii = false) override;
  
  	//! Ensures that the node allocation counts match the node counts.
  	void VerifyAllocations(IndexLock &state) override;

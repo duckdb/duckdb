@@ -186,11 +186,17 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
-string Prefix::ToString(ART &art, const Node &node, int indent_level) {
+string Prefix::ToString(ART &art, const Node &node, int indent_level, bool inside_gate, bool display_ascii) {
 	auto indent = [](std::string &str, const int n) {
 		for (int i = 0; i < n; ++i) {
 			str += " ";
 		}
+	};
+	auto format_byte = [&](uint8_t byte) {
+		if (!inside_gate && display_ascii && byte >= 32 && byte <= 126) {
+			return string(1, static_cast<char>(byte));
+		}
+		return to_string(byte);
 	};
 	string str = "";
 	indent(str, indent_level);
@@ -198,11 +204,11 @@ string Prefix::ToString(ART &art, const Node &node, int indent_level) {
 	Iterator(art, ref, true, false, [&](const Prefix &prefix) {
 		str += "Prefix: |";
 		for (idx_t i = 0; i < prefix.data[Count(art)]; i++) {
-			str += to_string(prefix.data[i]) + "|";
+			str += format_byte(prefix.data[i]) + "|";
 		}
 	});
 
-	auto child = ref.get().ToString(art, indent_level);
+	auto child = ref.get().ToString(art, indent_level, inside_gate, display_ascii);
 	return str + "\n" + child;
 }
 

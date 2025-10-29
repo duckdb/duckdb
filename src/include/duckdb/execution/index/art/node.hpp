@@ -107,7 +107,7 @@ public:
 	                                  unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator);
 
 	//! Returns the string representation of the node at indentation level.
-	string ToString(ART &art, int indent_level) const;
+	string ToString(ART &art, int indent_level, bool inside_gate = false, bool display_ascii = false) const;
 
 	//! Returns the node type.
 	inline NType GetType() const {

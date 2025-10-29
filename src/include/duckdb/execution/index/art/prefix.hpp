@@ -67,7 +67,7 @@ public:
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
 
 	//! Returns the string representation of the node at indentation level.
-	static string ToString(ART &art, const Node &node, int indent_level);
+	static string ToString(ART &art, const Node &node, int indent_level, bool inside_gate = false, bool display_ascii = false);
 
 private:
 	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset);

@@ -12,7 +12,7 @@ index 218aa0e..5b14ee9 100644
 +	throw NotImplementedException("HNSWIndex::Verify() not implemented");
 +}
 +
-+string HNSWIndex::ToString(IndexLock &l) {
++string HNSWIndex::ToString(IndexLock &l, bool display_ascii) {
 +	throw NotImplementedException("HNSWIndex::ToString() not implemented");
  }
  
@@ -33,7 +33,7 @@ index 83fb9e7..cb79446 100644
 +
 +	//! Returns the string representation of an index.
 +	//! Currently not implemented.
-+	string ToString(IndexLock &l) override;
++	string ToString(IndexLock &l, bool display_ascii = false) override;
 +
  	//! Ensures that the node allocation counts match the node counts.
  	void VerifyAllocations(IndexLock &state) override;

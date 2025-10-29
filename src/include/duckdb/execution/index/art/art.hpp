@@ -124,7 +124,7 @@ public:
 	void VerifyBuffers(IndexLock &l) override;
 
 	//! Returns string representation of the ART.
-	string ToString(IndexLock &l) override;
+	string ToString(IndexLock &l, bool display_ascii = false) override;
 
 private:
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
@@ -154,7 +154,7 @@ private:
 	void WritePartialBlocks(QueryContext context, const bool v1_0_0_storage);
 	void SetPrefixCount(const IndexStorageInfo &info);
 
-	string ToStringInternal();
+	string ToStringInternal(bool display_ascii);
 	void VerifyInternal();
 	void VerifyAllocationsInternal();
 };

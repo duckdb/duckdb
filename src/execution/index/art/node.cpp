@@ -466,13 +466,23 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 // Printing
 //===--------------------------------------------------------------------===//
 
-string Node::ToString(ART &art, int indent_level) const {
+string Node::ToString(ART &art, int indent_level, bool inside_gate, bool display_ascii) const {
 	auto indent = [](std::string &str, const int n) {
 		for (int i = 0; i < n; ++i) {
 			str += " ";
 		}
 	};
+	// if inside gate, print byte values not ascii.
+	auto format_byte = [&](uint8_t byte) {
+		if (!inside_gate && display_ascii && byte >= 32 && byte <= 126) {
+			return string(1, static_cast<char>(byte));
+		}
+		return to_string(byte);
+	};
 	auto type = GetType();
+	bool is_gate = GetGateStatus() == GateStatus::GATE_SET;
+	bool propagate_gate = inside_gate || is_gate;
+	
 	switch (type) {
 	case NType::LEAF_INLINED: {
 		string str = "";
@@ -482,8 +492,8 @@ string Node::ToString(ART &art, int indent_level) const {
 	case NType::LEAF:
 		return Leaf::DeprecatedToString(art, *this);
 	case NType::PREFIX: {
-		string str = Prefix::ToString(art, *this, indent_level);
-		if (GetGateStatus() == GateStatus::GATE_SET) {
+		string str = Prefix::ToString(art, *this, indent_level, propagate_gate, display_ascii);
+		if (is_gate) {
 			string s = "";
 			indent(s, indent_level);
 			s += "Gate\n";
@@ -505,7 +515,7 @@ string Node::ToString(ART &art, int indent_level) const {
 		str += "Leaf |";
 		auto has_byte = GetNextByte(art, byte);
 		while (has_byte) {
-			str += to_string(byte) + "|";
+			str += format_byte(byte) + "|";
 			if (byte == NumericLimits<uint8_t>::Maximum()) {
 				break;
 			}
@@ -516,9 +526,9 @@ string Node::ToString(ART &art, int indent_level) const {
 	} else {
 		auto child = GetNextChild(art, byte);
 		while (child) {
-			string c = child->ToString(art, indent_level + 2);
+			string c = child->ToString(art, indent_level + 2, propagate_gate, display_ascii);
 			indent(str, indent_level);
-			str = str + to_string(byte) + ",\n" + c;
+			str = str + format_byte(byte) + ",\n" + c;
 			if (byte == NumericLimits<uint8_t>::Maximum()) {
 				break;
 			}
@@ -527,7 +537,7 @@ string Node::ToString(ART &art, int indent_level) const {
 		}
 	}
 
-	if (GetGateStatus() == GateStatus::GATE_SET) {
+	if (is_gate) {
 		string s = "";
 		indent(s, indent_level + 2);
 		str = "Gate\n" + s + str;

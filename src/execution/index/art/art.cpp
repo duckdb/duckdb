@@ -1204,13 +1204,13 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 // Verification
 //===--------------------------------------------------------------------===//
 
-string ART::ToString(IndexLock &l) {
-	return ToStringInternal();
+string ART::ToString(IndexLock &l, bool display_ascii) {
+	return ToStringInternal(display_ascii);
 }
 
-string ART::ToStringInternal() {
+string ART::ToStringInternal(bool display_ascii) {
 	if (tree.HasMetadata()) {
-		return "\nART: \n" + tree.ToString(*this, 0);
+		return "\nART: \n" + tree.ToString(*this, 0, false, display_ascii);
 	}
 	return "[empty]";
 }

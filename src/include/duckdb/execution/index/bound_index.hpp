@@ -130,9 +130,9 @@ public:
 	void Verify();
 
 	//! Returns the string representation of an index.
-	virtual string ToString(IndexLock &l) = 0;
+	virtual string ToString(IndexLock &l, bool display_ascii = false) = 0;
 	//! Obtains a lock and calls ToString.
-	string ToString();
+	string ToString(bool display_ascii = false);
 
 	//! Ensures that the node allocation counts match the node counts.
 	virtual void VerifyAllocations(IndexLock &l) = 0;
