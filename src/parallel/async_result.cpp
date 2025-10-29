@@ -44,7 +44,10 @@ private:
 	shared_ptr<Counter> counter;
 };
 
-AsyncResult::AsyncResult(SourceResultType t) : result_type(GetAsyncResultType(t)) {
+AsyncResult::AsyncResult(SourceResultType t) : AsyncResult(GetAsyncResultType(t)) {
+}
+
+AsyncResult::AsyncResult(AsyncResultType t) : result_type(t) {
 	if (result_type == AsyncResultType::BLOCKED) {
 		throw InternalException("AsyncResult constructed with a BLOCKED state, do provide AsyncTasks");
 	}
@@ -58,6 +61,10 @@ AsyncResult::AsyncResult(vector<unique_ptr<AsyncTask>> &&tasks)
 }
 
 AsyncResult &AsyncResult::operator=(duckdb::SourceResultType t) {
+	return operator=(AsyncResult(t));
+}
+
+AsyncResult &AsyncResult::operator=(duckdb::AsyncResultType t) {
 	return operator=(AsyncResult(t));
 }
 

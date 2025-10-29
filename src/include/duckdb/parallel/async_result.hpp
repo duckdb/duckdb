@@ -26,6 +26,8 @@ public:
 };
 
 class AsyncResult {
+	explicit AsyncResult(AsyncResultType t);
+
 public:
 	AsyncResult() = default;
 	AsyncResult(AsyncResult &&) = default;
