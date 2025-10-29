@@ -71,46 +71,17 @@ void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 	}
 }
 
-static void LookupBlock(const uint64_t *__restrict keys, const uint64_t *__restrict bf, uint64_t *__restrict found,
-                        const uint64_t bitmask) {
-	uint64_t shifts[SIMD_BATCH_SIZE];
-	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
-		shifts[i] = keys[i] & SHIFT_MASK;
-	}
-
-	const auto shifts_8 = reinterpret_cast<uint8_t *>(shifts);
-	for (idx_t i = 0; i < SIMD_BATCH_SIZE; i++) {
-		const uint64_t bf_offset = keys[i] & bitmask;
-		const uint64_t mask = GetMask(shifts_8, i);
-		found[i] = (bf[bf_offset] & mask) == mask;
-	}
-}
-
-idx_t BloomFilter::LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel,
+idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_sel,
                                 const idx_t count) const {
 	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 	D_ASSERT(this->status.load() == BloomFilterStatus::ACTIVE);
 
-	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
-	const auto founds = FlatVector::GetData<uint64_t>(found_v);
-
-	idx_t remaining_count = count;
-	uint64_t *remaining_founds = founds;
-	while (remaining_count >= SIMD_BATCH_SIZE) {
-		LookupBlock(hashes, bf, remaining_founds, bitmask);
-		hashes += SIMD_BATCH_SIZE;
-		remaining_founds += SIMD_BATCH_SIZE;
-		remaining_count -= SIMD_BATCH_SIZE;
-	}
-	for (idx_t i = 0; i < remaining_count; i++) {
-		remaining_founds[i] = LookupOne(hashes[i]);
-	}
-
+	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
 	idx_t found_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		result_sel.set_index(found_count, i);
-		found_count += founds[i];
+		found_count += LookupOne(hashes[i]);
 	}
 	return found_count;
 }
@@ -161,7 +132,6 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 
 	if (state.current_capacity < approved_tuple_count) {
 		state.hashes_v.Initialize(false, approved_tuple_count);
-		state.found_v.Initialize(false, approved_tuple_count);
 		state.bf_sel.Initialize(approved_tuple_count);
 		state.current_capacity = approved_tuple_count;
 	}
@@ -175,7 +145,7 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 		found_count = found ? approved_tuple_count : 0;
 	} else {
 		state.hashes_v.Flatten(approved_tuple_count);
-		found_count = this->filter.LookupHashes(state.hashes_v, state.found_v, state.bf_sel, approved_tuple_count);
+		found_count = this->filter.LookupHashes(state.hashes_v, state.bf_sel, approved_tuple_count);
 	}
 
 	// add the runtime statistics to stop using the bf if not selective

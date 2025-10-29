@@ -54,7 +54,7 @@ public:
 
 	void InsertHashes(const Vector &hashes_v, idx_t count) const;
 
-	idx_t LookupHashes(const Vector &hashes_v, Vector &found_v, SelectionVector &result_sel, idx_t count) const;
+	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
 
 	SelectivityStats &GetSelectivityStats() {
 		return selectivity_data;
