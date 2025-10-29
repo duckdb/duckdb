@@ -326,7 +326,8 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 	if (test_config.on_set_option) {
 		test_config.on_set_option(parameter);
 	}
-	options.insert(make_pair(test_config.name, parameter));
+	// later values override earlier values
+	options[test_config.name] = parameter;
 	return true;
 }
 
