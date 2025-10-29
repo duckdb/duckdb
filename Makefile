@@ -381,15 +381,12 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 
 unittest: debug
 	build/debug/test/unittest
-	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittest_release: release
 	build/release/test/unittest
-	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
 	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
-	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestarrow:
 	build/debug/test/unittest "[arrow]"

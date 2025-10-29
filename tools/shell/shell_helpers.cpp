@@ -1,5 +1,27 @@
-#include "stripped_sqlite_int.h"
-#include <ctype.h>
+#include "shell_state.hpp"
+#include "duckdb/common/string_util.hpp"
+#include <thread>
+
+namespace duckdb_shell {
+
+void ShellState::Sleep(idx_t ms) {
+	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
+
+// The below methods were present in the sqlite API wrappers - and have been ported to here
+// Ideally they are eventually replaced with native code
+void ShellState::GenerateRandomBytes(int N, void *pBuf) {
+	static bool init = false;
+	if (!init) {
+		srand(time(NULL));
+		init = true;
+	}
+	unsigned char *zBuf = (unsigned char *)pBuf;
+	while (N--) {
+		unsigned char nextByte = rand() % 255;
+		zBuf[N] = nextByte;
+	}
+}
 
 #define sqlite3Toupper(x) toupper((unsigned char)(x))
 #define sqlite3Tolower(x) tolower((unsigned char)(x))
@@ -15,7 +37,7 @@ static const unsigned char sqlite3Utf8Trans1[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x00, 0x01, 0x02, 0x03, 0x00, 0x01, 0x00, 0x00,
 };
 
-u32 sqlite3Utf8Read(const unsigned char **pz /* Pointer to string from which to read char */
+uint32_t ReadCodepoint(const unsigned char **pz /* Pointer to string from which to read char */
 ) {
 	unsigned int c;
 
@@ -39,10 +61,10 @@ u32 sqlite3Utf8Read(const unsigned char **pz /* Pointer to string from which to 
 ** A structure defining how to do GLOB-style comparisons.
 */
 struct compareInfo {
-	u8 matchAll; /* "*" or "%" */
-	u8 matchOne; /* "?" or "_" */
-	u8 matchSet; /* "[" or 0 */
-	u8 noCase;   /* true to ignore case differences */
+	uint8_t matchAll; /* "*" or "%" */
+	uint8_t matchOne; /* "?" or "_" */
+	uint8_t matchSet; /* "[" or 0 */
+	uint8_t noCase;   /* true to ignore case differences */
 };
 
 /*
@@ -51,7 +73,7 @@ struct compareInfo {
 ** macro for fast reading of the next character in the common case where
 ** the next character is ASCII.
 */
-#define Utf8Read(A) (A[0] < 0x80 ? *(A++) : sqlite3Utf8Read(&A))
+#define Utf8Read(A) (A[0] < 0x80 ? *(A++) : ReadCodepoint(&A))
 
 static const struct compareInfo globInfo = {'*', '?', '[', 0};
 /* The correct SQL-92 behavior is for the LIKE operator to ignore
@@ -67,6 +89,15 @@ static const struct compareInfo likeInfoNorm = {'%', '_', 0, 1};
 #define SQLITE_MATCH           0
 #define SQLITE_NOMATCH         1
 #define SQLITE_NOWILDCARDMATCH 2
+
+#define SQLITE_SKIP_UTF8(zIn)                                                                                          \
+	{                                                                                                                  \
+		if ((*(zIn++)) >= 0xc0) {                                                                                      \
+			while ((*zIn & 0xc0) == 0x80) {                                                                            \
+				zIn++;                                                                                                 \
+			}                                                                                                          \
+		}                                                                                                              \
+	}
 
 /*
 ** Compare two UTF-8 strings for equality where the first string is
@@ -106,16 +137,16 @@ static const struct compareInfo likeInfoNorm = {'%', '_', 0, 1};
 **
 ** This routine is usually quick, but can be N**2 in the worst case.
 */
-static int patternCompare(const u8 *zPattern,              /* The glob pattern */
-                          const u8 *zString,               /* The string to compare against the glob */
+static int patternCompare(const uint8_t *zPattern,         /* The glob pattern */
+                          const uint8_t *zString,          /* The string to compare against the glob */
                           const struct compareInfo *pInfo, /* Information about how to do the compare */
                           uint32_t matchOther              /* The escape char (LIKE) or '[' (GLOB) */
 ) {
 	uint32_t c, c2;                      /* Next pattern and input string chars */
 	uint32_t matchOne = pInfo->matchOne; /* "?" or "_" */
 	uint32_t matchAll = pInfo->matchAll; /* "*" or "%" */
-	u8 noCase = pInfo->noCase;           /* True if uppercase==lowercase */
-	const u8 *zEscaped = 0;              /* One past the last escaped input char */
+	uint8_t noCase = pInfo->noCase;      /* True if uppercase==lowercase */
+	const uint8_t *zEscaped = 0;         /* One past the last escaped input char */
 
 	while ((c = Utf8Read(zPattern)) != 0) {
 		if (c == matchAll) { /* Match "*" */
@@ -123,7 +154,7 @@ static int patternCompare(const u8 *zPattern,              /* The glob pattern *
 			** are also "?" characters, skip those as well, but consume a
 			** single character of the input string for each "?" skipped */
 			while ((c = Utf8Read(zPattern)) == matchAll || c == matchOne) {
-				if (c == matchOne && sqlite3Utf8Read(&zString) == 0) {
+				if (c == matchOne && Utf8Read(zString) == 0) {
 					return SQLITE_NOWILDCARDMATCH;
 				}
 			}
@@ -131,13 +162,13 @@ static int patternCompare(const u8 *zPattern,              /* The glob pattern *
 				return SQLITE_MATCH; /* "*" at the end of the pattern matches */
 			} else if (c == matchOther) {
 				if (pInfo->matchSet == 0) {
-					c = sqlite3Utf8Read(&zPattern);
+					c = Utf8Read(zPattern);
 					if (c == 0)
 						return SQLITE_NOWILDCARDMATCH;
 				} else {
 					/* "[...]" immediately follows the "*".  We have to do a slow
 					** recursive search in this case, but it is an unusual case. */
-					assert(matchOther < 0x80); /* '[' is a single-byte character */
+					D_ASSERT(matchOther < 0x80); /* '[' is a single-byte character */
 					while (*zString) {
 						int bMatch = patternCompare(&zPattern[-1], zString, pInfo, matchOther);
 						if (bMatch != SQLITE_NOMATCH)
@@ -191,7 +222,7 @@ static int patternCompare(const u8 *zPattern,              /* The glob pattern *
 		}
 		if (c == matchOther) {
 			if (pInfo->matchSet == 0) {
-				c = sqlite3Utf8Read(&zPattern);
+				c = Utf8Read(zPattern);
 				if (c == 0)
 					return SQLITE_NOMATCH;
 				zEscaped = zPattern;
@@ -199,22 +230,22 @@ static int patternCompare(const u8 *zPattern,              /* The glob pattern *
 				uint32_t prior_c = 0;
 				int seen = 0;
 				int invert = 0;
-				c = sqlite3Utf8Read(&zString);
+				c = Utf8Read(zString);
 				if (c == 0)
 					return SQLITE_NOMATCH;
-				c2 = sqlite3Utf8Read(&zPattern);
+				c2 = Utf8Read(zPattern);
 				if (c2 == '^') {
 					invert = 1;
-					c2 = sqlite3Utf8Read(&zPattern);
+					c2 = Utf8Read(zPattern);
 				}
 				if (c2 == ']') {
 					if (c == ']')
 						seen = 1;
-					c2 = sqlite3Utf8Read(&zPattern);
+					c2 = Utf8Read(zPattern);
 				}
 				while (c2 && c2 != ']') {
 					if (c2 == '-' && zPattern[0] != ']' && zPattern[0] != 0 && prior_c > 0) {
-						c2 = sqlite3Utf8Read(&zPattern);
+						c2 = Utf8Read(zPattern);
 						if (c >= prior_c && c <= c2)
 							seen = 1;
 						prior_c = 0;
@@ -224,7 +255,7 @@ static int patternCompare(const u8 *zPattern,              /* The glob pattern *
 						}
 						prior_c = c2;
 					}
-					c2 = sqlite3Utf8Read(&zPattern);
+					c2 = Utf8Read(zPattern);
 				}
 				if (c2 == 0 || (seen ^ invert) == 0) {
 					return SQLITE_NOMATCH;
@@ -245,18 +276,12 @@ static int patternCompare(const u8 *zPattern,              /* The glob pattern *
 	return *zString == 0 ? SQLITE_MATCH : SQLITE_NOMATCH;
 }
 
-/*
-** The sqlite3_strglob() interface.  Return 0 on a match (like strcmp()) and
-** non-zero if there is no match.
-*/
-int sqlite3_strglob(const char *zGlobPattern, const char *zString) {
-	return patternCompare((u8 *)zGlobPattern, (u8 *)zString, &globInfo, '[');
+bool ShellState::StringGlob(const char *zGlobPattern, const char *zString) {
+	return patternCompare((uint8_t *)zGlobPattern, (uint8_t *)zString, &globInfo, '[') == SQLITE_MATCH;
 }
 
-/*
-** The sqlite3_strlike() interface.  Return 0 on a match and non-zero for
-** a miss - like strcmp().
-*/
-int sqlite3_strlike(const char *zPattern, const char *zStr, unsigned int esc) {
-	return patternCompare((u8 *)zPattern, (u8 *)zStr, &likeInfoNorm, esc);
+bool ShellState::StringLike(const char *zPattern, const char *zStr, unsigned int esc) {
+	return patternCompare((uint8_t *)zPattern, (uint8_t *)zStr, &likeInfoNorm, esc) == SQLITE_MATCH;
 }
+
+} // namespace duckdb_shell
