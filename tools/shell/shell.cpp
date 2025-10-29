@@ -3853,17 +3853,27 @@ int ShellState::DoMetaCommand(const string &zLine) {
 			result = command.callback(*this, args);
 		}
 		if (result == MetadataResult::PRINT_USAGE) {
-			raw_printf(stderr, "Usage: .%s %s\n", command.command, command.usage);
+			string error = StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
+			error += StringUtil::Format("Usage: '.%s %s'", command.command, command.usage);
+			PrintDatabaseError(error);
+			rc = 1;
 			result = MetadataResult::FAIL;
 		}
 		rc = int(result);
 		break;
 	}
 	if (!found_argument) {
-		utf8_printf(stderr,
-		            "Error: unknown command or invalid arguments: "
-		            " \"%s\". Enter \".help\" for help\n",
-		            args[0].c_str());
+		string error = StringUtil::Format("Unknown Command Error: Unrecognized command '%s'\n", args[0]);
+
+		vector<string> command_names;
+		for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
+			auto &command = metadata_commands[command_idx];
+			command_names.push_back(string(".") + command.command);
+		}
+		auto candidates_msg = StringUtil::CandidatesErrorMessage(command_names, args[0], "Did you mean");
+		error += candidates_msg + "\n";
+		error += "Run '.help' for more information.";
+		PrintDatabaseError(error);
 		rc = 1;
 	}
 
