@@ -124,6 +124,8 @@ public:
 	string ui_command = "CALL start_ui()";
 	idx_t last_changes = 0;
 	idx_t total_changes = 0;
+	bool readStdin = true;
+	string initFile;
 
 public:
 	void PushOutputMode();
@@ -174,7 +176,7 @@ public:
 	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
 
 	void PrintDatabaseError(const string &zErr);
-	int RunInitialCommand(char *sql, bool bail);
+	int RunInitialCommand(const char *sql, bool bail);
 	void AddError();
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);

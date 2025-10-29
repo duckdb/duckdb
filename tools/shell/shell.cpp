@@ -609,7 +609,7 @@ idx_t ShellState::RenderLength(const string &str) {
 	return RenderLength(str.c_str());
 }
 
-int ShellState::RunInitialCommand(char *sql, bool bail) {
+int ShellState::RunInitialCommand(const char *sql, bool bail) {
 	int rc = 0;
 	if (sql[0] == '.') {
 		rc = DoMetaCommand(sql);
@@ -4392,6 +4392,196 @@ static void usage(int showDetail) {
 	exit(0);
 }
 
+struct CommandLineOption {
+    const char *option;
+    idx_t argument_count;
+    const char *arguments;
+    metadata_command_t pre_init_callback;
+    metadata_command_t post_init_callback;
+    const char *description;
+};
+
+template<RenderMode output_mode>
+MetadataResult ToggleOutputMode(ShellState &state, const vector<string> &args) {
+	state.cMode = state.mode = output_mode;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleASCIIMode(ShellState &state, const vector<string> &args) {
+	state.cMode = state.mode = RenderMode::ASCII;
+	state.colSeparator = ",";
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleCSVMode(ShellState &state, const vector<string> &args) {
+	state.cMode = state.mode = RenderMode::CSV;
+	state.colSeparator = SEP_Unit;
+	state.rowSeparator = SEP_Record;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult EnableBail(ShellState &state, const vector<string> &args) {
+	bail_on_error = true;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult EnableBatch(ShellState &state, const vector<string> &args) {
+	stdin_is_interactive = false;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult DisableBatch(ShellState &state, const vector<string> &args) {
+	stdin_is_interactive = true;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetReadOnlyMode(ShellState &state, const vector<string> &args) {
+	state.config.options.access_mode = duckdb::AccessMode::READ_ONLY;
+	return MetadataResult::SUCCESS;
+}
+
+template<bool HEADER>
+MetadataResult ToggleHeader(ShellState &state, const vector<string> &args) {
+	state.showHeader = HEADER;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult DisableStdin(ShellState &state, const vector<string> &args) {
+	state.readStdin = false;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult EnableEcho(ShellState &state, const vector<string> &args) {
+	state.ShellSetFlag(ShellFlags::SHFLG_Echo);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult AllowUnredacted(ShellState &state, const vector<string> &args) {
+	state.config.options.allow_unredacted_secrets = true;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
+	state.config.options.allow_unsigned_extensions = true;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ShowVersionAndExit(ShellState &state, const vector<string> &args) {
+	printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
+		   duckdb::DuckDB::SourceID());
+	return MetadataResult::EXIT;
+}
+
+MetadataResult PrintHelpAndExit(ShellState &state, const vector<string> &args) {
+	usage(1);
+	return MetadataResult::EXIT;
+}
+
+MetadataResult LaunchUI(ShellState &state, const vector<string> &args) {
+	// run the UI command
+	auto rc = state.RunInitialCommand((char *)state.ui_command.c_str(), true);
+	if (rc != 0) {
+		exit(rc);
+		return MetadataResult::EXIT;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args) {
+	// run the UI command
+	state.rowSeparator = args[1];
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) {
+	auto &storage_version = args[1];
+	try {
+		state.config.options.serialization_compatibility =
+			duckdb::SerializationCompatibility::FromString("latest");
+	} catch(std::exception &ex) {
+		duckdb::ErrorData error(ex);
+		utf8_printf(
+			stderr,
+			"%s: Error: unknown argument (%s) for '-storage-version': %s\n",
+			program_name, storage_version.c_str(), error.Message().c_str());
+		return MetadataResult::EXIT;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
+	state.readStdin = false;
+	auto old_bail = bail_on_error;
+	bail_on_error = true;
+	auto &file = args[1];
+	if (!state.ProcessFile(file)) {
+		exit(1);
+		return MetadataResult::EXIT;
+	}
+	bail_on_error = old_bail;
+	return MetadataResult::SUCCESS;
+}
+
+
+MetadataResult SetInitFile(ShellState &state, const vector<string> &args) {
+	state.initFile = args[1];
+	return MetadataResult::SUCCESS;
+}
+
+template<bool EXIT>
+MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
+	if (EXIT) {
+		state.readStdin = false;
+	}
+	// Always bail if -c or -s fail
+	bool bail = bail_on_error || EXIT;
+	auto &cmd = args[1];
+	auto rc = state.RunInitialCommand(cmd.c_str(), bail);
+	if (rc != 0) {
+		exit(rc);
+		return MetadataResult::EXIT;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+static const CommandLineOption command_line_options[] = {
+    {"ascii", 0, "", nullptr, ToggleASCIIMode, "set output mode to 'ascii'"},
+    {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error'"},
+    {"batch", 0, "", EnableBatch, EnableBatch, "force batch I/O'"},
+    {"box", 0, "", nullptr, ToggleOutputMode<RenderMode::BOX>, "set output mode to 'box'"},
+    {"column", 0, "", nullptr, ToggleOutputMode<RenderMode::COLUMN>, "set output mode to 'column'"},
+    {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
+    {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
+    {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" before reading stdin"},
+    {"echo", 1, "COMMAND", nullptr, EnableEcho, "print commands before execution"},
+    {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
+    {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
+    {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
+    {"help", 0, "", nullptr, PrintHelpAndExit, "show this message"},
+    {"html", 0, "", nullptr, ToggleOutputMode<RenderMode::HTML>, "set output mode to HTML"},
+    {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
+    {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
+    {"line", 0, "", nullptr, ToggleOutputMode<RenderMode::LINE>, "set output mode to 'line'"},
+    {"list", 0, "", nullptr, ToggleOutputMode<RenderMode::LIST>, "set output mode to 'list'"},
+    {"markdown", 0, "", nullptr, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},
+    {"newline", 1, "SEP", nullptr, SetNewlineSeparator, "set output row separator. Default: '\\n'"},
+    {"no-stdin", 0, "", nullptr, DisableStdin, "exit after processing options instead of reading stdin"},
+    {"noheader", 0, "", nullptr, ToggleHeader<false>, "turn headers off"},
+    {"nullvalue", 1, "TEXT", nullptr, SetNullValue, "set text string for NULL values. Default 'NULL'"},
+    {"quote", 0, "", nullptr, ToggleOutputMode<RenderMode::QUOTE>, "set output mode to 'quote'"},
+    {"readonly", 0, "", SetReadOnlyMode, nullptr, "open the database read-only"},
+    {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" before reading stdin"},
+    {"safe", 0, "", EnableSafeMode, nullptr, "enable safe-mode"},
+    {"separator", 1, "SEP", nullptr, SetSeparator, "set output column separator. Default: '|'"},
+    {"storage-version", 1, "VERSION", SetStorageVersion, nullptr, "database storage compatibility version to use. Default: 'v0.10.0'"},
+    {"table", 0, "", nullptr, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
+    {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
+    {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
+    {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},
+    {"version", 0, "", nullptr, ShowVersionAndExit, "show DuckDB version"},
+    {nullptr, 0, nullptr, nullptr, nullptr, nullptr}};
+
+
 /*
 ** Initialize the state information in data
 */
@@ -4436,11 +4626,9 @@ int wmain(int argc, wchar_t **wargv) {
 	char **argv;
 #endif
 	ShellState data;
-	const char *zInitFile = nullptr;
 	int i;
 	int rc = 0;
 	bool warnInmemoryDb = false;
-	bool readStdin = true;
 	vector<string> extra_commands;
 #if !SQLITE_SHELL_IS_UTF8
 	char **argvToFree = 0;
@@ -4502,7 +4690,7 @@ int wmain(int argc, wchar_t **wargv) {
 			} else {
 				/* Excesss arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
-				readStdin = false;
+				data.readStdin = false;
 				extra_commands.push_back(z);
 			}
 		}
@@ -4516,7 +4704,7 @@ int wmain(int argc, wchar_t **wargv) {
 			(void)cmdline_option_value(argc, argv, ++i);
 			stdin_is_interactive = false;
 		} else if (strcmp(z, "-init") == 0) {
-			zInitFile = cmdline_option_value(argc, argv, ++i);
+			data.initFile = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-batch") == 0) {
 			/* Need to check for batch mode here to so we can avoid printing
 			** informational messages (like from process_sqliterc) before
@@ -4566,7 +4754,7 @@ int wmain(int argc, wchar_t **wargv) {
 	** is given on the command line, look for a file named ~/.sqliterc and
 	** try to process it.
 	*/
-	if (!data.ProcessDuckDBRC(zInitFile) && bail_on_error) {
+	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str()) && bail_on_error) {
 		return 1;
 	}
 
@@ -4645,9 +4833,9 @@ int wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-help") == 0) {
 			usage(1);
 		} else if (strcmp(z, "-no-stdin") == 0) {
-			readStdin = false;
+			data.readStdin = false;
 		} else if (strcmp(z, "-f") == 0) {
-			readStdin = false;
+			data.readStdin = false;
 			if (i == argc - 1) {
 				break;
 			}
@@ -4660,7 +4848,7 @@ int wmain(int argc, wchar_t **wargv) {
 			bail_on_error = old_bail;
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
-				readStdin = false;
+				data.readStdin = false;
 			}
 			/* Run commands that follow -cmd first and separately from commands
 			** that simply appear on the command-line.  This seems goofy.  It would
@@ -4694,7 +4882,7 @@ int wmain(int argc, wchar_t **wargv) {
 		data.cMode = data.mode;
 	}
 
-	if (!readStdin) {
+	if (!data.readStdin) {
 		/* Run all arguments that do not begin with '-' as if they were separate
 		** command-line inputs, except for the argToSkip argument which contains
 		** the database filename.
