@@ -91,13 +91,13 @@ void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &execu
 	}
 }
 
-void AsyncResult::ExecuteTasksSyncronously() {
+void AsyncResult::ExecuteTasksSynchronously() {
 	if (result_type != AsyncResultType::BLOCKED) {
-		throw InternalException("AsyncResult::ExecuteTasksSyncronously called on non BLOCKED AsyncResult");
+		throw InternalException("AsyncResult::ExecuteTasksSynchronously called on non BLOCKED AsyncResult");
 	}
 
 	if (async_tasks.empty()) {
-		throw InternalException("AsyncResult::ExecuteTasksSyncronously called with no available tasks");
+		throw InternalException("AsyncResult::ExecuteTasksSynchronously called with no available tasks");
 	}
 
 	for (auto &async_task : async_tasks) {

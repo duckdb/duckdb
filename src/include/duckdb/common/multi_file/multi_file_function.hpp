@@ -611,10 +611,10 @@ public:
 				case AsyncResultsExecutionMode::TASK_EXECUTOR:
 					data_p.async_result = std::move(res);
 					return;
-				case AsyncResultsExecutionMode::SYNCRONOUS:
-					res.ExecuteTasksSyncronously();
+				case AsyncResultsExecutionMode::SYNCHRONOUS:
+					res.ExecuteTasksSynchronously();
 					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
-						throw InternalException("Unexpected behaviour from ExecuteTasksSyncronously");
+						throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
 					}
 					// scan_chunk.size() is 0, see check above, and result is HAVE_MORE_OUTPUT, we need to loop again
 					continue;

@@ -655,7 +655,7 @@ AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetAsyncResultsExecutionModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(AsyncResultsExecutionMode::SYNCRONOUS), "SYNCRONOUS" },
+		{ static_cast<uint32_t>(AsyncResultsExecutionMode::SYNCHRONOUS), "SYNCHRONOUS" },
 		{ static_cast<uint32_t>(AsyncResultsExecutionMode::TASK_EXECUTOR), "TASK_EXECUTOR" }
 	};
 	return values;
