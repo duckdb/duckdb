@@ -188,7 +188,7 @@ enum class OrderByColumnType { NUMERIC, STRING };
 
 class RowGroupReorderer {
 public:
-	RowGroupReorderer(const RowGroupOrderOptions &options);
+	explicit RowGroupReorderer(const RowGroupOrderOptions &options);
 	RowGroup *GetNextRowGroup(reference<RowGroup> row_group);
 	RowGroup *GetRootSegment(reference<RowGroupSegmentTree> row_groups);
 
@@ -201,12 +201,14 @@ private:
 	idx_t offset;
 	bool initialized;
 	vector<reference<RowGroup>> ordered_row_groups;
+
+private:
+	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
 };
 
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
-	virtual ~CollectionScanState() = default;
 
 	//! The current row_group we are scanning
 	RowGroup *row_group;

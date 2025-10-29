@@ -10,20 +10,6 @@
 
 namespace duckdb {
 
-namespace {
-
-Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type) {
-	switch (order_by) {
-	case OrderByStatistics::MIN:
-		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Min(stats) : StringStats::Min(stats);
-	case OrderByStatistics::MAX:
-		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Max(stats) : StringStats::Max(stats);
-	}
-	return Value();
-}
-
-} // namespace
-
 TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 }
 
@@ -135,6 +121,17 @@ RowGroup *RowGroupReorderer::GetNextRowGroup(reference<RowGroup> row_group) {
 		return nullptr;
 	}
 	return &ordered_row_groups[++offset].get();
+}
+
+Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by,
+                                      OrderByColumnType column_type) {
+	switch (order_by) {
+	case OrderByStatistics::MIN:
+		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Min(stats) : StringStats::Min(stats);
+	case OrderByStatistics::MAX:
+		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Max(stats) : StringStats::Max(stats);
+	}
+	return Value();
 }
 
 RowGroup *RowGroupReorderer::GetRootSegment(reference<RowGroupSegmentTree> row_groups) {
