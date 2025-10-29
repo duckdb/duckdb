@@ -29,7 +29,6 @@ public:
 	idx_t current_unique_count;
 	idx_t max_unique_count_across_all_segments = 0;
 	idx_t current_dict_size;
-	std::vector<idx_t> dict_sizes_per_segment;
 	StringHeap heap;
 	string_set_t current_set;
 	bitpacking_width_t current_width;
