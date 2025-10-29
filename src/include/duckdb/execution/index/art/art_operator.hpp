@@ -68,7 +68,6 @@ public:
 	static ARTConflictType Insert(ArenaAllocator &arena, ART &art, Node &node, const ARTKey &key, idx_t depth,
 	                              const ARTKey &row_id, GateStatus status, optional_ptr<ART> delete_art,
 	                              const IndexAppendMode append_mode) {
-
 		reference<Node> active_node_ref(node);
 		reference<const ARTKey> active_key_ref(key);
 

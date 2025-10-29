@@ -482,7 +482,7 @@ string Node::ToString(ART &art, int indent_level, bool inside_gate, bool display
 	auto type = GetType();
 	bool is_gate = GetGateStatus() == GateStatus::GATE_SET;
 	bool propagate_gate = inside_gate || is_gate;
-	
+
 	switch (type) {
 	case NType::LEAF_INLINED: {
 		string str = "";

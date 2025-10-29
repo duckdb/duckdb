@@ -38,7 +38,7 @@ static BoundIndex &GetIndexFromTable(Connection &con, const string &table_name, 
 	auto &storage = duck_table.GetStorage();
 	auto &indexes = storage.GetDataTableInfo()->GetIndexes();
 	auto bound_index = indexes.Find(index_name);
-	
+
 	if (!bound_index) {
 		throw std::runtime_error("Index not found: " + index_name);
 	}
@@ -68,13 +68,13 @@ TEST_CASE("Test BoundIndex Verify and ToString with duplicate keys", "[index][in
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO dup_table VALUES (7, 'e'), (7, 'f'), (7, 'g')"));
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	
+
 	auto &bound_index = GetIndexFromTable(con, "dup_table", "dup_index");
 	bound_index.Verify();
 
 	string index_string = bound_index.ToString();
 	CompareWithReferenceFile(index_string, "test/sql/index/art/pretty_printer/expected_duplicate_keys.txt");
-	
+
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 }
 
@@ -94,17 +94,18 @@ TEST_CASE("Test BoundIndex Verify and ToString with deep tree (ASCII mode)", "[i
 	)"));
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	
+
 	auto &bound_index = GetIndexFromTable(con, "deep_table", "deep_index");
 	bound_index.Verify();
 
 	string index_string = bound_index.ToString(true);
 	CompareWithReferenceFile(index_string, "test/sql/index/art/pretty_printer/expected_deep_tree_ascii.txt");
-	
+
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 }
 
-TEST_CASE("Test BoundIndex Verify and ToString with VARCHAR duplicates (ASCII + Gate)", "[index][index-verify-string]") {
+TEST_CASE("Test BoundIndex Verify and ToString with VARCHAR duplicates (ASCII + Gate)",
+          "[index][index-verify-string]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -154,12 +155,12 @@ TEST_CASE("Test BoundIndex Verify and ToString with VARCHAR duplicates (ASCII + 
 	)"));
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	
+
 	auto &bound_index = GetIndexFromTable(con, "varchar_dup_table", "varchar_dup_index");
 	bound_index.Verify();
 
 	string index_string = bound_index.ToString(true);
 	CompareWithReferenceFile(index_string, "test/sql/index/art/pretty_printer/expected_varchar_duplicates_ascii.txt");
-	
+
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 }
