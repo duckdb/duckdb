@@ -139,6 +139,25 @@ void PEGTransformerFactory::RegisterDetach() {
 	REGISTER_TRANSFORM(TransformDetachStatement);
 }
 
+void PEGTransformerFactory::RegisterDrop() {
+	// drop.gram
+	REGISTER_TRANSFORM(TransformDropStatement);
+	REGISTER_TRANSFORM(TransformDropEntries);
+	REGISTER_TRANSFORM(TransformDropTable);
+	REGISTER_TRANSFORM(TransformTableOrView);
+	REGISTER_TRANSFORM(TransformDropTableFunction);
+	REGISTER_TRANSFORM(TransformDropFunction);
+	REGISTER_TRANSFORM(TransformDropSchema);
+	REGISTER_TRANSFORM(TransformQualifiedSchemaName);
+	REGISTER_TRANSFORM(TransformDropIndex);
+	REGISTER_TRANSFORM(TransformQualifiedIndexName);
+	REGISTER_TRANSFORM(TransformDropSequence);
+	REGISTER_TRANSFORM(TransformDropCollation);
+	REGISTER_TRANSFORM(TransformDropType);
+	REGISTER_TRANSFORM(TransformDropBehavior);
+	REGISTER_TRANSFORM(TransformDropSecret);
+}
+
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);

@@ -150,6 +150,7 @@ public:
 	void RegisterDeallocate();
 	void RegisterDelete();
 	void RegisterDetach();
+	void RegisterDrop();
 	void RegisterExpression();
 	void RegisterInsert();
 	void RegisterLoad();
@@ -271,6 +272,23 @@ private:
 	// detach.gram
 	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
+
+	// drop.gram
+	static unique_ptr<SQLStatement> TransformDropStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropEntries(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropTable(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static CatalogType TransformTableOrView(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformQualifiedSchemaName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformQualifiedIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static bool TransformDropBehavior(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// expression.gram
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,
