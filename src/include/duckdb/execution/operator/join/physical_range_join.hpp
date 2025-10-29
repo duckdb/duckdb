@@ -1,43 +1,42 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/join/physical_piecewise_merge_join.hpp
+// duckdb/execution/operator/join/physical_range_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
-#include "duckdb/planner/bound_result_modifier.hpp"
-#include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/common/sorting/sorted_run.hpp"
 
 namespace duckdb {
-
-struct GlobalSortState;
 
 //! PhysicalRangeJoin represents one or more inequality range join predicates between
 //! two tables
 class PhysicalRangeJoin : public PhysicalComparisonJoin {
 public:
+	class GlobalSortedTable;
+
 	class LocalSortedTable {
 	public:
-		LocalSortedTable(ClientContext &context, const PhysicalRangeJoin &op, const idx_t child);
+		LocalSortedTable(ExecutionContext &context, GlobalSortedTable &global_table, const idx_t child);
 
-		void Sink(DataChunk &input, GlobalSortState &global_sort_state);
+		void Sink(ExecutionContext &context, DataChunk &input);
 
-		inline void Sort(GlobalSortState &global_sort_state) {
-			local_sort_state.Sort(global_sort_state, true);
-		}
-
-		//! The hosting operator
-		const PhysicalRangeJoin &op;
+		//! The global table we are connected to
+		GlobalSortedTable &global_table;
 		//! The local sort state
-		LocalSortState local_sort_state;
+		unique_ptr<LocalSinkState> local_sink;
 		//! Local copy of the sorting expression executor
 		ExpressionExecutor executor;
 		//! Holds a vector of incoming sorting columns
 		DataChunk keys;
+		//! The sort data
+		DataChunk sort_chunk;
 		//! The number of NULL values
 		idx_t has_null;
 		//! The total number of rows
@@ -50,45 +49,89 @@ public:
 
 	class GlobalSortedTable {
 	public:
-		GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout,
-		                  const PhysicalOperator &op);
+		GlobalSortedTable(ClientContext &client, const vector<BoundOrderByNode> &orders,
+		                  const vector<LogicalType> &payload_layout, const PhysicalRangeJoin &op);
 
 		inline idx_t Count() const {
 			return count;
 		}
 
 		inline idx_t BlockCount() const {
-			if (global_sort_state.sorted_blocks.empty()) {
-				return 0;
-			}
-			D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
-			return global_sort_state.sorted_blocks[0]->radix_sorting_data.size();
+			return sorted->key_data->ChunkCount();
+		}
+
+		inline idx_t BlockStart(idx_t i) const {
+			return MinValue<idx_t>(i * STANDARD_VECTOR_SIZE, count);
+		}
+
+		inline idx_t BlockEnd(idx_t i) const {
+			return BlockStart(i + 1) - 1;
 		}
 
 		inline idx_t BlockSize(idx_t i) const {
-			return global_sort_state.sorted_blocks[0]->radix_sorting_data[i]->count;
+			return i < BlockCount() ? MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - BlockStart(i)) : 0;
 		}
 
-		void Combine(LocalSortedTable &ltable);
+		inline SortKeyType GetSortKeyType() const {
+			return sorted->key_data->GetLayout().GetSortKeyType();
+		}
+
 		void IntializeMatches();
+
+		//! Combine local states
+		void Combine(ExecutionContext &context, LocalSortedTable &ltable);
+		//! Prepare for sorting.
+		void Finalize(ClientContext &client, InterruptState &interrupt);
+		//! Schedules the materialisation process.
+		void Materialize(Pipeline &pipeline, Event &event);
+		//! Single-threaded materialisation.
+		void Materialize(ExecutionContext &context, InterruptState &interrupt);
+		//! Materialize an empty sorted run.
+		void MaterializeEmpty(ClientContext &client);
+		//! Print the table to the console
 		void Print();
 
-		//! Starts the sorting process.
-		void Finalize(Pipeline &pipeline, Event &event);
-		//! Schedules tasks to merge sort the current child's data during a Finalize phase
-		void ScheduleMergeTasks(Pipeline &pipeline, Event &event);
+		//! Create an iteration state
+		unique_ptr<ExternalBlockIteratorState> CreateIteratorState() {
+			auto state = make_uniq<ExternalBlockIteratorState>(*sorted->key_data, sorted->payload_data.get());
+
+			// Unless we do this, we will only get values from the first chunk
+			Repin(*state);
+
+			return state;
+		}
+		//! Reset the pins for an iterator so we release memory in a timely manner
+		static void Repin(ExternalBlockIteratorState &iter) {
+			iter.SetKeepPinned(true);
+			iter.SetPinPayload(true);
+		}
+		//! Create an iteration state
+		unique_ptr<SortedRunScanState> CreateScanState(ClientContext &client) {
+			return make_uniq<SortedRunScanState>(client, *sort);
+		}
+		//! Initialize a payload scanning state
+		void InitializePayloadState(TupleDataChunkState &state) {
+			sorted->payload_data->InitializeChunkState(state);
+		}
 
 		//! The hosting operator
-		const PhysicalOperator &op;
-		GlobalSortState global_sort_state;
+		const PhysicalRangeJoin &op;
+		//! The sort description
+		unique_ptr<Sort> sort;
+		//! The shared sort state
+		unique_ptr<GlobalSinkState> global_sink;
 		//! Whether or not the RHS has NULL values
 		atomic<idx_t> has_null;
 		//! The total number of rows in the RHS
 		atomic<idx_t> count;
+		//! The number of materialisation tasks completed in parallel
+		atomic<idx_t> tasks_completed;
+		//! The shared materialisation state
+		unique_ptr<GlobalSourceState> global_source;
+		//! The materialized data
+		unique_ptr<SortedRun> sorted;
 		//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
 		unsafe_unique_array<bool> found_match;
-		//! Memory usage per thread
-		idx_t memory_per_thread;
 	};
 
 public:
@@ -106,10 +149,9 @@ public:
 
 public:
 	// Gather the result values and slice the payload columns to those values.
-	// Returns a buffer handle to the pinned heap block (if any)
-	static BufferHandle SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
-	                                       const SelectionVector &result, const idx_t result_count,
-	                                       const idx_t left_cols = 0);
+	static void SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table, ExternalBlockIteratorState &state,
+	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx, SelectionVector &result,
+	                               const idx_t result_count, SortedRunScanState &scan_state);
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);

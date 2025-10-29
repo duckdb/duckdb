@@ -17,10 +17,10 @@ if(NOT AMALGAMATION_BUILD)
 endif()
 
 if(NOT WIN32
-   AND NOT SUN
-   AND ${BUILD_UNITTESTS})
-  add_subdirectory(imdb)
-  if(${BUILD_TPCE})
+   AND ${BUILD_UNITTESTS} AND ${BUILD_TPCE})
     add_subdirectory(tpce-tool)
-  endif()
+endif()
+
+if (${BUILD_BENCHMARKS})
+  add_subdirectory(imdb)
 endif()

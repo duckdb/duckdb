@@ -1,6 +1,8 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/variant.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
@@ -289,6 +291,7 @@ template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                      SelectionVector *false_sel, optional_ptr<ValidityMask> null_mask) {
 	if (!sel) {
+		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 		sel = FlatVector::IncrementalSelectionVector();
 	}
 
@@ -468,7 +471,6 @@ using StructEntries = vector<unique_ptr<Vector>>;
 
 void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
                             OptionalSelection &opt) {
-
 	for (idx_t i = 0; i < count;) {
 		const auto slice_idx = slice_sel.get_index(i);
 		const auto result_idx = sel.get_index(slice_idx);
@@ -478,21 +480,21 @@ void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count,
 }
 
 void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
-                       ValidityMask *child_mask, optional_ptr<ValidityMask> null_mask) {
-
-	if (!child_mask) {
+                       ValidityMask *child_mask_p, optional_ptr<ValidityMask> null_mask) {
+	if (!child_mask_p) {
 		return;
 	}
+	auto &child_mask = *child_mask_p;
 
 	for (idx_t i = 0; i < count; ++i) {
 		const auto slice_idx = slice_sel.get_index(i);
 		const auto result_idx = sel.get_index(slice_idx);
-		if (child_mask && !child_mask->RowIsValid(slice_idx)) {
+		if (!child_mask.RowIsValid(slice_idx)) {
 			null_mask->SetInvalid(result_idx);
 		}
 	}
 
-	child_mask->Reset(null_mask->Capacity());
+	child_mask.Reset(null_mask->Capacity());
 }
 
 void DensifyNestedSelection(const SelectionVector &dense_sel, const idx_t count, SelectionVector &slice_sel) {
@@ -890,6 +892,7 @@ idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const Selec
 	// we have to make multiple passes, so we need to keep track of the original input positions
 	// and then scatter the output selections when we are done.
 	if (!sel) {
+		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 		sel = FlatVector::IncrementalSelectionVector();
 	}
 
@@ -911,7 +914,8 @@ idx_t DistinctSelectNested(Vector &left, Vector &right, optional_ptr<const Selec
 	auto unknown = DistinctSelectNotNull<OP>(l_not_null, r_not_null, count, match_count, *sel, maybe_vec, true_opt,
 	                                         false_opt, null_mask);
 
-	switch (left.GetType().InternalType()) {
+	auto &left_type = left.GetType();
+	switch (left_type.InternalType()) {
 	case PhysicalType::LIST:
 		match_count +=
 		    DistinctSelectList<OP>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt, null_mask);
@@ -1009,7 +1013,6 @@ template <class OP>
 idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
                                        idx_t count, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

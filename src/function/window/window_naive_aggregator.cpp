@@ -13,7 +13,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared)
     : WindowAggregator(executor.wexpr, shared), executor(executor) {
-
 	for (const auto &order : wexpr.arg_orders) {
 		arg_order_idx.emplace_back(shared.RegisterCollection(order.expression, false));
 	}

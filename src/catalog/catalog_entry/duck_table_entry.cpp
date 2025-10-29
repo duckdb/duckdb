@@ -29,7 +29,6 @@ namespace duckdb {
 
 IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_storage, unique_ptr<CreateInfo> &info,
                               const idx_t id) {
-
 	auto &table_info = info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(type) + "_";
 	auto name = constraint_name + table_info.table + "_" + to_string(id);
@@ -44,7 +43,6 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
                                shared_ptr<DataTable> inherited_storage)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
       column_dependency_manager(std::move(info.column_dependency_manager)) {
-
 	if (storage) {
 		if (!info.indexes.empty()) {
 			storage->SetIndexStorageInfo(std::move(info.indexes));
@@ -68,7 +66,6 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &constraint = constraints[i];
 		if (constraint->type == ConstraintType::UNIQUE) {
-
 			// UNIQUE constraint: Create a unique index.
 			auto &unique = constraint->Cast<UniqueConstraint>();
 			IndexConstraintType constraint_type = IndexConstraintType::UNIQUE;
@@ -99,7 +96,6 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto &bfk = constraint->Cast<ForeignKeyConstraint>();
 			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 			    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
-
 				vector<LogicalIndex> column_indexes;
 				for (const auto &physical_index : bfk.info.fk_keys) {
 					auto &col = columns.GetColumn(physical_index);
@@ -595,12 +591,24 @@ void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_i
 			auto copy = constraint->Copy();
 			auto &unique = copy->Cast<UniqueConstraint>();
 			if (unique.HasIndex()) {
+				// Single-column UNIQUE constraint
 				if (unique.GetIndex() == removed_index) {
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
 					    info.removed_column);
 				}
 				unique.SetIndex(adjusted_indices[unique.GetIndex().index]);
+			} else {
+				// Multi-column UNIQUE constraint - check if any column matches the one being dropped
+				for (const auto &col_name : unique.GetColumnNames()) {
+					if (col_name == info.removed_column) {
+						// Build constraint string for error message: UNIQUE(col1, col2, ...)
+						auto constraint_str = "UNIQUE(" + StringUtil::Join(unique.GetColumnNames(), ", ") + ")";
+						throw CatalogException(
+						    "Cannot drop column \"%s\" because it is referenced in unique constraint %s",
+						    info.removed_column, constraint_str);
+					}
+				}
 			}
 			create_info.constraints.push_back(std::move(copy));
 			break;
@@ -1285,8 +1293,8 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 	return TableScanFunction::GetFunction();
 }
 
-vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo() {
-	return storage->GetColumnSegmentInfo();
+vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo(const QueryContext &context) {
+	return storage->GetColumnSegmentInfo(context);
 }
 
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {

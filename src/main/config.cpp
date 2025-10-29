@@ -63,6 +63,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
     DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),
     DUCKDB_SETTING(AllowExtensionsMetadataMismatchSetting),
+    DUCKDB_GLOBAL(AllowParserOverrideExtensionSetting),
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
@@ -168,21 +169,23 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
     DUCKDB_GLOBAL(SecretDirectorySetting),
+    DUCKDB_SETTING_CALLBACK(StorageBlockPrefetchSetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
     DUCKDB_LOCAL(StreamingBufferSizeSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),
     DUCKDB_GLOBAL(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
+    DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 83),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 33),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 102),
-                                                     DUCKDB_SETTING_ALIAS("user", 116),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 20),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 115),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 84),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 34),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 103),
+                                                     DUCKDB_SETTING_ALIAS("user", 118),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 21),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 117),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -324,9 +327,9 @@ void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const Configuratio
 	option.reset_global(db.get(), *this);
 }
 
-void DBConfig::SetOption(const string &name, Value value) {
+void DBConfig::SetOption(const String &name, Value value) {
 	lock_guard<mutex> l(config_lock);
-	options.set_variables[name] = std::move(value);
+	options.set_variables[name.ToStdString()] = std::move(value);
 }
 
 void DBConfig::ResetOption(const String &name) {
@@ -438,8 +441,14 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	return type_id;
 }
 
+bool DBConfig::HasExtensionOption(const string &name) {
+	lock_guard<mutex> l(config_lock);
+	return extension_parameters.find(name) != extension_parameters.end();
+}
+
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope) {
+	lock_guard<mutex> l(config_lock);
 	extension_parameters.insert(make_pair(
 	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope)));
 	// copy over unrecognized options, if they match the new extension option
@@ -515,8 +524,7 @@ void DBConfig::CheckLock(const String &name) {
 		return;
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked",
-	                            name.ToStdString());
+	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {

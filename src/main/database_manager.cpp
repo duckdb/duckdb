@@ -84,22 +84,40 @@ shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_gua
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
-	auto &config = DBConfig::GetConfig(context);
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
+		// Start timing the ATTACH-delay step.
+		auto profiler = context.client_data->profiler;
+		profiler->StartTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
+			// first check if it exists within this transaction
+			auto &meta_transaction = MetaTransaction::Get(context);
+			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
+			if (existing_db) {
+				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+				// it does! return it
+				return existing_db;
+			}
+
 			// ... but it might not be done attaching yet!
 			// verify the database has actually finished attaching prior to returning
 			lock_guard<mutex> guard(databases_lock);
-			if (databases.find(info.name) != databases.end()) {
-				// database ACTUALLY exists - return
-				return nullptr;
+			auto entry = databases.find(info.name);
+			if (entry != databases.end()) {
+				// The database ACTUALLY exists, so we return it.
+				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+				return entry->second;
 			}
 			if (context.interrupted) {
+				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 				throw InterruptException();
 			}
 		}
+		profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
 	}
+
+	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);
 	if (!options.db_type.empty()) {
 		// we only need to prevent duplicate opening of DuckDB files
@@ -126,6 +144,20 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
+
+	//! Initialize the database.
+	if (options.is_main_database) {
+		attached_db->SetInitialDatabase();
+		attached_db->Initialize(context);
+	} else {
+		attached_db->Initialize(context);
+		if (!options.default_table.name.empty()) {
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+		}
+		attached_db->FinalizeLoad(context);
+	}
+
+	FinalizeAttach(context, info, attached_db);
 	return attached_db;
 }
 
@@ -248,7 +280,7 @@ idx_t DatabaseManager::ApproxDatabaseCount() {
 }
 
 InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &info, AttachOptions &options) {
-	return path_manager->InsertDatabasePath(info.path, info.name, info.on_conflict, options);
+	return path_manager->InsertDatabasePath(*this, info.path, info.name, info.on_conflict, options);
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {
@@ -271,7 +303,6 @@ vector<string> DatabaseManager::GetAttachedDatabasePaths() {
 
 void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
                                       AttachOptions &options) {
-
 	// Test if the database is a DuckDB database file.
 	if (StringUtil::CIEquals(options.db_type, "duckdb")) {
 		options.db_type = "";
@@ -281,7 +312,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		DBPathAndType::CheckMagicBytes(QueryContext(context), fs, info.path, options.db_type);
+		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type);
 	}
 
 	if (options.db_type.empty()) {

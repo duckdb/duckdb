@@ -24,7 +24,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}"
                                                   STREQUAL "AppleClang")
   set(EXIT_TIME_DESTRUCTORS_WARNING TRUE)
   set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing -Wsign-conversion -Wsign-compare -Wconversion"
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing -Wsign-conversion -Wsign-compare -Wconversion -Wtype-limits"
   )
 endif()
 
@@ -60,9 +60,12 @@ endfunction()
 if(AMALGAMATION_BUILD)
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
-  set_target_properties(
-    duckdb PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
-                      SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
+  if(SET_DUCKDB_LIBRARY_VERSION)
+    set_target_properties(
+      duckdb
+      PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
+                 SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
+  endif()
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb PUBLIC)
   link_extension_libraries(duckdb PRIVATE)
@@ -113,9 +116,12 @@ else()
       duckdb_zstd)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
-  set_target_properties(
-    duckdb PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
-                      SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
+  if(SET_DUCKDB_LIBRARY_VERSION)
+    set_target_properties(
+      duckdb
+      PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
+                 SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
+  endif()
 
   if(WIN32 AND NOT MINGW)
     ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)

@@ -62,10 +62,14 @@ public:
 	MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager);
 	~MetadataManager();
 
+	BufferManager &GetBufferManager() const {
+		return buffer_manager;
+	}
+
 	MetadataHandle AllocateHandle();
 	MetadataHandle Pin(const MetadataPointer &pointer);
 
-	MetadataHandle Pin(QueryContext context, const MetadataPointer &pointer);
+	MetadataHandle Pin(const QueryContext &context, const MetadataPointer &pointer);
 
 	MetaBlockPointer GetDiskPointer(const MetadataPointer &pointer, uint32_t offset = 0);
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
@@ -92,17 +96,19 @@ public:
 protected:
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
+	mutable mutex block_lock;
 	unordered_map<block_id_t, MetadataBlock> blocks;
 	unordered_map<block_id_t, idx_t> modified_blocks;
 
 protected:
-	block_id_t AllocateNewBlock();
-	block_id_t PeekNextBlockId();
-	block_id_t GetNextBlockId();
+	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock);
+	block_id_t PeekNextBlockId() const;
+	block_id_t GetNextBlockId() const;
 
-	void AddBlock(MetadataBlock new_block, bool if_exists = false);
-	void AddAndRegisterBlock(MetadataBlock block);
-	void ConvertToTransient(MetadataBlock &block);
+	void AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new_block, bool if_exists = false);
+	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block);
+	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block);
+	MetadataPointer FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer);
 };
 
 } // namespace duckdb

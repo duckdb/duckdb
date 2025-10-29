@@ -37,14 +37,24 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
 
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-else()
-  find_program(CCACHE_PROGRAM sccache)
-  if(CCACHE_PROGRAM)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-  endif()
+if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C compiler launcher")
+        set(CMAKE_C_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
+endif()
+
+if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C++ compiler launcher")
+        set(CMAKE_CXX_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
 endif()
 
 # Determine install paths
@@ -238,7 +248,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" FALSE)
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")
 endif()
@@ -451,6 +461,7 @@ option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
+option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -1081,17 +1092,25 @@ endfunction()
 # Downloads the external extension repo at the specified commit and calls register_extension
 macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES LINKED_LIBS SUBMODULES EXTENSION_VERSION)
   include(FetchContent)
-  if (${APPLY_PATCHES})
-    set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+
+  string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
+  if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
+    set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
+    message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\"")
+  else()
+    if (${APPLY_PATCHES})
+      set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+    endif()
+    FETCHCONTENT_DECLARE(
+            ${NAME}_extension_fc
+            GIT_REPOSITORY ${URL}
+            GIT_TAG ${COMMIT}
+            GIT_SUBMODULES "${SUBMODULES}"
+            PATCH_COMMAND ${PATCH_COMMAND}
+    )
+    FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
+    message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
   endif()
-  FETCHCONTENT_DECLARE(
-          ${NAME}_extension_fc
-          GIT_REPOSITORY ${URL}
-          GIT_TAG ${COMMIT}
-          GIT_SUBMODULES "${SUBMODULES}"
-          PATCH_COMMAND ${PATCH_COMMAND}
-  )
-  FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   # Autogenerate version tag if not provided
   if ("${EXTENSION_VERSION}" STREQUAL "")
@@ -1099,8 +1118,6 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
   else()
     set(EXTERNAL_EXTENSION_VERSION "${EXTENSION_VERSION}")
   endif()
-
-  message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
 
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${EXTERNAL_EXTENSION_VERSION}" PARENT_SCOPE)

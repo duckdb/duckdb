@@ -80,7 +80,7 @@ private:
 	//! The set of pivot entries to create
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	//! Sets of stored CTEs, if any
-	vector<CommonTableExpressionMap *> stored_cte_map;
+	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 	//! Whether or not we are currently binding a window definition
 	bool in_window_definition = false;
 
@@ -217,6 +217,8 @@ private:
 	unique_ptr<QueryNode> TransformSelectNodeInternal(duckdb_libpgquery::PGSelectStmt &select, bool is_select = true);
 	unique_ptr<QueryNode> TransformSelectInternal(duckdb_libpgquery::PGSelectStmt &select);
 	void TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, QueryNode &node);
+	bool SetOperationsMatch(duckdb_libpgquery::PGSelectStmt &root, duckdb_libpgquery::PGNode &node);
+	void TransformSetOperationChildren(duckdb_libpgquery::PGSelectStmt &stmt, SetOperationNode &result);
 
 	//===--------------------------------------------------------------------===//
 	// Expression Transform
@@ -302,7 +304,6 @@ private:
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	vector<string> TransformStringList(duckdb_libpgquery::PGList *list);
 	void TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map);
-	static unique_ptr<QueryNode> TransformMaterializedCTE(unique_ptr<QueryNode> root);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr &node,
 	                                                  CommonTableExpressionInfo &info);
 

@@ -7,7 +7,6 @@ namespace duckdb {
 
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
-
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {

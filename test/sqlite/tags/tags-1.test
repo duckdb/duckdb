@@ -1,0 +1,9 @@
+# name: test/sqlite/tags/tags-1.test
+# group: [tags]
+
+tags 1
+
+require-env VALIDATE_TAGS
+
+statement ok
+SELECT 'tagged 1';

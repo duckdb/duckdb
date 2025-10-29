@@ -16,7 +16,6 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator> op) {
-
 	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
 		op->children[child_idx] = Rewrite(std::move(op->children[child_idx]));
 	}

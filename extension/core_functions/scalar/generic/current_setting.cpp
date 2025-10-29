@@ -33,7 +33,6 @@ void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
-
 	auto &key_child = arguments[0];
 	if (key_child->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
@@ -53,10 +52,7 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	if (!context.TryGetCurrentSetting(key, val)) {
 		auto extension_name = Catalog::AutoloadExtensionByConfigName(context, key);
 		// If autoloader didn't throw, the config is now available
-		if (!context.TryGetCurrentSetting(key, val)) {
-			throw InternalException("Extension %s did not provide the '%s' config setting",
-			                        extension_name.ToStdString(), key);
-		}
+		context.TryGetCurrentSetting(key, val);
 	}
 
 	bound_function.return_type = val.type();

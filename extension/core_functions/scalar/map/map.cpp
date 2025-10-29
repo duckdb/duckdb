@@ -38,7 +38,6 @@ static bool MapIsNull(DataChunk &chunk) {
 }
 
 static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
-
 	// internal MAP representation
 	// - LIST-vector that contains STRUCTs as child entries
 	// - STRUCTs have exactly two fields, a key-field, and a value-field
@@ -107,7 +106,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	idx_t offset = 0;
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-
 		auto keys_idx = keys_data.sel->get_index(row_idx);
 		auto values_idx = values_data.sel->get_index(row_idx);
 		auto result_idx = result_data.sel->get_index(row_idx);
@@ -128,7 +126,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		// set the selection vectors and perform a duplicate key check
 		value_set_t unique_keys;
 		for (idx_t child_idx = 0; child_idx < keys_entry.length; child_idx++) {
-
 			auto key_idx = keys_child_data.sel->get_index(keys_entry.offset + child_idx);
 			auto value_idx = values_child_data.sel->get_index(values_entry.offset + child_idx);
 
@@ -173,7 +170,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 }
 
 ScalarFunctionSet MapFun::GetFunctions() {
-
 	ScalarFunction empty_func({}, LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL), MapFunction);
 	BaseScalarFunction::SetReturnsError(empty_func);
 

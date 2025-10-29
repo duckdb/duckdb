@@ -96,14 +96,17 @@ private:
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);
 	//! Adds a filter to the set of filters. Returns FilterResult::UNSATISFIABLE if the subtree should be stripped, or
 	//! FilterResult::SUCCESS otherwise
+
+	unique_ptr<LogicalOperator> PushFiltersIntoDelimJoin(unique_ptr<LogicalOperator> op);
 	FilterResult AddFilter(unique_ptr<Expression> expr);
 	//! Extract filter bindings to compare them with expressions in an operator and determine if the filter
 	//! can be pushed down
 	void ExtractFilterBindings(const Expression &expr, vector<ColumnBinding> &bindings);
 	//! Generate filters from the current set of filters stored in the FilterCombiner
 	void GenerateFilters();
-	//! if there are filters in this FilterPushdown node, push them into the combiner
-	void PushFilters();
+	//! if there are filters in this FilterPushdown node, push them into the combiner. Returns
+	//! FilterResult::UNSATISFIABLE if the subtree should be stripped, or FilterResult::SUCCESS otherwise
+	FilterResult PushFilters();
 };
 
 } // namespace duckdb

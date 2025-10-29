@@ -11,12 +11,12 @@ statement ok
 CREATE TABLE no_newline (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY no_newline FROM 'data/csv/test/no_newline.csv';
+COPY no_newline FROM '{DATA_DIR}/csv/test/no_newline.csv';
 ----
 1024
 
 query III
-FROM read_csv('data/csv/test/no_newline_unicode.csv', delim= '🦆') limit 5;
+FROM read_csv('{DATA_DIR}/csv/test/no_newline_unicode.csv', delim= '🦆') limit 5;
 ----
 0	0	 test
 1	1	 test

@@ -121,3 +121,30 @@ statement ok
 CREATE TABLE foo.baz (
 	bar_col "foo".bar NOT NULL
 );
+
+statement ok
+drop schema "foo" cascade;
+
+# Test schema-qualified enum types with arrays
+# https://github.com/duckdb/duckdb/issues/17041
+statement ok
+CREATE SCHEMA foo;
+
+statement ok
+CREATE TYPE foo.bar AS ENUM ('a', 'b', 'c');
+
+statement ok
+CREATE TABLE foo.test (
+	qualified_array foo.bar[]
+);
+
+statement ok
+INSERT INTO foo.test VALUES (['a', 'b']);
+
+query I
+SELECT * FROM foo.test;
+----
+[a, b]
+
+statement ok
+DROP SCHEMA foo CASCADE;

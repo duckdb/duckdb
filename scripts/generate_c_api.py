@@ -81,6 +81,8 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'streaming_result_interface',
     'cast_functions',
     'expression_interface',
+    'file_system_interface',
+    'config_options_interface',
 ]
 
 # The file that forms the base for the header generation

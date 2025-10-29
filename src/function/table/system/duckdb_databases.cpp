@@ -67,9 +67,11 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
-
 		auto &attached = *entry;
 		auto &catalog = attached.GetCatalog();
+		if (attached.GetVisibility() == AttachVisibility::HIDDEN) {
+			continue;
+		}
 		// return values:
 
 		idx_t col = 0;

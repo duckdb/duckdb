@@ -23,7 +23,8 @@
         "test/sql/attach/show_databases.test",
         "test/sql/attach/attach_views.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
-        "test/sql/attach/attach_use_rollback.test"
+        "test/sql/attach/attach_use_rollback.test",
+        "test/sql/storage/read_duckdb/concurrent_duckdb_read.test_slow"
       ]
     }
   ]

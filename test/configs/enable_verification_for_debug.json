@@ -113,7 +113,8 @@
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
-        "test/sql/storage/compression/rle/rle_constant.test"
+        "test/sql/storage/compression/rle/rle_constant.test",
+        "test/sql/types/geo/geometry_stats.test"
       ]
     },
     {
@@ -723,7 +724,14 @@
         "test/sql/logging/logging_file_bind_replace.test",
         "test/sql/optimizer/test_rowid_pushdown_plan.test",
         "test/sql/pg_catalog/system_functions.test",
-        "test/sql/storage/compression/test_using_compression.test"
+        "test/sql/storage/compression/test_using_compression.test",
+        "test/sql/error/error_position.test"
+      ]
+    },
+    {
+      "reason": "Profiling in combination with verification is disabled for SELECT statements",
+      "paths": [
+        "test/sql/pragma/profiling/test_profiling_fs.test"
       ]
     }
   ]

@@ -13,7 +13,7 @@ statement ok
 set autoinstall_known_extensions=false
 
 statement error
-FROM read_csv('data/csv/test/test.csv', encoding = 'shift_jis')
+FROM read_csv('{DATA_DIR}/csv/test/test.csv', encoding = 'shift_jis')
 ----
 <REGEX>:.*Invalid Input Error.*You can try "INSTALL encodings; LOAD encodings".*
 
@@ -27,4 +27,4 @@ statement ok
 set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
 
 statement ok
-FROM read_csv('data/csv/test/test.csv', encoding = 'shift_jis')
+FROM read_csv('{DATA_DIR}/csv/test/test.csv', encoding = 'shift_jis')

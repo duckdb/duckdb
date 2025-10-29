@@ -24,6 +24,8 @@ class ClientContext;
 class DatabaseInstance;
 class MetadataManager;
 
+enum class ConvertToPersistentMode { DESTRUCTIVE, THREAD_SAFE };
+
 //! BlockManager is an abstract representation to manage blocks on DuckDB. When writing or reading blocks, the
 //! BlockManager creates and accesses blocks. The concrete types implement specific block storage strategies.
 class BlockManager {
@@ -37,6 +39,9 @@ public:
 	BufferManager &buffer_manager;
 
 public:
+	BufferManager &GetBufferManager() const {
+		return buffer_manager;
+	}
 	//! Creates a new block inside the block manager
 	virtual unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) = 0;
 	virtual unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) = 0;
@@ -82,6 +87,10 @@ public:
 	}
 	//! Whether or not the attached database is in-memory
 	virtual bool InMemory() = 0;
+	//! Whether or not to prefetch
+	virtual bool Prefetch() {
+		return false;
+	}
 
 	//! Sync changes made to the block manager
 	virtual void FileSync() = 0;
@@ -91,10 +100,15 @@ public:
 	//! Register a block with the given block id in the base file
 	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
+	//! If mode is set to destructive (default) - the old_block will be destroyed as part of this method
+	//! This can only be safely used when there is no other (lingering) usage of old_block
+	//! If there is concurrent usage of the block elsewhere - use the THREAD_SAFE mode which creates an extra copy
 	shared_ptr<BlockHandle> ConvertToPersistent(QueryContext context, block_id_t block_id,
-	                                            shared_ptr<BlockHandle> old_block, BufferHandle old_handle);
+	                                            shared_ptr<BlockHandle> old_block, BufferHandle old_handle,
+	                                            ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE);
 	shared_ptr<BlockHandle> ConvertToPersistent(QueryContext context, block_id_t block_id,
-	                                            shared_ptr<BlockHandle> old_block);
+	                                            shared_ptr<BlockHandle> old_block,
+	                                            ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE);
 
 	void UnregisterBlock(BlockHandle &block);
 	//! UnregisterBlock, only accepts non-temporary block ids

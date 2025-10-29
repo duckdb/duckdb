@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
@@ -80,7 +81,6 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, const AttachOptions &options)
     : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY),
       in_memory_change_size(0) {
-
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
 		return;
@@ -322,13 +322,40 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			}
 		}
 
-		// load the db from storage
+		// Start timing the storage load step.
+		auto client_context = context.GetClientContext();
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->StartTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+		}
+
+		// Load the checkpoint from storage.
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
 		checkpoint_reader.LoadFromStorage();
 
+		// End timing the storage load step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->EndTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+		}
+
+		// Start timing the WAL replay step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->StartTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+		}
+
+		// Replay the WAL.
 		auto wal_path = GetWALPath();
-		wal = WriteAheadLog::Replay(fs, db, wal_path);
+		wal = WriteAheadLog::Replay(context, fs, db, wal_path);
+
+		// End timing the WAL replay step.
+		if (client_context) {
+			auto profiler = client_context->client_data->profiler;
+			profiler->EndTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+		}
 	}
+
 	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
 		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
 		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
@@ -476,17 +503,34 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}
+
 	auto &config = DBConfig::Get(db);
+	// We only need to checkpoint if there is anything in the WAL.
 	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
-		// we only need to checkpoint if there is anything in the WAL
 		try {
+			// Start timing the checkpoint.
+			auto client_context = context.GetClientContext();
+			if (client_context) {
+				auto profiler = client_context->client_data->profiler;
+				profiler->StartTimer(MetricsType::CHECKPOINT_LATENCY);
+			}
+
+			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
+
+			// End timing the checkpoint.
+			if (client_context) {
+				auto profiler = client_context->client_data->profiler;
+				profiler->EndTimer(MetricsType::CHECKPOINT_LATENCY);
+			}
+
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
+
 	if (!InMemory() && options.wal_action == CheckpointWALAction::DELETE_WAL) {
 		ResetWAL();
 	}

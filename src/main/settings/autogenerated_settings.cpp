@@ -79,6 +79,28 @@ Value AllowCommunityExtensionsSetting::GetSetting(const ClientContext &context) 
 }
 
 //===----------------------------------------------------------------------===//
+// Allow Parser Override Extension
+//===----------------------------------------------------------------------===//
+void AllowParserOverrideExtensionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!OnGlobalSet(db, config, input)) {
+		return;
+	}
+	config.options.allow_parser_override_extension = input.GetValue<string>();
+}
+
+void AllowParserOverrideExtensionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!OnGlobalReset(db, config)) {
+		return;
+	}
+	config.options.allow_parser_override_extension = DBConfigOptions().allow_parser_override_extension;
+}
+
+Value AllowParserOverrideExtensionSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.allow_parser_override_extension);
+}
+
+//===----------------------------------------------------------------------===//
 // Allow Unredacted Secrets
 //===----------------------------------------------------------------------===//
 void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -526,6 +548,13 @@ void SchedulerProcessPartialSetting::ResetGlobal(DatabaseInstance *db, DBConfig 
 Value SchedulerProcessPartialSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.scheduler_process_partial);
+}
+
+//===----------------------------------------------------------------------===//
+// Storage Block Prefetch
+//===----------------------------------------------------------------------===//
+void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

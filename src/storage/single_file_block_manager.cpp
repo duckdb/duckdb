@@ -72,7 +72,6 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 
 	// we zero-out the iv and the (not yet) encrypted canary
@@ -864,6 +863,20 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 
 bool SingleFileBlockManager::IsRemote() {
 	return !handle->OnDiskFile();
+}
+
+bool SingleFileBlockManager::Prefetch() {
+	switch (DBConfig::GetSetting<StorageBlockPrefetchSetting>(db.GetDatabase())) {
+	case StorageBlockPrefetch::NEVER:
+		return false;
+	case StorageBlockPrefetch::DEBUG_FORCE_ALWAYS:
+	case StorageBlockPrefetch::ALWAYS_PREFETCH:
+		return !InMemory();
+	case StorageBlockPrefetch::REMOTE_ONLY:
+		return IsRemote();
+	default:
+		throw InternalException("Unknown StorageBlockPrefetch type");
+	}
 }
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {

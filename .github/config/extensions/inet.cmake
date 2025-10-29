@@ -4,4 +4,5 @@ duckdb_extension_load(inet
     GIT_TAG f6a2a14f061d2dfccdb4283800b55fef3fcbb128
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )

@@ -35,7 +35,6 @@ unique_ptr<FunctionLocalState> RegexpExtractAllStruct::InitLocalState(Expression
 // Forwards startpos automatically
 bool ExtractAll(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &pattern, idx_t *startpos,
                 duckdb_re2::StringPiece *groups, int ngroups) {
-
 	D_ASSERT(pattern.ok());
 	D_ASSERT(pattern.NumberOfCapturingGroups() == ngroups);
 

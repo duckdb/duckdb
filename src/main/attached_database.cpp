@@ -14,12 +14,17 @@
 
 namespace duckdb {
 
-StoredDatabasePath::StoredDatabasePath(DatabaseFilePathManager &manager, string path_p, const string &name)
-    : manager(manager), path(std::move(path_p)) {
+StoredDatabasePath::StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path_p,
+                                       const string &name)
+    : db_manager(db_manager), manager(manager), path(std::move(path_p)) {
 }
 
 StoredDatabasePath::~StoredDatabasePath() {
 	manager.EraseDatabasePath(path);
+}
+
+void StoredDatabasePath::OnDetach() {
+	manager.DetachDatabase(db_manager, path);
 }
 
 //===--------------------------------------------------------------------===//
@@ -31,7 +36,6 @@ AttachOptions::AttachOptions(const DBConfigOptions &options)
 
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
     : access_mode(default_access_mode) {
-
 	for (auto &entry : attach_options) {
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			// Extract the read access mode.
@@ -77,7 +81,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
       db(db), type(type) {
-
 	// This database does not have storage, or uses temporary_objects for in-memory storage.
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
@@ -99,6 +102,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	visibility = options.visibility;
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
 	stored_database_path = std::move(options.stored_database_path);
@@ -116,6 +120,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	} else {
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
+	visibility = options.visibility;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name, info, options);
@@ -155,6 +160,13 @@ bool AttachedDatabase::NameIsReserved(const string &name) {
 	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
 }
 
+string AttachedDatabase::StoredPath() const {
+	if (stored_database_path) {
+		return stored_database_path->path;
+	}
+	return string();
+}
+
 static string RemoveQueryParams(const string &name) {
 	auto vec = StringUtil::Split(name, "?");
 	D_ASSERT(!vec.empty());
@@ -179,7 +191,7 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(QueryContext(context));
+		storage->Initialize(context);
 	}
 }
 
@@ -227,10 +239,12 @@ void AttachedDatabase::SetReadOnlyDatabase() {
 }
 
 void AttachedDatabase::OnDetach(ClientContext &context) {
-	if (!catalog) {
-		return;
+	if (catalog) {
+		catalog->OnDetach(context);
 	}
-	catalog->OnDetach(context);
+	if (stored_database_path && visibility != AttachVisibility::HIDDEN) {
+		stored_database_path->OnDetach();
+	}
 }
 
 void AttachedDatabase::Close() {

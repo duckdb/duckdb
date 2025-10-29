@@ -199,10 +199,8 @@ void DatabaseInstance::CreateMainDatabase() {
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
-	auto initial_database = db_manager->AttachDatabase(*con.context, info, options);
-	initial_database->SetInitialDatabase();
-	initial_database->Initialize(*con.context);
-	db_manager->FinalizeAttach(*con.context, info, std::move(initial_database));
+	options.is_main_database = true;
+	db_manager->AttachDatabase(*con.context, info, options);
 	con.Commit();
 }
 
@@ -285,7 +283,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
 
-	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
+	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
 	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
