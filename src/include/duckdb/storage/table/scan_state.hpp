@@ -324,7 +324,7 @@ struct ParallelCollectionScanState {
 
 class CustomOrderParallelCollectionScanState : public ParallelCollectionScanState {
 public:
-	CustomOrderParallelCollectionScanState(const RowGroupOrderOptions &options);
+	explicit CustomOrderParallelCollectionScanState(const RowGroupOrderOptions &options);
 	RowGroup *GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) override;
 	RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups, RowGroup *row_group) override;
 

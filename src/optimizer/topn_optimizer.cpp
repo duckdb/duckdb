@@ -15,6 +15,25 @@
 
 namespace duckdb {
 
+namespace {
+
+bool CanReorderRowGroups(LogicalTopN &op) {
+	// Only reorder row groups if there are no additional limit operators since they could modify the order
+	reference<LogicalOperator> current_op = op;
+	while (!current_op.get().children.empty()) {
+		if (current_op.get().children.size() > 1) {
+			return false;
+		}
+		if (current_op.get().type == LogicalOperatorType::LOGICAL_LIMIT) {
+			return false;
+		}
+		current_op = *current_op.get().children[0];
+	}
+	return true;
+}
+
+} // namespace
+
 TopN::TopN(ClientContext &context_p) : context(context_p) {
 }
 
@@ -111,6 +130,9 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
 
+	bool use_custom_rowgroup_order =
+	    CanReorderRowGroups(op) && (colref.return_type.IsNumeric() || colref.return_type.IsTemporal());
+
 	for (auto &target : pushdown_targets) {
 		auto &get = target.get;
 		D_ASSERT(target.columns.size() == 1);
@@ -124,9 +146,8 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		auto &column_index = get.GetColumnIds()[col_idx];
 		get.table_filters.PushFilter(column_index, std::move(optional_filter));
 
-		// Scan rowgroups in custom order
-		if (colref.return_type.IsNumeric() || colref.return_type.IsTemporal() ||
-		    colref.return_type == LogicalType::VARCHAR) {
+		// Scan row groups in custom order
+		if (use_custom_rowgroup_order) {
 			auto column_type =
 			    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
 			auto order_type =
