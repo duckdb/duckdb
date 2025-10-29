@@ -23,8 +23,13 @@ DROP INDEX test_index;
 ----
 Catalog Error: Index with name test_index does not exist!
 
-statement ok
+statement error
 DROP MACRO plus1;
+----
+Catalog Error: Macro Function with name plus1 does not exist!
 
 statement ok
 DROP SEQUENCE temp.t1;
+
+statement ok
+DROP MACRO test.test_macro2;

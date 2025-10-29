@@ -62,7 +62,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFunction(PEGTransf
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	auto catalog_type = transformer.Transform<CatalogType>(list_pr.Child<ListParseResult>(0));
+	auto catalog_type = CatalogType::MACRO_ENTRY;
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto function_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	if (function_list.size() > 1) {
