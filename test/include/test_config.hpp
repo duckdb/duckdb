@@ -46,6 +46,10 @@ public:
 	void ParseOption(const string &name, const Value &value);
 	void LoadConfig(const string &config_path);
 
+	void UpdateEnvironment();
+	string GetWorkingDirectory();
+	bool ChangeWorkingDirectory(const string &dir); // true -> changed
+
 	void ProcessPath(string &path, const string &test_name);
 
 	string GetDescription();
@@ -94,6 +98,11 @@ public:
 private:
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
+
+	// explicitly take ownership of working_dir here, giving runners an API to chdir,
+	// and get env updates to match
+	string working_dir;
+	string test_uuid;
 	unordered_map<string, string> test_env;
 
 	vector<unordered_set<string>> select_tag_sets;

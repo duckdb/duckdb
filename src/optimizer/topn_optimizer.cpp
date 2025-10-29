@@ -127,7 +127,6 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op, &context)) {
-
 		vector<unique_ptr<LogicalOperator>> projections;
 
 		// traverse operator tree and collect all projection nodes until we reach

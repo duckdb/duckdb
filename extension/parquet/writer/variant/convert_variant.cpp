@@ -408,7 +408,6 @@ void CopySimplePrimitiveData(const UnifiedVariantVectorData &variant, data_ptr_t
 }
 
 void CopyUUIDData(const UnifiedVariantVectorData &variant, data_ptr_t &value_data, idx_t row, uint32_t values_index) {
-
 	auto byte_offset = variant.GetByteOffset(row, values_index);
 	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
 	auto ptr = data + byte_offset;
@@ -561,7 +560,6 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 static void WriteValueData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index,
                            data_ptr_t &value_data, const vector<uint32_t> &offsets, idx_t &offset_index,
                            optional_ptr<ShreddingState> shredding_state) {
-
 	VariantLogicalType type_id = VariantLogicalType::VARIANT_NULL;
 	if (variant.RowIsValid(row)) {
 		type_id = variant.GetTypeId(row, values_index);

@@ -22,7 +22,6 @@ void PartialBlock::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, ui
 }
 
 void PartialBlock::FlushInternal(const idx_t free_space_left) {
-
 	// ensure that we do not leak any data
 	if (free_space_left > 0 || !uninitialized_regions.empty()) {
 		auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
@@ -45,7 +44,6 @@ PartialBlockManager::PartialBlockManager(QueryContext context, BlockManager &blo
                                          uint32_t max_use_count)
     : context(context.GetClientContext()), block_manager(block_manager), partial_block_type(partial_block_type),
       max_use_count(max_use_count) {
-
 	if (max_partial_block_size_p.IsValid()) {
 		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
 		return;

@@ -6,7 +6,6 @@ namespace duckdb {
 
 static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, ScalarFunction &bound_function,
                                                        vector<unique_ptr<Expression>> &arguments) {
-
 	const auto &lhs_type = arguments[0]->return_type;
 	const auto &rhs_type = arguments[1]->return_type;
 

@@ -187,7 +187,6 @@ struct UniqueFunctor {
 
 		auto result_data = FlatVector::GetData<uint64_t>(result);
 		for (idx_t i = 0; i < count; i++) {
-
 			auto state = states[sdata.sel->get_index(i)];
 
 			if (!state->hist) {
@@ -253,7 +252,6 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	idx_t states_idx = 0;
 
 	for (idx_t i = 0; i < count; i++) {
-
 		// initialize the state for this list
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
@@ -390,7 +388,6 @@ template <bool IS_AGGR = false>
 unique_ptr<FunctionData>
 ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function, const LogicalType &list_child_type,
                            AggregateFunction &aggr_function, vector<unique_ptr<Expression>> &arguments) {
-
 	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
 	auto expr = make_uniq<BoundConstantExpression>(Value(list_child_type));
@@ -423,7 +420,6 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 template <bool IS_AGGR = false>
 unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
-
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
@@ -493,7 +489,6 @@ unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFuncti
 
 unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
-
 	// the list column and the name of the aggregate function
 	D_ASSERT(bound_function.arguments.size() >= 2);
 	D_ASSERT(arguments.size() >= 2);

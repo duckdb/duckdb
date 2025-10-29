@@ -8,24 +8,24 @@ PRAGMA enable_verification
 # implicit alias is equal to the file name
 
 statement ok
-select * from 'data/csv/test/dateformat.csv';
+select * from '{DATA_DIR}/csv/test/dateformat.csv';
 
 statement ok
-select * from 'data/csv/test/dateformat.csv', 'data/csv/test/dateformat_2.csv';
+select * from '{DATA_DIR}/csv/test/dateformat.csv', '{DATA_DIR}/csv/test/dateformat_2.csv';
 
 # explicit alias
 statement ok
-select mytbl.column0 from 'data/csv/test/dateformat.csv'mytbl;
+select mytbl.column0 from '{DATA_DIR}/csv/test/dateformat.csv'mytbl;
 
 statement ok
-select mytbl.mycol from 'data/csv/test/dateformat.csv' mytbl(mycol);
+select mytbl.mycol from '{DATA_DIR}/csv/test/dateformat.csv' mytbl(mycol);
 
 require parquet
 
 statement ok
-select blob.ids from 'data/parquet-testing/blob.parquet'
+select blob.ids from '{DATA_DIR}/parquet-testing/blob.parquet'
 
 require json
 
 statement ok
-select example_n.id from 'data/json/example_n.ndjson'
+select example_n.id from '{DATA_DIR}/json/example_n.ndjson'

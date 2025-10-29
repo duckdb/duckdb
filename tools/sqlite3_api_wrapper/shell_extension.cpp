@@ -28,7 +28,6 @@ static unique_ptr<FunctionData> GetEnvBind(ClientContext &context, ScalarFunctio
 }
 
 void ShellExtension::Load(ExtensionLoader &loader) {
-
 	loader.SetDescription("Adds CLI-specific support and functionalities");
 	loader.RegisterFunction(
 	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind));

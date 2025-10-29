@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-create view r AS from read_csv_auto('data/csv/hive-partitioning/mismatching_contents/*/*.csv', UNION_BY_NAME=1, HIVE_PARTITIONING=1)
+create view r AS from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_contents/*/*.csv', UNION_BY_NAME=1, HIVE_PARTITIONING=1)
 
 query II
 WITH RECURSIVE t(i, j) AS

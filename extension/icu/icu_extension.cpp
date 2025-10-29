@@ -5,11 +5,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-current.hpp"
 #include "include/icu-dateadd.hpp"
@@ -25,8 +22,6 @@
 #include "include/icu_extension.hpp"
 #include "unicode/calendar.h"
 #include "unicode/coll.h"
-#include "unicode/errorcode.h"
-#include "unicode/sortkey.h"
 #include "unicode/stringpiece.h"
 #include "unicode/timezone.h"
 #include "unicode/ucol.h"
@@ -209,11 +204,71 @@ static ScalarFunction GetICUCollateFunction(const string &collation, const strin
 	return result;
 }
 
-unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
+unique_ptr<icu::TimeZone> GetKnownTimeZone(const string &tz_str) {
 	icu::StringPiece tz_name_utf8(tz_str);
 	const auto uid = icu::UnicodeString::fromUTF8(tz_name_utf8);
 	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
 	if (*tz != icu::TimeZone::getUnknown()) {
+		return tz;
+	}
+
+	return nullptr;
+}
+
+static string NormalizeTimeZone(const string &tz_str) {
+	if (GetKnownTimeZone(tz_str)) {
+		return tz_str;
+	}
+
+	//	Map UTC±NN00 to Etc/UTC±N
+	do {
+		if (tz_str.size() <= 4) {
+			break;
+		}
+		if (tz_str.compare(0, 3, "UTC")) {
+			break;
+		}
+
+		idx_t pos = 3;
+		const auto sign = tz_str[pos++];
+		if (sign != '+' && sign != '-') {
+			break;
+		}
+
+		string mapped = "Etc/GMT";
+		mapped += sign;
+		const auto base_len = mapped.size();
+		for (; pos < tz_str.size(); ++pos) {
+			const auto digit = tz_str[pos];
+			//	We could get fancy here and count colons and their locations, but I doubt anyone cares.
+			if (digit == '0' || digit == ':') {
+				continue;
+			}
+			if (!StringUtil::CharacterIsDigit(digit)) {
+				break;
+			}
+			mapped += digit;
+		}
+		if (pos < tz_str.size()) {
+			break;
+		}
+		// If we didn't add anything, then make it +0
+		if (mapped.size() == base_len) {
+			mapped.back() = '+';
+			mapped += '0';
+		}
+		// Final sanity check
+		if (GetKnownTimeZone(mapped)) {
+			return mapped;
+		}
+	} while (false);
+
+	return tz_str;
+}
+
+unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
+	auto tz = GetKnownTimeZone(tz_str);
+	if (tz) {
 		return tz;
 	}
 
@@ -269,6 +324,7 @@ unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
 	auto tz_str = StringValue::Get(parameter);
+	tz_str = NormalizeTimeZone(tz_str);
 	ICUHelpers::GetTimeZone(tz_str);
 	parameter = Value(tz_str);
 }
@@ -362,7 +418,6 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-
 	// iterate over all the collations
 	int32_t count;
 	auto locales = icu::Collator::getAvailableLocales(count);
@@ -405,6 +460,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	icu::UnicodeString tz_id;
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
+	// If the environment TZ is invalid, look for some alternatives
+	tz_string = NormalizeTimeZone(tz_string);
+	if (!GetKnownTimeZone(tz_string)) {
+		tz_string = "UTC";
+	}
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
 	                          SetICUTimeZone);
 
