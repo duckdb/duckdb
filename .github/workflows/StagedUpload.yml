@@ -38,7 +38,7 @@ jobs:
           aws s3 cp --recursive "s3://duckdb-staging/$TARGET/${{ inputs.target_git_describe }}/$GITHUB_REPOSITORY/github_release" to_be_uploaded
 
      - name: Deploy
-        if: ${{ inputs.target_git_describe != '' }}
+       if: ${{ inputs.target_git_describe != '' }}
        shell: bash
        env:
          AWS_ENDPOINT_URL: ${{ secrets.DUCKDB_INSTALL_S3_ENDPOINT }}
