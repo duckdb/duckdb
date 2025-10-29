@@ -8,7 +8,7 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
       current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
-                         max_unique_count_across_all_segments + 1, // maximum_size_p (amount of elements)
+                         max_unique_count_across_all_segments, // maximum_size_p (amount of elements)
                          1 // maximum_target_capacity_p, 0 because we don't care about target for our use-case, as we
                            // are using PrimitiveDictionary for duplicate checks
       ) {
