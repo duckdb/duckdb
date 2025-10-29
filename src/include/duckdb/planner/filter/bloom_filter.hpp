@@ -18,9 +18,9 @@
 namespace duckdb {
 
 enum class BloomFilterStatus : uint8_t {
-	Uninitialized, // not initialized and cannot be populated or probed
-	Active,        // ready and in use
-	Pause          // ready to use but not in use currently, e.g., not selective enough
+	UNINITALIZED, // not initialized and cannot be populated or probed
+	ACTIVE,       // ready and in use
+	PAUSED        // ready to use but not in use currently, e.g., not selective enough
 };
 
 class BloomFilter {
@@ -65,18 +65,18 @@ public:
 	}
 
 	void Pause() {
-		status.store(BloomFilterStatus::Pause);
+		status.store(BloomFilterStatus::PAUSED);
 	}
 
 	bool IsActive() const {
-		return status.load() == BloomFilterStatus::Active;
+		return status.load() == BloomFilterStatus::ACTIVE;
 	}
 	void InsertOne(hash_t hash) const;
 	bool LookupOne(hash_t hash) const;
 
 private:
 	SelectivityStats selectivity_data;
-	atomic<BloomFilterStatus> status {BloomFilterStatus::Uninitialized};
+	atomic<BloomFilterStatus> status {BloomFilterStatus::UNINITALIZED};
 	idx_t num_sectors;
 	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
 

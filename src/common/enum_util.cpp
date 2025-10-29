@@ -730,9 +730,9 @@ BlockState EnumUtil::FromString<BlockState>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetBloomFilterStatusValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(BloomFilterStatus::Uninitialized), "Uninitialized" },
-		{ static_cast<uint32_t>(BloomFilterStatus::Active), "Active" },
-		{ static_cast<uint32_t>(BloomFilterStatus::Pause), "Pause" }
+		{ static_cast<uint32_t>(BloomFilterStatus::UNINITALIZED), "UNINITALIZED" },
+		{ static_cast<uint32_t>(BloomFilterStatus::ACTIVE), "ACTIVE" },
+		{ static_cast<uint32_t>(BloomFilterStatus::PAUSED), "PAUSED" }
 	};
 	return values;
 }

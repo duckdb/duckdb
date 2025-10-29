@@ -29,7 +29,7 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	bf = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 	std::fill_n(bf, num_sectors, 0);
 
-	status.store(BloomFilterStatus::Active);
+	status.store(BloomFilterStatus::ACTIVE);
 }
 
 inline uint64_t GetMask(const uint8_t *__restrict shifts_8, const idx_t i) {
@@ -136,7 +136,7 @@ inline bool BloomFilter::LookupOne(uint64_t hash) const {
 }
 
 string BFTableFilter::ToString(const string &column_name) const {
-	if (filter.GetStatus().load() == BloomFilterStatus::Active) {
+	if (filter.GetStatus().load() == BloomFilterStatus::ACTIVE) {
 		return column_name + " IN BF(" + key_column_name + ")";
 	} else {
 		return "True";
