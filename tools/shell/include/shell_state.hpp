@@ -22,9 +22,9 @@ enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
 using duckdb::make_uniq;
+using duckdb::string;
 using duckdb::unique_ptr;
-using std::string;
-using std::vector;
+using duckdb::vector;
 struct ColumnarResult;
 struct RowResult;
 class ColumnRenderer;

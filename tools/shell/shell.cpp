@@ -4720,8 +4720,16 @@ int wmain(int argc, wchar_t **wargv) {
 		}
 		if (!c.IsValid()) {
 			// not found
-			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
-			raw_printf(stderr, "Use -help for a list of options.\n");
+			string error = StringUtil::Format("Unknown Option Error: Unrecognized option '-%s'\n", z);
+			vector<string> option_names;
+			for (idx_t c = 0; command_line_options[c].option; c++) {
+				auto &option = command_line_options[c];
+				option_names.push_back(string("-") + option.option);
+			}
+			auto candidates_msg = StringUtil::CandidatesErrorMessage(option_names, string("-") + z, "Did you mean");
+			error += candidates_msg + "\n";
+			error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
+			data.PrintDatabaseError(error);
 			return 1;
 		}
 		auto &option = command_line_options[c.GetIndex()];
@@ -4730,7 +4738,13 @@ int wmain(int argc, wchar_t **wargv) {
 		arguments.push_back(option.option);
 		for (idx_t arg_idx = 0; arg_idx < option.argument_count; arg_idx++) {
 			if (i + 1 >= argc) {
-				utf8_printf(stderr, "%s: Error: missing argument to %s\n", argv[0], option.option);
+				string error =
+				    StringUtil::Format("Missing Argument Error: Argument '-%s' needs %llu arguments, but got %llu\n",
+				                       option.option, option.argument_count, arg_idx);
+				error += StringUtil::Format("OPTION:\n  -%s %s    %s\n\n", option.option, option.arguments,
+				                            option.description);
+				error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
+				data.PrintDatabaseError(error);
 				return 1;
 			}
 			arguments.emplace_back(argv[++i]);
