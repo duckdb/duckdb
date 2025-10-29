@@ -35,7 +35,6 @@ public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : executor(context), intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()),
 	      new_groups(STANDARD_VECTOR_SIZE) {
-
 		vector<LogicalType> aggr_input_types;
 		vector<BoundAggregateExpression *> payload_aggregates_ptr;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
