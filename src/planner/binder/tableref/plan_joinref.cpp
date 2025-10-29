@@ -70,7 +70,6 @@ void LogicalComparisonJoin::ExtractJoinConditions(
     unique_ptr<LogicalOperator> &right_child, const unordered_set<idx_t> &left_bindings,
     const unordered_set<idx_t> &right_bindings, vector<unique_ptr<Expression>> &expressions,
     vector<JoinCondition> &conditions, vector<unique_ptr<Expression>> &arbitrary_expressions) {
-
 	for (auto &expr : expressions) {
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {

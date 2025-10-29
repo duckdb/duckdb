@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-create table test as SELECT * FROM read_csv('data/csv/test/issue3562_assertion.csv.gz',  columns={'OBJECTID': 'DECIMAL(18,3)', 'URL': 'TEXT', 'NAME': 'TEXT', 'the_geom':'TEXT', 'LINE': 'TEXT'});
+create table test as SELECT * FROM read_csv('{DATA_DIR}/csv/test/issue3562_assertion.csv.gz',  columns={'OBJECTID': 'DECIMAL(18,3)', 'URL': 'TEXT', 'NAME': 'TEXT', 'the_geom':'TEXT', 'LINE': 'TEXT'});
 
 query II
 select objectid, name from test ORDER BY objectid limit 10

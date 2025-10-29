@@ -6,6 +6,6 @@ PRAGMA enable_verification
 
 statement error
 SELECT *
-FROM read_csv('data/csv/auto/early_out_error.csv', buffer_size = 8, maximum_line_size = 8, auto_detect = false, columns = {'a': 'integer','b': 'integer','c': 'integer'}, header = true)
+FROM read_csv('{DATA_DIR}/csv/auto/early_out_error.csv', buffer_size = 8, maximum_line_size = 8, auto_detect = false, columns = {'a': 'integer','b': 'integer','c': 'integer'}, header = true)
 ----
 Error when converting column "b". Could not convert string "\n" to 'INTEGER'

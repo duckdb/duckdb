@@ -14,7 +14,6 @@ PhysicalPositionalScan::PhysicalPositionalScan(PhysicalPlan &physical_plan, vect
                                                PhysicalOperator &left, PhysicalOperator &right)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::POSITIONAL_SCAN, std::move(types),
                        MaxValue(left.estimated_cardinality, right.estimated_cardinality)) {
-
 	// Manage the children ourselves
 	if (left.type == PhysicalOperatorType::TABLE_SCAN) {
 		child_tables.emplace_back(left);

@@ -18,7 +18,6 @@ BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstr
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
       index_constraint_type(index_constraint_type) {
-
 	for (auto &expr : unbound_expressions_p) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);

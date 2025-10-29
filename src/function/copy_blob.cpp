@@ -61,7 +61,6 @@ struct WriteBlobGlobalState final : public GlobalFunctionData {
 
 unique_ptr<GlobalFunctionData> WriteBlobInitializeGlobal(ClientContext &context, FunctionData &bind_data,
                                                          const string &file_path) {
-
 	auto &bdata = bind_data.Cast<WriteBlobBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
 
@@ -102,7 +101,6 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		const auto out_idx = vdata.sel->get_index(row_idx);
 		if (vdata.validity.RowIsValid(out_idx)) {
-
 			auto &blob = blobs[out_idx];
 			auto blob_len = blob.GetSize();
 			auto blob_ptr = blob.GetDataWriteable();

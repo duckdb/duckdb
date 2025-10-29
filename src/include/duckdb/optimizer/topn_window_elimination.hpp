@@ -25,6 +25,8 @@ struct TopNWindowEliminationParameters {
 	TopNPayloadType payload_type;
 	//! Whether to include row numbers
 	bool include_row_number;
+	//! Whether the val or arg column contains null values
+	bool can_be_null = false;
 };
 
 class TopNWindowElimination : public BaseColumnPruner {
@@ -49,9 +51,9 @@ private:
 	vector<unique_ptr<Expression>> GenerateAggregatePayload(const vector<ColumnBinding> &bindings,
 	                                                        const LogicalWindow &window, map<idx_t, idx_t> &group_idxs);
 	vector<ColumnBinding> TraverseProjectionBindings(const std::vector<ColumnBinding> &old_bindings,
-	                                                 LogicalOperator *&op);
+	                                                 reference<LogicalOperator> &op);
 	unique_ptr<Expression> CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, bool requires_arg,
-	                                                 OrderType order_type) const;
+	                                                 const TopNWindowEliminationParameters &params) const;
 	unique_ptr<Expression> CreateRowNumberGenerator(unique_ptr<Expression> aggregate_column_ref) const;
 	void AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
 	                           const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const;
@@ -59,6 +61,19 @@ private:
 	                                  const map<idx_t, idx_t> &group_idxs,
 	                                  const vector<ColumnBinding> &topmost_bindings,
 	                                  vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
+	TopNWindowEliminationParameters ExtractOptimizerParameters(const LogicalWindow &window, const LogicalFilter &filter,
+	                                                           const vector<ColumnBinding> &bindings,
+	                                                           vector<unique_ptr<Expression>> &aggregate_payload);
+
+	// Semi-join reduction methods
+	unique_ptr<LogicalOperator> TryPrepareLateMaterialization(const LogicalWindow &window,
+	                                                          vector<unique_ptr<Expression>> &args);
+	unique_ptr<LogicalOperator> ConstructLHS(LogicalGet &rhs, vector<idx_t> &projections) const;
+	static unique_ptr<LogicalOperator> ConstructJoin(unique_ptr<LogicalOperator> lhs, unique_ptr<LogicalOperator> rhs,
+	                                                 idx_t rhs_rowid_idx,
+	                                                 const TopNWindowEliminationParameters &params);
+	bool CanUseLateMaterialization(const LogicalWindow &window, vector<unique_ptr<Expression>> &args,
+	                               vector<idx_t> &projections, vector<reference<LogicalOperator>> &stack);
 
 private:
 	ClientContext &context;

@@ -162,7 +162,6 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, 
 
 	reference<const Node> ref(node);
 	while (ref.get().HasMetadata()) {
-
 		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
 		if (row_ids.size() + leaf.count > max_count) {
 			return false;

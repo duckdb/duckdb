@@ -7,12 +7,12 @@ PRAGMA enable_verification
 
 
 statement error
-from read_csv('data/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false);
+from read_csv('{DATA_DIR}/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false);
 ----
 * Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query III
-from read_csv('data/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false, strict_mode = False);
+from read_csv('{DATA_DIR}/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false, strict_mode = False);
 ----
 HYDRONIC GESELLSCHAFT FÜR WASSERTECHNIK MBH	 	2011
 ANTON SONNENSCHUTZSYSTEME GESELLSCHAFT MIT BESCHRÄNKTER HAFTUN	 	2012
@@ -20,12 +20,12 @@ ENERGYS MAINTENANCE S	 	2015
 SYSTEMAT BELGIUM  S	 	2013
 
 query II
-SELECT DELIMITER, QUOTE FROM sniff_csv('data/csv/rabo-anon.csv.gz', strict_mode=FALSE)
+SELECT DELIMITER, QUOTE FROM sniff_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', strict_mode=FALSE)
 ----
 ,	"
 
 statement ok
-CREATE TABLE T AS FROM read_csv('data/csv/rabo-anon.csv.gz', strict_mode=FALSE);
+CREATE TABLE T AS FROM read_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', strict_mode=FALSE);
 
 query I
 select count(*) from T

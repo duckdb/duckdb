@@ -10,7 +10,6 @@ PhysicalMergeInto::PhysicalMergeInto(PhysicalPlan &physical_plan, vector<Logical
                                      bool return_chunk_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::MERGE_INTO, std::move(types), 1),
       row_id_index(row_id_index), source_marker(source_marker), parallel(parallel_p), return_chunk(return_chunk_p) {
-
 	map<MergeActionCondition, MergeActionRange> ranges;
 	for (auto &entry : actions_p) {
 		MergeActionRange range;

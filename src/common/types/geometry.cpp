@@ -150,10 +150,9 @@ public:
 		if (*str == '\0') {
 			SkipWhitespace(); // remove trailing whitespace
 			return true;      // matched
-		} else {
-			pos = ptr;    // reset position
-			return false; // not matched
 		}
+		pos = ptr;    // reset position
+		return false; // not matched
 	}
 
 	bool TryMatch(char c) {
@@ -212,7 +211,6 @@ private:
 };
 
 void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth, bool parent_has_z, bool parent_has_m) {
-
 	if (depth == Geometry::MAX_RECURSION_DEPTH) {
 		throw InvalidInputException("Geometry string exceeds maximum recursion depth of %d",
 		                            Geometry::MAX_RECURSION_DEPTH);
@@ -354,7 +352,6 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 		auto part_count = writer.Reserve<uint32_t>();
 		reader.Match('(');
 		do {
-
 			const auto part_meta =
 			    static_cast<uint32_t>(GeometryType::LINESTRING) + (has_z ? 1000 : 0) + (has_m ? 2000 : 0);
 			writer.Write<uint8_t>(1);
@@ -384,7 +381,6 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 		auto part_count = writer.Reserve<uint32_t>();
 		reader.Match('(');
 		do {
-
 			const auto part_meta =
 			    static_cast<uint32_t>(GeometryType::POLYGON) + (has_z ? 1000 : 0) + (has_m ? 2000 : 0);
 			writer.Write<uint8_t>(1);
@@ -747,6 +743,8 @@ void ToStringRecursive(BlobReader &reader, TextWriter &writer, idx_t depth, bool
 // Public interface
 //----------------------------------------------------------------------------------------------------------------------
 namespace duckdb {
+
+constexpr const idx_t Geometry::MAX_RECURSION_DEPTH;
 
 bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
