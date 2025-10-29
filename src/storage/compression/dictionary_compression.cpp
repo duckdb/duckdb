@@ -88,7 +88,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = *analyze_state.analyze_state;
 
 	if (state.current_tuple_count != 0) {
-		state.Flush(true);
+		state.UpdateMaxUniqueCount();
 	}
 
 	auto width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);

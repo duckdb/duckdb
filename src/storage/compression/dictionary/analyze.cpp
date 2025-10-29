@@ -49,6 +49,9 @@ void DictionaryAnalyzeState::Flush(bool final) {
 	current_dict_size = 0;
 	current_set.clear();
 }
+void DictionaryAnalyzeState::UpdateMaxUniqueCount() {
+	max_unique_count_across_all_segments = std::max(max_unique_count_across_all_segments, current_unique_count);
+}
 void DictionaryAnalyzeState::Verify() {
 }
 
