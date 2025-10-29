@@ -74,11 +74,6 @@ bool DirectMultiFileInfo<OP>::ParseOption(ClientContext &context, const string &
 template <class OP>
 unique_ptr<TableFunctionData> DirectMultiFileInfo<OP>::InitializeBindData(MultiFileBindData &multi_file_data,
                                                                           unique_ptr<BaseFileReaderOptions> options) {
-	if (multi_file_data.file_options.union_by_name) {
-		string name = OP::NAME;
-		throw BinderException("The \"%s\" function does not support the \"union_by_name\" option", name);
-	}
-
 	auto result = make_uniq<ReadFileBindData>();
 	result->options = std::move(options);
 	return std::move(result);
@@ -194,6 +189,12 @@ struct ReadTextOperation {
 template <class OP>
 static TableFunction GetFunction() {
 	MultiFileFunction<DirectMultiFileInfo<OP>> table_function(OP::NAME);
+	// Erase extra multi file reader options
+	table_function.named_parameters.erase("filename");
+	table_function.named_parameters.erase("hive_partitioning");
+	table_function.named_parameters.erase("union_by_name");
+	table_function.named_parameters.erase("hive_types");
+	table_function.named_parameters.erase("hive_types_autocast");
 	return table_function;
 }
 

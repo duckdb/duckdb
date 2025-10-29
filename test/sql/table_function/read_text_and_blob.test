@@ -70,7 +70,8 @@ select parse_path(filename)[-6:], size, part, date from read_text('{DATA_DIR}/pa
 statement error
 select filename from read_blob('.*', union_by_name := true);
 ----
-Binder Error: The "read_blob" function does not support the "union_by_name" option
+Binder Error: Invalid named parameter "union_by_name" for function read_blob
+
 
 # Searching for non-existing remote file should return empty result set (like local files)
 # This is probably wrong behavior in our httpfs implementation, but at least its consistent in this case.
