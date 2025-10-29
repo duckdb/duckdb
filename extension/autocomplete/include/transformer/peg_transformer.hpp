@@ -289,6 +289,7 @@ private:
 	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformDropBehavior(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformDropSecretStorage(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// expression.gram
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,

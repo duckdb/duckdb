@@ -900,7 +900,7 @@ DropEntries <-
 	DropSecret
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
-DropTableFunction <- 'MACRO' 'TABLE' IfExists? List(TableFunctionName)
+DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
 DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
@@ -910,7 +910,8 @@ DropCollation <- 'COLLATION' IfExists? List(CollationName)
 DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
 DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
 
-TableOrView <- 'TABLE' / 'VIEW' / ('MATERIALIZED' 'VIEW')
+TableOrView <- CommentTable / CommentView / MaterializedViewEntry
+MaterializedViewEntry <- 'MATERIALIZED' 'VIEW'
 FunctionType <- 'MACRO' / 'FUNCTION'
 
 DropBehavior <- 'CASCADE' / 'RESTRICT'
@@ -919,7 +920,6 @@ IfExists <- 'IF' 'EXISTS'
 QualifiedSchemaName <- CatalogQualification? SchemaName
 
 DropSecretStorage <- 'FROM' Identifier
-
 UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
 
 UpdateTarget <- (BaseTableName 'SET') / (BaseTableName UpdateAlias? 'SET')
@@ -1393,12 +1393,24 @@ MacroParameter <- NamedParameter / (TypeFuncName Type?)
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatement
 
-CommentStatement <- 'COMMENT' 'ON' CommentOnType ColumnReference 'IS' CommentValue
+CommentStatement <- 'COMMENT' 'ON' CommentOnType DottedIdentifier 'IS' CommentValue
 
+CommentOnType <-    CommentTable / CommentSequence / CommentFunction / CommentMacroTable / CommentMacro /
+                    CommentView / CommentDatabase / CommentIndex / CommentSchema / CommentType / CommentColumn
 
-CommentOnType <- 'TABLE' / 'SEQUENCE' / 'FUNCTION' / ('MACRO' 'TABLE'?) / 'VIEW' / 'DATABASE' / 'INDEX' / 'SCHEMA' / 'TYPE' / 'COLUMN'
+CommentTable <- 'TABLE'
+CommentSequence <- 'SEQUENCE'
+CommentFunction <- 'FUNCTION'
+CommentMacroTable <- 'MACRO' 'TABLE'
+CommentMacro <- 'MACRO'
+CommentView <- 'VIEW'
+CommentDatabase <- 'DATABASE'
+CommentIndex <- 'INDEX'
+CommentSchema <- 'SCHEMA'
+CommentType <- 'TYPE'
+CommentColumn <- 'COLUMN'
+
 CommentValue <- 'NULL' / StringLiteral
-
 AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
 Database <- 'DATABASE'

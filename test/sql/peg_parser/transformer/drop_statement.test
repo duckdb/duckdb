@@ -1,0 +1,14 @@
+# name: test/sql/peg_parser/transformer/prepare.test
+# description:
+# group: [transformer]
+
+require autocomplete
+
+statement ok
+CREATE TABLE integers (i bigint);
+
+statement ok
+set allow_parser_override_extension=strict_when_supported;
+
+statement ok
+DROP TABLE integers;
