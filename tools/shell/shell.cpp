@@ -412,7 +412,8 @@ static int win_utf8_mode = 0;
 void utf8_printf(FILE *out, const char *zFormat, ...) {
 	va_list ap;
 	va_start(ap, zFormat);
-	if (stdout_is_console && (out == stdout || out == stderr)) {
+	auto &state = ShellState::Get();
+	if (state.stdout_is_console && (out == stdout || out == stderr)) {
 		char buffer[2048];
 		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
 		const char *z1;
@@ -610,7 +611,8 @@ static char *local_getline(char *zLine, FILE *in) {
 	idx_t n = 0;
 
 #if defined(_WIN32) || defined(WIN32)
-	int is_stdin = stdin_is_interactive && in == stdin;
+	auto &state = ShellState::Get();
+	int is_stdin = state.stdin_is_interactive && in == stdin;
 	int is_utf8 = 0;
 	if (is_stdin && win_utf8_mode) {
 		if (SetConsoleCP(CP_UTF8)) {
