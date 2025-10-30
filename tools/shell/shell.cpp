@@ -155,6 +155,7 @@ using duckdb::KeywordHelper;
 using duckdb::SQLIdentifier;
 using duckdb::SQLString;
 using duckdb::StringUtil;
+using duckdb::unordered_map;
 using namespace duckdb_shell;
 
 #if defined(_WIN32) || defined(WIN32)
@@ -2585,8 +2586,8 @@ bool ShellState::ImportData(const vector<string> &args) {
 	}
 	string table_name;
 	string file_name;
-	idx_t nskip = 0;
-	string sep;
+	unordered_map<string, string> generic_parameters;
+	string function;
 
 	for (idx_t i = 1; i < args.size(); i++) {
 		auto z = args[i].c_str();
@@ -2605,17 +2606,23 @@ bool ShellState::ImportData(const vector<string> &args) {
 			}
 		} else if (strcmp(z, "-v") == 0) {
 			// verbose - ignore
-		} else if (strcmp(z, "-skip") == 0 && i < args.size() - 1) {
-			nskip = duckdb::NumericCast<idx_t>(StringToInt(args[++i]));
 		} else if (strcmp(z, "-ascii") == 0) {
 			utf8_printf(stderr, "-ascii mode is no longer supported for .import");
 			exit(1);
 		} else if (strcmp(z, "-csv") == 0) {
-			sep = ',';
+			function = "read_csv";
+		} else if (strcmp(z, "-parquet") == 0) {
+			function = "read_parquet";
+		} else if (strcmp(z, "-json") == 0) {
+			function = "read_json";
 		} else {
-			utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", z);
-			PrintHelp("import");
-			return false;
+			z++;
+			if (i + 1 >= args.size()) {
+				utf8_printf(out, "ERROR: expected an argument for generic parameter: \"%s\".  Usage:\n", z);
+				PrintHelp("import");
+				return false;
+			}
+			generic_parameters[z] = args[++i];
 		}
 	}
 	if (table_name.empty()) {
@@ -2623,13 +2630,49 @@ bool ShellState::ImportData(const vector<string> &args) {
 		PrintHelp("import");
 		return false;
 	}
+	if (function.empty()) {
+		// derive function to use from file extension
+		// FIXME: get this list from the system somehow
+		unordered_map<string, string> function_map;
+		function_map[".parquet"] = "read_parquet";
+		function_map[".csv"] = "read_csv";
+		function_map[".tsv"] = "read_csv";
+		function_map[".tbl"] = "read_csv";
+		function_map[".json"] = "read_json";
+		function_map[".jsonl"] = "read_json";
+		function_map[".ndjson"] = "read_json";
+		function_map[".avro"] = "read_avro";
+		function_map[".xlsx"] = "read_xlsx";
+
+		vector<string> compression_suffixes {"", ".gz", ".zst"};
+
+		for (auto &entry : function_map) {
+			for (auto &compression_suffix : compression_suffixes) {
+				auto suffix = entry.first + compression_suffix;
+				if (StringUtil::EndsWith(file_name, suffix)) {
+					function = entry.second;
+					break;
+				}
+			}
+			if (!function.empty()) {
+				break;
+			}
+		}
+		if (function.empty()) {
+			// fallback to read_csv
+			function = "read_csv";
+		}
+	}
+	if (function == "read_csv" && generic_parameters.find("ignore_errors") == generic_parameters.end()) {
+		generic_parameters["ignore_errors"] = "true";
+	}
 	seenInterrupt = 0;
 	// check if the table exists
 	OpenDB();
 	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
 	if (needCommit) {
-		 con.BeginTransaction();
+		con.BeginTransaction();
 	}
 	auto table_info = con.TableInfo(table_name);
 
@@ -2642,9 +2685,10 @@ bool ShellState::ImportData(const vector<string> &args) {
 		// table exists - insert into it
 		import_query = StringUtil::Format("INSERT INTO %s ", SQLIdentifier(table_name));
 	}
-	import_query += StringUtil::Format("SELECT * FROM read_csv(%s, skip=%d, ignore_errors=True", SQLString(file_name), nskip);
-	if (!sep.empty()) {
-		import_query += StringUtil::Format(", sep=%s", SQLString(sep));
+	import_query += StringUtil::Format("SELECT * FROM %s(%s", function, SQLString(file_name));
+	// add the generic parameters
+	for (auto &entry : generic_parameters) {
+		import_query += StringUtil::Format(", %s=%s", SQLIdentifier(entry.first), SQLString(entry.second));
 	}
 	import_query += ")";
 	auto result = con.Query(import_query);
@@ -3394,11 +3438,10 @@ static const MetadataCommand metadata_commands[] = {
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0,
-     "Options:\n\t--csv\tUse , and \\n as column and row "
-     "separators\n\t--skip N\tSkip the first N rows of input\n\t-v\t\"Verbose\" - increase auxiliary "
-     "output\nNotes:\n\t* If TABLE does not exist, it is created. The first row of input\n\t  determines the column "
-     "names.\n\t* If neither --csv or --ascii are used, the input mode is derived\n\t  from the \".mode\" output "
-     "mode\n\t* If FILE begins with \"|\" then it is a command that generates the\n\t  input text."},
+     "Options:\n\t--csv\tImport data from CSV (read_csv)\n\t--json\tImport data from JSON "
+     "(read_json)\n\t--parquet\tImport data from Parquet (read_parquet)\n\t--[parameter] [value]\tProvides a parameter "
+     "to the reader function\n\tNotes:\n\t* If TABLE does not exist, it is created.\n\t* If file type is not selected, "
+     "the input mode is derived from the file extension\n\t* Generic parameters are passed to the reader functions"},
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0,
      "Notes:\n\t* If TABLE is specified, only show indexes for\n\t  tables matching TABLE using the LIKE operator."},
     {"indices", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},

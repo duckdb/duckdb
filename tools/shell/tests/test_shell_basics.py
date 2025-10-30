@@ -35,7 +35,7 @@ def test_import(shell, generated_file):
     )
 
     result = test.run()
-    result.check_stdout("col_1,col_2\n1,2\n10,20")
+    result.check_stdout("col_1,col_2\r\n1,2\r\n10,20")
 
 
 @pytest.mark.parametrize('generated_file', ["42\n84"], indirect=True)
