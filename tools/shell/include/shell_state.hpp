@@ -32,8 +32,12 @@ struct RowResult;
 class ColumnRenderer;
 class RowRenderer;
 using duckdb::atomic;
+using duckdb::KeywordHelper;
 using duckdb::optional_idx;
 using duckdb::optional_ptr;
+using duckdb::SQLIdentifier;
+using duckdb::SQLString;
+using duckdb::unordered_map;
 struct ShellState;
 
 using idx_t = uint64_t;
@@ -184,9 +188,19 @@ public:
 	//! Whether or not we are highlighting results
 	OptionType highlight_results = OptionType::DEFAULT;
 
+	/*
+	** Prompt strings. Initialized in main. Settable with
+	**   .prompt main continue
+	*/
+	static constexpr idx_t MAX_PROMPT_SIZE = 20;
+	char mainPrompt[MAX_PROMPT_SIZE];             /* First line prompt. default: "D "*/
+	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
+	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
+
 public:
 	static ShellState &Get();
 
+	void Initialize();
 	void Destroy();
 	void PushOutputMode();
 	void PopOutputMode();
@@ -310,6 +324,13 @@ public:
 	static MetadataResult SetNullValue(ShellState &state, const vector<string> &args);
 	static MetadataResult SetSeparator(ShellState &state, const vector<string> &args);
 	static MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args);
+	static MetadataResult ToggleTimer(ShellState &state, const vector<string> &args);
+	SuccessState ChangeDirectory(const string &path);
+	SuccessState ShowDatabases();
+	void CloseOutputFile(FILE *file);
+	FILE *OpenOutputFile(const char *zFile, int bTextMode);
+	static void SetPrompt(char prompt[], const string &new_value);
+	static string ModeToString(RenderMode mode);
 
 private:
 	ShellState();
