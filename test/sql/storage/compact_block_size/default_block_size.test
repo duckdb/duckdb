@@ -6,10 +6,10 @@
 require vector_size 2048
 
 statement ok
-ATTACH 'data/storage/block_size_16kb.db' (TYPE DUCKDB, READONLY)
+ATTACH '{DATA_DIR}/storage/block_size_16kb.db' (TYPE DUCKDB, READONLY)
 
 statement error
-ATTACH 'data/storage/vector_size_512.db' (TYPE DUCKDB, READONLY)
+ATTACH '{DATA_DIR}/storage/vector_size_512.db' (TYPE DUCKDB, READONLY)
 ----
 Cannot read database file
 
@@ -17,4 +17,4 @@ Cannot read database file
 require 64bit
 
 statement ok
-ATTACH 'data/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);
+ATTACH '{DATA_DIR}/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);

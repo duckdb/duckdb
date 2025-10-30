@@ -89,7 +89,6 @@ private:
 };
 
 struct WindowBoundariesState {
-
 	static bool HasPrecedingRange(const BoundWindowExpression &wexpr);
 	static bool HasFollowingRange(const BoundWindowExpression &wexpr);
 	static WindowBoundsSet GetWindowBounds(const BoundWindowExpression &wexpr);

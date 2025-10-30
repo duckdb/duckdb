@@ -57,7 +57,6 @@ struct QuantileReuseUpdater {
 };
 
 void ReuseIndexes(idx_t *index, const SubFrames &currs, const SubFrames &prevs) {
-
 	//  Copy overlapping indices by scanning the previous set and copying down into holes.
 	//	We copy instead of leaving gaps in case there are fewer values in the current frame.
 	FrameSet prev_set(prevs);

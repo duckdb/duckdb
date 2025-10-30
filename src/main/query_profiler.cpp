@@ -180,7 +180,6 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		auto type = PhysicalOperatorType(info.GetMetricValue<uint8_t>(MetricsType::OPERATOR_TYPE));
 		if (type == PhysicalOperatorType::UNION &&
 		    info.Enabled(info.expanded_settings, MetricsType::OPERATOR_CARDINALITY)) {
-
 			auto &child_info = child->GetProfilingInfo();
 			auto value = child_info.metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>();
 			info.MetricSum(MetricsType::OPERATOR_CARDINALITY, value);
@@ -252,19 +251,27 @@ void QueryProfiler::EndQuery() {
 	}
 }
 
-void QueryProfiler::AddBytesRead(const idx_t nr_bytes) {
-	if (IsEnabled()) {
-		query_metrics.total_bytes_read += nr_bytes;
+void QueryProfiler::AddToCounter(const MetricsType type, const idx_t amount) {
+	if (!IsEnabled()) {
+		return;
+	}
+
+	switch (type) {
+	case MetricsType::TOTAL_BYTES_READ:
+		query_metrics.total_bytes_read += amount;
+		return;
+	case MetricsType::TOTAL_BYTES_WRITTEN:
+		query_metrics.total_bytes_written += amount;
+		return;
+	case MetricsType::WAL_REPLAY_ENTRY_COUNT:
+		query_metrics.wal_replay_entry_count += amount;
+		return;
+	default:
+		return;
 	}
 }
 
-void QueryProfiler::AddBytesWritten(const idx_t nr_bytes) {
-	if (IsEnabled()) {
-		query_metrics.total_bytes_written += nr_bytes;
-	}
-}
-
-void QueryProfiler::StartTimer(MetricsType type) {
+void QueryProfiler::StartTimer(const MetricsType type) {
 	if (!IsEnabled()) {
 		return;
 	}
@@ -281,6 +288,9 @@ void QueryProfiler::StartTimer(MetricsType type) {
 		return;
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.Start();
+		return;
+	case MetricsType::COMMIT_WRITE_WAL_LATENCY:
+		query_metrics.commit_write_wal_latency.Start();
 		return;
 	default:
 		return;
