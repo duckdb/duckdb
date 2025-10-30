@@ -2712,7 +2712,7 @@ int ShellState::DoMetaCommand(const string &zLine) {
 		try {
 			if (!command.callback) {
 				PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
-					   command.command);
+				       command.command);
 				result = MetadataResult::FAIL;
 			} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
 				result = command.callback(*this, args);
@@ -2724,7 +2724,7 @@ int ShellState::DoMetaCommand(const string &zLine) {
 				rc = 1;
 				result = MetadataResult::FAIL;
 			}
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			PrintDatabaseError(error.Message());
 			result = MetadataResult::FAIL;

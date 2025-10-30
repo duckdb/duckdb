@@ -115,9 +115,6 @@ string Prompt::GeneratePrompt(ShellState &state) {
 		case PromptComponentType::LITERAL:
 			prompt += component.literal;
 			break;
-		case PromptComponentType::LITERAL:
-			prompt += component.literal;
-			break;
 		default:
 			throw InternalException("Invalid prompt component");
 		}
