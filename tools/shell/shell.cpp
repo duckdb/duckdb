@@ -379,62 +379,14 @@ static void endTimer(void) {
 */
 #define ArraySize(X) (int)(sizeof(X) / sizeof(X[0]))
 
-/*
-** If the following flag is set, then command execution stops at an error
-** if we are not interactive, including any error in processed files.
-*/
-static bool bail_on_error = false;
-
-/*
-** Treat stdin as an interactive input if the following variable
-** is true.  Otherwise, assume stdin is connected to a file or pipe.
-*/
-static bool stdin_is_interactive = true;
-
-/*
-** On Windows systems we have to know if standard output is a console
-** in order to translate UTF-8 into MBCS.  The following variable is
-** true if translation is required.
-*/
-static bool stdout_is_console = true;
-static bool stderr_is_console = true;
-
-/*
-** True if an interrupt (Control-C) has been received.
-*/
-static volatile int seenInterrupt = 0;
-
-/*
-** This is the name of our program. It is set in main(), used
-** in a number of other places, mostly for error messages.
-*/
-static const char *program_name;
-
-enum class OptionType { DEFAULT, ON, OFF };
-
-/*
-** Whether or not we are running in safe mode
-*/
-static bool safe_mode = false;
-
-/*
-** Whether or not we are highlighting errors
-*/
-static OptionType highlight_errors = OptionType::DEFAULT;
-
-static bool HighlightErrors() {
+bool ShellState::HighlightErrors() const {
 	if (highlight_errors == OptionType::DEFAULT) {
 		return stderr_is_console;
 	}
 	return highlight_errors == OptionType::ON;
 }
 
-/*
-** Whether or not we are highlighting results
-*/
-static OptionType highlight_results = OptionType::DEFAULT;
-
-static bool HighlightResults() {
+bool ShellState::HighlightResults() const {
 	if (highlight_results == OptionType::DEFAULT) {
 		return stdout_is_console;
 	}
@@ -503,7 +455,7 @@ static void shell_out_of_memory(void) {
 	exit(1);
 }
 
-ShellState::ShellState() {
+ShellState::ShellState() : seenInterrupt(0) {
 	config.error_manager->AddCustomError(
 	    duckdb::ErrorType::UNSIGNED_EXTENSION,
 	    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
@@ -1066,11 +1018,11 @@ void ShellState::OutputCSV(const char *z, int bSep) {
 */
 static void interrupt_handler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
-	seenInterrupt++;
-	if (seenInterrupt > 2) {
+	auto &state = ShellState::Get();
+	state.seenInterrupt++;
+	if (state.seenInterrupt > 2) {
 		exit(1);
 	}
-	auto &state = ShellState::Get();
 	if (state.conn) {
 		state.conn->Interrupt();
 	}
@@ -2064,7 +2016,7 @@ struct MetadataCommand {
 };
 
 MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
-	bail_on_error = booleanValue(args[1]);
+	state.bail_on_error = booleanValue(args[1]);
 	return MetadataResult::SUCCESS;
 }
 
@@ -2078,7 +2030,7 @@ MetadataResult ToggleBinary(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ChangeDirectory(ShellState &state, const vector<string> &args) {
-	if (safe_mode) {
+	if (state.safe_mode) {
 		utf8_printf(stderr, ".cd cannot be used in -safe mode\n");
 		return MetadataResult::FAIL;
 	}
@@ -2258,12 +2210,12 @@ MetadataResult SetHighlightColors(ShellState &state, const vector<string> &args)
 }
 
 MetadataResult ToggleHighlighErrors(ShellState &state, const vector<string> &args) {
-	highlight_errors = booleanValue(args[1]) ? OptionType::ON : OptionType::OFF;
+	state.highlight_errors = booleanValue(args[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &args) {
-	highlight_results = booleanValue(args[1]) ? OptionType::ON : OptionType::OFF;
+	state.highlight_results = booleanValue(args[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
 
@@ -2280,7 +2232,7 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
-	if (safe_mode) {
+	if (state.safe_mode) {
 		utf8_printf(stderr, ".log cannot be used in -safe mode\n");
 		return MetadataResult::FAIL;
 	}
@@ -2325,7 +2277,7 @@ MetadataResult SetRowRendering(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args) {
-	safe_mode = true;
+	state.safe_mode = true;
 	if (state.db) {
 		// db has been opened - disable external access
 		state.ExecuteQuery("SET enable_external_access=false");
@@ -2873,7 +2825,7 @@ MetadataResult DisplaySchemas(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult RunShellCommand(ShellState &state, const vector<string> &args) {
-	if (safe_mode) {
+	if (state.safe_mode) {
 		utf8_printf(stderr, ".sh/.system cannot be used in -safe mode\n");
 		return MetadataResult::FAIL;
 	}
@@ -4106,17 +4058,17 @@ MetadataResult ToggleCSVMode(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult EnableBail(ShellState &state, const vector<string> &args) {
-	bail_on_error = true;
+	state.bail_on_error = true;
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult EnableBatch(ShellState &state, const vector<string> &args) {
-	stdin_is_interactive = false;
+	state.stdin_is_interactive = false;
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult DisableBatch(ShellState &state, const vector<string> &args) {
-	stdin_is_interactive = true;
+	state.stdin_is_interactive = true;
 	return MetadataResult::SUCCESS;
 }
 
@@ -4185,7 +4137,7 @@ MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) 
 		    duckdb::SerializationCompatibility::FromString(storage_version);
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
-		utf8_printf(stderr, "%s: Error: unknown argument (%s) for '-storage-version': %s\n", program_name,
+		utf8_printf(stderr, "%s: Error: unknown argument (%s) for '-storage-version': %s\n", state.program_name,
 		            storage_version.c_str(), error.Message().c_str());
 		return MetadataResult::EXIT;
 	}
@@ -4194,14 +4146,14 @@ MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) 
 
 MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
 	state.readStdin = false;
-	auto old_bail = bail_on_error;
-	bail_on_error = true;
+	auto old_bail = state.bail_on_error;
+	state.bail_on_error = true;
 	auto &file = args[1];
 	if (!state.ProcessFile(file)) {
 		exit(1);
 		return MetadataResult::EXIT;
 	}
-	bail_on_error = old_bail;
+	state.bail_on_error = old_bail;
 	return MetadataResult::SUCCESS;
 }
 
@@ -4216,7 +4168,7 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 		state.readStdin = false;
 	}
 	// Always bail if -c or -s fail
-	bool bail = bail_on_error || EXIT;
+	bool bail = state.bail_on_error || EXIT;
 	auto &cmd = args[1];
 	auto rc = state.RunInitialCommand(cmd.c_str(), bail);
 	if (rc != 0) {
@@ -4382,9 +4334,9 @@ int wmain(int argc, wchar_t **wargv) {
 
 	setBinaryMode(stdin, 0);
 	setvbuf(stderr, 0, _IONBF, 0); /* Make sure stderr is unbuffered */
-	stdin_is_interactive = isatty(0);
-	stdout_is_console = isatty(1);
-	stderr_is_console = isatty(2);
+	data.stdin_is_interactive = isatty(0);
+	data.stdout_is_console = isatty(1);
+	data.stderr_is_console = isatty(2);
 
 	main_init(&data);
 
@@ -4408,7 +4360,7 @@ int wmain(int argc, wchar_t **wargv) {
 #endif
 
 	assert(argc >= 1 && argv && argv[0]);
-	program_name = argv[0];
+	data.program_name = argv[0];
 
 	/* Make sure we have a valid signal handler early, before anything
 	** else is done.
@@ -4435,7 +4387,7 @@ int wmain(int argc, wchar_t **wargv) {
 				/* Excesss arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
 				data.readStdin = false;
-				stdin_is_interactive = false;
+				data.stdin_is_interactive = false;
 				extra_commands.emplace_back(z);
 			}
 			continue;
@@ -4463,7 +4415,7 @@ int wmain(int argc, wchar_t **wargv) {
 			}
 			auto candidates_msg = StringUtil::CandidatesErrorMessage(option_names, string("-") + z, "Did you mean");
 			error += candidates_msg + "\n";
-			error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
+			error += StringUtil::Format("Run '%s -help' for a list of options.\n", data.program_name);
 			data.PrintDatabaseError(error);
 			return 1;
 		}
@@ -4478,7 +4430,7 @@ int wmain(int argc, wchar_t **wargv) {
 				                       option.option, option.argument_count, arg_idx);
 				error += StringUtil::Format("OPTION:\n  -%s %s    %s\n\n", option.option, option.arguments,
 				                            option.description);
-				error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
+				error += StringUtil::Format("Run '%s -help' for a list of options.\n", data.program_name);
 				data.PrintDatabaseError(error);
 				return 1;
 			}
@@ -4514,7 +4466,7 @@ int wmain(int argc, wchar_t **wargv) {
 	** is given on the command line, look for a file named ~/.sqliterc and
 	** try to process it.
 	*/
-	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str()) && bail_on_error) {
+	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str()) && data.bail_on_error) {
 		return 1;
 	}
 
@@ -4556,7 +4508,7 @@ int wmain(int argc, wchar_t **wargv) {
 	} else {
 		/* Run commands received from standard input
 		 */
-		if (stdin_is_interactive) {
+		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
 			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/

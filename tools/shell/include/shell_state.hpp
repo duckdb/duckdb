@@ -16,6 +16,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb.hpp"
 
 enum class MetadataResult : uint8_t;
@@ -30,6 +31,7 @@ struct ColumnarResult;
 struct RowResult;
 class ColumnRenderer;
 class RowRenderer;
+using duckdb::atomic;
 
 using idx_t = uint64_t;
 
@@ -75,6 +77,7 @@ enum class ShellFlags : uint32_t {
 
 enum class ShellOpenFlags { EXIT_ON_FAILURE, KEEP_ALIVE_ON_FAILURE };
 enum class SuccessState { SUCCESS, FAILURE };
+enum class OptionType { DEFAULT, ON, OFF };
 
 /*
 ** State information about the database connection is contained in an
@@ -126,6 +129,34 @@ public:
 	bool readStdin = true;
 	string initFile;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
+	//! If the following flag is set, then command execution stops at an error
+	bool bail_on_error = false;
+
+	/*
+	** Treat stdin as an interactive input if the following variable
+	** is true.  Otherwise, assume stdin is connected to a file or pipe.
+	*/
+	bool stdin_is_interactive = true;
+
+	/*
+	** On Windows systems we have to know if standard output is a console
+	** in order to translate UTF-8 into MBCS.  The following variable is
+	** true if translation is required.
+	*/
+	bool stdout_is_console = true;
+	bool stderr_is_console = true;
+
+	//! True if an interrupt (Control-C) has been received.
+	atomic<idx_t> seenInterrupt;
+	//! Name of our program
+	const char *program_name;
+
+	//! Whether or not we are running in safe mode
+	bool safe_mode = false;
+	//! Whether or not we are highlighting errors
+	OptionType highlight_errors = OptionType::DEFAULT;
+	//! Whether or not we are highlighting results
+	OptionType highlight_results = OptionType::DEFAULT;
 
 public:
 	static ShellState &Get();
@@ -235,6 +266,8 @@ public:
 	//! On fail - prints the error and returns FAILURE
 	SuccessState RenderQuery(RowRenderer &renderer, const string &query);
 	SuccessState RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &result);
+	bool HighlightErrors() const;
+	bool HighlightResults() const;
 
 private:
 	ShellState();
