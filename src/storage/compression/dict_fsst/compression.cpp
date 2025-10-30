@@ -11,10 +11,11 @@ DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &che
                                                    unique_ptr<DictFSSTAnalyzeState> &&analyze_p)
     : CompressionState(analyze_p->info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)),
-      current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
-                         info.GetBlockSize(), // maximum_size_p (amount of elements)
-                         1                    // maximum_target_capacity_p (byte capacity)
-                         ),
+      current_string_map(
+          info.GetBlockManager().buffer_manager.GetBufferAllocator(),
+          MinValue(analyze_p.get()->total_count, info.GetBlockSize()) / 2, // maximum_size_p (amount of elements)
+          1                                                                // maximum_target_capacity_p (byte capacity)
+          ),
       analyze(std::move(analyze_p)) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
