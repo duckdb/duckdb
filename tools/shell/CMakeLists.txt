@@ -18,6 +18,7 @@ if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
 endif()
 set(SHELL_SOURCES
     ${SHELL_SOURCES}
+    shell_command_line_option.cpp
     shell_extension.cpp
     shell.cpp
     shell_helpers.cpp

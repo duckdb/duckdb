@@ -2003,8 +2003,6 @@ void ShellState::NewTempFile(const char *zSuffix) {
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
-typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
-
 struct MetadataCommand {
 	const char *command;
 	idx_t argument_count;
@@ -4021,15 +4019,6 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 }
 #endif
 
-struct CommandLineOption {
-	const char *option;
-	idx_t argument_count;
-	const char *arguments;
-	metadata_command_t pre_init_callback;
-	metadata_command_t post_init_callback;
-	const char *description;
-};
-
 struct CommandLineCall {
 	CommandLineCall(const CommandLineOption &option, vector<string> arguments_p)
 	    : option(option), arguments(std::move(arguments_p)) {
@@ -4217,7 +4206,7 @@ static const CommandLineOption command_line_options[] = {
     {"version", 0, "", nullptr, ShowVersionAndExit, "show DuckDB version"},
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr}};
 
-duckdb::optional_idx FindOption(const char *name) {
+optional_idx FindOption(const char *name) {
 	for (idx_t c = 0; command_line_options[c].option; c++) {
 		auto &option = command_line_options[c];
 		if (!StringUtil::Equals(name, option.option)) {
@@ -4227,7 +4216,31 @@ duckdb::optional_idx FindOption(const char *name) {
 		// found it!
 		return c;
 	}
-	return duckdb::optional_idx();
+	return optional_idx();
+}
+
+optional_ptr<const CommandLineOption> ShellState::FindCommandLineOption(const string &option, string &error_msg) const {
+	auto c = FindOption(option.c_str());
+	if (!c.IsValid()) {
+		// we haven't found it yet - try substituting all underscores with dashes
+		// this is legacy behavior - we allow e.g. "-storage_version" to be used instead of "-storage-version"
+		auto option_name = StringUtil::Replace(option, "_", "-");
+		c = FindOption(option_name.c_str());
+	}
+	if (!c.IsValid()) {
+		// not found
+		string error = StringUtil::Format("Unknown Option Error: Unrecognized option '-%s'\n", option);
+		vector<string> option_names;
+		for (idx_t c = 0; command_line_options[c].option; c++) {
+			auto &option = command_line_options[c];
+			option_names.push_back(string("-") + option.option);
+		}
+		auto candidates_msg = StringUtil::CandidatesErrorMessage(option_names, "-" + option, "Did you mean");
+		error += candidates_msg + "\n";
+		error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
+		return nullptr;
+	}
+	return command_line_options[c.GetIndex()];
 }
 
 struct PrintOptionInfo {
@@ -4399,28 +4412,13 @@ int wmain(int argc, wchar_t **wargv) {
 			z++;
 		}
 
-		auto c = FindOption(z);
-		if (!c.IsValid()) {
-			// we haven't found it yet - try substituting all underscores with dashes
-			// this is legacy behavior - we allow e.g. "-storage_version" to be used instead of "-storage-version"
-			auto option_name = StringUtil::Replace(z, "_", "-");
-			c = FindOption(option_name.c_str());
-		}
-		if (!c.IsValid()) {
-			// not found
-			string error = StringUtil::Format("Unknown Option Error: Unrecognized option '-%s'\n", z);
-			vector<string> option_names;
-			for (idx_t c = 0; command_line_options[c].option; c++) {
-				auto &option = command_line_options[c];
-				option_names.push_back(string("-") + option.option);
-			}
-			auto candidates_msg = StringUtil::CandidatesErrorMessage(option_names, string("-") + z, "Did you mean");
-			error += candidates_msg + "\n";
-			error += StringUtil::Format("Run '%s -help' for a list of options.\n", data.program_name);
-			data.PrintDatabaseError(error);
+		string error_msg;
+		auto command_line_option = data.FindCommandLineOption(z, error_msg);
+		if (!command_line_option) {
+			data.PrintDatabaseError(error_msg);
 			return 1;
 		}
-		auto &option = command_line_options[c.GetIndex()];
+		auto &option = *command_line_option;
 		// parse arguments
 		vector<string> arguments;
 		arguments.push_back(option.option);

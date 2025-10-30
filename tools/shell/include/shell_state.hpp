@@ -14,6 +14,7 @@
 #include <memory>
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/atomic.hpp"
@@ -33,6 +34,9 @@ struct RowResult;
 class ColumnRenderer;
 class RowRenderer;
 using duckdb::atomic;
+using duckdb::optional_idx;
+using duckdb::optional_ptr;
+struct ShellState;
 
 using idx_t = uint64_t;
 
@@ -79,6 +83,17 @@ enum class ShellFlags : uint32_t {
 enum class ShellOpenFlags { EXIT_ON_FAILURE, KEEP_ALIVE_ON_FAILURE };
 enum class SuccessState { SUCCESS, FAILURE };
 enum class OptionType { DEFAULT, ON, OFF };
+
+typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
+
+struct CommandLineOption {
+	const char *option;
+	idx_t argument_count;
+	const char *arguments;
+	metadata_command_t pre_init_callback;
+	metadata_command_t post_init_callback;
+	const char *description;
+};
 
 /*
 ** State information about the database connection is contained in an
@@ -268,6 +283,7 @@ public:
 	static string Win32MbcsToUtf8(const char *zText, bool useAnsi);
 	static unique_ptr<uint8_t[]> Win32Utf8ToMbcs(const char *zText, bool useAnsi);
 #endif
+	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
 
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE
