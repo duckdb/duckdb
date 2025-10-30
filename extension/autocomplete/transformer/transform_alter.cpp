@@ -93,8 +93,8 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTrans
 		if (seq_option.first == "owned") {
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
 			auto schema = owned_by->qualified_name.schema.empty() ? DEFAULT_SCHEMA : owned_by->qualified_name.schema;
-			return make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema, owned_by->qualified_name.name,
-			                                      OnEntryNotFound::THROW_EXCEPTION);
+			return make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
+			                                      owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
 		}
 	}
 	throw NotImplementedException("ALTER SEQUENCE option not yet supported");
@@ -240,7 +240,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameAlter(PEGTransf
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetPartitionedBy(PEGTransformer &transformer,
-		optional_ptr<ParseResult> parse_result) {
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(3));
 	auto expr_list = ExtractParseResultsFromList(extract_parens);
@@ -252,7 +252,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetPartitionedBy(PEGT
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetPartitionedBy(PEGTransformer &transformer,
-		optional_ptr<ParseResult> parse_result) {
+                                                                              optional_ptr<ParseResult> parse_result) {
 	vector<unique_ptr<ParsedExpression>> partition_keys;
 	return make_uniq<SetPartitionedByInfo>(AlterEntryData(), std::move(partition_keys));
 }

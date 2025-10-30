@@ -220,8 +220,10 @@ private:
 	                                                     optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformDropColumn(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
-	static unique_ptr<AlterTableInfo> TransformSetPartitionedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<AlterTableInfo> TransformResetPartitionedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<AlterTableInfo> TransformSetPartitionedBy(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
+	static unique_ptr<AlterTableInfo> TransformResetPartitionedBy(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformAlterColumn(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformAlterColumnEntry(PEGTransformer &transformer,
