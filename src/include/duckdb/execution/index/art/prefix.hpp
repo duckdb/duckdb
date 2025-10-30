@@ -61,7 +61,7 @@ public:
 	//! after its creation.
 	static GateStatus Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
 
-	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
+	//! Traverses and verifies the node and its subtree
 	static void Verify(ART &art, const Node &node);
 	//! Transform the child of the node.
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);

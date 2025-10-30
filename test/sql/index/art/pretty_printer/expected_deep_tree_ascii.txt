@@ -1,0 +1,84 @@
+
+ART: 
+Node4
+a,
+  Prefix: |p|
+  Node4
+  p,
+    Prefix: |l|
+    Node4
+    e,
+      Prefix: |0|
+      Inlined Leaf [row ID: 0]
+    i,
+      Prefix: |c|a|t|
+      Node4
+      i,
+        Prefix: |o|n|0|
+        Inlined Leaf [row ID: 1]
+      o,
+        Prefix: |r|0|
+        Inlined Leaf [row ID: 2]
+    y,
+      Prefix: |0|
+      Inlined Leaf [row ID: 3]
+  r,
+    Prefix: |i|c|o|t|0|
+    Inlined Leaf [row ID: 4]
+b,
+  Prefix: |a|n|
+  Node4
+  a,
+    Prefix: |n|a|0|
+    Inlined Leaf [row ID: 5]
+  d,
+    Node4
+    0,
+      Inlined Leaf [row ID: 6]
+    a,
+      Prefix: |n|a|0|
+      Inlined Leaf [row ID: 7]
+  n,
+    Prefix: |e|r|0|
+    Inlined Leaf [row ID: 8]
+  q,
+    Prefix: |u|e|t|0|
+    Inlined Leaf [row ID: 9]
+c,
+  Prefix: |a|r|
+  Node4
+  0,
+    Inlined Leaf [row ID: 10]
+  d,
+    Node4
+    0,
+      Inlined Leaf [row ID: 11]
+    i,
+      Prefix: |n|a|l|0|
+      Inlined Leaf [row ID: 12]
+  g,
+    Prefix: |o|0|
+    Inlined Leaf [row ID: 13]
+  p,
+    Prefix: |e|t|0|
+    Inlined Leaf [row ID: 14]
+d,
+  Prefix: |o|
+  Node4
+  g,
+    Prefix: |0|
+    Inlined Leaf [row ID: 15]
+  o,
+    Prefix: |r|
+    Node4
+    0,
+      Inlined Leaf [row ID: 16]
+    b,
+      Prefix: |e|l|l|0|
+      Inlined Leaf [row ID: 17]
+    w,
+      Prefix: |a|y|0|
+      Inlined Leaf [row ID: 18]
+  t,
+    Prefix: |0|
+    Inlined Leaf [row ID: 19]

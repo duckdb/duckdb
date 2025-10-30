@@ -1,0 +1,94 @@
+
+ART: 
+Node16
+A,
+  Node4
+  a,
+    Prefix: |a|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |0|1|2|
+  b,
+    Prefix: |b|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |3|4|
+  c,
+    Prefix: |c|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |5|6|7|
+  d,
+    Prefix: |d|0|
+    Inlined Leaf [row ID: 8]
+B,
+  Node4
+  x,
+    Prefix: |x|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |9|10|11|12|
+  y,
+    Prefix: |y|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |13|14|
+  z,
+    Prefix: |z|0|
+    Inlined Leaf [row ID: 15]
+C,
+  Node4
+  p,
+    Prefix: |p|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |16|17|
+  q,
+    Prefix: |q|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |18|19|20|
+  r,
+    Prefix: |r|0|
+    Inlined Leaf [row ID: 21]
+D,
+  Node4
+  m,
+    Prefix: |m|m|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |22|23|24|
+  n,
+    Prefix: |n|n|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |25|26|
+  o,
+    Prefix: |o|o|0|
+    Inlined Leaf [row ID: 27]
+E,
+  Node4
+  f,
+    Prefix: |f|f|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |29|30|
+  g,
+    Prefix: |g|g|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |31|32|33|
+  p,
+    Prefix: |p|p|0|
+    Inlined Leaf [row ID: 28]

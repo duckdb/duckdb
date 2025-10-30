@@ -1,0 +1,101 @@
+
+ART: 
+Node4
+a,
+  Prefix: |a|a|a|a|a|a|a|a|a|a|a|a|a|a|a|Prefix: |a|a|a|a|a|a|a|a|
+  Node4
+  b,
+    Prefix: |b|b|b|b|b|b|b|b|b|b|b|b|b|b|b|Prefix: |b|b|b|b|b|b|b|b|
+    Node4
+    0,
+      Gate
+      Prefix: |128|0|0|0|0|0|0|
+      Node7
+      Leaf |9|10|
+    c,
+      Prefix: |c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|Prefix: |c|c|c|c|c|c|c|c|
+      Node4
+      0,
+        Gate
+        Prefix: |128|0|0|0|0|0|0|
+        Node7
+        Leaf |6|7|8|
+      d,
+        Prefix: |d|d|d|d|d|d|d|d|d|d|d|d|d|d|d|Prefix: |d|d|d|d|d|d|d|d|0|
+        Gate
+        Prefix: |128|0|0|0|0|0|0|
+        Node7
+        Leaf |0|1|2|
+      e,
+        Prefix: |e|e|e|e|e|e|e|e|e|e|e|e|e|e|e|Prefix: |e|e|e|e|e|e|e|e|0|
+        Gate
+        Prefix: |128|0|0|0|0|0|0|
+        Node7
+        Leaf |3|4|
+      f,
+        Prefix: |f|f|f|f|f|f|f|f|f|f|f|f|f|f|f|Prefix: |f|f|f|f|0|
+        Inlined Leaf [row ID: 5]
+  g,
+    Prefix: |g|g|g|g|g|g|g|g|g|g|g|g|g|g|g|Prefix: |g|g|g|g|g|g|g|g|h|h|h|h|h|h|h|Prefix: |h|h|h|h|h|h|h|h|h|h|h|h|h|h|h|Prefix: |h|
+    Node4
+    i,
+      Prefix: |i|i|i|i|i|i|i|i|i|i|i|i|i|i|i|Prefix: |i|
+      Node4
+      i,
+        Prefix: |i|i|0|
+        Gate
+        Prefix: |128|0|0|0|0|0|0|
+        Node7
+        Leaf |11|12|13|14|15|
+      j,
+        Prefix: |j|j|j|0|
+        Gate
+        Prefix: |128|0|0|0|0|0|0|
+        Node7
+        Leaf |16|17|
+    k,
+      Prefix: |k|k|k|k|k|k|k|k|k|k|k|k|k|k|k|Prefix: |k|k|k|k|0|
+      Gate
+      Prefix: |128|0|0|0|0|0|0|
+      Node7
+      Leaf |18|19|
+p,
+  Prefix: |p|p|p|p|p|p|p|p|p|p|p|p|p|p|p|Prefix: |p|p|p|p|p|p|p|p|q|q|q|q|q|q|q|Prefix: |q|q|q|q|q|q|q|q|q|q|q|q|q|q|q|Prefix: |q|q|r|r|r|r|r|r|r|r|r|r|r|r|r|Prefix: |r|r|r|r|r|r|r|r|r|r|r|
+  Node4
+  0,
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |26|27|28|
+  s,
+    Prefix: |s|s|s|s|s|s|s|s|s|s|s|s|s|s|s|Prefix: |s|s|s|s|s|s|s|s|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |20|21|22|23|
+  t,
+    Prefix: |t|t|t|t|t|t|t|t|t|t|t|t|t|t|t|Prefix: |t|t|t|t|t|t|t|t|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |24|25|
+x,
+  Prefix: |x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|Prefix: |x|x|x|x|x|x|x|x|y|y|y|y|y|y|y|Prefix: |y|y|y|y|y|y|y|y|y|y|y|y|y|y|y|Prefix: |y|y|z|z|z|z|z|z|z|z|z|z|z|z|z|Prefix: |z|z|z|z|z|z|z|z|z|z|z|
+  Node4
+  0,
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |29|30|31|32|33|
+  A,
+    Prefix: |A|A|A|A|A|A|A|A|A|A|A|A|A|A|A|Prefix: |A|A|A|A|A|A|A|A|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |34|35|36|
+  B,
+    Prefix: |B|B|B|B|B|B|B|B|B|B|B|B|B|B|B|Prefix: |B|B|B|B|B|B|B|B|0|
+    Gate
+    Prefix: |128|0|0|0|0|0|0|
+    Node7
+    Leaf |37|38|39|
