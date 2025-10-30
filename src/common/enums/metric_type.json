@@ -119,6 +119,14 @@
         "collection_method": "timer"
       },
       {
+        "name": "COMMIT_WRITE_WAL_LATENCY",
+        "description": "The timer for the WAL writes during COMMIT.",
+        "type": "double",
+        "unit": "seconds",
+        "query_root": true,
+        "collection_method": "timer"
+      },
+      {
         "name": "TOTAL_BYTES_READ",
         "description": "Total number of bytes read from disk",
         "type": "uint64",
@@ -141,6 +149,14 @@
         "unit": "seconds",
         "query_root": true,
         "collection_method": "timer"
+      },
+      {
+        "name": "WAL_REPLAY_ENTRY_COUNT",
+        "description": "The total number of entries to replay in the WAL.",
+        "type": "uint64",
+        "unit": "absolute",
+        "query_root": true,
+        "collection_method": "query_metric"
       }
     ]
   },

@@ -57,6 +57,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CHECKPOINT_LATENCY:
+		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
 		case MetricsType::CPU_TIME:
 		case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
 		case MetricsType::LATENCY:
@@ -80,6 +81,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 		case MetricsType::TOTAL_BYTES_READ:
 		case MetricsType::TOTAL_BYTES_WRITTEN:
+		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
 			metrics[type] = Value::CreateValue<uint64_t>(0);
 			break;
 		case MetricsType::EXTRA_INFO:
@@ -104,6 +106,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
 		case MetricsType::BLOCKED_THREAD_TIME:
 		case MetricsType::CHECKPOINT_LATENCY:
+		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
 		case MetricsType::CPU_TIME:
 		case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
 		case MetricsType::LATENCY:
@@ -127,6 +130,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 		case MetricsType::TOTAL_BYTES_READ:
 		case MetricsType::TOTAL_BYTES_WRITTEN:
+		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
 			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[type].GetValue<uint64_t>());
 			break;
 		case MetricsType::EXTRA_INFO:
@@ -163,6 +167,9 @@ void ProfilingUtils::CollectMetrics(const MetricsType &type, QueryMetrics &query
 		case MetricsType::CHECKPOINT_LATENCY:
 			metric = query_metrics.checkpoint_latency.Elapsed();
 			break;
+		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
+			metric = query_metrics.commit_write_wal_latency.Elapsed();
+			break;
 		case MetricsType::LATENCY:
 			metric = query_metrics.latency.Elapsed();
 			break;
@@ -180,6 +187,9 @@ void ProfilingUtils::CollectMetrics(const MetricsType &type, QueryMetrics &query
 			break;
 		case MetricsType::TOTAL_BYTES_WRITTEN:
 			metric = Value::UBIGINT(query_metrics.total_bytes_written);
+			break;
+		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
+			metric = Value::UBIGINT(query_metrics.wal_replay_entry_count);
 			break;
 		case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
 			metric = GetCumulativeOptimizers(node);

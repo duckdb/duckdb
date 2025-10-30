@@ -34,6 +34,7 @@ SELECT unnest(res) FROM (
 "ATTACH_REPLAY_WAL_LATENCY": "true"
 "BLOCKED_THREAD_TIME": "true"
 "CHECKPOINT_LATENCY": "true"
+"COMMIT_WRITE_WAL_LATENCY": "true"
 "CPU_TIME": "true"
 "CUMULATIVE_CARDINALITY": "true"
 "CUMULATIVE_OPTIMIZER_TIMING": "true"
@@ -89,6 +90,7 @@ SELECT unnest(res) FROM (
 "TOTAL_BYTES_READ": "true"
 "TOTAL_BYTES_WRITTEN": "true"
 "WAITING_TO_ATTACH_LATENCY": "true"
+"WAL_REPLAY_ENTRY_COUNT": "true"
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
