@@ -64,6 +64,8 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformAlterTableStmt);
 	REGISTER_TRANSFORM(TransformAlterViewStmt);
 	REGISTER_TRANSFORM(TransformAlterSequenceStmt);
+	REGISTER_TRANSFORM(TransformAlterSequenceOptions);
+	REGISTER_TRANSFORM(TransformSetSequenceOption);
 	REGISTER_TRANSFORM(TransformAlterTableOptions);
 	REGISTER_TRANSFORM(TransformAddColumn);
 	REGISTER_TRANSFORM(TransformDropColumn);
@@ -555,7 +557,6 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
 	return false;
 }
 
-
 QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {
 	QualifiedName result;
 	if (input.empty()) {
@@ -600,8 +601,6 @@ LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_
 	default:
 		throw InternalException("Unsupported interval post-fix");
 	}
-
 }
-
 
 } // namespace duckdb

@@ -8,17 +8,20 @@
 namespace duckdb {
 
 // IdentifierOrStringLiteral <- Identifier / StringLiteral
-string PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
-                                                                 optional_ptr<ParseResult> parse_result) {
+QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	QualifiedName result;
+	result.catalog = INVALID_CATALOG;
+	result.schema = INVALID_SCHEMA;
 	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
-		return choice_pr.result->Cast<IdentifierParseResult>().identifier;
+		result.name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
 	}
 	if (choice_pr.result->type == ParseResultType::STRING) {
-		return choice_pr.result->Cast<StringLiteralParseResult>().result;
+		result.name = choice_pr.result->Cast<StringLiteralParseResult>().result;
 	}
-	throw NotImplementedException("Unexpected type encountered: %s", ParseResultToString(choice_pr.result->type));
+	return result;
 }
 
 string PEGTransformerFactory::TransformColIdOrString(PEGTransformer &transformer,
@@ -70,8 +73,8 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 	return parts;
 }
 
-
-ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer &transformer,
+                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
@@ -83,7 +86,8 @@ ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer
 	return result;
 }
 
-LogicalType PEGTransformerFactory::TransformTypeOrGenerated(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+LogicalType PEGTransformerFactory::TransformTypeOrGenerated(PEGTransformer &transformer,
+                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto type_pr = list_pr.Child<OptionalParseResult>(0);
 	auto generated_column_pr = list_pr.Child<OptionalParseResult>(1);
@@ -95,7 +99,8 @@ LogicalType PEGTransformerFactory::TransformTypeOrGenerated(PEGTransformer &tran
 	return type;
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraint(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	// TODO(dtenwolde) figure out what to do with constraint name.
 	auto opt_constraint_name = list_pr.Child<OptionalParseResult>(0);
@@ -103,26 +108,30 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraint(PEGTra
 	return result;
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraintList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraintList(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<Constraint>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
 	auto result = make_uniq<UniqueConstraint>(column_list, true);
 	return result;
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTransformer &transformer,
+                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
 	auto result = make_uniq<UniqueConstraint>(column_list, false);
 	return result;
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto check_expr = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
@@ -130,7 +139,8 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransf
 	return result;
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto fk_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
 
@@ -151,7 +161,8 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(P
 	return make_uniq<ForeignKeyConstraint>(pk_list, fk_list, fk_info);
 }
 
-vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &transformer,
+                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<string> result;
 	auto colid_list = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
@@ -161,6 +172,5 @@ vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &tran
 	}
 	return result;
 }
-
 
 } // namespace duckdb

@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result) {
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto comment_on_type = transformer.Transform<CatalogType>(list_pr.Child<ListParseResult>(2));
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(3));
@@ -21,15 +21,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 		dotted_identifier.pop_back();
 		auto qualified_name = StringToQualifiedName(dotted_identifier);
 		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
-											column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
+		                                       column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (comment_on_type == CatalogType::DATABASE_ENTRY) {
 		throw NotImplementedException("Adding comments to databases is not implemented");
 	} else if (comment_on_type == CatalogType::SCHEMA_ENTRY) {
 		throw NotImplementedException("Adding comments to schemas is not implemented");
 	} else {
 		auto qualified_name = StringToQualifiedName(dotted_identifier);
-		info = make_uniq<SetCommentInfo>(comment_on_type, qualified_name.catalog, qualified_name.schema, qualified_name.name,
-										comment_value, OnEntryNotFound::THROW_EXCEPTION);
+		info = make_uniq<SetCommentInfo>(comment_on_type, qualified_name.catalog, qualified_name.schema,
+		                                 qualified_name.name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	if (!info) {
 		throw NotImplementedException("Cannot comment on this type");
@@ -38,13 +38,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 	return result;
 }
 
-
-CatalogType PEGTransformerFactory::TransformCommentOnType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+CatalogType PEGTransformerFactory::TransformCommentOnType(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
 	auto list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<CatalogType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	// CommentValue <- 'NULL'i / StringLiteral
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);

@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result) {
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
@@ -79,22 +79,24 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 	}
 	if (info->start_value < info->min_value) {
 		throw ParserException("START value (%lld) cannot be less than MINVALUE (%lld)", info->start_value,
-							  info->min_value);
+		                      info->min_value);
 	}
 	if (info->start_value > info->max_value) {
 		throw ParserException("START value (%lld) cannot be greater than MAXVALUE (%lld)", info->start_value,
-							  info->max_value);
+		                      info->max_value);
 	}
 	result->info = std::move(info);
 	return result;
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSequenceOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSequenceOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetCycle(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqSetCycle(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
 		return make_pair("cycle", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_CYCLE, Value(false)));
@@ -102,8 +104,8 @@ pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetC
 	return make_pair("cycle", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_CYCLE, Value(true)));
 }
 
-
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -113,8 +115,8 @@ pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetI
 	return make_pair("increment", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_INC, const_expr.value));
 }
 
-
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqSetMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 	auto rule_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
@@ -127,20 +129,22 @@ pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetM
 	return make_pair(rule_name, make_uniq<ValueSequenceOption>(seq_info, const_expr.value));
 }
 
-string PEGTransformerFactory::TransformSeqMinOrMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformSeqMinOrMax(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<string>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformNoMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformNoMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto rule_name = transformer.TransformEnum<string>(list_pr.Child<ListParseResult>(1));
 	auto seq_info = rule_name == "minvalue" ? SequenceInfo::SEQ_MIN : SequenceInfo::SEQ_MAX;
 	return make_pair("no" + rule_name, make_uniq<ValueSequenceOption>(seq_info, true));
 }
 
-
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqStartWith(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqStartWith(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 
@@ -151,7 +155,8 @@ pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqStar
 	return make_pair("start", make_uniq<ValueSequenceOption>(SequenceInfo::SEQ_START, const_expr.value));
 }
 
-pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqOwnedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, unique_ptr<SequenceOption>>
+PEGTransformerFactory::TransformSeqOwnedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	// Unused by old transformer
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));

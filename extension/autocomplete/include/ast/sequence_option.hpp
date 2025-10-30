@@ -6,7 +6,8 @@ namespace duckdb {
 
 class SequenceOption {
 public:
-	SequenceOption(SequenceInfo type_p) : type(type_p) {}
+	SequenceOption(SequenceInfo type_p) : type(type_p) {
+	}
 
 public:
 	SequenceInfo type;
@@ -14,7 +15,8 @@ public:
 
 class ValueSequenceOption : public SequenceOption {
 public:
-	ValueSequenceOption(SequenceInfo type, Value value_p) : SequenceOption(type), value(value_p) {}
+	ValueSequenceOption(SequenceInfo type, Value value_p) : SequenceOption(type), value(value_p) {
+	}
 
 public:
 	Value value;
@@ -22,9 +24,12 @@ public:
 
 class QualifiedSequenceOption : public SequenceOption {
 public:
-	QualifiedSequenceOption(SequenceInfo type, QualifiedName qualified_name_p) : SequenceOption(type), qualified_name(qualified_name_p) {}
+	QualifiedSequenceOption(SequenceInfo type, QualifiedName qualified_name_p)
+	    : SequenceOption(type), qualified_name(qualified_name_p) {
+	}
+
 public:
 	QualifiedName qualified_name;
 };
 
-}
+} // namespace duckdb

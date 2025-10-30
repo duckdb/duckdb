@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/transformer/attach_statement.test
+# name: test/sql/peg_parser/transformer/alter_statement.test
 # description: Test alter statements in peg parser
 # group: [transformer]
 
