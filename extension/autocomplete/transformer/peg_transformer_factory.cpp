@@ -86,6 +86,13 @@ void PEGTransformerFactory::RegisterCheckpoint() {
 	REGISTER_TRANSFORM(TransformCheckpointStatement);
 }
 
+void PEGTransformerFactory::RegisterComment() {
+	// comment.gram
+	REGISTER_TRANSFORM(TransformCommentStatement);
+	REGISTER_TRANSFORM(TransformCommentOnType);
+	REGISTER_TRANSFORM(TransformCommentValue);
+}
+
 void PEGTransformerFactory::RegisterCommon() {
 	// common.gram
 	REGISTER_TRANSFORM(TransformNumberLiteral);
@@ -456,6 +463,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterAttach();
 	RegisterCall();
 	RegisterCheckpoint();
+	RegisterComment();
 	RegisterCommon();
 	RegisterCreateTable();
 	RegisterDeallocate();
@@ -507,5 +515,54 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
 	}
 	return false;
 }
+
+
+QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {
+	QualifiedName result;
+	if (input.empty()) {
+		throw InternalException("QualifiedName cannot be made with an empty input.");
+	}
+	if (input.size() == 1) {
+		result.catalog = INVALID_CATALOG;
+		result.schema = INVALID_SCHEMA;
+		result.name = input[0];
+	} else if (input.size() == 2) {
+		result.catalog = INVALID_CATALOG;
+		result.schema = input[0];
+		result.name = input[1];
+	} else if (input.size() == 3) {
+		result.catalog = input[0];
+		result.schema = input[1];
+		result.name = input[2];
+	} else {
+		throw ParserException("Too many dots found.");
+	}
+	return result;
+}
+
+LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_part) {
+	switch (date_part) {
+	case DatePartSpecifier::YEAR:
+	case DatePartSpecifier::MONTH:
+	case DatePartSpecifier::DAY:
+	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::QUARTER:
+	case DatePartSpecifier::DECADE:
+	case DatePartSpecifier::CENTURY:
+	case DatePartSpecifier::MILLENNIUM:
+		return LogicalType::INTEGER;
+	case DatePartSpecifier::HOUR:
+	case DatePartSpecifier::MINUTE:
+	case DatePartSpecifier::MICROSECONDS:
+		return LogicalType::BIGINT;
+	case DatePartSpecifier::MILLISECONDS:
+	case DatePartSpecifier::SECOND:
+		return LogicalType::DOUBLE;
+	default:
+		throw InternalException("Unsupported interval post-fix");
+	}
+
+}
+
 
 } // namespace duckdb

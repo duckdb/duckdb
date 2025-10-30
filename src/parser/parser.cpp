@@ -272,6 +272,7 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::DETACH_STATEMENT:
 					case StatementType::DELETE_STATEMENT:
 					case StatementType::DROP_STATEMENT:
+					case StatementType::C
 						is_supported = true;
 						break;
 					default:

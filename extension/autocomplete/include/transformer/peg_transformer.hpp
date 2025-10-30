@@ -136,15 +136,20 @@ public:
 	static PEGTransformerFactory &GetInstance();
 	explicit PEGTransformerFactory();
 
+	//! Helper functions
 	static unique_ptr<SQLStatement> Transform(vector<MatcherToken> &tokens, const char *root_rule = "Statement");
 	static optional_ptr<ParseResult> ExtractResultFromParens(optional_ptr<ParseResult> parse_result);
+	static vector<optional_ptr<ParseResult>> ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result);
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);
+	static QualifiedName StringToQualifiedName(vector<string> input);
+	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
 
 	// Registration methods
 	void RegisterAlter();
 	void RegisterAttach();
 	void RegisterCall();
 	void RegisterCheckpoint();
+	void RegisterComment();
 	void RegisterCommon();
 	void RegisterCreateTable();
 
@@ -213,6 +218,12 @@ private:
 	// checkpoint.gram
 	static unique_ptr<SQLStatement> TransformCheckpointStatement(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
+
+	// comment.gram
+	static unique_ptr<SQLStatement> TransformCommentStatement(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result);
+	static CatalogType TransformCommentOnType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static Value TransformCommentValue(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// common.gram
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer,
@@ -581,8 +592,6 @@ private:
 	static unique_ptr<TransactionStatement> TransformCommitTransaction(PEGTransformer &, optional_ptr<ParseResult>);
 	static unique_ptr<TransactionStatement> TransformRollbackTransaction(PEGTransformer &, optional_ptr<ParseResult>);
 
-	//! Helper functions
-	static vector<optional_ptr<ParseResult>> ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result);
 
 private:
 	PEGParser parser;
