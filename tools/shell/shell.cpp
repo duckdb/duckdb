@@ -400,13 +400,6 @@ static bool stdout_is_console = true;
 static bool stderr_is_console = true;
 
 /*
-** The following is the open database.  We make a pointer
-** to this database a static variable so that it can be accessed
-** by the SIGINT handler to interrupt database processing.
-*/
-static duckdb_shell::ShellState *globalState = nullptr;
-
-/*
 ** True if an interrupt (Control-C) has been received.
 */
 static volatile int seenInterrupt = 0;
@@ -517,6 +510,12 @@ ShellState::ShellState() {
 	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
+}
+
+void ShellState::Destroy() {
+	db.reset();
+	conn.reset();
+	last_result.reset();
 }
 
 void ShellState::Print(PrintOutput output, const char *str) {
@@ -1071,8 +1070,9 @@ static void interrupt_handler(int NotUsed) {
 	if (seenInterrupt > 2) {
 		exit(1);
 	}
-	if (globalState && globalState->conn) {
-		globalState->conn->Interrupt();
+	auto &state = ShellState::Get();
+	if (state.conn) {
+		state.conn->Interrupt();
 	}
 }
 
@@ -1497,7 +1497,8 @@ private:
 };
 
 ShellState &ShellState::Get() {
-	return *globalState;
+	static ShellState state;
+	return state;
 }
 
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
@@ -1515,7 +1516,6 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		result = con.Query(std::move(statement));
 	}
 	auto &res = *result;
-	;
 	if (res.HasError()) {
 		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
@@ -4013,9 +4013,6 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	if (nLine > sizeof(zBuf) - 30) {
 		return;
 	}
-	if (!globalState) {
-		return;
-	}
 	if (zLine[0] == '.') {
 		// auto-complete dot command
 		for (idx_t c = 0; metadata_commands[c].command; c++) {
@@ -4048,10 +4045,11 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	unique_ptr<duckdb::DuckDB> localDB;
 	unique_ptr<duckdb::Connection> localCon;
 
-	if (!globalState->conn) {
-		globalState->OpenDB();
+	auto &state = ShellState::Get();
+	if (!state.conn) {
+		state.OpenDB();
 	}
-	auto &con = *globalState->conn;
+	auto &con = *state.conn;
 	bool copiedSuggestion = false;
 	auto result = con.Query(zSql);
 	for (auto &row : *result) {
@@ -4357,13 +4355,18 @@ static void main_init(ShellState *data) {
 #endif
 #endif
 
+struct ShellStateDestroyer {
+	~ShellStateDestroyer() {
+		ShellState::Get().Destroy();
+	}
+};
+
 #if SQLITE_SHELL_IS_UTF8
 int main(int argc, char **argv) {
 #else
 int wmain(int argc, wchar_t **wargv) {
 	char **argv;
 #endif
-	ShellState data;
 	int i;
 	int rc = 0;
 	bool warnInmemoryDb = false;
@@ -4372,9 +4375,10 @@ int wmain(int argc, wchar_t **wargv) {
 	char **argvToFree = 0;
 	int argcToFree = 0;
 #endif
+	ShellStateDestroyer destroyer;
 
+	auto &data = ShellState::Get();
 	data.out = stdout;
-	globalState = &data;
 
 	setBinaryMode(stdin, 0);
 	setvbuf(stderr, 0, _IONBF, 0); /* Make sure stderr is unbuffered */

@@ -82,8 +82,6 @@ enum class SuccessState { SUCCESS, FAILURE };
 */
 struct ShellState {
 public:
-	ShellState();
-
 	unique_ptr<duckdb::DuckDB> db;            /* The database */
 	unique_ptr<duckdb::Connection> conn;      /* The primary connection to the database */
 	duckdb::DBConfig config;                  /* Config used for opening the database */
@@ -132,6 +130,7 @@ public:
 public:
 	static ShellState &Get();
 
+	void Destroy();
 	void PushOutputMode();
 	void PopOutputMode();
 	void OutputCSV(const char *z, int bSep);
@@ -236,6 +235,9 @@ public:
 	//! On fail - prints the error and returns FAILURE
 	SuccessState RenderQuery(RowRenderer &renderer, const string &query);
 	SuccessState RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &result);
+
+private:
+	ShellState();
 };
 
 } // namespace duckdb_shell
