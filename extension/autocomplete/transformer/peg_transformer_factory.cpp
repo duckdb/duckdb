@@ -69,7 +69,6 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformAlterTableOptions);
 	REGISTER_TRANSFORM(TransformAddColumn);
 	REGISTER_TRANSFORM(TransformDropColumn);
-	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformAlterColumn);
 	REGISTER_TRANSFORM(TransformAlterColumnEntry);
 	REGISTER_TRANSFORM(TransformDropDefault);
@@ -151,8 +150,17 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformColIdOrString);
 	REGISTER_TRANSFORM(TransformColLabelOrString);
 	REGISTER_TRANSFORM(TransformColId);
+	REGISTER_TRANSFORM(TransformColumnIdList);
 	REGISTER_TRANSFORM(TransformIdentifier);
 	REGISTER_TRANSFORM(TransformDottedIdentifier);
+	REGISTER_TRANSFORM(TransformColumnDefinition);
+	REGISTER_TRANSFORM(TransformTypeOrGenerated);
+	REGISTER_TRANSFORM(TransformTopLevelConstraint);
+	REGISTER_TRANSFORM(TransformTopLevelConstraintList);
+	REGISTER_TRANSFORM(TransformTopPrimaryKeyConstraint);
+	REGISTER_TRANSFORM(TransformTopUniqueConstraint);
+	REGISTER_TRANSFORM(TransformCheckConstraint);
+	REGISTER_TRANSFORM(TransformTopForeignKeyConstraint);
 }
 
 void PEGTransformerFactory::RegisterDeallocate() {

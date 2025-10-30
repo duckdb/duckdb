@@ -50,54 +50,39 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropColumn(PEGTransfo
 	bool cascade = false;
 	transformer.TransformOptional<bool>(list_pr, 4, cascade);
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto nested_column = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(3));
-	if (nested_column.size() == 1) {
-		auto result = make_uniq<RemoveColumnInfo>(AlterEntryData(), nested_column[0], if_exists, cascade);
+	auto nested_column = transformer.Transform<unique_ptr<ColumnRefExpression>>(list_pr.Child<ListParseResult>(3));
+	if (nested_column->column_names.size() == 1) {
+		auto result = make_uniq<RemoveColumnInfo>(AlterEntryData(), nested_column->column_names[0], if_exists, cascade);
 		return result;
 	} else {
-		auto result = make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column, if_exists, cascade);
+		auto result = make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column->column_names, if_exists, cascade);
 		return result;
 	}
-}
-
-vector<string> PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto opt_identifier = list_pr.Child<OptionalParseResult>(0);
-	vector<string> result;
-	if (opt_identifier.HasResult()) {
-		auto repeat_pr = opt_identifier.optional_result->Cast<RepeatParseResult>();
-		for (auto child : repeat_pr.children) {
-			auto child_list = child->Cast<ListParseResult>();
-			result.push_back(child_list.Child<IdentifierParseResult>(0).identifier);
-		}
-	}
-	result.push_back(list_pr.Child<IdentifierParseResult>(1).identifier);
-	return result;
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto nested_column_name = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
+	auto nested_column_name = transformer.Transform<unique_ptr<ColumnRefExpression>>(list_pr.Child<ListParseResult>(2));
 	auto alter_column_entry = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
 	if (alter_column_entry->alter_table_type == AlterTableType::SET_DEFAULT) {
 		auto set_default_entry = unique_ptr_cast<AlterTableInfo, SetDefaultInfo>(std::move(alter_column_entry));
 		// TODO(Dtenwolde) Figure out with nested names;
-		set_default_entry->column_name = nested_column_name[0];
+		set_default_entry->column_name = nested_column_name->column_names[0];
 		return set_default_entry;
 	} else if (alter_column_entry->alter_table_type == AlterTableType::DROP_NOT_NULL) {
 		auto drop_not_null = unique_ptr_cast<AlterTableInfo, DropNotNullInfo>(std::move(alter_column_entry));
-		drop_not_null->column_name = nested_column_name[0];
+		drop_not_null->column_name = nested_column_name->column_names[0];
 		return drop_not_null;
 	} else if (alter_column_entry->alter_table_type == AlterTableType::SET_NOT_NULL) {
 		auto set_not_null = unique_ptr_cast<AlterTableInfo, SetNotNullInfo>(std::move(alter_column_entry));
-		set_not_null->column_name = nested_column_name[0];
+		set_not_null->column_name = nested_column_name->column_names[0];
 		return set_not_null;
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
 		if (!change_column_type->expression) {
-			change_column_type->expression = make_uniq<CastExpression>(change_column_type->target_type, make_uniq<ColumnRefExpression>(nested_column_name));
+			change_column_type->expression = make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
 		}
-		change_column_type->column_name = nested_column_name[0];
+		change_column_type->column_name = nested_column_name->column_names[0];
 		return change_column_type;
 	} else {
 		throw NotImplementedException("Unrecognized type for alter column encountered");
@@ -158,15 +143,14 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddDefault(PEGTransfo
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto nested_column = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
+	auto nested_column = transformer.Transform<unique_ptr<ColumnRefExpression>>(list_pr.Child<ListParseResult>(2));
 	auto new_column_name = list_pr.Child<IdentifierParseResult>(4).identifier;
-	if (nested_column.size() == 1) {
-		auto result = make_uniq<RenameColumnInfo>(AlterEntryData(), nested_column[0], new_column_name);
-		return result;
-	} else {
-		auto result = make_uniq<RenameFieldInfo>(AlterEntryData(), nested_column, new_column_name);
+	if (nested_column->column_names.size() == 1) {
+		auto result = make_uniq<RenameColumnInfo>(AlterEntryData(), nested_column->column_names[0], new_column_name);
 		return result;
 	}
+	auto result = make_uniq<RenameFieldInfo>(AlterEntryData(), nested_column->column_names, new_column_name);
+	return result;
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameAlter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
