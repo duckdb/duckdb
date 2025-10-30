@@ -183,8 +183,12 @@ string ProfilingInfo::GetMetricAsString(const MetricsType metric) const {
 }
 
 void ProfilingInfo::WriteMetricsToLog(ClientContext &context) {
-	for (auto &metric : settings) {
-		DUCKDB_LOG(context, MetricsLogType, metric, metrics[metric]);
+	auto &logger = Logger::Get(context);
+	if (logger.ShouldLog(MetricsLogType::NAME, MetricsLogType::LEVEL)) {
+		for (auto &metric : settings) {
+			logger.WriteLog(MetricsLogType::NAME, MetricsLogType::LEVEL,
+			                MetricsLogType::ConstructLogMessage(metric, metrics[metric]));
+		}
 	}
 }
 
