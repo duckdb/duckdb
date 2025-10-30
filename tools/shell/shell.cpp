@@ -3211,19 +3211,15 @@ struct ShellStateDestroyer {
 };
 
 #if SQLITE_SHELL_IS_UTF8
-int main(int argc, char **argv) {
+int main(int argc, const char **argv) {
 #else
 int wmain(int argc, wchar_t **wargv) {
-	char **argv;
+	const char **argv;
 #endif
 	int i;
 	int rc = 0;
 	bool warnInmemoryDb = false;
 	vector<string> extra_commands;
-#if !SQLITE_SHELL_IS_UTF8
-	char **argvToFree = 0;
-	int argcToFree = 0;
-#endif
 	ShellStateDestroyer destroyer;
 
 	auto &data = ShellState::Get();
@@ -3240,19 +3236,11 @@ int wmain(int argc, wchar_t **wargv) {
 	/* On Windows, we must translate command-line arguments into UTF-8.
 	 */
 #if !SQLITE_SHELL_IS_UTF8
-	argvToFree = (char **)malloc(sizeof(argv[0]) * argc * 2);
-	argcToFree = argc;
-	argv = argvToFree + argc;
-	if (argv == 0)
-		shell_out_of_memory();
+	vector<string> utf8_args;
+	utf8_args.resize(argc);
 	for (i = 0; i < argc; i++) {
-		auto z = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		argv[i] = (char *)malloc(z.size() + 1);
-		if (argv[i] == 0) {
-			shell_out_of_memory();
-		}
-		memcpy(argv[i], z.c_str(), z.size() + 1);
-		argvToFree[i] = argv[i];
+		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
+		argv[i] = utf8_args[i].c_str();
 	}
 #endif
 
@@ -3275,8 +3263,7 @@ int wmain(int argc, wchar_t **wargv) {
 	*/
 	vector<CommandLineCall> command_line_calls;
 	for (i = 1; i < argc; i++) {
-		char *z;
-		z = argv[i];
+		auto z = argv[i];
 		if (z[0] != '-') {
 			if (data.zDbFilename.empty()) {
 				data.zDbFilename = z;
@@ -3434,11 +3421,5 @@ int wmain(int argc, wchar_t **wargv) {
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
-#if !SQLITE_SHELL_IS_UTF8
-	for (i = 0; i < argcToFree; i++) {
-		free(argvToFree[i]);
-	}
-	free(argvToFree);
-#endif
 	return rc;
 }
