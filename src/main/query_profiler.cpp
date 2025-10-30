@@ -888,11 +888,9 @@ static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val 
 void QueryProfiler::ToLog() const {
 	lock_guard<std::mutex> guard(lock);
 
-	if (query_metrics.query.empty() && !root) {
-		// Empty
-	}
 	if (!root) {
-		// Error
+		// No root, not much to do
+		return;
 	}
 
 	auto &settings = root->GetProfilingInfo();
