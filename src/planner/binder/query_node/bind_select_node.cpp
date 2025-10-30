@@ -141,12 +141,27 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				}
 			}
 			order_binder.SetQueryComponent("DISTINCT ON");
+			auto &order_binders = order_binder.GetBinders();
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
-				auto expr = BindOrderExpression(order_binder, std::move(distinct_on_target));
-				if (!expr) {
-					continue;
+				vector<unique_ptr<ParsedExpression>> target_list;
+				order_binders[0].get().ExpandStarExpression(std::move(distinct_on_target), target_list);
+				for (auto &target : target_list) {
+					auto expr = BindOrderExpression(order_binder, std::move(target));
+					if (!expr) {
+						continue;
+					}
+					// Skip duplicates
+					bool duplicate = false;
+					for (auto &existing : bound_distinct->target_distincts) {
+						if (expr->Equals(*existing)) {
+							duplicate = true;
+							break;
+						}
+					}
+					if (!duplicate) {
+						bound_distinct->target_distincts.push_back(std::move(expr));
+					}
 				}
-				bound_distinct->target_distincts.push_back(std::move(expr));
 			}
 			order_binder.SetQueryComponent();
 

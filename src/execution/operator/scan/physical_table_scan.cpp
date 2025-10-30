@@ -102,8 +102,35 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
 
 	if (function.function) {
+		data.async_result = AsyncResultType::IMPLICIT;
+		data.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
 		function.function(context.client, data, chunk);
-		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+
+		switch (data.async_result.GetResultType()) {
+		case AsyncResultType::BLOCKED: {
+			D_ASSERT(data.async_result.HasTasks());
+			auto guard = g_state.Lock();
+			if (g_state.CanBlock(guard)) {
+				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
+				return SourceResultType::BLOCKED;
+			}
+			return SourceResultType::FINISHED;
+		}
+		case AsyncResultType::IMPLICIT:
+			if (chunk.size() > 0) {
+				return SourceResultType::HAVE_MORE_OUTPUT;
+			}
+			return SourceResultType::FINISHED;
+		case AsyncResultType::FINISHED:
+			return SourceResultType::FINISHED;
+		case AsyncResultType::HAVE_MORE_OUTPUT:
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		default:
+			throw InternalException(
+			    "PhysicalTableScan::GetData call of function.function returned unexpected return '%'",
+			    EnumUtil::ToChars(data.async_result.GetResultType()));
+		}
+		throw InternalException("PhysicalTableScan::GetData hasn't handled a function.function return");
 	}
 
 	if (g_state.in_out_final) {
