@@ -79,10 +79,10 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterColumn(PEGTransf
 		return set_not_null;
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
+		change_column_type->column_name = nested_column_name->column_names[0];
 		if (!change_column_type->expression) {
 			change_column_type->expression = make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
 		}
-		change_column_type->column_name = nested_column_name->column_names[0];
 		return change_column_type;
 	} else {
 		throw NotImplementedException("Unrecognized type for alter column encountered");
@@ -96,8 +96,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterColumnEntry(PEGT
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropDefault(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	throw NotImplementedException("Rule 'DropDefault' has not been implemented yet");
+	return make_uniq<SetDefaultInfo>(AlterEntryData(), "", nullptr);
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformChangeNullability(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
