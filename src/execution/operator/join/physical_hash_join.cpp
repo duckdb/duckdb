@@ -855,8 +855,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 					// If the nulls are equal, we let nulls pass. If not, we filter them
 					auto filters_null_values = !ht->NullValuesAreEqual(0);
 					const auto key_name = ht->conditions[0].right->ToString();
+					const auto key_type = ht->conditions[0].left->return_type;
 					auto bf_filter =
-					    make_uniq<BFTableFilter>(ht->GetBloomFilter(), filters_null_values, key_name);
+					    make_uniq<BFTableFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
 					ht->SetBuildBloomFilter(true);
 					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
 				}

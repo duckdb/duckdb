@@ -56,11 +56,13 @@ struct BFTableFilterState final : public TableFilterState {
 
 	idx_t current_capacity;
 	Vector hashes_v;
+	Vector found_v;
+	Vector keys_sliced_v;
 	SelectionVector bf_sel;
 
-	explicit BFTableFilterState()
-	    : current_capacity(STANDARD_VECTOR_SIZE), hashes_v(LogicalType::HASH),
-	      bf_sel(STANDARD_VECTOR_SIZE) {
+	explicit BFTableFilterState(const LogicalType &key_logical_type)
+	    : current_capacity(STANDARD_VECTOR_SIZE), hashes_v(LogicalType::HASH), found_v(LogicalType::UBIGINT),
+	      keys_sliced_v(key_logical_type), bf_sel(STANDARD_VECTOR_SIZE) {
 	}
 };
 

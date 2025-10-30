@@ -6,7 +6,7 @@ namespace duckdb {
 static constexpr idx_t MAX_NUM_SECTORS = (1ULL << 26);
 static constexpr idx_t MIN_NUM_BITS_PER_KEY = 12;
 static constexpr idx_t MIN_NUM_BITS = 512;
-static constexpr idx_t LOG_SECTOR_SIZE = 6; // a sector is 64 bits, log2(64) = 6
+static constexpr idx_t LOG_SECTOR_SIZE = 6;             // a sector is 64 bits, log2(64) = 6
 static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
 static constexpr idx_t N_BITS = 4;                      // the number of bits to set per hash
 
@@ -39,13 +39,12 @@ inline uint64_t GetMask(const hash_t hash) {
 	uint64_t mask = 0;
 
 	for (idx_t bit_idx = 8 - N_BITS; bit_idx < 8; bit_idx++) {
-		const uint8_t bit_pos = shifts_8[ bit_idx];
+		const uint8_t bit_pos = shifts_8[bit_idx];
 		mask |= (1ULL << bit_pos);
 	}
 
 	return mask;
 }
-
 
 void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
@@ -54,8 +53,7 @@ void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 	}
 }
 
-idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_sel,
-                                const idx_t count) const {
+idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, const idx_t count) const {
 	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
 	D_ASSERT(this->status.load() == BloomFilterStatus::ACTIVE);
@@ -95,7 +93,8 @@ string BFTableFilter::ToString(const string &column_name) const {
 void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
                                  BFTableFilterState &state) {
 	if (sel.IsSet()) {
-		VectorOperations::Hash(keys_v, state.hashes_v, sel, approved_count);
+		state.keys_sliced_v.Slice(keys_v, sel, approved_count);
+		VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_count);
 	} else {
 		VectorOperations::Hash(keys_v, state.hashes_v, approved_count);
 	}
@@ -174,7 +173,7 @@ bool BFTableFilter::Equals(const TableFilter &other) const {
 	return false;
 }
 unique_ptr<TableFilter> BFTableFilter::Copy() const {
-	return make_uniq<BFTableFilter>(this->filter, this->filters_null_values, this->key_column_name);
+	return make_uniq<BFTableFilter>(this->filter, this->filters_null_values, this->key_column_name, this->key_type);
 }
 
 unique_ptr<Expression> BFTableFilter::ToExpression(const Expression &column) const {
@@ -186,14 +185,16 @@ void BFTableFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WriteProperty<bool>(200, "filters_null_values", filters_null_values);
 	serializer.WriteProperty<string>(201, "key_column_name", key_column_name);
+	serializer.WriteProperty<LogicalType>(202, "key_type", key_type);
 }
 
 unique_ptr<TableFilter> BFTableFilter::Deserialize(Deserializer &deserializer) {
 	auto filters_null_values = deserializer.ReadProperty<bool>(200, "filters_null_values");
 	auto key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
+	auto key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
 
 	BloomFilter filter;
-	auto result = make_uniq<BFTableFilter>(filter, filters_null_values, key_column_name);
+	auto result = make_uniq<BFTableFilter>(filter, filters_null_values, key_column_name, key_type);
 	return std::move(result);
 }
 
