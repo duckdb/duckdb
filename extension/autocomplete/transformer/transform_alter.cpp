@@ -120,15 +120,14 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropColumn(PEGTransfo
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool cascade = false;
 	transformer.TransformOptional<bool>(list_pr, 4, cascade);
-	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	bool if_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
 	auto nested_column = transformer.Transform<unique_ptr<ColumnRefExpression>>(list_pr.Child<ListParseResult>(3));
 	if (nested_column->column_names.size() == 1) {
 		auto result = make_uniq<RemoveColumnInfo>(AlterEntryData(), nested_column->column_names[0], if_exists, cascade);
 		return result;
-	} else {
-		auto result = make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column->column_names, if_exists, cascade);
-		return result;
 	}
+	auto result = make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column->column_names, if_exists, cascade);
+	return result;
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer,
