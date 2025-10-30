@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE final(channel VARCHAR, i_brand_id INTEGER, i_class_id INTEGER, i_category_id INTEGER, sum_sales DECIMAL(38,2), number_sales HUGEINT);
 
 statement ok
-COPY final FROM 'data/csv/tpcds_14.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+COPY final FROM '{DATA_DIR}/csv/tpcds_14.csv' (FORMAT CSV, DELIMITER '|', HEADER);
 
 query IIIIII
 SELECT * FROM final

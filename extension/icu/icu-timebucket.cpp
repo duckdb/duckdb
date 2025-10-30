@@ -16,7 +16,6 @@
 namespace duckdb {
 
 struct ICUTimeBucket : public ICUDateFunc {
-
 	// Use 2000-01-03 00:00:00 (Monday) as origin when bucket_width is days, hours, ... for TimescaleDB compatibility
 	// There are 10959 days between 1970-01-01 and 2000-01-03
 	constexpr static const int64_t DEFAULT_ORIGIN_MICROS_1 = 10959 * Interval::MICROS_PER_DAY;

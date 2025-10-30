@@ -12,7 +12,7 @@ SET threads = 2;
 
 statement ok
 CREATE OR REPLACE TABLE cricket_staging AS
-SELECT * FROM read_json('data/json/18301/*.json', filename=true)
+SELECT * FROM read_json('{DATA_DIR}/json/18301/*.json', filename=true)
 WHERE 1=0;
 
 statement ok
@@ -20,7 +20,7 @@ TRUNCATE cricket_staging;
 
 statement ok
 INSERT INTO cricket_staging
-SELECT * FROM read_json('data/json/18301/*.json',
+SELECT * FROM read_json('{DATA_DIR}/json/18301/*.json',
     union_by_name=true,
     filename=true
 );

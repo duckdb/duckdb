@@ -1,17 +1,46 @@
 include_directories(include)
-include_directories(../sqlite3_api_wrapper/include)
 if(NOT WIN32)
   add_subdirectory(linenoise)
   add_definitions(-DHAVE_LINENOISE=1)
   include_directories(../../third_party/utf8proc/include)
   include_directories(linenoise/include)
 endif()
-set(SHELL_SOURCES ${SHELL_SOURCES} shell.cpp shell_renderer.cpp
-                  shell_highlight.cpp)
+add_definitions(-DSQLITE_SHELL_IS_UTF8)
+add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
+
+
+
+include_directories(../../third_party/utf8proc/include)
+
+if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
+  include_directories(../../extension/autocomplete/include)
+  set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
+                       ../../extension/autocomplete/autocomplete_extension.cpp)
+  add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
+endif()
+set(SHELL_SOURCES
+    ${SHELL_SOURCES}
+    shell_extension.cpp
+    shell.cpp
+    shell_helpers.cpp
+    shell_renderer.cpp
+    shell_highlight.cpp
+    shell_windows.cpp)
 
 add_executable(shell ${SHELL_SOURCES})
-target_link_libraries(shell sqlite3_api_wrapper_static
-                      ${DUCKDB_EXTRA_LINK_FLAGS})
+
+target_link_libraries(shell duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+link_threads(shell "")
+if(STATIC_LIBCPP)
+  message("Statically linking CLI")
+  target_link_libraries(shell -static-libstdc++ -static-libgcc)
+endif()
+
+link_extension_libraries(shell "")
+
+if(NOT AMALGAMATION_BUILD AND NOT WIN32)
+  target_link_libraries(shell duckdb_utf8proc )
+endif()
 
 function(ensure_variable_is_number INPUT_VERSION OUT_RESULT)
   if(NOT "${${INPUT_VERSION}}" MATCHES "^[0-9]+$")

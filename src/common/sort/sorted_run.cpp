@@ -78,7 +78,7 @@ void GetKeyAndPayload(SORT_KEY *const *const sort_keys, const idx_t &count, Data
 template <class SORT_KEY>
 void TemplatedReconstructSortKey(SORT_KEY *const *const sort_keys, const idx_t &count) {
 	for (idx_t i = 0; i < count; i++) {
-		sort_keys[i]->ByteSwap();
+		sort_keys[i]->Reconstruct();
 	}
 }
 

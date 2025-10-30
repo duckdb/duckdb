@@ -11,6 +11,6 @@ statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
 query I
-insert into test select * from read_csv_auto('data/csv/test/mixed_line_endings.csv', strict_mode=false);
+insert into test select * from read_csv_auto('{DATA_DIR}/csv/test/mixed_line_endings.csv', strict_mode=false);
 ----
 3

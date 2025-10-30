@@ -641,7 +641,6 @@ void FSSTStorage::EndScan(FSSTScanState &scan_state, bp_delta_offsets_t &offsets
 template <bool ALLOW_FSST_VECTORS>
 void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
-
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
@@ -735,7 +734,6 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 //===--------------------------------------------------------------------===//
 void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto base_ptr = handle.Ptr() + segment.GetBlockOffset();

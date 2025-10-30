@@ -44,6 +44,20 @@ def test_custom_highlight_error(shell):
     result.check_stderr("Unknown element 'column_nameXX'")
     result.check_stderr("Unknown color 'redXX'")
     result.check_stderr("Unknown intensity 'boldXX'")
-    result.check_stderr("Usage: .highlight_colors")
+    result.check_stderr("Usage")
+
+@pytest.mark.skipif(os.name == 'nt', reason="Linenoise not supported on Windows")
+def test_linenoise_highlighting(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".render_color XX red")
+        .statement(".render_color comment redXX")
+        .statement(".render_color comment")
+        .statement(".render_color comment " + 'X' * 5000)
+    )
+    result = test.run()
+    result.check_stderr("Unknown component 'XX'")
+    result.check_stderr("Unknown highlighting color 'redXX'")
+    result.check_stderr("Usage")
 
 # fmt: on

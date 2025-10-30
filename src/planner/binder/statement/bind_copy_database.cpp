@@ -21,7 +21,6 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_database, const string &target_database_name) {
-
 	catalog_entry_vector_t catalog_entries;
 	catalog_entries = PhysicalExport::GetNaiveExportOrder(context, from_database);
 

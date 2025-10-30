@@ -79,7 +79,6 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
                                    optional_ptr<const SelectionVector> sel, SelectionVector &res,
                                    ValidityMask &res_validity, VariantNestedData *nested_data, idx_t count) {
-
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = sel ? sel->get_index(i) : i;
 

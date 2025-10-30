@@ -487,6 +487,19 @@ typedef struct {
 	                                                  duckdb_arrow_converted_schema converted_schema,
 	                                                  duckdb_data_chunk *out_chunk);
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
+	// New configuration options functions
+
+	duckdb_config_option (*duckdb_create_config_option)();
+	void (*duckdb_destroy_config_option)(duckdb_config_option *option);
+	void (*duckdb_config_option_set_name)(duckdb_config_option option, const char *name);
+	void (*duckdb_config_option_set_type)(duckdb_config_option option, duckdb_logical_type type);
+	void (*duckdb_config_option_set_default_value)(duckdb_config_option option, duckdb_value default_value);
+	void (*duckdb_config_option_set_default_scope)(duckdb_config_option option,
+	                                               duckdb_config_option_scope default_scope);
+	void (*duckdb_config_option_set_description)(duckdb_config_option option, const char *description);
+	duckdb_state (*duckdb_register_config_option)(duckdb_connection connection, duckdb_config_option option);
+	duckdb_value (*duckdb_client_context_get_config_option)(duckdb_client_context context, const char *name,
+	                                                        duckdb_config_option_scope *out_scope);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -1003,6 +1016,15 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_schema_from_arrow = duckdb_schema_from_arrow;
 	result.duckdb_data_chunk_from_arrow = duckdb_data_chunk_from_arrow;
 	result.duckdb_destroy_arrow_converted_schema = duckdb_destroy_arrow_converted_schema;
+	result.duckdb_create_config_option = duckdb_create_config_option;
+	result.duckdb_destroy_config_option = duckdb_destroy_config_option;
+	result.duckdb_config_option_set_name = duckdb_config_option_set_name;
+	result.duckdb_config_option_set_type = duckdb_config_option_set_type;
+	result.duckdb_config_option_set_default_value = duckdb_config_option_set_default_value;
+	result.duckdb_config_option_set_default_scope = duckdb_config_option_set_default_scope;
+	result.duckdb_config_option_set_description = duckdb_config_option_set_description;
+	result.duckdb_register_config_option = duckdb_register_config_option;
+	result.duckdb_client_context_get_config_option = duckdb_client_context_get_config_option;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;

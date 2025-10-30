@@ -8,7 +8,7 @@ PRAGMA enable_verification
 loop i 1 25
 
 statement maybe
-FROM 'data/csv/afl/no_parameter/${i}.csv'
+FROM '{DATA_DIR}/csv/afl/no_parameter/${i}.csv'
 ----
 
 endloop

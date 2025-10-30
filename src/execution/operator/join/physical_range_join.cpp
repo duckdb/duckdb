@@ -40,7 +40,6 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 }
 
 void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataChunk &input) {
-
 	// Obtain sorting columns
 	keys.Reset();
 	executor.Execute(input, keys);
@@ -69,7 +68,6 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &client,
                                                         const vector<LogicalType> &payload_types,
                                                         const PhysicalRangeJoin &op)
     : op(op), has_null(0), count(0), tasks_completed(0) {
-
 	// Set up the sort. We will materialize keys ourselves, so just set up references.
 	vector<BoundOrderByNode> orders;
 	vector<LogicalType> input_types;
@@ -420,7 +418,6 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
                                            ExternalBlockIteratorState &state, TupleDataChunkState &chunk_state,
                                            const idx_t chunk_idx, SelectionVector &result, const idx_t result_count,
                                            SortedRunScanState &scan_state) {
-
 	auto &sorted = *table.sorted;
 	auto &sort_keys = chunk_state.row_locations;
 	const auto sort_key_type = table.GetSortKeyType();
