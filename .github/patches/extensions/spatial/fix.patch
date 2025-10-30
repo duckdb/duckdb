@@ -1,5 +1,5 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index a925782..8ffa13e 100644
+index a925782..b1d8f9d 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
 @@ -284,8 +284,12 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
@@ -18,7 +18,7 @@ index a925782..8ffa13e 100644
  
  void RTreeIndex::VerifyAllocations(IndexLock &state) {
 diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
-index 202a6c7..b4f177d 100644
+index 202a6c7..243a476 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
 +++ b/src/spatial/index/rtree/rtree_index.hpp
 @@ -61,8 +61,13 @@ public:
