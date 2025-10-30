@@ -27,7 +27,8 @@ public:
 	idx_t segment_count;
 	idx_t current_tuple_count;
 	idx_t current_unique_count;
-	idx_t max_unique_count_across_all_segments = 0;
+	idx_t max_unique_count_across_segments =
+	    0; // Is used to allocate the dictionary optimally later on at the InitCompression step
 	idx_t current_dict_size;
 	StringHeap heap;
 	string_set_t current_set;

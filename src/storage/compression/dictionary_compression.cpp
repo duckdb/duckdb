@@ -107,7 +107,7 @@ unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(Colum
 	const auto &analyze_state = state->Cast<DictionaryCompressionAnalyzeState>();
 	auto &actual_state = *analyze_state.analyze_state;
 	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state->info,
-	                                                     actual_state.max_unique_count_across_all_segments);
+	                                                     actual_state.max_unique_count_across_segments);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {

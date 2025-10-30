@@ -1,5 +1,0 @@
-# name: test/tmp.test
-# group: [test]
-
-statement ok
-SELECT 1

@@ -21,22 +21,6 @@ struct PrimitiveCastOperator {
 	}
 };
 
-struct StringCastOperator {
-	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
-		return input;
-	}
-	// Not needed for our use-case
-	template <class SRC, class TGT>
-	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
-	}
-	// Not needed for our use-case
-	template <class SRC, class TGT>
-	static idx_t WriteSize(const TGT &target_value) {
-		return 0;
-	}
-};
-
 template <class SRC, class TGT = SRC, class OP = PrimitiveCastOperator>
 class PrimitiveDictionary {
 private:
@@ -95,8 +79,6 @@ public:
 
 	//! Insert value into dictionary without calling AddToTarget()
 	void InsertRaw(SRC value) {
-		// TODO: We probably don't need check if it's full, as we know we allocated exactly enough with
-		// max_unique_count_across_all_segments. Try without checks and see if there's a difference with benchmarking.
 		if (full) {
 			return;
 		}
@@ -109,6 +91,12 @@ public:
 			entry.value = value;
 			entry.index = size++;
 		}
+	}
+	// Can be called when we know we allocated enough. Is used for Dictionary compression.
+	void InsertRawNoChecks(SRC value) {
+		auto &entry = Lookup(value);
+		entry.value = value;
+		entry.index = size++;
 	}
 
 	//! Get dictionary index of an already inserted value
@@ -166,14 +154,11 @@ public:
 	}
 
 	void Clear() {
-		// Don't reset the allocated memory - just clear the dictionary contents
 		for (idx_t i = 0; i < capacity; i++) {
 			dictionary[i].index = INVALID_INDEX;
 		}
 		size = 0;
 		full = false;
-		// Reset the target stream position but don't free the memory
-		target_stream.SetPosition(0);
 	}
 	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {

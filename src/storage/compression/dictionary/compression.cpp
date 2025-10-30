@@ -9,8 +9,8 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
       current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
                          max_unique_count_across_all_segments, // maximum_size_p (amount of elements)
-                         1 // maximum_target_capacity_p, 0 because we don't care about target for our use-case, as we
-                           // are using PrimitiveDictionary for duplicate checks
+                         1 // maximum_target_capacity_p, 1 because we don't care about target for our use-case, as we
+                           // only use PrimitiveDictionary for duplicate checks, and not for writing to any target
       ) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
@@ -74,11 +74,11 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 	index_buffer.push_back(current_dictionary.size);
 	selection_buffer.push_back(UnsafeNumericCast<uint32_t>(index_buffer.size() - 1));
 	if (str.IsInlined()) {
-		current_string_map.InsertRaw(str);
+		current_string_map.InsertRawNoChecks(str);
 	} else {
 		string_t dictionary_string((const char *)dict_pos, UnsafeNumericCast<uint32_t>(str.GetSize())); // NOLINT
 		D_ASSERT(!dictionary_string.IsInlined());
-		current_string_map.InsertRaw(dictionary_string);
+		current_string_map.InsertRawNoChecks(dictionary_string);
 	}
 	DictionaryCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
 
