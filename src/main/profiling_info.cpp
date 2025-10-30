@@ -2,7 +2,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include "yyjson.hpp"
 
