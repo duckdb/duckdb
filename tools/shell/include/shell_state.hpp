@@ -25,6 +25,7 @@ namespace duckdb_shell {
 using duckdb::make_uniq;
 using duckdb::MaterializedQueryResult;
 using duckdb::string;
+using duckdb::StringUtil;
 using duckdb::unique_ptr;
 using duckdb::vector;
 struct ColumnarResult;
@@ -177,7 +178,7 @@ public:
 	void PrintOptionallyQuotedIdentifier(const char *z);
 	void OutputJSONString(const char *z, int n);
 	void PrintDashes(idx_t N);
-	void UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool right_align);
+	void UTF8WidthPrint(idx_t w, const string &str, bool right_align);
 	bool SetOutputMode(const string &mode, const char *tbl_name);
 	bool ImportData(const vector<string> &args);
 	bool OpenDatabase(const vector<string> &args);
@@ -198,6 +199,14 @@ public:
 	void Print(const char *str);
 	void Print(const string &str);
 	void PrintPadded(const char *str, idx_t len);
+	template <typename... ARGS>
+	void PrintF(PrintOutput stream, const string &str, ARGS... params) {
+		Print(stream, StringUtil::Format(str, params...));
+	}
+	template <typename... ARGS>
+	void PrintF(const string &str, ARGS... params) {
+		PrintF(PrintOutput::STDOUT, str, std::forward<ARGS>(params)...);
+	}
 	bool ColumnTypeIsInteger(const char *type);
 	string strdup_handle_newline(const char *z);
 	void ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result);
@@ -247,6 +256,7 @@ public:
 	static bool IsSpace(char c);
 	static bool IsDigit(char c);
 	static int64_t StringToInt(const string &arg);
+	bool StringToBool(const string &zArg);
 	static void GenerateRandomBytes(int N, void *pBuf);
 	static bool StringGlob(const char *zGlobPattern, const char *zString);
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
