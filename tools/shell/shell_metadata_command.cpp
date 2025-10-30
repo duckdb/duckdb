@@ -1,5 +1,6 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
+#include "shell_prompt.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -283,7 +284,9 @@ void ShellState::SetPrompt(char *prompt, const string &new_value) {
 
 MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
-		ShellState::SetPrompt(state.mainPrompt, args[1]);
+		auto new_prompt = make_uniq<Prompt>();
+		new_prompt->ParsePrompt(args[1]);
+		state.main_prompt = std::move(new_prompt);
 	}
 	if (args.size() >= 3) {
 		ShellState::SetPrompt(state.continuePrompt, args[2]);

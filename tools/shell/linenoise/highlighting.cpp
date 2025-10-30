@@ -20,7 +20,7 @@ struct Color {
 	const char *color_name;
 	const char *highlight;
 };
-static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033[32m"},
+static const Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033[32m"},
                                   {"yellow", "\033[33m"},        {"blue", "\033[34m"},
                                   {"magenta", "\033[35m"},       {"cyan", "\033[36m"},
                                   {"white", "\033[37m"},         {"brightblack", "\033[90m"},
@@ -28,15 +28,15 @@ static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033
                                   {"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
                                   {"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
                                   {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
-static std::string bold = "\033[1m";
-static std::string underline = "\033[4m";
-static std::string keyword = "\033[32m";
-static std::string continuation_selected = "\033[32m";
-static std::string constant = "\033[33m";
-static std::string continuation = "\033[90m";
-static std::string comment = "\033[90m";
-static std::string error = "\033[31m";
-static std::string reset = "\033[00m";
+static const char *const bold = "\033[1m";
+static const char *const underline = "\033[4m";
+static const char *const keyword = "\033[32m";
+static const char *const continuation_selected = "\033[32m";
+static const char *const constant = "\033[33m";
+static const char *const continuation = "\033[90m";
+static const char *const comment = "\033[90m";
+static const char *const error = "\033[31m";
+static const char *const reset = "\033[00m";
 
 void Highlighting::Enable() {
 	enableHighlighting = 1;

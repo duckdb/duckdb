@@ -85,6 +85,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "shell_prompt.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
@@ -464,6 +465,9 @@ ShellState::ShellState() : seenInterrupt(0) {
 	nullValue = "NULL";
 }
 
+ShellState::~ShellState() {
+}
+
 void ShellState::Destroy() {
 	db.reset();
 	conn.reset();
@@ -657,13 +661,19 @@ static char *local_getline(char *zLine, FILE *in) {
 ** zPrior argument for reuse.
 */
 static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
-	const char *zPrompt;
 	char *zResult;
 	if (in != 0) {
 		zResult = local_getline(zPrior, in);
 	} else {
 		auto &state = ShellState::Get();
-		zPrompt = isContinuation ? state.continuePrompt : state.mainPrompt;
+		string main_prompt;
+		const char *zPrompt;
+		if (!isContinuation) {
+			main_prompt = state.main_prompt->GeneratePrompt(state);
+			zPrompt = main_prompt.c_str();
+		} else {
+			zPrompt = state.continuePrompt;
+		}
 #if SHELL_USE_LOCAL_GETLINE
 		printf("%s", zPrompt);
 		fflush(stdout);
@@ -2699,18 +2709,24 @@ int ShellState::DoMetaCommand(const string &zLine) {
 	} else {
 		auto &command = *metadata_command;
 		MetadataResult result = MetadataResult::PRINT_USAGE;
-		if (!command.callback) {
-			PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
-			       command.command);
-			result = MetadataResult::FAIL;
-		} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
-			result = command.callback(*this, args);
-		}
-		if (result == MetadataResult::PRINT_USAGE) {
-			string error = StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
-			error += StringUtil::Format("Usage: '.%s %s'", command.command, command.usage);
-			PrintDatabaseError(error);
-			rc = 1;
+		try {
+			if (!command.callback) {
+				PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
+					   command.command);
+				result = MetadataResult::FAIL;
+			} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
+				result = command.callback(*this, args);
+			}
+			if (result == MetadataResult::PRINT_USAGE) {
+				string error = StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
+				error += StringUtil::Format("Usage: '.%s %s'", command.command, command.usage);
+				PrintDatabaseError(error);
+				rc = 1;
+				result = MetadataResult::FAIL;
+			}
+		} catch(std::exception &ex) {
+			ErrorData error(ex);
+			PrintDatabaseError(error.Message());
 			result = MetadataResult::FAIL;
 		}
 		rc = int(result);
@@ -3193,7 +3209,8 @@ void ShellState::Initialize() {
 	colSeparator = SEP_Column;
 	rowSeparator = SEP_Row;
 	showHeader = true;
-	strcpy(mainPrompt, "D ");
+	main_prompt = make_uniq<Prompt>();
+	main_prompt->ParsePrompt("D ");
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE

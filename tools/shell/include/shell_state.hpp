@@ -40,6 +40,9 @@ using duckdb::SQLIdentifier;
 using duckdb::SQLString;
 using duckdb::unordered_map;
 struct ShellState;
+using duckdb::InternalException;
+using duckdb::InvalidInputException;
+struct Prompt;
 
 using idx_t = uint64_t;
 
@@ -194,7 +197,7 @@ public:
 	**   .prompt main continue
 	*/
 	static constexpr idx_t MAX_PROMPT_SIZE = 20;
-	char mainPrompt[MAX_PROMPT_SIZE];             /* First line prompt. default: "D "*/
+	unique_ptr<Prompt> main_prompt;
 	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
 
@@ -335,6 +338,7 @@ public:
 
 private:
 	ShellState();
+	~ShellState();
 };
 
 } // namespace duckdb_shell
