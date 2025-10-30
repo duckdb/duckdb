@@ -53,7 +53,7 @@ SecretName <- ColId
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
-Type <- (TimeType / IntervalType / BitType / RowType / MapType / UnionType / NumericType / SimpleType) ArrayBounds*
+Type <- (TimeType / IntervalType / BitType / RowType / MapType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
 SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
 CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
@@ -124,6 +124,7 @@ NumericModType <- 'NUMERIC' TypeModifiers?
 QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
 TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct ColIdTypeList
+SetofType <- 'SETOF' Type
 UnionType <- 'UNION' ColIdTypeList
 ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))
