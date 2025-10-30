@@ -126,8 +126,6 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 	if (stats.vectors_processed.load() < SELECTIVITY_N_VECTORS_TO_CHECK) {
 		stats.Update(found_count, approved_tuple_count);
 		if (stats.vectors_processed.load() >= SELECTIVITY_N_VECTORS_TO_CHECK) {
-			printf("BFTableFilter: selectivity after %llu vectors: %.4f\n",
-			       static_cast<unsigned long long>(stats.vectors_processed.load()), stats.GetSelectivity());
 			if (stats.GetSelectivity() >= SELECTIVITY_THRESHOLD) {
 				this->filter.Pause();
 			}
