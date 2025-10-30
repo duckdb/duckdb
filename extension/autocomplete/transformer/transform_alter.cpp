@@ -239,6 +239,24 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameAlter(PEGTransf
 	return result;
 }
 
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetPartitionedBy(PEGTransformer &transformer,
+		optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(3));
+	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	vector<unique_ptr<ParsedExpression>> partition_keys;
+	for (auto expr : expr_list) {
+		partition_keys.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	}
+	return make_uniq<SetPartitionedByInfo>(AlterEntryData(), std::move(partition_keys));
+}
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetPartitionedBy(PEGTransformer &transformer,
+		optional_ptr<ParseResult> parse_result) {
+	vector<unique_ptr<ParsedExpression>> partition_keys;
+	return make_uniq<SetPartitionedByInfo>(AlterEntryData(), std::move(partition_keys));
+}
+
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddConstraint(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
