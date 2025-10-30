@@ -45,7 +45,8 @@ PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer, op
 	if (opt_identifiers.HasResult()) {
 		auto repeat_identifiers = opt_identifiers.optional_result->Cast<RepeatParseResult>();
 		for (auto &child : repeat_identifiers.children) {
-			column_names.push_back(transformer.Transform<string>(child));
+			auto repeat_list = child->Cast<ListParseResult>();
+			column_names.push_back(repeat_list.Child<IdentifierParseResult>(0).identifier);
 		}
 	}
 	column_names.push_back(list_pr.Child<IdentifierParseResult>(1).identifier);

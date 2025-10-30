@@ -15,6 +15,12 @@ statement ok
 set allow_parser_override_extension=strict_when_supported;
 
 statement error
+ALTER TABLE test DROP s.s2.v1;
+----
+Catalog Error: Table with name test does not exist!
+
+
+statement error
 ALTER SEQUENCE seq OWNED BY tbl1;
 ----
 Catalog Error: Sequence with name seq does not exist!
@@ -71,3 +77,8 @@ Catalog Error: Table with name person does not exist!
 statement error
 ALTER TABLE t0 ALTER c1 TYPE TIMESTAMP;
 ----
+
+statement error
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+----
+Parser Error: Adding generated columns after table creation is not supported yet
