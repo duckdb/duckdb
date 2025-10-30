@@ -32,6 +32,20 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterTableStmt(PEGTransfor
 	return result;
 }
 
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
+	auto alter_table_info = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
+	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(alter_table_info));
+	auto result = make_uniq<RenameViewInfo>(AlterEntryData(), rename_table->new_table_name);
+	result->catalog = base_table->catalog_name;
+	result->schema = base_table->schema_name;
+	result->name = base_table->table_name;
+	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	return result;
+}
+
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterTableOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).result);

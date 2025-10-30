@@ -63,6 +63,7 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformAlterStatement);
 	REGISTER_TRANSFORM(TransformAlterOptions);
 	REGISTER_TRANSFORM(TransformAlterTableStmt);
+	REGISTER_TRANSFORM(TransformAlterViewStmt);
 	REGISTER_TRANSFORM(TransformAlterTableOptions);
 	REGISTER_TRANSFORM(TransformAddColumn);
 	REGISTER_TRANSFORM(TransformDropColumn);
