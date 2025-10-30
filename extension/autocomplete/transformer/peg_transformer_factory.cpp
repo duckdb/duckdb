@@ -62,6 +62,26 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 
 void PEGTransformerFactory::RegisterAlter() {
 	// alter.gram
+
+	REGISTER_TRANSFORM(TransformAlterStatement);
+	REGISTER_TRANSFORM(TransformAlterOptions);
+	REGISTER_TRANSFORM(TransformAlterTableStmt);
+	REGISTER_TRANSFORM(TransformAlterTableOptions);
+	REGISTER_TRANSFORM(TransformAddColumn);
+	REGISTER_TRANSFORM(TransformDropColumn);
+	REGISTER_TRANSFORM(TransformNestedColumnName);
+	REGISTER_TRANSFORM(TransformAlterColumn);
+	REGISTER_TRANSFORM(TransformAlterColumnEntry);
+	REGISTER_TRANSFORM(TransformDropDefault);
+	REGISTER_TRANSFORM(TransformChangeNullability);
+	REGISTER_TRANSFORM(TransformAlterType);
+	REGISTER_TRANSFORM(TransformUsingExpression);
+	REGISTER_TRANSFORM(TransformDropOrSet);
+	REGISTER_TRANSFORM(TransformAddOrDropDefault);
+	REGISTER_TRANSFORM(TransformAddDefault);
+	REGISTER_TRANSFORM(TransformRenameColumn);
+	REGISTER_TRANSFORM(TransformRenameAlter);
+	REGISTER_TRANSFORM(TransformAddConstraint);
 	REGISTER_TRANSFORM(TransformQualifiedSequenceName);
 	REGISTER_TRANSFORM(TransformSequenceName);
 }
