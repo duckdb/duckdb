@@ -146,6 +146,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MaxVacuumTasksSetting),
     DUCKDB_SETTING(MergeJoinThresholdSetting),
     DUCKDB_SETTING(NestedLoopJoinThresholdSetting),
+    DUCKDB_SETTING(NoWalModeSetting),
     DUCKDB_SETTING(OldImplicitCastingSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
     DUCKDB_SETTING_CALLBACK(OrderedAggregateThresholdSetting),
@@ -182,10 +183,10 @@ static const ConfigurationOption internal_options[] = {
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 84),
                                                      DUCKDB_SETTING_ALIAS("null_order", 34),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 103),
-                                                     DUCKDB_SETTING_ALIAS("user", 118),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 104),
+                                                     DUCKDB_SETTING_ALIAS("user", 119),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 21),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 117),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 118),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

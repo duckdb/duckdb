@@ -960,6 +960,15 @@ struct NestedLoopJoinThresholdSetting {
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
+struct NoWalModeSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "no_wal_mode";
+	static constexpr const char *Description = "Disable WAL mode for the database";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
 struct OldImplicitCastingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "old_implicit_casting";

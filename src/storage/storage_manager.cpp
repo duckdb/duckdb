@@ -110,7 +110,10 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	return InMemory() ? in_memory_change_size.load() : wal->GetWALSize();
+	if (wal) {
+		return InMemory() ? in_memory_change_size.load() : wal->GetWALSize();
+	}
+	return 0;
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -121,7 +124,9 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 }
 
 void StorageManager::ResetWAL() {
-	wal->Delete();
+	if (wal) {
+		wal->Delete();
+	}
 }
 
 string StorageManager::GetWALPath() const {
@@ -274,7 +279,12 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		sf_block_manager->CreateNewDatabase(context);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
-		wal = make_uniq<WriteAheadLog>(db, wal_path);
+
+		if (context.GetClientContext() != nullptr) {
+			if (!DBConfig::GetSetting<NoWalModeSetting>(*context.GetClientContext())) {
+				wal = make_uniq<WriteAheadLog>(db, wal_path);
+			}
+		}
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
 		// try to read the existing file on disk.
@@ -347,7 +357,11 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 		// Replay the WAL.
 		auto wal_path = GetWALPath();
-		wal = WriteAheadLog::Replay(context, fs, db, wal_path);
+		if (context.GetClientContext() != nullptr) {
+			if (!DBConfig::GetSetting<NoWalModeSetting>(*context.GetClientContext())) {
+				wal = WriteAheadLog::Replay(context, fs, db, wal_path);
+			}
+		}
 
 		// End timing the WAL replay step.
 		if (client_context) {
