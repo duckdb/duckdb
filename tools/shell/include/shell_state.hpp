@@ -22,9 +22,9 @@ enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
 using duckdb::make_uniq;
+using duckdb::string;
 using duckdb::unique_ptr;
-using std::string;
-using std::vector;
+using duckdb::vector;
 struct ColumnarResult;
 struct RowResult;
 class ColumnRenderer;
@@ -124,6 +124,8 @@ public:
 	string ui_command = "CALL start_ui()";
 	idx_t last_changes = 0;
 	idx_t total_changes = 0;
+	bool readStdin = true;
+	string initFile;
 
 public:
 	void PushOutputMode();
@@ -174,7 +176,7 @@ public:
 	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
 
 	void PrintDatabaseError(const string &zErr);
-	int RunInitialCommand(char *sql, bool bail);
+	int RunInitialCommand(const char *sql, bool bail);
 	void AddError();
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
@@ -200,6 +202,7 @@ public:
 	void ClearTempFile();
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(const string &zLine);
+	idx_t PrintHelp(const char *zPattern);
 
 	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();
@@ -214,6 +217,7 @@ public:
 	static bool StringGlob(const char *zGlobPattern, const char *zString);
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 	static void Sleep(idx_t ms);
+	void PrintUsage();
 #if defined(_WIN32) || defined(WIN32)
 	static unique_ptr<uint8_t[]> Win32Utf8ToUnicode(const char *zText);
 	static string Win32UnicodeToUtf8(void *zWideText);

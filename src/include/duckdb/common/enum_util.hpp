@@ -78,6 +78,10 @@ enum class ArrowTypeInfoType : uint8_t;
 
 enum class ArrowVariableSizeType : uint8_t;
 
+enum class AsyncResultType : uint8_t;
+
+enum class AsyncResultsExecutionMode : uint8_t;
+
 enum class BatchedDataCollectionBufferManagerType : uint8_t;
 
 enum class BinderType : uint8_t;
@@ -527,6 +531,12 @@ const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
+
+template<>
+const char* EnumUtil::ToChars<AsyncResultType>(AsyncResultType value);
+
+template<>
+const char* EnumUtil::ToChars<AsyncResultsExecutionMode>(AsyncResultsExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<BatchedDataCollectionBufferManagerType>(BatchedDataCollectionBufferManagerType value);
@@ -1167,6 +1177,12 @@ ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value);
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
+
+template<>
+AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value);
+
+template<>
+AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const char *value);
 
 template<>
 BatchedDataCollectionBufferManagerType EnumUtil::FromString<BatchedDataCollectionBufferManagerType>(const char *value);

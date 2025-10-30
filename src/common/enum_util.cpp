@@ -132,6 +132,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
@@ -631,6 +632,45 @@ const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value) {
 	return static_cast<ArrowVariableSizeType>(StringUtil::StringToEnum(GetArrowVariableSizeTypeValues(), 4, "ArrowVariableSizeType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAsyncResultTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AsyncResultType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AsyncResultType::IMPLICIT), "IMPLICIT" },
+		{ static_cast<uint32_t>(AsyncResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
+		{ static_cast<uint32_t>(AsyncResultType::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(AsyncResultType::BLOCKED), "BLOCKED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AsyncResultType>(AsyncResultType value) {
+	return StringUtil::EnumToString(GetAsyncResultTypeValues(), 5, "AsyncResultType", static_cast<uint32_t>(value));
+}
+
+template<>
+AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value) {
+	return static_cast<AsyncResultType>(StringUtil::StringToEnum(GetAsyncResultTypeValues(), 5, "AsyncResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAsyncResultsExecutionModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AsyncResultsExecutionMode::SYNCHRONOUS), "SYNCHRONOUS" },
+		{ static_cast<uint32_t>(AsyncResultsExecutionMode::TASK_EXECUTOR), "TASK_EXECUTOR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AsyncResultsExecutionMode>(AsyncResultsExecutionMode value) {
+	return StringUtil::EnumToString(GetAsyncResultsExecutionModeValues(), 2, "AsyncResultsExecutionMode", static_cast<uint32_t>(value));
+}
+
+template<>
+AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const char *value) {
+	return static_cast<AsyncResultsExecutionMode>(StringUtil::StringToEnum(GetAsyncResultsExecutionModeValues(), 2, "AsyncResultsExecutionMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBatchedDataCollectionBufferManagerTypeValues() {

@@ -41,6 +41,7 @@ public:
 	static bool IsSingleByteOperator(char c);
 	static bool CharacterIsInitialNumber(char c);
 	static bool CharacterIsNumber(char c);
+	static bool CharacterIsScientific(char c);
 	static bool CharacterIsControlFlow(char c);
 	static bool CharacterIsKeyword(char c);
 	static bool CharacterIsOperator(char c);

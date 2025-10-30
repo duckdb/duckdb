@@ -387,7 +387,7 @@ jobs:
       id: build
       shell: bash
       env:
-        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;autocomplete"
         GEN: ninja
       run: make
 
@@ -505,11 +505,18 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/prefetch_all_storage.json
 
-    - name: Test peg_parser
+    - name: Test PEG parser on fallback mode
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/peg_parser.json
+
+    - name: Test PEG parser on strict when supported mode
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/peg_parser_strict.json
+
     - name: Forwards compatibility tests
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash

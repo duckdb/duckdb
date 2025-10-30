@@ -34,6 +34,12 @@ DROP TABLE strings_temp;
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
+# we disable verification for these last queries as verification stores multiple query results in main memory
+# query results are buffer-managed, so they add to the memory usage.
+# the memory usage goes up (slightly) with each query, causing, e.g., "Copied statement differs from original result!"
+statement ok
+PRAGMA disable_verification;
+
 query I
 SELECT mem_to_bytes(memory_usage) < 7500000 FROM pragma_database_size();
 ----
@@ -59,12 +65,6 @@ DROP TABLE strings_temp;
 
 statement ok
 CREATE INDEX idx ON art USING ART(id);
-
-# we disable verification for these last queries as verification stores multiple query results in main memory
-# query results are buffer-managed, so they add to the memory usage.
-# the memory usage goes up (slightly) with each query, causing, e.g., "Copied statement differs from original result!"
-statement ok
-PRAGMA disable_verification;
 
 # 11 blocks for prefixes, 2 blocks for Node4, 6 blocks for Node16,
 # 19 blocks * 256KB = 4864KB

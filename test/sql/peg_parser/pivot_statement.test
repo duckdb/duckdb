@@ -1,8 +1,0 @@
-# name: test/sql/peg_parser/pivot_statement.test
-# description: Test pivot statement in peg parser
-# group: [peg_parser]
-
-require autocomplete
-
-statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM oncall UNPIVOT ((name) FOR precedence IN ((name1), (name2)));$TEST_PEG_PARSER$);

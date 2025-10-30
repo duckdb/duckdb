@@ -119,8 +119,10 @@ LimitValue <- 'ALL' / (NumberLiteral 'PERCENT') / (Expression '%'?)
 OffsetValue <- Expression RowOrRows?
 RowOrRows <- 'ROW' / 'ROWS'
 
-
-AliasedExpression <- (ColId ':' Expression) / (Expression 'AS' ColLabelOrString) / (Expression Identifier?)
+AliasedExpression <- ColIdExpression / ExpressionAsColLabel / ExpressionOptIdentifier
+ColIdExpression <- ColId ':' Expression
+ExpressionAsColLabel <- Expression 'AS' ColLabelOrString
+ExpressionOptIdentifier <- Expression Identifier?
 
 ValuesClause <- 'VALUES' List(ValuesExpressions)
 ValuesExpressions <- Parens(List(Expression))
