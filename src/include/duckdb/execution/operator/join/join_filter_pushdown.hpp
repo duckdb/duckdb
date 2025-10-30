@@ -76,9 +76,19 @@ public:
 	unique_ptr<DataChunk> Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
 	                               JoinFilterGlobalState &gstate, const PhysicalComparisonJoin &op) const;
 
+	void FinalizeBF(const ClientContext &context, JoinHashTable &ht, const PhysicalComparisonJoin &op, const Value &min,
+	                const Value &max) const;
+
 private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
 	                  idx_t filter_idx, idx_t filter_col_idx) const;
+
+	void PushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
+	                     idx_t filter_col_idx) const;
+
+	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
+	bool CanUseBloomFilter(const ClientContext &context, JoinHashTable &ht, const PhysicalComparisonJoin &op,
+	                       const ExpressionType &cmp) const;
 };
 
 } // namespace duckdb

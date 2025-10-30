@@ -701,6 +701,12 @@ public:
 	}
 };
 
+bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
+                                            const ExpressionType &cmp) const {
+	auto dynamic_or_filter_threshold = DBConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
+	return ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold && cmp == ExpressionType::COMPARE_EQUAL;
+}
+
 void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
                                           const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const {
 	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
@@ -746,6 +752,36 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	return;
 }
 
+bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, JoinHashTable &ht,
+                                               const PhysicalComparisonJoin &op, const ExpressionType &cmp) const {
+
+	// bf is only supported for single key joins with equality condition as the Filter API only allows
+	// single-column filters so far
+	const bool can_use_bf = ht.conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
+
+	// building the bloom filter is costly on the build to make probing faster, so only use it if there are
+	// more probing tuples than build tuples
+	const double build_to_probe_ratio =
+	    static_cast<double>(op.children[0].get().estimated_cardinality) / static_cast<double>(ht.Count());
+	const bool probe_larger_then_build = build_to_probe_ratio > 1.0;
+
+	const bool can_use_in_filter = CanUseInFilter(context, ht, cmp);
+
+	// only use bloom filter if there is no in-filter already
+	return can_use_bf && !can_use_in_filter && build_side_has_filter && probe_larger_then_build;
+}
+
+void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
+                                             const PhysicalOperator &op, idx_t filter_col_idx) const {
+	// If the nulls are equal, we let nulls pass. If not, we filter them
+	auto filters_null_values = !ht.NullValuesAreEqual(0);
+	const auto key_name = ht.conditions[0].right->ToString();
+	const auto key_type = ht.conditions[0].left->return_type;
+	auto bf_filter = make_uniq<BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
+	ht.SetBuildBloomFilter(true);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
+}
+
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                        JoinFilterGlobalState &gstate,
                                                        const PhysicalComparisonJoin &op) const {
@@ -763,7 +799,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 		return final_min_max; // There are not table souces in which we can push down filters
 	}
 
-	auto dynamic_or_filter_threshold = DBConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
@@ -783,27 +818,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 			}
 			// if the HT is small we can generate a complete "OR" filter
 			// but only if the join condition is equality.
-			bool has_in_filter = false;
-			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold &&
-			    cmp == ExpressionType::COMPARE_EQUAL) {
+			if (ht && CanUseInFilter(context, ht, cmp)) {
 				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
-				has_in_filter = true;
-			}
-
-			bool use_bloom_filter = false;
-			if (ht) {
-				// bf is only supported for single key joins with equality condition as the Filter API only allows
-				// single-column filters so far
-				const bool can_use_bf = ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
-
-				// building the bloom filter is costly on the build to make probing faster, so only use it if there are
-				// more probing tuples than build tuples
-				const double build_to_probe_ratio =
-				    static_cast<double>(op.children[0].get().estimated_cardinality) / static_cast<double>(ht->Count());
-				const bool probe_larger_then_build = build_to_probe_ratio > 1.0;
-
-				// only use bloom filter if there is no in-filter already
-				use_bloom_filter = can_use_bf && !has_in_filter && build_side_has_filter && probe_larger_then_build;
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
@@ -822,12 +838,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					if (use_bloom_filter) {
-						auto optional_greater_equals = make_uniq<OptionalFilter>(std::move(greater_equals));
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
-					} else {
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
-					}
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
 					break;
 				}
 				default:
@@ -839,33 +850,31 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-					if (use_bloom_filter) {
-						auto optional_less_equals = make_uniq<OptionalFilter>(std::move(less_equals));
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
-					} else {
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
-					}
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
 					break;
 				}
 				default:
 					break;
-				}
-
-				if (ht && use_bloom_filter) {
-					// If the nulls are equal, we let nulls pass. If not, we filter them
-					auto filters_null_values = !ht->NullValuesAreEqual(0);
-					const auto key_name = ht->conditions[0].right->ToString();
-					const auto key_type = ht->conditions[0].left->return_type;
-					auto bf_filter =
-					    make_uniq<BFTableFilter>(ht->GetBloomFilter(), filters_null_values, key_name, key_type);
-					ht->SetBuildBloomFilter(true);
-					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
 				}
 			}
 		}
 	}
 
 	return final_min_max;
+}
+
+void JoinFilterPushdownInfo::FinalizeBF(const ClientContext &context, JoinHashTable &ht,
+                                        const PhysicalComparisonJoin &op, const Value &min, const Value &max) const {
+	// create a filter for each of the aggregates
+	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
+		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
+		for (auto &info : probe_info) {
+			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
+			if (CanUseBloomFilter(context, ht, op, cmp) && !Value::NotDistinctFrom(min, max)) {
+				PushBloomFilter(info, ht, op, filter_col_idx);
+			}
+		}
+	}
 }
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -958,6 +967,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
+		if (filter_pushdown) {
+			filter_pushdown->FinalizeBF(context, ht, *this, min, max);
+		}
 		sink.perfect_join_executor.reset();
 		sink.ScheduleFinalize(pipeline, event);
 	}
