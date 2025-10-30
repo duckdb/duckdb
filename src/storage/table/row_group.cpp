@@ -26,14 +26,14 @@
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t start, idx_t count)
-    : SegmentBase<RowGroup>(start, count), collection(collection_p), version_info(nullptr), allocation_size(0),
-      row_id_is_loaded(false), has_changes(false) {
+    : SegmentBase<RowGroup>(start, count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
+      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
     : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection_p), version_info(nullptr),
-      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -45,7 +45,6 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 		this->is_loaded[c] = false;
 	}
 	this->deletes_pointers = std::move(pointer.deletes_pointers);
-	this->deletes_is_loaded = false;
 	this->has_metadata_blocks = pointer.has_metadata_blocks;
 	this->extra_metadata_blocks = std::move(pointer.extra_metadata_blocks);
 
@@ -54,7 +53,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
     : SegmentBase<RowGroup>(data.start, data.count), collection(collection_p), version_info(nullptr),
-      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
@@ -974,9 +973,9 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
-vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
+vector<MetaBlockPointer> RowGroup::GetColumnPointers(bool force) {
 	vector<MetaBlockPointer> result;
-	if (has_metadata_blocks) {
+	if (has_metadata_blocks && !force) {
 		// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
 		// read if from "column_pointers" and "extra_metadata_blocks"
 		for (auto block : column_pointers) {
@@ -1012,6 +1011,25 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
 	MetadataReader reader(metadata_manager, column_pointers[last_idx], &result);
 	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, start, reader, types[last_idx]);
 	return result;
+}
+
+vector<MetaBlockPointer> RowGroup::GetAllColumnPointers() {
+	vector<MetaBlockPointer> result;
+	if (column_pointers.empty()) {
+		// no pointers
+		return result;
+	}
+	auto &types = GetCollection().GetTypes();
+	auto &metadata_manager = GetCollection().GetMetadataManager();
+	for (idx_t i = 0; i < column_pointers.size(); i++) {
+		MetadataReader reader(metadata_manager, column_pointers[i], &result);
+		ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, start, reader, types[i]);
+	}
+	return result;
+}
+
+vector<MetaBlockPointer> RowGroup::GetColumnStartPointers() {
+	return column_pointers;
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
@@ -1120,6 +1138,7 @@ bool RowGroup::HasChanges() const {
 		// we have deletes
 		return true;
 	}
+	D_ASSERT(!deletes_is_loaded.load());
 	// check if any of the columns have changes
 	// avoid loading unloaded columns - unloaded columns can never have changes
 	for (idx_t c = 0; c < columns.size(); c++) {

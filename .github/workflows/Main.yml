@@ -381,6 +381,12 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/latest_storage.json
 
+    - name: test/configs/block_verification.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/block_verification.json
+
     - name: test/configs/verify_fetch_row.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash

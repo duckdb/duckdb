@@ -1187,11 +1187,106 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		if (!row_group_writer) {
 			throw InternalException("Missing row group writer for index %llu", segment_idx);
 		}
+		bool metadata_reuse = !checkpoint_state.write_data[segment_idx].existing_pointers.empty();
+		std::ignore = metadata_reuse;
 		auto pointer =
 		    row_group.Checkpoint(std::move(checkpoint_state.write_data[segment_idx]), *row_group_writer, global_stats);
+		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase());
+		vector<MetaBlockPointer> start_pointers;
+		set<MetaBlockPointer> all_written_blocks;
+		set<MetaBlockPointer> all_metadata_blocks;
+		bool has_extra_has_metadata_blocks;
+		if (debug_verify_blocks) {
+			start_pointers = row_group.GetColumnStartPointers();
+			for (auto &ptr : pointer.data_pointers) {
+				all_written_blocks.emplace(ptr);
+			}
+			has_extra_has_metadata_blocks = pointer.has_metadata_blocks;
+			for (auto &block : pointer.extra_metadata_blocks) {
+				all_written_blocks.emplace(block, 0);
+				all_metadata_blocks.emplace(block, 0);
+			}
+		}
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		row_groups->AppendSegment(l, std::move(entry.node));
 		new_total_rows += row_group.count;
+
+		if (debug_verify_blocks && dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr) {
+			// Verify that we can load the metadata correctly again
+			auto pointers = row_group.GetColumnPointers(true);
+			set<MetaBlockPointer> all_read_blocks;
+			for (auto &ptr : pointers) {
+				all_read_blocks.insert(ptr);
+				if (metadata_reuse && !block_manager.GetMetadataManager().BlockHasBeenCleared(ptr)) {
+					throw InternalException("Not cleared block");
+				}
+			}
+			auto detailed_pointers = row_group.GetAllColumnPointers();
+			set<MetaBlockPointer> all_detailed_read_blocks;
+			for (auto &ptr : detailed_pointers) {
+				all_detailed_read_blocks.insert(ptr);
+				if (metadata_reuse && !block_manager.GetMetadataManager().BlockHasBeenCleared(ptr)) {
+					throw InternalException("Not cleared detailed block");
+				}
+			}
+			set<idx_t> all_written_block_ids;
+			for (auto &ptr : all_written_blocks) {
+				all_written_block_ids.insert(ptr.block_pointer);
+			}
+			set<idx_t> all_read_block_ids;
+			for (auto &ptr : all_read_blocks) {
+				all_read_block_ids.insert(ptr.block_pointer);
+			}
+			set<idx_t> all_detailed_read_block_ids;
+			for (auto &ptr : all_detailed_read_blocks) {
+				all_detailed_read_block_ids.insert(ptr.block_pointer);
+			}
+			std::stringstream oss;
+			oss << "Written: ";
+			for (auto &block : all_written_blocks) {
+				oss << block << ", ";
+			}
+			oss << std::endl;
+			oss << "Read: ";
+			for (auto &block : all_read_blocks) {
+				oss << block << ", ";
+			}
+			oss << std::endl;
+			oss << "Read Detailed: ";
+			for (auto &block : all_detailed_read_blocks) {
+				oss << block << ", ";
+			}
+			oss << std::endl;
+			oss << "Start pointers: ";
+			for (auto &block : start_pointers) {
+				oss << block << ", ";
+			}
+			oss << std::endl;
+			oss << "Metadata blocks: ";
+			for (auto &block : all_metadata_blocks) {
+				oss << block << ", ";
+			}
+			oss << std::endl;
+			oss << std::endl;
+			if (has_extra_has_metadata_blocks) {
+				if (all_written_block_ids != all_read_block_ids) {
+					throw InternalException("Reloading blocks just written does not yield same blocks: " + oss.str());
+				}
+			} else {
+				if (!metadata_reuse) {
+					throw InternalException("We only have no extra_metadata_blocks when we reuse an old segment");
+				}
+				for (auto &block : all_written_block_ids) {
+					if (all_read_block_ids.find(block) == all_read_block_ids.end()) {
+						throw InternalException("Reloading blocks just written does not yield superset of blocks: " +
+						                        oss.str());
+					}
+				}
+			}
+			if (all_read_block_ids != all_detailed_read_block_ids) {
+				throw InternalException("Read and detailed read block ids differ: " + oss.str());
+			}
+		}
 	}
 	total_rows = new_total_rows;
 	l.Release();

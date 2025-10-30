@@ -425,6 +425,18 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 	}
 }
 
+bool MetadataManager::BlockHasBeenCleared(const MetaBlockPointer &pointer) {
+	unique_lock<mutex> guard(block_lock);
+	auto block_id = pointer.GetBlockId();
+	auto block_index = pointer.GetBlockIndex();
+	auto entry = modified_blocks.find(block_id);
+	if (entry == modified_blocks.end()) {
+		throw InternalException("BlockHasBeenCleared - Block id %llu not found in modified_blocks", block_id);
+	}
+	auto &modified_list = entry->second;
+	return (modified_list & (1ULL << block_index)) == 0ULL;
+}
+
 vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
 	vector<MetadataBlockInfo> result;
 	unique_lock<mutex> guard(block_lock);

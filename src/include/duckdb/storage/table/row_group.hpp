@@ -94,7 +94,12 @@ public:
 		return collection.get();
 	}
 	//! Returns the list of meta block pointers used by the columns
-	vector<MetaBlockPointer> GetColumnPointers();
+	vector<MetaBlockPointer> GetColumnPointers(bool force = false);
+
+	vector<MetaBlockPointer> GetAllColumnPointers();
+
+	vector<MetaBlockPointer> GetColumnStartPointers();
+
 	//! Returns the list of meta block pointers used by the deletes
 	const vector<MetaBlockPointer> &GetDeletesPointers() const {
 		return deletes_pointers;
