@@ -597,6 +597,11 @@ public:
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 
+		if (gstate.finished) {
+			data_p.async_result = SourceResultType::FINISHED;
+			return;
+		}
+
 		do {
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
@@ -630,6 +635,9 @@ public:
 			}
 			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 				// Loop back to the same block
+				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					continue;
+				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				return;
 			}
@@ -640,8 +648,16 @@ public:
 			}
 
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				data_p.async_result = SourceResultType::FINISHED;
+				if (scan_chunk.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					gstate.finished = true;
+					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+				} else {
+					data_p.async_result = SourceResultType::FINISHED;
+				}
 			} else {
+				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					continue;
+				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 			}
 			return;
