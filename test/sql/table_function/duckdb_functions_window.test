@@ -9,15 +9,15 @@ select function_name, parameters, parameter_types, function_type from duckdb_fun
 ----
 cume_dist	[]	[]	window
 dense_rank	[]	[]	window
-fill	[expr]	[T]	window
-first	[expr]	[T]	window
-first_value	[expr]	[T]	window
-lag	['expr[', 'offset[', 'default]]']	[T, BIGINT, T]	window
-last	[expr]	[T]	window
-last_value	[expr]	[T]	window
-lead	['expr[', 'offset[', 'default]]']	[T, BIGINT, T]	window
-nth_value	[expr, nth]	[T, BIGINT]	window
-ntile	[num_buckets]	[BIGINT]	window
+fill	[col0]	[T]	window
+first	[col0]	[T]	window
+first_value	[col0]	[T]	window
+lag	[col0, col1, col2]	[T, BIGINT, T]	window
+last	[col0]	[T]	window
+last_value	[col0]	[T]	window
+lead	[col0, col1, col2]	[T, BIGINT, T]	window
+nth_value	[col0, col1]	[T, BIGINT]	window
+ntile	[col0]	[BIGINT]	window
 percent_rank	[]	[]	window
 rank	[]	[]	window
 rank_dense	[]	[]	window

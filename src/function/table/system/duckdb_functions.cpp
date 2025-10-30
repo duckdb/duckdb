@@ -16,6 +16,10 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 constexpr const char *AggregateFunctionCatalogEntry::Name;
@@ -184,6 +188,12 @@ struct ScalarFunctionExtractor {
 
 	static Value ResultType(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).stability);
+	}
+};
+
+struct WindowFunctionExtractor : ScalarFunctionExtractor {
+	static Value GetFunctionType() {
+		return Value("window");
 	}
 };
 
@@ -648,121 +658,70 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	return function_idx + 1 == OP::FunctionCount(function);
 }
 
-void ExtractWindowFunctionData(const WindowFunctionDefinition *it, DataChunk &output, idx_t output_offset) {
+void ExtractWindowFunctionData(ClientContext &context, const WindowFunctionDefinition *it, DataChunk &output,
+                               idx_t output_offset) {
 	D_ASSERT(it && it->name != nullptr);
-	Value parameter_types;
-	Value parameter_names;
-	Value return_type;
-	Value name(it->name);
+	string name(it->name);
+
+	auto &system_catalog = Catalog::GetSystemCatalog(DatabaseInstance::GetDatabase(context));
+	string schema_name(DEFAULT_SCHEMA);
+	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name);
+	auto &default_schema = system_catalog.GetSchema(context, schema_lookup);
 
 	switch (it->expression_type) {
 	case ExpressionType::WINDOW_FILL:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_FIRST_VALUE: {
-		return_type = Value("T");
-		parameter_types = Value::LIST({Value("T")});
-		parameter_names = Value::LIST({Value("expr")});
+		ScalarFunction function(name, {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"), nullptr);
+		CreateScalarFunctionInfo create_info(function);
+		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
 	case ExpressionType::WINDOW_NTH_VALUE: {
-		return_type = Value("T");
-		parameter_types = Value::LIST({Value("T"), Value("BIGINT")});
-		parameter_names = Value::LIST({Value("expr"), Value("nth")});
+		ScalarFunction function(name, {LogicalType::TEMPLATE("T"), LogicalType::BIGINT}, LogicalType::TEMPLATE("T"),
+		                        nullptr);
+		CreateScalarFunctionInfo create_info(function);
+		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE: {
-		return_type = Value("BIGINT");
-		parameter_types = Value::LIST(LogicalType::VARCHAR, {});
-		parameter_names = Value::LIST(LogicalType::VARCHAR, {});
+		ScalarFunction function(name, {}, LogicalType::BIGINT, nullptr);
+		CreateScalarFunctionInfo create_info(function);
+		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
 	case ExpressionType::WINDOW_NTILE: {
-		return_type = Value("BIGINT");
-		parameter_types = Value::LIST(LogicalType::VARCHAR, {Value("BIGINT")});
-		parameter_names = Value::LIST(LogicalType::VARCHAR, {Value("num_buckets")});
+		ScalarFunction function(name, {LogicalType::BIGINT}, LogicalType::BIGINT, nullptr);
+		CreateScalarFunctionInfo create_info(function);
+		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_CUME_DIST: {
-		return_type = Value("DOUBLE");
-		parameter_types = Value::LIST(LogicalType::VARCHAR, {});
-		parameter_names = Value::LIST(LogicalType::VARCHAR, {});
+		ScalarFunction function(name, {}, LogicalType::DOUBLE, nullptr);
+		CreateScalarFunctionInfo create_info(function);
+		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
-	case ExpressionType::WINDOW_LEAD:
-	case ExpressionType::WINDOW_LAG: {
-		return_type = Value("T");
-		parameter_types = Value::LIST({Value("T"), Value("BIGINT"), Value("T")});
-		parameter_names = Value::LIST({Value("expr["), Value("offset["), Value("default]]")});
+	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_LEAD: {
+		ScalarFunction function(name, {LogicalType::TEMPLATE("T"), LogicalType::BIGINT, LogicalType::TEMPLATE("T")},
+		                        LogicalType::TEMPLATE("T"), nullptr);
+		CreateScalarFunctionInfo create_info(function);
+		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
+	}
 	default:
-		return;
+		throw InternalException("Window function '%s' not implemented", name);
 	}
-	}
-
-	idx_t col = 0;
-
-	// database_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(SYSTEM_CATALOG));
-
-	// database_oid, BIGINT
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::BIGINT));
-
-	// schema_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(DEFAULT_SCHEMA));
-
-	// function_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, name);
-
-	// alias_of, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
-
-	// function_type, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value("window"));
-
-	// function_description, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
-
-	// comment, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
-
-	// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, Value::MAP({}));
-
-	// return_type, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, return_type);
-
-	// parameters, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, parameter_names);
-
-	// parameter_types, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, parameter_types);
-
-	// varargs, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
-
-	// macro_definition, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
-
-	// has_side_effects, LogicalType::BOOLEAN
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
-
-	// internal, LogicalType::BOOLEAN
-	output.SetValue(col++, output_offset, Value::BOOLEAN(true));
-
-	// function_oid, LogicalType::BIGINT
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::BIGINT));
-
-	// examples, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, Value::LIST(LogicalType::VARCHAR, {}));
-
-	// stability, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(LogicalTypeId::VARCHAR));
-
-	// categories, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, Value::LIST(LogicalType::VARCHAR, {}));
 }
 
 static bool Finished(const DuckDBFunctionsData &data) {
@@ -827,7 +786,7 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 		count++;
 	}
 	while (data.window_iterator->name != nullptr && count < STANDARD_VECTOR_SIZE) {
-		ExtractWindowFunctionData(data.window_iterator, output, count);
+		ExtractWindowFunctionData(context, data.window_iterator, output, count);
 		count++;
 		data.window_iterator++;
 	}
