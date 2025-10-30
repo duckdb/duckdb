@@ -19,6 +19,10 @@ ALTER TABLE test DROP s.s2.v1;
 ----
 Catalog Error: Table with name test does not exist!
 
+statement error
+ALTER TABLE tbl SET PARTITIONED BY (i);
+----
+Catalog Error: Table with name tbl does not exist!
 
 statement error
 ALTER SEQUENCE seq OWNED BY tbl1;

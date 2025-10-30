@@ -92,8 +92,8 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformSetSequenceOption(PEGTrans
 		auto seq_option = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(option);
 		if (seq_option.first == "owned") {
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
-			return make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "",
-			                                      owned_by->qualified_name.schema, owned_by->qualified_name.name,
+			auto schema = owned_by->qualified_name.schema.empty() ? DEFAULT_SCHEMA : owned_by->qualified_name.schema;
+			return make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema, owned_by->qualified_name.name,
 			                                      OnEntryNotFound::THROW_EXCEPTION);
 		}
 	}
