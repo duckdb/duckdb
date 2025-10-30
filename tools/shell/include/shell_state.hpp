@@ -198,6 +198,10 @@ public:
 	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
 
+#if defined(_WIN32) || defined(WIN32)
+	bool win_utf8_mode = false;
+#endif
+
 public:
 	static ShellState &Get();
 

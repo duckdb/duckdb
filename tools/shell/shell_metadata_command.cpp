@@ -421,7 +421,7 @@ MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
 
 #if defined(_WIN32) || defined(WIN32)
 MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
-	win_utf8_mode = 1;
+	state.win_utf8_mode = true;
 	return MetadataResult::SUCCESS;
 }
 #endif
