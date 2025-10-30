@@ -13,6 +13,7 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 
@@ -466,9 +467,9 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 // Printing
 //===--------------------------------------------------------------------===//
 
-string Node::ToString(ART &art, int indent_level, bool inside_gate, bool display_ascii) const {
-	auto indent = [](std::string &str, const int n) {
-		for (int i = 0; i < n; ++i) {
+string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool display_ascii) const {
+	auto indent = [](string &str, const idx_t n) {
+		for (idx_t i = 0; i < n; ++i) {
 			str += " ";
 		}
 	};

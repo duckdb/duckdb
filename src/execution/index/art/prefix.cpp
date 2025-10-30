@@ -186,9 +186,9 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
-string Prefix::ToString(ART &art, const Node &node, int indent_level, bool inside_gate, bool display_ascii) {
-	auto indent = [](std::string &str, const int n) {
-		for (int i = 0; i < n; ++i) {
+string Prefix::ToString(ART &art, const Node &node, idx_t indent_level, bool inside_gate, bool display_ascii) {
+	auto indent = [](string &str, const idx_t n) {
+		for (idx_t i = 0; i < n; ++i) {
 			str += " ";
 		}
 	};
