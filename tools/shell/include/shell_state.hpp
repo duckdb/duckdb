@@ -20,8 +20,6 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb.hpp"
 
-enum class MetadataResult : uint8_t;
-
 namespace duckdb_shell {
 using duckdb::make_uniq;
 using duckdb::MaterializedQueryResult;
@@ -83,6 +81,8 @@ enum class ShellFlags : uint32_t {
 enum class ShellOpenFlags { EXIT_ON_FAILURE, KEEP_ALIVE_ON_FAILURE };
 enum class SuccessState { SUCCESS, FAILURE };
 enum class OptionType { DEFAULT, ON, OFF };
+
+enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
 typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
 
@@ -294,6 +294,10 @@ public:
 	SuccessState RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &result);
 	bool HighlightErrors() const;
 	bool HighlightResults() const;
+
+	static MetadataResult SetNullValue(ShellState &state, const vector<string> &args);
+	static MetadataResult SetSeparator(ShellState &state, const vector<string> &args);
+	static MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args);
 
 private:
 	ShellState();
