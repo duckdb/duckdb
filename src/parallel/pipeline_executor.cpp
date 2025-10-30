@@ -129,7 +129,7 @@ SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const boo
 	// by default set it to the maximum valid batch index value for the current pipeline
 	auto &partition_info = local_sink_state->partition_info;
 	OperatorPartitionData next_data(max_batch_index);
-	if (( source_chunk.size() > 0 )) {
+	if ((source_chunk.size() > 0)) {
 		D_ASSERT(local_source_state);
 		D_ASSERT(pipeline.source_state);
 		// if we retrieved data - initialize the next batch index

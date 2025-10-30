@@ -597,7 +597,7 @@ public:
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 
-		{
+		do {
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
 
@@ -628,7 +628,7 @@ public:
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
 			}
-			if (res.GetResultType() == AsyncResultType::ONGOING) {
+			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 				// Loop back to the same block
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				return;
@@ -641,13 +641,8 @@ public:
 			} else {
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 			}
-<<<<<<< HEAD
+			return;
 		} while (true);
-		// This is not expected to be ever taken
-		throw InternalException("MultiFileScan is malformed");
-=======
-		}
->>>>>>> 38d993c294 (MultiFileScan: Handle newer available returns combinations)
 	}
 
 	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
