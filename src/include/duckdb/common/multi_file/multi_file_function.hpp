@@ -634,7 +634,10 @@ public:
 				return;
 			}
 
-			D_ASSERT(res.GetResultType() == AsyncResultType::FINISHED);
+			if (res.GetResultType() != AsyncResultType::FINISHED) {
+				throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
+				                        EnumUtil::ToChars(res.GetResultType()));
+			}
 
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
 				data_p.async_result = SourceResultType::FINISHED;
