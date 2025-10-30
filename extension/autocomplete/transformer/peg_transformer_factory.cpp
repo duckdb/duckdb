@@ -59,11 +59,11 @@ PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
 
 void PEGTransformerFactory::RegisterAlter() {
 	// alter.gram
-
 	REGISTER_TRANSFORM(TransformAlterStatement);
 	REGISTER_TRANSFORM(TransformAlterOptions);
 	REGISTER_TRANSFORM(TransformAlterTableStmt);
 	REGISTER_TRANSFORM(TransformAlterViewStmt);
+	REGISTER_TRANSFORM(TransformAlterSequenceStmt);
 	REGISTER_TRANSFORM(TransformAlterTableOptions);
 	REGISTER_TRANSFORM(TransformAddColumn);
 	REGISTER_TRANSFORM(TransformDropColumn);
@@ -140,6 +140,18 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformIntervalType);
 	REGISTER_TRANSFORM(TransformIntervalInterval);
 	REGISTER_TRANSFORM(TransformInterval);
+}
+
+void PEGTransformerFactory::RegisterCreateSequence() {
+	REGISTER_TRANSFORM(TransformCreateSequenceStmt);
+	REGISTER_TRANSFORM(TransformSequenceOption);
+	REGISTER_TRANSFORM(TransformSeqSetCycle);
+	REGISTER_TRANSFORM(TransformSeqSetIncrement);
+	REGISTER_TRANSFORM(TransformSeqSetMinMax);
+	REGISTER_TRANSFORM(TransformSeqMinOrMax);
+	REGISTER_TRANSFORM(TransformNoMinMax);
+	REGISTER_TRANSFORM(TransformSeqStartWith);
+	REGISTER_TRANSFORM(TransformSeqOwnedBy);
 }
 
 void PEGTransformerFactory::RegisterCreateTable() {
@@ -491,6 +503,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCheckpoint();
 	RegisterComment();
 	RegisterCommon();
+	RegisterCreateSequence();
 	RegisterCreateTable();
 	RegisterDeallocate();
 	RegisterDelete();

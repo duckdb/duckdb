@@ -46,6 +46,29 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 	return result;
 }
 
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	auto sequence_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	auto alter_info = transformer.Transform<unique_ptr<AlterInfo>>(list_pr.Child<ListParseResult>(3));
+	alter_info->catalog = sequence_name.catalog;
+	alter_info->schema = sequence_name.schema;
+	alter_info->name = sequence_name.name;
+	alter_info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	return alter_info;
+}
+
+QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	QualifiedName result;
+	result.catalog = INVALID_CATALOG;
+	result.schema = INVALID_SCHEMA;
+	transformer.TransformOptional(list_pr, 0, result.catalog);
+	transformer.TransformOptional(list_pr, 1, result.schema);
+	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	return result;
+}
+
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterTableOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
@@ -177,16 +200,6 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddConstraint(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto constraint = transformer.Transform<unique_ptr<Constraint>>(list_pr.Child<ListParseResult>(1));
 	return make_uniq<AddConstraintInfo>(AlterEntryData(), std::move(constraint));
-}
-
-QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransformer &transformer,
-                                                                    optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	QualifiedName result;
-	transformer.TransformOptional<string>(list_pr, 0, result.catalog);
-	transformer.TransformOptional<string>(list_pr, 1, result.schema);
-	result.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
-	return result;
 }
 
 string PEGTransformerFactory::TransformSequenceName(PEGTransformer &transformer,

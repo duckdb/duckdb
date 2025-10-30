@@ -10,6 +10,7 @@
 #include "ast/join_prefix.hpp"
 #include "ast/join_qualifier.hpp"
 #include "ast/on_conflict_expression_target.hpp"
+#include "ast/sequence_option.hpp"
 #include "ast/setting_info.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -151,6 +152,7 @@ public:
 	void RegisterCheckpoint();
 	void RegisterComment();
 	void RegisterCommon();
+	void RegisterCreateSequence();
 	void RegisterCreateTable();
 
 	void RegisterDeallocate();
@@ -200,6 +202,8 @@ private:
 	static unique_ptr<AlterInfo> TransformAlterOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterInfo> TransformAlterTableStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterInfo> TransformAlterViewStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<AlterInfo> TransformAlterSequenceStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformAlterTableOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformDropColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
@@ -215,8 +219,6 @@ private:
 	static unique_ptr<AlterTableInfo> TransformRenameColumn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformRenameAlter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddConstraint(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer,
-	                                                    optional_ptr<ParseResult> parse_result);
 	static string TransformSequenceName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// attach.gram
@@ -279,6 +281,18 @@ private:
 	static LogicalType TransformIntervalType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformIntervalInterval(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static DatePartSpecifier TransformInterval(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// create_sequence.gram
+	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSequenceOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetCycle(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetIncrement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformSeqMinOrMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformNoMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqStartWith(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqOwnedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_table.gram
 	static string TransformIdentifierOrStringLiteral(PEGTransformer &transformer,

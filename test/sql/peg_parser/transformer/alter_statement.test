@@ -15,6 +15,11 @@ statement ok
 set allow_parser_override_extension=strict_when_supported;
 
 statement error
+ALTER SEQUENCE seq OWNED BY tbl1;
+----
+Catalog Error: Sequence with name seq does not exist!
+
+statement error
 ALTER TABLE integers ALTER j TYPE BIGINT;
 ----
 Catalog Error: Table with name integers does not exist!
@@ -49,10 +54,6 @@ ALTER TABLE t0 DROP COLUMN rowid;
 ----
 Catalog Error: Table with name t0 does not exist!
 
-statement error
-ALTER SEQUENCE seq OWNED BY tbl1;
-----
-Catalog Error: Sequence with name seq does not exist!
 
 statement error
 ALTER TABLE aliens ADD COLUMN iq_level intelligence;

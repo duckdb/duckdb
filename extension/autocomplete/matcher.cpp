@@ -1233,12 +1233,12 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
+	AddRuleOverride("SequenceName", Variable());
 	AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("CopyOptionName", CopyOptionName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
-	// AddRuleOverride("ArithmeticOperatorLiteral", ArithmeticOperator());
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);
