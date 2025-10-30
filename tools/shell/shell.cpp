@@ -3943,6 +3943,31 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 	return ProcessFile(file, true);
 }
 
+vector<string> ShellState::GetMetadataCompletions(const char *zLine, idx_t nLine) {
+	char zBuf[1000];
+	vector<string> result;
+	for (idx_t c = 0; metadata_commands[c].command; c++) {
+		auto &command = metadata_commands[c];
+		auto &line = command.command;
+		bool found_match = true;
+		idx_t line_pos;
+		zBuf[0] = '.';
+		for (line_pos = 0; !IsSpace(line[line_pos]) && line[line_pos] && line_pos + 2 < sizeof(zBuf); line_pos++) {
+			zBuf[line_pos + 1] = line[line_pos];
+			if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
+				// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
+				found_match = false;
+				break;
+			}
+		}
+		zBuf[line_pos + 1] = '\0';
+		if (found_match && line_pos + 1 >= nLine) {
+			result.push_back(zBuf);
+		}
+	}
+	return result;
+}
+
 #ifdef HAVE_LINENOISE
 /*
 ** Linenoise completion callback
@@ -3956,25 +3981,9 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	}
 	if (zLine[0] == '.') {
 		// auto-complete dot command
-		for (idx_t c = 0; metadata_commands[c].command; c++) {
-			auto &command = metadata_commands[c];
-			auto &line = command.command;
-			bool found_match = true;
-			idx_t line_pos;
-			zBuf[0] = '.';
-			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 2 < sizeof(zBuf);
-			     line_pos++) {
-				zBuf[line_pos + 1] = line[line_pos];
-				if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
-					// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
-					found_match = false;
-					break;
-				}
-			}
-			zBuf[line_pos + 1] = '\0';
-			if (found_match && line_pos + 1 >= nLine) {
-				linenoiseAddCompletion(lc, zBuf);
-			}
+		auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
+		for (auto &completion : dot_completions) {
+			linenoiseAddCompletion(lc, completion.c_str());
 		}
 		return;
 	}

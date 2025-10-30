@@ -295,6 +295,7 @@ public:
 #endif
 	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
 	optional_ptr<const MetadataCommand> FindMetadataCommand(const string &option, string &error_msg) const;
+	static vector<string> GetMetadataCompletions(const char *zLine, idx_t nLine);
 
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE
