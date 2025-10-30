@@ -256,7 +256,9 @@ public:
 			}
 		}
 		if (statements.empty()) {
-			return ParserOverrideResult();
+			auto not_implemented_exception =
+			    NotImplementedException("QuackParser has not yet implemented the statements to transform this query");
+			return ParserOverrideResult(not_implemented_exception);
 		}
 		return ParserOverrideResult(std::move(statements));
 	}

@@ -11,6 +11,9 @@ require no_extension_autoloading "FIXME: to be reviewed whether this can be lift
 statement ok
 set allow_parser_override_extension=strict;
 
+statement ok
+SET threads=1;
+
 statement error
 select 1;
 ----

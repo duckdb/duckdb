@@ -777,7 +777,7 @@ bool Linenoise::AddCompletionMarker(const char *buf, idx_t len, string &result_b
 		if (!IsCompletionCharacter(buf[cpos])) {
 			break;
 		}
-		if (completion.completions[0].completion[cpos] != buf[cpos]) {
+		if (tolower(completion.completions[0].completion[cpos]) != tolower(buf[cpos])) {
 			return false;
 		}
 	}
