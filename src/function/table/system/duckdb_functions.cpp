@@ -17,7 +17,6 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
