@@ -1495,6 +1495,10 @@ private:
 	bool highlight = true;
 };
 
+ShellState &ShellState::Get() {
+	return *globalState;
+}
+
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
 	if (!statement->named_param_map.empty()) {
 		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
@@ -1502,20 +1506,22 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &con = *conn;
-	unique_ptr<duckdb::QueryResult> res;
+	unique_ptr<duckdb::QueryResult> result;
 	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX) {
 		// for row-wise rendering we can use streaming results
-		res = con.SendQuery(std::move(statement));
+		result = con.SendQuery(std::move(statement));
 	} else {
-		res = con.Query(std::move(statement));
+		result = con.Query(std::move(statement));
 	}
-	if (res->HasError()) {
-		PrintDatabaseError(res->GetError());
+	auto &res = *result;
+	;
+	if (res.HasError()) {
+		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
 	}
-	auto &properties = res->properties;
+	auto &properties = res.properties;
 	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
-		auto result_chunk = res->Fetch();
+		auto result_chunk = res.Fetch();
 		if (result_chunk && result_chunk->size() == 1) {
 			// update total changes
 			auto row_changes = result_chunk->GetValue(0, 0);
@@ -1529,8 +1535,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// only SELECT statements return results that need to be rendered
 		return SuccessState::SUCCESS;
 	}
+	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
+		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
+	}
 	if (ShellRenderer::IsColumnar(cMode)) {
-		RenderColumnarResult(*res);
+		RenderColumnarResult(res);
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::TRASH) {
@@ -1538,11 +1547,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::DUCKBOX) {
-		return RenderDuckBoxResult(*res);
+		return RenderDuckBoxResult(res);
 	}
 	// row rendering
 	auto renderer = GetRowRenderer();
-	return RenderQueryResult(*renderer, *res);
+	return RenderQueryResult(*renderer, res);
 }
 
 SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {

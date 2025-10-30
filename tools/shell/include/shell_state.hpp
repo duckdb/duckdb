@@ -22,6 +22,7 @@ enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
 using duckdb::make_uniq;
+using duckdb::MaterializedQueryResult;
 using duckdb::string;
 using duckdb::unique_ptr;
 using duckdb::vector;
@@ -126,8 +127,11 @@ public:
 	idx_t total_changes = 0;
 	bool readStdin = true;
 	string initFile;
+	unique_ptr<duckdb::MaterializedQueryResult> last_result;
 
 public:
+	static ShellState &Get();
+
 	void PushOutputMode();
 	void PopOutputMode();
 	void OutputCSV(const char *z, int bSep);
