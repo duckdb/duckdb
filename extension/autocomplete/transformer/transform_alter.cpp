@@ -110,7 +110,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	ColumnDefinition new_column = transformer.Transform<ColumnDefinition>(list_pr.Child<ListParseResult>(3));
-	bool if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	bool if_not_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
 	auto result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(new_column), if_not_exists);
 	return result;
 }
