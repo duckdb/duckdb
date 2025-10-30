@@ -1184,7 +1184,7 @@ NestedColumnName <- (Identifier '.')* ColumnName
 RenameAlter <- 'RENAME' 'TO' Identifier
 SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
-SetSortedBy <- 'SET' 'SORTED' 'BY' OrderByExpressions
+SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
 ResetSortedBy <- 'RESET' 'SORTED' 'BY'
 
 AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType

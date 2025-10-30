@@ -1064,7 +1064,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"RenameAlter <- 'RENAME' 'TO' Identifier\n"
 	"SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))\n"
 	"ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'\n"
-	"SetSortedBy <- 'SET' 'SORTED' 'BY' OrderByExpressions\n"
+	"SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)\n"
 	"ResetSortedBy <- 'RESET' 'SORTED' 'BY'\n"
 	"AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType\n"
 	"AddOrDropDefault <- AddDefault / DropDefault\n"
