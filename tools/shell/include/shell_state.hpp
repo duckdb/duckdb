@@ -95,6 +95,16 @@ struct CommandLineOption {
 	const char *description;
 };
 
+struct MetadataCommand {
+	const char *command;
+	idx_t argument_count;
+	metadata_command_t callback;
+	const char *usage;
+	const char *description;
+	idx_t match_size;
+	const char *extra_description;
+};
+
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -284,6 +294,7 @@ public:
 	static unique_ptr<uint8_t[]> Win32Utf8ToMbcs(const char *zText, bool useAnsi);
 #endif
 	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
+	optional_ptr<const MetadataCommand> FindMetadataCommand(const string &option, string &error_msg) const;
 
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE

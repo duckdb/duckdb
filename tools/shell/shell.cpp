@@ -462,17 +462,9 @@ void ShellState::PrintPadded(const char *str, idx_t len) {
 	utf8_printf(out, "%*s", int(len), str);
 }
 
-/*
-** Render output like fprintf().  This should not be used on anything that
-** includes string formatting (e.g. "%s").
-*/
-#if !defined(raw_printf)
-#define raw_printf fprintf
-#endif
-
 /* Indicate out-of-memory and exit. */
 static void shell_out_of_memory(void) {
-	raw_printf(stderr, "Error: out of memory\n");
+	fprintf(stderr, "Error: out of memory\n");
 	exit(1);
 }
 
@@ -1998,20 +1990,10 @@ void ShellState::NewTempFile(const char *zSuffix) {
 		zTempFile = StringUtil::Format("%z.%s", zTempFile, zSuffix);
 	}
 	if (zTempFile.empty()) {
-		raw_printf(stderr, "out of memory\n");
+		PrintF(PrintOutput::STDERR, "out of memory\n");
 		exit(1);
 	}
 }
-
-struct MetadataCommand {
-	const char *command;
-	idx_t argument_count;
-	metadata_command_t callback;
-	const char *usage;
-	const char *description;
-	idx_t match_size;
-	const char *extra_description;
-};
 
 MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
 	state.bail_on_error = state.StringToBool(args[1]);
@@ -2075,7 +2057,7 @@ MetadataResult SetSeparator(ShellState &state, const vector<string> &args, const
 	} else if (StringUtil::Equals(args[1], "none")) {
 		separator = '\0';
 	} else if (args[1].size() != 1) {
-		raw_printf(stderr, ".%s_sep SEP must be one byte, \"space\" or \"none\"\n", separator_name);
+		state.PrintF(PrintOutput::STDERR, ".%s_sep SEP must be one byte, \"space\" or \"none\"\n", separator_name);
 		return MetadataResult::FAIL;
 	} else {
 		separator = args[1][0];
@@ -2115,12 +2097,13 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	for (idx_t i = 1; i < args.size(); i++) {
 		if (args[i][0] == '-') {
 			const char *z = args[i].c_str() + 1;
-			if (z[0] == '-')
+			if (z[0] == '-') {
 				z++;
+			}
 			if (StringUtil::Equals(z, "newlines")) {
 				state.ShellSetFlag(ShellFlags::SHFLG_Newlines);
 			} else {
-				raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", args[i].c_str());
+				state.PrintF(PrintOutput::STDERR, "Unknown option \"%s\" on \".dump\"\n", args[i].c_str());
 				return MetadataResult::FAIL;
 			}
 		} else if (!zLike.empty()) {
@@ -2677,7 +2660,7 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 #endif /* SQLITE_NOHAVE_SYSTEM */
 	if (zFile[0] == '|') {
 #ifdef SQLITE_OMIT_POPEN
-		raw_printf(stderr, "Error: pipes are not supported in this OS\n");
+		PrintF(PrintOutput::STDERR, "Error: pipes are not supported in this OS\n");
 		out = stdout;
 		return false;
 #else
@@ -2776,7 +2759,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 		} else if (zName == 0) {
 			zName = args[ii].c_str();
 		} else {
-			raw_printf(stderr, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
+			PrintF(PrintOutput::STDERR, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
 			return false;
 		}
 	}
@@ -2808,7 +2791,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 		rc = RenderQuery(*renderer, sSelect);
 	}
 	if (rc == SuccessState::FAILURE) {
-		raw_printf(stderr, "Error: querying schema information\n");
+		PrintF(PrintOutput::STDERR, "Error: querying schema information\n");
 		return false;
 	} else {
 		return true;
@@ -2872,7 +2855,7 @@ MetadataResult ShowConfiguration(ShellState &state, const vector<string> &args) 
 MetadataResult ToggleTimer(ShellState &state, const vector<string> &args) {
 	enableTimer = state.StringToBool(args[1]);
 	if (enableTimer && !HAS_TIMER) {
-		raw_printf(stderr, "Error: timer not available on this system.\n");
+		state.PrintF(PrintOutput::STDERR, "Error: timer not available on this system.\n");
 		enableTimer = false;
 	}
 	return MetadataResult::SUCCESS;
@@ -3448,6 +3431,30 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 	return print_info_list.size();
 }
 
+optional_ptr<const MetadataCommand> ShellState::FindMetadataCommand(const string &option, string &error_msg) const {
+	idx_t n = option.size();
+	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
+		auto &command = metadata_commands[command_idx];
+		idx_t match_size = command.match_size ? command.match_size : n;
+		if (n < match_size || strncmp(option.c_str(), command.command, n) != 0) {
+			continue;
+		}
+		return command;
+	}
+	// no command found
+	error_msg = StringUtil::Format("Unknown Command Error: Unrecognized command '%s'\n", option);
+
+	vector<string> command_names;
+	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
+		auto &command = metadata_commands[command_idx];
+		command_names.push_back(string(".") + command.command);
+	}
+	auto candidates_msg = StringUtil::CandidatesErrorMessage(command_names, option, "Did you mean");
+	error_msg += candidates_msg + "\n";
+	error_msg += "Run '.help' for more information.";
+	return nullptr;
+}
+
 /*
 ** If an input line begins with "." then invoke this routine to
 ** process that line.
@@ -3455,7 +3462,6 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 ** Return 1 on error, 2 to exit, and 0 otherwise.
 */
 int ShellState::DoMetaCommand(const string &zLine) {
-	int n, c;
 	int rc = 0;
 	vector<string> args;
 	// skip initial dot
@@ -3505,21 +3511,20 @@ int ShellState::DoMetaCommand(const string &zLine) {
 	if (args.empty()) {
 		return 0; /* no tokens, no error */
 	}
-	n = args[0].size();
-	c = args[0][0];
 	ClearTempFile();
 
-	bool found_argument = false;
-	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
-		auto &command = metadata_commands[command_idx];
-		idx_t match_size = command.match_size ? command.match_size : n;
-		if (n < int(match_size) || c != *command.command || strncmp(args[0].c_str(), command.command, n) != 0) {
-			continue;
-		}
-		found_argument = true;
+	string error_msg;
+	auto metadata_command = FindMetadataCommand(args[0], error_msg);
+	if (!metadata_command) {
+		// command not found
+		PrintDatabaseError(error_msg);
+		rc = 1;
+	} else {
+		auto &command = *metadata_command;
 		MetadataResult result = MetadataResult::PRINT_USAGE;
 		if (!command.callback) {
-			raw_printf(stderr, "Command \"%s\" is unsupported in the current version of the CLI\n", command.command);
+			PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
+			       command.command);
 			result = MetadataResult::FAIL;
 		} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
 			result = command.callback(*this, args);
@@ -3532,21 +3537,6 @@ int ShellState::DoMetaCommand(const string &zLine) {
 			result = MetadataResult::FAIL;
 		}
 		rc = int(result);
-		break;
-	}
-	if (!found_argument) {
-		string error = StringUtil::Format("Unknown Command Error: Unrecognized command '%s'\n", args[0]);
-
-		vector<string> command_names;
-		for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
-			auto &command = metadata_commands[command_idx];
-			command_names.push_back(string(".") + command.command);
-		}
-		auto candidates_msg = StringUtil::CandidatesErrorMessage(command_names, args[0], "Did you mean");
-		error += candidates_msg + "\n";
-		error += "Run '.help' for more information.";
-		PrintDatabaseError(error);
-		rc = 1;
 	}
 
 	if (outCount) {
