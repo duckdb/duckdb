@@ -690,7 +690,7 @@
     },
     {
         "name": "no_wal_mode",
-        "description": "Disable WAL mode for the database",
+        "description": "Disable WAL mode for the database. Use with caution, disables recovery from crashes for persistent files.",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"

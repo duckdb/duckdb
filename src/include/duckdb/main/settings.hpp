@@ -963,7 +963,8 @@ struct NestedLoopJoinThresholdSetting {
 struct NoWalModeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "no_wal_mode";
-	static constexpr const char *Description = "Disable WAL mode for the database";
+	static constexpr const char *Description =
+	    "Disable WAL mode for the database. Use with caution, disables recovery from crashes for persistent files.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;

@@ -273,7 +273,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		auto &profiler = *context.client_data->profiler;
 		profiler.StartTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
-		if (!DBConfig::GetSetting<NoWalModeSetting>(context)) {
+		if (!DBConfig::GetSetting<NoWalModeSetting>(db.GetDatabase())) {
 			error = transaction.WriteToWAL(db, commit_state);
 		}
 		profiler.EndTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);

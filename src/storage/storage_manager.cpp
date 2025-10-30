@@ -280,10 +280,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
-		if (context.GetClientContext() != nullptr) {
-			if (!DBConfig::GetSetting<NoWalModeSetting>(*context.GetClientContext())) {
-				wal = make_uniq<WriteAheadLog>(db, wal_path);
-			}
+		if (!DBConfig::GetSetting<NoWalModeSetting>(db.GetDatabase())) {
+			wal = make_uniq<WriteAheadLog>(db, wal_path);
 		}
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
@@ -356,11 +354,10 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 
 		// Replay the WAL.
+
 		auto wal_path = GetWALPath();
-		if (context.GetClientContext() != nullptr) {
-			if (!DBConfig::GetSetting<NoWalModeSetting>(*context.GetClientContext())) {
-				wal = WriteAheadLog::Replay(context, fs, db, wal_path);
-			}
+		if (!DBConfig::GetSetting<NoWalModeSetting>(db.GetDatabase())) {
+			wal = WriteAheadLog::Replay(context, fs, db, wal_path);
 		}
 
 		// End timing the WAL replay step.
