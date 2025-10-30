@@ -30,7 +30,8 @@ public:
 
 public:
 	//! Construct a new fixed-size allocator
-	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
+	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager,
+	                   MemoryTag memory_tag = MemoryTag::ART_INDEX);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
@@ -152,6 +153,8 @@ public:
 	void VerifyBuffers();
 
 private:
+	//! Memory tag of memory that is allocated through the allocator
+	MemoryTag memory_tag;
 	//! Allocation size of one segment in a buffer
 	//! We only need this value to calculate bitmask_count, bitmask_offset, and
 	//! available_segments_per_buffer

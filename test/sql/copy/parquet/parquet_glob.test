@@ -8,60 +8,60 @@ statement ok
 PRAGMA enable_verification
 
 query II
-select * from parquet_scan('data/parquet-testing/glob*/t?.parquet') order by i
+select * from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet') order by i
 ----
 1	a
 2	b
 3	c
 
 query II
-select * from parquet_scan('data/parquet-testing/glob/t[0-9].parquet') order by i
+select * from parquet_scan('{DATA_DIR}/parquet-testing/glob/t[0-9].parquet') order by i
 ----
 1	a
 2	b
 
 query II
-select * from parquet_scan('data/parquet-testing/glob/*') order by i
+select * from parquet_scan('{DATA_DIR}/parquet-testing/glob/*') order by i
 ----
 1	a
 2	b
 
 query II
-select * from parquet_scan('data/parquet-testing/glob/*.parquet') order by i
+select * from parquet_scan('{DATA_DIR}/parquet-testing/glob/*.parquet') order by i
 ----
 1	a
 2	b
 
 query II
-select * from parquet_scan('data/parquet-testing/g*/*.parquet') order by i
+select * from parquet_scan('{DATA_DIR}/parquet-testing/g*/*.parquet') order by i
 ----
 1	a
 2	b
 3	c
 
 query II
-select * from parquet_scan('data/parquet-testing/g*/t1.parquet') order by i
+select * from parquet_scan('{DATA_DIR}/parquet-testing/g*/t1.parquet') order by i
 ----
 1	a
 3	c
 
 # abs path
 query II
-select * from parquet_scan('__WORKING_DIRECTORY__/data/parquet-testing/g*/t1.parquet') order by i
+select * from parquet_scan('{WORKING_DIR}/data/parquet-testing/g*/t1.parquet') order by i
 ----
 1	a
 3	c
 
 # forward slashes
 query II
-select * from parquet_scan('data\parquet-testing\g*\t1.parquet') order by i
+select * from parquet_scan('{DATA_DIR}\parquet-testing\g*\t1.parquet') order by i
 ----
 1	a
 3	c
 
 # Double partial matches
 query II rowsort
-FROM parquet_scan('data/parquet-testing/glob3/*/dir/*.parquet');
+FROM parquet_scan('{DATA_DIR}/parquet-testing/glob3/*/dir/*.parquet');
 ----
 1	a
 3	c
@@ -69,18 +69,20 @@ FROM parquet_scan('data/parquet-testing/glob3/*/dir/*.parquet');
 statement error
 select count(*) from parquet_scan('')
 ----
+<REGEX>:.*IO Error.*can only be set for.*
 
 # schema mismatch in parquet glob
 statement error
-select * from parquet_scan('data/parquet-testing/*.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/*.parquet')
 ----
+<REGEX>:.*Invalid Input Error: Failed to read file.*
 
 # parquet glob with COPY FROM
 statement ok
 CREATE TABLE vals (i INTEGER, j BLOB)
 
 statement ok
-COPY vals FROM 'data/parquet-testing/glob/t?.parquet' (FORMAT PARQUET);
+COPY vals FROM '{DATA_DIR}/parquet-testing/glob/t?.parquet' (FORMAT PARQUET);
 
 query II
 SELECT * FROM vals ORDER BY 1
@@ -95,3 +97,4 @@ CREATE TABLE vals2 (i INTEGER, j INTEGER)
 statement error
 COPY vals2 FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);
 ----
+<REGEX>:.*IO Error: No files found that match the pattern.*

@@ -184,8 +184,7 @@ void JSONReader::OpenJSONFile() {
 	if (!IsOpen()) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		auto regular_file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | options.compression);
-		file_handle = make_uniq<JSONFileHandle>(QueryContext(context), std::move(regular_file_handle),
-		                                        BufferAllocator::Get(context));
+		file_handle = make_uniq<JSONFileHandle>(context, std::move(regular_file_handle), BufferAllocator::Get(context));
 	}
 	Reset();
 }

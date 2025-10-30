@@ -1,6 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,11 @@ static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, Tabl
 	names.emplace_back("readonly");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("encrypted");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	names.emplace_back("cipher");
+	return_types.emplace_back(LogicalType::VARCHAR);
 	return nullptr;
 }
 
@@ -61,8 +67,11 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
-
 		auto &attached = *entry;
+		auto &catalog = attached.GetCatalog();
+		if (attached.GetVisibility() == AttachVisibility::HIDDEN) {
+			continue;
+		}
 		// return values:
 
 		idx_t col = 0;
@@ -72,12 +81,16 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(attached.oid)));
 		bool is_internal = attached.IsSystem() || attached.IsTemporary();
 		bool is_readonly = attached.IsReadOnly();
+		string cipher_str;
 		// path, VARCHAR
 		Value db_path;
 		if (!is_internal) {
-			bool in_memory = attached.GetCatalog().InMemory();
+			bool in_memory = catalog.InMemory();
 			if (!in_memory) {
-				db_path = Value(attached.GetCatalog().GetDBPath());
+				db_path = Value(catalog.GetDBPath());
+			}
+			if (catalog.IsEncrypted()) {
+				cipher_str = catalog.GetEncryptionCipher();
 			}
 		}
 		output.SetValue(col++, count, db_path);
@@ -88,9 +101,13 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// internal, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(is_internal));
 		// type, VARCHAR
-		output.SetValue(col++, count, Value(attached.GetCatalog().GetCatalogType()));
+		output.SetValue(col++, count, Value(catalog.GetCatalogType()));
 		// readonly, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(is_readonly));
+		// encrypted, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(catalog.IsEncrypted()));
+		// cipher, VARCHAR
+		output.SetValue(col++, count, cipher_str.empty() ? Value() : Value(cipher_str));
 
 		count++;
 	}

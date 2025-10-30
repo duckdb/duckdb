@@ -1,0 +1,23 @@
+# name: test/sql/peg_parser/parser/sample.test
+# description: Test sample clause in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select count(*)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from range(200000) using sample reservoir(90 PERCENT);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from range(200000) tablesample reservoir(90 PERCENT);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT COUNT(*) FROM test USING SAMPLE 3 (reservoir);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from integers tablesample reservoir(10);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT * from t1 using sample reservoir(6000) repeatable (1) order by a;$TEST_PEG_PARSER$);

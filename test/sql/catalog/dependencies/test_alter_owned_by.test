@@ -30,13 +30,13 @@ ALTER SEQUENCE sequence1 OWNED BY tbl1;
 statement error
 ALTER SEQUENCE sequence2 OWNED BY sequence1;
 ----
-sequence1 can not become the owner, it is already owned by tbl1
+<REGEX>:.*Dependency Error.*is already owned.*
 
 # sequence1 is already owned by another entry
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tbl2;
 ----
-Dependency Error: sequence1 is already owned by tbl1
+<REGEX>:.*Dependency Error.*is already owned.*
 
 statement ok
 create sequence sequence3;
@@ -44,7 +44,7 @@ create sequence sequence3;
 statement error
 alter sequence sequence3 owned by sequence1
 ----
-sequence1 can not become the owner, it is already owned by tbl1
+<REGEX>:.*Dependency Error.*is already owned.*
 
 statement ok
 DROP TABLE tbl1;
@@ -52,3 +52,4 @@ DROP TABLE tbl1;
 statement error
 SELECT nextval('sequence1');
 ----
+<REGEX>:.*Catalog Error.*does not exist.*

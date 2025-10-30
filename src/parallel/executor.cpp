@@ -379,7 +379,6 @@ void Executor::Initialize(PhysicalOperator &plan) {
 }
 
 void Executor::InitializeInternal(PhysicalOperator &plan) {
-
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	{
 		lock_guard<mutex> elock(executor_lock);
@@ -423,7 +422,6 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
-
 	{
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
@@ -578,6 +576,12 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 			} else if (result == TaskExecutionResult::TASK_FINISHED) {
 				// if the task is finished, clean it up
 				task.reset();
+			} else if (result == TaskExecutionResult::TASK_ERROR) {
+				if (!HasError()) {
+					// This is very much unexpected, TASK_ERROR means this executor should have an Error
+					throw InternalException("A task executed within Executor::ExecuteTask, from own producer, returned "
+					                        "TASK_ERROR without setting error on the Executor");
+				}
 			}
 		}
 		if (!HasError()) {

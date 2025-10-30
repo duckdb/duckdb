@@ -37,14 +37,24 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
 
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-else()
-  find_program(CCACHE_PROGRAM sccache)
-  if(CCACHE_PROGRAM)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-  endif()
+if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C compiler launcher")
+        set(CMAKE_C_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
+endif()
+
+if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C++ compiler launcher")
+        set(CMAKE_CXX_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
 endif()
 
 # Determine install paths
@@ -435,7 +445,7 @@ option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the
 option(DEBUG_ALLOCATION "Debug setting: keep track of outstanding allocations to detect memory leaks" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
-option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle)" "none")
+option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle, variant_vector)" "none")
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the unittest runner." TRUE)
 option(ENABLE_UNITTEST_CPP_TESTS "Build the C++ Unit Tests." TRUE)
@@ -443,6 +453,7 @@ option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead
 option(CUSTOM_LINKER "Use a custom linker program" "")
 option(CRASH_ON_ASSERT "Trigger a sigabort on an assert failing, instead of throwing an exception" FALSE)
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
+option(FORCE_DEBUG "Force adding a debug define, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
@@ -450,6 +461,7 @@ option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
+option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -551,6 +563,10 @@ endif()
 
 if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
+endif()
+
+if(FORCE_DEBUG)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG")
 endif()
 
 if(STANDALONE_DEBUG)
@@ -1076,17 +1092,25 @@ endfunction()
 # Downloads the external extension repo at the specified commit and calls register_extension
 macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES LINKED_LIBS SUBMODULES EXTENSION_VERSION)
   include(FetchContent)
-  if (${APPLY_PATCHES})
-    set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+
+  string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
+  if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
+    set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
+    message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\"")
+  else()
+    if (${APPLY_PATCHES})
+      set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+    endif()
+    FETCHCONTENT_DECLARE(
+            ${NAME}_extension_fc
+            GIT_REPOSITORY ${URL}
+            GIT_TAG ${COMMIT}
+            GIT_SUBMODULES "${SUBMODULES}"
+            PATCH_COMMAND ${PATCH_COMMAND}
+    )
+    FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
+    message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
   endif()
-  FETCHCONTENT_DECLARE(
-          ${NAME}_extension_fc
-          GIT_REPOSITORY ${URL}
-          GIT_TAG ${COMMIT}
-          GIT_SUBMODULES "${SUBMODULES}"
-          PATCH_COMMAND ${PATCH_COMMAND}
-  )
-  FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   # Autogenerate version tag if not provided
   if ("${EXTENSION_VERSION}" STREQUAL "")
@@ -1094,8 +1118,6 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
   else()
     set(EXTERNAL_EXTENSION_VERSION "${EXTENSION_VERSION}")
   endif()
-
-  message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
 
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${EXTERNAL_EXTENSION_VERSION}" PARENT_SCOPE)

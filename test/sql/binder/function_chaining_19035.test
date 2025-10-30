@@ -1,0 +1,72 @@
+# name: test/sql/binder/function_chaining_19035.test
+# description: Lambda expression with macro function chaining
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+with stage as (
+      select
+          [1,2,3] as c1,
+          [4,5,6] as c2
+)
+select
+     list_transform(
+       c1,
+       lambda x: list_bool_or(
+          list_transform(
+            c2,
+            lambda y: y == x
+          )
+       )
+     ) as c3
+from stage;
+----
+[false, false, false]
+
+query I
+select list_transform(
+           [1,2,3],
+           lambda x: list_max(
+                list_transform([4,5,6], lambda y: y + x)
+           )) as result;
+----
+[7, 8, 9]
+
+statement ok
+CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
+
+statement error
+SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], lambda x: list_contains_macro(x, 3))
+----
+<REGEX>:Binder Error.*subqueries in lambda expressions are not supported.*
+
+statement ok
+CREATE TABLE tbl(a int[]);
+
+statement ok
+INSERT INTO tbl VALUES ([5, 4, 3]), ([1, 2, 3]), (NULL), ([NULL, 101, 12]);
+
+query I
+SELECT list_transform(a, lambda x, i: x + i + list_any_value(a)) FROM tbl;
+----
+[11, 11, 11]
+[3, 5, 7]
+NULL
+[NULL, 204, 116]
+
+query I
+select ['a a ', ' b ', ' cc'].list_transform(lambda x: nullif(trim(x), '')) as trimmed_and_nulled
+----
+[a a, b, cc]
+
+query I
+select ['a a ', ' b ', ' cc'].list_transform(lambda x: x.trim().nullif('')) as trimmed_and_nulled;
+----
+[a a, b, cc]
+
+query I
+select ['a a ', ' b ', ' cd'].list_transform(lambda x: x.trim().nullif('').reverse()) as trimmed_and_nulled;
+----
+[a a, b, dc]

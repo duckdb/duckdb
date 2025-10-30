@@ -36,11 +36,10 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
 	    info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
-		auto existing_db = db_manager.GetDatabase(context.client, name);
+		auto existing_db = db_manager.GetDatabase(name);
 		if (existing_db) {
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
-
 				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
 				auto existing_mode_str = EnumUtil::ToString(existing_mode);
 				auto attached_mode = EnumUtil::ToString(options.access_mode);
@@ -51,10 +50,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 			}
 			if (info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-				// same path, name and type, DB does not need replacing
-				auto const db_type = options.db_type.empty() ? "duckdb" : options.db_type;
-				if (existing_db->GetCatalog().GetDBPath() == path &&
-				    existing_db->GetCatalog().GetCatalogType() == db_type) {
+				// allow custom catalogs to override this behavior
+				if (!existing_db->GetCatalog().HasConflictingAttachOptions(path, options)) {
 					return SourceResultType::FINISHED;
 				}
 			} else {
@@ -63,18 +60,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	// Get the database type and attach the database.
-	db_manager.GetDatabaseType(context.client, *info, config, options);
-	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
-
-	//! Initialize the database.
-	attached_db->Initialize(context.client);
-	if (!options.default_table.name.empty()) {
-		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
-	}
-	attached_db->FinalizeLoad(context.client);
-
-	db_manager.FinalizeAttach(context.client, *info, std::move(attached_db));
+	db_manager.AttachDatabase(context.client, *info, options);
 	return SourceResultType::FINISHED;
 }
 

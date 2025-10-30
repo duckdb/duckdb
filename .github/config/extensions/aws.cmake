@@ -1,8 +1,7 @@
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
-            APPLY_PATCHES
             ### TODO: re-enable LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
-            GIT_TAG 4f318ebd088e464266c511abe2f70bbdeee2fcd8
+            GIT_TAG 18803d5e55b9f9f6dda5047d0fdb4f4238b6801d
             )
 endif()

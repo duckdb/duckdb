@@ -18,7 +18,6 @@ using duckdb::QueryResultType;
 
 duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
                                          const char **names, idx_t column_count, struct ArrowSchema *out_schema) {
-
 	if (!types || !names || !arrow_options || !out_schema) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, "Invalid argument(s) to duckdb_to_arrow_schema");
 	}
@@ -159,9 +158,14 @@ void duckdb_destroy_arrow_converted_schema(duckdb_arrow_converted_schema *arrow_
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {
 	Connection *conn = (Connection *)connection;
 	auto wrapper = new ArrowResultWrapper();
-	wrapper->result = conn->Query(query);
-	*out_result = (duckdb_arrow)wrapper;
-	return !wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
+	try {
+		wrapper->result = conn->Query(query);
+		*out_result = (duckdb_arrow)wrapper;
+		return !wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
+	} catch (...) {
+		delete wrapper;
+		return DuckDBError;
+	}
 }
 
 duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema) {
@@ -293,7 +297,6 @@ void duckdb_destroy_arrow(duckdb_arrow *result) {
 }
 
 void duckdb_destroy_arrow_stream(duckdb_arrow_stream *stream_p) {
-
 	auto stream = reinterpret_cast<ArrowArrayStream *>(*stream_p);
 	if (!stream) {
 		return;
@@ -313,11 +316,16 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 		return DuckDBError;
 	}
 	auto arrow_wrapper = new ArrowResultWrapper();
-	auto result = wrapper->statement->Execute(wrapper->values, false);
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
-	arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
-	*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
-	return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
+	try {
+		auto result = wrapper->statement->Execute(wrapper->values, false);
+		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+		arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+		*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
+		return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
+	} catch (...) {
+		delete arrow_wrapper;
+		return DuckDBError;
+	}
 }
 
 namespace arrow_array_stream_wrapper {
@@ -463,13 +471,25 @@ duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, const char *t
 	private_data->array = reinterpret_cast<ArrowArray *>(arrow_array);
 	private_data->done = false;
 
-	ArrowArrayStream *stream = new ArrowArrayStream;
-	*out_stream = reinterpret_cast<duckdb_arrow_stream>(stream);
-	stream->get_schema = arrow_array_stream_wrapper::GetSchema;
-	stream->get_next = arrow_array_stream_wrapper::GetNext;
-	stream->get_last_error = arrow_array_stream_wrapper::GetLastError;
-	stream->release = arrow_array_stream_wrapper::Release;
-	stream->private_data = private_data;
+	ArrowArrayStream *stream;
+	try {
+		stream = new ArrowArrayStream;
+	} catch (...) {
+		delete private_data;
+		return DuckDBError;
+	}
+	try {
+		*out_stream = reinterpret_cast<duckdb_arrow_stream>(stream);
+		stream->get_schema = arrow_array_stream_wrapper::GetSchema;
+		stream->get_next = arrow_array_stream_wrapper::GetNext;
+		stream->get_last_error = arrow_array_stream_wrapper::GetLastError;
+		stream->release = arrow_array_stream_wrapper::Release;
+		stream->private_data = private_data;
 
-	return duckdb_arrow_scan(connection, table_name, reinterpret_cast<duckdb_arrow_stream>(stream));
+		return duckdb_arrow_scan(connection, table_name, reinterpret_cast<duckdb_arrow_stream>(stream));
+	} catch (...) {
+		delete private_data;
+		delete stream;
+		return DuckDBError;
+	}
 }

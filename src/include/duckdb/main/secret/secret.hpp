@@ -296,7 +296,9 @@ public:
 		Value result;
 		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
 		if (lookup_result) {
-			value_out = result.GetValue<TYPE>();
+			if (!result.IsNull()) {
+				value_out = result.GetValue<TYPE>();
+			}
 		}
 		return lookup_result;
 	}

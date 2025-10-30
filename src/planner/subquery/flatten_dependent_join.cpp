@@ -18,9 +18,8 @@
 
 namespace duckdb {
 
-FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated,
-                                             bool perform_delim, bool any_join,
-                                             optional_ptr<FlattenDependentJoins> parent)
+FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim,
+                                             bool any_join, optional_ptr<FlattenDependentJoins> parent)
     : binder(binder), delim_offset(DConstants::INVALID_INDEX), correlated_columns(correlated),
       perform_delim(perform_delim), any_join(any_join), parent(parent) {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
@@ -30,8 +29,7 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<Correl
 	}
 }
 
-static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
-                                      const vector<CorrelatedColumnInfo> &correlated_columns,
+static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const CorrelatedColumns &correlated_columns,
                                       vector<ColumnBinding> bindings, idx_t base_offset, bool perform_delim) {
 	auto col_count = perform_delim ? correlated_columns.size() : 1;
 	for (idx_t i = 0; i < col_count; i++) {
@@ -50,7 +48,7 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
 
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
-	vector<CorrelatedColumnInfo> correlated;
+	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	return flatten.Decorrelate(std::move(plan));
 }
@@ -80,12 +78,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 			entry->second = false;
 
 			// rewrite
-			idx_t lateral_depth = 0;
+			idx_t next_lateral_depth = 0;
 
-			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
+			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, next_lateral_depth);
 			rewriter.VisitOperator(*plan);
 
-			RewriteCorrelatedExpressions recursive_rewriter(base_binding, correlated_map, lateral_depth, true);
+			RewriteCorrelatedExpressions recursive_rewriter(base_binding, correlated_map, next_lateral_depth, true);
 			recursive_rewriter.VisitOperator(*plan);
 		} else {
 			op.children[0] = Decorrelate(std::move(op.children[0]));
@@ -94,8 +92,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		if (!op.perform_delim) {
 			// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
 			// and perform all duplicate elimination on that row number instead
-			D_ASSERT(op.correlated_columns[0].type.id() == LogicalTypeId::BIGINT);
-			auto window = make_uniq<LogicalWindow>(op.correlated_columns[0].binding.table_index);
+			const auto &op_col = op.correlated_columns[op.correlated_columns.GetDelimIndex()];
+			auto window = make_uniq<LogicalWindow>(op_col.binding.table_index);
 			auto row_number = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT,
 			                                                   nullptr, nullptr);
 			row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
@@ -114,9 +112,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		flatten.DetectCorrelatedExpressions(*delim_join->children[1], op.is_lateral_join, lateral_depth);
 
 		if (delim_join->children[1]->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-			auto &cte = delim_join->children[1]->Cast<LogicalMaterializedCTE>();
+			auto &cte_ref = delim_join->children[1]->Cast<LogicalMaterializedCTE>();
 			// check if the left side of the CTE has correlated expressions
-			auto entry = flatten.has_correlated_expressions.find(*cte.children[0]);
+			auto entry = flatten.has_correlated_expressions.find(*cte_ref.children[0]);
 			if (entry != flatten.has_correlated_expressions.end()) {
 				if (!entry->second) {
 					// the left side of the CTE has no correlated expressions, we can push the DEPENDENT_JOIN down
@@ -132,7 +130,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		delim_join->children[1] =
 		    flatten.PushDownDependentJoin(std::move(delim_join->children[1]), propagate_null_values, lateral_depth);
 		data_offset = flatten.data_offset;
-		auto left_offset = delim_join->children[0]->GetColumnBindings().size();
+		const auto left_offset = delim_join->children[0]->GetColumnBindings().size();
 		if (!parent) {
 			delim_offset = left_offset + flatten.delim_offset;
 		}
@@ -214,7 +212,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 
 bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, bool lateral, idx_t lateral_depth,
                                                         bool parent_is_dependent_join) {
-
 	bool is_lateral_join = false;
 
 	// check if this entry has correlated expressions
@@ -890,12 +887,16 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto &setop = plan->Cast<LogicalSetOperation>();
 		// set operator, push into both children
 #ifdef DEBUG
-		plan->children[0]->ResolveOperatorTypes();
-		plan->children[1]->ResolveOperatorTypes();
-		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
+		for (auto &child : plan->children) {
+			child->ResolveOperatorTypes();
+		}
+		for (idx_t i = 1; i < plan->children.size(); i++) {
+			D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
+		}
 #endif
-		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
-		plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
+		for (auto &child : plan->children) {
+			child = PushDownDependentJoin(std::move(child));
+		}
 		for (idx_t i = 0; i < plan->children.size(); i++) {
 			if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 				auto proj_index = binder.GenerateTableIndex();
@@ -920,10 +921,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// here we need to check the children. If they have reorderable bindings, you need to plan a projection
 		// on top that will guarantee the order of the bindings.
 #ifdef DEBUG
-		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[1]->GetColumnBindings().size());
-		plan->children[0]->ResolveOperatorTypes();
-		plan->children[1]->ResolveOperatorTypes();
-		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
+		for (idx_t i = 1; i < plan->children.size(); i++) {
+			D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[i]->GetColumnBindings().size());
+		}
+		for (auto &child : plan->children) {
+			child->ResolveOperatorTypes();
+		}
+		for (idx_t i = 1; i < plan->children.size(); i++) {
+			D_ASSERT(plan->children[0]->types.size() == plan->children[i]->types.size());
+		}
 #endif
 		// we have to refer to the setop index now
 		base_binding.table_index = setop.table_index;
@@ -989,7 +995,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-
 #ifdef DEBUG
 		plan->children[0]->ResolveOperatorTypes();
 		plan->children[1]->ResolveOperatorTypes();

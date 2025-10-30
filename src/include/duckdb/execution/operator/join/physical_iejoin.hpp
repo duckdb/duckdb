@@ -70,10 +70,6 @@ public:
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-
-private:
-	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state) const;
 };
 
 } // namespace duckdb

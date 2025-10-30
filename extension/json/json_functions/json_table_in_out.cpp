@@ -244,7 +244,11 @@ static void InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 	// Parse path, default to root if not given
 	Value path_value("$");
 	if (input.data.size() > 1) {
-		path_value = ConstantVector::GetData<string_t>(input.data[1])[0];
+		auto &path_vector = input.data[1];
+		if (ConstantVector::IsNull(path_vector)) {
+			return;
+		}
+		path_value = ConstantVector::GetData<string_t>(path_vector)[0];
 	}
 
 	if (JSONReadFunctionData::CheckPath(path_value, lstate.path, lstate.len) == JSONCommon::JSONPathType::WILDCARD) {
@@ -280,7 +284,6 @@ static void InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 template <JSONTableInOutType TYPE>
 static bool JSONTableInOutHandleValue(JSONTableInOutLocalState &lstate, JSONTableInOutResult &result,
                                       idx_t &child_index, size_t &idx, yyjson_val *child_key, yyjson_val *child_val) {
-
 	if (idx < child_index) {
 		return false; // Continue: Get back to where we left off
 	}

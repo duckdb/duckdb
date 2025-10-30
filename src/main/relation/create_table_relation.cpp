@@ -29,6 +29,14 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
+unique_ptr<QueryNode> CreateTableRelation::GetQueryNode() {
+	throw InternalException("Cannot create a query node from a create table relation");
+}
+
+string CreateTableRelation::GetQuery() {
+	return string();
+}
+
 const vector<ColumnDefinition> &CreateTableRelation::Columns() {
 	return columns;
 }

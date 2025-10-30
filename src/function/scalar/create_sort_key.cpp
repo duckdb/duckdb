@@ -696,13 +696,15 @@ void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths,
 	}
 }
 
-void FinalizeSortData(Vector &result, idx_t size) {
+void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_lengths,
+                      const unsafe_vector<idx_t> &offsets) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
 		auto result_data = FlatVector::GetData<string_t>(result);
 		// call Finalize on the result
 		for (idx_t r = 0; r < size; r++) {
-			result_data[r].Finalize();
+			result_data[r].SetSizeAndFinalize(NumericCast<uint32_t>(offsets[r]),
+			                                  key_lengths.variable_lengths[r] + key_lengths.constant_length);
 		}
 		break;
 	}
@@ -739,7 +741,7 @@ void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
 		SortKeyConstructInfo info(modifiers[c], offsets, data_pointers.get());
 		ConstructSortKey(*sort_key_data[c], info);
 	}
-	FinalizeSortData(result, row_count);
+	FinalizeSortData(result, row_count, key_lengths, offsets);
 }
 
 } // namespace
@@ -1156,11 +1158,13 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 
 } // namespace
 
-void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
-                                         OrderModifiers modifiers) {
+idx_t CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
+                                          OrderModifiers modifiers) {
 	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
 	DecodeSortKeyData decode_data(sort_key);
 	DecodeSortKeyRecursive(&decode_data, sort_key_data, result, result_idx, 1);
+
+	return decode_data.position;
 }
 
 void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,

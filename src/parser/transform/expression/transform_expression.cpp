@@ -16,7 +16,6 @@ unique_ptr<ParsedExpression> Transformer::TransformResTarget(duckdb_libpgquery::
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformNamedArg(duckdb_libpgquery::PGNamedArgExpr &root) {
-
 	auto expr = TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(root.arg));
 	if (root.name) {
 		expr->SetAlias(root.name);
@@ -25,7 +24,6 @@ unique_ptr<ParsedExpression> Transformer::TransformNamedArg(duckdb_libpgquery::P
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery::PGNode &node) {
-
 	auto stack_checker = StackCheck();
 
 	switch (node.type) {

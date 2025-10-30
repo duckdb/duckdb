@@ -186,7 +186,6 @@ struct is_atomic<std::atomic<T>> : std::true_type {
 // NOLINTEND
 
 struct SerializationDefaultValue {
-
 	template <typename T = void>
 	static inline typename std::enable_if<is_atomic<T>::value, T>::type GetDefault() {
 		using INNER = typename is_atomic<T>::TYPE;

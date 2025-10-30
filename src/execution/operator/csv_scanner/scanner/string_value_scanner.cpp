@@ -639,7 +639,6 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_position) {
-
 	bool first_nl = false;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles, PrintErrorLine());
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
@@ -797,7 +796,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel; We error.
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch, path);
-		error_handler.Error(csv_error, try_row);
+		error_handler.Error(csv_error, true);
 	}
 }
 
