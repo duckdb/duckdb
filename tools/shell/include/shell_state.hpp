@@ -32,6 +32,7 @@ struct RowResult;
 class ColumnRenderer;
 class RowRenderer;
 using duckdb::atomic;
+using duckdb::ErrorData;
 using duckdb::KeywordHelper;
 using duckdb::optional_idx;
 using duckdb::optional_ptr;

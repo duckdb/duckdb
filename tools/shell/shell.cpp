@@ -3125,47 +3125,52 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 ** Linenoise completion callback
 */
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
-	idx_t nLine = ShellState::StringLength(zLine);
-	char zBuf[1000];
-
-	if (nLine > sizeof(zBuf) - 30) {
-		return;
-	}
-	if (zLine[0] == '.') {
-		// auto-complete dot command
-		auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
-		for (auto &completion : dot_completions) {
-			linenoiseAddCompletion(lc, completion.c_str());
-		}
-		return;
-	}
-	if (zLine[0] == '#') {
-		return;
-	}
-	//  if( i==nLine-1 ) return;
-	auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
-	unique_ptr<duckdb::DuckDB> localDB;
-	unique_ptr<duckdb::Connection> localCon;
-
 	auto &state = ShellState::Get();
-	if (!state.conn) {
-		state.OpenDB();
-	}
-	auto &con = *state.conn;
-	bool copiedSuggestion = false;
-	auto result = con.Query(zSql);
-	for (auto &row : *result) {
-		auto zCompletion = row.GetValue<string>(0);
-		auto nCompletion = zCompletion.size();
-		idx_t iStart = row.GetValue<idx_t>(1);
-		if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
-			if (!copiedSuggestion) {
-				memcpy(zBuf, zLine, iStart);
-				copiedSuggestion = true;
-			}
-			memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
-			linenoiseAddCompletion(lc, zBuf);
+	try {
+		idx_t nLine = ShellState::StringLength(zLine);
+		char zBuf[1000];
+
+		if (nLine > sizeof(zBuf) - 30) {
+			return;
 		}
+		if (zLine[0] == '.') {
+			// auto-complete dot command
+			auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
+			for (auto &completion : dot_completions) {
+				linenoiseAddCompletion(lc, completion.c_str());
+			}
+			return;
+		}
+		if (zLine[0] == '#') {
+			return;
+		}
+		auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
+		unique_ptr<duckdb::DuckDB> localDB;
+		unique_ptr<duckdb::Connection> localCon;
+
+		if (!state.conn) {
+			state.OpenDB();
+		}
+		auto &con = *state.conn;
+		bool copiedSuggestion = false;
+		auto result = con.Query(zSql);
+		for (auto &row : *result) {
+			auto zCompletion = row.GetValue<string>(0);
+			auto nCompletion = zCompletion.size();
+			idx_t iStart = row.GetValue<idx_t>(1);
+			if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
+				if (!copiedSuggestion) {
+					memcpy(zBuf, zLine, iStart);
+					copiedSuggestion = true;
+				}
+				memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
+				linenoiseAddCompletion(lc, zBuf);
+			}
+		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		state.PrintF(PrintOutput::STDERR, "Failure during auto-completion: %s\n", error.Message());
+		exit(1);
 	}
 }
 #endif
@@ -3216,7 +3221,6 @@ int main(int argc, const char **argv) {
 int wmain(int argc, wchar_t **wargv) {
 	const char **argv;
 #endif
-	int i;
 	int rc = 0;
 	bool warnInmemoryDb = false;
 	vector<string> extra_commands;
@@ -3262,7 +3266,7 @@ int wmain(int argc, wchar_t **wargv) {
 	** and the first command to execute.
 	*/
 	vector<CommandLineCall> command_line_calls;
-	for (i = 1; i < argc; i++) {
+	for (int i = 1; i < argc; i++) {
 		auto z = argv[i];
 		if (z[0] != '-') {
 			if (data.zDbFilename.empty()) {
