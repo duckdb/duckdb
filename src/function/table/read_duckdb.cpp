@@ -87,8 +87,8 @@ public:
 public:
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
-	void Scan(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
-	          DataChunk &chunk) override;
+	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 	double GetProgressInFile(ClientContext &context) override;
@@ -300,14 +300,38 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 	return true;
 }
 
-void DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p,
-                        DataChunk &chunk) {
+AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                               LocalTableFunctionState &lstate_p, DataChunk &chunk) {
 	chunk.Reset();
 	auto &lstate = lstate_p.Cast<DuckDBReadLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state, global_state);
-	scan_function.function(context, input, chunk);
-	if (chunk.size() == 0) {
-		finished = true;
+
+	if (!scan_function.function) {
+		throw InternalException("DuckDBReader works only with simple table functions");
+	} else {
+		input.async_result = AsyncResultType::IMPLICIT;
+		input.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
+		scan_function.function(context, input, chunk);
+
+		switch (input.async_result.GetResultType()) {
+		case AsyncResultType::BLOCKED:
+			return std::move(input.async_result);
+		case AsyncResultType::HAVE_MORE_OUTPUT:
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		case AsyncResultType::IMPLICIT:
+			if (chunk.size() > 0) {
+				return SourceResultType::HAVE_MORE_OUTPUT;
+			}
+			finished = true;
+			return SourceResultType::FINISHED;
+		case AsyncResultType::FINISHED:
+			finished = true;
+			return SourceResultType::FINISHED;
+		default:
+			throw InternalException("DuckDBReader call of scan_function.function returned unexpected return '%'",
+			                        EnumUtil::ToChars(input.async_result.GetResultType()));
+		}
+		throw InternalException("DuckDBReader hasn't handled a scan_function.function return");
 	}
 }
 
