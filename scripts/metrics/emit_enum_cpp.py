@@ -147,10 +147,7 @@ def _generate_get_metric_by_group_function(
     for group in metric_index.group_names:
         formatted = group.upper()
         cpp_f.write_indented(1, f"case MetricGroup::{formatted}:")
-        cpp_f.write_indented(2, "return {")
-        for m in metric_index.metrics_per_group(group):
-            cpp_f.write_indented(3, f"MetricsType::{m},")
-        cpp_f.write_indented(3, "};")
+        cpp_f.write_indented(2, "return Get" + _to_pascal_case(group) + "Metrics();")
     cpp_f.write_indented(1, "default:")
     cpp_f.write_indented(2, 'throw InternalException("The MetricGroup passed is invalid");')
     cpp_f.write_indented(1, "}")
