@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 218aa0e..5b14ee9 100644
+index 218aa0e..89e909d 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -566,8 +566,12 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
@@ -18,7 +18,7 @@ index 218aa0e..5b14ee9 100644
  
  void HNSWIndex::VerifyAllocations(IndexLock &state) {
 diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
-index 83fb9e7..cb79446 100644
+index 83fb9e7..a22a0b8 100644
 --- a/src/include/hnsw/hnsw_index.hpp
 +++ b/src/include/hnsw/hnsw_index.hpp
 @@ -91,8 +91,14 @@ public:
