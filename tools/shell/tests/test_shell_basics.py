@@ -35,7 +35,7 @@ def test_import(shell, generated_file):
     )
 
     result = test.run()
-    result.check_stdout("col_1,col_2\n1,2\n10,20")
+    result.check_stdout("col_1,col_2\r\n1,2\r\n10,20")
 
 
 @pytest.mark.parametrize('generated_file', ["42\n84"], indirect=True)
@@ -874,9 +874,10 @@ def test_databases(shell):
     result.check_stdout('xx')
 
 def test_invalid_csv(shell, tmp_path):
+    # import ignores errors
     file = tmp_path / 'nonsencsv.csv'
     with open(file, 'wb+') as f:
-        f.write(b'\xFF\n')
+        f.write(b'\xFF\n42\n')
     test = (
         ShellTest(shell)
         .statement(".nullvalue NULL")
@@ -885,7 +886,7 @@ def test_invalid_csv(shell, tmp_path):
         .statement("SELECT * FROM test;")
     )
     result = test.run()
-    result.check_stdout('NULL')
+    result.check_stdout('42')
 
 def test_mode_latex(shell):
     test = (
