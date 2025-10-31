@@ -117,6 +117,7 @@ jobs:
     - name: Deploy
       shell: bash
       env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
@@ -167,6 +168,7 @@ jobs:
     - name: Deploy
       shell: bash
       env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
@@ -200,7 +202,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -209,66 +211,3 @@ jobs:
     - name: Symbol Leakage Test
       shell: bash
       run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
- linux-httpfs:
-    name: Linux HTTPFS
-    runs-on: ubuntu-22.04
-    needs: linux-release-cli
-    env:
-      CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
-      S3_TEST_SERVER_AVAILABLE: 1
-      AWS_DEFAULT_REGION: eu-west-1
-      AWS_ACCESS_KEY_ID: minio_duckdb_user
-      AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
-      DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
-      DUCKDB_S3_USE_SSL: false
-      HTTP_PROXY_PUBLIC: localhost:3128
-      TEST_PERSISTENT_SECRETS_AVAILABLE: true
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Install Ninja
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
-
-    - name: Fix permissions of test secrets
-      shell: bash
-      run: chmod -R 700 data/secrets
-
-    # TODO: fix the authenticated proxy here
-    - name: Install and run http proxy squid
-      shell: bash
-      run: |
-        sudo apt-get install squid
-        ./scripts/run_squid.sh --port 3128 --log_dir squid_logs &
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make
-
-    - name: Start test server & run tests
-      shell: bash
-      run: |
-        sudo ./scripts/install_s3_test_server.sh
-        ./scripts/generate_presigned_url.sh
-        source ./scripts/run_s3_test_server.sh
-        source ./scripts/set_s3_test_server_variables.sh
-        sleep 60
-
-        python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
-        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
-        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'

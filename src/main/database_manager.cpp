@@ -52,26 +52,51 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 		return database;
 	}
 	lock_guard<mutex> guard(databases_lock);
+	shared_ptr<AttachedDatabase> db;
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
-		return meta_transaction.UseDatabase(context.client_data->temporary_objects);
+		db = context.client_data->temporary_objects;
+	} else {
+		db = GetDatabaseInternal(guard, name);
 	}
+	if (!db) {
+		return nullptr;
+	}
+	return meta_transaction.UseDatabase(db);
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabase(const string &name) {
+	lock_guard<mutex> guard(databases_lock);
+	return GetDatabaseInternal(guard, name);
+}
+
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_guard<mutex> &, const string &name) {
 	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
-		return meta_transaction.UseDatabase(system);
+		return system;
 	}
 	auto entry = databases.find(name);
 	if (entry == databases.end()) {
 		// not found
 		return nullptr;
 	}
-	return meta_transaction.UseDatabase(entry->second);
+	return entry->second;
 }
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
-		if (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
-			return nullptr;
+		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
+			// database with this name and path already exists
+			// ... but it might not be done attaching yet!
+			// verify the database has actually finished attaching prior to returning
+			lock_guard<mutex> guard(databases_lock);
+			if (databases.find(info.name) != databases.end()) {
+				// database ACTUALLY exists - return
+				return nullptr;
+			}
+			if (context.interrupted) {
+				throw InterruptException();
+			}
 		}
 	}
 	GetDatabaseType(context, info, config, options);
@@ -174,7 +199,7 @@ idx_t DatabaseManager::ApproxDatabaseCount() {
 }
 
 InsertDatabasePathResult DatabaseManager::InsertDatabasePath(const AttachInfo &info, AttachOptions &options) {
-	return path_manager->InsertDatabasePath(info.path, info.name, info.on_conflict, options);
+	return path_manager->InsertDatabasePath(*this, info.path, info.name, info.on_conflict, options);
 }
 
 vector<string> DatabaseManager::GetAttachedDatabasePaths() {

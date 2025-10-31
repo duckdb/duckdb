@@ -37,14 +37,24 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
 
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-else()
-  find_program(CCACHE_PROGRAM sccache)
-  if(CCACHE_PROGRAM)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-  endif()
+if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C compiler launcher")
+        set(CMAKE_C_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
+endif()
+
+if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C++ compiler launcher")
+        set(CMAKE_CXX_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
 endif()
 
 # Determine install paths
@@ -238,7 +248,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" FALSE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")
 endif()
@@ -451,6 +461,7 @@ option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
+option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)

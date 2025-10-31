@@ -20,6 +20,14 @@ BoundStatement ExplainRelation::Bind(Binder &binder) {
 	return binder.Bind(explain.Cast<SQLStatement>());
 }
 
+unique_ptr<QueryNode> ExplainRelation::GetQueryNode() {
+	throw InternalException("Cannot create a query node from an explain relation");
+}
+
+string ExplainRelation::GetQuery() {
+	return string();
+}
+
 const vector<ColumnDefinition> &ExplainRelation::Columns() {
 	return columns;
 }

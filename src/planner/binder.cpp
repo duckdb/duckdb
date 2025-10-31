@@ -440,7 +440,7 @@ void Binder::MoveCorrelatedExpressions(Binder &other) {
 	other.correlated_columns.clear();
 }
 
-void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
+void Binder::MergeCorrelatedColumns(CorrelatedColumns &other) {
 	for (idx_t i = 0; i < other.size(); i++) {
 		AddCorrelatedColumn(other[i]);
 	}
@@ -449,7 +449,7 @@ void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
 void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	// we only add correlated columns to the list if they are not already there
 	if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
-		correlated_columns.push_back(info);
+		correlated_columns.AddColumn(info);
 	}
 }
 
@@ -469,7 +469,6 @@ optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, con
                                                  const string &table_name, const string &column_name,
                                                  ErrorData &error) {
 	optional_ptr<Binding> binding;
-	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->GetAlias()) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {

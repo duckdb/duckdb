@@ -570,7 +570,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
-	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
+	if (next_schema_idx >= file_meta_data->schema.size()) {
+		throw InvalidInputException("Malformed Parquet schema in file \"%s\": invalid schema index %d", file.path,
+		                            next_schema_idx);
+	}
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
 	auto this_idx = next_schema_idx;
 
@@ -737,7 +740,9 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		throw InvalidInputException("Root element of Parquet file must be a struct");
 	}
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
-	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
+	if (!file_meta_data->row_groups.empty() && next_file_idx != file_meta_data->row_groups[0].columns.size()) {
+		throw InvalidInputException("Parquet reader: row group does not have enough columns");
+	}
 	if (parquet_options.file_row_number) {
 		for (auto &column : root.children) {
 			auto &name = column.name;

@@ -199,6 +199,31 @@ enum class GeoParquetColumnEncoding : uint8_t {
 	MULTIPOLYGON,
 };
 
+enum class GeoParquetVersion : uint8_t {
+	// Write GeoParquet 1.0 metadata
+	// GeoParquet 1.0 has the widest support among readers and writers
+	V1,
+
+	// Write GeoParquet 2.0
+	// The GeoParquet 2.0 options is identical to GeoParquet 1.0 except the underlying storage
+	// of spatial columns is Parquet native geometry, where the Parquet writer will include
+	// native statistics according to the underlying Parquet options. Compared to 'BOTH', this will
+	// actually write the metadata as containing GeoParquet version 2.0.0
+	// However, V2 isnt standardized yet, so this option is still a bit experimental
+	V2,
+
+	// Write GeoParquet 1.0 metadata, with native Parquet geometry types
+	// This is a bit of a hold-over option for compatibility with systems that
+	// reject GeoParquet 2.0 metadata, but can read Parquet native geometry types as they simply ignore the extra
+	// logical type. DuckDB v1.4.0 falls into this category.
+	BOTH,
+
+	// Do not write GeoParquet metadata
+	// This option suppresses GeoParquet metadata; however, spatial types will be written as
+	// Parquet native Geometry/Geography.
+	NONE,
+};
+
 struct GeoParquetColumnMetadata {
 	// The encoding of the geometry column
 	GeoParquetColumnEncoding geometry_encoding;
@@ -215,6 +240,8 @@ struct GeoParquetColumnMetadata {
 
 class GeoParquetFileMetadata {
 public:
+	GeoParquetFileMetadata(GeoParquetVersion geo_parquet_version) : version(geo_parquet_version) {
+	}
 	void AddGeoParquetStats(const string &column_name, const LogicalType &type, const GeometryStats &stats);
 	void Write(duckdb_parquet::FileMetaData &file_meta_data);
 
@@ -234,8 +261,8 @@ public:
 
 private:
 	mutex write_lock;
-	string version = "1.1.0";
 	unordered_map<string, GeoParquetColumnMetadata> geometry_columns;
+	GeoParquetVersion version;
 };
 
 } // namespace duckdb

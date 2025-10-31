@@ -537,7 +537,8 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	auto count = duckdb_column_count(&result_wrapper->result);
 	std::vector<duckdb_logical_type> types(count);
 
-	std::vector<std::string> owned_names(count);
+	std::vector<std::string> owned_names;
+	owned_names.reserve(count);
 	duckdb::vector<const char *> names(count);
 	for (idx_t i = 0; i < count; i++) {
 		types[i] = duckdb_column_logical_type(&result_wrapper->result, i);
@@ -659,12 +660,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 		std::ostringstream create_table;
 		create_table << "CREATE TABLE ";
 		if (schema) {
-			create_table << schema << ".";
+			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
 		}
-		create_table << table_name << " (";
+		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) << " (";
 		for (idx_t i = 0; i < types.size(); i++) {
-			create_table << names[i] << " ";
-			create_table << types[i].ToString();
+			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(names[i]);
+			create_table << " " << types[i].ToString();
 			if (i + 1 < types.size()) {
 				create_table << ", ";
 			}
@@ -793,7 +794,8 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		count = 1;
 	}
 	std::vector<duckdb_logical_type> types(count);
-	std::vector<std::string> owned_names(count);
+	std::vector<std::string> owned_names;
+	owned_names.reserve(count);
 	duckdb::vector<const char *> names(count);
 
 	for (idx_t i = 0; i < count; i++) {

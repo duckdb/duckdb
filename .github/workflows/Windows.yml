@@ -33,6 +33,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
 
   merge_group:
   pull_request:
@@ -45,7 +47,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
-
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
 
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -86,7 +89,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -147,6 +150,7 @@ jobs:
     - name: Deploy
       shell: bash
       env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
@@ -190,7 +194,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -232,7 +236,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+         save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - name: Build
        shell: bash
@@ -260,6 +264,7 @@ jobs:
      - name: Deploy
        shell: bash
        env:
+         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
@@ -304,7 +309,7 @@ jobs:
          uses: hendrikmuhs/ccache-action@main
          with:
            key: ${{ github.job }}
-           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+           save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
        - name: Build
          shell: msys2 {0}

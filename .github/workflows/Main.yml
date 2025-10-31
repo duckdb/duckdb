@@ -14,7 +14,10 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
+      - '!.github/patches/extensions/fts/*.patch' # fts used in some jobs
+      - '!.github/config/extensions/fts.cmake'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft]
@@ -25,7 +28,10 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
-      - '.github/config/out_of_tree_extensions.cmake'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
+      - '!.github/patches/extensions/fts/*.patch' # fts used in some jobs
+      - '!.github/config/extensions/fts.cmake'
 
 
 concurrency:
@@ -43,7 +49,7 @@ jobs:
     steps:
       - name: Preliminary checks on CI 
         run: echo "Event name is ${{ github.event_name }}"
-      
+
  linux-debug:
     name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
@@ -72,7 +78,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -115,7 +121,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -152,7 +158,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Build
         shell: bash
@@ -194,7 +200,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Build
         shell: bash
@@ -229,7 +235,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -269,7 +275,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -341,7 +347,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       id: build
@@ -458,3 +464,9 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/compressed_in_memory.json
+
+    - name: Forwards compatibility tests
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2" --new-unittest build/release/test/unittest

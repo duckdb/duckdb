@@ -563,7 +563,7 @@ void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<Physic
 	D_ASSERT(storage);
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
-	storage->row_groups->Update(TransactionData(0, 0), ids, column_ids, updates);
+	storage->row_groups->Update(TransactionData(0, 0), table, ids, column_ids, updates);
 }
 
 void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state) {

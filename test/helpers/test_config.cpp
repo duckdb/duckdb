@@ -6,6 +6,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace duckdb {
 
@@ -53,7 +54,16 @@ static const TestConfigOption test_config_options[] = {
     {"statically_loaded_extensions", "Extensions to be loaded (from the statically available one)",
      LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {"storage_version", "Database storage version to use by default", LogicalType::VARCHAR, nullptr},
-    {"data_location", "Directory where static test files are read (defaults to `data/`)", LogicalType::VARCHAR,
+    {"select_tag", "Select tests which match named tag (as singleton set; multiple sets are OR'd)",
+     LogicalType::VARCHAR, TestConfiguration::AppendSelectTagSet},
+    {"select_tag_set", "Select tests which match _all_ named tags (multiple sets are OR'd)",
+     LogicalType::LIST(LogicalType::VARCHAR), TestConfiguration::AppendSelectTagSet},
+    {"skip_tag", "Skip tests which match named tag (as singleton set; multiple sets are OR'd)", LogicalType::VARCHAR,
+     TestConfiguration::AppendSkipTagSet},
+    {"skip_tag_set", "Skip tests which match _all_ named tags (multiple sets are OR'd)",
+     LogicalType::LIST(LogicalType::VARCHAR), TestConfiguration::AppendSkipTagSet},
+    {"settings", "Configuration settings to apply",
+     LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
      nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
@@ -94,6 +104,42 @@ void TestConfiguration::Initialize() {
 			ParseOption("summarize_failures", Value(true));
 		}
 	}
+
+	working_dir = FileSystem::GetWorkingDirectory();
+	test_uuid = UUID::ToString(UUID::GenerateRandomUUID());
+	UpdateEnvironment();
+}
+
+void TestConfiguration::UpdateEnvironment() {
+	// Setup standard vars
+
+	// XXX: UUID used by ducklake to avoid collisions, is there a better way?
+	test_env["TEST_UUID"] = test_uuid;
+	test_env["BUILD_DIR"] = string(DUCKDB_BUILD_DIRECTORY);
+	test_env["WORKING_DIR"] = working_dir;        // can be overridden per runner
+	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
+
+	string temp_dir = TestDirectoryPath();
+	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
+	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
+}
+
+string TestConfiguration::GetWorkingDirectory() {
+	return working_dir;
+}
+
+bool TestConfiguration::ChangeWorkingDirectory(const string &dir) {
+	bool rv = false;
+	// set CWD first, then get it -- this gets us normalized absolute path for free
+	// making the comparison below meaningful
+	FileSystem::SetWorkingDirectory(dir);
+	const auto &normalized = FileSystem::GetWorkingDirectory();
+	if (working_dir != normalized) {
+		rv = true;
+		working_dir = normalized;
+		UpdateEnvironment();
+	}
+	return rv;
 }
 
 bool TestConfiguration::ParseArgument(const string &arg, idx_t argc, char **argv, idx_t &i) {
@@ -196,15 +242,6 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	return tests_to_be_skipped.count(test_name);
-}
-
-string TestConfiguration::DataLocation() {
-	string res = GetOptionOrDefault("data_location", string("data/"));
-	// Force DataLocation to end with a '/'
-	if (res.back() != '/') {
-		res += "/";
-	}
-	return res;
 }
 
 string TestConfiguration::OnInitCommand() {
@@ -399,6 +436,22 @@ string TestConfiguration::GetStorageVersion() {
 	return GetOptionOrDefault("storage_version", string());
 }
 
+vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
+	vector<ConfigSetting> result;
+	if (options.find("settings") != options.end()) {
+		auto entry = options["settings"];
+		auto list_children = ListValue::GetChildren(entry);
+		for (const auto &value : list_children) {
+			auto &struct_children = StructValue::GetChildren(value);
+			ConfigSetting config_setting;
+			config_setting.name = StringValue::Get(struct_children[0]);
+			config_setting.value = StringValue::Get(struct_children[1]);
+			result.push_back(std::move(config_setting));
+		}
+	}
+	return result;
+}
+
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
 	if (test_env.empty() && options.find("test_env") != options.end()) {
 		auto entry = options["test_env"];
@@ -416,12 +469,78 @@ string TestConfiguration::GetTestEnv(const string &key, const string &default_va
 	return test_env[key];
 }
 
+const unordered_map<string, string> &TestConfiguration::GetTestEnvMap() {
+	return test_env;
+}
+
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
 	return EnumUtil::FromString<DebugVectorVerification>(GetOptionOrDefault<string>("verify_vector", "NONE"));
 }
 
 DebugInitialize TestConfiguration::GetDebugInitialize() {
 	return EnumUtil::FromString<DebugInitialize>(GetOptionOrDefault<string>("debug_initialize", "NO_INITIALIZE"));
+}
+
+vector<unordered_set<string>> TestConfiguration::GetSelectTagSets() {
+	return select_tag_sets;
+}
+
+vector<unordered_set<string>> TestConfiguration::GetSkipTagSets() {
+	return skip_tag_sets;
+}
+
+std::unordered_set<string> make_tag_set(const Value &src_val) {
+	// handle both cases -- singleton VARCHAR/string, and set of strings
+	auto dst_set = std::unordered_set<string>();
+	if (src_val.type() == LogicalType::VARCHAR) {
+		dst_set.insert(src_val.GetValue<string>());
+	} else /* LIST(VARCHAR) */ {
+		for (auto &tag : ListValue::GetChildren(src_val)) {
+			dst_set.insert(tag.GetValue<string>());
+		}
+	}
+	return dst_set;
+}
+
+void TestConfiguration::AppendSelectTagSet(const Value &tag_set) {
+	TestConfiguration::Get().select_tag_sets.push_back(make_tag_set(tag_set));
+}
+
+void TestConfiguration::AppendSkipTagSet(const Value &tag_set) {
+	TestConfiguration::Get().skip_tag_sets.push_back(make_tag_set(tag_set));
+}
+
+bool is_subset(const unordered_set<string> &sub, const vector<string> &super) {
+	for (const auto &elt : sub) {
+		if (std::find(super.begin(), super.end(), elt) == super.end()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// NOTE: this model of policy assumes simply that all selects are applied to the All set, then
+// all skips are applied to that result. (Typical alternative: CLI ordering where each
+// select/skip operation is applied in sequence.)
+TestConfiguration::SelectPolicy TestConfiguration::GetPolicyForTagSet(const vector<string> &subject_tag_set) {
+	// Apply select_tag_set first then skip_tag_set; if both empty always NONE
+	auto policy = TestConfiguration::SelectPolicy::NONE;
+	// select: if >= 1 select_tag_set is subset of subject_tag_set
+	// if count(select_tag_sets) > 0 && no matches, SKIP
+	for (const auto &select_tag_set : select_tag_sets) {
+		policy = TestConfiguration::SelectPolicy::SKIP; // >=1 sets => SKIP || SELECT
+		if (is_subset(select_tag_set, subject_tag_set)) {
+			policy = TestConfiguration::SelectPolicy::SELECT;
+			break;
+		}
+	}
+	// skip: if >=1 skip_tag_set is subset of subject_tag_set, else passthrough
+	for (const auto &skip_tag_set : skip_tag_sets) {
+		if (is_subset(skip_tag_set, subject_tag_set)) {
+			return TestConfiguration::SelectPolicy::SKIP;
+		}
+	}
+	return policy;
 }
 
 bool TestConfiguration::TestForceStorage() {
