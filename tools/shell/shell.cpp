@@ -1515,10 +1515,9 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		duckdb::QueryParameters parameters;
 		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
 		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
-		result = con.Query(std::move(statement), parameters);
+		result = con.SendQuery(std::move(statement), parameters);
 	}
 	auto &res = *result;
-	;
 	if (res.HasError()) {
 		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;

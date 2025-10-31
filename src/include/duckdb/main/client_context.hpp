@@ -107,32 +107,23 @@ public:
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT
 	//! statement.
-	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, bool allow_stream_result);
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, QueryParameters query_parameters);
-	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, bool allow_stream_result);
-	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, QueryParameters parameters);
+	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, QueryParameters query_parameters);
 
 	//! Issues a query to the database and returns a Pending Query Result. Note that "query" may only contain
 	//! a single statement.
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, bool allow_stream_result);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, QueryParameters parameters);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, QueryParameters query_parameters);
 	//! Issues a query to the database and returns a Pending Query Result
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-	                                                       bool allow_stream_result);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-	                                                       QueryParameters parameters);
+	                                                       QueryParameters query_parameters);
 
 	//! Create a pending query with a list of parameters
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
 	                                                       case_insensitive_map_t<BoundParameterData> &values,
-	                                                       bool allow_stream_result);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
+	                                                       QueryParameters query_parameters);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
 	                                                       case_insensitive_map_t<BoundParameterData> &values,
-	                                                       QueryParameters parameters);
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, case_insensitive_map_t<BoundParameterData> &values, bool allow_stream_result);
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, case_insensitive_map_t<BoundParameterData> &values, QueryParameters parameters);
+	                                                       QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, PendingQueryParameters parameters);
 
 	//! Destroy the client context
@@ -159,9 +150,7 @@ public:
 
 	//! Execute a relation
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const shared_ptr<Relation> &relation,
-	                                                       bool allow_stream_result);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const shared_ptr<Relation> &relation,
-	                                                       QueryParameters parameters);
+	                                                       QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
 	//! Prepare a query
@@ -179,9 +168,10 @@ public:
 	//! Execute a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
-	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	                                           case_insensitive_map_t<BoundParameterData> &values,
-	                                           bool allow_stream_result = true);
+	DUCKDB_API unique_ptr<QueryResult>
+	Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
+	        case_insensitive_map_t<BoundParameterData> &values,
+	        QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           const PendingQueryParameters &parameters);
 
@@ -304,8 +294,6 @@ private:
 	                                                            shared_ptr<PreparedStatementData> &prepared,
 	                                                            const PendingQueryParameters &parameters);
 
-	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
-	                                                    bool allow_stream_result);
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                                    QueryParameters query_parameters);
 

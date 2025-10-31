@@ -80,8 +80,10 @@ public:
 	//! one active StreamQueryResult per Connection object. Calling SendQuery() will invalidate any previously existing
 	//! StreamQueryResult.
 	DUCKDB_API unique_ptr<QueryResult>
-	SendQuery(const string &query, QueryParameters parameters = QueryResultOutputType::FORCE_MATERIALIZED);
-	DUCKDB_API unique_ptr<QueryResult> SendQuery(unique_ptr<SQLStatement> statement, QueryParameters parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	SendQuery(const string &query, QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	DUCKDB_API unique_ptr<QueryResult>
+	SendQuery(unique_ptr<SQLStatement> statement,
+	          QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	//! Issues a query to the database and materializes the result (if necessary). Always returns a
 	//! MaterializedQueryResult.
 	DUCKDB_API unique_ptr<MaterializedQueryResult> Query(const string &query);
@@ -99,22 +101,24 @@ public:
 	//! Issues a query to the database and returns a Pending Query Result. Note that "query" may only contain
 	//! a single statement.
 	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, QueryParameters parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	PendingQuery(const string &query, QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	//! Issues a query to the database and returns a Pending Query Result
 	DUCKDB_API unique_ptr<PendingQueryResult>
 	PendingQuery(unique_ptr<SQLStatement> statement,
-	             QueryParameters parameters = QueryResultOutputType::FORCE_MATERIALIZED);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-	                                                       case_insensitive_map_t<BoundParameterData> &named_values,
-	                                                       bool allow_stream_result = false);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
-	                                                       case_insensitive_map_t<BoundParameterData> &named_values,
-	                                                       bool allow_stream_result = false);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, vector<Value> &values,
-	                                                       bool allow_stream_result = false);
+	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(unique_ptr<SQLStatement> statement, case_insensitive_map_t<BoundParameterData> &named_values,
+	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(const string &query, case_insensitive_map_t<BoundParameterData> &named_values,
+	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(const string &query, vector<Value> &values,
+	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, PendingQueryParameters parameters);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
-	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
+	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);

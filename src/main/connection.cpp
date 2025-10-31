@@ -95,70 +95,50 @@ void Connection::ForceParallelism() {
 	ClientConfig::GetConfig(*context).verify_parallelism = true;
 }
 
-unique_ptr<QueryResult> Connection::SendQuery(const string &query, QueryParameters parameters) {
-	return context->Query(query, parameters);
+unique_ptr<QueryResult> Connection::SendQuery(const string &query, QueryParameters query_parameters) {
+	return context->Query(query, query_parameters);
 }
 
-unique_ptr<QueryResult> Connection::SendQuery(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
-	return context->Query(std::move(statement), parameters);
+unique_ptr<QueryResult> Connection::SendQuery(unique_ptr<SQLStatement> statement, QueryParameters query_parameters) {
+	return context->Query(std::move(statement), query_parameters);
 }
 
 unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
-	QueryParameters parameters;
-	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-	auto result = context->Query(query, parameters);
+	QueryParameters query_parameters;
+	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	auto result = context->Query(query, query_parameters);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
 unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement,
                                                       QueryResultMemoryType memory_type) {
-	QueryParameters parameters;
-	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-	parameters.memory_type = memory_type;
-	auto result = context->Query(std::move(statement), parameters);
+	QueryParameters query_parameters;
+	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	query_parameters.memory_type = memory_type;
+	auto result = context->Query(std::move(statement), query_parameters);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, bool allow_stream_result) {
-	QueryParameters parameters;
-	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
-	return context->PendingQuery(query, parameters);
-}
-
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, QueryParameters parameters) {
-	return context->PendingQuery(query, parameters);
-}
-
-unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	QueryParameters parameters;
-	parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
-	return context->PendingQuery(std::move(statement), parameters);
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, QueryParameters query_parameters) {
+	return context->PendingQuery(query, query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                        QueryParameters parameters) {
-	return context->PendingQuery(std::move(statement), parameters);
+                                                        QueryParameters query_parameters) {
+	return context->PendingQuery(std::move(statement), query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
                                                         case_insensitive_map_t<BoundParameterData> &named_values,
-                                                        bool allow_stream_result) {
-	QueryParameters query_parameters;
-	query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
+                                                        QueryParameters query_parameters) {
 	return context->PendingQuery(query, named_values, query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
                                                         case_insensitive_map_t<BoundParameterData> &named_values,
-                                                        bool allow_stream_result) {
-	QueryParameters query_parameters;
-	query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
+                                                        QueryParameters query_parameters) {
 	return context->PendingQuery(std::move(statement), named_values, query_parameters);
 }
 
@@ -172,20 +152,14 @@ static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<V
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vector<Value> &values,
-                                                        bool allow_stream_result) {
+                                                        QueryParameters query_parameters) {
 	auto named_params = ConvertParamListToMap(values);
-	QueryParameters query_parameters;
-	query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return context->PendingQuery(query, named_params, query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
-                                                        bool allow_stream_result) {
+                                                        QueryParameters query_parameters) {
 	auto named_params = ConvertParamListToMap(values);
-	QueryParameters query_parameters;
-	query_parameters.output_type =
-	    allow_stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
 	return context->PendingQuery(std::move(statement), named_params, query_parameters);
 }
 

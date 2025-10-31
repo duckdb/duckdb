@@ -101,8 +101,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 
 			auto statement = make_uniq<LogicalPlanStatement>(std::move(plan));
 			auto result = con2.Query(std::move(statement));
-			auto pinned_result_set = result->Pin();
-			auto &collection = pinned_result_set->collection;
+			auto &collection = result->Collection();
 			idx_t num_chunks = collection.ChunkCount();
 			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
 			for (auto &chunk : collection.Chunks()) {

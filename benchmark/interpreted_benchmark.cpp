@@ -757,8 +757,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 
 	// we are running a result query
 	// store the current result in a table called "__answer"
-	auto pinned_result_set = state.result->Pin();
-	auto &collection = pinned_result_set->collection;
+	auto &collection = state.result->Collection();
 	auto &names = state.result->names;
 	auto &types = state.result->types;
 	case_insensitive_set_t name_set;

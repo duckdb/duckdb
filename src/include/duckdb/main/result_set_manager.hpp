@@ -11,7 +11,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
