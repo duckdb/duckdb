@@ -30,7 +30,6 @@
 ** This file contains code to implement the "sqlite" command line
 ** utility for accessing SQLite databases.
 */
-#include "duckdb/main/result_set_manager.hpp"
 #if (defined(_WIN32) || defined(WIN32)) && !defined(_CRT_SECURE_NO_WARNINGS)
 /* This needs to come before any includes for MSVC compiler */
 #define _CRT_SECURE_NO_WARNINGS
@@ -1586,9 +1585,8 @@ SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
 		config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
 		duckdb::BoxRenderer renderer(config);
 		auto &materialized = res.Cast<duckdb::MaterializedQueryResult>();
-		auto pinned_result_set = materialized.Pin();
 		auto &con = *conn;
-		renderer.Render(*con.context, res.names, pinned_result_set->collection, result_renderer);
+		renderer.Render(*con.context, res.names, materialized.Collection(), result_renderer);
 		return SuccessState::SUCCESS;
 	} catch (std::exception &ex) {
 		string error_str = duckdb::ErrorData(ex).Message() + "\n";

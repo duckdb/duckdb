@@ -1,6 +1,5 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/result_set_manager.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -10,14 +9,6 @@ namespace duckdb {
 ColumnDataRef::ColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collection_p, vector<string> expected_names)
     : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)),
       collection(std::move(collection_p)) {
-}
-
-ColumnDataRef::ColumnDataRef(unique_ptr<PinnedResultSet> pinned_query_result_p, vector<string> expected_names)
-    : TableRef(TableReferenceType::COLUMN_DATA), expected_names(std::move(expected_names)),
-      collection(pinned_query_result_p->collection), pinned_query_result(std::move(pinned_query_result_p)) {
-}
-
-ColumnDataRef::~ColumnDataRef() {
 }
 
 string ColumnDataRef::ToString() const {
@@ -83,9 +74,6 @@ unique_ptr<TableRef> ColumnDataRef::Copy() {
 	auto copied_collection = CopyCollection(collection);
 	auto result = make_uniq<ColumnDataRef>(std::move(copied_collection), expected_names);
 	CopyProperties(*result);
-	if (pinned_query_result) {
-		result->pinned_query_result = pinned_query_result->Copy();
-	}
 	return std::move(result);
 }
 

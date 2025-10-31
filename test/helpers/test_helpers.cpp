@@ -266,14 +266,13 @@ bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::MaterializedQueryResult> &result, s
 
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	D_ASSERT(result.type == QueryResultType::MATERIALIZED_RESULT);
-	auto &materialized = result.Cast<MaterializedQueryResult>();
+	auto &materialized = (MaterializedQueryResult &)result;
 	if (materialized.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", materialized.GetError().c_str());
 		return materialized.GetError();
 	}
-	auto pinned_result_set = materialized.Pin();
 	string error;
-	if (!compare_result(csv, pinned_result_set->collection, materialized.types, header, error)) {
+	if (!compare_result(csv, materialized.Collection(), materialized.types, header, error)) {
 		return error;
 	}
 	return "";

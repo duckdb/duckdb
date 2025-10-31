@@ -3,7 +3,6 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
-#include "duckdb/main/result_set_manager.hpp"
 #include "fmt/format.h"
 
 using duckdb::ArrowConverter;
@@ -273,8 +272,7 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 		return 0;
 	}
 	idx_t rows_changed = 0;
-	auto pinned_result_set = wrapper->result->Pin();
-	auto &collection = pinned_result_set->collection;
+	auto &collection = wrapper->result->Collection();
 	idx_t row_count = collection.Count();
 	if (row_count > 0 && wrapper->result->properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
 		auto rows = collection.GetRows();

@@ -6,18 +6,16 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
 MaterializedRelation::MaterializedRelation(const shared_ptr<ClientContext> &context,
-                                           shared_ptr<ManagedResultSet> result_set_p, vector<string> names,
+                                           unique_ptr<ColumnDataCollection> &&collection_p, vector<string> names,
                                            string alias_p)
     : Relation(context, RelationType::MATERIALIZED_RELATION), alias(std::move(alias_p)),
-      result_set(std::move(result_set_p)) {
+      collection(std::move(collection_p)) {
 	// create constant expressions for the values
-	auto pinned_result_set = result_set->Pin();
-	auto types = pinned_result_set->collection.Types();
+	auto types = collection->Types();
 	D_ASSERT(types.size() == names.size());
 
 	QueryResult::DeduplicateColumns(names);
@@ -37,7 +35,7 @@ unique_ptr<QueryNode> MaterializedRelation::GetQueryNode() {
 }
 
 unique_ptr<TableRef> MaterializedRelation::GetTableRef() {
-	auto table_ref = make_uniq<ColumnDataRef>(result_set->Pin());
+	auto table_ref = make_uniq<ColumnDataRef>(collection);
 	for (auto &col : columns) {
 		table_ref->expected_names.push_back(col.Name());
 	}
@@ -54,8 +52,7 @@ const vector<ColumnDefinition> &MaterializedRelation::Columns() {
 }
 
 string MaterializedRelation::ToString(idx_t depth) {
-	auto pinned_result_set = result_set->Pin();
-	return pinned_result_set->collection.ToString();
+	return collection->ToString();
 }
 
 } // namespace duckdb

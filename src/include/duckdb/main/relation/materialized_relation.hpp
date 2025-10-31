@@ -15,11 +15,11 @@ namespace duckdb {
 
 class MaterializedRelation : public Relation {
 public:
-	MaterializedRelation(const shared_ptr<ClientContext> &context, shared_ptr<ManagedResultSet> result_set,
+	MaterializedRelation(const shared_ptr<ClientContext> &context, unique_ptr<ColumnDataCollection> &&collection,
 	                     vector<string> names, string alias = "materialized");
 	vector<ColumnDefinition> columns;
 	string alias;
-	shared_ptr<ManagedResultSet> result_set;
+	shared_ptr<ColumnDataCollection> collection;
 
 public:
 	const vector<ColumnDefinition> &Columns() override;

@@ -8,6 +8,7 @@
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -59,9 +60,10 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<Logica
 	allocator = make_shared_ptr<ColumnDataAllocator>(allocator_p);
 }
 
-ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
+ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p,
+                                           ColumnDataCollectionLifetime lifetime) {
 	Initialize(std::move(types_p));
-	allocator = make_shared_ptr<ColumnDataAllocator>(buffer_manager);
+	allocator = make_shared_ptr<ColumnDataAllocator>(buffer_manager, lifetime);
 }
 
 ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
@@ -70,8 +72,8 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 }
 
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
-                                           ColumnDataAllocatorType type)
-    : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type), std::move(types_p)) {
+                                           ColumnDataAllocatorType type, ColumnDataCollectionLifetime lifetime)
+    : ColumnDataCollection(make_shared_ptr<ColumnDataAllocator>(context, type, lifetime), std::move(types_p)) {
 	D_ASSERT(!types.empty());
 }
 
@@ -1026,6 +1028,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<col
 	state.current_chunk_state.handles.clear();
 	state.properties = properties;
 	state.column_ids = std::move(column_ids);
+	state.db = allocator->GetDatabase();
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,

@@ -95,18 +95,12 @@ void Connection::ForceParallelism() {
 	ClientConfig::GetConfig(*context).verify_parallelism = true;
 }
 
-unique_ptr<QueryResult> Connection::SendQuery(const string &query) {
-	QueryParameters parameters;
-	parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
-	return SendQuery(query, parameters);
-}
-
 unique_ptr<QueryResult> Connection::SendQuery(const string &query, QueryParameters parameters) {
 	return context->Query(query, parameters);
 }
 
-unique_ptr<QueryResult> Connection::SendQuery(unique_ptr<SQLStatement> statement) {
-	return context->Query(std::move(statement), true);
+unique_ptr<QueryResult> Connection::SendQuery(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
+	return context->Query(std::move(statement), parameters);
 }
 
 unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
@@ -117,13 +111,11 @@ unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
-unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {
+unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement,
+                                                      QueryResultMemoryType memory_type) {
 	QueryParameters parameters;
 	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-	return Query(std::move(statement), parameters);
-}
-
-unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
+	parameters.memory_type = memory_type;
 	auto result = context->Query(std::move(statement), parameters);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));

@@ -11,6 +11,7 @@
 #include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 
 namespace duckdb {
+
 class BufferManager;
 class BlockHandle;
 class ClientContext;
@@ -29,10 +30,14 @@ public:
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
 	DUCKDB_API explicit ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
+	DUCKDB_API
+	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types,
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::INDEPENDENTLY_USABLE);
 	//! Constructs either an in-memory or a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
-	                                ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	DUCKDB_API
+	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::INDEPENDENTLY_USABLE);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
 	//! between multiple column data collections and prevents wasting space.
 	//! Note that after one CDC inherits blocks from another, the other

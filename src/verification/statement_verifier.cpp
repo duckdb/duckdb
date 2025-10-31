@@ -16,7 +16,6 @@
 #include "duckdb/verification/no_operator_caching_verifier.hpp"
 #include "duckdb/verification/fetch_row_verifier.hpp"
 #include "duckdb/verification/explain_statement_verifier.hpp"
-#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
@@ -143,7 +142,6 @@ bool StatementVerifier::Run(
 		if (result->HasError()) {
 			failed = true;
 		}
-		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	} catch (std::exception &ex) {
 		failed = true;
@@ -166,9 +164,7 @@ string StatementVerifier::CompareResults(const StatementVerifier &other) {
 	if (materialized_result->HasError()) {
 		return "";
 	}
-	auto this_pinned_result_set = materialized_result->Pin();
-	auto other_pinned_result_set = other.materialized_result->Pin();
-	if (!ColumnDataCollection::ResultEquals(this_pinned_result_set->collection, other_pinned_result_set->collection,
+	if (!ColumnDataCollection::ResultEquals(materialized_result->Collection(), other.materialized_result->Collection(),
 	                                        error)) { // LCOV_EXCL_START
 		string result = other.name + " statement differs from original result!\n";
 		result += "Original Result:\n" + materialized_result->ToString();

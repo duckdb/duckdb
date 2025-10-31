@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-class PinnedResultSet;
-
 //! Represents a TableReference to a materialized result
 class ColumnDataRef : public TableRef {
 public:
@@ -24,17 +22,12 @@ public:
 public:
 	explicit ColumnDataRef(optionally_owned_ptr<ColumnDataCollection> collection_p,
 	                       vector<string> expected_names = vector<string>());
-	explicit ColumnDataRef(unique_ptr<PinnedResultSet> pinned_query_result_p,
-	                       vector<string> expected_names = vector<string>());
-	~ColumnDataRef() override;
 
 public:
 	//! The set of expected names
 	vector<string> expected_names;
 	//! (Optionally) the owned collection
 	optionally_owned_ptr<ColumnDataCollection> collection;
-	//! (Optional) the managed query result this reads
-	unique_ptr<PinnedResultSet> pinned_query_result;
 
 public:
 	string ToString() const override;
