@@ -11,10 +11,9 @@
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
 #include <vector>
-#include "duckdb_shell_wrapper.h"
 #include <string>
-#include "sqlite3.h"
 #include "duckdb/common/string_util.hpp"
+#include "shell_state.hpp"
 #ifdef __MVS__
 #include <strings.h>
 #include <sys/time.h>
@@ -232,105 +231,6 @@ int Linenoise::GetRenderPosition(const char *buf, size_t len, int max_width, int
 		// invalid utf8, return -1
 		return -1;
 	}
-}
-
-int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error) {
-	if (strcmp(azArg[0], "highlight") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Highlighting::Disable();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Highlighting::Enable();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .highlight [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "render_errors") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Linenoise::DisableErrorRendering();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Linenoise::EnableErrorRendering();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .render_errors [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "render_completion") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Linenoise::DisableCompletionRendering();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Linenoise::EnableCompletionRendering();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .render_completion [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "keyword") == 0 || strcmp(azArg[0], "constant") == 0 ||
-	           strcmp(azArg[0], "comment") == 0 || strcmp(azArg[0], "error") == 0 || strcmp(azArg[0], "cont") == 0 ||
-	           strcmp(azArg[0], "cont_sel") == 0) {
-		if (nArg == 2) {
-			const char *option = Highlighting::GetColorOption(azArg[1]);
-			if (option) {
-				HighlightingType type;
-				if (strcmp(azArg[0], "keyword") == 0) {
-					type = HighlightingType::KEYWORD;
-				} else if (strcmp(azArg[0], "constant") == 0) {
-					type = HighlightingType::CONSTANT;
-				} else if (strcmp(azArg[0], "comment") == 0) {
-					type = HighlightingType::COMMENT;
-				} else if (strcmp(azArg[0], "error") == 0) {
-					type = HighlightingType::ERROR;
-				} else if (strcmp(azArg[0], "cont") == 0) {
-					type = HighlightingType::CONTINUATION;
-				} else {
-					type = HighlightingType::CONTINUATION_SELECTED;
-				}
-				Highlighting::SetHighlightingColor(type, option);
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .[keyword|constant|comment|error|cont|cont_sel] "
-		             "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
-		             "brightblue|brightmagenta|brightcyan|brightwhite]";
-		return 1;
-	} else if (strcmp(azArg[0], "keywordcode") == 0 || strcmp(azArg[0], "constantcode") == 0 ||
-	           strcmp(azArg[0], "commentcode") == 0 || strcmp(azArg[0], "errorcode") == 0 ||
-	           strcmp(azArg[0], "contcode") == 0 || strcmp(azArg[0], "cont_selcode") == 0) {
-		if (nArg == 2) {
-			HighlightingType type;
-			if (strcmp(azArg[0], "keywordcode") == 0) {
-				type = HighlightingType::KEYWORD;
-			} else if (strcmp(azArg[0], "constantcode") == 0) {
-				type = HighlightingType::CONSTANT;
-			} else if (strcmp(azArg[0], "commentcode") == 0) {
-				type = HighlightingType::COMMENT;
-			} else if (strcmp(azArg[0], "errorcode") == 0) {
-				type = HighlightingType::ERROR;
-			} else if (strcmp(azArg[0], "contcode") == 0) {
-				type = HighlightingType::CONTINUATION;
-			} else {
-				type = HighlightingType::CONTINUATION_SELECTED;
-			}
-			Highlighting::SetHighlightingColor(type, azArg[1]);
-			return 1;
-		}
-		*out_error =
-		    "Expected usage: .[keywordcode|constantcode|commentcode|errorcode|contcode|cont_selcode] [terminal_code]";
-		return 1;
-	} else if (strcmp(azArg[0], "multiline") == 0) {
-		linenoiseSetMultiLine(1);
-		return 1;
-	} else if (strcmp(azArg[0], "singleline") == 0) {
-		linenoiseSetMultiLine(0);
-		return 1;
-	}
-	return 0;
 }
 
 bool Linenoise::IsNewline(char c) {
@@ -575,7 +475,7 @@ void Linenoise::EditMoveEnd() {
 
 /* Move cursor to the start of the line. */
 void Linenoise::EditMoveStartOfLine() {
-	while (pos > 0 && buf[pos] != '\n') {
+	while (pos > 0 && buf[pos - 1] != '\n') {
 		pos--;
 	}
 	RefreshLine();
@@ -1177,7 +1077,7 @@ int Linenoise::Edit() {
 			if (Terminal::IsMultiline() && len > 0) {
 				// check if this forms a complete SQL statement or not
 				buf[len] = '\0';
-				if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
+				if (buf[0] != '.' && !AllWhitespace(buf) && !duckdb_shell::ShellState::SQLIsComplete(buf)) {
 					// not a complete SQL statement yet! continuation
 					pos = len;
 					if (c != CTRL_G) {

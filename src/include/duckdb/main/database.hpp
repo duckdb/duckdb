@@ -91,7 +91,7 @@ private:
 	unique_ptr<ExtensionManager> extension_manager;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
-	shared_ptr<LogManager> log_manager;
+	unique_ptr<LogManager> log_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ParserKeywordManager> keyword_manager;
 
@@ -117,14 +117,14 @@ public:
 	void LoadStaticExtension() {
 		T extension;
 		auto &manager = ExtensionManager::Get(*instance);
-		auto info = manager.BeginLoad(extension.Name());
-		if (!info) {
+		auto load_info = manager.BeginLoad(extension.Name());
+		if (!load_info) {
 			// already loaded - return
 			return;
 		}
 
 		// Instantiate a new loader
-		ExtensionLoader loader(*instance, extension.Name());
+		ExtensionLoader loader(*load_info);
 
 		// Call the Load method of the extension
 		extension.Load(loader);
@@ -135,7 +135,7 @@ public:
 		ExtensionInstallInfo install_info;
 		install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
 		install_info.version = extension.Version();
-		info->FinishLoad(install_info);
+		load_info->FinishLoad(install_info);
 	}
 
 	DUCKDB_API FileSystem &GetFileSystem();

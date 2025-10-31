@@ -39,6 +39,9 @@ bool TopN::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context)
 		if (child_op->has_estimated_cardinality) {
 			// only check if we should switch to full sorting if we have estimated cardinality
 			auto constant_limit = static_cast<double>(limit.limit_val.GetConstantValue());
+			if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+				constant_limit += static_cast<double>(limit.offset_val.GetConstantValue());
+			}
 			auto child_card = static_cast<double>(child_op->estimated_cardinality);
 
 			// if the limit is > 0.7% of the child cardinality, sorting the whole table is faster
@@ -127,7 +130,6 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op, &context)) {
-
 		vector<unique_ptr<LogicalOperator>> projections;
 
 		// traverse operator tree and collect all projection nodes until we reach

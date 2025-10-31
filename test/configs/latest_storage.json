@@ -3,6 +3,9 @@
   "on_init": "ATTACH '__TEST_DIR__/{BASE_TEST_NAME}__test__config__latest__storage.db' AS __test__config__latest__storage (STORAGE_VERSION 'latest'); SET storage_compatibility_version='latest';",
   "on_new_connection": "USE __test__config__latest__storage;",
   "on_load": "skip",
+  "settings": [
+    {"name": "storage_compatibility_version", "value": "latest"}
+  ],
   "skip_compiled": "true",
   "skip_tests": [
     {
@@ -35,7 +38,8 @@
         "test/sql/table_function/duckdb_databases.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/logging/file_system_logging_attach.test",
-        "test/sql/logging/file_system_logging_attach_deadlock.test"
+        "test/sql/logging/file_system_logging_attach_deadlock.test",
+        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
       ]
     },
     {

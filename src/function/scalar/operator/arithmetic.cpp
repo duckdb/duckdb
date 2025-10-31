@@ -277,7 +277,6 @@ void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<Funct
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
 unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, ScalarFunction &bound_function) {
-
 	//	// re-change the function pointers
 	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
@@ -589,7 +588,6 @@ struct DecimalNegateBindData : public FunctionData {
 
 unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
-
 	auto bind_data = make_uniq<DecimalNegateBindData>();
 
 	auto &decimal_type = arguments[0]->return_type;
@@ -861,7 +859,6 @@ struct MultiplyPropagateStatistics {
 
 unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
-
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	uint8_t result_width = 0, result_scale = 0;
@@ -1220,7 +1217,7 @@ hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, co
 
 template <>
 uhugeint_t InterpolateOperator::Operation(const uhugeint_t &lo, const double d, const uhugeint_t &hi) {
-	return Hugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
+	return Uhugeint::Convert(Operation(Uhugeint::Cast<double>(lo), d, Uhugeint::Cast<double>(hi)));
 }
 
 static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT

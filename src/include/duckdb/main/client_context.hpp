@@ -304,6 +304,8 @@ private:
 	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
 	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 
+	SettingLookupResult TryGetCurrentSettingInternal(const string &key, Value &result) const;
+
 private:
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
@@ -334,6 +336,8 @@ public:
 	QueryContext() : context(nullptr) {
 	}
 	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
+	}
+	QueryContext(ClientContext &context) : context(&context) { // NOLINT: allow implicit construction
 	}
 
 public:

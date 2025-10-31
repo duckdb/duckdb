@@ -199,6 +199,7 @@ public:
 
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
+		file_options.auto_detect_hive_partitioning = false;
 
 		for (auto &option : input.info.options) {
 			auto loption = StringUtil::Lower(option.first);
@@ -589,6 +590,7 @@ public:
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
+			data_p.async_result = SourceResultType::FINISHED;
 			return;
 		}
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
@@ -599,19 +601,44 @@ public:
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
 
-			data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+
+			if (res.GetResultType() == AsyncResultType::BLOCKED) {
+				if (scan_chunk.size() != 0) {
+					throw InternalException("Unexpected behaviour from Scan, no rows should be returned");
+				}
+				switch (data_p.results_execution_mode) {
+				case AsyncResultsExecutionMode::TASK_EXECUTOR:
+					data_p.async_result = std::move(res);
+					return;
+				case AsyncResultsExecutionMode::SYNCHRONOUS:
+					res.ExecuteTasksSynchronously();
+					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
+						throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
+					}
+					// scan_chunk.size() is 0, see check above, and result is HAVE_MORE_OUTPUT, we need to loop again
+					continue;
+				}
+			}
+
 			output.SetCardinality(scan_chunk.size());
+
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				return;
 			}
+
 			scan_chunk.Reset();
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
+				data_p.async_result = SourceResultType::FINISHED;
 				return;
 			}
 		} while (true);
+		// This is not expected to be ever taken
+		throw InternalException("MultiFileScan is malformed");
 	}
 
 	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,

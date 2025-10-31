@@ -217,15 +217,15 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 		state->QueryBegin(*this);
 	}
 
-	// Flush the old Logger
+	// Flush the old logger.
 	logger->Flush();
 
-	// Refresh the logger to ensure we are in sync with global log settings
-	LoggingContext context(LogContextScope::CONNECTION);
-	context.connection_id = connection_id;
-	context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
-	context.query_id = transaction.GetActiveQuery();
-	logger = db->GetLogManager().CreateLogger(context, true);
+	// Refresh the logger to ensure we are in sync with the global log settings.
+	LoggingContext logging_context(LogContextScope::CONNECTION);
+	logging_context.connection_id = connection_id;
+	logging_context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
+	logging_context.query_id = transaction.GetActiveQuery();
+	logger = db->GetLogManager().CreateLogger(logging_context, true);
 	DUCKDB_LOG(*this, QueryLogType, query);
 }
 
@@ -889,6 +889,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	unique_ptr<PendingQueryResult> pending;
 
+	// Start the profiler.
+	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
+
 	try {
 		BeginQueryInternal(lock, query);
 	} catch (std::exception &ex) {
@@ -900,9 +904,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		}
 		return ErrorResult<PendingQueryResult>(std::move(error), query);
 	}
-	// start the profiler
-	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
 
 	bool invalidate_query = true;
 	try {
@@ -1406,15 +1407,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) const {
-	// first check the built-in settings
-	auto &db_config = DBConfig::GetConfig(*this);
-	auto option = db_config.GetOptionByName(key);
-	if (option && option->get_setting) {
-		result = option->get_setting(*this);
-		return SettingLookupResult(SettingScope::LOCAL);
-	}
-
+SettingLookupResult ClientContext::TryGetCurrentSettingInternal(const string &key, Value &result) const {
 	// check the client session values
 	const auto &session_config_map = config.set_variables;
 
@@ -1428,6 +1421,21 @@ SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, 
 	return db->TryGetCurrentSetting(key, result);
 }
 
+SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
+	// first check the built-in settings
+	auto &db_config = DBConfig::GetConfig(*this);
+	auto option = db_config.GetOptionByName(key);
+	if (option) {
+		if (option->get_setting) {
+			result = option->get_setting(*this);
+			return SettingLookupResult(SettingScope::LOCAL);
+		}
+		// alias - search for the default key
+		return TryGetCurrentSettingInternal(option->name, result);
+	}
+	return TryGetCurrentSettingInternal(key, result);
+}
+
 ParserOptions ClientContext::GetParserOptions() const {
 	auto &client_config = ClientConfig::GetConfig(*this);
 	ParserOptions options;
@@ -1435,6 +1443,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
 	options.max_expression_depth = client_config.max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
+	options.parser_override_setting = DBConfig::GetConfig(*this).options.allow_parser_override_extension;
 	return options;
 }
 

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 
@@ -30,8 +31,8 @@ struct StorageOptions {
 
 	//! Whether the database is encrypted
 	bool encryption = false;
-	//! Encryption algorithm (default = GCM)
-	string encryption_cipher = "gcm";
+	//! Encryption algorithm
+	EncryptionTypes::CipherType encryption_cipher = EncryptionTypes::INVALID;
 	//! encryption key
 	//! FIXME: change to a unique_ptr in the future
 	shared_ptr<string> user_key;

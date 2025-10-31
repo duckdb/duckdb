@@ -112,6 +112,7 @@ public:
 			return true;
 		case LogicalTypeId::DECIMAL:
 		case LogicalTypeId::UNION:
+		case LogicalTypeId::VARIANT:
 		case LogicalTypeId::MAP:
 			if (!type.AuxInfo()) {
 				return true;
@@ -155,7 +156,6 @@ public:
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 			deserializer.Unset<LogicalType>();
 		} else {
-
 			FunctionBinder binder(context);
 
 			// Resolve templates

@@ -118,7 +118,7 @@ for file in os.listdir(keywords_dir):
     rule_name = filename_to_upper_camel(file)
     rule = f"{rule_name} <- "
     with open(os.path.join(keywords_dir, file), 'r') as f:
-        lines = [f"'{line.strip()}'i" for line in f if line.strip()]
+        lines = [f"'{line.strip()}'" for line in f if line.strip()]
         rule += " /\n".join(lines) + "\n"
     contents += rule
 

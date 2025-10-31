@@ -15,6 +15,7 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
 #include "duckdb/transaction/wal_write_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -176,7 +177,7 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	CleanupState state(lowest_active_transaction);
+	CleanupState state(QueryContext(), lowest_active_transaction);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 

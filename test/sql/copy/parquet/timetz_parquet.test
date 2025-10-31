@@ -8,6 +8,6 @@ statement ok
 PRAGMA enable_verification
 
 query II
-select * from 'data/parquet-testing/timetz_4byte_stats.parquet' order by 1;
+select * from '{DATA_DIR}/parquet-testing/timetz_4byte_stats.parquet' order by 1;
 ----
 00:00:00+00	00:00:00+00

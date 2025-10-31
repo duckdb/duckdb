@@ -14,7 +14,7 @@ CREATE TABLE test_null_option (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(1
 # test COPY ... FROM ...
 # implicitly using default NULL value
 query I
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (NULL 'NULL');
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL 'NULL');
 ----
 3
 
@@ -30,7 +30,7 @@ DELETE FROM test_null_option;
 
 # explicitly using default NULL value
 query I
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (NULL '');
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL '');
 ----
 3
 
@@ -46,7 +46,7 @@ DELETE FROM test_null_option;
 
 # make sure a quoted null string is not interpreted as a null value
 query I
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (NULL 'test');
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL 'test');
 ----
 3
 
@@ -62,7 +62,7 @@ DELETE FROM test_null_option;
 
 # setting specific NULL value
 query I
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (NULL 'null');
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL 'null');
 ----
 3
 
@@ -75,29 +75,29 @@ SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 
 # invalid parameter type
 statement error
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (NULL null);
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL null);
 ----
 NULL is not supported
 
 # delimiter must not appear in the NULL specification
 statement error
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (NULL 'null,', DELIMITER ',');
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL 'null,', DELIMITER ',');
 ----
 DELIMITER must not appear in the NULL specification and vice versa
 
 statement error
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (DELIMITER 'null', NULL 'null');
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (DELIMITER 'null', NULL 'null');
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
 statement error
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (DELIMITER 'null', NULL 'nu');
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (DELIMITER 'null', NULL 'nu');
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
 # no parameter type
 statement error
-COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (NULL);
+COPY test_null_option FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL);
 ----
 CSV Reader function option null requires a non-empty list of possible null strings (varchar) as input
 
@@ -106,14 +106,14 @@ statement ok
 CREATE TABLE test_null_option_2 (col_a INTEGER, col_b INTEGER, col_c VARCHAR(10), col_d VARCHAR(10));
 
 statement error
-COPY test_null_option_2 FROM 'data/csv/test/test_null_option.csv' (NULL 'null');
+COPY test_null_option_2 FROM '{DATA_DIR}/csv/test/test_null_option.csv' (NULL 'null');
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
 # test COPY ... TO ...
 # implicitly using default NULL value
 query I
-COPY test_null_option TO '__TEST_DIR__/test_null_option_2.csv';
+COPY test_null_option TO '{TEMP_DIR}/test_null_option_2.csv';
 ----
 3
 
@@ -121,7 +121,7 @@ statement ok
 DELETE FROM test_null_option;
 
 query I
-COPY test_null_option FROM '__TEST_DIR__/test_null_option_2.csv';
+COPY test_null_option FROM '{TEMP_DIR}/test_null_option_2.csv';
 ----
 3
 
@@ -134,7 +134,7 @@ SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 
 # explicitly using default NULL value
 query I
-COPY test_null_option TO '__TEST_DIR__/test_null_option_3.csv' (NULL '');
+COPY test_null_option TO '{TEMP_DIR}/test_null_option_3.csv' (NULL '');
 ----
 3
 
@@ -142,7 +142,7 @@ statement ok
 DELETE FROM test_null_option;
 
 query I
-COPY test_null_option FROM '__TEST_DIR__/test_null_option_3.csv' (NULL '');
+COPY test_null_option FROM '{TEMP_DIR}/test_null_option_3.csv' (NULL '');
 ----
 3
 
@@ -155,7 +155,7 @@ SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 
 # setting specific NULL value
 query I
-COPY test_null_option TO '__TEST_DIR__/test_null_option_4.csv' (NULL 'null');
+COPY test_null_option TO '{TEMP_DIR}/test_null_option_4.csv' (NULL 'null');
 ----
 3
 
@@ -163,7 +163,7 @@ statement ok
 DELETE FROM test_null_option;
 
 query I
-COPY test_null_option FROM '__TEST_DIR__/test_null_option_4.csv' (NULL 'null');
+COPY test_null_option FROM '{TEMP_DIR}/test_null_option_4.csv' (NULL 'null');
 ----
 3
 

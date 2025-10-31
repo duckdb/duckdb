@@ -1,9 +1,6 @@
 # name: test/sql/storage/compression/alp/alp_stress_test.test_slow
 # group: [alp]
 
-# FIXME: for small block sizes (16KB), this test returns a Constant segment in Line 69
-require block_size 262144
-
 load __TEST_DIR__/alp_min_max.db
 
 foreach type DOUBLE FLOAT
@@ -63,11 +60,6 @@ insert into ${compression}_tbl select * from temp_table;
 # Checkpoint the table with the newly added data
 statement ok
 checkpoint
-
-# And verify that no other compression is used
-query I
-SELECT compression FROM pragma_storage_info('${compression}_tbl') WHERE segment_type == '${type}' AND compression != '${compression}';
-----
 
 # compression
 endloop

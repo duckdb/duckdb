@@ -1,118 +1,44 @@
-diff --git a/src/include/sqlsmith_extension.hpp b/src/include/sqlsmith_extension.hpp
-index 4cd16f7..1e43766 100644
---- a/src/include/sqlsmith_extension.hpp
-+++ b/src/include/sqlsmith_extension.hpp
-@@ -14,7 +14,7 @@ namespace duckdb {
- 
- class SqlsmithExtension : public Extension {
- public:
--	void Load(DuckDB &db) override;
-+	void Load(ExtensionLoader &loader) override;
- 	std::string Name() override;
- 	std::string Version() const override;
- };
-diff --git a/src/sqlsmith_extension.cpp b/src/sqlsmith_extension.cpp
-index f995e73..29b7c37 100644
---- a/src/sqlsmith_extension.cpp
-+++ b/src/sqlsmith_extension.cpp
-@@ -1,5 +1,3 @@
--#define DUCKDB_EXTENSION_MAIN
--
- #include "sqlsmith_extension.hpp"
- #include "statement_simplifier.hpp"
- #include "fuzzyduck.hpp"
-@@ -8,7 +6,7 @@
- #include "duckdb.hpp"
- #include "duckdb/function/table_function.hpp"
- #include "duckdb/parser/parser.hpp"
--#include "duckdb/main/extension_util.hpp"
-+#include "duckdb/main/extension/extension_loader.hpp"
- 
- namespace duckdb {
- 
-@@ -170,8 +168,7 @@ static void FuzzAllFunctions(ClientContext &context, TableFunctionInput &data_p,
- 	data.finished = true;
- }
- 
--void SqlsmithExtension::Load(DuckDB &db) {
--	auto &db_instance = *db.instance;
-+static void LoadInternal(ExtensionLoader &loader) {
- 
- 	TableFunction sqlsmith_func("sqlsmith", {}, SQLSmithFunction, SQLSmithBind);
- 	sqlsmith_func.named_parameters["seed"] = LogicalType::INTEGER;
-@@ -182,7 +179,7 @@ void SqlsmithExtension::Load(DuckDB &db) {
- 	sqlsmith_func.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
- 	sqlsmith_func.named_parameters["complete_log"] = LogicalType::VARCHAR;
- 	sqlsmith_func.named_parameters["log"] = LogicalType::VARCHAR;
--	ExtensionUtil::RegisterFunction(db_instance, sqlsmith_func);
-+	loader.RegisterFunction(sqlsmith_func);
- 
- 	TableFunction fuzzy_duck_fun("fuzzyduck", {}, FuzzyDuckFunction, FuzzyDuckBind);
- 	fuzzy_duck_fun.named_parameters["seed"] = LogicalType::INTEGER;
-@@ -191,17 +188,20 @@ void SqlsmithExtension::Load(DuckDB &db) {
- 	fuzzy_duck_fun.named_parameters["complete_log"] = LogicalType::VARCHAR;
- 	fuzzy_duck_fun.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
- 	fuzzy_duck_fun.named_parameters["enable_verification"] = LogicalType::BOOLEAN;
--	ExtensionUtil::RegisterFunction(db_instance, fuzzy_duck_fun);
-+	loader.RegisterFunction(fuzzy_duck_fun);
- 
- 	TableFunction fuzz_all_functions("fuzz_all_functions", {}, FuzzAllFunctions, FuzzyDuckBind);
- 	fuzz_all_functions.named_parameters["seed"] = LogicalType::INTEGER;
- 	fuzz_all_functions.named_parameters["log"] = LogicalType::VARCHAR;
- 	fuzz_all_functions.named_parameters["complete_log"] = LogicalType::VARCHAR;
- 	fuzz_all_functions.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
--	ExtensionUtil::RegisterFunction(db_instance, fuzz_all_functions);
-+	loader.RegisterFunction(fuzz_all_functions);
- 
- 	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
--	ExtensionUtil::RegisterFunction(db_instance, reduce_sql_function);
-+	loader.RegisterFunction(reduce_sql_function);
-+}
-+void SqlsmithExtension::Load(ExtensionLoader &loader) {
-+	LoadInternal(loader);
- }
- 
- std::string SqlsmithExtension::Name() {
-@@ -220,16 +220,8 @@ std::string SqlsmithExtension::Version() const {
- 
- extern "C" {
- 
--DUCKDB_EXTENSION_API void sqlsmith_init(duckdb::DatabaseInstance &db) {
--	duckdb::DuckDB db_wrapper(db);
--	db_wrapper.LoadExtension<duckdb::SqlsmithExtension>();
-+DUCKDB_CPP_EXTENSION_ENTRY(sqlsmith, loader) {
-+	duckdb::LoadInternal(loader);
- }
- 
--DUCKDB_EXTENSION_API const char *sqlsmith_version() {
--	return duckdb::DuckDB::LibraryVersion();
--}
- }
--
--#ifndef DUCKDB_EXTENSION_MAIN
--#error DUCKDB_EXTENSION_MAIN not defined
--#endif
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index 325fb0a..fc34c7c 100644
+index fc34c7c..5defc4e 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
-@@ -34,7 +34,7 @@ struct GeneratorContext {
- 	vector<reference<CatalogEntry>> table_functions;
- 	vector<reference<CatalogEntry>> pragma_functions;
- 	vector<reference<CatalogEntry>> tables_and_views;
--	vector<reference<AttachedDatabase>> attached_databases;
-+	vector<shared_ptr<AttachedDatabase>> attached_databases;
- };
- 
- StatementGenerator::StatementGenerator(ClientContext &context) : context(context), parent(nullptr), depth(0) {
-@@ -216,8 +216,8 @@ unique_ptr<DetachInfo> StatementGenerator::GenerateDetachInfo() {
- 
- std::string StatementGenerator::GetRandomAttachedDataBase() {
- 	auto state = GetDatabaseState(context);
--	auto st_name = state->attached_databases[RandomValue(state->attached_databases.size())];
--	auto name = st_name.get().name;
-+	auto &st_name = *state->attached_databases[RandomValue(state->attached_databases.size())];
-+	auto name = st_name.name;
- 	return name;
+@@ -373,8 +373,9 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
+ 		GenerateCTEs(*setop);
+ 		setop->setop_type = Choose<SetOperationType>({SetOperationType::EXCEPT, SetOperationType::INTERSECT,
+ 		                                              SetOperationType::UNION, SetOperationType::UNION_BY_NAME});
+-		setop->left = GenerateQueryNode();
+-		setop->right = GenerateQueryNode();
++		for(idx_t i = 0; i < 2; i++) {
++			setop->children.push_back(GenerateQueryNode());
++		}
+ 		switch (setop->setop_type) {
+ 		case SetOperationType::EXCEPT:
+ 		case SetOperationType::INTERSECT:
+diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
+index 2cd7f06..4602928 100644
+--- a/src/statement_simplifier.cpp
++++ b/src/statement_simplifier.cpp
+@@ -196,8 +196,9 @@ void StatementSimplifier::Simplify(SelectNode &node) {
  }
  
+ void StatementSimplifier::Simplify(SetOperationNode &node) {
+-	Simplify(node.left);
+-	Simplify(node.right);
++	for(auto &child : node.children) {
++		Simplify(child);
++	}
+ }
+ 
+ void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
+@@ -218,8 +219,9 @@ void StatementSimplifier::Simplify(unique_ptr<QueryNode> &node) {
+ 		break;
+ 	case QueryNodeType::SET_OPERATION_NODE: {
+ 		auto &setop = node->Cast<SetOperationNode>();
+-		SimplifyReplace(node, setop.left);
+-		SimplifyReplace(node, setop.right);
++		for(auto &child : setop.children) {
++			SimplifyReplace(node, child);
++		}
+ 		Simplify(setop);
+ 		break;
+ 	}

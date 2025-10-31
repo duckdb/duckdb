@@ -60,11 +60,12 @@ SELECT * FROM tbl1;
 statement error
 CREATE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
 ----
+Parser Error: syntax error at or near "IF"
 
 statement error
 CREATE OR REPLACE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
 ----
-
+Parser Error: syntax error at or near "IF"
 
 ### CREATE TABLE t(col1, col2) AS SELECT ... 
 statement ok

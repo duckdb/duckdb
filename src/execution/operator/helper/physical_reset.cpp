@@ -36,8 +36,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 			auto extension_name = Catalog::AutoloadExtensionByConfigName(context.client, name);
 			entry = config.extension_parameters.find(name.ToStdString());
 			if (entry == config.extension_parameters.end()) {
-				throw InvalidInputException("Extension parameter %s was not found after autoloading",
-				                            name.ToStdString());
+				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
 		ResetExtensionVariable(context, config, entry->second);
@@ -65,9 +64,9 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 		}
 		if (variable_scope == SetScope::SESSION) {
 			auto &client_config = ClientConfig::GetConfig(context.client);
-			client_config.set_variables.erase(name.ToStdString());
+			client_config.set_variables.erase(option->name);
 		} else {
-			config.ResetGenericOption(name);
+			config.ResetGenericOption(option->name);
 		}
 		return SourceResultType::FINISHED;
 	}

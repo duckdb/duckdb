@@ -190,7 +190,6 @@ public:
 template <typename OP>
 static void WindowDeltaScanner(ColumnDataCollection &collection, idx_t block_begin, idx_t block_end,
                                const vector<column_t> &scan_cols, const idx_t key_count, OP operation) {
-
 	//	Stop if there is no work to do
 	if (!collection.Count()) {
 		return;

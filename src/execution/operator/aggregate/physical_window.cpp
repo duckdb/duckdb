@@ -218,7 +218,6 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
                                PhysicalOperatorType type)
     : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
       select_list(std::move(select_list_p)), order_idx(0), is_order_dependent(false) {
-
 	idx_t max_orders = 0;
 	for (idx_t i = 0; i < select_list.size(); ++i) {
 		auto &expr = select_list[i];
@@ -271,7 +270,6 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 
 WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &client)
     : op(op), client(client), count(0) {
-
 	D_ASSERT(op.select_list[op.order_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 	auto &wexpr = op.select_list[op.order_idx]->Cast<BoundWindowExpression>();
 
@@ -334,6 +332,12 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	return global_partition.MaterializeHashGroups(pipeline, event, *this, hfinalize);
 }
 
+ProgressData PhysicalWindow::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+                                             const ProgressData source_progress) const {
+	auto &gsink = gstate.Cast<WindowGlobalSinkState>();
+	return gsink.global_partition->GetSinkProgress(context, *gsink.hashed_sink, source_progress);
+}
+
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
@@ -381,8 +385,8 @@ public:
 	atomic<idx_t> finished;
 	//! Stop producing tasks
 	atomic<bool> stopped;
-	//! The number of rows returned
-	atomic<idx_t> returned;
+	//! The number of tasks completed. This will combine both build and evaluate.
+	atomic<idx_t> completed;
 
 public:
 	idx_t MaxThreads() override {
@@ -397,8 +401,7 @@ protected:
 };
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &client, WindowGlobalSinkState &gsink_p)
-    : client(client), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false), returned(0) {
-
+    : client(client), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false), completed(0) {
 	auto &global_partition = *gsink.global_partition;
 	auto hashed_source = global_partition.GetGlobalSourceState(client, *gsink.hashed_sink);
 	auto &hash_groups = global_partition.GetHashGroups(*hashed_source);
@@ -888,6 +891,9 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 		auto &v = active_groups;
 		v.erase(std::remove(v.begin(), v.end(), group_idx), v.end());
 	}
+
+	//	Count the global tasks completed.
+	++completed;
 }
 
 bool WindowLocalSourceState::TryAssignTask() {
@@ -1020,17 +1026,20 @@ OrderPreservationType PhysicalWindow::SourceOrder() const {
 
 ProgressData PhysicalWindow::GetProgress(ClientContext &client, GlobalSourceState &gsource_p) const {
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
-	const auto returned = gsource.returned.load();
-
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.count.load();
+	const auto completed = gsource.completed.load();
+
 	ProgressData res;
 	if (count) {
-		res.done = double(returned);
-		res.total = double(count);
+		res.done = double(completed);
+		res.total = double(gsource.total_tasks);
+		//	Convert to tuples.
+		res.Normalize(double(count));
 	} else {
 		res.SetInvalid();
 	}
+
 	return res;
 }
 
@@ -1070,8 +1079,6 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 			}
 		}
 	}
-
-	gsource.returned += chunk.size();
 
 	if (chunk.size() == 0) {
 		return SourceResultType::FINISHED;

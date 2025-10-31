@@ -210,15 +210,4 @@ inline bool GreaterThan::Operation(const interval_t &left, const interval_t &rig
 	return Interval::GreaterThan(left, right);
 }
 
-//===--------------------------------------------------------------------===//
-// Specialized Hugeint Comparison Operators
-//===--------------------------------------------------------------------===//
-template <>
-inline bool Equals::Operation(const hugeint_t &left, const hugeint_t &right) {
-	return Hugeint::Equals(left, right);
-}
-template <>
-inline bool GreaterThan::Operation(const hugeint_t &left, const hugeint_t &right) {
-	return Hugeint::GreaterThan(left, right);
-}
 } // namespace duckdb

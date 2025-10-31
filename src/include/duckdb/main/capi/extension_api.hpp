@@ -487,6 +487,19 @@ typedef struct {
 	                                                  duckdb_arrow_converted_schema converted_schema,
 	                                                  duckdb_data_chunk *out_chunk);
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
+	// New configuration options functions
+
+	duckdb_config_option (*duckdb_create_config_option)();
+	void (*duckdb_destroy_config_option)(duckdb_config_option *option);
+	void (*duckdb_config_option_set_name)(duckdb_config_option option, const char *name);
+	void (*duckdb_config_option_set_type)(duckdb_config_option option, duckdb_logical_type type);
+	void (*duckdb_config_option_set_default_value)(duckdb_config_option option, duckdb_value default_value);
+	void (*duckdb_config_option_set_default_scope)(duckdb_config_option option,
+	                                               duckdb_config_option_scope default_scope);
+	void (*duckdb_config_option_set_description)(duckdb_config_option option, const char *description);
+	duckdb_state (*duckdb_register_config_option)(duckdb_connection connection, duckdb_config_option option);
+	duckdb_value (*duckdb_client_context_get_config_option)(duckdb_client_context context, const char *name,
+	                                                        duckdb_config_option_scope *out_scope);
 	// New functions for duckdb error data
 
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -501,6 +514,26 @@ typedef struct {
 	bool (*duckdb_expression_is_foldable)(duckdb_expression expr);
 	duckdb_error_data (*duckdb_expression_fold)(duckdb_client_context context, duckdb_expression expr,
 	                                            duckdb_value *out_value);
+	// API to manage file system operations
+
+	duckdb_file_system (*duckdb_client_context_get_file_system)(duckdb_client_context context);
+	void (*duckdb_destroy_file_system)(duckdb_file_system *file_system);
+	duckdb_state (*duckdb_file_system_open)(duckdb_file_system file_system, const char *path,
+	                                        duckdb_file_open_options options, duckdb_file_handle *out_file);
+	duckdb_error_data (*duckdb_file_system_error_data)(duckdb_file_system file_system);
+	duckdb_file_open_options (*duckdb_create_file_open_options)();
+	duckdb_state (*duckdb_file_open_options_set_flag)(duckdb_file_open_options options, duckdb_file_flag flag,
+	                                                  bool value);
+	void (*duckdb_destroy_file_open_options)(duckdb_file_open_options *options);
+	void (*duckdb_destroy_file_handle)(duckdb_file_handle *file_handle);
+	duckdb_error_data (*duckdb_file_handle_error_data)(duckdb_file_handle file_handle);
+	duckdb_state (*duckdb_file_handle_close)(duckdb_file_handle file_handle);
+	int64_t (*duckdb_file_handle_read)(duckdb_file_handle file_handle, void *buffer, int64_t size);
+	int64_t (*duckdb_file_handle_write)(duckdb_file_handle file_handle, const void *buffer, int64_t size);
+	duckdb_state (*duckdb_file_handle_seek)(duckdb_file_handle file_handle, int64_t position);
+	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file_handle);
+	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file_handle);
+	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
 	// New functions around the client context
 
 	idx_t (*duckdb_client_context_get_connection_id)(duckdb_client_context context);
@@ -509,6 +542,13 @@ typedef struct {
 	duckdb_value (*duckdb_get_table_names)(duckdb_connection connection, const char *query, bool qualified);
 	void (*duckdb_connection_get_arrow_options)(duckdb_connection connection, duckdb_arrow_options *out_arrow_options);
 	void (*duckdb_destroy_arrow_options)(duckdb_arrow_options *arrow_options);
+	// API to get information about the results of a prepared statement
+
+	idx_t (*duckdb_prepared_statement_column_count)(duckdb_prepared_statement prepared_statement);
+	const char *(*duckdb_prepared_statement_column_name)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+	duckdb_logical_type (*duckdb_prepared_statement_column_logical_type)(duckdb_prepared_statement prepared_statement,
+	                                                                     idx_t col_idx);
+	duckdb_type (*duckdb_prepared_statement_column_type)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
 	// New query execution functions
 
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
@@ -527,6 +567,11 @@ typedef struct {
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
+	// New functions around the table description
+
+	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
+	duckdb_logical_type (*duckdb_table_description_get_column_type)(duckdb_table_description table_description,
+	                                                                idx_t index);
 	// New functions around table function binding
 
 	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
@@ -971,6 +1016,15 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_schema_from_arrow = duckdb_schema_from_arrow;
 	result.duckdb_data_chunk_from_arrow = duckdb_data_chunk_from_arrow;
 	result.duckdb_destroy_arrow_converted_schema = duckdb_destroy_arrow_converted_schema;
+	result.duckdb_create_config_option = duckdb_create_config_option;
+	result.duckdb_destroy_config_option = duckdb_destroy_config_option;
+	result.duckdb_config_option_set_name = duckdb_config_option_set_name;
+	result.duckdb_config_option_set_type = duckdb_config_option_set_type;
+	result.duckdb_config_option_set_default_value = duckdb_config_option_set_default_value;
+	result.duckdb_config_option_set_default_scope = duckdb_config_option_set_default_scope;
+	result.duckdb_config_option_set_description = duckdb_config_option_set_description;
+	result.duckdb_register_config_option = duckdb_register_config_option;
+	result.duckdb_client_context_get_config_option = duckdb_client_context_get_config_option;
 	result.duckdb_create_error_data = duckdb_create_error_data;
 	result.duckdb_destroy_error_data = duckdb_destroy_error_data;
 	result.duckdb_error_data_error_type = duckdb_error_data_error_type;
@@ -980,12 +1034,32 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_expression_return_type = duckdb_expression_return_type;
 	result.duckdb_expression_is_foldable = duckdb_expression_is_foldable;
 	result.duckdb_expression_fold = duckdb_expression_fold;
+	result.duckdb_client_context_get_file_system = duckdb_client_context_get_file_system;
+	result.duckdb_destroy_file_system = duckdb_destroy_file_system;
+	result.duckdb_file_system_open = duckdb_file_system_open;
+	result.duckdb_file_system_error_data = duckdb_file_system_error_data;
+	result.duckdb_create_file_open_options = duckdb_create_file_open_options;
+	result.duckdb_file_open_options_set_flag = duckdb_file_open_options_set_flag;
+	result.duckdb_destroy_file_open_options = duckdb_destroy_file_open_options;
+	result.duckdb_destroy_file_handle = duckdb_destroy_file_handle;
+	result.duckdb_file_handle_error_data = duckdb_file_handle_error_data;
+	result.duckdb_file_handle_close = duckdb_file_handle_close;
+	result.duckdb_file_handle_read = duckdb_file_handle_read;
+	result.duckdb_file_handle_write = duckdb_file_handle_write;
+	result.duckdb_file_handle_seek = duckdb_file_handle_seek;
+	result.duckdb_file_handle_tell = duckdb_file_handle_tell;
+	result.duckdb_file_handle_sync = duckdb_file_handle_sync;
+	result.duckdb_file_handle_size = duckdb_file_handle_size;
 	result.duckdb_client_context_get_connection_id = duckdb_client_context_get_connection_id;
 	result.duckdb_destroy_client_context = duckdb_destroy_client_context;
 	result.duckdb_connection_get_client_context = duckdb_connection_get_client_context;
 	result.duckdb_get_table_names = duckdb_get_table_names;
 	result.duckdb_connection_get_arrow_options = duckdb_connection_get_arrow_options;
 	result.duckdb_destroy_arrow_options = duckdb_destroy_arrow_options;
+	result.duckdb_prepared_statement_column_count = duckdb_prepared_statement_column_count;
+	result.duckdb_prepared_statement_column_name = duckdb_prepared_statement_column_name;
+	result.duckdb_prepared_statement_column_logical_type = duckdb_prepared_statement_column_logical_type;
+	result.duckdb_prepared_statement_column_type = duckdb_prepared_statement_column_type;
 	result.duckdb_result_get_arrow_options = duckdb_result_get_arrow_options;
 	result.duckdb_scalar_function_set_bind = duckdb_scalar_function_set_bind;
 	result.duckdb_scalar_function_bind_set_error = duckdb_scalar_function_bind_set_error;
@@ -997,6 +1071,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_scalar_function_bind_get_argument = duckdb_scalar_function_bind_get_argument;
 	result.duckdb_scalar_function_set_bind_data_copy = duckdb_scalar_function_set_bind_data_copy;
 	result.duckdb_value_to_string = duckdb_value_to_string;
+	result.duckdb_table_description_get_column_count = duckdb_table_description_get_column_count;
+	result.duckdb_table_description_get_column_type = duckdb_table_description_get_column_type;
 	result.duckdb_table_function_get_client_context = duckdb_table_function_get_client_context;
 	result.duckdb_create_map_value = duckdb_create_map_value;
 	result.duckdb_create_union_value = duckdb_create_union_value;
