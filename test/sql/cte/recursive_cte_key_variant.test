@@ -23,7 +23,7 @@ WITH RECURSIVE tbl2(a, b) USING KEY (a) AS (SELECT 5, 1 UNION SELECT a, b + 1 FR
 statement error
 WITH RECURSIVE tbl(a) USING KEY (b) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a, (SELECT * FROM recurring.tbl AS d WHERE d.a = 1) AS b WHERE a.a < 2) SELECT * FROM tbl;
 ----
-Binder Error: Referenced column "b" was not found because the FROM clause is missing
+Binder Error: Referenced column "b" not found in FROM clause!
 
 statement error
 WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION ALL SELECT a+1 FROM tbl) SELECT * FROM tbl;

@@ -8,32 +8,32 @@ CREATE TABLE t0 (c0 INT);
 statement error
 INSERT INTO t0 VALUES (1) RETURNING c0, rowid;
 ----
-Binder Error: Referenced column "rowid" was not found because the FROM clause is missing
+Binder Error: Referenced column "rowid" not found in FROM clause!
 
 statement error
 INSERT INTO t0 VALUES (1), (2), (3) RETURNING *, rowid;
 ----
-Binder Error: Referenced column "rowid" was not found because the FROM clause is missing
+Binder Error: Referenced column "rowid" not found in FROM clause!
 
 statement error
 INSERT INTO t0 VALUES (4) RETURNING c0 + rowid;
 ----
-Binder Error: Referenced column "rowid" was not found because the FROM clause is missing
+Binder Error: Referenced column "rowid" not found in FROM clause!
 
 statement error
 INSERT INTO t0 VALUES (1) RETURNING rowid c2;
 ----
-Binder Error: Referenced column "rowid" was not found because the FROM clause is missing
+Binder Error: Referenced column "rowid" not found in FROM clause!
 
 statement error
 UPDATE t0 SET c0 = 5 WHERE c0 = 0 RETURNING rowid;
 ----
-Binder Error: Referenced column "rowid" was not found because the FROM clause is missing
+Binder Error: Referenced column "rowid" not found in FROM clause!
 
 statement error
 DELETE FROM t0 WHERE c0 = 0 RETURNING rowid;
 ----
-Binder Error: Referenced column "rowid" was not found because the FROM clause is missing
+Binder Error: Referenced column "rowid" not found in FROM clause!
 
 # make sure you can still return the alias rowid
 # More tests could be written, but the returning binder doesn't allow
@@ -57,4 +57,4 @@ CREATE TABLE t1 (c1 AS ('abc'), c2 INT);
 statement error
 INSERT INTO t1 SELECT 1 RETURNING rowid c1;
 ----
-Binder Error: Referenced column "rowid" was not found because the FROM clause is missing
+Binder Error: Referenced column "rowid" not found in FROM clause!

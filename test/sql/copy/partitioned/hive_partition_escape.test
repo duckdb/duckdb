@@ -53,7 +53,7 @@ from parquet_scan('__TEST_DIR__/escaped_partitions_names/**/*.parquet')
 GROUP BY ALL
 ORDER BY ALL
 ----
-Binder Error: Referenced column "=/ \\/" was not found because the FROM clause is missing
+Binder Error: Referenced column "=/ \\/" not found in FROM clause!
 
 
 # if we write the partition column on files, it can be read
