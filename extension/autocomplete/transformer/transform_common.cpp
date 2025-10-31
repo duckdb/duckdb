@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
 
@@ -239,6 +240,9 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 	if (type_or_character_pr->name == "QualifiedTypeName") {
 		auto qualified_type_name = transformer.Transform<QualifiedName>(type_or_character_pr);
 		result = LogicalType(TransformStringToLogicalTypeId(qualified_type_name.name));
+		if (result.id() == LogicalTypeId::USER) {
+			result = LogicalType::USER(qualified_type_name.name);
+		}
 	} else if (type_or_character_pr->name == "CharacterType") {
 		result = transformer.Transform<LogicalType>(type_or_character_pr);
 	} else {

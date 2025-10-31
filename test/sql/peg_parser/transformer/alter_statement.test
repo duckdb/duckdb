@@ -14,6 +14,30 @@ PRAGMA enable_verification
 statement ok
 set allow_parser_override_extension=strict_when_supported;
 
+statement ok
+CREATE TYPE mood AS ENUM (
+	'sad',
+	'ok',
+	'happy'
+);
+
+statement ok
+CREATE TABLE person (
+	id INTEGER,
+	c STRUCT(
+		name text,
+		current_mood mood
+    )
+);
+
+statement error
+ALTER TABLE person ADD COLUMN c STRUCT(
+                name text,
+                current_mood mood
+    );
+----
+Catalog Error: Column with name c already exists!
+
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 ----
@@ -75,13 +99,7 @@ ALTER TABLE aliens ADD COLUMN iq_level intelligence;
 ----
 Catalog Error: Table with name aliens does not exist!
 
-statement error
-ALTER TABLE person ADD COLUMN c STRUCT(
-                name text,
-                current_mood mood
-    );
-----
-Catalog Error: Table with name person does not exist!
+
 
 statement error
 ALTER TABLE t0 ALTER c1 TYPE TIMESTAMP;
