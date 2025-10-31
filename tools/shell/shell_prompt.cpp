@@ -1,4 +1,6 @@
 #include "shell_prompt.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb_shell {
 
@@ -89,7 +91,25 @@ string Prompt::HandleColor(const PromptComponent &component) {
 
 void Prompt::AddComponent(const string &bracket_type, const string &value) {
 	PromptComponent component;
-	if (bracket_type == "sql") {
+	if (bracket_type == "setting") {
+		if (value.empty()) {
+			throw InvalidInputException("setting requires a parameter");
+		}
+		vector<string> supported_settings {"current_database", "current_schema", "current_database_and_schema"};
+		bool found = false;
+		for (auto &entry : supported_settings) {
+			if (value == entry) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			throw InvalidInputException("unsupported setting \"%s\" for setting, supported values: %s", value,
+			                            StringUtil::Join(supported_settings, ", "));
+		}
+		component.type = PromptComponentType::SETTING;
+		component.literal = value;
+	} else if (bracket_type == "sql") {
 		if (value.empty()) {
 			throw InvalidInputException("sql requires a parameter");
 		}
@@ -272,6 +292,29 @@ string Prompt::EvaluateSQL(ShellState &state, const string &sql) {
 	return "#EMPTY#";
 }
 
+string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
+	if (!state.conn) {
+		return component.literal == "current_schema" ? "main" : "memory";
+	}
+	auto &con = *state.conn;
+	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(*con.context);
+	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
+	;
+	if (component.literal == "current_database") {
+		return current_db;
+	}
+	if (component.literal == "current_schema") {
+		return current_schema;
+	}
+	if (component.literal == "current_database_and_schema") {
+		if (current_schema == "main") {
+			return current_db;
+		} else {
+			return current_db + "." + current_schema;
+		}
+	}
+	throw InternalException("Unsupported setting %s", component.literal);
+}
 string Prompt::GeneratePrompt(ShellState &state) {
 	string prompt;
 	for (auto &component : components) {
@@ -287,6 +330,9 @@ string Prompt::GeneratePrompt(ShellState &state) {
 		case PromptComponentType::RESET_COLOR:
 		case PromptComponentType::SET_COLOR_RGB:
 			prompt += HandleColor(component);
+			break;
+		case PromptComponentType::SETTING:
+			prompt += HandleSetting(state, component);
 			break;
 		default:
 			throw InternalException("Invalid prompt component");

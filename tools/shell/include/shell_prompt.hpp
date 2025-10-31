@@ -13,7 +13,7 @@
 
 namespace duckdb_shell {
 
-enum class PromptComponentType { LITERAL, SQL, SET_COLOR, SET_INTENSITY, RESET_COLOR, SET_COLOR_RGB };
+enum class PromptComponentType { LITERAL, SQL, SET_COLOR, SET_INTENSITY, RESET_COLOR, SET_COLOR_RGB, SETTING };
 
 struct PromptComponent {
 	PromptComponentType type;
@@ -41,6 +41,7 @@ private:
 	void AddComponent(const string &bracket_type, const string &value);
 	string EvaluateSQL(ShellState &state, const string &sql);
 	string HandleColor(const PromptComponent &component);
+	string HandleSetting(ShellState &state, const PromptComponent &component);
 };
 
 } // namespace duckdb_shell
