@@ -14,7 +14,17 @@ void Prompt::AddLiteral(const string &str) {
 }
 
 void Prompt::AddComponent(const string &bracket_type, const string &value) {
-	throw InvalidInputException("Unknown bracket type %s", bracket_type);
+	PromptComponent component;
+	if (bracket_type == "sql") {
+		if (value.empty()) {
+			throw InvalidInputException("sql requires a parameter", bracket_type);
+		}
+		component.type = PromptComponentType::SQL;
+		component.literal = value;
+	} else {
+		throw InvalidInputException("Unknown bracket type %s", bracket_type);
+	}
+	components.push_back(std::move(component));
 }
 
 void Prompt::ParsePrompt(const string &prompt) {
@@ -78,8 +88,8 @@ void Prompt::ParsePrompt(const string &prompt) {
 			}
 			break;
 		case PromptParseState::PARSE_BRACKET_CONTENT:
-			switch (c)
-			case '}': {
+			switch (c) {
+			case '}':
 				// closing bracket - we have terminated the bracket - add the component
 				AddComponent(bracket_type, literal);
 				bracket_type.clear();
@@ -94,18 +104,39 @@ void Prompt::ParsePrompt(const string &prompt) {
 			default:
 				literal += c;
 				break;
-			} break;
-			default:
-				throw InternalException("Invalid prompt state");
+			}
+			break;
+		default:
+			throw InternalException("Invalid prompt state");
 		}
 	}
 	if (parse_state != PromptParseState::STANDARD) {
-		throw InvalidInputException("Failed to parse prompt - unterminated bracket or escape");
+		throw InvalidInputException("Failed to parse prompt \"%s\" - unterminated bracket or escape", prompt);
 	}
 	if (!literal.empty()) {
 		AddLiteral(literal);
 		literal.clear();
 	}
+}
+
+string Prompt::EvaluateSQL(ShellState &state, const string &sql) {
+	state.OpenDB();
+	auto &con = *state.conn;
+	auto result = con.Query(sql);
+	if (result->HasError()) {
+		return "#ERROR#:" + result->GetError();
+	}
+	auto &collection = result->Collection();
+	if (collection.Count() > 1) {
+		return "#TOO MANY ROWS#";
+	}
+	if (collection.ColumnCount() != 1) {
+		return "#TOO MANY COLUMNS#";
+	}
+	for (auto &row : collection.Rows()) {
+		return row.GetValue(0).ToString();
+	}
+	return "#EMPTY#";
 }
 
 string Prompt::GeneratePrompt(ShellState &state) {
@@ -114,6 +145,9 @@ string Prompt::GeneratePrompt(ShellState &state) {
 		switch (component.type) {
 		case PromptComponentType::LITERAL:
 			prompt += component.literal;
+			break;
+		case PromptComponentType::SQL:
+			prompt += EvaluateSQL(state, component.literal);
 			break;
 		default:
 			throw InternalException("Invalid prompt component");

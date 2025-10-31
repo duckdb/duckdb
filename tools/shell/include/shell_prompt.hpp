@@ -39,6 +39,7 @@ private:
 private:
 	void AddLiteral(const string &str);
 	void AddComponent(const string &bracket_type, const string &value);
+	string EvaluateSQL(ShellState &state, const string &sql);
 };
 
 } // namespace duckdb_shell
