@@ -42,6 +42,7 @@ using duckdb::unordered_map;
 struct ShellState;
 using duckdb::InternalException;
 using duckdb::InvalidInputException;
+using duckdb::to_string;
 struct Prompt;
 
 using idx_t = uint64_t;

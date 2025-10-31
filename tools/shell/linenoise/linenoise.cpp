@@ -194,7 +194,41 @@ size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
 	size_t render_width = 0;
 	int sz;
 	while (cpos < len) {
-		if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
+		// --- 1. Handle newline ---
+		if (buf[cpos] == '\n') {
+			render_width = 0; // reset width for new line
+			cpos++;
+			continue;
+		}
+
+		// --- 2. Handle tab (optional, usually 8-space tab stops) ---
+		if (buf[cpos] == '\t') {
+			render_width += 8 - (render_width % 8);
+			cpos++;
+			continue;
+		}
+
+		// --- 3. Handle ANSI escape sequences ---
+		if (buf[cpos] == '\033') {
+			cpos++;
+			if (cpos < len && buf[cpos] == '[') { // CSI sequence
+				cpos++;
+				while (cpos < len && !(buf[cpos] >= '@' && buf[cpos] <= '~')) {
+					cpos++;
+				}
+				if (cpos < len)
+					cpos++; // skip final letter
+			} else {
+				// standalone ESC
+				cpos++;
+			}
+			continue; // width does not increase
+		}
+
+		// --- 4. Handle UTF-8 grapheme clusters ---
+		int codepoint = duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz);
+		if (codepoint < 0) {
+			// invalid byte, treat as width 1
 			cpos++;
 			render_width++;
 			continue;
