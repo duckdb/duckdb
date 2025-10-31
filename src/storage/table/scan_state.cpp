@@ -252,7 +252,7 @@ CollectionScanState::CollectionScanState(TableScanState &parent_p)
 
 optional_ptr<RowGroup> CollectionScanState::GetNextRowGroup(optional_ptr<RowGroup> row_group) const {
 	if (reorderer) {
-		return *reorderer->GetNextRowGroup(row_group);
+		return reorderer->GetNextRowGroup(row_group);
 	}
 	return row_groups->GetNextSegment(row_group.get());
 }
@@ -303,7 +303,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 		if (result.size() > 0) {
 			return true;
 		} else {
-			row_group = GetNextRowGroup(l, *row_group).get();
+			row_group = GetNextRowGroup(l, row_group).get();
 			if (row_group) {
 				row_group->InitializeScan(*this);
 			}
@@ -319,7 +319,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 			return true;
 		}
 
-		row_group = GetNextRowGroup(*row_group).get();
+		row_group = GetNextRowGroup(row_group).get();
 		if (row_group) {
 			row_group->InitializeScan(*this);
 		}
