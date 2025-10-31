@@ -2985,6 +2985,15 @@ int ShellState::ProcessInput(InputMode mode) {
 		} else {
 			numCtrlC = 0;
 		}
+		if (mode == InputMode::DUCKDB_RC && !StringUtil::StartsWith(zLine, ".startup_text")) {
+			if (startup_text == StartupText::ALL) {
+				ShellHighlight highlight(*this);
+				highlight.PrintText(StringUtil::Format("-- Loading resources from %s\n", duckdb_rc_path),
+				                    PrintOutput::STDERR, HighlightElementType::STARTUP_TEXT);
+				displayed_loading_resources_message = true;
+			}
+			mode = InputMode::FILE;
+		}
 		if (seenInterrupt) {
 			if (in) {
 				break;
@@ -3004,8 +3013,9 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			if (zLine[0] == '.') {
 #ifndef SHELL_USE_LOCAL_GETLINE
-				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3')
+				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3') {
 					shell_add_history(zLine);
+				}
 #endif
 				rc = DoMetaCommand(zLine);
 				if (rc == 2) { /* exit requested */
@@ -3084,12 +3094,12 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 
 	in = fopen(file.c_str(), "rb");
 	if (in) {
+		InputMode input_mode = InputMode::FILE;
 		if (stdin_is_interactive && is_duckdb_rc) {
-			ShellHighlight highlight(*this);
-			highlight.PrintText(StringUtil::Format("-- Loading resources from %s\n", file.c_str()), PrintOutput::STDERR,
-			                    HighlightElementType::STARTUP_TEXT);
+			input_mode = InputMode::DUCKDB_RC;
+			duckdb_rc_path = file;
 		}
-		rc = ProcessInput(InputMode::FILE);
+		rc = ProcessInput(input_mode);
 		fclose(in);
 	} else if (!is_duckdb_rc) {
 		PrintF(PrintOutput::STDERR, "Failed to read file \"%s\"\n", file.c_str());
@@ -3395,9 +3405,13 @@ int wmain(int argc, wchar_t **wargv) {
 				startup_version += duckdb::DuckDB::SourceID();
 			}
 			startup_version += ")\n";
-			highlight.PrintText(startup_version, PrintOutput::STDOUT, HighlightElementType::STARTUP_VERSION);
-			highlight.PrintText("Enter \".help\" for usage hints.\n", PrintOutput::STDOUT,
-			                    HighlightElementType::STARTUP_TEXT);
+			if (data.startup_text != StartupText::NONE) {
+				highlight.PrintText(startup_version, PrintOutput::STDOUT, HighlightElementType::STARTUP_VERSION);
+			}
+			if (data.startup_text == StartupText::ALL) {
+				highlight.PrintText("Enter \".help\" for usage hints.\n", PrintOutput::STDOUT,
+				                    HighlightElementType::STARTUP_TEXT);
+			}
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
 				zHome = GetHomeDirectory() + "/.duckdb_history";
