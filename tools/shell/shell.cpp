@@ -3085,7 +3085,9 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 	in = fopen(file.c_str(), "rb");
 	if (in) {
 		if (stdin_is_interactive && is_duckdb_rc) {
-			PrintF(PrintOutput::STDERR, "-- Loading resources from %s\n", file.c_str());
+			ShellHighlight highlight(*this);
+			highlight.PrintText(StringUtil::Format("-- Loading resources from %s\n", file.c_str()), PrintOutput::STDERR,
+			                    PrintColor::GRAY, PrintIntensity::STANDARD);
 		}
 		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
