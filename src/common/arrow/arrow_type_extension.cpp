@@ -368,7 +368,6 @@ struct ArrowBool8 {
 };
 
 struct ArrowGeometry {
-
 	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		// Validate extension metadata. This metadata also contains a CRS, which we drop
 		// because the GEOMETRY type does not implement a CRS at the type level (yet).

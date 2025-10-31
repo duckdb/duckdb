@@ -799,7 +799,6 @@ struct WKBAnalysis {
 };
 
 WKBAnalysis AnalyzeWKB(BlobReader &reader) {
-
 	WKBAnalysis result;
 
 	while (!reader.IsAtEnd()) {
@@ -873,7 +872,6 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 
 void ConvertWKB(BlobReader &reader, FixedSizeBlobWriter &writer) {
 	while (!reader.IsAtEnd()) {
-
 		const auto le = reader.Read<uint8_t>() == 1;
 		const auto meta = reader.Read<uint32_t>(le);
 		const auto type_id = (meta & 0x0000FFFF) % 1000;

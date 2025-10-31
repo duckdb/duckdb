@@ -566,7 +566,6 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 	// Check for geometry type
 	if (IsGeometryType(s_ele, *metadata, depth)) {
-
 		// Geometries in both GeoParquet and native parquet are stored as a WKB-encoded BLOB.
 		// Because we don't just want to validate that the WKB encoding is correct, but also transform it into
 		// little-endian if necessary, we cant just make use of the StringColumnReader without heavily modifying it.
