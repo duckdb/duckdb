@@ -674,6 +674,7 @@ void ExtractWindowFunctionData(ClientContext &context, const WindowFunctionDefin
 		ScalarFunction function(name, {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"), nullptr);
 		CreateScalarFunctionInfo create_info(function);
 		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		entry.oid = 0;
 		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
@@ -682,6 +683,7 @@ void ExtractWindowFunctionData(ClientContext &context, const WindowFunctionDefin
 		                        nullptr);
 		CreateScalarFunctionInfo create_info(function);
 		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		entry.oid = 0;
 		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
@@ -691,6 +693,7 @@ void ExtractWindowFunctionData(ClientContext &context, const WindowFunctionDefin
 		ScalarFunction function(name, {}, LogicalType::BIGINT, nullptr);
 		CreateScalarFunctionInfo create_info(function);
 		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		entry.oid = 0;
 		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
@@ -698,6 +701,7 @@ void ExtractWindowFunctionData(ClientContext &context, const WindowFunctionDefin
 		ScalarFunction function(name, {LogicalType::BIGINT}, LogicalType::BIGINT, nullptr);
 		CreateScalarFunctionInfo create_info(function);
 		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		entry.oid = 0;
 		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
@@ -706,6 +710,7 @@ void ExtractWindowFunctionData(ClientContext &context, const WindowFunctionDefin
 		ScalarFunction function(name, {}, LogicalType::DOUBLE, nullptr);
 		CreateScalarFunctionInfo create_info(function);
 		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		entry.oid = 0;
 		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
@@ -715,6 +720,7 @@ void ExtractWindowFunctionData(ClientContext &context, const WindowFunctionDefin
 		                        LogicalType::TEMPLATE("T"), nullptr);
 		CreateScalarFunctionInfo create_info(function);
 		ScalarFunctionCatalogEntry entry(system_catalog, default_schema, create_info);
+		entry.oid = 0;
 		ExtractFunctionData<ScalarFunctionCatalogEntry, WindowFunctionExtractor>(entry, 0, output, output_offset);
 		break;
 	}
