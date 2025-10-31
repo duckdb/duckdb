@@ -35,7 +35,6 @@ struct MyCopyFunctionGlobalState {
 };
 
 static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
-
 	// COVERAGE
 	duckdb_copy_function_bind_set_error(nullptr, "foo");
 	duckdb_copy_function_bind_set_error(info, nullptr);
@@ -139,7 +138,6 @@ static void MyCopyFunctionBind(duckdb_copy_function_bind_info info) {
 }
 
 static void MyCopyFunctionInit(duckdb_copy_function_global_init_info info) {
-
 	// COVERAGE
 	duckdb_copy_function_global_init_set_error(nullptr, "foo");
 	duckdb_copy_function_global_init_set_error(info, nullptr);
@@ -188,7 +186,6 @@ static void MyCopyFunctionInit(duckdb_copy_function_global_init_info info) {
 }
 
 static void MyCopyFunctionSink(duckdb_copy_function_sink_info info, duckdb_data_chunk input) {
-
 	// COVERAGE
 	duckdb_copy_function_sink_set_error(nullptr, "foo");
 	duckdb_copy_function_sink_set_error(info, nullptr);
@@ -224,7 +221,6 @@ static void MyCopyFunctionSink(duckdb_copy_function_sink_info info, duckdb_data_
 }
 
 static void MyCopyFunctionFinalize(duckdb_copy_function_finalize_info info) {
-
 	// COVERAGE
 	duckdb_copy_function_finalize_set_error(nullptr, "foo");
 	duckdb_copy_function_finalize_set_error(info, nullptr);
@@ -276,7 +272,6 @@ struct MyCopyFromFunctionState {
 };
 
 static void MyCopyFromFunctionBind(duckdb_bind_info info) {
-
 	// COVERAGE
 	REQUIRE(duckdb_table_function_bind_get_result_column_count(nullptr) == 0);
 	REQUIRE(duckdb_table_function_bind_get_result_column_name(nullptr, 0) == nullptr);
@@ -340,7 +335,6 @@ static void MyCopyFromFunctionBind(duckdb_bind_info info) {
 }
 
 static void MyCopyFromFunctionInit(duckdb_init_info info) {
-
 	auto bind_data = (MyCopyFromFunctionBindData *)duckdb_init_get_bind_data(info);
 	auto state = new MyCopyFromFunctionState();
 

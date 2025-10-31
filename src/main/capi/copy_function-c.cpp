@@ -15,7 +15,6 @@ namespace duckdb {
 namespace {
 
 struct CCopyFunctionInfo : public CopyFunctionInfo {
-
 	~CCopyFunctionInfo() override {
 		if (extra_info && delete_callback) {
 			delete_callback(extra_info);
@@ -128,7 +127,6 @@ void duckdb_copy_function_set_extra_info(duckdb_copy_function function, void *ex
 namespace duckdb {
 namespace {
 struct CCopyToBindInfo : FunctionData {
-
 	shared_ptr<CopyFunctionInfo> function_info;
 	void *bind_data = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
@@ -289,7 +287,6 @@ namespace duckdb {
 namespace {
 
 struct CCopyToGlobalState : GlobalFunctionData {
-
 	void *global_state = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
 
@@ -326,7 +323,6 @@ unique_ptr<GlobalFunctionData> CCopyToGlobalInit(ClientContext &context, Functio
 	auto result = make_uniq<CCopyToGlobalState>();
 
 	if (function_info.global_init) {
-
 		// Call the user-defined global init function
 		CCopyToGlobalInitInfo global_init_info(context, bind_data, file_path);
 		function_info.global_init(reinterpret_cast<duckdb_copy_function_global_init_info>(&global_init_info));
@@ -435,7 +431,6 @@ namespace duckdb {
 namespace {
 
 struct CCopyToSinkInfo {
-
 	CCopyToSinkInfo(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate)
 	    : context(context), bind_data(bind_data), gstate(gstate) {
 	}
@@ -449,7 +444,6 @@ struct CCopyToSinkInfo {
 
 void CCopyToSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                  LocalFunctionData &lstate, DataChunk &input) {
-
 	auto &bind_info = bind_data.Cast<CCopyToBindInfo>();
 	auto &function_info = bind_info.function_info->Cast<CCopyFunctionInfo>();
 
@@ -653,7 +647,6 @@ namespace {
 
 unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionBindInput &info,
                                        vector<string> &expected_names, vector<LogicalType> &expected_types) {
-
 	auto &tf_info = info.tf.function_info->Cast<CTableFunctionInfo>();
 	auto result = make_uniq<CTableBindData>(tf_info);
 
@@ -661,7 +654,6 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 
 	// Turn all options into named parameters
 	for (auto opt : info.info.options) {
-
 		auto param_it = info.tf.named_parameters.find(opt.first);
 		if (param_it == info.tf.named_parameters.end()) {
 			// Option not found in the table function's named parameters
@@ -717,7 +709,6 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 
 void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_function,
                                                  duckdb_table_function table_function) {
-
 	auto &copy_function_ref = *reinterpret_cast<duckdb::CopyFunction *>(copy_function);
 	if (!copy_function || !table_function) {
 		return;
