@@ -192,15 +192,24 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 enum class AsOfJoinSourceStage : uint8_t { LEFT, RIGHT, DONE };
 
 struct AsOfSourceTask {
+	template <typename T>
+	static T BinValue(T n, T val) {
+		return ((n + (val - 1)) / val);
+	}
+
 	AsOfSourceTask() {
 	}
 
 	AsOfJoinSourceStage stage = AsOfJoinSourceStage::DONE;
 	//! The hash group
 	idx_t group_idx = 0;
+	//! The thread index (for local state)
+	idx_t thread_idx = 0;
+	//! The total block index count
+	idx_t max_idx = 0;
 	//! The first block index count
 	idx_t begin_idx = 0;
-	//! The end block index count
+	//! The last block index count
 	idx_t end_idx = 0;
 };
 
@@ -323,7 +332,7 @@ public:
 
 	AsOfHashGroup(const PhysicalAsOfJoin &op, HashGroupPtr &lhs_data, HashGroupPtr &rhs_data, const idx_t hash_group);
 
-	//! IS this a right join (do we have a RIGHT stage?)
+	//! Is this a right join (do we have a RIGHT stage?)
 	inline bool IsRightOuter() const {
 		return right_outer.Enabled();
 	}
@@ -341,16 +350,11 @@ public:
 	// Set up the task parameters
 	idx_t InitTasks(idx_t per_thread);
 
-	//! The total number of chunks (left and right)
+	//! The maximum number of chunks that we will scan for each state
 	idx_t ChunkCount() const {
-		idx_t result = 0;
-		if (left_group) {
-			result += left_group->key_data->ChunkCount();
-		}
-		if (right_group) {
-			result += right_group->key_data->ChunkCount();
-		}
-		return result;
+		const auto left_chunks = left_group ? left_group->key_data->ChunkCount() : 0;
+		const auto right_chunks = (IsRightOuter() && right_group) ? right_group->key_data->ChunkCount() : 0;
+		return MaxValue(left_chunks, right_chunks);
 	}
 	//! Try to move to the next stage
 	bool TryPrepareNextStage();
@@ -371,6 +375,8 @@ public:
 	OuterJoinMarker right_outer;
 	// The processing stage for this group
 	AsOfJoinSourceStage stage;
+	//! The the number of blocks per thread.
+	idx_t per_thread = 0;
 	//! The next task to process
 	idx_t next_task = 0;
 	//! The number of left side tasks
@@ -389,12 +395,17 @@ AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, HashGroupPtr &left_grou
       right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::LEFT), left_completed(0),
       right_completed(0) {
 	right_outer.Initialize(right_group ? right_group->Count() : 0);
-
-	left_tasks = (left_group && left_group->Count()) ? 1 : 0;
-	right_tasks += (IsRightOuter() && right_group && right_group->Count()) ? 1 : 0;
 };
 
 idx_t AsOfHashGroup::InitTasks(idx_t per_thread_p) {
+	per_thread = per_thread_p;
+
+	const auto left_chunks = left_group ? left_group->key_data->ChunkCount() : 0;
+	left_tasks = AsOfSourceTask::BinValue<idx_t>(left_chunks, per_thread);
+
+	const auto right_chunks = (IsRightOuter() && right_group) ? right_group->key_data->ChunkCount() : 0;
+	right_tasks = AsOfSourceTask::BinValue<idx_t>(right_chunks, per_thread);
+
 	return GetTaskCount();
 }
 
@@ -432,16 +443,23 @@ bool AsOfHashGroup::TryNextTask(AsOfSourceTask &task) {
 	task.group_idx = group_idx;
 	task.begin_idx = 0;
 	task.end_idx = 0;
+	task.max_idx = 0;
 
 	switch (task.stage) {
 	case AsOfJoinSourceStage::LEFT:
 		if (left_group) {
-			task.end_idx = left_group->key_data->ChunkCount();
+			task.thread_idx = next_task;
+			task.begin_idx = task.thread_idx * per_thread;
+			task.max_idx = AsOfSourceTask::BinValue<idx_t>(left_group->Count(), STANDARD_VECTOR_SIZE);
+			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 		}
 		break;
 	case AsOfJoinSourceStage::RIGHT:
 		if (right_group) {
-			task.end_idx = right_group->key_data->ChunkCount();
+			task.thread_idx = next_task - left_tasks;
+			task.begin_idx = task.thread_idx * per_thread;
+			task.max_idx = AsOfSourceTask::BinValue<idx_t>(right_group->Count(), STANDARD_VECTOR_SIZE);
+			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 		}
 		break;
 	default:
@@ -457,10 +475,17 @@ bool AsOfHashGroup::FinishTask(AsOfSourceTask &task) {
 	//	Inside the lock
 	switch (task.stage) {
 	case AsOfJoinSourceStage::LEFT:
-		++left_completed;
+		if (left_completed >= left_tasks) {
+			left_group.reset();
+			if (!IsRightOuter()) {
+				right_group.reset();
+			}
+		}
 		break;
 	case AsOfJoinSourceStage::RIGHT:
-		++right_completed;
+		if (right_completed >= right_tasks) {
+			right_group.reset();
+		}
 		break;
 	default:
 		break;
@@ -513,7 +538,7 @@ public:
 
 public:
 	idx_t MaxThreads() override {
-		return asof_groups.size();
+		return total_tasks;
 	}
 
 protected:
@@ -586,7 +611,7 @@ void AsOfGlobalSourceState::CreateTaskList(ClientContext &client) {
 	auto &ts = TaskScheduler::GetScheduler(client);
 	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
-	const auto per_thread = ((max_block.first + threads - 1) / threads);
+	const auto per_thread = AsOfSourceTask::BinValue(max_block.first, threads);
 	if (!per_thread) {
 		throw InternalException("No blocks per AsOf thread! %ld threads, %ld groups, %ld blocks, %ld hash group",
 		                        threads, partition_blocks.size(), max_block.first, max_block.second);
@@ -952,18 +977,9 @@ void AsOfProbeBuffer::EndLeftScan() {
 	rhs_scanner.reset();
 	right_outer = nullptr;
 
-	auto &asof_groups = gsource.asof_groups;
-	if (!asof_hash_group->IsRightOuter() && right_bin < asof_groups.size()) {
-		asof_groups[right_bin]->right_group.reset();
-	}
-
 	left_group = nullptr;
 	left_itr.reset();
 	lhs_scanner.reset();
-
-	if (left_bin < asof_groups.size()) {
-		asof_groups[left_bin]->left_group.reset();
-	}
 }
 
 template <SortKeyType SORT_KEY_TYPE>
@@ -1162,7 +1178,7 @@ unique_ptr<GlobalSourceState> PhysicalAsOfJoin::GetGlobalSourceState(ClientConte
 
 class AsOfLocalSourceState : public LocalSourceState {
 public:
-	using HashGroupPtr = unique_ptr<SortedRun>;
+	using HashGroupPtr = optional_ptr<SortedRun>;
 	using Task = AsOfSourceTask;
 	using TaskPtr = optional_ptr<Task>;
 
@@ -1244,7 +1260,7 @@ void AsOfLocalSourceState::BeginRightScan() {
 		return;
 	}
 
-	hash_group = std::move(asof_groups[hash_bin]->right_group);
+	hash_group = asof_groups[hash_bin]->right_group.get();
 	if (!hash_group || !hash_group->Count()) {
 		return;
 	}

@@ -6,8 +6,8 @@ name AsOf Join unpartitioned
 group join
 subgroup asof
 
-argument build 100000
-argument probe 10000
+argument build 100000000
+argument probe 1000000
 
 load
 PRAGMA debug_asof_iejoin=False;
