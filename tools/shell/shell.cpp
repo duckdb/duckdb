@@ -156,6 +156,7 @@ using duckdb::KeywordHelper;
 using duckdb::SQLIdentifier;
 using duckdb::SQLString;
 using duckdb::StringUtil;
+using duckdb::unordered_map;
 using namespace duckdb_shell;
 
 #if defined(_WIN32) || defined(WIN32)
@@ -1496,6 +1497,10 @@ private:
 	bool highlight = true;
 };
 
+ShellState &ShellState::Get() {
+	return *globalState;
+}
+
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
 	if (!statement->named_param_map.empty()) {
 		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
@@ -1503,23 +1508,25 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::FAILURE;
 	}
 	auto &con = *conn;
-	unique_ptr<duckdb::QueryResult> res;
+	unique_ptr<duckdb::QueryResult> result;
 	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX) {
 		// for row-wise rendering we can use streaming results
-		res = con.SendQuery(std::move(statement));
+		result = con.SendQuery(std::move(statement));
 	} else {
 		duckdb::QueryParameters parameters;
 		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
 		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
-		res = con.Query(std::move(statement), parameters);
+		result = con.Query(std::move(statement), parameters);
 	}
-	if (res->HasError()) {
-		PrintDatabaseError(res->GetError());
+	auto &res = *result;
+	;
+	if (res.HasError()) {
+		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
 	}
-	auto &properties = res->properties;
+	auto &properties = res.properties;
 	if (properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
-		auto result_chunk = res->Fetch();
+		auto result_chunk = res.Fetch();
 		if (result_chunk && result_chunk->size() == 1) {
 			// update total changes
 			auto row_changes = result_chunk->GetValue(0, 0);
@@ -1533,8 +1540,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// only SELECT statements return results that need to be rendered
 		return SuccessState::SUCCESS;
 	}
+	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
+		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
+	}
 	if (ShellRenderer::IsColumnar(cMode)) {
-		RenderColumnarResult(*res);
+		RenderColumnarResult(res);
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::TRASH) {
@@ -1542,11 +1552,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::DUCKBOX) {
-		return RenderDuckBoxResult(*res);
+		return RenderDuckBoxResult(res);
 	}
 	// row rendering
 	auto renderer = GetRowRenderer();
-	return RenderQueryResult(*renderer, *res);
+	return RenderQueryResult(*renderer, res);
 }
 
 SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
@@ -1911,162 +1921,6 @@ static FILE *output_file_open(const char *zFile, int bTextMode) {
 		}
 	}
 	return f;
-}
-
-/*
-** An object used to read a CSV and other files for import.
-*/
-typedef struct ImportCtx ImportCtx;
-struct ImportCtx {
-	const char *zFile;      /* Name of the input file */
-	FILE *in;               /* Read the CSV text from this input stream */
-	int (*xCloser)(FILE *); /* Func to close in */
-	string z;
-	int nLine;     /* Current line number */
-	int nRow;      /* Number of rows imported */
-	int nErr;      /* Number of errors encountered */
-	int bNotFirst; /* True if one or more bytes already read */
-	int cTerm;     /* Character that terminated the most recent field */
-	int cColSep;   /* The column separator character.  (Usually ",") */
-	int cRowSep;   /* The row separator character.  (Usually "\n") */
-
-	void AddError() {
-		nErr++;
-	}
-};
-
-/* Clean up resourced used by an ImportCtx */
-static void import_cleanup(ImportCtx *p) {
-	if (p->in != 0 && p->xCloser != 0) {
-		p->xCloser(p->in);
-		p->in = 0;
-	}
-	p->z = string();
-}
-
-/* Append a single byte to z[] */
-static void import_append_char(ImportCtx *p, int c) {
-	p->z += char(c);
-}
-
-/* Read a single field of CSV text.  Compatible with rfc4180 and extended
-** with the option of having a separator other than ",".
-**
-**   +  Input comes from p->in.
-**   +  Store results in p->z of length p->n.
-**   +  Use p->cSep as the column separator.  The default is ",".
-**   +  Use p->rSep as the row separator.  The default is "\n".
-**   +  Keep track of the line number in p->nLine.
-**   +  Store the character that terminates the field in p->cTerm.  Store
-**      EOF on end-of-file.
-**   +  Report syntax errors on stderr
-*/
-static const char *csv_read_one_field(ImportCtx *p) {
-	int c;
-	int cSep = p->cColSep;
-	int rSep = p->cRowSep;
-	p->z.clear();
-	c = fgetc(p->in);
-	if (c == EOF || seenInterrupt) {
-		p->cTerm = EOF;
-		return 0;
-	}
-	if (c == '"') {
-		int pc, ppc;
-		int startLine = p->nLine;
-		int cQuote = c;
-		pc = ppc = 0;
-		while (1) {
-			c = fgetc(p->in);
-			if (c == rSep)
-				p->nLine++;
-			if (c == cQuote) {
-				if (pc == cQuote) {
-					pc = 0;
-					continue;
-				}
-			}
-			if ((c == cSep && pc == cQuote) || (c == rSep && pc == cQuote) ||
-			    (c == rSep && pc == '\r' && ppc == cQuote) || (c == EOF && pc == cQuote)) {
-				do {
-					p->z.pop_back();
-				} while (!p->z.empty() && p->z.back() != cQuote);
-				p->cTerm = c;
-				break;
-			}
-			if (pc == cQuote && c != '\r') {
-				utf8_printf(stderr, "%s:%d: unescaped %c character\n", p->zFile, p->nLine, cQuote);
-			}
-			if (c == EOF) {
-				utf8_printf(stderr, "%s:%d: unterminated %c-quoted field\n", p->zFile, startLine, cQuote);
-				p->cTerm = c;
-				break;
-			}
-			import_append_char(p, c);
-			ppc = pc;
-			pc = c;
-		}
-	} else {
-		/* If this is the first field being parsed and it begins with the
-		** UTF-8 BOM  (0xEF BB BF) then skip the BOM */
-		if ((c & 0xff) == 0xef && p->bNotFirst == 0) {
-			import_append_char(p, c);
-			c = fgetc(p->in);
-			if ((c & 0xff) == 0xbb) {
-				import_append_char(p, c);
-				c = fgetc(p->in);
-				if ((c & 0xff) == 0xbf) {
-					p->bNotFirst = 1;
-					p->z.clear();
-					return csv_read_one_field(p);
-				}
-			}
-		}
-		while (c != EOF && c != cSep && c != rSep) {
-			import_append_char(p, c);
-			c = fgetc(p->in);
-		}
-		if (c == rSep) {
-			p->nLine++;
-			if (!p->z.empty() && p->z.back() == '\r')
-				p->z.pop_back();
-		}
-		p->cTerm = c;
-	}
-	p->bNotFirst = 1;
-	return p->z.c_str();
-}
-
-/* Read a single field of ASCII delimited text.
-**
-**   +  Input comes from p->in.
-**   +  Store results in p->z of length p->n.
-**   +  Use p->cSep as the column separator.  The default is "\x1F".
-**   +  Use p->rSep as the row separator.  The default is "\x1E".
-**   +  Keep track of the row number in p->nLine.
-**   +  Store the character that terminates the field in p->cTerm.  Store
-**      EOF on end-of-file.
-**   +  Report syntax errors on stderr
-*/
-static const char *ascii_read_one_field(ImportCtx *p) {
-	int c;
-	int cSep = p->cColSep;
-	int rSep = p->cRowSep;
-	p->z.clear();
-	c = fgetc(p->in);
-	if (c == EOF || seenInterrupt) {
-		p->cTerm = EOF;
-		return nullptr;
-	}
-	while (c != EOF && c != cSep && c != rSep) {
-		import_append_char(p, c);
-		c = fgetc(p->in);
-	}
-	if (c == rSep) {
-		p->nLine++;
-	}
-	p->cTerm = c;
-	return p->z.c_str();
 }
 
 /*
@@ -2579,257 +2433,125 @@ bool ShellState::ImportData(const vector<string> &args) {
 		utf8_printf(stderr, ".import cannot be used in -safe mode\n");
 		return false;
 	}
-	const char *zTable = nullptr;      /* Insert data into this table */
-	const char *zFile = nullptr;       /* Name of file to extra content from */
-	ImportCtx sCtx;                    /* Reader context */
-	const char *(*xRead)(ImportCtx *); /* Func to read one value */
-	int eVerbose = 0;                  /* Larger for more console output */
-	int nSkip = 0;                     /* Initial lines to skip */
-	int useOutputMode = 1;             /* Use output mode to determine separators */
+	string table_name;
+	string file_name;
+	unordered_map<string, string> generic_parameters;
+	string function;
 
-	memset(&sCtx, 0, sizeof(sCtx));
-	if (mode == RenderMode::ASCII) {
-		xRead = ascii_read_one_field;
-	} else {
-		xRead = csv_read_one_field;
-	}
 	for (idx_t i = 1; i < args.size(); i++) {
 		auto z = args[i].c_str();
 		if (z[0] == '-' && z[1] == '-') {
 			z++;
 		}
 		if (z[0] != '-') {
-			if (zFile == nullptr) {
-				zFile = z;
-			} else if (zTable == nullptr) {
-				zTable = z;
+			if (file_name.empty()) {
+				file_name = z;
+			} else if (table_name.empty()) {
+				table_name = z;
 			} else {
 				utf8_printf(out, "ERROR: extra argument: \"%s\".  Usage:\n", z);
 				PrintHelp("import");
 				return false;
 			}
 		} else if (strcmp(z, "-v") == 0) {
-			eVerbose++;
-		} else if (strcmp(z, "-skip") == 0 && i < args.size() - 1) {
-			nSkip = (int)StringToInt(args[++i]);
+			// verbose - ignore
 		} else if (strcmp(z, "-ascii") == 0) {
-			sCtx.cColSep = SEP_Unit[0];
-			sCtx.cRowSep = SEP_Record[0];
-			xRead = ascii_read_one_field;
-			useOutputMode = 0;
+			utf8_printf(stderr, "-ascii mode is no longer supported for .import");
+			exit(1);
 		} else if (strcmp(z, "-csv") == 0) {
-			sCtx.cColSep = ',';
-			sCtx.cRowSep = '\n';
-			xRead = csv_read_one_field;
-			useOutputMode = 0;
+			function = "read_csv";
+		} else if (strcmp(z, "-parquet") == 0) {
+			function = "read_parquet";
+		} else if (strcmp(z, "-json") == 0) {
+			function = "read_json";
 		} else {
-			utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", z);
-			PrintHelp("import");
-			return false;
+			z++;
+			if (i + 1 >= args.size()) {
+				utf8_printf(out, "ERROR: expected an argument for generic parameter: \"%s\".  Usage:\n", z);
+				PrintHelp("import");
+				return false;
+			}
+			generic_parameters[z] = args[++i];
 		}
 	}
-	if (zTable == 0) {
-		utf8_printf(out, "ERROR: missing %s argument. Usage:\n", zFile == 0 ? "FILE" : "TABLE");
+	if (table_name.empty()) {
+		utf8_printf(out, "ERROR: missing %s argument. Usage:\n", file_name.empty() ? "FILE" : "TABLE");
 		PrintHelp("import");
 		return false;
 	}
+	if (function.empty()) {
+		// derive function to use from file extension
+		// FIXME: get this list from the system somehow
+		unordered_map<string, string> function_map;
+		function_map[".parquet"] = "read_parquet";
+		function_map[".csv"] = "read_csv";
+		function_map[".tsv"] = "read_csv";
+		function_map[".tbl"] = "read_csv";
+		function_map[".json"] = "read_json";
+		function_map[".jsonl"] = "read_json";
+		function_map[".ndjson"] = "read_json";
+		function_map[".avro"] = "read_avro";
+		function_map[".xlsx"] = "read_xlsx";
+
+		vector<string> compression_suffixes {"", ".gz", ".zst"};
+
+		for (auto &entry : function_map) {
+			for (auto &compression_suffix : compression_suffixes) {
+				auto suffix = entry.first + compression_suffix;
+				if (StringUtil::EndsWith(file_name, suffix)) {
+					function = entry.second;
+					break;
+				}
+			}
+			if (!function.empty()) {
+				break;
+			}
+		}
+		if (function.empty()) {
+			// fallback to read_csv
+			function = "read_csv";
+		}
+	}
+	if (function == "read_csv" && generic_parameters.find("ignore_errors") == generic_parameters.end()) {
+		generic_parameters["ignore_errors"] = "true";
+	}
 	seenInterrupt = 0;
-	OpenDB();
-	if (useOutputMode) {
-		/* If neither the --csv or --ascii options are specified, then set
-		** the column and row separator characters from the output mode. */
-		int nSep = colSeparator.size();
-		if (nSep == 0) {
-			raw_printf(stderr, "Error: non-null column separator required for import\n");
-			return false;
-		}
-		if (nSep > 1) {
-			raw_printf(stderr, "Error: multi-character column separators not allowed"
-			                   " for import\n");
-			return false;
-		}
-		nSep = rowSeparator.size();
-		if (nSep == 0) {
-			raw_printf(stderr, "Error: non-null row separator required for import\n");
-			return false;
-		}
-		if (nSep == 2 && mode == RenderMode::CSV && rowSeparator == SEP_CrLf) {
-			/* When importing CSV (only), if the row separator is set to the
-			** default output row separator, change it to the default input
-			** row separator.  This avoids having to maintain different input
-			** and output row separators. */
-			rowSeparator = SEP_Row;
-			nSep = rowSeparator.size();
-		}
-		if (nSep > 1) {
-			raw_printf(stderr, "Error: multi-character row separators not allowed"
-			                   " for import\n");
-			return false;
-		}
-		sCtx.cColSep = colSeparator[0];
-		sCtx.cRowSep = rowSeparator[0];
-	}
-	sCtx.zFile = zFile;
-	sCtx.nLine = 1;
-	if (sCtx.zFile[0] == '|') {
-#ifdef SQLITE_OMIT_POPEN
-		raw_printf(stderr, "Error: pipes are not supported in this OS\n");
-		rc = 1;
-		goto meta_command_exit;
-#else
-		sCtx.in = popen(sCtx.zFile + 1, "r");
-		sCtx.zFile = "<pipe>";
-		sCtx.xCloser = pclose;
-#endif
-	} else {
-		sCtx.in = fopen(sCtx.zFile, "rb");
-		sCtx.xCloser = fclose;
-	}
-	if (sCtx.in == 0) {
-		utf8_printf(stderr, "Error: cannot open \"%s\"\n", zFile);
-		return false;
-	}
-	if (eVerbose >= 2 || (eVerbose >= 1 && useOutputMode)) {
-		char zSep[2];
-		zSep[1] = 0;
-		zSep[0] = sCtx.cColSep;
-		utf8_printf(out, "Column separator ");
-		OutputCString(zSep);
-		utf8_printf(out, ", row separator ");
-		zSep[0] = sCtx.cRowSep;
-		OutputCString(zSep);
-		utf8_printf(out, "\n");
-	}
-	while ((nSkip--) > 0) {
-		while (xRead(&sCtx) && sCtx.cTerm == sCtx.cColSep) {
-		}
-	}
 	// check if the table exists
+	OpenDB();
 	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
 	if (needCommit) {
-		ExecuteQuery("BEGIN");
+		con.BeginTransaction();
 	}
-	auto table_info = con.TableInfo(zTable);
+	auto table_info = con.TableInfo(table_name);
 
-	import_append_char(&sCtx, 0); /* To ensure sCtx.z is allocated */
-	idx_t nCol;
+	string import_query;
+
 	if (!table_info) {
-		// table does not exist - read the first line and create it based on the row values in the first line
-		string zCreate = "CREATE TABLE ";
-		zCreate += zTable;
-		char cSep = '(';
-		nCol = 0;
-		while (xRead(&sCtx)) {
-			zCreate += cSep;
-			zCreate += "\"";
-			zCreate += sCtx.z;
-			zCreate += "\"";
-			zCreate += " TEXT";
-			cSep = ',';
-			nCol++;
-			if (sCtx.cTerm != sCtx.cColSep) {
-				break;
-			}
-		}
-		if (nCol == 0) {
-			import_cleanup(&sCtx);
-			utf8_printf(stderr, "%s: empty file\n", sCtx.zFile);
-			return false;
-		}
-		zCreate += "\n)";
-		if (eVerbose >= 1) {
-			utf8_printf(out, "%s\n", zCreate.c_str());
-		}
-		auto res = ExecuteQuery(zCreate);
-		if (res == SuccessState::FAILURE) {
-			import_cleanup(&sCtx);
-			return false;
-		}
+		// table does not exist - create it
+		import_query = StringUtil::Format("CREATE TABLE %s AS ", SQLIdentifier(table_name));
 	} else {
-		nCol = table_info->columns.size();
+		// table exists - insert into it
+		import_query = StringUtil::Format("INSERT INTO %s ", SQLIdentifier(table_name));
 	}
-	string zSql = StringUtil::Format("INSERT INTO %s VALUES(?", SQLIdentifier(zTable));
-	for (idx_t i = 1; i < nCol; i++) {
-		zSql += ",?";
+	import_query += StringUtil::Format("SELECT * FROM %s(%s", function, SQLString(file_name));
+	// add the generic parameters
+	for (auto &entry : generic_parameters) {
+		import_query += StringUtil::Format(", %s=%s", SQLIdentifier(entry.first), SQLString(entry.second));
 	}
-	zSql += ")";
-	if (eVerbose >= 2) {
-		utf8_printf(out, "Insert using: %s\n", zSql.c_str());
-	}
-	auto prepared = con.Prepare(zSql);
-	if (prepared->HasError()) {
-		PrintDatabaseError(prepared->GetError());
-		import_cleanup(&sCtx);
+	import_query += ")";
+	auto result = con.Query(import_query);
+	if (result->HasError()) {
+		if (needCommit) {
+			con.Rollback();
+		}
+		string error = StringUtil::Format("Failed To Import Error: Failed to import from file '%s'\n", file_name);
+		PrintDatabaseError(error);
+		PrintDatabaseError(result->GetError());
 		return false;
 	}
-	do {
-		duckdb::vector<duckdb::Value> bind_values;
-		int startLine = sCtx.nLine;
-		int i;
-		for (i = 0; i < nCol; i++) {
-			const char *z = xRead(&sCtx);
-			/*
-			** Did we reach end-of-file before finding any columns?
-			** If so, stop instead of NULL filling the remaining columns.
-			*/
-			if (z == nullptr && i == 0) {
-				break;
-			}
-			/*
-			** Did we reach end-of-file OR end-of-line before finding any
-			** columns in ASCII mode?  If so, stop instead of NULL filling
-			** the remaining columns.
-			*/
-			if (mode == RenderMode::ASCII && (z == nullptr || z[0] == 0) && i == 0) {
-				break;
-			}
-			if (!duckdb::Value::StringIsValid(z, strlen(z))) {
-				bind_values.emplace_back();
-			} else {
-				bind_values.emplace_back(z);
-			}
-			if (i < nCol - 1 && sCtx.cTerm != sCtx.cColSep) {
-				utf8_printf(stderr,
-				            "%s:%d: expected %d columns but found %d - "
-				            "filling the rest with NULL\n",
-				            sCtx.zFile, startLine, (int)nCol, i + 1);
-				i += 2;
-				while (i <= nCol) {
-					bind_values.emplace_back();
-					i++;
-				}
-			}
-		}
-		if (sCtx.cTerm == sCtx.cColSep) {
-			do {
-				xRead(&sCtx);
-				i++;
-			} while (sCtx.cTerm == sCtx.cColSep);
-			utf8_printf(stderr,
-			            "%s:%d: expected %d columns but found %d - "
-			            "extras ignored\n",
-			            sCtx.zFile, startLine, (int)nCol, i);
-		}
-		if (i >= nCol) {
-			auto result = prepared->Execute(bind_values);
-			if (result->HasError()) {
-				utf8_printf(stderr, "%s:%d: INSERT failed: %s\n", sCtx.zFile, startLine, result->GetError().c_str());
-				sCtx.AddError();
-			} else {
-				sCtx.nRow++;
-			}
-		}
-	} while (sCtx.cTerm != EOF);
-
-	prepared.reset();
-	import_cleanup(&sCtx);
 	if (needCommit) {
-		ExecuteQuery("COMMIT");
-	}
-	if (eVerbose > 0) {
-		utf8_printf(out, "Added %d rows with %d errors using %d lines of input\n", sCtx.nRow, sCtx.nErr,
-		            sCtx.nLine - 1);
+		con.Commit();
 	}
 	return true;
 }
@@ -3565,11 +3287,10 @@ static const MetadataCommand metadata_commands[] = {
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0,
-     "Options:\n\t--ascii\tUse \\037 and \\036 as column and row separators\n\t--csv\tUse , and \\n as column and row "
-     "separators\n\t--skip N\tSkip the first N rows of input\n\t-v\t\"Verbose\" - increase auxiliary "
-     "output\nNotes:\n\t* If TABLE does not exist, it is created. The first row of input\n\t  determines the column "
-     "names.\n\t* If neither --csv or --ascii are used, the input mode is derived\n\t  from the \".mode\" output "
-     "mode\n\t* If FILE begins with \"|\" then it is a command that generates the\n\t  input text."},
+     "Options:\n\t--csv\tImport data from CSV (read_csv)\n\t--json\tImport data from JSON "
+     "(read_json)\n\t--parquet\tImport data from Parquet (read_parquet)\n\t--[parameter] [value]\tProvides a parameter "
+     "to the reader function\n\tNotes:\n\t* If TABLE does not exist, it is created.\n\t* If file type is not selected, "
+     "the input mode is derived from the file extension\n\t* Generic parameters are passed to the reader functions"},
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0,
      "Notes:\n\t* If TABLE is specified, only show indexes for\n\t  tables matching TABLE using the LIKE operator."},
     {"indices", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},

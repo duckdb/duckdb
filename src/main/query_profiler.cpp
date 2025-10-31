@@ -648,7 +648,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	profiler.operator_infos.clear();
 }
 
-void QueryProfiler::SetInfo(const double &blocked_thread_time) {
+void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
