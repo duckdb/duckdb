@@ -39,24 +39,24 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_
 statement error
 SELECT cpu_time FROM metrics_output;
 ----
-<REGEX>:Binder Error.*Referenced column "cpu_time" was not found because the FROM clause is missing.*
+<REGEX>:Binder Error.*Referenced column "cpu_time" not found in FROM clause!.*
 
 statement error
 SELECT extra_info FROM metrics_output;
 ----
-<REGEX>:Binder Error.*Referenced column "extra_info" was not found because the FROM clause is missing.*
+<REGEX>:Binder Error.*Referenced column "extra_info" not found in FROM clause!.*
 
 statement error
 SELECT operator_cardinality FROM metrics_output;
 ----
-<REGEX>:Binder Error.*Referenced column "operator_cardinality" was not found because the FROM clause is missing.*
+<REGEX>:Binder Error.*Referenced column "operator_cardinality" not found in FROM clause!.*
 
 statement error
 SELECT operator_timing FROM metrics_output;
 ----
-<REGEX>:Binder Error.*Referenced column "operator_timing" was not found because the FROM clause is missing.*
+<REGEX>:Binder Error.*Referenced column "operator_timing" not found in FROM clause!.*
 
 statement error
 SELECT cumulative_cardinality FROM metrics_output;
 ----
-<REGEX>:Binder Error.*Referenced column "cumulative_cardinality" was not found because the FROM clause is missing.*
+<REGEX>:Binder Error.*Referenced column "cumulative_cardinality" not found in FROM clause!.*

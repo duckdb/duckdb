@@ -42,7 +42,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_
 statement error
 SELECT cpu_time FROM metrics_output;
 ----
-<REGEX>:Binder Error.*Referenced column "cpu_time" was not found because the FROM clause is missing.*
+<REGEX>:Binder Error.*Referenced column "cpu_time" not found in FROM clause!.*
 
 statement ok
 SELECT extra_info, latency FROM metrics_output;
