@@ -22,7 +22,7 @@
 // under the License.
 
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/adbc/driver_manager.h"
+#include "driver_manager.h"
 #include "duckdb/common/adbc/adbc.h"
 #include "duckdb/common/adbc/adbc.hpp"
 
