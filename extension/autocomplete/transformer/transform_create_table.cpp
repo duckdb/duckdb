@@ -91,6 +91,9 @@ LogicalType PEGTransformerFactory::TransformTypeOrGenerated(PEGTransformer &tran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto type_pr = list_pr.Child<OptionalParseResult>(0);
 	auto generated_column_pr = list_pr.Child<OptionalParseResult>(1);
+	if (generated_column_pr.HasResult()) {
+		throw NotImplementedException("Generated columns have not yet been implemented.");
+	}
 	LogicalType type = LogicalType::INVALID;
 	if (type_pr.HasResult()) {
 		type = transformer.Transform<LogicalType>(type_pr.optional_result);
