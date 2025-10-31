@@ -526,14 +526,19 @@ idx_t ShellState::StringLength(const char *z) {
 /*
 ** Return the length of a string in characters.
 */
+bool ShellState::IsCharacter(char c) {
+	return (c & 0xc0) != 0x80;
+}
+
 idx_t ShellState::RenderLength(const char *z) {
 #ifdef HAVE_LINENOISE
 	return linenoiseComputeRenderWidth(z, strlen(z));
 #else
 	int n = 0;
-	while (*z) {
-		if ((0xc0 & *(z++)) != 0x80)
+	for (; *z; z++) {
+		if (IsCharacter(*z)) {
 			n++;
+		}
 	}
 	return n;
 #endif
@@ -3216,9 +3221,9 @@ void ShellState::Initialize() {
 	string default_prompt;
 #ifndef HAVE_LINENOISE
 	// windows terminal only supports "basic" colors - so use green
-	default_prompt = "{color:green}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt = "{max_length:40}{color:green}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 #else
-	default_prompt = "{color:38,5,208}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt = "{max_length:40}{color:38,5,208}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 #endif
 	main_prompt->ParsePrompt(default_prompt);
 	strcpy(continuePrompt, "· ");

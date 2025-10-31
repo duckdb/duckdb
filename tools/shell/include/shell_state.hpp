@@ -238,6 +238,7 @@ public:
 
 	idx_t RenderLength(const char *z);
 	idx_t RenderLength(const string &str);
+	bool IsCharacter(char c);
 	void SetBinaryMode();
 	void SetTextMode();
 	static idx_t StringLength(const char *z);

@@ -91,7 +91,13 @@ string Prompt::HandleColor(const PromptComponent &component) {
 
 void Prompt::AddComponent(const string &bracket_type, const string &value) {
 	PromptComponent component;
-	if (bracket_type == "setting") {
+	if (bracket_type == "max_length") {
+		if (value.empty()) {
+			throw InvalidInputException("max_length requires a parameter");
+		}
+		max_length = StringUtil::ToUnsigned(value);
+		return;
+	} else if (bracket_type == "setting") {
 		if (value.empty()) {
 			throw InvalidInputException("setting requires a parameter");
 		}
@@ -182,6 +188,7 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 
 void Prompt::ParsePrompt(const string &prompt) {
 	components.clear();
+	max_length = optional_idx();
 	PromptParseState parse_state = PromptParseState::STANDARD;
 	PromptParseState prev_state = parse_state;
 	string bracket_type;
@@ -315,25 +322,70 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 	}
 	throw InternalException("Unsupported setting %s", component.literal);
 }
+
+string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) {
+	if (max_length.IsValid() && length > max_length.GetIndex()) {
+		// max length was already exceeded - skip rendering
+		return string();
+	}
+	auto render_length = state.RenderLength(text.c_str());
+	if (length + render_length <= max_length.GetIndex()) {
+		// not exceeded - render entire string
+		length += render_length;
+		return text;
+	}
+	// length gets exceeded by this string - render whatever we can
+	idx_t start_pos = 0;
+	string truncated_text;
+	for (idx_t i = 1; i <= text.size(); i++) {
+		if (i < text.size() && !state.IsCharacter(text[i])) {
+			// not a character - we cannot partially render at this position
+			continue;
+		}
+		// this is a character - can we render the PREVIOUS character?
+		auto prev_character = text.substr(start_pos, i - start_pos);
+		auto char_length = state.RenderLength(prev_character);
+		if (length + char_length > max_length.GetIndex()) {
+			// we cannot - we are done!
+			break;
+		}
+		// we can - render it and move to the next character
+		truncated_text += prev_character;
+		length += char_length;
+
+		// set the start pos
+		start_pos = i;
+	}
+	// add the final components
+	truncated_text += "... D ";
+	length += 6;
+	return truncated_text;
+}
+
 string Prompt::GeneratePrompt(ShellState &state) {
 	string prompt;
+	idx_t length = 0;
 	for (auto &component : components) {
 		switch (component.type) {
 		case PromptComponentType::LITERAL:
-			prompt += component.literal;
+			prompt += HandleText(state, component.literal, length);
 			break;
-		case PromptComponentType::SQL:
-			prompt += EvaluateSQL(state, component.literal);
+		case PromptComponentType::SQL: {
+			auto query_result = EvaluateSQL(state, component.literal);
+			prompt += HandleText(state, query_result, length);
 			break;
+		}
 		case PromptComponentType::SET_COLOR:
 		case PromptComponentType::SET_INTENSITY:
 		case PromptComponentType::RESET_COLOR:
 		case PromptComponentType::SET_COLOR_RGB:
 			prompt += HandleColor(component);
 			break;
-		case PromptComponentType::SETTING:
-			prompt += HandleSetting(state, component);
+		case PromptComponentType::SETTING: {
+			auto setting_val = HandleSetting(state, component);
+			prompt += HandleText(state, setting_val, length);
 			break;
+		}
 		default:
 			throw InternalException("Invalid prompt component");
 		}
@@ -346,19 +398,20 @@ void Prompt::PrintPrompt(ShellState &state, PrintOutput output) {
 	auto color = PrintColor::STANDARD;
 	auto intensity = PrintIntensity::STANDARD;
 
+	idx_t length = 0;
 	for (auto &component : components) {
 		switch (component.type) {
 		case PromptComponentType::LITERAL:
-			highlight.PrintText(component.literal, output, color, intensity);
+			highlight.PrintText(HandleText(state, component.literal, length), output, color, intensity);
 			break;
 		case PromptComponentType::SQL: {
 			auto result = EvaluateSQL(state, component.literal);
-			highlight.PrintText(result, output, color, intensity);
+			highlight.PrintText(HandleText(state, result, length), output, color, intensity);
 			break;
 		}
 		case PromptComponentType::SETTING: {
 			auto result = HandleSetting(state, component);
-			highlight.PrintText(result, output, color, intensity);
+			highlight.PrintText(HandleText(state, result, length), output, color, intensity);
 			break;
 		}
 		case PromptComponentType::SET_COLOR: {
