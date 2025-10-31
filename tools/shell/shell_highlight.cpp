@@ -27,6 +27,8 @@ static HighlightElement highlight_elements[] = {{"error", PrintColor::RED, Print
                                                 {"null_value", PrintColor::GRAY, PrintIntensity::STANDARD},
                                                 {"footer", PrintColor::STANDARD, PrintIntensity::STANDARD},
                                                 {"layout", PrintColor::GRAY, PrintIntensity::STANDARD},
+                                                {"startup_text", PrintColor::GRAY, PrintIntensity::STANDARD},
+                                                {"startup_version", PrintColor::STANDARD, PrintIntensity::STANDARD},
                                                 {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
                                                 {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
 

@@ -3087,7 +3087,7 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 		if (stdin_is_interactive && is_duckdb_rc) {
 			ShellHighlight highlight(*this);
 			highlight.PrintText(StringUtil::Format("-- Loading resources from %s\n", file.c_str()), PrintOutput::STDERR,
-			                    PrintColor::GRAY, PrintIntensity::STANDARD);
+			                    HighlightElementType::STARTUP_TEXT);
 		}
 		rc = ProcessInput(InputMode::FILE);
 		fclose(in);
@@ -3386,9 +3386,18 @@ int wmain(int argc, wchar_t **wargv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
-			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/
-			       "Enter \".help\" for usage hints.\n",
-			       duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
+
+			ShellHighlight highlight(data);
+			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
+			                                          duckdb::DuckDB::ReleaseCodename());
+			if (StringUtil::Contains(duckdb::DuckDB::ReleaseCodename(), "Development")) {
+				startup_version += ", ";
+				startup_version += duckdb::DuckDB::SourceID();
+			}
+			startup_version += ")\n";
+			highlight.PrintText(startup_version, PrintOutput::STDOUT, HighlightElementType::STARTUP_VERSION);
+			highlight.PrintText("Enter \".help\" for usage hints.\n", PrintOutput::STDOUT,
+			                    HighlightElementType::STARTUP_TEXT);
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
 				zHome = GetHomeDirectory() + "/.duckdb_history";
