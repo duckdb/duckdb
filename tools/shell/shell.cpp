@@ -3254,7 +3254,6 @@ int wmain(int argc, wchar_t **wargv) {
 	const char **argv;
 #endif
 	int rc = 0;
-	bool warnInmemoryDb = false;
 	vector<string> extra_commands;
 	ShellStateDestroyer destroyer;
 
@@ -3354,7 +3353,6 @@ int wmain(int argc, wchar_t **wargv) {
 
 	if (data.zDbFilename.empty()) {
 		data.zDbFilename = ":memory:";
-		warnInmemoryDb = argc == 1;
 	}
 	data.out = stdout;
 
@@ -3419,14 +3417,6 @@ int wmain(int argc, wchar_t **wargv) {
 			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/
 			       "Enter \".help\" for usage hints.\n",
 			       duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
-			if (warnInmemoryDb) {
-				printf("Connected to a ");
-				ShellHighlight highlighter(data);
-				highlighter.PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
-				                      PrintIntensity::BOLD);
-				printf(".\nUse \".open FILENAME\" to reopen on a "
-				       "persistent database.\n");
-			}
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
 				zHome = GetHomeDirectory() + "/.duckdb_history";
