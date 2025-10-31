@@ -9,26 +9,25 @@ namespace duckdb {
 
 BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<LogicalType> types_p,
                                              ColumnDataAllocatorType allocator_type_p,
-                                             BatchedDataCollectionBufferManagerType buffer_manager_type_p)
-    : context(context_p), types(std::move(types_p)), allocator_type(allocator_type_p),
-      buffer_manager_type(buffer_manager_type_p) {
+                                             ColumnDataCollectionLifetime lifetime_p)
+    : context(context_p), types(std::move(types_p)), allocator_type(allocator_type_p), lifetime(lifetime_p) {
 }
 
 BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<LogicalType> types_p, batch_map_t batches,
                                              ColumnDataAllocatorType allocator_type_p,
-                                             BatchedDataCollectionBufferManagerType buffer_manager_type_p)
-    : context(context_p), types(std::move(types_p)), allocator_type(allocator_type_p),
-      buffer_manager_type(buffer_manager_type_p), data(std::move(batches)) {
+                                             ColumnDataCollectionLifetime lifetime_p)
+    : context(context_p), types(std::move(types_p)), allocator_type(allocator_type_p), lifetime(lifetime_p),
+      data(std::move(batches)) {
 }
 
 unique_ptr<ColumnDataCollection> BatchedDataCollection::CreateCollection() const {
 	if (last_collection.collection) {
 		return make_uniq<ColumnDataCollection>(*last_collection.collection);
 	} else if (allocator_type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
-		auto &buffer_manager = buffer_manager_type == BatchedDataCollectionBufferManagerType::CLIENT_CONTEXT
+		auto &buffer_manager = lifetime == ColumnDataCollectionLifetime::REGULAR
 		                           ? BufferManager::GetBufferManager(context)
 		                           : BufferManager::GetBufferManager(*context.db);
-		return make_uniq<ColumnDataCollection>(buffer_manager, types);
+		return make_uniq<ColumnDataCollection>(buffer_manager, types, lifetime);
 	} else {
 		D_ASSERT(allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);

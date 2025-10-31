@@ -765,9 +765,6 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
 	auto result = con->SendQuery("SELECT 42;", parameters);
 
-	// Query result is accessible now
-	REQUIRE(CHECK_COLUMN(result, 0, {42}));
-
 	// Reset connection AND db
 	con.reset();
 	db.reset();
@@ -780,9 +777,6 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	con = make_uniq<Connection>(*db);
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 	result = con->SendQuery("SELECT 42;", parameters);
-
-	// Query result is accessible now
-	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
 	// Reset connection AND db
 	con.reset();

@@ -17,7 +17,7 @@ ColumnDataAllocator::ColumnDataAllocator(Allocator &allocator) : type(ColumnData
 ColumnDataAllocator::ColumnDataAllocator(BufferManager &buffer_manager, ColumnDataCollectionLifetime lifetime)
     : type(ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
 	alloc.buffer_manager = &buffer_manager;
-	if (lifetime == ColumnDataCollectionLifetime::DATABASE_INSTANCE) {
+	if (lifetime == ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES) {
 		managed_result_set = ResultSetManager::Get(buffer_manager.GetDatabase()).Add(*this);
 	}
 }
@@ -29,7 +29,7 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
 	case ColumnDataAllocatorType::HYBRID:
 		alloc.buffer_manager = &BufferManager::GetBufferManager(context);
-		if (lifetime == ColumnDataCollectionLifetime::DATABASE_INSTANCE) {
+		if (lifetime == ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES) {
 			managed_result_set = ResultSetManager::Get(context).Add(*this);
 		}
 		break;
@@ -63,14 +63,18 @@ ColumnDataAllocator::~ColumnDataAllocator() {
 	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		return;
 	}
+	if (managed_result_set) {
+		D_ASSERT(type != ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
+		auto db = managed_result_set->db.lock();
+		if (db) {
+			ResultSetManager::Get(*db).Remove(*this);
+		}
+		return;
+	}
 	for (auto &block : blocks) {
 		block.GetHandle()->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 	}
 	blocks.clear();
-	if (managed_result_set) {
-		D_ASSERT(type != ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
-		ResultSetManager::Get(alloc.buffer_manager->GetDatabase()).Remove(*this);
-	}
 }
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {

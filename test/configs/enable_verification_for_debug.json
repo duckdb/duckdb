@@ -735,11 +735,9 @@
       ]
     },
     {
-      "reason": "Multiple buffer-managed query results (for verification) change memory usage query results",
+      "reason": "Verification query results are not buffer managed",
       "paths": [
-        "test/sql/pragma/pragma_database_size_readonly.test",
-        "test/sql/pragma/test_pragma_database_size.test",
-        "test/sql/index/art/storage/test_art_mem_limit.test"
+        "test/sql/outofcore/buffer_managed_query_result.test_slow"
       ]
     }
   ]

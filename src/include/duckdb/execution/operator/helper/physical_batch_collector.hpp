@@ -49,7 +49,9 @@ public:
 	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
 	               ? ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR
 	               : ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
-	           BatchedDataCollectionBufferManagerType::DATABASE_INSTANCE) {
+	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
+	               ? ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES
+	               : ColumnDataCollectionLifetime::REGULAR) {
 	}
 
 	mutex glock;
@@ -64,7 +66,9 @@ public:
 	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
 	               ? ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR
 	               : ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
-	           BatchedDataCollectionBufferManagerType::DATABASE_INSTANCE) {
+	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
+	               ? ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES
+	               : ColumnDataCollectionLifetime::REGULAR) {
 	}
 
 	BatchedDataCollection data;

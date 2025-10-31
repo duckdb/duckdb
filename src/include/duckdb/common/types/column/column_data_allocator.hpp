@@ -39,10 +39,10 @@ public:
 class ColumnDataAllocator {
 public:
 	explicit ColumnDataAllocator(Allocator &allocator);
-	explicit ColumnDataAllocator(BufferManager &buffer_manager, ColumnDataCollectionLifetime lifetime =
-	                                                                ColumnDataCollectionLifetime::INDEPENDENTLY_USABLE);
+	explicit ColumnDataAllocator(BufferManager &buffer_manager,
+	                             ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type,
-	                    ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::INDEPENDENTLY_USABLE);
+	                    ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	ColumnDataAllocator(ColumnDataAllocator &allocator);
 	~ColumnDataAllocator();
 

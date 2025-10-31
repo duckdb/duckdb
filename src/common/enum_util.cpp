@@ -84,7 +84,6 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
@@ -671,24 +670,6 @@ const char* EnumUtil::ToChars<AsyncResultsExecutionMode>(AsyncResultsExecutionMo
 template<>
 AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const char *value) {
 	return static_cast<AsyncResultsExecutionMode>(StringUtil::StringToEnum(GetAsyncResultsExecutionModeValues(), 2, "AsyncResultsExecutionMode", value));
-}
-
-const StringUtil::EnumStringLiteral *GetBatchedDataCollectionBufferManagerTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(BatchedDataCollectionBufferManagerType::CLIENT_CONTEXT), "CLIENT_CONTEXT" },
-		{ static_cast<uint32_t>(BatchedDataCollectionBufferManagerType::DATABASE_INSTANCE), "DATABASE_INSTANCE" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<BatchedDataCollectionBufferManagerType>(BatchedDataCollectionBufferManagerType value) {
-	return StringUtil::EnumToString(GetBatchedDataCollectionBufferManagerTypeValues(), 2, "BatchedDataCollectionBufferManagerType", static_cast<uint32_t>(value));
-}
-
-template<>
-BatchedDataCollectionBufferManagerType EnumUtil::FromString<BatchedDataCollectionBufferManagerType>(const char *value) {
-	return static_cast<BatchedDataCollectionBufferManagerType>(StringUtil::StringToEnum(GetBatchedDataCollectionBufferManagerTypeValues(), 2, "BatchedDataCollectionBufferManagerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBinderTypeValues() {

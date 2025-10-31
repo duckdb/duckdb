@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/batched_chunk_collection.hpp
+// duckdb/common/types/batched_data_collection.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -28,14 +28,6 @@ struct BatchedChunkScanState {
 	ColumnDataScanState scan_state;
 };
 
-//! Which BufferManager to use (if using ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR)
-enum class BatchedDataCollectionBufferManagerType : uint8_t {
-	//! Use the BufferManager belonging to the ClientContext
-	CLIENT_CONTEXT,
-	//! Use the BufferManager belonging to the DatabaseInstance
-	DATABASE_INSTANCE
-};
-
 //!  A BatchedDataCollection holds a number of data entries that are partitioned by batch index
 //! Scans over a BatchedDataCollection are ordered by batch index
 class BatchedDataCollection {
@@ -43,13 +35,11 @@ public:
 	DUCKDB_API
 	BatchedDataCollection(ClientContext &context, vector<LogicalType> types,
 	                      ColumnDataAllocatorType allocator_type = ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
-	                      BatchedDataCollectionBufferManagerType buffer_manager_type =
-	                          BatchedDataCollectionBufferManagerType::CLIENT_CONTEXT);
+	                      ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	DUCKDB_API
 	BatchedDataCollection(ClientContext &context, vector<LogicalType> types, batch_map_t batches,
 	                      ColumnDataAllocatorType allocator_type = ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
-	                      BatchedDataCollectionBufferManagerType buffer_manager_type =
-	                          BatchedDataCollectionBufferManagerType::CLIENT_CONTEXT);
+	                      ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 
 	//! Appends a datachunk with the given batch index to the batched collection
 	DUCKDB_API void Append(DataChunk &input, idx_t batch_index);
@@ -105,7 +95,7 @@ private:
 	ClientContext &context;
 	vector<LogicalType> types;
 	ColumnDataAllocatorType allocator_type;
-	BatchedDataCollectionBufferManagerType buffer_manager_type;
+	ColumnDataCollectionLifetime lifetime;
 	//! The data of the batched chunk collection - a set of batch_index -> ColumnDataCollection pointers
 	map<idx_t, unique_ptr<ColumnDataCollection>> data;
 	//! The last batch collection that was inserted into

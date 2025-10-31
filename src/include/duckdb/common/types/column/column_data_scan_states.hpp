@@ -36,10 +36,11 @@ enum class ColumnDataScanProperties : uint8_t {
 };
 
 enum class ColumnDataCollectionLifetime {
-	//! ColumnDataCollection is usable after the DB has closed
-	INDEPENDENTLY_USABLE,
-	//! Lifetime of the ColumnDataCollection is tied to the lifetime of the DB
-	DATABASE_INSTANCE,
+	//! Regular lifetime management
+	REGULAR,
+	//! Accessing will throw an error after the DB closes
+	//! Optional for ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR only
+	THROW_ERROR_AFTER_DATABASE_CLOSES,
 };
 
 struct ChunkManagementState {

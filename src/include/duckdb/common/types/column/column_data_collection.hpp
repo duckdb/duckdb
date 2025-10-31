@@ -32,12 +32,12 @@ public:
 	//! Constructs a buffer-managed column data collection
 	DUCKDB_API
 	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types,
-	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::INDEPENDENTLY_USABLE);
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	//! Constructs either an in-memory or a buffer-managed column data collection
 	DUCKDB_API
 	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
 	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
-	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::INDEPENDENTLY_USABLE);
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
 	//! between multiple column data collections and prevents wasting space.
 	//! Note that after one CDC inherits blocks from another, the other

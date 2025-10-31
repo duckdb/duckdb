@@ -74,7 +74,8 @@ unique_ptr<ColumnDataCollection> PhysicalResultCollector::CreateCollection(Clien
 		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	case QueryResultMemoryType::BUFFER_MANAGED:
 		// Use the DatabaseInstance BufferManager because the query result can outlive the ClientContext
-		return make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*context.db), types);
+		return make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*context.db), types,
+		                                       ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES);
 	default:
 		throw NotImplementedException("PhysicalResultCollector::CreateCollection for %s",
 		                              EnumUtil::ToString(memory_type));

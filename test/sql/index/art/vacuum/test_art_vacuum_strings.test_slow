@@ -129,12 +129,6 @@ FROM pragma_database_size() AS current);
 statement ok
 DELETE FROM t;
 
-# we disable verification for this last query as verification stores multiple query results in main memory
-# query results are now buffer-managed, so they add to the memory usage.
-# the memory usage goes up (slightly) with each query, causing, e.g., "Copied statement differs from original result!"
-statement ok
-PRAGMA disable_verification;
-
 query I
 SELECT mem_to_bytes(current.memory_usage) <= db_size.usage
 FROM db_size, pragma_database_size() current;
