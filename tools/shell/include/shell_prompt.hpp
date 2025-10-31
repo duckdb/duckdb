@@ -32,6 +32,7 @@ struct Prompt {
 public:
 	void ParsePrompt(const string &prompt);
 	string GeneratePrompt(ShellState &state);
+	void PrintPrompt(ShellState &state, PrintOutput output);
 
 private:
 	vector<PromptComponent> components;

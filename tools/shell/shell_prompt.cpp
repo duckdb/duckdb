@@ -341,4 +341,46 @@ string Prompt::GeneratePrompt(ShellState &state) {
 	return prompt;
 }
 
+void Prompt::PrintPrompt(ShellState &state, PrintOutput output) {
+	ShellHighlight highlight(state);
+	auto color = PrintColor::STANDARD;
+	auto intensity = PrintIntensity::STANDARD;
+
+	for (auto &component : components) {
+		switch (component.type) {
+		case PromptComponentType::LITERAL:
+			highlight.PrintText(component.literal, output, color, intensity);
+			break;
+		case PromptComponentType::SQL: {
+			auto result = EvaluateSQL(state, component.literal);
+			highlight.PrintText(result, output, color, intensity);
+			break;
+		}
+		case PromptComponentType::SETTING: {
+			auto result = HandleSetting(state, component);
+			highlight.PrintText(result, output, color, intensity);
+			break;
+		}
+		case PromptComponentType::SET_COLOR: {
+			color = component.color;
+			break;
+		}
+		case PromptComponentType::SET_INTENSITY: {
+			intensity = component.intensity;
+			break;
+		}
+		case PromptComponentType::RESET_COLOR: {
+			color = PrintColor::STANDARD;
+			intensity = PrintIntensity::STANDARD;
+			break;
+		}
+		case PromptComponentType::SET_COLOR_RGB:
+			highlight.PrintText("#UNSUPPORTED_COLOR#", output, PrintColor::RED, PrintIntensity::BOLD);
+			break;
+		default:
+			throw InternalException("Invalid prompt component");
+		}
+	}
+}
+
 } // namespace duckdb_shell

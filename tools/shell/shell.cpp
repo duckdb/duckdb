@@ -607,8 +607,9 @@ static char *local_getline(char *zLine, FILE *in) {
 		if (n + 100 > nLine) {
 			nLine = nLine * 2 + 100;
 			zLine = (char *)realloc(zLine, nLine);
-			if (zLine == 0)
+			if (!zLine) {
 				shell_out_of_memory();
+			}
 		}
 		if (fgets(&zLine[n], nLine - n, in) == 0) {
 			if (n == 0) {
@@ -666,6 +667,15 @@ static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
 		zResult = local_getline(zPrior, in);
 	} else {
 		auto &state = ShellState::Get();
+#if SHELL_USE_LOCAL_GETLINE
+		if (!isContinuation) {
+			state.main_prompt->PrintPrompt(state, PrintOutput::STDOUT);
+		} else {
+			state.Print(state.continuePrompt);
+		}
+		fflush(stdout);
+		zResult = local_getline(zPrior, stdin);
+#else
 		string main_prompt;
 		const char *zPrompt;
 		if (!isContinuation) {
@@ -674,11 +684,6 @@ static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
 		} else {
 			zPrompt = state.continuePrompt;
 		}
-#if SHELL_USE_LOCAL_GETLINE
-		printf("%s", zPrompt);
-		fflush(stdout);
-		zResult = local_getline(zPrior, stdin);
-#else
 		free(zPrior);
 		zResult = shell_readline(zPrompt);
 #endif
@@ -3210,7 +3215,14 @@ void ShellState::Initialize() {
 	rowSeparator = SEP_Row;
 	showHeader = true;
 	main_prompt = make_uniq<Prompt>();
-	main_prompt->ParsePrompt("D ");
+	string default_prompt;
+#ifndef HAVE_LINENOISE
+	// windows terminal only supports "basic" colors - so use green
+	default_prompt = "{color:green}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+#else
+	default_prompt = "{color:38,5,208}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+#endif
+	main_prompt->ParsePrompt(default_prompt);
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
