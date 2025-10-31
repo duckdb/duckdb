@@ -144,7 +144,7 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 				auto val = StringUtil::ToUnsigned(split);
 				if (val >= 256) {
 					throw InvalidInputException(
-					    "Unexpected rgb value \"%s\" for color parameter \"%s\": expected a value between 0 and 255",
+					    "Out of range rgb value \"%s\" for color parameter \"%s\": expected a value between 0 and 255",
 					    split, value);
 				}
 				if (!component.literal.empty()) {
