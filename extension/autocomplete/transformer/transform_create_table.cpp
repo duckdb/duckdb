@@ -122,7 +122,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(P
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
 	auto result = make_uniq<UniqueConstraint>(column_list, true);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTransformer &transformer,
@@ -130,7 +130,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
 	auto result = make_uniq<UniqueConstraint>(column_list, false);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,
@@ -139,7 +139,7 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransf
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto check_expr = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
 	auto result = make_uniq<CheckConstraint>(std::move(check_expr));
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(PEGTransformer &transformer,
