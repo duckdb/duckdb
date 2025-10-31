@@ -395,8 +395,6 @@ bool ShellState::HighlightResults() const {
 ** output from UTF-8 into MBCS.
 */
 #if defined(_WIN32) || defined(WIN32)
-static int win_utf8_mode = 0;
-
 void utf8_printf(FILE *out, const char *zFormat, ...) {
 	va_list ap;
 	va_start(ap, zFormat);
@@ -413,7 +411,7 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 		} else {
 			z1 = buffer;
 		}
-		if (win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
+		if (state.win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
 			// we can write UTF8 directly
 			fputs(z1, out);
 		} else {
@@ -597,7 +595,7 @@ static char *local_getline(char *zLine, FILE *in) {
 	auto &state = ShellState::Get();
 	int is_stdin = state.stdin_is_interactive && in == stdin;
 	int is_utf8 = 0;
-	if (is_stdin && win_utf8_mode) {
+	if (is_stdin && state.win_utf8_mode) {
 		if (SetConsoleCP(CP_UTF8)) {
 			is_utf8 = 1;
 		}

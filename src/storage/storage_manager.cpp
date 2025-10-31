@@ -347,7 +347,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 		// Replay the WAL.
 		auto wal_path = GetWALPath();
-		wal = WriteAheadLog::Replay(fs, db, wal_path);
+		wal = WriteAheadLog::Replay(context, fs, db, wal_path);
 
 		// End timing the WAL replay step.
 		if (client_context) {

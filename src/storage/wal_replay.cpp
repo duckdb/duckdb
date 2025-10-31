@@ -32,6 +32,7 @@
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -256,13 +257,16 @@ private:
 //===--------------------------------------------------------------------===//
 // Replay
 //===--------------------------------------------------------------------===//
-unique_ptr<WriteAheadLog> WriteAheadLog::Replay(FileSystem &fs, AttachedDatabase &db, const string &wal_path) {
+unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, FileSystem &fs, AttachedDatabase &db,
+                                                const string &wal_path) {
 	auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		// WAL does not exist - instantiate an empty WAL
 		return make_uniq<WriteAheadLog>(db, wal_path);
 	}
-	auto wal_handle = ReplayInternal(db, std::move(handle));
+
+	// context is passed for metric collection purposes only!!
+	auto wal_handle = ReplayInternal(context, db, std::move(handle));
 	if (wal_handle) {
 		return wal_handle;
 	}
@@ -272,12 +276,15 @@ unique_ptr<WriteAheadLog> WriteAheadLog::Replay(FileSystem &fs, AttachedDatabase
 	}
 	return make_uniq<WriteAheadLog>(db, wal_path);
 }
-unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle) {
+
+// QueryContext is passed for metric collection purposes only!!
+unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, AttachedDatabase &database,
+                                                        unique_ptr<FileHandle> handle) {
 	Connection con(database.GetDatabase());
 	auto wal_path = handle->GetPath();
 	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
 	if (reader.Finished()) {
-		// WAL file exists but it is empty - we can delete the file
+		// WAL file exists, but it is empty - we can delete the file
 		return nullptr;
 	}
 
@@ -289,7 +296,9 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
 	ReplayState checkpoint_state(database, *con.context);
 	try {
+		idx_t replay_entry_count = 0;
 		while (true) {
+			replay_entry_count++;
 			// read the current entry (deserialize only)
 			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader, true);
 			if (deserializer.ReplayEntry()) {
@@ -299,6 +308,11 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &databa
 					break;
 				}
 			}
+		}
+		auto client_context = context.GetClientContext();
+		if (client_context) {
+			auto &profiler = *client_context->client_data->profiler;
+			profiler.AddToCounter(MetricsType::WAL_REPLAY_ENTRY_COUNT, replay_entry_count);
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);

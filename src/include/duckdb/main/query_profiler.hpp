@@ -124,6 +124,8 @@ struct QueryMetrics {
 		attach_load_storage_latency.Reset();
 		attach_replay_wal_latency.Reset();
 		checkpoint_latency.Reset();
+		commit_write_wal_latency.Reset();
+		wal_replay_entry_count = 0;
 		total_bytes_read = 0;
 		total_bytes_written = 0;
 	}
@@ -142,6 +144,10 @@ struct QueryMetrics {
 	Profiler attach_replay_wal_latency;
 	//! The timer for running checkpoints.
 	Profiler checkpoint_latency;
+	//! The timer for the WAL writes during COMMIT.
+	Profiler commit_write_wal_latency;
+	//! The total number of entries to replay in the WAL.
+	atomic<idx_t> wal_replay_entry_count;
 	//! The total bytes read by the file system.
 	atomic<idx_t> total_bytes_read;
 	//! The total bytes written by the file system.
@@ -170,10 +176,8 @@ public:
 	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
 
-	//! Adds nr_bytes bytes to the total bytes read.
-	DUCKDB_API void AddBytesRead(const idx_t nr_bytes);
-	//! Adds nr_bytes bytes to the total bytes written.
-	DUCKDB_API void AddBytesWritten(const idx_t nr_bytes);
+	//! Adds amount to a specific metric type.
+	DUCKDB_API void AddToCounter(MetricsType type, const idx_t amount);
 
 	//! Start/End a timer for a specific metric type.
 	DUCKDB_API void StartTimer(MetricsType type);
@@ -184,7 +188,7 @@ public:
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
-	DUCKDB_API void SetInfo(const double &blocked_thread_time);
+	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
 
 	DUCKDB_API void StartPhase(MetricsType phase_metric);
 	DUCKDB_API void EndPhase();
