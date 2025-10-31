@@ -503,8 +503,7 @@ private:
 			                                           ? KeywordCategory::KEYWORD_TYPE_FUNC
 			                                           : KeywordCategory::KEYWORD_COL_NAME;
 
-			const bool is_reserved =
-			    keyword_helper.IsKeywordInCategory(token_text, KeywordCategory::KEYWORD_RESERVED);
+			const bool is_reserved = keyword_helper.IsKeywordInCategory(token_text, KeywordCategory::KEYWORD_RESERVED);
 			const bool has_extra_banned_category = keyword_helper.IsKeywordInCategory(token_text, banned_category);
 			const bool has_banned_flag = is_reserved || has_extra_banned_category;
 
