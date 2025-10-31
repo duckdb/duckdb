@@ -107,9 +107,9 @@ public:
 	}
 
 	string ConvertValue(const char *value) override {
-		// when rendering for markdown we need to escape pipes and backslashes
+		// when rendering for markdown we need to escape pipes
 		string result = ColumnRenderer::ConvertValue(value);
-		return StringUtil::Replace(StringUtil::Replace(result, "\\", "\\\\"), "|", "\\|");
+		return StringUtil::Replace(result, "|", "\\|");
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
