@@ -128,10 +128,10 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 		if (value == "bold") {
 			component.type = PromptComponentType::SET_INTENSITY;
 			component.intensity = PrintIntensity::BOLD;
-		} else if (value == "'underline") {
+		} else if (value == "underline") {
 			component.type = PromptComponentType::SET_INTENSITY;
 			component.intensity = PrintIntensity::UNDERLINE;
-		} else if (value == "'reset") {
+		} else if (value == "reset") {
 			component.type = PromptComponentType::RESET_COLOR;
 		} else if (value == "red") {
 			component.type = PromptComponentType::SET_COLOR;
@@ -157,8 +157,6 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 		} else if (value == "white") {
 			component.type = PromptComponentType::SET_COLOR;
 			component.color = PrintColor::WHITE;
-		} else if (value == "reset") {
-			component.type = PromptComponentType::RESET_COLOR;
 		} else {
 			// rgb color - try to parse it
 			auto splits = StringUtil::Split(value, ",");
@@ -324,7 +322,11 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 }
 
 string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) {
-	if (max_length.IsValid() && length > max_length.GetIndex()) {
+	if (!max_length.IsValid()) {
+		// no max length specified - just use the code
+		return text;
+	}
+	if (length > max_length.GetIndex()) {
 		// max length was already exceeded - skip rendering
 		return string();
 	}

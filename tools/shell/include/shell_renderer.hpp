@@ -47,6 +47,7 @@ class ColumnRenderer : public ShellRenderer {
 public:
 	explicit ColumnRenderer(ShellState &state);
 
+	virtual string ConvertValue(const char *value);
 	virtual void RenderHeader(ColumnarResult &result) = 0;
 	virtual void RenderFooter(ColumnarResult &result);
 

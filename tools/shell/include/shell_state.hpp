@@ -257,8 +257,7 @@ public:
 		PrintF(PrintOutput::STDOUT, str, std::forward<ARGS>(params)...);
 	}
 	bool ColumnTypeIsInteger(const char *type);
-	string strdup_handle_newline(const char *z);
-	void ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result);
+	void ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);

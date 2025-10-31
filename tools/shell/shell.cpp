@@ -499,11 +499,11 @@ void ShellState::UTF8WidthPrint(idx_t w, const string &str, bool right_align) {
 			}
 		}
 	if (n >= aw) {
-		PrintF("%.*s", i, zUtf);
+		utf8_printf(out, "%.*s", i, zUtf);
 	} else if (right_align) {
-		PrintF("%*s%s", aw - n, "", zUtf);
+		utf8_printf(out, "%*s%s", aw - n, "", zUtf);
 	} else {
-		PrintF("%s%*s", zUtf, aw - n, "");
+		utf8_printf(out, "%s%*s", zUtf, aw - n, "");
 	}
 }
 
@@ -1081,7 +1081,7 @@ void ShellState::PrintDashes(idx_t N) {
 		fputs(zDash, out);
 		N -= nDash;
 	}
-	PrintF("%.*s", static_cast<int>(N), zDash);
+	utf8_printf(out, "%.*s", static_cast<int>(N), zDash);
 }
 
 /*
@@ -1193,36 +1193,6 @@ void ShellState::RunTableDumpQuery(const string &zSelect) {
 	}
 }
 
-string ShellState::strdup_handle_newline(const char *z) {
-	static constexpr idx_t MAX_SIZE = 80;
-	if (!z) {
-		return nullValue;
-	}
-	if (cMode != RenderMode::BOX) {
-		return z;
-	}
-	string result;
-	idx_t count = 0;
-	bool interrupted = false;
-	for (const char *s = z; *s; s++) {
-		if (*s == '\n') {
-			result += "\\";
-			result += "n";
-		} else {
-			result += *s;
-		}
-		count++;
-		if (count >= MAX_SIZE && ((*s & 0xc0) != 0x80)) {
-			interrupted = true;
-			break;
-		}
-	}
-	if (interrupted) {
-		result += "...";
-	}
-	return result;
-}
-
 bool ShellState::ColumnTypeIsInteger(const char *type) {
 	if (!type) {
 		return false;
@@ -1327,12 +1297,12 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 	return SuccessState::SUCCESS;
 }
 
-void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result) {
+void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result) {
 	// fetch the column count, column names and types
 	result.column_count = res.ColumnCount();
 	result.data.reserve(result.column_count * 4);
 	for (idx_t c = 0; c < result.column_count; c++) {
-		result.data.push_back(strdup_handle_newline(res.names[c].c_str()));
+		result.data.push_back(renderer.ConvertValue(res.names[c].c_str()));
 		result.types.push_back(res.types[c]);
 		result.type_names.push_back(GetTypeName(res.types[c]));
 	}
@@ -1340,7 +1310,7 @@ void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult 
 	for (auto &row : res) {
 		for (idx_t c = 0; c < result.column_count; c++) {
 			auto str_val = row.GetValue<string>(c);
-			result.data.push_back(strdup_handle_newline(str_val.c_str()));
+			result.data.push_back(renderer.ConvertValue(str_val.c_str()));
 		}
 	}
 
@@ -1376,9 +1346,9 @@ void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult 
 */
 void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
 	ColumnarResult result;
-	ConvertColumnarResult(res, result);
-
 	auto column_renderer = GetColumnRenderer();
+	ConvertColumnarResult(*column_renderer, res, result);
+
 	column_renderer->RenderHeader(result);
 	auto colSep = column_renderer->GetColumnSeparator();
 	auto rowSep = column_renderer->GetRowSeparator();
