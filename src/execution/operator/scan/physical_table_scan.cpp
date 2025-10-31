@@ -104,7 +104,29 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	if (function.function) {
 		data.async_result = AsyncResultType::IMPLICIT;
 		data.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
+
+#ifdef SYNCHRONOUS_PHYSICAL_TABLE_SCAN
+		data.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;
+#endif
 		function.function(context.client, data, chunk);
+
+#ifdef SYNCHRONOUS_PHYSICAL_TABLE_SCAN
+		switch (data.async_result.GetResultType()) {
+		case AsyncResultType::BLOCKED:
+			throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found BLOCKED");
+
+		case AsyncResultType::FINISHED:
+			if (chunk.size() > 0) {
+				throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found FINISHED with non-empty chunk");
+			}
+			break;
+		case AsyncResultType::HAVE_MORE_OUTPUT:
+			if (chunk.size() == 0) {
+				throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found HAVE_MORE_OUTPUT with empty chunk");
+			}
+			break;
+		}
+#endif
 
 		switch (data.async_result.GetResultType()) {
 		case AsyncResultType::BLOCKED: {
