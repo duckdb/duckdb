@@ -999,6 +999,11 @@ void Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool stri
 	}
 }
 
+void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
+	// We are currently using WKB internally, so just copy as-is!
+	result.Reference(source);
+}
+
 bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
 	BlobWriter writer;
