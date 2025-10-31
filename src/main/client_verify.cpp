@@ -34,6 +34,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 
 	auto parameters = query_parameters.parameters;
 	query_parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	query_parameters.query_parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
 
 	// The purpose of this function is to test correctness of otherwise hard to test features:
 	// Copy() of statements and expressions

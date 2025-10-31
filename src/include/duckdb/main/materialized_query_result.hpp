@@ -52,6 +52,9 @@ public:
 
 	DUCKDB_API idx_t RowCount() const;
 
+	//! Returns a reference to the underlying column data collection
+	ColumnDataCollection &Collection();
+
 	bool HasManagedResult() const;
 
 	//! Returns the underlying column data collection

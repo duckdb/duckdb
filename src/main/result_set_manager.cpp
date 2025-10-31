@@ -32,6 +32,10 @@ unique_ptr<PinnedResultSet> ManagedResultSet::Pin() {
 	    new PinnedResultSet(std::move(db_ref), shared_from_this(), *collection, scan_state));
 }
 
+QueryResultMemoryType ManagedResultSet::GetMemoryType() const {
+	return memory_type;
+}
+
 ResultSetManager::ResultSetManager(DatabaseInstance &db_p) : db(db_p.shared_from_this()) {
 }
 

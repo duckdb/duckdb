@@ -196,8 +196,9 @@ private:
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection,
-	                                            bool independently_usable = true);
+	DUCKDB_API explicit ColumnDataRowCollection(
+	    const ColumnDataCollection &collection,
+	    ColumnDataScanProperties properties = ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;

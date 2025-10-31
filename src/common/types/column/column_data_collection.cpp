@@ -146,22 +146,18 @@ idx_t ColumnDataRow::RowIndex() const {
 //===--------------------------------------------------------------------===//
 // ColumnDataRowCollection
 //===--------------------------------------------------------------------===//
-ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection, bool independently_usable) {
+ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection,
+                                                 const ColumnDataScanProperties properties) {
 	if (collection.Count() == 0) {
 		return;
 	}
 	// read all the chunks
 	ColumnDataScanState temp_scan_state;
-	// we disallow zero copy so the chunk is independently usable even after the result is destroyed
-	if (independently_usable) {
-		collection.InitializeScan(temp_scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
-	} else {
-		collection.InitializeScan(temp_scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
-	}
+	collection.InitializeScan(temp_scan_state, properties);
 	while (true) {
 		auto chunk = make_uniq<DataChunk>();
 		// Use default allocator so the chunk is independently usable even after the DB allocator is destroyed
-		if (independently_usable) {
+		if (properties == ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 			collection.InitializeScanChunk(Allocator::DefaultAllocator(), *chunk);
 		} else {
 			collection.InitializeScanChunk(*chunk);

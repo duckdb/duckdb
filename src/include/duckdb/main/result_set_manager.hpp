@@ -34,6 +34,7 @@ public:
 
 public:
 	unique_ptr<PinnedResultSet> Pin();
+	QueryResultMemoryType GetMemoryType() const;
 
 private:
 	weak_ptr<DatabaseInstance> db;

@@ -3,6 +3,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/main/config.hpp"
 #include "shell_state.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,7 +40,7 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	if (!state.last_result) {
 		throw BinderException("Failed to query last result \"_\": no result available");
 	}
-	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->names);
+	return make_uniq<ColumnDataRef>(state.last_result->Pin(), state.last_result->names);
 }
 
 void ShellExtension::Load(ExtensionLoader &loader) {

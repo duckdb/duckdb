@@ -71,6 +71,15 @@ idx_t MaterializedQueryResult::RowCount() const {
 	return pinned_result_set->collection.Count();
 }
 
+ColumnDataCollection &MaterializedQueryResult::Collection() {
+	ValidateManagedResultInternal();
+	if (result_set->GetMemoryType() != QueryResultMemoryType::IN_MEMORY) {
+		throw InternalException("MaterializedQueryResult::Collection() cannot be used on in-memory result set");
+	}
+	return result_set->Pin()->collection;
+}
+
+
 bool MaterializedQueryResult::HasManagedResult() const {
 	return result_set.get();
 }
