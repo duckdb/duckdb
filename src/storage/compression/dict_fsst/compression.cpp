@@ -787,7 +787,6 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 
 	// Rewrite the dictionary
 	current_string_map.Clear();
-	// current_string_map.reserve(dict_count);
 	if (new_state == DictionaryAppendState::ENCODED) {
 		offset = 0;
 		auto uncompressed_dictionary_ptr = dict_copy.GetData();

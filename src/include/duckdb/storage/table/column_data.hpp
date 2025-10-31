@@ -196,7 +196,6 @@ public:
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics();
-	ColumnSegmentTree data;
 
 protected:
 	//! Append a transient segment
@@ -232,6 +231,7 @@ private:
 
 protected:
 	//! The segments holding the data of this column segment
+	ColumnSegmentTree data;
 	//! The lock for the updates
 	mutable mutex update_lock;
 	//! The updates for this column segment

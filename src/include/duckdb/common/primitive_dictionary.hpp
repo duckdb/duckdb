@@ -58,9 +58,6 @@ public:
 	}
 
 public:
-	void Replace(uint32_t index, SRC &value) {
-		dictionary[index].value = value;
-	}
 	//! Insert value into dictionary (if not full)
 	void Insert(SRC value) {
 		if (full) {
@@ -91,12 +88,6 @@ public:
 			entry.value = value;
 			entry.index = size++;
 		}
-	}
-	// Can be called when we know we allocated enough. Is used for Dictionary compression.
-	void InsertRawNoChecks(SRC value) {
-		auto &entry = Lookup(value);
-		entry.value = value;
-		entry.index = size++;
 	}
 
 	//! Get dictionary index of an already inserted value
