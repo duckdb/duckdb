@@ -1256,7 +1256,7 @@ void AsOfLocalSourceState::BeginRightScan() {
 }
 
 void AsOfLocalSourceState::EndRightScan() {
-	D_ASSERT(task->stage != AsOfJoinSourceStage::RIGHT);
+	D_ASSERT(task->stage == AsOfJoinSourceStage::RIGHT);
 
 	auto &asof_groups = gsource.asof_groups;
 	const auto hash_bin = task->group_idx;
@@ -1281,7 +1281,6 @@ void AsOfGlobalSourceState::FinishTask(TaskPtr task) {
 	D_ASSERT(finished_hash_group);
 
 	if (finished_hash_group->FinishTask(*task)) {
-		finished_hash_group.reset();
 		//	Remove it from the active groups
 		auto &v = active_groups;
 		v.erase(std::remove(v.begin(), v.end(), group_idx), v.end());
