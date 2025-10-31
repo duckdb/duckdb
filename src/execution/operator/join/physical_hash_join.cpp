@@ -967,7 +967,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
-		if (filter_pushdown) {
+		if (filter_pushdown && !sink.skip_filter_pushdown) {
 			filter_pushdown->FinalizeBF(context, ht, *this, min, max);
 		}
 		sink.perfect_join_executor.reset();
