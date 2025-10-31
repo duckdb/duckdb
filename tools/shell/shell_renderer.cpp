@@ -50,7 +50,7 @@ public:
 			return;
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
-			state.UTF8WidthPrint(state.out, result.column_width[i], result.data[i], result.right_align[i]);
+			state.UTF8WidthPrint(result.column_width[i], result.data[i], result.right_align[i]);
 			state.Print(i == result.column_count - 1 ? "\n" : "  ");
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
