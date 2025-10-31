@@ -153,8 +153,8 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 			auto order_type =
 			    op.orders[0].type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
 			auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-			auto order_options = make_shared_ptr<RowGroupOrderOptions>(column_index.GetPrimaryIndex(), order_by,
-			                                                           order_type, column_type);
+			auto order_options =
+			    make_uniq<RowGroupOrderOptions>(column_index.GetPrimaryIndex(), order_by, order_type, column_type);
 			get.function.set_scan_order(std::move(order_options), get.bind_data.get());
 		}
 	}

@@ -115,12 +115,12 @@ RowGroupReorderer::RowGroupReorderer(const RowGroupOrderOptions &options)
       column_type(options.column_type), offset(0), initialized(false) {
 }
 
-RowGroup *RowGroupReorderer::GetNextRowGroup(reference<RowGroup> row_group) {
-	D_ASSERT(&ordered_row_groups[offset].get() == &row_group.get());
+optional_ptr<RowGroup> RowGroupReorderer::GetNextRowGroup(optional_ptr<RowGroup> row_group) {
+	D_ASSERT(ordered_row_groups[offset] == row_group);
 	if (offset >= ordered_row_groups.size() - 1) {
 		return nullptr;
 	}
-	return &ordered_row_groups[++offset].get();
+	return ordered_row_groups[++offset];
 }
 
 Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by,
@@ -134,15 +134,15 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 	return Value();
 }
 
-RowGroup *RowGroupReorderer::GetRootSegment(reference<RowGroupSegmentTree> row_groups) {
+optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
 	if (initialized) {
-		return ordered_row_groups.empty() ? nullptr : &ordered_row_groups[0].get();
+		return ordered_row_groups.empty() ? nullptr : ordered_row_groups[0];
 	}
 
 	initialized = true;
 
 	multimap<Value, const reference<RowGroup>> row_group_map;
-	for (auto &row_group : row_groups.get().Segments()) {
+	for (auto &row_group : row_groups.Segments()) {
 		auto stats = row_group.GetStatistics(column_idx);
 		Value comparison_value = RetrieveStat(*stats, order_by, column_type);
 		row_group_map.emplace(comparison_value, row_group);
@@ -155,15 +155,15 @@ RowGroup *RowGroupReorderer::GetRootSegment(reference<RowGroupSegmentTree> row_g
 	ordered_row_groups.reserve(row_group_map.size());
 	if (order_type == RowGroupOrderType::ASC) {
 		for (auto &row_group : row_group_map) {
-			ordered_row_groups.push_back(row_group.second);
+			ordered_row_groups.emplace_back(row_group.second);
 		}
 	} else {
 		for (auto it = row_group_map.rbegin(); it != row_group_map.rend(); ++it) {
-			ordered_row_groups.push_back(it->second);
+			ordered_row_groups.emplace_back(it->second);
 		}
 	}
 
-	return &ordered_row_groups[0].get();
+	return ordered_row_groups[0];
 }
 
 optional_ptr<AdaptiveFilter> ScanFilterInfo::GetAdaptiveFilter() {
@@ -230,19 +230,19 @@ ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
 }
 
-RowGroup *ParallelCollectionScanState::GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups) {
+optional_ptr<RowGroup> ParallelCollectionScanState::GetRootSegment(RowGroupSegmentTree &row_groups) const {
 	if (reorderer) {
-		return reorderer->GetRootSegment(*row_groups);
+		return reorderer->GetRootSegment(row_groups);
 	}
-	return row_groups->GetRootSegment();
+	return row_groups.GetRootSegment();
 }
 
-RowGroup *ParallelCollectionScanState::GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups,
-                                                       RowGroup *row_group) {
+optional_ptr<RowGroup> ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups,
+                                                                    optional_ptr<RowGroup> row_group) const {
 	if (reorderer) {
-		return reorderer->GetNextRowGroup(*row_group);
+		return reorderer->GetNextRowGroup(row_group);
 	}
-	return row_groups->GetNextSegment(row_group);
+	return row_groups.GetNextSegment(row_group.get());
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
@@ -250,19 +250,19 @@ CollectionScanState::CollectionScanState(TableScanState &parent_p)
       valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
 }
 
-RowGroup *CollectionScanState::GetNextRowGroup(RowGroup *row_group) {
+optional_ptr<RowGroup> CollectionScanState::GetNextRowGroup(optional_ptr<RowGroup> row_group) const {
 	if (reorderer) {
-		return reorderer->GetNextRowGroup(*row_group);
+		return *reorderer->GetNextRowGroup(row_group);
 	}
-	return row_groups->GetNextSegment(row_group);
+	return row_groups->GetNextSegment(row_group.get());
 }
 
-RowGroup *CollectionScanState::GetNextRowGroup(SegmentLock &l, RowGroup *row_group) {
+optional_ptr<RowGroup> CollectionScanState::GetNextRowGroup(SegmentLock &l, optional_ptr<RowGroup> row_group) const {
 	D_ASSERT(!reorderer);
-	return row_groups->GetNextSegment(l, row_group);
+	return row_groups->GetNextSegment(l, row_group.get());
 }
 
-RowGroup *CollectionScanState::GetRootSegment() {
+optional_ptr<RowGroup> CollectionScanState::GetRootSegment() const {
 	if (reorderer) {
 		return reorderer->GetRootSegment(*row_groups);
 	}
@@ -279,7 +279,7 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 			return false;
 		} else {
 			do {
-				row_group = GetNextRowGroup(row_group);
+				row_group = GetNextRowGroup(row_group).get();
 				if (row_group) {
 					if (row_group->start >= max_row) {
 						row_group = nullptr;
@@ -303,7 +303,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 		if (result.size() > 0) {
 			return true;
 		} else {
-			row_group = GetNextRowGroup(l, row_group);
+			row_group = GetNextRowGroup(l, *row_group).get();
 			if (row_group) {
 				row_group->InitializeScan(*this);
 			}
@@ -319,7 +319,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 			return true;
 		}
 
-		row_group = GetNextRowGroup(row_group);
+		row_group = GetNextRowGroup(*row_group).get();
 		if (row_group) {
 			row_group->InitializeScan(*this);
 		}

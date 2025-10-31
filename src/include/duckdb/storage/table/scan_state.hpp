@@ -189,8 +189,8 @@ enum class OrderByColumnType { NUMERIC, STRING };
 class RowGroupReorderer {
 public:
 	explicit RowGroupReorderer(const RowGroupOrderOptions &options);
-	RowGroup *GetNextRowGroup(reference<RowGroup> row_group);
-	RowGroup *GetRootSegment(reference<RowGroupSegmentTree> row_groups);
+	optional_ptr<RowGroup> GetNextRowGroup(optional_ptr<RowGroup> row_group);
+	optional_ptr<RowGroup> GetRootSegment(RowGroupSegmentTree &row_groups);
 
 private:
 	const column_t column_idx;
@@ -200,7 +200,7 @@ private:
 
 	idx_t offset;
 	bool initialized;
-	vector<reference<RowGroup>> ordered_row_groups;
+	vector<optional_ptr<RowGroup>> ordered_row_groups;
 
 private:
 	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
@@ -230,7 +230,7 @@ public:
 	RandomEngine random;
 
 	//! Optional state for custom row group ordering
-	shared_ptr<RowGroupReorderer> reorderer;
+	unique_ptr<RowGroupReorderer> reorderer;
 
 public:
 	void Initialize(const QueryContext &context, const vector<LogicalType> &types);
@@ -238,9 +238,9 @@ public:
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
-	RowGroup *GetNextRowGroup(RowGroup *row_group);
-	RowGroup *GetNextRowGroup(SegmentLock &l, RowGroup *row_group);
-	RowGroup *GetRootSegment();
+	optional_ptr<RowGroup> GetNextRowGroup(optional_ptr<RowGroup> row_group) const;
+	optional_ptr<RowGroup> GetNextRowGroup(SegmentLock &l, optional_ptr<RowGroup> row_group) const;
+	optional_ptr<RowGroup> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
@@ -306,8 +306,8 @@ private:
 
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
-	RowGroup *GetRootSegment(const shared_ptr<RowGroupSegmentTree> &row_groups);
-	RowGroup *GetNextRowGroup(const shared_ptr<RowGroupSegmentTree> &row_groups, RowGroup *row_group);
+	optional_ptr<RowGroup> GetRootSegment(RowGroupSegmentTree &row_groups) const;
+	optional_ptr<RowGroup> GetNextRowGroup(RowGroupSegmentTree &row_groups, optional_ptr<RowGroup> row_group) const;
 
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
@@ -319,7 +319,7 @@ struct ParallelCollectionScanState {
 	mutex lock;
 
 	//! Optional state for custom row group ordering
-	shared_ptr<RowGroupReorderer> reorderer;
+	unique_ptr<RowGroupReorderer> reorderer;
 };
 
 struct ParallelTableScanState {

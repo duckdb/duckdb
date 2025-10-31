@@ -339,7 +339,7 @@ typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientConte
 typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &context,
                                                               optional_ptr<FunctionData> bind_data);
 
-typedef void (*table_function_set_scan_order)(shared_ptr<RowGroupOrderOptions> order_options,
+typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
                                               optional_ptr<FunctionData> bind_data);
 
 //! When to call init_global to initialize the table function
