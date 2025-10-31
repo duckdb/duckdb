@@ -1,4 +1,7 @@
-#include "reader/variant/variant_value.hpp"
+#include "duckdb/common/types/variant_value.hpp"
+#include "yyjson.hpp"
+
+using namespace duckdb_yyjson;
 
 namespace duckdb {
 

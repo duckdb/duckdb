@@ -4,9 +4,10 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/value.hpp"
 
-#include "yyjson.hpp"
-
-using namespace duckdb_yyjson;
+namespace duckdb_yyjson {
+struct yyjson_mut_doc;
+struct yyjson_mut_val;
+} // namespace duckdb_yyjson
 
 namespace duckdb {
 
@@ -41,7 +42,7 @@ public:
 	void AddItem(VariantValue &&val);
 
 public:
-	yyjson_mut_val *ToJSON(ClientContext &context, yyjson_mut_doc *doc) const;
+	duckdb_yyjson::yyjson_mut_val *ToJSON(ClientContext &context, duckdb_yyjson::yyjson_mut_doc *doc) const;
 
 public:
 	VariantValueType value_type;
