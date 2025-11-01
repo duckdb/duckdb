@@ -136,7 +136,7 @@ public:
 
 		// Compress the value
 		if (xor_result == 0) {
-			state.flag_buffer.Insert(ChimpConstants::Flags::VALUE_IDENTICAL);
+			state.flag_buffer.Insert<true>(ChimpConstants::Flags::VALUE_IDENTICAL);
 			state.output.template WriteValue<uint8_t, INDEX_BITS_SIZE>(previous_index);
 			state.SetLeadingZeros();
 		} else {
@@ -145,28 +145,29 @@ public:
 			uint8_t leading_zeros = ChimpConstants::Compression::LEADING_ROUND[leading_zeros_raw];
 
 			if (trailing_zeros_exceed_threshold) {
-				state.flag_buffer.Insert(ChimpConstants::Flags::TRAILING_EXCEEDS_THRESHOLD);
+				state.flag_buffer.Insert<true>(ChimpConstants::Flags::TRAILING_EXCEEDS_THRESHOLD);
 				uint32_t significant_bits = BIT_SIZE - leading_zeros - trailing_zeros;
 				auto result = PackedDataUtils<CHIMP_TYPE>::Pack(
 				    reference_index, ChimpConstants::Compression::LEADING_REPRESENTATION[leading_zeros],
 				    significant_bits);
-				state.packed_data_buffer.Insert(result & 0xFFFF);
+				state.packed_data_buffer.Insert<true>(result & 0xFFFF);
 				state.output.template WriteValue<CHIMP_TYPE>(xor_result >> trailing_zeros, significant_bits);
 				state.SetLeadingZeros();
 			} else if (leading_zeros == state.previous_leading_zeros) {
-				state.flag_buffer.Insert(ChimpConstants::Flags::LEADING_ZERO_EQUALITY);
+				state.flag_buffer.Insert<true>(ChimpConstants::Flags::LEADING_ZERO_EQUALITY);
 				int32_t significant_bits = BIT_SIZE - leading_zeros;
 				state.output.template WriteValue<CHIMP_TYPE>(xor_result, significant_bits);
 			} else {
-				state.flag_buffer.Insert(ChimpConstants::Flags::LEADING_ZERO_LOAD);
+				state.flag_buffer.Insert<true>(ChimpConstants::Flags::LEADING_ZERO_LOAD);
 				const int32_t significant_bits = BIT_SIZE - leading_zeros;
-				state.leading_zero_buffer.Insert(ChimpConstants::Compression::LEADING_REPRESENTATION[leading_zeros]);
+				state.leading_zero_buffer.Insert<true>(
+				    ChimpConstants::Compression::LEADING_REPRESENTATION[leading_zeros]);
 				state.output.template WriteValue<CHIMP_TYPE>(xor_result, significant_bits);
 				state.SetLeadingZeros(leading_zeros);
 			}
 		}
 		state.previous_value = in;
-		state.ring_buffer.Insert(in);
+		state.ring_buffer.Insert<true>(in);
 	}
 };
 

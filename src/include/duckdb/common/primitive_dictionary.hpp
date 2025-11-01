@@ -59,29 +59,14 @@ public:
 
 public:
 	//! Insert value into dictionary (if not full)
+	template <bool ADD_TO_TARGET = false>
 	void Insert(SRC value) {
 		if (full) {
 			return;
 		}
 		auto &entry = Lookup(value);
 		if (entry.IsEmpty()) {
-			if (size + 1 > maximum_size || !AddToTarget(value)) {
-				full = true;
-				return;
-			}
-			entry.value = value;
-			entry.index = size++;
-		}
-	}
-
-	//! Insert value into dictionary without calling AddToTarget()
-	void InsertRaw(SRC value) {
-		if (full) {
-			return;
-		}
-		auto &entry = Lookup(value);
-		if (entry.IsEmpty()) {
-			if (size + 1 > maximum_size) {
+			if (size + 1 > maximum_size || (ADD_TO_TARGET && !AddToTarget(value))) {
 				full = true;
 				return;
 			}

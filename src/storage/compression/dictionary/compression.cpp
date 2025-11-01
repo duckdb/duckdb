@@ -73,11 +73,11 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 	index_buffer.push_back(current_dictionary.size);
 	selection_buffer.push_back(UnsafeNumericCast<uint32_t>(index_buffer.size() - 1));
 	if (str.IsInlined()) {
-		current_string_map.InsertRaw(str);
+		current_string_map.Insert(str);
 	} else {
 		string_t dictionary_string((const char *)dict_pos, UnsafeNumericCast<uint32_t>(str.GetSize())); // NOLINT
 		D_ASSERT(!dictionary_string.IsInlined());
-		current_string_map.InsertRaw(dictionary_string);
+		current_string_map.Insert(dictionary_string);
 	}
 	DictionaryCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
 

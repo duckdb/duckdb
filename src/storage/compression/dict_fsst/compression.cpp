@@ -445,7 +445,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		}
 		state.to_encode_string_sum += str_len;
 		auto &uncompressed_string = state.dictionary_encoding_buffer.back();
-		state.current_string_map.InsertRaw(uncompressed_string);
+		state.current_string_map.Insert(uncompressed_string);
 	} else {
 		state.string_lengths.push_back(str_len);
 		auto baseptr =
@@ -453,7 +453,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		memcpy(baseptr + state.dictionary_offset, str.GetData(), str_len);
 		string_t dictionary_string((const char *)(baseptr + state.dictionary_offset), str_len); // NOLINT
 		state.dictionary_offset += str_len;
-		state.current_string_map.InsertRaw(dictionary_string);
+		state.current_string_map.Insert(dictionary_string);
 	}
 	state.dict_count++;
 
@@ -797,7 +797,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 			auto uncompressed_str_len = string_lengths[dictionary_index];
 
 			string_t dictionary_string(uncompressed_dictionary_ptr + offset, uncompressed_str_len);
-			current_string_map.InsertRaw(dictionary_string);
+			current_string_map.Insert(dictionary_string);
 
 #ifdef DEBUG
 			//! Verify that we can decompress the string
@@ -822,7 +822,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 			string_lengths[dictionary_index] = size;
 			string_t dictionary_string((const char *)start, UnsafeNumericCast<uint32_t>(size)); // NOLINT
 
-			current_string_map.InsertRaw(dictionary_string);
+			current_string_map.Insert(dictionary_string);
 		}
 	}
 	dictionary_offset = new_size;
