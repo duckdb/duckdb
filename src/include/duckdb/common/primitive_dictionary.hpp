@@ -51,10 +51,7 @@ public:
 	                                              : capacity * sizeof(TGT))),
 	      target_stream(allocated_target.get(), allocated_target.GetSize()),
 	      dictionary(reinterpret_cast<primitive_dictionary_entry_t *>(allocated_dictionary.get())), full(false) {
-		// Initialize empty
-		for (idx_t i = 0; i < capacity; i++) {
-			dictionary[i].index = INVALID_INDEX;
-		}
+		Clear();
 	}
 
 public:
