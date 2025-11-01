@@ -15,14 +15,10 @@ void Prompt::AddLiteral(const string &str) {
 	components.back().literal += str;
 }
 
-#if defined(_WIN32) || defined(WIN32)
 string Prompt::HandleColor(const PromptComponent &component) {
-	throw InvalidInputException("Prompt colors are not supported on Windows currently");
-}
-
-#else
-
-string Prompt::HandleColor(const PromptComponent &component) {
+	if (!ShellHighlight::IsEnabled()) {
+		return string();
+	}
 	switch (component.type) {
 	case PromptComponentType::SET_COLOR:
 		return ShellHighlight::TerminalCode(component.color, PrintIntensity::STANDARD);
@@ -34,7 +30,6 @@ string Prompt::HandleColor(const PromptComponent &component) {
 		throw InternalException("Invalid prompt color component");
 	}
 }
-#endif
 
 void Prompt::AddComponent(const string &bracket_type, const string &value) {
 	PromptComponent component;

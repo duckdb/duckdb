@@ -12,22 +12,8 @@
 
 namespace duckdb {
 
-#ifdef DISABLE_HIGHLIGHT
-static bool enableHighlighting = 0;
-#else
-static bool enableHighlighting = 1;
-#endif
-
-void Highlighting::Enable() {
-	enableHighlighting = 1;
-}
-
-void Highlighting::Disable() {
-	enableHighlighting = 0;
-}
-
 bool Highlighting::IsEnabled() {
-	return enableHighlighting;
+	return duckdb_shell::ShellHighlight::IsEnabled();
 }
 
 static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {

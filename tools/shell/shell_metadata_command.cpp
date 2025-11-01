@@ -431,7 +431,7 @@ MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
 
 #ifdef HAVE_LINENOISE
 MetadataResult ToggleHighlighting(ShellState &state, const vector<string> &args) {
-	linenoiseSetHighlighting(state.StringToBool(args[1]));
+	ShellHighlight::SetHighlighting(state.StringToBool(args[1]));
 	return MetadataResult::SUCCESS;
 }
 

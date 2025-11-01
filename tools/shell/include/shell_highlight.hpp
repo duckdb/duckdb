@@ -70,6 +70,10 @@ struct ShellHighlight {
 	static string TerminalCode(PrintColor color, PrintIntensity intensity);
 	//! Terminal code for resetting the state
 	static string ResetTerminalCode();
+	//! Whether or not shell highlighting is enabled
+	static bool IsEnabled();
+	//! Enable or disable highlighting
+	static void SetHighlighting(bool enabled);
 
 	static const HighlightElement &GetHighlightElement(HighlightElementType type);
 

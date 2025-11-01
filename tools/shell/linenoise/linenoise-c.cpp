@@ -116,14 +116,6 @@ void linenoiseSetMultiLine(int ml) {
 	Terminal::SetMultiLine(ml);
 }
 
-void linenoiseSetHighlighting(int enabled) {
-	if (enabled) {
-		Highlighting::Enable();
-	} else {
-		Highlighting::Disable();
-	}
-}
-
 void linenoiseSetErrorRendering(int enabled) {
 	if (enabled) {
 		Linenoise::EnableErrorRendering();

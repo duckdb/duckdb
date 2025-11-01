@@ -64,7 +64,6 @@ int linenoiseHistorySave(const char *filename);
 int linenoiseHistoryLoad(const char *filename);
 void linenoiseClearScreen(void);
 void linenoiseSetMultiLine(int ml);
-void linenoiseSetHighlighting(int enabled);
 void linenoiseSetErrorRendering(int enabled);
 void linenoiseSetCompletionRendering(int enabled);
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len);

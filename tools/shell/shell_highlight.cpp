@@ -42,82 +42,90 @@ const HighlightElement &ShellHighlight::GetHighlightElement(HighlightElementType
 ShellHighlight::ShellHighlight(ShellState &state) : state(state) {
 }
 
+bool ShellHighlight::IsEnabled() {
+	return ShellState::Get().highlighting_enabled;
+}
+
+void ShellHighlight::SetHighlighting(bool enabled) {
+	ShellState::Get().highlighting_enabled = enabled;
+}
+
 void ShellHighlight::PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
-    if (color == PrintColor::STANDARD && intensity == PrintIntensity::STANDARD) {
-        // no highlighting - print directly
-        state.Print(output, text);
-        return;
-    }
+	if ((color == PrintColor::STANDARD && intensity == PrintIntensity::STANDARD) || !IsEnabled()) {
+		// no highlighting - print directly
+		state.Print(output, text);
+		return;
+	}
 #ifdef _WIN32
 	HANDLE out = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-    bool use_terminal_codes = false;
-    DWORD mode = 0;
-    if (GetConsoleMode(out, &mode)) {
-        if (mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) {
-            // terminal codes are supported - use them!
-            use_terminal_codes = true;
-        }
-    }
-    if (!use_terminal_codes) {
-        // terminal codes are not supported - use standard 4-bit colors
-        CONSOLE_SCREEN_BUFFER_INFO defaultScreenInfo;
-        GetConsoleScreenBufferInfo(out, &defaultScreenInfo);
-        WORD wAttributes = 0;
+	bool use_terminal_codes = false;
+	DWORD mode = 0;
+	if (GetConsoleMode(out, &mode)) {
+		if (mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) {
+			// terminal codes are supported - use them!
+			use_terminal_codes = true;
+		}
+	}
+	if (!use_terminal_codes) {
+		// terminal codes are not supported - use standard 4-bit colors
+		CONSOLE_SCREEN_BUFFER_INFO defaultScreenInfo;
+		GetConsoleScreenBufferInfo(out, &defaultScreenInfo);
+		WORD wAttributes = 0;
 
-        switch (intensity) {
-        case PrintIntensity::BOLD:
-        case PrintIntensity::BOLD_UNDERLINE:
-            wAttributes |= FOREGROUND_INTENSITY;
-            break;
-        default:
-            break;
-        }
-        switch (color) {
-        case PrintColor::RED:
-            wAttributes |= FOREGROUND_RED;
-            break;
-        case PrintColor::GREEN:
-            wAttributes |= FOREGROUND_GREEN;
-            break;
-        case PrintColor::BLUE:
-            wAttributes |= FOREGROUND_BLUE;
-            break;
-        case PrintColor::YELLOW:
-            wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN;
-            break;
-        case PrintColor::GRAY:
-            wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
-            break;
-        case PrintColor::MAGENTA:
-            wAttributes |= FOREGROUND_BLUE | FOREGROUND_RED;
-            break;
-        case PrintColor::CYAN:
-            wAttributes |= FOREGROUND_BLUE | FOREGROUND_GREEN;
-            break;
-        case PrintColor::WHITE:
-            wAttributes |= FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
-            break;
-        default:
-            break;
-        }
-        if (wAttributes != 0) {
-            SetConsoleTextAttribute(out, wAttributes);
-        }
+		switch (intensity) {
+		case PrintIntensity::BOLD:
+		case PrintIntensity::BOLD_UNDERLINE:
+			wAttributes |= FOREGROUND_INTENSITY;
+			break;
+		default:
+			break;
+		}
+		switch (color) {
+		case PrintColor::RED:
+			wAttributes |= FOREGROUND_RED;
+			break;
+		case PrintColor::GREEN:
+			wAttributes |= FOREGROUND_GREEN;
+			break;
+		case PrintColor::BLUE:
+			wAttributes |= FOREGROUND_BLUE;
+			break;
+		case PrintColor::YELLOW:
+			wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN;
+			break;
+		case PrintColor::GRAY:
+			wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+			break;
+		case PrintColor::MAGENTA:
+			wAttributes |= FOREGROUND_BLUE | FOREGROUND_RED;
+			break;
+		case PrintColor::CYAN:
+			wAttributes |= FOREGROUND_BLUE | FOREGROUND_GREEN;
+			break;
+		case PrintColor::WHITE:
+			wAttributes |= FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+			break;
+		default:
+			break;
+		}
+		if (wAttributes != 0) {
+			SetConsoleTextAttribute(out, wAttributes);
+		}
 
-        state.Print(output, text);
+		state.Print(output, text);
 
-        SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
-        return;
-    }
+		SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
+		return;
+	}
 #endif
 	string terminal_code = TerminalCode(color, intensity);
-    if (terminal_code.empty()) {
-        // no highlighting - print directly
-        state.Print(output, text);
-        return;
-    }
-    terminal_code += text;
-    terminal_code += ResetTerminalCode();
+	if (terminal_code.empty()) {
+		// no highlighting - print directly
+		state.Print(output, text);
+		return;
+	}
+	terminal_code += text;
+	terminal_code += ResetTerminalCode();
 	state.Print(output, terminal_code);
 }
 
