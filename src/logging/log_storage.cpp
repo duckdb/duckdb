@@ -258,8 +258,10 @@ void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insens
 }
 
 void StdOutLogStorage::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx_t write_size) {
+#ifndef DUCKDB_DISABLE_PRINT
 	std::cout.write(const_char_ptr_cast(buffer), NumericCast<int64_t>(write_size));
 	std::cout.flush();
+#endif
 }
 
 StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, false, 1) {

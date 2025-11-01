@@ -129,12 +129,14 @@ public:
 	}
 
 	void Print() const {
+#ifndef DUCKDB_DISABLE_PRINT
 		std::cout << "State Machine Options" << '\n';
 		std::cout << "Delim: " << state_machine_options.delimiter.GetValue() << '\n';
 		std::cout << "Quote: " << state_machine_options.quote.GetValue() << '\n';
 		std::cout << "Escape: " << state_machine_options.escape.GetValue() << '\n';
 		std::cout << "Comment: " << state_machine_options.comment.GetValue() << '\n';
 		std::cout << "---------------------" << '\n';
+#endif
 	}
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
