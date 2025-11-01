@@ -51,21 +51,19 @@ public:
 	                                              : capacity * sizeof(TGT))),
 	      target_stream(allocated_target.get(), allocated_target.GetSize()),
 	      dictionary(reinterpret_cast<primitive_dictionary_entry_t *>(allocated_dictionary.get())), full(false) {
-		// Initialize empty
-		for (idx_t i = 0; i < capacity; i++) {
-			dictionary[i].index = INVALID_INDEX;
-		}
+		Clear();
 	}
 
 public:
 	//! Insert value into dictionary (if not full)
+	template <bool ADD_TO_TARGET = false>
 	void Insert(SRC value) {
 		if (full) {
 			return;
 		}
 		auto &entry = Lookup(value);
 		if (entry.IsEmpty()) {
-			if (size + 1 > maximum_size || !AddToTarget(value)) {
+			if (size + 1 > maximum_size || (ADD_TO_TARGET && !AddToTarget(value))) {
 				full = true;
 				return;
 			}
@@ -128,7 +126,13 @@ public:
 		allocated_target.Reset();
 	}
 
-private:
+	void Clear() {
+		for (idx_t i = 0; i < capacity; i++) {
+			dictionary[i].index = INVALID_INDEX;
+		}
+		size = 0;
+		full = false;
+	}
 	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {
 		auto offset = Hash(value) & capacity_mask;
@@ -138,6 +142,7 @@ private:
 		return dictionary[offset];
 	}
 
+private:
 	//! Write a value to the target data (if source is not string)
 	template <typename S = SRC, typename std::enable_if<!std::is_same<S, string_t>::value, int>::type = 0>
 	bool AddToTarget(const SRC &src_value) {

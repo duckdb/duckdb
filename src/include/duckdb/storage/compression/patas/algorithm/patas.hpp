@@ -44,7 +44,7 @@ public:
 public:
 	void UpdateMetadata(uint8_t trailing_zero, uint8_t byte_count, uint8_t index_diff) {
 		if (!EMPTY) {
-			packed_data_buffer.Insert(PackedDataUtils<EXACT_TYPE>::Pack(index_diff, byte_count, trailing_zero));
+			packed_data_buffer.Insert<true>(PackedDataUtils<EXACT_TYPE>::Pack(index_diff, byte_count, trailing_zero));
 		}
 		index++;
 	}
@@ -108,7 +108,7 @@ struct PatasCompression {
 		// Avoid an invalid shift error when xor_result is 0
 		state.byte_writer.template WriteValue<EXACT_TYPE>(xor_result >> (trailing_zero - is_equal), significant_bits);
 
-		state.ring_buffer.Insert(value);
+		state.ring_buffer.Insert<true>(value);
 		const uint8_t index_difference = state.ring_buffer.Size() - reference_index;
 		state.UpdateMetadata(trailing_zero - is_equal, significant_bytes, index_difference);
 	}
