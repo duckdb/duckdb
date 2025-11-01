@@ -73,7 +73,7 @@ enum class RenderMode : uint32_t {
 
 enum class PrintOutput { STDOUT, STDERR };
 
-enum class InputMode { STANDARD, FILE };
+enum class InputMode { STANDARD, FILE, DUCKDB_RC };
 
 enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 
@@ -90,6 +90,7 @@ enum class ShellFlags : uint32_t {
 enum class ShellOpenFlags { EXIT_ON_FAILURE, KEEP_ALIVE_ON_FAILURE };
 enum class SuccessState { SUCCESS, FAILURE };
 enum class OptionType { DEFAULT, ON, OFF };
+enum class StartupText { ALL, VERSION, NONE };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
@@ -192,6 +193,12 @@ public:
 	OptionType highlight_errors = OptionType::DEFAULT;
 	//! Whether or not we are highlighting results
 	OptionType highlight_results = OptionType::DEFAULT;
+	//! Path to .duckdbrc file
+	string duckdb_rc_path;
+	//! Startup text to display
+	StartupText startup_text = StartupText::ALL;
+	//! Whether or not the loading resources message was displayed
+	bool displayed_loading_resources_message = false;
 
 	/*
 	** Prompt strings. Initialized in main. Settable with

@@ -375,6 +375,27 @@ MetadataResult ShowConfiguration(ShellState &state, const vector<string> &args) 
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetStartupText(ShellState &state, const vector<string> &args) {
+	auto prev_display = state.startup_text;
+	if (args[1] == "all") {
+		state.startup_text = StartupText::ALL;
+	} else if (args[1] == "version") {
+		state.startup_text = StartupText::VERSION;
+	} else if (args[1] == "none") {
+		state.startup_text = StartupText::NONE;
+	} else {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (state.displayed_loading_resources_message && prev_display == StartupText::ALL &&
+	    state.startup_text != StartupText::ALL) {
+		ShellHighlight highlight(state);
+		string warning = "WARNING: .startup_text should be on top of your ~/.duckdbrc in order to "
+		                 "prevent the \"Loading resources\" message from being displayed\n";
+		highlight.PrintText(warning, PrintOutput::STDERR, HighlightElementType::STARTUP_TEXT);
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ShowVersion(ShellState &state, const vector<string> &args) {
 	state.PrintF("DuckDB %s (%s) %s\n" /*extra-version-info*/, duckdb::DuckDB::LibraryVersion(),
 	             duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
@@ -664,6 +685,8 @@ static const MetadataCommand metadata_commands[] = {
 #ifdef HAVE_LINENOISE
     {"singleline", 1, ToggleSingleLine, "", "Sets the render mode to single-line", 0, ""},
 #endif
+    {"startup_text", 2, SetStartupText, "none|version|all",
+     "Start-up text to display. Set this as the first line in .duckdbrc", 0, ""},
     {"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, ""},
     {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2, ""},
     {"thousand_sep", 0, SetThousandSep, "SEP",
