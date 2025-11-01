@@ -1,6 +1,7 @@
 {
   "group": "config_options_interface",
   "deprecated": false,
+  "description": "Functions to create, configure, and register custom configuration options.",
   "entries": [
     {
       "name": "duckdb_create_config_option",

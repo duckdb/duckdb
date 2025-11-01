@@ -1,6 +1,7 @@
 {
     "group": "bind_values_to_prepared_statements",
     "deprecated": false,
+    "description": "Functions to bind values to prepared statements. Try to use `duckdb_bind_value` and the `duckdb_create_...` interface for all types.",
     "entries": [
         {
             "name": "duckdb_bind_value",

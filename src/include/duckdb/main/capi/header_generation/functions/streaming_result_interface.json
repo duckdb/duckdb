@@ -1,6 +1,7 @@
 {
     "group": "streaming_result_interface",
     "deprecated": false,
+    "description": "Functions to stream a `duckdb_result`. Call `duckdb_fetch_chunk` until the result is exhausted.",
     "entries": [
         {
             "name": "duckdb_stream_fetch_chunk",

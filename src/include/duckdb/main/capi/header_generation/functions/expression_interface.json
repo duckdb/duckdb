@@ -1,6 +1,7 @@
 {
   "group": "expression_interface",
   "deprecated": false,
+  "description": "Functions to create and access expressions. Expressions are widespread in DuckDB, especially during query planning. E.g., scalar function parameters are expressions, and can be inspected during the bind-phase.",
   "entries": [
     {
       "name": "duckdb_destroy_expression",

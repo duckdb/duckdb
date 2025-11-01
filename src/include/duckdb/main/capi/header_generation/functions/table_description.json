@@ -1,6 +1,7 @@
 {
     "group": "table_description",
     "deprecated": false,
+    "description": "Functions to create and access a `duckdb_table_description` instance.",
     "entries": [
         {
             "name": "duckdb_table_description_create",

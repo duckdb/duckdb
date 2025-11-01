@@ -1,6 +1,7 @@
 {
     "group": "vector_interface",
     "deprecated": false,
+    "description": "Functions to interact with `duckdb_vector`. A vector typically (but not always) lives in a data chunk and contains a subset of the rows of a column.",
     "entries": [
         {
             "name": "duckdb_create_vector",

@@ -1,6 +1,7 @@
 {
   "group": "file_system_interface",
   "deprecated": false,
+  "description": "Functions to access the file system of a connection and to interact with file handles. File handle instances to files allow operations such as reading, writing, and seeking in a file.",
   "entries": [
     {
       "name": "duckdb_client_context_get_file_system",

@@ -1,6 +1,7 @@
 {
     "group": "helpers",
     "deprecated": false,
+    "description": "Generic and `duckdb_string_t` helper functions.",
     "entries": [
         {
             "name": "duckdb_malloc",

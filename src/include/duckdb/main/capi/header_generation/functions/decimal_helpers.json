@@ -1,6 +1,7 @@
 {
     "group": "decimal_helpers",
     "deprecated": false,
+    "description": "Functions to convert from and to `duckdb_decimal`.",
     "entries": [
         {
             "name": "duckdb_double_to_decimal",

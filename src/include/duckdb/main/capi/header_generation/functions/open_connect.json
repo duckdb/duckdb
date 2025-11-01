@@ -1,6 +1,7 @@
 {
     "group": "open_connect",
     "deprecated": false,
+    "description": "Functions to operate on the instance cache, databases, connections, as well as some metadata functions.",
     "entries": [
         {
             "name": "duckdb_create_instance_cache",

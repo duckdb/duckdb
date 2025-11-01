@@ -1,6 +1,7 @@
 {
     "group": "scalar_functions",
     "deprecated": false,
+    "description": "Functions to create, execute, and register custom scalar functions. Scalar functions take one or more input parameters, and return a single output parameter. Consider using a table function, if your scalar function does not take any input parameters.",
     "entries": [
         {
             "name": "duckdb_create_scalar_function",

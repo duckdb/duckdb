@@ -1,6 +1,7 @@
 {
     "group": "cast_functions",
     "deprecated": false,
+    "description": "Functions to create, execute, and register custom cast functions.",
     "entries": [
         {
             "name": "duckdb_create_cast_function",

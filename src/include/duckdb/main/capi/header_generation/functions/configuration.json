@@ -1,6 +1,7 @@
 {
     "group": "configuration",
     "deprecated": false,
+    "description": "Functions to interact with a `duckdb_config`, which is the configuration parameter for opening a database.",
     "entries": [
         {
             "name": "duckdb_create_config",
