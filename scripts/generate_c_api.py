@@ -485,9 +485,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
                 use_instead = curr_group['use_instead']
 
             if not 'description' in curr_group:
-                raise Exception(
-                    f"Group {group_name} does not have a description!"
-                )
+                raise Exception(f"Group {group_name} does not have a description!")
             description = curr_group['description']
 
             declarations += comment_function_group(group_name, group_is_deprecated, use_instead, description)
