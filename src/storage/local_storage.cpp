@@ -154,12 +154,25 @@ void LocalTableStorage::FlushBlocks() {
 ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                              TableIndexList &index_list, const vector<LogicalType> &table_types,
                                              row_t &start_row) {
-	// In this function, we only care about scanning the indexed columns of a table.
+	// mapped_column_ids contains the physical column indices of each Indexed column in the table.
+	// This mapping is used to retrieve the physical column index for the corresponding vector of an index chunk scan.
+	// For example, if we are processing data for index_chunk.data[i], we can retrieve the physical column index
+	// by getting the value at mapped_column_ids[i].
+	// An important note is that the index_chunk orderings are created in accordance with this mapping, not the other
+	// way around. (Check the scan code below, where the mapped_column_ids is passed as a parameter to the scan.
+	// The index_chunk inside of that lambda is ordered according to the mapping that is a parameter to the scan).
+
+	// mapped_column_ids is used in two places:
+	// 1) To create the physical table chunk in this function.
+	// 2) If we are in an unbound state (i.e., WAL replay is happening right now), this mapping and the index_chunk
+	//	  are buffered in unbound_index. However, there can also be buffered deletes happening, so it is important
+	//    to maintain a canonical representation of the mapping, which is just sorting.
 	auto indexed_columns = index_list.GetRequiredColumns();
 	vector<StorageIndex> mapped_column_ids;
 	for (auto &col : indexed_columns) {
 		mapped_column_ids.emplace_back(col);
 	}
+	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
 
 	// However, because the bound expressions of the indexes (and their bound
 	// column references) are in relation to ALL table columns, we create an
@@ -168,6 +181,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	DataChunk table_chunk;
 	table_chunk.InitializeEmpty(table_types);
 
+	// index_chunk scans are created here in the mapped_column_ids ordering (see note above).
 	ErrorData error;
 	source.Scan(transaction, mapped_column_ids, [&](DataChunk &index_chunk) -> bool {
 		D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
@@ -195,7 +209,6 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
                                         bool append_to_table) {
 	// In this function, we might scan all table columns,
 	// as we might also append to the table itself (append_to_table).
-
 	auto &table = table_ref.get();
 	if (append_to_table) {
 		table.InitializeAppend(transaction, append_state);

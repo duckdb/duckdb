@@ -100,6 +100,7 @@
 #include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
@@ -705,6 +706,24 @@ const char* EnumUtil::ToChars<BlockState>(BlockState value) {
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value) {
 	return static_cast<BlockState>(StringUtil::StringToEnum(GetBlockStateValues(), 2, "BlockState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetBufferedIndexReplayValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(BufferedIndexReplay::INSERT_ENTRY), "INSERT_ENTRY" },
+		{ static_cast<uint32_t>(BufferedIndexReplay::DEL_ENTRY), "DEL_ENTRY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<BufferedIndexReplay>(BufferedIndexReplay value) {
+	return StringUtil::EnumToString(GetBufferedIndexReplayValues(), 2, "BufferedIndexReplay", static_cast<uint32_t>(value));
+}
+
+template<>
+BufferedIndexReplay EnumUtil::FromString<BufferedIndexReplay>(const char *value) {
+	return static_cast<BufferedIndexReplay>(StringUtil::StringToEnum(GetBufferedIndexReplayValues(), 2, "BufferedIndexReplay", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCAPIResultSetTypeValues() {
