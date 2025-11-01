@@ -3195,7 +3195,8 @@ void ShellState::Initialize() {
 	// windows terminal only supports "basic" colors - so use green
 	default_prompt = "{max_length:40}{color:green}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 #else
-	default_prompt = "{max_length:40}{color:38,5,208}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt =
+	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 #endif
 	main_prompt->ParsePrompt(default_prompt);
 	strcpy(continuePrompt, "· ");

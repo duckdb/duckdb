@@ -551,4 +551,8 @@ string ShellHighlight::TerminalCode(PrintColor color, PrintIntensity intensity) 
 	return terminal_code;
 }
 
+string ShellHighlight::ResetTerminalCode() {
+	return "\033[00m";
+}
+
 } // namespace duckdb_shell

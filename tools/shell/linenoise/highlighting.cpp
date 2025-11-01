@@ -17,7 +17,6 @@ static bool enableHighlighting = 0;
 #else
 static bool enableHighlighting = 1;
 #endif
-static const char *reset = "\033[00m";
 
 void Highlighting::Enable() {
 	enableHighlighting = 1;
@@ -226,7 +225,7 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 		} else {
 			ss << terminal_code;
 			ss << text;
-			ss << reset;
+			ss << duckdb_shell::ShellHighlight::ResetTerminalCode();
 		}
 	}
 	return ss.str();

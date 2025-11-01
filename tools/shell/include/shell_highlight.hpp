@@ -68,6 +68,8 @@ struct ShellHighlight {
 	static bool TryGetPrintColor(const char *name, PrintColor &result, string &error_msg);
 	//! Gets the terminal code for a given print color (POSIX only)
 	static string TerminalCode(PrintColor color, PrintIntensity intensity);
+	//! Terminal code for resetting the state
+	static string ResetTerminalCode();
 
 	static const HighlightElement &GetHighlightElement(HighlightElementType type);
 

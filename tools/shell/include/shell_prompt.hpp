@@ -13,7 +13,7 @@
 
 namespace duckdb_shell {
 
-enum class PromptComponentType { LITERAL, SQL, SET_COLOR, SET_INTENSITY, RESET_COLOR, SET_COLOR_RGB, SETTING };
+enum class PromptComponentType { LITERAL, SQL, SET_COLOR, SET_INTENSITY, RESET_COLOR, SETTING };
 
 struct PromptComponent {
 	PromptComponentType type;
