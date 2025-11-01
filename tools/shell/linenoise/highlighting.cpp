@@ -17,7 +17,6 @@ static bool enableHighlighting = 0;
 #else
 static bool enableHighlighting = 1;
 #endif
-static const char *underline = "\033[4m";
 static const char *reset = "\033[00m";
 
 void Highlighting::Enable() {

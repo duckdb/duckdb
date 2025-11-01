@@ -471,17 +471,11 @@ MetadataResult TrySetHighlightColor(ShellState &state, const string &component, 
 
 enum class DeprecatedHighlightColors {
 	COMMENT,
-	COMMENT_CODE,
 	CONSTANT,
-	CONSTANT_CODE,
 	KEYWORD,
-	KEYWORD_CODE,
 	ERROR,
-	ERROR_CODE,
 	CONT,
-	CONT_CODE,
 	CONT_SEL,
-	CONT_SEL_CODE
 };
 
 template <DeprecatedHighlightColors T>
@@ -491,38 +485,20 @@ MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &arg
 	case DeprecatedHighlightColors::COMMENT:
 		literal = "comment";
 		break;
-	case DeprecatedHighlightColors::COMMENT_CODE:
-		literal = "commentcode";
-		break;
 	case DeprecatedHighlightColors::CONSTANT:
 		literal = "constant";
-		break;
-	case DeprecatedHighlightColors::CONSTANT_CODE:
-		literal = "constantcode";
 		break;
 	case DeprecatedHighlightColors::KEYWORD:
 		literal = "keyword";
 		break;
-	case DeprecatedHighlightColors::KEYWORD_CODE:
-		literal = "keywordcode";
-		break;
 	case DeprecatedHighlightColors::ERROR:
 		literal = "error";
-		break;
-	case DeprecatedHighlightColors::ERROR_CODE:
-		literal = "errorcode";
 		break;
 	case DeprecatedHighlightColors::CONT:
 		literal = "cont";
 		break;
-	case DeprecatedHighlightColors::CONT_CODE:
-		literal = "contcode";
-		break;
 	case DeprecatedHighlightColors::CONT_SEL:
 		literal = "cont_sel";
-		break;
-	case DeprecatedHighlightColors::CONT_SEL_CODE:
-		literal = "cont_selcode";
 		break;
 	default:
 		throw std::runtime_error("eek");
@@ -556,20 +532,12 @@ static const MetadataCommand metadata_commands[] = {
 #ifdef HAVE_LINENOISE
     {"comment", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for comment values", 0, nullptr},
-    {"commentcode", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for comment values", 0, nullptr},
     {"constant", 2, SetHighlightingColor<DeprecatedHighlightColors::CONSTANT>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for constant values", 0, nullptr},
-    {"constantcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONSTANT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for constant values", 0, nullptr},
     {"cont", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for continuation markers", 0, nullptr},
-    {"contcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for continuation markers", 0, nullptr},
     {"cont_sel", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_SEL>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for continuation markers", 0, nullptr},
-    {"cont_selcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_SEL_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for continuation markers", 0, nullptr},
 #endif
     {"decimal_sep", 0, SetDecimalSep, "SEP",
      "Sets the decimal separator used when rendering numbers. Only for duckbox mode.", 3, ""},
@@ -593,8 +561,6 @@ static const MetadataCommand metadata_commands[] = {
 #ifdef HAVE_LINENOISE
     {"error", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for errors", 0, nullptr},
-    {"errorcode", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for errors", 0, nullptr},
 #endif
     {"excel", 0, SetOutputExcel, "", "Display the output of next command in spreadsheet", 0,
      "--bom\tPut a UTF8 byte-order mark on intermediate file"},
@@ -618,8 +584,6 @@ static const MetadataCommand metadata_commands[] = {
 #ifdef HAVE_LINENOISE
     {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
-    {"keywordcode", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for keywords", 0, nullptr},
 #endif
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
