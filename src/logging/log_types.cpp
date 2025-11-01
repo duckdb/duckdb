@@ -14,6 +14,7 @@ constexpr LogLevel FileSystemLogType::LEVEL;
 constexpr LogLevel QueryLogType::LEVEL;
 constexpr LogLevel HTTPLogType::LEVEL;
 constexpr LogLevel PhysicalOperatorLogType::LEVEL;
+constexpr LogLevel MetricsLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
@@ -147,6 +148,29 @@ string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &phys
 
 	return Value::STRUCT(std::move(child_list)).ToString();
 }
+
+//===--------------------------------------------------------------------===//
+// MetricsLogType
+//===--------------------------------------------------------------------===//
+MetricsLogType::MetricsLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType MetricsLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"metric", LogicalType::VARCHAR},
+	    {"value", LogicalType::VARCHAR},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string MetricsLogType::ConstructLogMessage(const MetricsType &metric, const Value &value) {
+	child_list_t<Value> child_list = {
+	    {"metric", EnumUtil::ToString(metric)},
+	    {"value", value.ToString()},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
 //===--------------------------------------------------------------------===//
 // CheckpointLogType
 //===--------------------------------------------------------------------===//

@@ -2,6 +2,8 @@
 # description: Test version pragma
 # group: [pragma]
 
+tags release
+
 statement ok
 PRAGMA version;
 
@@ -27,3 +29,18 @@ SELECT count(*) FROM pragma_version() WHERE library_version LIKE 'v%';
 
 statement ok
 pragma extension_versions;
+
+statement ok
+SET VARIABLE v = (select library_version  from pragma_version());
+
+statement ok
+SET VARIABLE v_or_latest = (select CASE WHEN getvariable('v') ILIKE 'v%-dev%' THEN 'latest' WHEN getvariable('v') ILIKE 'v0.0.1' THEN 'latest' ELSE getvariable('v') END);
+
+statement ok
+SET VARIABLE codename = (select CASE WHEN getvariable('v') ILIKE 'v%-dev%' THEN 'Development Version' WHEN getvariable('v') ILIKE 'v0.0.1' THEN 'Unknown Version' ELSE '%' END);
+
+query I
+select count(*) FROM (select codename from pragma_version() WHERE codename LIKE getvariable('codename'));
+----
+1
+

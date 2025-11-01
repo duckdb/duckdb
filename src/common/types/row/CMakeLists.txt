@@ -6,7 +6,6 @@ endif()
 add_library_unity(
   duckdb_common_types_row
   OBJECT
-  block_iterator.cpp
   partitioned_tuple_data.cpp
   tuple_data_allocator.cpp
   tuple_data_collection.cpp

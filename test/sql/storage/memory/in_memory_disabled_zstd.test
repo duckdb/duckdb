@@ -1,0 +1,28 @@
+# name: test/sql/storage/memory/in_memory_disabled_zstd.test
+# group: [memory]
+
+statement ok
+attach ':memory:' as db2 (compress);
+
+statement ok
+use db2;
+
+statement ok
+pragma force_compression='zstd';
+
+statement ok
+create table tbl as
+select
+    i // 5_000 as num,
+    num::varchar || list_reduce([uuid()::varchar for x in range(10)], lambda x, y: concat(x, y)) str
+from range(20_000) t(i) order by num;
+
+# Because we're running in In-Memory mode, we have explicitly disabled ZSTD
+# Since the InMemoryBlockManager doesn't support the methods required by ZSTD
+statement ok
+force checkpoint;
+
+query I
+select distinct compression = 'Uncompressed' from pragma_storage_info('tbl') where segment_type = 'VARCHAR'
+----
+true

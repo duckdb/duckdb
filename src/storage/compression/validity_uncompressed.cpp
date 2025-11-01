@@ -287,6 +287,13 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 			// otherwise the subsequent bitwise & will modify values outside of the range of values we want to alter
 			input_mask |= ValidityUncompressed::UPPER_MASKS[shift_amount];
 
+			if (pos == 0) {
+				// We also need to set the lower bits, which are to the left of the relevant bits (x), to 1
+				// These are the bits that are "behind" this scan window, and should not affect this scan
+				auto non_relevant_mask = ValidityUncompressed::LOWER_MASKS[result_idx];
+				input_mask |= non_relevant_mask;
+			}
+
 			// after this, we move to the next input_entry
 			offset = ValidityMask::BITS_PER_VALUE - input_idx;
 			input_entry++;
