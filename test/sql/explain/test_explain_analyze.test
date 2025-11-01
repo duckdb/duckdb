@@ -88,6 +88,11 @@ EXPLAIN (ANALYZE, FORMAT html) SELECT SUM(i) FROM integers
 ----
 analyzed_plan	<REGEX>:.+<div class="title">EXPLAIN_ANALYZE</div>.*
 
+query II
+EXPLAIN (ANALYZE, FORMAT mermaid) SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.+\*\*EXPLAIN_ANALYZE\*\*.*
+
 # Make sure that EXPLAIN ANALYZE still works when no output is specified
 statement ok
 PRAGMA enable_profiling = 'no_output';
