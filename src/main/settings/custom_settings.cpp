@@ -339,22 +339,39 @@ bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_o
 	return false;
 }
 
-static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &json,
+static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &input,
                                                 const set<OptimizerType> &disabled_optimizers) {
 	profiler_settings_t metrics;
 
 	string invalid_settings;
-	for (auto &entry : json) {
+	for (auto &entry : input) {
 		MetricsType setting;
+		MetricGroup group = MetricGroup::INVALID;
 		try {
 			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
 		} catch (std::exception &ex) {
-			if (!invalid_settings.empty()) {
-				invalid_settings += ", ";
+			try {
+				group = EnumUtil::FromString<MetricGroup>(StringUtil::Upper(entry.first));
+			} catch (std::exception &ex) {
+				if (!invalid_settings.empty()) {
+					invalid_settings += ", ";
+				}
+				invalid_settings += entry.first;
+				continue;
 			}
-			invalid_settings += entry.first;
+		}
+		if (group != MetricGroup::INVALID) {
+			if (entry.second == "true") {
+				auto group_metrics = MetricsUtils::GetMetricsByGroupType(group);
+				for (auto &metric : group_metrics) {
+					if (!MetricsUtils::IsOptimizerMetric(metric) || IsEnabledOptimizer(metric, disabled_optimizers)) {
+						metrics.insert(metric);
+					}
+				}
+			}
 			continue;
 		}
+
 		if (StringUtil::Lower(entry.second) == "true" &&
 		    (!MetricsUtils::IsOptimizerMetric(setting) || IsEnabledOptimizer(setting, disabled_optimizers))) {
 			metrics.insert(setting);
@@ -382,9 +399,9 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	auto &config = ClientConfig::GetConfig(context);
 
 	// parse the file content
-	unordered_map<string, string> json;
+	unordered_map<string, string> input_json;
 	try {
-		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
+		input_json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
 	} catch (std::exception &ex) {
 		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
 		                  "all the keys and values start with a quote. ",
@@ -395,7 +412,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	auto &db_config = DBConfig::GetConfig(context);
 	auto &disabled_optimizers = db_config.options.disabled_optimizers;
 
-	auto settings = FillTreeNodeSettings(json, disabled_optimizers);
+	auto settings = FillTreeNodeSettings(input_json, disabled_optimizers);
 	AddOptimizerMetrics(settings, disabled_optimizers);
 	config.profiler_settings = settings;
 }
@@ -403,7 +420,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 void CustomProfilingSettingsSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
-	config.profiler_settings = ProfilingInfo::DefaultSettings();
+	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
 }
 
 Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
@@ -1270,6 +1287,12 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
 		for (auto &setting : phase_timing_settings) {
 			config.profiler_settings.insert(setting);
+		}
+	} else if (parameter == "all") {
+		config.enable_profiler = true;
+		auto all_metrics = MetricsUtils::GetAllMetrics();
+		for (auto &metric : all_metrics) {
+			config.profiler_settings.insert(metric);
 		}
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);

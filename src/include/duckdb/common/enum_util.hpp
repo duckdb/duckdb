@@ -262,6 +262,8 @@ enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
 
+enum class MetricGroup : uint8_t;
+
 enum class MetricsType : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
@@ -801,6 +803,9 @@ const char* EnumUtil::ToChars<MergeActionType>(MergeActionType value);
 
 template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
+
+template<>
+const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
@@ -1438,6 +1443,9 @@ MergeActionType EnumUtil::FromString<MergeActionType>(const char *value);
 
 template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
+
+template<>
+MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value);

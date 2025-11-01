@@ -1,7 +1,7 @@
 #include "duckdb/main/profiling_info.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiling_utils.hpp"
 
 #include "yyjson.hpp"
 
@@ -23,64 +23,17 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 
 	// Reduce.
 	if (depth == 0) {
-		auto op_metrics = OperatorScopeSettings();
+		auto op_metrics = MetricsUtils::GetOperatorMetrics();
 		for (const auto metric : op_metrics) {
 			settings.erase(metric);
 		}
 	} else {
-		auto root_metrics = RootScopeSettings();
+		auto root_metrics = MetricsUtils::GetRootScopeMetrics();
 		for (const auto metric : root_metrics) {
 			settings.erase(metric);
 		}
 	}
 	ResetMetrics();
-}
-
-profiler_settings_t ProfilingInfo::DefaultSettings() {
-	return {MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
-	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
-	        MetricsType::BLOCKED_THREAD_TIME,
-	        MetricsType::CHECKPOINT_LATENCY,
-	        MetricsType::CPU_TIME,
-	        MetricsType::COMMIT_WRITE_WAL_LATENCY,
-	        MetricsType::CUMULATIVE_CARDINALITY,
-	        MetricsType::CUMULATIVE_ROWS_SCANNED,
-	        MetricsType::EXTRA_INFO,
-	        MetricsType::LATENCY,
-	        MetricsType::OPERATOR_CARDINALITY,
-	        MetricsType::OPERATOR_NAME,
-	        MetricsType::OPERATOR_ROWS_SCANNED,
-	        MetricsType::OPERATOR_TIMING,
-	        MetricsType::OPERATOR_TYPE,
-	        MetricsType::RESULT_SET_SIZE,
-	        MetricsType::ROWS_RETURNED,
-	        MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
-	        MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
-	        MetricsType::TOTAL_BYTES_READ,
-	        MetricsType::TOTAL_BYTES_WRITTEN,
-	        MetricsType::WAITING_TO_ATTACH_LATENCY,
-	        MetricsType::WAL_REPLAY_ENTRY_COUNT,
-	        MetricsType::QUERY_NAME};
-}
-
-profiler_settings_t ProfilingInfo::RootScopeSettings() {
-	return {MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
-	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
-	        MetricsType::BLOCKED_THREAD_TIME,
-	        MetricsType::CHECKPOINT_LATENCY,
-	        MetricsType::COMMIT_WRITE_WAL_LATENCY,
-	        MetricsType::LATENCY,
-	        MetricsType::ROWS_RETURNED,
-	        MetricsType::TOTAL_BYTES_READ,
-	        MetricsType::TOTAL_BYTES_WRITTEN,
-	        MetricsType::WAITING_TO_ATTACH_LATENCY,
-	        MetricsType::WAL_REPLAY_ENTRY_COUNT,
-	        MetricsType::QUERY_NAME};
-}
-
-profiler_settings_t ProfilingInfo::OperatorScopeSettings() {
-	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
-	        MetricsType::OPERATOR_NAME, MetricsType::OPERATOR_TYPE};
 }
 
 void ProfilingInfo::ResetMetrics() {
@@ -91,46 +44,7 @@ void ProfilingInfo::ResetMetrics() {
 			continue;
 		}
 
-		switch (metric) {
-		case MetricsType::QUERY_NAME:
-			metrics[metric] = Value::CreateValue("");
-			break;
-		case MetricsType::LATENCY:
-		case MetricsType::BLOCKED_THREAD_TIME:
-		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING:
-		case MetricsType::WAITING_TO_ATTACH_LATENCY:
-		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
-		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
-		case MetricsType::CHECKPOINT_LATENCY:
-		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
-			metrics[metric] = Value::CreateValue(0.0);
-			break;
-		case MetricsType::OPERATOR_NAME:
-			metrics[metric] = Value::CreateValue("");
-			break;
-		case MetricsType::OPERATOR_TYPE:
-			metrics[metric] = Value::CreateValue<uint8_t>(0);
-			break;
-		case MetricsType::ROWS_RETURNED:
-		case MetricsType::RESULT_SET_SIZE:
-		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY:
-		case MetricsType::CUMULATIVE_ROWS_SCANNED:
-		case MetricsType::OPERATOR_ROWS_SCANNED:
-		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
-		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-		case MetricsType::TOTAL_BYTES_READ:
-		case MetricsType::TOTAL_BYTES_WRITTEN:
-		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
-			metrics[metric] = Value::CreateValue<uint64_t>(0);
-			break;
-		case MetricsType::EXTRA_INFO:
-			metrics[metric] = Value::MAP(InsertionOrderPreservingMap<string>());
-			break;
-		default:
-			throw InternalException("MetricsType" + EnumUtil::ToString(metric) + "not implemented");
-		}
+		ProfilingUtils::SetMetricToDefault(metrics, metric);
 	}
 }
 
@@ -223,44 +137,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			continue;
 		}
 
-		switch (metric) {
-		case MetricsType::QUERY_NAME:
-		case MetricsType::OPERATOR_NAME:
-			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
-			break;
-		case MetricsType::LATENCY:
-		case MetricsType::BLOCKED_THREAD_TIME:
-		case MetricsType::CPU_TIME:
-		case MetricsType::OPERATOR_TIMING:
-		case MetricsType::WAITING_TO_ATTACH_LATENCY:
-		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
-		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
-		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
-		case MetricsType::CHECKPOINT_LATENCY: {
-			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
-			break;
-		}
-		case MetricsType::OPERATOR_TYPE: {
-			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, GetMetricAsString(metric).c_str());
-			break;
-		}
-		case MetricsType::ROWS_RETURNED:
-		case MetricsType::RESULT_SET_SIZE:
-		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::OPERATOR_CARDINALITY:
-		case MetricsType::CUMULATIVE_ROWS_SCANNED:
-		case MetricsType::OPERATOR_ROWS_SCANNED:
-		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
-		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
-		case MetricsType::TOTAL_BYTES_READ:
-		case MetricsType::TOTAL_BYTES_WRITTEN: {
-			yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[metric].GetValue<uint64_t>());
-			break;
-		}
-		default:
-			throw NotImplementedException("MetricsType %s not implemented", EnumUtil::ToString(metric));
-		}
+		ProfilingUtils::MetricToJson(doc, dest, key_ptr, metrics, metric);
 	}
 }
 
