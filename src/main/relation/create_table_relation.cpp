@@ -14,12 +14,21 @@ CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string sc
 	TryBindRelation(columns);
 }
 
+CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string catalog_name, string schema_name,
+                                         string table_name, bool temporary_p, OnCreateConflict on_conflict)
+    : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(std::move(child_p)),
+      catalog_name(std::move(catalog_name)), schema_name(std::move(schema_name)), table_name(std::move(table_name)),
+      temporary(temporary_p), on_conflict(on_conflict) {
+	TryBindRelation(columns);
+}
+
 BoundStatement CreateTableRelation::Bind(Binder &binder) {
 	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
 	CreateStatement stmt;
 	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = catalog_name;
 	info->schema = schema_name;
 	info->table = table_name;
 	info->query = std::move(select);
