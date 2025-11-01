@@ -4,12 +4,15 @@
 
 namespace duckdb {
 void PrintBits(const char value) {
+#ifndef DUCKDB_DISABLE_PRINT
 	for (int i = 7; i >= 0; --i) {
 		std::cout << ((value >> i) & 1);
 	}
+#endif
 }
 
 void bignum_t::Print() const {
+#ifndef DUCKDB_DISABLE_PRINT
 	auto ptr = data.GetData();
 	auto length = data.GetSize();
 	for (idx_t i = 0; i < length; ++i) {
@@ -17,14 +20,17 @@ void bignum_t::Print() const {
 		std::cout << "  ";
 	}
 	std::cout << '\n';
+#endif
 }
 
 void BignumIntermediate::Print() const {
+#ifndef DUCKDB_DISABLE_PRINT
 	for (idx_t i = 0; i < size; ++i) {
 		PrintBits(static_cast<char>(data[i]));
 		std::cout << "  ";
 	}
 	std::cout << '\n';
+#endif
 }
 
 BignumIntermediate::BignumIntermediate(const bignum_t &value) {
