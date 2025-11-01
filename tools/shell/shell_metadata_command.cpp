@@ -450,12 +450,12 @@ MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
 }
 #endif
 
-#ifdef HAVE_LINENOISE
 MetadataResult ToggleHighlighting(ShellState &state, const vector<string> &args) {
-	linenoiseSetHighlighting(state.StringToBool(args[1]));
+	ShellHighlight::SetHighlighting(state.StringToBool(args[1]));
 	return MetadataResult::SUCCESS;
 }
 
+#ifdef HAVE_LINENOISE
 MetadataResult ToggleErrorRendering(ShellState &state, const vector<string> &args) {
 	linenoiseSetErrorRendering(state.StringToBool(args[1]));
 	return MetadataResult::SUCCESS;
@@ -483,31 +483,20 @@ MetadataResult ToggleSingleLine(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult TrySetHighlightColor(ShellState &state, const string &component, const string &code) {
-	char error[1024];
-	if (!linenoiseTrySetHighlightColor(component.c_str(), code.c_str(), error, 1024)) {
-		state.PrintF(PrintOutput::STDERR, "%s\n", error);
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetRenderHighlightColor(ShellState &state, const vector<string> &args) {
-	return TrySetHighlightColor(state, args[1], args[2]);
+	vector<string> args;
+	args.push_back("highlight_colors");
+	args.push_back(component);
+	args.push_back(code);
+	return SetHighlightColors(state, args);
 }
 
 enum class DeprecatedHighlightColors {
 	COMMENT,
-	COMMENT_CODE,
 	CONSTANT,
-	CONSTANT_CODE,
 	KEYWORD,
-	KEYWORD_CODE,
 	ERROR,
-	ERROR_CODE,
 	CONT,
-	CONT_CODE,
 	CONT_SEL,
-	CONT_SEL_CODE
 };
 
 template <DeprecatedHighlightColors T>
@@ -517,38 +506,20 @@ MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &arg
 	case DeprecatedHighlightColors::COMMENT:
 		literal = "comment";
 		break;
-	case DeprecatedHighlightColors::COMMENT_CODE:
-		literal = "commentcode";
-		break;
 	case DeprecatedHighlightColors::CONSTANT:
 		literal = "constant";
-		break;
-	case DeprecatedHighlightColors::CONSTANT_CODE:
-		literal = "constantcode";
 		break;
 	case DeprecatedHighlightColors::KEYWORD:
 		literal = "keyword";
 		break;
-	case DeprecatedHighlightColors::KEYWORD_CODE:
-		literal = "keywordcode";
-		break;
 	case DeprecatedHighlightColors::ERROR:
 		literal = "error";
-		break;
-	case DeprecatedHighlightColors::ERROR_CODE:
-		literal = "errorcode";
 		break;
 	case DeprecatedHighlightColors::CONT:
 		literal = "cont";
 		break;
-	case DeprecatedHighlightColors::CONT_CODE:
-		literal = "contcode";
-		break;
 	case DeprecatedHighlightColors::CONT_SEL:
 		literal = "cont_sel";
-		break;
-	case DeprecatedHighlightColors::CONT_SEL_CODE:
-		literal = "cont_selcode";
 		break;
 	default:
 		throw std::runtime_error("eek");
@@ -561,6 +532,38 @@ MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &arg
 
 #endif
 
+MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
+	bool bold = false;
+	bool underline = false;
+	for (idx_t i = 1; i < args.size(); i++) {
+		if (args[i] == "bold") {
+			bold = true;
+		} else if (args[i] == "underline") {
+			underline = true;
+		} else {
+			return MetadataResult::PRINT_USAGE;
+		}
+	}
+	PrintIntensity intensity = PrintIntensity::STANDARD;
+	if (bold && underline) {
+		intensity = PrintIntensity::BOLD_UNDERLINE;
+	} else if (bold) {
+		intensity = PrintIntensity::BOLD;
+	} else if (underline) {
+		intensity = PrintIntensity::UNDERLINE;
+	}
+	ShellHighlight highlighter(state);
+	for (idx_t i = 0; i < static_cast<idx_t>(PrintColor::EXTENDED_COLOR_COUNT); i++) {
+		auto color = static_cast<PrintColor>(i);
+		auto color_info = ShellHighlight::GetColorInfo(color);
+		string print_text = color_info->color_name;
+		highlighter.PrintText(print_text, PrintOutput::STDOUT, color, intensity);
+		state.Print(" ");
+	}
+	state.Print("\n");
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
@@ -570,20 +573,12 @@ static const MetadataCommand metadata_commands[] = {
 #ifdef HAVE_LINENOISE
     {"comment", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for comment values", 0, nullptr},
-    {"commentcode", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for comment values", 0, nullptr},
     {"constant", 2, SetHighlightingColor<DeprecatedHighlightColors::CONSTANT>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for constant values", 0, nullptr},
-    {"constantcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONSTANT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for constant values", 0, nullptr},
     {"cont", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for continuation markers", 0, nullptr},
-    {"contcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for continuation markers", 0, nullptr},
     {"cont_sel", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_SEL>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for continuation markers", 0, nullptr},
-    {"cont_selcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_SEL_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for continuation markers", 0, nullptr},
 #endif
     {"decimal_sep", 0, SetDecimalSep, "SEP",
      "Sets the decimal separator used when rendering numbers. Only for duckbox mode.", 3, ""},
@@ -598,6 +593,7 @@ static const MetadataCommand metadata_commands[] = {
         "Options:\n\t--newlines\tAllow unescaped newline characters in output\nTABLE is a LIKE pattern for the tables "
         "to dump\nAdditional LIKE patterns can be given in subsequent arguments",
     },
+    {"display_colors", 0, DisplayColors, "[bold|underline]", "Display all terminal colors and their names", 0, ""},
     {"echo", 2, ToggleEcho, "on|off", "Turn command echo on or off", 3, ""},
     {"edit", 0, nullptr, "", "Opens an external text editor to edit a query.", 0,
      "Notes:\n\t* The editor is read from the environment variables\n\t  DUCKDB_EDITOR, EDITOR, VISUAL in-order\n\t* "
@@ -606,17 +602,13 @@ static const MetadataCommand metadata_commands[] = {
 #ifdef HAVE_LINENOISE
     {"error", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for errors", 0, nullptr},
-    {"errorcode", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for errors", 0, nullptr},
 #endif
     {"excel", 0, SetOutputExcel, "", "Display the output of next command in spreadsheet", 0,
      "--bom\tPut a UTF8 byte-order mark on intermediate file"},
     {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0, ""},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0, ""},
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0, ""},
-#ifdef HAVE_LINENOISE
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
-#endif
     {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
@@ -631,8 +623,6 @@ static const MetadataCommand metadata_commands[] = {
 #ifdef HAVE_LINENOISE
     {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
-    {"keywordcode", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for keywords", 0, nullptr},
 #endif
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
@@ -669,8 +659,6 @@ static const MetadataCommand metadata_commands[] = {
     {"quit", 0, QuitProcess, "", "Exit this program", 0, ""},
     {"read", 2, ReadFromFile, "FILE", "Read input from FILE", 3, ""},
 #ifdef HAVE_LINENOISE
-    {"render_color", 3, SetRenderHighlightColor, "?COMP? ?COLOR?",
-     "Configure highlighting colors for the interactive prompt", 0, ""},
     {"render_completion", 2, ToggleCompletionRendering, "on|off",
      "Toggle displaying of completion prompts in the shell on/off", 0, ""},
     {"render_errors", 2, ToggleErrorRendering, "on|off", "Toggle rendering of errors in the shell on/off", 0, ""},

@@ -15,79 +15,21 @@ void Prompt::AddLiteral(const string &str) {
 	components.back().literal += str;
 }
 
-#if defined(_WIN32) || defined(WIN32)
 string Prompt::HandleColor(const PromptComponent &component) {
-	throw InvalidInputException("Prompt colors are not supported on Windows currently");
-}
-
-#else
-// FIXME: this is copied from tools/shell/linenoise/highlighting.cpp
-struct Color {
-	const char *color_name;
-	const char *highlight;
-};
-static const Color color_list[] = {{"red", "\033[31m"},           {"green", "\033[32m"},
-                                   {"yellow", "\033[33m"},        {"blue", "\033[34m"},
-                                   {"magenta", "\033[35m"},       {"cyan", "\033[36m"},
-                                   {"white", "\033[37m"},         {"brightblack", "\033[90m"},
-                                   {"brightred", "\033[91m"},     {"brightgreen", "\033[92m"},
-                                   {"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
-                                   {"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
-                                   {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
-static const char *color_bold = "\033[1m";
-static const char *color_underline = "\033[4m";
-static const char *color_reset = "\033[00m";
-
-string GetHighlightColor(const char *color) {
-	for (idx_t i = 0; color_list[i].color_name; i++) {
-		if (StringUtil::Equals(color, color_list[i].color_name)) {
-			return color_list[i].highlight;
-		}
+	if (!ShellHighlight::IsEnabled()) {
+		return string();
 	}
-	throw InvalidInputException("Color not found");
-}
-
-string Prompt::HandleColor(const PromptComponent &component) {
 	switch (component.type) {
 	case PromptComponentType::SET_COLOR:
-		switch (component.color) {
-		case PrintColor::RED:
-			return GetHighlightColor("red");
-		case PrintColor::YELLOW:
-			return GetHighlightColor("yellow");
-		case PrintColor::GREEN:
-			return GetHighlightColor("green");
-		case PrintColor::GRAY:
-			return GetHighlightColor("gray");
-		case PrintColor::BLUE:
-			return GetHighlightColor("blue");
-		case PrintColor::MAGENTA:
-			return GetHighlightColor("magenta");
-		case PrintColor::CYAN:
-			return GetHighlightColor("cyan");
-		case PrintColor::WHITE:
-			return GetHighlightColor("white");
-		default:
-			throw InternalException("Invalid prompt color");
-		}
+		return ShellHighlight::TerminalCode(component.color, PrintIntensity::STANDARD);
 	case PromptComponentType::SET_INTENSITY:
-		switch (component.intensity) {
-		case PrintIntensity::BOLD:
-			return color_bold;
-		case PrintIntensity::UNDERLINE:
-			return color_underline;
-		default:
-			throw InternalException("Invalid prompt intensity");
-		}
+		return ShellHighlight::TerminalCode(PrintColor::STANDARD, component.intensity);
 	case PromptComponentType::RESET_COLOR:
-		return color_reset;
-	case PromptComponentType::SET_COLOR_RGB:
-		return "\033[" + component.literal + "m";
+		return ShellHighlight::ResetTerminalCode();
 	default:
 		throw InternalException("Invalid prompt color component");
 	}
 }
-#endif
 
 void Prompt::AddComponent(const string &bracket_type, const string &value) {
 	PromptComponent component;
@@ -133,50 +75,13 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 			component.intensity = PrintIntensity::UNDERLINE;
 		} else if (value == "reset") {
 			component.type = PromptComponentType::RESET_COLOR;
-		} else if (value == "red") {
-			component.type = PromptComponentType::SET_COLOR;
-			component.color = PrintColor::RED;
-		} else if (value == "yellow") {
-			component.type = PromptComponentType::SET_COLOR;
-			component.color = PrintColor::YELLOW;
-		} else if (value == "green") {
-			component.type = PromptComponentType::SET_COLOR;
-			component.color = PrintColor::GREEN;
-		} else if (value == "blue") {
-			component.type = PromptComponentType::SET_COLOR;
-			component.color = PrintColor::BLUE;
-		} else if (value == "cyan") {
-			component.type = PromptComponentType::SET_COLOR;
-			component.color = PrintColor::CYAN;
-		} else if (value == "gray" || value == "grey") {
-			component.type = PromptComponentType::SET_COLOR;
-			component.color = PrintColor::GRAY;
-		} else if (value == "magenta") {
-			component.type = PromptComponentType::SET_COLOR;
-			component.color = PrintColor::MAGENTA;
-		} else if (value == "white") {
-			component.type = PromptComponentType::SET_COLOR;
-			component.color = PrintColor::WHITE;
 		} else {
-			// rgb color - try to parse it
-			auto splits = StringUtil::Split(value, ",");
-			if (splits.size() != 3) {
-				throw InvalidInputException(
-				    "Unrecognized color \"%s\" for color parameter: expected a color name or an r,g,b value", value);
+			// color value
+			string error_msg;
+			if (!ShellHighlight::TryGetPrintColor(value.c_str(), component.color, error_msg)) {
+				throw InvalidInputException(error_msg);
 			}
-			for (auto &split : splits) {
-				auto val = StringUtil::ToUnsigned(split);
-				if (val >= 256) {
-					throw InvalidInputException(
-					    "Out of range rgb value \"%s\" for color parameter \"%s\": expected a value between 0 and 255",
-					    split, value);
-				}
-				if (!component.literal.empty()) {
-					component.literal += ";";
-				}
-				component.literal += to_string(val);
-			}
-			component.type = PromptComponentType::SET_COLOR_RGB;
+			component.type = PromptComponentType::SET_COLOR;
 		}
 	} else {
 		throw InvalidInputException("Unknown bracket type %s", bracket_type);
@@ -380,7 +285,6 @@ string Prompt::GeneratePrompt(ShellState &state) {
 		case PromptComponentType::SET_COLOR:
 		case PromptComponentType::SET_INTENSITY:
 		case PromptComponentType::RESET_COLOR:
-		case PromptComponentType::SET_COLOR_RGB:
 			prompt += HandleColor(component);
 			break;
 		case PromptComponentType::SETTING: {
@@ -429,9 +333,6 @@ void Prompt::PrintPrompt(ShellState &state, PrintOutput output) {
 			intensity = PrintIntensity::STANDARD;
 			break;
 		}
-		case PromptComponentType::SET_COLOR_RGB:
-			highlight.PrintText("#UNSUPPORTED_COLOR#", output, PrintColor::RED, PrintIntensity::BOLD);
-			break;
 		default:
 			throw InternalException("Invalid prompt component");
 		}

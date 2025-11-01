@@ -17,7 +17,7 @@ def test_highlight_column_header(shell):
         .statement('select NULL AS r;')
     )
     result = test.run()
-    result.check_stdout('\x1b[90mNULL\x1b[0m')
+    result.check_stdout('\x1b[90mNULL\x1b[00m')
 @pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
 def test_custom_highlight(shell):
     test = (
@@ -29,8 +29,8 @@ def test_custom_highlight(shell):
         .statement('select * from lineitem;')
     )
     result = test.run()
-    result.check_stdout('\x1b[1m\x1b[31ml_comment\x1b[0m')
-    result.check_stdout('\x1b[33mvarchar\x1b[0m')
+    result.check_stdout('\x1b[1m\x1b[31ml_comment\x1b[00m')
+    result.check_stdout('\x1b[33mvarchar\x1b[00m')
 
 def test_custom_highlight_error(shell):
     test = (
@@ -42,22 +42,8 @@ def test_custom_highlight_error(shell):
     )
     result = test.run()
     result.check_stderr("Unknown element 'column_nameXX'")
-    result.check_stderr("Unknown color 'redXX'")
-    result.check_stderr("Unknown intensity 'boldXX'")
-    result.check_stderr("Usage")
-
-@pytest.mark.skipif(os.name == 'nt', reason="Linenoise not supported on Windows")
-def test_linenoise_highlighting(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".render_color XX red")
-        .statement(".render_color comment redXX")
-        .statement(".render_color comment")
-        .statement(".render_color comment " + 'X' * 5000)
-    )
-    result = test.run()
-    result.check_stderr("Unknown component 'XX'")
     result.check_stderr("Unknown highlighting color 'redXX'")
+    result.check_stderr("Unknown intensity 'boldXX'")
     result.check_stderr("Usage")
 
 # fmt: on

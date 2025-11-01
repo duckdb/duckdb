@@ -187,6 +187,8 @@ public:
 	//! Name of our program
 	const char *program_name;
 
+	//! Whether or not syntax highlighting is enabled
+	bool highlighting_enabled = true;
 	//! Whether or not we are running in safe mode
 	bool safe_mode = false;
 	//! Whether or not we are highlighting errors
