@@ -501,6 +501,13 @@ struct FlatVector {
 };
 
 struct ListVector {
+	static inline const list_entry_t *GetData(const Vector &v) {
+		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(v);
+			return GetData(child);
+		}
+		return FlatVector::GetData<const list_entry_t>(v);
+	}
 	static inline list_entry_t *GetData(Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			auto &child = DictionaryVector::Child(v);
