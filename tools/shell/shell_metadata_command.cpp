@@ -512,11 +512,31 @@ MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &arg
 #endif
 
 MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
+	bool bold = false;
+	bool underline = false;
+	for (idx_t i = 1; i < args.size(); i++) {
+		if (args[i] == "bold") {
+			bold = true;
+		} else if (args[i] == "underline") {
+			underline = true;
+		} else {
+			return MetadataResult::PRINT_USAGE;
+		}
+	}
+	PrintIntensity intensity = PrintIntensity::STANDARD;
+	if (bold && underline) {
+		intensity = PrintIntensity::BOLD_UNDERLINE;
+	} else if (bold) {
+		intensity = PrintIntensity::BOLD;
+	} else if (underline) {
+		intensity = PrintIntensity::UNDERLINE;
+	}
 	ShellHighlight highlighter(state);
 	for (idx_t i = 0; i < static_cast<idx_t>(PrintColor::EXTENDED_COLOR_COUNT); i++) {
 		auto color = static_cast<PrintColor>(i);
 		auto color_info = ShellHighlight::GetColorInfo(color);
-		highlighter.PrintText(color_info->color_name, PrintOutput::STDOUT, color, PrintIntensity::STANDARD);
+		string print_text = color_info->color_name;
+		highlighter.PrintText(print_text, PrintOutput::STDOUT, color, intensity);
 		state.Print(" ");
 	}
 	state.Print("\n");
@@ -552,7 +572,7 @@ static const MetadataCommand metadata_commands[] = {
         "Options:\n\t--newlines\tAllow unescaped newline characters in output\nTABLE is a LIKE pattern for the tables "
         "to dump\nAdditional LIKE patterns can be given in subsequent arguments",
     },
-    {"display_colors", 1, DisplayColors, "", "Display all terminal colors and their names", 0, ""},
+    {"display_colors", 0, DisplayColors, "[bold|underline]", "Display all terminal colors and their names", 0, ""},
     {"echo", 2, ToggleEcho, "on|off", "Turn command echo on or off", 3, ""},
     {"edit", 0, nullptr, "", "Opens an external text editor to edit a query.", 0,
      "Notes:\n\t* The editor is read from the environment variables\n\t  DUCKDB_EDITOR, EDITOR, VISUAL in-order\n\t* "
