@@ -100,7 +100,7 @@ DROP FUNCTION two;
 statement error
 CREATE MACRO add_macro(a) AS a + b
 ----
-column "b" not found
+column "b" was not found because the FROM clause is missing
 
 statement ok
 CREATE MACRO add_macro(a, b) AS a + b
