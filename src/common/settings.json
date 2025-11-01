@@ -233,11 +233,7 @@
         "description": "DEBUG SETTING: force use of given strategy for executing physical table scans",
         "type": "ENUM<PhysicalTableScanExecutionStrategy>",
         "default_scope": "global",
-        "default_value": "DEFAULT",
-        "on_callbacks": [
-            "set",
-            "reset"
-        ]
+        "default_value": "DEFAULT"
     },
     {
         "name": "debug_skip_checkpoint_on_commit",
