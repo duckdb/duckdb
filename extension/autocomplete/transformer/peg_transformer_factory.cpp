@@ -14,7 +14,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, const char *root_rule) {
+unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens,
+                                                          ParserKeywordManager &keyword_manager,
+                                                          const char *root_rule) {
 	string token_stream;
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
@@ -22,7 +24,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	// Printer::Print(token_stream);
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
-	MatchState state(tokens, suggestions, parse_result_allocator);
+	MatchState state(tokens, suggestions, parse_result_allocator, keyword_manager);
 	MatcherAllocator allocator;
 	auto &matcher = Matcher::RootMatcher(allocator);
 	auto match_result = matcher.MatchParseResult(state);
