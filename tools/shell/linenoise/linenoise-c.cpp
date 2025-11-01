@@ -4,6 +4,7 @@
 #include "terminal.hpp"
 #include "highlighting.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "shell_highlight.hpp"
 
 using duckdb::Highlighting;
 using duckdb::History;
@@ -115,14 +116,6 @@ void linenoiseSetMultiLine(int ml) {
 	Terminal::SetMultiLine(ml);
 }
 
-void linenoiseSetHighlighting(int enabled) {
-	if (enabled) {
-		Highlighting::Enable();
-	} else {
-		Highlighting::Disable();
-	}
-}
-
 void linenoiseSetErrorRendering(int enabled) {
 	if (enabled) {
 		Linenoise::EnableErrorRendering();
@@ -137,53 +130,6 @@ void linenoiseSetCompletionRendering(int enabled) {
 	} else {
 		Linenoise::DisableCompletionRendering();
 	}
-}
-
-int linenoiseTrySetHighlightColor(const char *component, const char *code, char *out_error, size_t out_error_len) {
-	// figure out the component
-	duckdb::HighlightingType type;
-	bool raw_code = false;
-	std::string raw_component;
-	if (duckdb::StringUtil::EndsWith(component, "code")) {
-		raw_code = true;
-		raw_component = std::string(component, strlen(component) - 4);
-		component = raw_component.c_str();
-	}
-	if (duckdb::StringUtil::Equals(component, "keyword")) {
-		type = duckdb::HighlightingType::KEYWORD;
-	} else if (duckdb::StringUtil::Equals(component, "constant")) {
-		type = duckdb::HighlightingType::CONSTANT;
-	} else if (duckdb::StringUtil::Equals(component, "comment")) {
-		type = duckdb::HighlightingType::COMMENT;
-	} else if (duckdb::StringUtil::Equals(component, "error")) {
-		type = duckdb::HighlightingType::ERROR;
-	} else if (duckdb::StringUtil::Equals(component, "cont")) {
-		type = duckdb::HighlightingType::CONTINUATION;
-	} else if (duckdb::StringUtil::Equals(component, "cont_sel")) {
-		type = duckdb::HighlightingType::CONTINUATION_SELECTED;
-	} else {
-		snprintf(out_error, out_error_len - 1,
-		         "Unknown component '%s'.\nSupported highlighting components: "
-		         "[keyword|constant|comment|error|cont|cont_sel]",
-		         component);
-		return 0;
-	}
-	// if this is not a raw code - lookup the color codes
-	if (!raw_code) {
-		const char *option = Highlighting::GetColorOption(code);
-		if (!option) {
-			snprintf(out_error, out_error_len - 1,
-			         "Unknown highlighting color '%s'.\nSupported highlighting colors: "
-			         "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
-			         "brightblue|brightmagenta|brightcyan|brightwhite]",
-			         code);
-			return 0;
-		}
-		Highlighting::SetHighlightingColor(type, option);
-	} else {
-		Highlighting::SetHighlightingColor(type, code);
-	}
-	return 1;
 }
 
 void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {

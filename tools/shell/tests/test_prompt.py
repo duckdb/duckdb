@@ -47,12 +47,4 @@ def test_prompt_invalid_color(shell):
     result = test.run()
     result.check_stderr("xxx")
 
-def test_prompt_out_of_range_rgb(shell):
-    test = (
-        ShellTest(shell)
-        .statement('.prompt "{color:100,100,1000}"')
-    )
-    result = test.run()
-    result.check_stderr("Out of range")
-
 # fmt: on
