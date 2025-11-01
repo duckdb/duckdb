@@ -481,6 +481,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(group_expressions.size());
 		GroupBinder group_binder(*this, context, statement, result.group_index, bind_state, info.alias_map);
+		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
+		auto prev_can_contain_nulls = this->can_contain_nulls;
+		this->can_contain_nulls = true;
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
@@ -525,6 +528,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
 			info.map[*unbound_groups[i]] = i;
 		}
+		this->can_contain_nulls = prev_can_contain_nulls;
 	}
 	result.groups.grouping_sets = std::move(statement.groups.grouping_sets);
 
