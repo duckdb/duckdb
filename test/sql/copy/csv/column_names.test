@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE t1 AS SELECT * FROM read_csv_auto('data/csv/test/issue2518.csv', header=False, columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, auto_detect = false)
+CREATE TABLE t1 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/issue2518.csv', header=False, columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, auto_detect = false)
 
 query IIIII
 SELECT rsID, chr, pos, refb, altb FROM t1
@@ -23,7 +23,7 @@ SELECT rsID, chr, pos, refb, altb FROM t1
 1184	6	187649	T	A,C,G
 
 statement ok
-CREATE TABLE t2 AS SELECT * FROM read_csv_auto('data/csv/test/issue2518.csv', header=False, columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, AUTO_DETECT=0)
+CREATE TABLE t2 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/issue2518.csv', header=False, columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, AUTO_DETECT=0)
 
 query IIIII
 SELECT rsID, chr, pos, refb, altb FROM t2
@@ -41,7 +41,7 @@ SELECT rsID, chr, pos, refb, altb FROM t2
 
 
 statement ok
-CREATE TABLE t3 AS SELECT * FROM read_csv_auto('data/csv/test/issue2518.csv', columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, auto_detect = false)
+CREATE TABLE t3 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/issue2518.csv', columns={'rsID':'INT', 'CHR': 'VARCHAR', 'POS': 'INT','REFB': 'VARCHAR','ALTB':'VARCHAR'}, auto_detect = false)
 
 query IIIII
 SELECT rsID, chr, pos, refb, altb FROM t3

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/time.hpp
+// duckdb/common/types/geometry.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -171,6 +171,19 @@ public:
 		y_max = MaxValue(y_max, other.y_max);
 		z_max = MaxValue(z_max, other.z_max);
 		m_max = MaxValue(m_max, other.m_max);
+	}
+
+	bool IntersectsXY(const GeometryExtent &other) const {
+		return !(x_min > other.x_max || x_max < other.x_min || y_min > other.y_max || y_max < other.y_min);
+	}
+
+	bool IntersectsXYZM(const GeometryExtent &other) const {
+		return !(x_min > other.x_max || x_max < other.x_min || y_min > other.y_max || y_max < other.y_min ||
+		         z_min > other.z_max || z_max < other.z_min || m_min > other.m_max || m_max < other.m_min);
+	}
+
+	bool ContainsXY(const GeometryExtent &other) const {
+		return x_min <= other.x_min && x_max >= other.x_max && y_min <= other.y_min && y_max >= other.y_max;
 	}
 
 	double x_min;

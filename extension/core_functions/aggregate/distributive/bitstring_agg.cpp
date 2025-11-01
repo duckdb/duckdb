@@ -235,7 +235,6 @@ idx_t BitStringAggOperation::GetRange(uhugeint_t min, uhugeint_t max) {
 
 unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                    AggregateStatisticsInput &input) {
-
 	if (NumericStats::HasMinMax(input.child_stats[0])) {
 		auto &bind_agg_data = input.bind_data->Cast<BitstringAggBindData>();
 		bind_agg_data.min = NumericStats::Min(input.child_stats[0]);

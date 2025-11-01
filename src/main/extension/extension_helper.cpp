@@ -175,7 +175,6 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
                                                           const string &extension_name) {
-
 	return AddExtensionInstallHintToErrorMsg(DatabaseInstance::GetDatabase(context), base_error, extension_name);
 }
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,

@@ -74,9 +74,17 @@ PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
 	SettingInfo setting_info = transformer.Transform<SettingInfo>(setting_or_var_pr.result);
 
 	auto &set_assignment_pr = list_pr.Child<ListParseResult>(1);
-	auto value = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(set_assignment_pr);
-	// TODO(dtenwolde) Needs to throw error if more than 1 value (e.g. set threads=1,2;)
-	return make_uniq<SetVariableStatement>(setting_info.name, std::move(value[0]), setting_info.scope);
+	auto values = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(set_assignment_pr);
+	if (values.size() > 1) {
+		throw ParserException("SET can only contain a single value");
+	}
+	auto value = std::move(values[0]);
+	if (value->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		// SET value cannot be a column reference
+		auto &col_ref = value->Cast<ColumnRefExpression>();
+		value = make_uniq<ConstantExpression>(col_ref.GetColumnName());
+	}
+	return make_uniq<SetVariableStatement>(setting_info.name, std::move(value), setting_info.scope);
 }
 
 // VariableList <- List(Expression)

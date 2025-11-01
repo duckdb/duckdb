@@ -86,7 +86,6 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 
 void TraverseTree(duckdb_profiling_info profiling_info, duckdb::map<string, double> &cumulative_counter,
                   duckdb::map<string, double> &cumulative_result, const idx_t depth) {
-
 	RetrieveMetrics(profiling_info, cumulative_counter, cumulative_result, depth);
 
 	// Recurse into the child node.
@@ -373,7 +372,6 @@ TEST_CASE("Test profiling with the appender", "[capi]") {
 TEST_CASE("Test profiling with the non-query appender", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
-	duckdb_state status;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	tester.Query("CREATE TABLE test (i INTEGER)");
