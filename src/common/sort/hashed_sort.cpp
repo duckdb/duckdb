@@ -339,14 +339,6 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 			payload_types.emplace_back(LogicalType::HASH);
 		} else {
 			// OVER(ORDER BY...)
-			for (idx_t ord_idx = 0; ord_idx < hashed_sort.orders.size(); ord_idx++) {
-				auto &pexpr = *hashed_sort.orders[ord_idx].expression.get();
-				group_types.push_back(pexpr.return_type);
-				hash_exec.AddExpression(pexpr);
-			}
-			group_chunk.Initialize(allocator, group_types);
-
-			//	Single partition
 			auto &sort = *hashed_sort.sort;
 			sort_local = sort.GetLocalSinkState(context);
 		}
