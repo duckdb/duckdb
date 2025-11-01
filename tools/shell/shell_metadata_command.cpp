@@ -450,12 +450,12 @@ MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
 }
 #endif
 
-#ifdef HAVE_LINENOISE
 MetadataResult ToggleHighlighting(ShellState &state, const vector<string> &args) {
 	ShellHighlight::SetHighlighting(state.StringToBool(args[1]));
 	return MetadataResult::SUCCESS;
 }
 
+#ifdef HAVE_LINENOISE
 MetadataResult ToggleErrorRendering(ShellState &state, const vector<string> &args) {
 	linenoiseSetErrorRendering(state.StringToBool(args[1]));
 	return MetadataResult::SUCCESS;
@@ -608,9 +608,7 @@ static const MetadataCommand metadata_commands[] = {
     {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0, ""},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0, ""},
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0, ""},
-#ifdef HAVE_LINENOISE
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
-#endif
     {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
