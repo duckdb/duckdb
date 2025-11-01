@@ -6,9 +6,9 @@ require parquet
 
 statement ok
 copy (select uuid() sw_id, uuid()::varchar sw_system_object, uuid()::varchar source_system_id, uuid()::varchar source_system, uuid()::varchar source_system_object, uuid()::varchar source_system_field_name, random() <= 0.9 as is_primary from range(728478))
-to '__TEST_DIR__/external_ids_generated.parquet';
+to '{TEMP_DIR}/external_ids_generated.parquet';
 
-load __TEST_DIR__/external_ids.db
+load {LOCAL_TEMP_DIR}/external_ids.db
 
 statement ok
 PRAGMA force_compression='uncompressed';
@@ -20,4 +20,4 @@ statement ok
 SET preserve_insertion_order = false;
 
 statement ok
-create table external_ids_tbl as from parquet_scan('__TEST_DIR__/external_ids_generated.parquet');
+create table external_ids_tbl as from parquet_scan('{TEMP_DIR}/external_ids_generated.parquet');

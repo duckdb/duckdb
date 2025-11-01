@@ -2,7 +2,7 @@
 # description: Test parallel order-preserving insert
 # group: [parallel]
 
-load __TEST_DIR__/insert_order_preserving.db
+load {LOCAL_TEMP_DIR}/insert_order_preserving.db
 
 query I
 CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);

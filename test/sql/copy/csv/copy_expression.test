@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SET VARIABLE copy_target = '__TEST_DIR__/copy_expression_target.csv';
+SET VARIABLE copy_target = '{TEMP_DIR}/copy_expression_target.csv';
 
 statement ok
 COPY (SELECT * FROM range(5) t(i)) TO (getvariable('copy_target')) WITH (HEADER)
@@ -32,9 +32,9 @@ statement ok
 PREPARE v1 AS COPY (SELECT 'hello world' str) TO $1;
 
 statement ok
-EXECUTE v1('__TEST_DIR__/prepared_copy.csv');
+EXECUTE v1('{TEMP_DIR}/prepared_copy.csv');
 
 query I
-FROM '__TEST_DIR__/prepared_copy.csv'
+FROM '{TEMP_DIR}/prepared_copy.csv'
 ----
 hello world

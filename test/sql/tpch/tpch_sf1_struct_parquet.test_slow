@@ -6,7 +6,7 @@ require parquet
 
 require tpch
 
-load __TEST_DIR__/tpch_sf1_struct.db
+load {LOCAL_TEMP_DIR}/tpch_sf1_struct.db
 
 statement ok
 CALL dbgen(sf=1, suffix='_normal');
@@ -14,10 +14,10 @@ CALL dbgen(sf=1, suffix='_normal');
 foreach tbl customer lineitem nation orders part partsupp region supplier
 
 statement ok
-COPY (SELECT ${tbl}_normal val FROM ${tbl}_normal) TO '__TEST_DIR__/${tbl}_struct_sf1.parquet'
+COPY (SELECT ${tbl}_normal val FROM ${tbl}_normal) TO '{TEMP_DIR}/${tbl}_struct_sf1.parquet'
 
 statement ok
-CREATE VIEW ${tbl} AS SELECT UNNEST(val) FROM read_parquet('__TEST_DIR__/${tbl}_struct_sf1.parquet')
+CREATE VIEW ${tbl} AS SELECT UNNEST(val) FROM read_parquet('{TEMP_DIR}/${tbl}_struct_sf1.parquet')
 
 endloop
 

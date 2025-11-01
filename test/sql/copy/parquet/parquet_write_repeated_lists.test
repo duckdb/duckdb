@@ -12,10 +12,10 @@ COPY (
     SELECT *
             FROM (values(['asdf', 'fdsa']))
             JOIN (values(1),(2)) ON TRUE
-) to '__TEST_DIR__/lists.parquet';
+) to '{TEMP_DIR}/lists.parquet';
 
 query II
-SELECT * FROM read_parquet('__TEST_DIR__/lists.parquet');
+SELECT * FROM read_parquet('{TEMP_DIR}/lists.parquet');
 ----
 [asdf, fdsa]	1
 [asdf, fdsa]	2

@@ -6,7 +6,7 @@
 require notwindows
 
 # load the DB from disk
-load {TEMP_DIR}/logging_file_persistence.test
+load {LOCAL_TEMP_DIR}/logging_file_persistence.test
 
 # Enable FileSystem logging to single csv file  
 statement ok

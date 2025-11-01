@@ -2,7 +2,7 @@
 # description: Test lists with compression
 # group: [list]
 
-load __TEST_DIR__/list_compression.db
+load {LOCAL_TEMP_DIR}/list_compression.db
 
 foreach compression rle bitpacking uncompressed
 

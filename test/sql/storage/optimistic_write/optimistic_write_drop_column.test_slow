@@ -2,7 +2,7 @@
 # description: Test optimistic write with drop column in transaction-local storage
 # group: [optimistic_write]
 
-load __TEST_DIR__/optimistic_write_drop.db
+load {LOCAL_TEMP_DIR}/optimistic_write_drop.db
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER);

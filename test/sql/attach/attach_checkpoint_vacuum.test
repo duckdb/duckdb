@@ -3,7 +3,7 @@
 # group: [attach]
 
 statement ok
-ATTACH '__TEST_DIR__/attach_vacuum.db' AS db1
+ATTACH '{LOCAL_TEMP_DIR}/attach_vacuum.db' AS db1
 
 statement ok
 CREATE TABLE db1.integers(i INTEGER);

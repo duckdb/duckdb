@@ -9,7 +9,7 @@ require vector_size 512
 
 require parquet
 
-load __TEST_DIR__/compact_odd_batches.db
+load {LOCAL_TEMP_DIR}/compact_odd_batches.db
 
 query I
 CREATE TABLE integers AS SELECT * FROM range(100000) tbl(i);
@@ -29,12 +29,12 @@ SELECT MEDIAN(count) FROM pragma_storage_info('integers');
 2047
 
 statement ok
-COPY integers TO '__TEST_DIR__/integers.parquet' (ROW_GROUP_SIZE 777)
+COPY integers TO '{TEMP_DIR}/integers.parquet' (ROW_GROUP_SIZE 777)
 
 # verify that reading while preserving insertion order creates the same size table
 
 statement ok
-CREATE TABLE integers_parquet AS FROM '__TEST_DIR__/integers.parquet';
+CREATE TABLE integers_parquet AS FROM '{TEMP_DIR}/integers.parquet';
 
 query I
 SELECT * FROM integers_parquet LIMIT 5
@@ -70,7 +70,7 @@ statement ok
 SET preserve_insertion_order=false
 
 statement ok
-CREATE TABLE integers_parquet_no_order AS FROM '__TEST_DIR__/integers.parquet'
+CREATE TABLE integers_parquet_no_order AS FROM '{TEMP_DIR}/integers.parquet'
 
 query I
 SELECT COUNT(DISTINCT block_id) < 60 FROM pragma_storage_info('integers_parquet_no_order');

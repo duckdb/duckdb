@@ -7,10 +7,10 @@ require parquet
 set seed 0.72
 
 statement ok
-COPY (SELECT uuid()::VARCHAR as varchar, uuid() AS uuid FROM range(10000000) t(i)) TO '__TEST_DIR__/random_uuids.parquet'
+COPY (SELECT uuid()::VARCHAR as varchar, uuid() AS uuid FROM range(10000000) t(i)) TO '{TEMP_DIR}/random_uuids.parquet'
 
 statement ok
 SET memory_limit='750MB'
 
 statement ok
-COPY '__TEST_DIR__/random_uuids.parquet' TO '__TEST_DIR__/random_uuids_copy.parquet';
+COPY '{TEMP_DIR}/random_uuids.parquet' TO '{TEMP_DIR}/random_uuids_copy.parquet';

@@ -3,7 +3,7 @@
 # group: [attach]
 
 statement ok
-ATTACH '__TEST_DIR__/reattach_schema.db' AS new_db;
+ATTACH '{LOCAL_TEMP_DIR}/reattach_schema.db' AS new_db;
 
 statement ok
 CREATE SCHEMA new_db.my_schema;
@@ -42,7 +42,7 @@ statement ok
 DETACH new_db
 
 statement ok
-ATTACH '__TEST_DIR__/reattach_schema.db' AS new_name;
+ATTACH '{LOCAL_TEMP_DIR}/reattach_schema.db' AS new_name;
 
 query I
 SELECT * FROM new_name.my_schema.my_table

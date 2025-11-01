@@ -4,7 +4,7 @@
 
 require parquet
 
-load {TEMP_DIR}/candidate.db
+load {LOCAL_TEMP_DIR}/candidate.db
 
 statement ok
 PRAGMA enable_verification

@@ -21,15 +21,15 @@ INSERT INTO strings VALUES
     ('happy'), ('happy'), ('joy'), ('joy'), ('surprise');
 
 statement ok
-COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+COPY strings TO '{TEMP_DIR}/strings.parquet' (FORMAT PARQUET);
 
 query I
-SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+SELECT encodings FROM parquet_metadata('{TEMP_DIR}/strings.parquet')
 ----
 RLE_DICTIONARY
 
 query I
-SELECT * FROM '__TEST_DIR__/strings.parquet'
+SELECT * FROM '{TEMP_DIR}/strings.parquet'
 ----
 happy
 happy
@@ -62,7 +62,7 @@ joy
 surprise
 
 query I
-SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+SELECT stats_distinct_count FROM parquet_metadata('{TEMP_DIR}/strings.parquet')
 ----
 3
 
@@ -71,10 +71,10 @@ statement ok
 UPDATE strings SET s=NULL WHERE s='joy'
 
 statement ok
-COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+COPY strings TO '{TEMP_DIR}/strings.parquet' (FORMAT PARQUET);
 
 query I
-SELECT * FROM '__TEST_DIR__/strings.parquet'
+SELECT * FROM '{TEMP_DIR}/strings.parquet'
 ----
 happy
 happy
@@ -111,10 +111,10 @@ statement ok
 UPDATE strings SET s=NULL
 
 statement ok
-COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+COPY strings TO '{TEMP_DIR}/strings.parquet' (FORMAT PARQUET);
 
 query I
-SELECT * FROM '__TEST_DIR__/strings.parquet'
+SELECT * FROM '{TEMP_DIR}/strings.parquet'
 ----
 NULL
 NULL
@@ -151,10 +151,10 @@ statement ok
 DELETE FROM strings
 
 statement ok
-COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+COPY strings TO '{TEMP_DIR}/strings.parquet' (FORMAT PARQUET);
 
 query I
-SELECT * FROM '__TEST_DIR__/strings.parquet'
+SELECT * FROM '{TEMP_DIR}/strings.parquet'
 ----
 
 
@@ -169,15 +169,15 @@ INSERT INTO strings VALUES
 	('20'), ('21'), ('22'), ('23'), ('24'), ('25'), ('26'), ('27'), ('28'), ('29')
 
 statement ok
-COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+COPY strings TO '{TEMP_DIR}/strings.parquet' (FORMAT PARQUET);
 
 query I
-SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+SELECT encodings FROM parquet_metadata('{TEMP_DIR}/strings.parquet')
 ----
 PLAIN
 
 query I
-SELECT * FROM '__TEST_DIR__/strings.parquet'
+SELECT * FROM '{TEMP_DIR}/strings.parquet'
 ----
 0
 1
@@ -211,7 +211,7 @@ SELECT * FROM '__TEST_DIR__/strings.parquet'
 29
 
 query I
-SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+SELECT stats_distinct_count FROM parquet_metadata('{TEMP_DIR}/strings.parquet')
 ----
 NULL
 
@@ -226,10 +226,10 @@ INSERT INTO strings VALUES
 	('20'), (NULL), ('22'), ('23'), ('24'), ('25'), (NULL), ('27'), ('28'), ('29')
 
 statement ok
-COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+COPY strings TO '{TEMP_DIR}/strings.parquet' (FORMAT PARQUET);
 
 query I
-SELECT * FROM '__TEST_DIR__/strings.parquet'
+SELECT * FROM '{TEMP_DIR}/strings.parquet'
 ----
 0
 1

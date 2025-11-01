@@ -10,7 +10,7 @@ require parquet
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/autoloading_types'
+set extension_directory='{TEMP_DIR}/autoloading_types'
 
 ### No autoloading nor installing: throw error with installation hint
 statement ok
@@ -20,7 +20,7 @@ statement ok
 set autoinstall_known_extensions=false
 
 statement maybe
-copy (select 1337 as edgy_hacker_number) TO '__TEST_DIR__/test1337.parquet'
+copy (select 1337 as edgy_hacker_number) TO '{TEMP_DIR}/test1337.parquet'
 ----
 Catalog Error: Copy Function with name "parquet" is not in the catalog, but it exists in the parquet extension.
 
@@ -35,9 +35,9 @@ statement ok
 set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
 
 statement ok
-copy (select 1337 as edgy_hacker_number) TO '__TEST_DIR__/test1337.parquet'
+copy (select 1337 as edgy_hacker_number) TO '{TEMP_DIR}/test1337.parquet'
 
 query I
-select * from '__TEST_DIR__/test1337.parquet';
+select * from '{TEMP_DIR}/test1337.parquet';
 ----
 1337

@@ -13,7 +13,7 @@ SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parq
 ----
 
 # now load a DB from disk
-load {TEMP_DIR}/test_extension_restart.db
+load {LOCAL_TEMP_DIR}/test_extension_restart.db
 
 # we can still load the parquet file
 query ITIIIIRRTTT nosort parquet_scan_result

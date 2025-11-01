@@ -3,7 +3,7 @@
 # group: [pivot]
 
 # load the DB from disk
-load __TEST_DIR__/pivot_storage.db
+load {LOCAL_TEMP_DIR}/pivot_storage.db
 
 statement ok
 PRAGMA enable_verification

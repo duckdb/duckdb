@@ -14,13 +14,13 @@ CALL dsdgen(sf=1, suffix='_og');
 foreach tpcds_tbl call_center catalog_page catalog_returns catalog_sales customer customer_address customer_demographics date_dim household_demographics income_band inventory item promotion reason ship_mode store store_returns store_sales time_dim warehouse web_page web_returns web_sales web_site
 
 statement ok
-COPY ${tpcds_tbl}_og TO '__TEST_DIR__/${tpcds_tbl}.csv';
+COPY ${tpcds_tbl}_og TO '{TEMP_DIR}/${tpcds_tbl}.csv';
 
 statement ok
 create table ${tpcds_tbl} as select * from ${tpcds_tbl}_og limit 0;
 
 statement ok
-insert into ${tpcds_tbl} select * from read_csv_auto('__TEST_DIR__/${tpcds_tbl}.csv', allow_quoted_nulls=False)
+insert into ${tpcds_tbl} select * from read_csv_auto('{TEMP_DIR}/${tpcds_tbl}.csv', allow_quoted_nulls=False)
 
 query I
 select count(*) from (SELECT * FROM ${tpcds_tbl} EXCEPT SELECT * FROM ${tpcds_tbl}_og);

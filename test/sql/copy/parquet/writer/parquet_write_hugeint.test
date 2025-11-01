@@ -14,10 +14,10 @@ statement ok
 INSERT INTO hugeints VALUES (-1180591620717411303424), (0), (NULL), (1180591620717411303424)
 
 statement ok
-COPY hugeints TO '__TEST_DIR__/hugeints.parquet' (FORMAT 'parquet');
+COPY hugeints TO '{TEMP_DIR}/hugeints.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM '__TEST_DIR__/hugeints.parquet'
+SELECT * FROM '{TEMP_DIR}/hugeints.parquet'
 ----
 -1180591620717411303424
 0
@@ -25,7 +25,7 @@ NULL
 1180591620717411303424
 
 query I
-SELECT typeof(h) FROM '__TEST_DIR__/hugeints.parquet' LIMIT 1
+SELECT typeof(h) FROM '{TEMP_DIR}/hugeints.parquet' LIMIT 1
 ----
 DOUBLE
 

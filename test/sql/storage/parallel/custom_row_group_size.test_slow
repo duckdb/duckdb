@@ -5,27 +5,27 @@
 require parquet
 
 statement ok
-ATTACH '__TEST_DIR__/custom_row_group_size.db' AS custom_row_group_size (ROW_GROUP_SIZE 204800, STORAGE_VERSION 'v1.2.0')
+ATTACH '{LOCAL_TEMP_DIR}/custom_row_group_size.db' AS custom_row_group_size (ROW_GROUP_SIZE 204800, STORAGE_VERSION 'v1.2.0')
 
 statement ok
 USE custom_row_group_size
 
 statement ok
-COPY (FROM range(100000) tbl(i)) TO '__TEST_DIR__/mix_batches_small.parquet' (ROW_GROUP_SIZE 5000)
+COPY (FROM range(100000) tbl(i)) TO '{TEMP_DIR}/mix_batches_small.parquet' (ROW_GROUP_SIZE 5000)
 
 statement ok
-COPY (FROM range(100000, 400000) tbl(i)) TO '__TEST_DIR__/mix_batches_large.parquet' (ROW_GROUP_SIZE 200000)
+COPY (FROM range(100000, 400000) tbl(i)) TO '{TEMP_DIR}/mix_batches_large.parquet' (ROW_GROUP_SIZE 200000)
 
 statement ok
-COPY (FROM range(400000, 700000) tbl(i)) TO '__TEST_DIR__/mix_batches_odd.parquet' (ROW_GROUP_SIZE 999)
+COPY (FROM range(400000, 700000) tbl(i)) TO '{TEMP_DIR}/mix_batches_odd.parquet' (ROW_GROUP_SIZE 999)
 
 statement ok
-COPY (FROM range(700000, 1000000) tbl(i)) TO '__TEST_DIR__/mix_batches_odd_again.parquet' (ROW_GROUP_SIZE 99979)
+COPY (FROM range(700000, 1000000) tbl(i)) TO '{TEMP_DIR}/mix_batches_odd_again.parquet' (ROW_GROUP_SIZE 99979)
 
 
 # create views that read the batches
 statement ok
-CREATE VIEW v1 AS SELECT * FROM parquet_scan(['__TEST_DIR__/mix_batches_small.parquet', '__TEST_DIR__/mix_batches_large.parquet', '__TEST_DIR__/mix_batches_odd.parquet',  '__TEST_DIR__/mix_batches_odd_again.parquet'])
+CREATE VIEW v1 AS SELECT * FROM parquet_scan(['{TEMP_DIR}/mix_batches_small.parquet', '{TEMP_DIR}/mix_batches_large.parquet', '{TEMP_DIR}/mix_batches_odd.parquet',  '{TEMP_DIR}/mix_batches_odd_again.parquet'])
 
 statement ok
 CREATE VIEW v2 AS FROM v1 WHERE (i//10000)%2=0;
@@ -133,7 +133,7 @@ statement ok
 DETACH custom_row_group_size
 
 statement ok
-ATTACH '__TEST_DIR__/custom_row_group_size.db' AS custom_row_group_size
+ATTACH '{LOCAL_TEMP_DIR}/custom_row_group_size.db' AS custom_row_group_size
 
 statement ok
 USE custom_row_group_size
@@ -155,11 +155,11 @@ SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers3
 
 # invalid row group size parameters
 statement error
-ATTACH '__TEST_DIR__/custom_row_group_size_xx.db' AS custom_row_group_size_x1 (ROW_GROUP_SIZE 0)
+ATTACH '{LOCAL_TEMP_DIR}/custom_row_group_size_xx.db' AS custom_row_group_size_x1 (ROW_GROUP_SIZE 0)
 ----
 row group size must be bigger than 0
 
 statement error
-ATTACH '__TEST_DIR__/custom_row_group_size_xx.db' AS custom_row_group_size_x2 (ROW_GROUP_SIZE 77)
+ATTACH '{LOCAL_TEMP_DIR}/custom_row_group_size_xx.db' AS custom_row_group_size_x2 (ROW_GROUP_SIZE 77)
 ----
 row group size must be divisible by the vector size

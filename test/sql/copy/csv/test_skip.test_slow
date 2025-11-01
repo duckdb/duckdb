@@ -6,54 +6,54 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-copy (from range(10000)) to '__TEST_DIR__/skip.csv' (HEADER 0);
+copy (from range(10000)) to '{TEMP_DIR}/skip.csv' (HEADER 0);
 
 
 foreach auto_detect true false
 
 # Test -1
 statement error
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=-1, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=-1, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
 ----
 skip_rows option from read_csv scanner, must be equal or higher than 0
 
 # Test 0
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=0, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=0, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
 ----
 10000
 
 # Test 3000
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=3000, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=3000, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
 ----
 7000
 
 query I
-select * from read_csv('__TEST_DIR__/skip.csv', skip=3000, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'}) order by all limit 1;
+select * from read_csv('{TEMP_DIR}/skip.csv', skip=3000, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'}) order by all limit 1;
 ----
 3000
 
 # Test 9999
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=9999, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=9999, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
 ----
 1
 
 query I
-select * from read_csv('__TEST_DIR__/skip.csv', skip=9999, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'}) order by all limit 1;
+select * from read_csv('{TEMP_DIR}/skip.csv', skip=9999, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'}) order by all limit 1;
 ----
 9999
 
 # test 10001
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=10001, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=10001, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
 ----
 0
 
 # Test 11000
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=11000, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=11000, auto_detect = ${auto_detect}, columns = {'i': 'INTEGER'});
 ----
 0
 
@@ -61,13 +61,13 @@ endloop
 
 # Test sniff_csv function, exclude prompt since this is path dependent
 query IIIIIIIIIII
-SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip.csv',skip=3000)
+SELECT * EXCLUDE (prompt) from sniff_csv('{TEMP_DIR}/skip.csv',skip=3000)
 ----
 ,	(empty)	(empty)	\n	(empty)	3000	0	[{'name': column0, 'type': BIGINT}]	NULL	NULL	skip=3000
 
 # If we don't encounter a value, we use skip
 query IIIIIIIIIII
-SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip.csv',skip=11000)
+SELECT * EXCLUDE (prompt) from sniff_csv('{TEMP_DIR}/skip.csv',skip=11000)
 ----
 ,	(empty)	(empty)	\n	(empty)	11000	0	[{'name': column0, 'type': VARCHAR}]	NULL	NULL	skip=11000
 
@@ -77,47 +77,47 @@ loop buffer_size 5 10
 
 # Test -1
 statement error
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=-1, buffer_size=${buffer_size});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=-1, buffer_size=${buffer_size});
 ----
 skip_rows option from read_csv scanner, must be equal or higher than 0
 
 # Test 0
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=0, buffer_size=${buffer_size});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=0, buffer_size=${buffer_size});
 ----
 10000
 
 # Test 3000
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=3000, buffer_size=${buffer_size});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=3000, buffer_size=${buffer_size});
 ----
 7000
 
 query I
-select * from read_csv('__TEST_DIR__/skip.csv', skip=3000, buffer_size=${buffer_size}) order by all limit 1;
+select * from read_csv('{TEMP_DIR}/skip.csv', skip=3000, buffer_size=${buffer_size}) order by all limit 1;
 ----
 3000
 
 # Test 9999
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=9999, buffer_size=${buffer_size});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=9999, buffer_size=${buffer_size});
 ----
 1
 
 query I
-select * from read_csv('__TEST_DIR__/skip.csv', skip=9999, buffer_size=${buffer_size}) order by all limit 1;
+select * from read_csv('{TEMP_DIR}/skip.csv', skip=9999, buffer_size=${buffer_size}) order by all limit 1;
 ----
 9999
 
 # test 10001
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=10001, buffer_size=${buffer_size});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=10001, buffer_size=${buffer_size});
 ----
 0
 
 # Test 11000
 query I
-select count(*) from read_csv('__TEST_DIR__/skip.csv', skip=11000, buffer_size=${buffer_size});
+select count(*) from read_csv('{TEMP_DIR}/skip.csv', skip=11000, buffer_size=${buffer_size});
 ----
 0
 
@@ -134,11 +134,11 @@ statement ok
 insert into t  select '1,2,3' from range(10)
 
 statement ok
-copy t to '__TEST_DIR__/skip_2.csv' (HEADER 0, delim ';');
+copy t to '{TEMP_DIR}/skip_2.csv' (HEADER 0, delim ';');
 
 
 query III
-from read_csv('__TEST_DIR__/skip_2.csv',skip=10000, buffer_size = 26)
+from read_csv('{TEMP_DIR}/skip_2.csv',skip=10000, buffer_size = 26)
 ----
 1	2	3
 1	2	3
@@ -152,12 +152,12 @@ from read_csv('__TEST_DIR__/skip_2.csv',skip=10000, buffer_size = 26)
 1	2	3
 
 query IIIIIIIIIII
-SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip_2.csv',skip=10000)
+SELECT * EXCLUDE (prompt) from sniff_csv('{TEMP_DIR}/skip_2.csv',skip=10000)
 ----
 ,	(empty)	(empty)	\n	(empty)	10000	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': BIGINT}, {'name': column2, 'type': BIGINT}]	NULL	NULL	skip=10000
 
 query III
-from read_csv('__TEST_DIR__/skip_2.csv',skip=10000)
+from read_csv('{TEMP_DIR}/skip_2.csv',skip=10000)
 ----
 1	2	3
 1	2	3
@@ -173,7 +173,7 @@ from read_csv('__TEST_DIR__/skip_2.csv',skip=10000)
 loop buffer_size 20 25
 
 query III
-from read_csv('__TEST_DIR__/skip_2.csv',skip=10000, buffer_size = ${buffer_size})
+from read_csv('{TEMP_DIR}/skip_2.csv',skip=10000, buffer_size = ${buffer_size})
 ----
 1	2	3
 1	2	3
@@ -194,7 +194,7 @@ mode skip
 # Multifile Testing
 
 query III
-from read_csv(['__TEST_DIR__/skip_2.csv','__TEST_DIR__/skip_2.csv','__TEST_DIR__/skip_2.csv'],skip=10000, buffer_size = 26)
+from read_csv(['{TEMP_DIR}/skip_2.csv','{TEMP_DIR}/skip_2.csv','{TEMP_DIR}/skip_2.csv'],skip=10000, buffer_size = 26)
 ----
 1	2	3
 1	2	3
@@ -228,7 +228,7 @@ from read_csv(['__TEST_DIR__/skip_2.csv','__TEST_DIR__/skip_2.csv','__TEST_DIR__
 1	2	3
 
 query III
-from read_csv(['__TEST_DIR__/skip_2.csv','__TEST_DIR__/skip_2.csv','__TEST_DIR__/skip_2.csv'],skip=10000)
+from read_csv(['{TEMP_DIR}/skip_2.csv','{TEMP_DIR}/skip_2.csv','{TEMP_DIR}/skip_2.csv'],skip=10000)
 ----
 1	2	3
 1	2	3
@@ -270,21 +270,21 @@ CALL dbgen(sf=0.1);
 
 # Lineitem has about 75 mb
 statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem.csv' (DELIMITER '|', HEADER);
+COPY lineitem TO '{TEMP_DIR}/lineitem.csv' (DELIMITER '|', HEADER);
 
 # Lets check skipping ~ 15 mb
 query I
-select count(*) from read_csv('__TEST_DIR__/lineitem.csv')
+select count(*) from read_csv('{TEMP_DIR}/lineitem.csv')
 ----
 600572
 
 query I
-select count(*) from read_csv('__TEST_DIR__/lineitem.csv', skip=158310)
+select count(*) from read_csv('{TEMP_DIR}/lineitem.csv', skip=158310)
 ----
 442263
 
 # Lets check skipping ~ 40 mb
 query I
-select count(*) from read_csv('__TEST_DIR__/lineitem.csv', skip=474930)
+select count(*) from read_csv('{TEMP_DIR}/lineitem.csv', skip=474930)
 ----
 125643

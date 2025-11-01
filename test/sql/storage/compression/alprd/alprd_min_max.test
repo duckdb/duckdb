@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/alprd/alprd_min_max.test
 # group: [alprd]
 
-load __TEST_DIR__/alprd_min_max.db
+load {LOCAL_TEMP_DIR}/alprd_min_max.db
 
 statement ok
 PRAGMA enable_verification

@@ -2,7 +2,7 @@
 # description: Test retrieving memory information after creating an ART.
 # group: [storage]
 
-load __TEST_DIR__/index_mem_limit.db
+load {LOCAL_TEMP_DIR}/index_mem_limit.db
 
 statement ok
 SET threads=1;

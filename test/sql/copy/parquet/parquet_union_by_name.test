@@ -32,22 +32,22 @@ statement ok
 INSERT INTO ubn3 VALUES (100,101), (102, 103);
 
 statement ok
-COPY ubn1 TO '__TEST_DIR__/ubn1.parquet' WITH (FORMAT PARQUET);
+COPY ubn1 TO '{TEMP_DIR}/ubn1.parquet' WITH (FORMAT PARQUET);
 
 statement ok
-COPY ubn2 TO '__TEST_DIR__/ubn2.parquet' WITH (FORMAT PARQUET);
+COPY ubn2 TO '{TEMP_DIR}/ubn2.parquet' WITH (FORMAT PARQUET);
 
 statement ok
-COPY ubn3 TO '__TEST_DIR__/ubn3.parquet' WITH (FORMAT PARQUET);
+COPY ubn3 TO '{TEMP_DIR}/ubn3.parquet' WITH (FORMAT PARQUET);
 
 # If use SELECT * some filesystem may surprisingly success
 statement error
-SELECT a,b,c FROM parquet_scan('__TEST_DIR__/ubn*.parquet')
+SELECT a,b,c FROM parquet_scan('{TEMP_DIR}/ubn*.parquet')
 ----
 
 query III
 SELECT a,b,c 
-FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE) 
+FROM parquet_scan('{TEMP_DIR}/ubn*.parquet', UNION_BY_NAME=TRUE) 
 ORDER BY a;
 ----
 1	NULL	NULL
@@ -62,14 +62,14 @@ ORDER BY a;
 # without union by name, parquet reader will use the first parquet files's type
 statement error
 SELECT a 
-FROM parquet_scan(['__TEST_DIR__/ubn2.parquet', '__TEST_DIR__/ubn1.parquet', '__TEST_DIR__/ubn3.parquet']) 
+FROM parquet_scan(['{TEMP_DIR}/ubn2.parquet', '{TEMP_DIR}/ubn1.parquet', '{TEMP_DIR}/ubn3.parquet']) 
 ORDER BY a;
 ----
 
 # with union by name, parquet readers will use max logical type
 query I
 SELECT a 
-FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE) 
+FROM parquet_scan('{TEMP_DIR}/ubn*.parquet', UNION_BY_NAME=TRUE) 
 ORDER BY a;
 ----
 1
@@ -83,13 +83,13 @@ ORDER BY a;
 
 statement error
 SELECT b
-FROM parquet_scan('__TEST_DIR__/ubn*.parquet') 
+FROM parquet_scan('{TEMP_DIR}/ubn*.parquet') 
 ORDER BY b;
 ----
 
 query I
 SELECT b
-FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE) 
+FROM parquet_scan('{TEMP_DIR}/ubn*.parquet', UNION_BY_NAME=TRUE) 
 ORDER BY b;
 ----
 NULL
@@ -102,20 +102,20 @@ NULL
 
 query TTT
 SELECT typeof(a), typeof(b), typeof(c)
-FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE)
+FROM parquet_scan('{TEMP_DIR}/ubn*.parquet', UNION_BY_NAME=TRUE)
 LIMIT 1;
 ----
 BIGINT	INTEGER	INTEGER
 
 statement ok
-COPY (SELECT [42::INT] a, [43::INT] b) TO '__TEST_DIR__/listubn1.parquet' (FORMAT PARQUET)
+COPY (SELECT [42::INT] a, [43::INT] b) TO '{TEMP_DIR}/listubn1.parquet' (FORMAT PARQUET)
 
 statement ok
-COPY (SELECT [44::BIGINT] b, [45::INT] c) TO '__TEST_DIR__/listubn2.parquet' (FORMAT PARQUET)
+COPY (SELECT [44::BIGINT] b, [45::INT] c) TO '{TEMP_DIR}/listubn2.parquet' (FORMAT PARQUET)
 
 query III
 SELECT a,b,c 
-FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true)
+FROM parquet_scan('{TEMP_DIR}/listubn[12].parquet', union_by_name=true)
 ORDER BY a;
 ----
 NULL	[44]	[45]
@@ -124,7 +124,7 @@ NULL	[44]	[45]
 
 query TTT
 SELECT typeof(a),typeof(b),typeof(c)
-FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true)
+FROM parquet_scan('{TEMP_DIR}/listubn[12].parquet', union_by_name=true)
 LIMIT 1;
 ----
 INTEGER[]	BIGINT[]	INTEGER[]

@@ -3,7 +3,7 @@
 # group: [delete]
 
 # load the DB from disk
-load __TEST_DIR__/test_unchanged_deletes.db
+load {LOCAL_TEMP_DIR}/test_unchanged_deletes.db
 
 statement ok
 CREATE TABLE integers AS FROM range(4) t(i)

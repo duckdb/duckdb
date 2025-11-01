@@ -9,7 +9,7 @@ statement ok
 SET checkpoint_threshold='1TB'
 
 statement ok
-ATTACH '__TEST_DIR__/wal_promote.db';
+ATTACH '{LOCAL_TEMP_DIR}/wal_promote.db';
 
 statement ok
 CREATE TABLE wal_promote.T AS (FROM range(10));
@@ -18,7 +18,7 @@ statement ok
 DETACH wal_promote;
 
 statement ok
-ATTACH '__TEST_DIR__/wal_promote.db' (STORAGE_VERSION 'latest');
+ATTACH '{LOCAL_TEMP_DIR}/wal_promote.db' (STORAGE_VERSION 'latest');
 
 statement ok
 INSERT INTO wal_promote.T VALUES (42);
@@ -27,7 +27,7 @@ statement ok
 DETACH wal_promote;
 
 statement ok
-ATTACH '__TEST_DIR__/wal_promote.db' (STORAGE_VERSION 'latest');
+ATTACH '{LOCAL_TEMP_DIR}/wal_promote.db' (STORAGE_VERSION 'latest');
 
 statement ok
 INSERT INTO wal_promote.T VALUES (42);

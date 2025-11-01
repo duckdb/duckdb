@@ -12,10 +12,10 @@ statement ok
 insert into t values (1),(2),(NULL)
 
 statement ok
-COPY t TO '__TEST_DIR__/t_default.tsv' WITH (DELIMITER '\t');
+COPY t TO '{TEMP_DIR}/t_default.tsv' WITH (DELIMITER '\t');
 
 query I
-select * from read_csv_auto('__TEST_DIR__/t_default.tsv', header = 0)
+select * from read_csv_auto('{TEMP_DIR}/t_default.tsv', header = 0)
 ----
 a
 1
@@ -23,10 +23,10 @@ a
 NULL
 
 statement ok
-COPY t TO '__TEST_DIR__/t_default.tsv' WITH (DELIMITER '\t');
+COPY t TO '{TEMP_DIR}/t_default.tsv' WITH (DELIMITER '\t');
 
 query I
-select * from read_csv_auto('__TEST_DIR__/t_default.tsv', header = 0)
+select * from read_csv_auto('{TEMP_DIR}/t_default.tsv', header = 0)
 ----
 a
 1
@@ -34,10 +34,10 @@ a
 NULL
 
 statement ok
-COPY t TO '__TEST_DIR__/t_default.tsv' WITH (DELIMITER '\t', HEADER 0);
+COPY t TO '{TEMP_DIR}/t_default.tsv' WITH (DELIMITER '\t', HEADER 0);
 
 query I
-select * from read_csv_auto('__TEST_DIR__/t_default.tsv', header = 0)
+select * from read_csv_auto('{TEMP_DIR}/t_default.tsv', header = 0)
 ----
 1
 2

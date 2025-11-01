@@ -2,7 +2,7 @@
 # description: Verify that database footprint remains within expected bounds when writing index data.
 # group: [storage]
 
-load __TEST_DIR__/index_checkpoint.db
+load {LOCAL_TEMP_DIR}/index_checkpoint.db
 
 # ensure we do not checkpoint early
 statement ok

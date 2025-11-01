@@ -12,7 +12,7 @@ require icu
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/autoloading_types'
+set extension_directory='{TEMP_DIR}/autoloading_types'
 
 ### No autoloading nor installing: throw error with installation hint
 statement ok

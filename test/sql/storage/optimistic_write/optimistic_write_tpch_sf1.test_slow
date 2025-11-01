@@ -12,11 +12,11 @@ CALL dbgen(sf=1);
 foreach tbl lineitem orders partsupp part customer supplier nation region
 
 statement ok
-COPY ${tbl} TO '__TEST_DIR__/${tbl}_sf1.parquet'
+COPY ${tbl} TO '{TEMP_DIR}/${tbl}_sf1.parquet'
 
 endloop
 
-load __TEST_DIR__/optimistic_write_lineitem.db
+load {LOCAL_TEMP_DIR}/optimistic_write_lineitem.db
 
 statement ok
 SET debug_skip_checkpoint_on_commit=true
@@ -27,7 +27,7 @@ PRAGMA disable_checkpoint_on_shutdown
 foreach tbl lineitem orders partsupp part customer supplier nation region
 
 statement ok
-CREATE TABLE ${tbl} AS FROM '__TEST_DIR__/${tbl}_sf1.parquet';
+CREATE TABLE ${tbl} AS FROM '{TEMP_DIR}/${tbl}_sf1.parquet';
 
 endloop
 

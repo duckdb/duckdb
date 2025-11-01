@@ -11,20 +11,20 @@ statement ok
 insert into tbl values ({'one': 1, 'two': 2}), (null)
 
 statement ok
-copy tbl to '__TEST_DIR__/fewnulls.json'
+copy tbl to '{TEMP_DIR}/fewnulls.json'
 
 statement ok
 insert into tbl select null from range(9)
 
 statement ok
-copy tbl to '__TEST_DIR__/manynulls.json'
+copy tbl to '{TEMP_DIR}/manynulls.json'
 
 query I
-select typeof(test) from '__TEST_DIR__/fewnulls.json' limit 1
+select typeof(test) from '{TEMP_DIR}/fewnulls.json' limit 1
 ----
 STRUCT(one BIGINT, two VARCHAR)
 
 query I
-select typeof(test) from '__TEST_DIR__/manynulls.json' limit 1
+select typeof(test) from '{TEMP_DIR}/manynulls.json' limit 1
 ----
 STRUCT(one BIGINT, two VARCHAR)

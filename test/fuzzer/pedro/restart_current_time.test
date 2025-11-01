@@ -2,7 +2,7 @@
 # description: Segfault when restarting a system with current time in a check constraint
 # group: [pedro]
 
-load __TEST_DIR__/restart_current_time.db
+load {LOCAL_TEMP_DIR}/restart_current_time.db
 
 statement error
 CREATE TABLE t0 (c1 INT, CHECK (CURRENT_TIME >= TIME '00:00:00'));

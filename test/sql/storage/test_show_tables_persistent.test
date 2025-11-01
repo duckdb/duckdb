@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/show_tables.db
+load {LOCAL_TEMP_DIR}/show_tables.db
 
 query I
 show tables

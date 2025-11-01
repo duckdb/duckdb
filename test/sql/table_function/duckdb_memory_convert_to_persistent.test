@@ -1,7 +1,7 @@
 # name: test/sql/table_function/duckdb_memory_convert_to_persistent.test
 # group: [table_function]
 
-load __TEST_DIR__/convert_to_persistent.duckdb
+load {LOCAL_TEMP_DIR}/convert_to_persistent.duckdb
 
 # create a persistent table
 # this first allocates memory with the tag 'IN_MEMORY_TABLE'

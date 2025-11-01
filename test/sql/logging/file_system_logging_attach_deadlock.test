@@ -21,7 +21,7 @@ statement ok
 SET logging_level='trace';
 
 statement ok
-ATTACH '__TEST_DIR__/filehandle_logging.db' AS db;
+ATTACH '{LOCAL_TEMP_DIR}/filehandle_logging.db' AS db;
 
 statement ok
 CREATE TABLE db.test AS SELECT 1;

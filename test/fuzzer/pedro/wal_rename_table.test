@@ -2,7 +2,7 @@
 # description: Rename table not written to WAL correctly
 # group: [pedro]
 
-load __TEST_DIR__/wal_rename_table.db
+load {LOCAL_TEMP_DIR}/wal_rename_table.db
 
 statement ok
 CREATE TABLE t1 (c0 INT);

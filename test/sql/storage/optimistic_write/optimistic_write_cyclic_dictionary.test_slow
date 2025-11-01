@@ -2,7 +2,7 @@
 # description: Test optimistic write with a cyclic scan
 # group: [optimistic_write]
 
-load __TEST_DIR__/optimistic_write_cyclic_dictionary.db
+load {LOCAL_TEMP_DIR}/optimistic_write_cyclic_dictionary.db
 
 statement ok
 CREATE TABLE test (c VARCHAR);

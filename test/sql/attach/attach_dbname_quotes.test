@@ -24,7 +24,7 @@ SELECT * FROM tbl
 42
 
 statement ok
-ATTACH '__TEST_DIR__/attach_quoated_base.db'
+ATTACH '{LOCAL_TEMP_DIR}/attach_quoated_base.db'
 
 statement ok
 USE attach_quoated_base

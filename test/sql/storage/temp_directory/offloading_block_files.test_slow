@@ -8,7 +8,7 @@
 # FIXME: Investigate why the database size is twice the size of the default block size.
 require block_size 262144
 
-load __TEST_DIR__/offloading_block_files.db
+load {LOCAL_TEMP_DIR}/offloading_block_files.db
 
 # 500M row table.
 statement ok

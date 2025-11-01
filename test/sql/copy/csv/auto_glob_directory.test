@@ -3,10 +3,10 @@
 # group: [csv]
 
 statement ok
-COPY (SELECT i%2 AS grp, i FROM range(1000) t(i)) TO '__TEST_DIR__/partitioned_glob_csv' (FORMAT csv, PARTITION_BY (grp));
+COPY (SELECT i%2 AS grp, i FROM range(1000) t(i)) TO '{TEMP_DIR}/partitioned_glob_csv' (FORMAT csv, PARTITION_BY (grp));
 
 query II
-SELECT grp, COUNT(*) FROM read_csv('__TEST_DIR__/partitioned_glob_csv') GROUP BY ALL ORDER BY ALL
+SELECT grp, COUNT(*) FROM read_csv('{TEMP_DIR}/partitioned_glob_csv') GROUP BY ALL ORDER BY ALL
 ----
 0	500
 1	500

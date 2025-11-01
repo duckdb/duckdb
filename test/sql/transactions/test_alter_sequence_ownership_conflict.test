@@ -4,7 +4,7 @@
 
 require noforcestorage
 
-load __TEST_DIR__/alter_sequence_conflict1.db;
+load {LOCAL_TEMP_DIR}/alter_sequence_conflict1.db;
 
 statement ok
 CREATE TABLE tbl1 (id INT);

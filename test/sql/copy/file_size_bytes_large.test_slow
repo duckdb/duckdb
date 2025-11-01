@@ -9,37 +9,37 @@ statement ok
 CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0, 10000000) tbl(i);
 
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv42' (FORMAT CSV, FILE_SIZE_BYTES '1mb');
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv42' (FORMAT CSV, FILE_SIZE_BYTES '1mb');
 
 query I
-SELECT COUNT(*) FROM read_csv('__TEST_DIR__/file_size_bytes_csv42/*.csv')
+SELECT COUNT(*) FROM read_csv('{TEMP_DIR}/file_size_bytes_csv42/*.csv')
 ----
 10000000
 
 query II
-SELECT AVG(col_a), AVG(col_b) FROM read_csv('__TEST_DIR__/file_size_bytes_csv42/*.csv')
+SELECT AVG(col_a), AVG(col_b) FROM read_csv('{TEMP_DIR}/file_size_bytes_csv42/*.csv')
 ----
 4999999.5	4999999.5
 
 query I
-SELECT COUNT(*) BETWEEN 100 AND 200 FROM glob('__TEST_DIR__/file_size_bytes_csv42/*.csv')
+SELECT COUNT(*) BETWEEN 100 AND 200 FROM glob('{TEMP_DIR}/file_size_bytes_csv42/*.csv')
 ----
 1
 
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv43' (FORMAT CSV, FILE_SIZE_BYTES '1mb', PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv43' (FORMAT CSV, FILE_SIZE_BYTES '1mb', PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv43/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('{TEMP_DIR}/file_size_bytes_csv43/*.csv')
 ----
 10000000
 
 query II
-SELECT AVG(col_a), AVG(col_b) FROM read_csv('__TEST_DIR__/file_size_bytes_csv43/*.csv')
+SELECT AVG(col_a), AVG(col_b) FROM read_csv('{TEMP_DIR}/file_size_bytes_csv43/*.csv')
 ----
 4999999.5	4999999.5
 
 query I
-SELECT COUNT(*) BETWEEN 100 AND 200 FROM glob('__TEST_DIR__/file_size_bytes_csv43/*.csv')
+SELECT COUNT(*) BETWEEN 100 AND 200 FROM glob('{TEMP_DIR}/file_size_bytes_csv43/*.csv')
 ----
 1

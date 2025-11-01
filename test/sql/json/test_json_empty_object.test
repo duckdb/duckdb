@@ -20,25 +20,25 @@ Binder Error: Empty object in JSON structure
 
 # create a JSON file with an empty struct
 statement ok
-copy (select '{"a": {}}') to '__TEST_DIR__/my.json' (FORMAT CSV, quote '', header 0)
+copy (select '{"a": {}}') to '{TEMP_DIR}/my.json' (FORMAT CSV, quote '', header 0)
 
 # auto-detection should not give back an empty struct
 query T
-select typeof(a) from '__TEST_DIR__/my.json'
+select typeof(a) from '{TEMP_DIR}/my.json'
 ----
 MAP(VARCHAR, JSON)
 
 # can't force it to have an empty struct
 statement error
-select * from read_json('__TEST_DIR__/my.json', columns={a: 'STRUCT()')
+select * from read_json('{TEMP_DIR}/my.json', columns={a: 'STRUCT()')
 ----
 
 # test issue 6443
 statement ok
-copy (select unnest(['{"c1":"val11","c2":{"k1":"val11","k2":{}}}','{"c1":"val21","c2":{"k1":"val21","k2":{}}}'])) to '__TEST_DIR__/data.ndjson' (FORMAT CSV, quote '', header 0)
+copy (select unnest(['{"c1":"val11","c2":{"k1":"val11","k2":{}}}','{"c1":"val21","c2":{"k1":"val21","k2":{}}}'])) to '{TEMP_DIR}/data.ndjson' (FORMAT CSV, quote '', header 0)
 
 statement ok
-CREATE OR REPLACE TABLE tbl AS SELECT * FROM read_ndjson_auto('__TEST_DIR__/data.ndjson');
+CREATE OR REPLACE TABLE tbl AS SELECT * FROM read_ndjson_auto('{TEMP_DIR}/data.ndjson');
 
 # no empty struct here either
 query II
@@ -50,10 +50,10 @@ VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, JSON))
 require parquet
 
 statement ok
-copy tbl to '__TEST_DIR__/data.parquet';
+copy tbl to '{TEMP_DIR}/data.parquet';
 
 query II
-select * from '__TEST_DIR__/data.parquet';
+select * from '{TEMP_DIR}/data.parquet';
 ----
 val11	{'k1': val11, 'k2': {}}
 val21	{'k1': val21, 'k2': {}}

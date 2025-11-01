@@ -12,106 +12,106 @@ statement ok
 insert into t values (1,1.1,'bla');
 
 statement ok
-COPY (SELECT * from t) TO '__TEST_DIR__/csv_file.csv'  (FORMAT CSV, DELIMITER '|', HEADER 0);
+COPY (SELECT * from t) TO '{TEMP_DIR}/csv_file.csv'  (FORMAT CSV, DELIMITER '|', HEADER 0);
 
 query III
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv');
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv');
 ----
 1	1.1	bla
 
 query TTT
-SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv');
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv');
 ----
 BIGINT	DOUBLE	VARCHAR
 
 query III
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
 ----
 1	1.1	bla
 
 statement error
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['MAP']);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['MAP']);
 ----
 Value "MAP" can not be converted to a DuckDB Type.
 
 query TTT
-SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
 ----
 BIGINT	DOUBLE	VARCHAR
 
 
 query III
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['VARCHAR'], header = 0);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['VARCHAR'], header = 0);
 ----
 1	1.1	bla
 
 query TTT
-SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['VARCHAR'], header = 0);
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['VARCHAR'], header = 0);
 ----
 VARCHAR	VARCHAR	VARCHAR
 
 query III
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT']);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['BIGINT']);
 ----
 1	1.1	bla
 
 query TTT
-SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT']);
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['BIGINT']);
 ----
 BIGINT	VARCHAR	VARCHAR
 
 
 query III
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT','VARCHAR']);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['BIGINT','VARCHAR']);
 ----
 1	1.1	bla
 
 query TTT
-SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT','VARCHAR']);
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['BIGINT','VARCHAR']);
 ----
 BIGINT	VARCHAR	VARCHAR
 
 query III
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['FLOAT','VARCHAR']);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['FLOAT','VARCHAR']);
 ----
 1.0	1.1	bla
 
 query TTT
-SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['FLOAT','VARCHAR']);
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['FLOAT','VARCHAR']);
 ----
 FLOAT	FLOAT	VARCHAR
 
 query III
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
 ----
 1	1.1	bla
 
 query TTT
-SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
 ----
 SMALLINT	FLOAT	VARCHAR
 
 query III
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR','SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR','SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
 ----
 1	1.1	bla
 
 query TTT
-SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR','SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR','SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
 ----
 SMALLINT	FLOAT	VARCHAR
 
 statement error
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['USMALLINT', 'VARCHAR']);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['USMALLINT', 'VARCHAR']);
 ----
 Auto Type Candidate of type USMALLINT is not accepted as a valid input
 
 statement error
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['bla', 'VARCHAR'])
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=['bla', 'VARCHAR'])
 ----
 Type with name bla does not exist!
 
 statement error
-SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=[]);
+SELECT * FROM read_csv_auto ('{TEMP_DIR}/csv_file.csv', auto_type_candidates=[]);
 ----
 auto_type_candidates requires at least one type

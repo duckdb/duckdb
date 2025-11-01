@@ -2,7 +2,7 @@
 # description: Test CREATE INDEX on a lot of duplicate values with a persistent DB
 # group: [issues]
 
-load __TEST_DIR__/test_index.db
+load {LOCAL_TEMP_DIR}/test_index.db
 
 statement ok
 CREATE TABLE t AS SELECT now() AS d FROM generate_series(1, 218165);

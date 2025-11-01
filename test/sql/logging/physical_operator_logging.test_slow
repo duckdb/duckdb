@@ -22,11 +22,11 @@ copy (
     join range(3_000_000) t2(i)
     using (i)
     order by i
-) to '__TEST_DIR__/physical_operator_logging.parquet'
+) to '{TEMP_DIR}/physical_operator_logging.parquet'
 
 # this is for row group read/skip logging
 statement ok
-from '__TEST_DIR__/physical_operator_logging.parquet' where i = 42
+from '{TEMP_DIR}/physical_operator_logging.parquet' where i = 42
 
 statement ok
 CALL disable_logging()
@@ -47,7 +47,7 @@ select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'JoinH
 query I
 select count(*) = (
     select count(distinct row_group_id)
-    from parquet_metadata('__TEST_DIR__/physical_operator_logging.parquet')
+    from parquet_metadata('{TEMP_DIR}/physical_operator_logging.parquet')
 )
 from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetWriter' and event = 'FlushRowGroup'
 ----

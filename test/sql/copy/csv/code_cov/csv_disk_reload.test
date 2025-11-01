@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE t1 AS select i, (i+1) as j from range(0,300000) tbl(i)
 
 statement ok
-COPY t1 TO '__TEST_DIR__/t1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+COPY t1 TO '{TEMP_DIR}/t1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
 
 # Let's set a memory limit
 statement ok
@@ -19,6 +19,6 @@ statement ok
 PRAGMA threads=2
 
 query I
-select count(*) from read_csv_auto('__TEST_DIR__/t1.csv',buffer_size = 262144, sample_size=-1)
+select count(*) from read_csv_auto('{TEMP_DIR}/t1.csv',buffer_size = 262144, sample_size=-1)
 ----
 300000

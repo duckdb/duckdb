@@ -2,7 +2,7 @@
 # description: Test that the block manager reclaims index memory after UPSERT.
 # group: [storage]
 
-load __TEST_DIR__/test_reclaim_upsert_space.db
+load {LOCAL_TEMP_DIR}/test_reclaim_upsert_space.db
 
 statement ok
 CREATE TABLE tbl AS SELECT i FROM range(10000) tbl(i);

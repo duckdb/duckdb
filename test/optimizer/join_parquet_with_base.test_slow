@@ -10,49 +10,49 @@ statement ok
 CALL DBGEN(sf=0.1);
 
 statement ok
-COPY orders TO '__TEST_DIR__/orders.parquet';
+COPY orders TO '{TEMP_DIR}/orders.parquet';
 
 statement ok
 DROP TABLE orders;
 
 statement ok
-COPY customer TO '__TEST_DIR__/customer.parquet';
+COPY customer TO '{TEMP_DIR}/customer.parquet';
 
 statement ok
 DROP TABLE customer;
 
 statement ok
-COPY region TO '__TEST_DIR__/region.parquet';
+COPY region TO '{TEMP_DIR}/region.parquet';
 
 statement ok
 DROP TABLE region;
 
 statement ok
-COPY nation TO '__TEST_DIR__/nation.parquet';
+COPY nation TO '{TEMP_DIR}/nation.parquet';
 
 statement ok
 DROP TABLE nation;
 
 statement ok
-COPY supplier TO '__TEST_DIR__/supplier.parquet';
+COPY supplier TO '{TEMP_DIR}/supplier.parquet';
 
 statement ok
 DROP TABLE supplier
 
 statement ok
-CREATE view orders AS SELECT * FROM read_parquet('__TEST_DIR__/orders.parquet');
+CREATE view orders AS SELECT * FROM read_parquet('{TEMP_DIR}/orders.parquet');
 
 statement ok
-CREATE view region AS SELECT * FROM read_parquet('__TEST_DIR__/region.parquet');
+CREATE view region AS SELECT * FROM read_parquet('{TEMP_DIR}/region.parquet');
 
 statement ok
-CREATE view supplier AS SELECT * FROM read_parquet('__TEST_DIR__/supplier.parquet');
+CREATE view supplier AS SELECT * FROM read_parquet('{TEMP_DIR}/supplier.parquet');
 
 statement ok
-CREATE view nation AS SELECT * FROM read_parquet('__TEST_DIR__/nation.parquet');
+CREATE view nation AS SELECT * FROM read_parquet('{TEMP_DIR}/nation.parquet');
 
 statement ok
-CREATE view customer AS SELECT * FROM read_parquet('__TEST_DIR__/customer.parquet');
+CREATE view customer AS SELECT * FROM read_parquet('{TEMP_DIR}/customer.parquet');
 
 loop i 1 9
 

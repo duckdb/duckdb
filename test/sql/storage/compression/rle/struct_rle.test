@@ -2,7 +2,7 @@
 # description: Test storage with RLE inside structs
 # group: [rle]
 
-load __TEST_DIR__/test_rle.db
+load {LOCAL_TEMP_DIR}/test_rle.db
 
 statement ok
 PRAGMA force_compression = 'rle'

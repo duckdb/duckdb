@@ -14,7 +14,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -49,7 +49,7 @@ SELECT unnest(res) FROM (
 "TOTAL_BYTES_WRITTEN": "true"
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profiling_output.json';
 
 statement ok
 SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;

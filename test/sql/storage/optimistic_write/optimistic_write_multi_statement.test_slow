@@ -2,7 +2,7 @@
 # description: Test multiple appends across statements within the same transaction
 # group: [optimistic_write]
 
-load __TEST_DIR__/optimistic_write_multi_statement.db
+load {LOCAL_TEMP_DIR}/optimistic_write_multi_statement.db
 
 statement ok
 SET force_compression='uncompressed';

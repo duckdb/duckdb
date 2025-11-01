@@ -11,10 +11,10 @@ statement ok
 INSERT INTO empty_lists SELECT [] FROM range(10) UNION ALL SELECT [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 statement ok
-COPY (SELECT * FROM empty_lists LIMIT 10) TO '__TEST_DIR__/emptylist_int.parquet';
+COPY (SELECT * FROM empty_lists LIMIT 10) TO '{TEMP_DIR}/emptylist_int.parquet';
 
 query I
-SELECT * FROM '__TEST_DIR__/emptylist_int.parquet'
+SELECT * FROM '{TEMP_DIR}/emptylist_int.parquet'
 ----
 []
 []
@@ -34,10 +34,10 @@ statement ok
 INSERT INTO empty_lists_varchar SELECT [] FROM range(10) UNION ALL SELECT ['hello', 'world', 'this', 'is', 'a', 'varchar', 'list']
 
 statement ok
-COPY (SELECT * FROM empty_lists_varchar LIMIT 10) TO '__TEST_DIR__/emptylist_varchar.parquet';
+COPY (SELECT * FROM empty_lists_varchar LIMIT 10) TO '{TEMP_DIR}/emptylist_varchar.parquet';
 
 query I
-SELECT * FROM '__TEST_DIR__/emptylist_varchar.parquet'
+SELECT * FROM '{TEMP_DIR}/emptylist_varchar.parquet'
 ----
 []
 []
@@ -57,10 +57,10 @@ statement ok
 INSERT INTO empty_list_nested SELECT [] FROM range(10) UNION ALL SELECT [[1, 2, 3], [4, 5], [6, 7, 8]]
 
 statement ok
-COPY (SELECT * FROM empty_list_nested LIMIT 10) TO '__TEST_DIR__/empty_list_nested.parquet';
+COPY (SELECT * FROM empty_list_nested LIMIT 10) TO '{TEMP_DIR}/empty_list_nested.parquet';
 
 query I
-SELECT * FROM '__TEST_DIR__/empty_list_nested.parquet'
+SELECT * FROM '{TEMP_DIR}/empty_list_nested.parquet'
 ----
 []
 []

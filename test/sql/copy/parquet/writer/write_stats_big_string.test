@@ -15,10 +15,10 @@ INSERT INTO varchar VALUES (NULL), ('hello'), (NULL), ('world'), (NULL)
 
 # we write stats when there are only small strings
 statement ok
-COPY varchar TO '__TEST_DIR__/bigvarchar.parquet'
+COPY varchar TO '{TEMP_DIR}/bigvarchar.parquet'
 
 query IIIIII
-SELECT stats_min_value, stats_max_value, stats_min, stats_max, min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/bigvarchar.parquet')
+SELECT stats_min_value, stats_max_value, stats_min, stats_max, min_is_exact, max_is_exact FROM parquet_metadata('{TEMP_DIR}/bigvarchar.parquet')
 ----
 hello	world	hello	world	true	true
 
@@ -27,9 +27,9 @@ statement ok
 INSERT INTO varchar SELECT repeat('A', 100000) v
 
 statement ok
-COPY varchar TO '__TEST_DIR__/bigvarchar.parquet'
+COPY varchar TO '{TEMP_DIR}/bigvarchar.parquet'
 
 query IIIIII
-SELECT stats_min_value, stats_max_value, stats_min, stats_max, min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/bigvarchar.parquet')
+SELECT stats_min_value, stats_max_value, stats_min, stats_max, min_is_exact, max_is_exact FROM parquet_metadata('{TEMP_DIR}/bigvarchar.parquet')
 ----
 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	world	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	world	false	true

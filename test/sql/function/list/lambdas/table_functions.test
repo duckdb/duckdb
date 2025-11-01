@@ -12,33 +12,33 @@ CREATE TABLE tmp AS SELECT range AS id FROM range(10);
 
 # create a parquet file
 query I
-COPY tmp TO '__TEST_DIR__/my_file_cba.parquet' (FORMAT PARQUET);
+COPY tmp TO '{TEMP_DIR}/my_file_cba.parquet' (FORMAT PARQUET);
 ----
 10
 
 # now test different table functions
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+SELECT COUNT(*) FROM read_parquet('{TEMP_DIR}/my_file_' ||
 list_aggr(list_transform(['C', 'B', 'A'], lambda s: lower(s)), 'string_agg', '') || '.parquet');
 ----
 10
 
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+SELECT COUNT(*) FROM read_parquet('{TEMP_DIR}/my_file_' ||
 list_aggr(list_transform(list_sort(['a', 'b', 'c'], 'DESC'), lambda s: lower(s)), 'string_agg', '') || '.parquet');
 ----
 10
 
 # nested lambdas
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+SELECT COUNT(*) FROM read_parquet('{TEMP_DIR}/my_file_' ||
 list_aggr(list_transform(list_filter(['s', 'c', 'b', NULL, 'a'], lambda x: x IS NOT NULL AND x != 's'),
 lambda s: lower(s)), 'string_agg', '') || '.parquet');
 ----
 10
 
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+SELECT COUNT(*) FROM read_parquet('{TEMP_DIR}/my_file_' ||
 list_aggr(list_transform(list_filter(
 list_filter(['s', 'c', 'b', NULL, 'a'], lambda y: y != 's'), lambda x: x IS NOT NULL),
 lambda s: lower(s)), 'string_agg', '') || '.parquet');
@@ -46,31 +46,31 @@ lambda s: lower(s)), 'string_agg', '') || '.parquet');
 10
 
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+SELECT COUNT(*) FROM read_parquet('{TEMP_DIR}/my_file_' ||
 list_aggr(list_reduce([['c', 'b', NULL, 'a']], lambda x, y: coalesce(x,y)), 'string_agg', '') || '.parquet');
 ----
 10
 
 # lambda parameters in rhs
 query I
-COPY tmp TO '__TEST_DIR__/my_file_ac.parquet' (FORMAT PARQUET);
+COPY tmp TO '{TEMP_DIR}/my_file_ac.parquet' (FORMAT PARQUET);
 ----
 10
 
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+SELECT COUNT(*) FROM read_parquet('{TEMP_DIR}/my_file_' ||
 list_aggr(list_transform(['a'], lambda x: list_transform(['a', 'c'], lambda y: x || y)[2]), 'string_agg', '') || '.parquet');
 ----
 10
 
 # issue 5821 (without httpfs)
 query I
-COPY tmp TO '__TEST_DIR__/my_file_a=1,b=2,c=3.parquet' (FORMAT PARQUET);
+COPY tmp TO '{TEMP_DIR}/my_file_a=1,b=2,c=3.parquet' (FORMAT PARQUET);
 ----
 10
 
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+SELECT COUNT(*) FROM read_parquet('{TEMP_DIR}/my_file_' ||
 list_string_agg([lower(s) for s in ['a=1', 'b=2', 'c=3']]) || '.parquet');
 ----
 10

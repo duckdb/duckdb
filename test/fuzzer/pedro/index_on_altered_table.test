@@ -2,7 +2,7 @@
 # description: Issue #4696: Alter table transaction conflict
 # group: [pedro]
 
-load __TEST_DIR__/index_on_altered_table.db
+load {LOCAL_TEMP_DIR}/index_on_altered_table.db
 
 statement ok
 CREATE TABLE t4 (c0 DATE, c3 VARCHAR(10));

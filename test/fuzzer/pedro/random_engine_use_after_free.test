@@ -2,7 +2,7 @@
 # description: Random engine heap use after free
 # group: [pedro]
 
-load __TEST_DIR__/random_engine_use_after_free.db
+load {LOCAL_TEMP_DIR}/random_engine_use_after_free.db
 
 statement ok
 PRAGMA enable_verification

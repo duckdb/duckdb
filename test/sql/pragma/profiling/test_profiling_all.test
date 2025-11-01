@@ -7,7 +7,7 @@ require json
 require skip_reload
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profile_attach.json';
+PRAGMA profiling_output = '{LOCAL_TEMP_DIR}/profile_attach.json';
 
 # Test ATTACH.
 
@@ -18,7 +18,7 @@ statement ok
 SET profiling_coverage='ALL';
 
 statement ok
-ATTACH '__TEST_DIR__/profile_attach.db';
+ATTACH '{LOCAL_TEMP_DIR}/profile_attach.db';
 
 statement ok
 PRAGMA disable_profiling;
@@ -27,7 +27,7 @@ statement ok
 SET profiling_coverage='SELECT';
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profile_attach.json';
 
 query II
 SELECT latency != 0, contains(query_name, 'ATTACH') FROM metrics_output;
@@ -52,7 +52,7 @@ statement ok
 SET profiling_coverage='SELECT';
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profile_attach.json';
 
 query II
 SELECT latency != 0, contains(query_name, 'CREATE TABLE') FROM metrics_output;
@@ -77,7 +77,7 @@ statement ok
 SET profiling_coverage='SELECT';
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profile_attach.json';
 
 query II
 SELECT latency != 0, contains(query_name, 'INSERT INTO') FROM metrics_output;
@@ -102,7 +102,7 @@ statement ok
 SET profiling_coverage='SELECT';
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profile_attach.json';
 
 query II
 SELECT latency != 0, contains(query_name, 'CREATE INDEX') FROM metrics_output;
@@ -127,7 +127,7 @@ statement ok
 SET profiling_coverage='SELECT';
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_attach.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{LOCAL_TEMP_DIR}/profile_attach.json';
 
 query II
 SELECT latency != 0, contains(query_name, 'DETACH') FROM metrics_output;

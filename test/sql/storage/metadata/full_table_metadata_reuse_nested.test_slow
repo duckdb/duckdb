@@ -2,7 +2,7 @@
 # description: Test full table metadata reuse of complex nested data
 # group: [metadata]
 
-load __TEST_DIR__/full_table_metadata_reuse_nested.test.db
+load {LOCAL_TEMP_DIR}/full_table_metadata_reuse_nested.test.db
 
 statement ok
 BEGIN

@@ -8,7 +8,7 @@ pragma enable_verification;
 require tpch
 
 # load the DB from disk
-load __TEST_DIR__/test_csv_tpch.db
+load {LOCAL_TEMP_DIR}/test_csv_tpch.db
 
 statement ok
 CALL dbgen(sf=1)
@@ -16,6 +16,6 @@ CALL dbgen(sf=1)
 restart
 
 statement error
-from read_csv('__TEST_DIR__/test_csv_tpch.db')
+from read_csv('{TEMP_DIR}/test_csv_tpch.db')
 ----
 It was not possible to automatically detect the CSV parsing dialect

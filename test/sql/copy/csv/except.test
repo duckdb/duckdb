@@ -6,9 +6,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-COPY (SELECT 1 a, 2 b) TO '__TEST_DIR__/mismatch_types_except.csv';
+COPY (SELECT 1 a, 2 b) TO '{TEMP_DIR}/mismatch_types_except.csv';
 
 query II
-FROM '__TEST_DIR__/mismatch_types_except.csv' EXCEPT select 'bla' as a, 1 as b;
+FROM '{TEMP_DIR}/mismatch_types_except.csv' EXCEPT select 'bla' as a, 1 as b;
 ----
 1	2

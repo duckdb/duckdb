@@ -6,7 +6,7 @@ statement ok
 SET storage_compatibility_version='v1.2.0'
 
 # load the DB from disk
-load __TEST_DIR__/test_zstd_storage.db
+load {LOCAL_TEMP_DIR}/test_zstd_storage.db
 
 statement ok
 PRAGMA force_compression = 'zstd'
