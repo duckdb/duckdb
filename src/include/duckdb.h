@@ -1062,8 +1062,8 @@ DUCKDB_C_API void duckdb_destroy_config(duckdb_config *config);
 // Error Data
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-// Functions to operate on `duckdb_error_data`, which contains, for example, the error type and message.
-// Please use this interface for all new C API functions, as it supersedes previous error handling approaches.
+// Functions to operate on `duckdb_error_data`, which contains, for example, the error type and message. Please use this
+// interface for all new C API functions, as it supersedes previous error handling approaches.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -1347,8 +1347,8 @@ DUCKDB_C_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 // This function group is deprecated and scheduled for removal.
 //
 // USE INSTEAD:
-// To access the values in a result, use `duckdb_fetch_chunk` repeatedly.
-// For each chunk, use the `duckdb_data_chunk` interface to access any columns and their values.
+// To access the values in a result, use `duckdb_fetch_chunk` repeatedly. For each chunk, use the `duckdb_data_chunk`
+// interface to access any columns and their values.
 //----------------------------------------------------------------------------------------------------------------------
 
 #ifndef DUCKDB_API_NO_DEPRECATED
@@ -1703,7 +1703,7 @@ DUCKDB_C_API bool duckdb_is_finite_timestamp_ns(duckdb_timestamp_ns ts);
 // Hugeint and Uhugeint Helpers
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to convert from and to `duckdb_[hugeint, uhugeint]`.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -1746,7 +1746,7 @@ DUCKDB_C_API duckdb_uhugeint duckdb_double_to_uhugeint(double val);
 // Decimal Helpers
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to convert from and to `duckdb_decimal`.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -1771,16 +1771,15 @@ DUCKDB_C_API double duckdb_decimal_to_double(duckdb_decimal val);
 // Prepared Statements
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-// // A prepared statement is a parameterized query, and you can bind parameters to it.
-// Prepared statements are commonly used to easily supply parameters to functions and avoid SQL injection attacks.
-// They also speed up queries that are executed repeatedly with different parameters.
-// That is because the query is only be parsed, bound, optimized and planned once during the prepare stage,
-// rather than once per execution, if it is possible to resolve all parameter types.
+// A prepared statement is a parameterized query, and you can bind parameters to it. Prepared statements are commonly
+// used to easily supply parameters to functions and avoid SQL injection attacks. They also speed up queries that are
+// executed repeatedly with different parameters. That is because the query is only parsed, bound, optimized and planned
+// once during the prepare stage, rather than once per execution, if it is possible to resolve all parameter types.
 //
 // For example:
-//   SELECT * FROM tbl WHERE id=?
+//   SELECT * FROM tbl WHERE id = ?
 // Or a query with multiple parameters:
-//   SELECT * FROM tbl WHERE id=$1 OR name=$2
+//   SELECT * FROM tbl WHERE id = $1 OR name = $2
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -1925,7 +1924,8 @@ DUCKDB_C_API duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_s
 // Bind Values to Prepared Statements
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to bind values to prepared statements. Try to use `duckdb_bind_value` and the `duckdb_create_...` interface
+// for all types.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -2073,7 +2073,7 @@ DUCKDB_C_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_st
 // Execute Prepared Statements
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to execute a prepared statement.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -2116,7 +2116,7 @@ DUCKDB_C_API duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_stat
 // Extract Statements
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-// // A query string can be extracted into multiple SQL statements. Each statement can be prepared and executed
+// A query string can be extracted into multiple SQL statements. Each statement should be prepared and executed
 // separately.
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -2172,7 +2172,7 @@ DUCKDB_C_API void duckdb_destroy_extracted(duckdb_extracted_statements *extracte
 // Pending Result Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to interact with a pending result. First, prepare a pending result, and then execute it.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -2280,7 +2280,9 @@ DUCKDB_C_API bool duckdb_pending_execution_is_finished(duckdb_pending_state pend
 // Value Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create a `duckdb_value` for each of DuckDB's supported data types, and to access the contents of a
+// `duckdb_value`. The `duckdb_value` wrapper allows handling of primitive and arbitrarily (nested) types through the
+// same interface.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -2928,7 +2930,7 @@ DUCKDB_C_API char *duckdb_value_to_string(duckdb_value value);
 // Logical Type Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create and interact with `duckdb_logical_type`.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -3221,7 +3223,12 @@ DUCKDB_C_API duckdb_state duckdb_register_logical_type(duckdb_connection con, du
 // Data Chunk Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
+// Functions to interact with `duckdb_data_chunk`. Data chunks pass through the different operators of DuckDB's
+// execution engine, when, e.g., executing a scalar function. Additionally, a query result is composed of a sequence of
+// data chunks.
 //
+// A data chunk contains a number of vectors, which, in turn, contain data in a columnar format. For the query result,
+// the vectors are the result columns, and they contain the query result for each row.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -3289,7 +3296,8 @@ DUCKDB_C_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size
 // Vector Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to interact with `duckdb_vector`. A vector typically (but not always) lives in a data chunk and contains a
+// subset of the rows of a column.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -3490,7 +3498,8 @@ DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb
 // Validity Mask Functions
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to interact with the validity mask of a vector. The validity mask is a bitmask determining whether a row in
+// a vector is `NULL`, or not.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -3538,7 +3547,9 @@ DUCKDB_C_API void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row);
 // Scalar Functions
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create, execute, and register custom scalar functions. Scalar functions take one or more input
+// parameters, and return a single output parameter. Consider using a table function, if your scalar function does not
+// take any input parameters.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -3779,7 +3790,9 @@ DUCKDB_C_API duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_b
 // Selection Vector Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to interact with `duckdb_selection_vector`. Selection vectors define a selection on top of a vector. Lets
+// say that a filter filters out all `VARCHAR`-rows containing `hello`. Then, instead of creating a full new copy of the
+// filtered-out data, it is possible to use a selection vector only selecting the rows satisfying the filter.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -3810,7 +3823,8 @@ DUCKDB_C_API sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector
 // Aggregate Functions
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create, execute, and register custom aggregate functions. Aggregate functions aggregate the values of a
+// column into an output value.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -3970,7 +3984,8 @@ DUCKDB_C_API duckdb_state duckdb_register_aggregate_function_set(duckdb_connecti
 // Table Functions
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create, execute, and register custom table functions. Table functions take one or more input parameters,
+// and return one or more output parameters.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -4091,7 +4106,8 @@ DUCKDB_C_API duckdb_state duckdb_register_table_function(duckdb_connection con, 
 // Table Function Bind
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to implement the bind-phase of a table function. The bind-phase happens once before the execution of the
+// table function. It is useful to, e.g., set up any read-only information for the different threads during execution.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -4179,7 +4195,8 @@ DUCKDB_C_API void duckdb_bind_set_error(duckdb_bind_info info, const char *error
 // Table Function Init
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to implement the init-phase of a table function. The init-phase happens once for each thread and
+// initializes thread-local information prior to execution.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -4251,7 +4268,8 @@ DUCKDB_C_API void duckdb_init_set_error(duckdb_init_info info, const char *error
 // Table Function
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to implement the execution callback of a table function. The execution callback (i.e., the main function)
+// produces a data chunk output based on a data chunk input, and has access to both the bind and init data.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -4301,7 +4319,8 @@ DUCKDB_C_API void duckdb_function_set_error(duckdb_function_info info, const cha
 // Replacement Scans
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create, execute, and register a custom replacement scan. A replacement scan is a callback replacing a
+// scan of a table that does not exist in the catalog.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -4345,7 +4364,7 @@ DUCKDB_C_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info
 // Profiling Info
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to access the post-execution profiling information of a query. Only available, if profiling is enabled.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -4397,20 +4416,12 @@ DUCKDB_C_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profil
 // Appender
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-// // Appenders are the most efficient way of loading data into DuckDB from within the C API.
-// They are recommended for fast data loading as they perform better than prepared statements or individual `INSERT
-// INTO` statements.
-
-// Appends are possible in row-wise format, and by appending entire data chunks.
-
-// Row-wise: for every column, a `duckdb_append_[type]` call should be made. After finishing all appends to a row, call
-// `duckdb_appender_end_row`.
-
-// Chunk-wise: Consecutively call `duckdb_append_data_chunk` until all chunks have been appended.
-
-// After all data has been appended, call `duckdb_appender_close` to finalize the appender followed by
-// `duckdb_appender_destroy` to clean up the memory.
-
+// Appenders are the most efficient way of bulk-loading data into DuckDB. They are recommended for fast data loading as
+// they perform better than prepared statements or individual `INSERT INTO` statements. Appends are possible in row-wise
+// format, and by appending entire data chunks. Try to use chunk-wise appends via `duckdb_append_data_chunk` to ensure
+// support for all of DuckDBs data types. Chunk-wise appends consecutively call `duckdb_append_data_chunk` until all
+// chunks have been appended. Afterward, call `duckdb_appender_destroy` flush any outstanding data and to destroy the
+// appender instance.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -4719,7 +4730,7 @@ DUCKDB_C_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duc
 // Table Description
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create and access a `duckdb_table_description` instance.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -4810,7 +4821,7 @@ DUCKDB_C_API duckdb_logical_type duckdb_table_description_get_column_type(duckdb
 // Arrow Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to convert from and to Arrow.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -5055,7 +5066,7 @@ DUCKDB_C_API duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, 
 // Threading Information
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create and execute tasks.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -5139,7 +5150,7 @@ DUCKDB_C_API bool duckdb_execution_is_finished(duckdb_connection con);
 // Streaming Result Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to stream a `duckdb_result`. Call `duckdb_fetch_chunk` until the result is exhausted.
 //----------------------------------------------------------------------------------------------------------------------
 
 #ifndef DUCKDB_API_NO_DEPRECATED
@@ -5181,7 +5192,7 @@ DUCKDB_C_API duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result);
 // Cast Functions
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create, execute, and register custom cast functions.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -5290,7 +5301,8 @@ DUCKDB_C_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_functi
 // Expression Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to create and access expressions. Expressions are widespread in DuckDB, especially during query planning.
+// E.g., scalar function parameters are expressions, and can be inspected during the bind-phase.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -5331,7 +5343,8 @@ DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context cont
 // File System Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-//
+// Functions to access the file system of a connection and to interact with file handles. File handle instances to files
+// allow operations such as reading, writing, and seeking in a file.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -5474,9 +5487,12 @@ Closes the given file handle.
 */
 DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handle);
 
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
 // Config Options Interface
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to create, configure, and register custom configuration options.
+//----------------------------------------------------------------------------------------------------------------------
 
 /*!
 Creates a configuration option instance.

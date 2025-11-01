@@ -1,6 +1,7 @@
 {
     "group": "hugeint_and_uhugeint_helpers",
     "deprecated": false,
+    "description": "Functions to convert from and to `duckdb_[hugeint, uhugeint]`.",
     "entries": [
         {
             "name": "duckdb_hugeint_to_double",
