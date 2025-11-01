@@ -975,16 +975,22 @@ bool RowGroup::HasUnloadedDeletes() const {
 }
 
 vector<MetaBlockPointer> RowGroup::GetColumnPointers() {
+	vector<MetaBlockPointer> result;
 	if (has_metadata_blocks) {
 		// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
 		// read if from "column_pointers" and "extra_metadata_blocks"
-		auto result = column_pointers;
+		for (auto block : column_pointers) {
+			block.offset = 0;
+			if (std::find(result.begin(), result.end(), block) != result.end()) {
+				continue;
+			}
+			result.push_back(block);
+		}
 		for (auto &block_pointer : extra_metadata_blocks) {
 			result.emplace_back(block_pointer, 0);
 		}
 		return result;
 	}
-	vector<MetaBlockPointer> result;
 	if (column_pointers.empty()) {
 		// no pointers
 		return result;
@@ -1092,6 +1098,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		}
 		// this metadata block is not stored - add it to the extra metadata blocks
 		row_group_pointer.extra_metadata_blocks.push_back(column_pointer.block_pointer);
+		metadata_blocks.insert(column_pointer.block_pointer);
 	}
 	// set up the pointers correctly within this row group for future operations
 	column_pointers = row_group_pointer.data_pointers;
