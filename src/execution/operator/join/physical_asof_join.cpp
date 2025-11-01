@@ -1419,39 +1419,40 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 }
 
 void AsOfLocalSourceState::ExecuteRightTask(DataChunk &chunk) {
-	idx_t result_count = 0;
-	while (!result_count) {
+	while (task->begin_idx < task->end_idx) {
 		const auto rhs_position = scanner->Scanned();
 		scanner->Scan(rhs_chunk);
 		++task->begin_idx;
 
-		const auto count = rhs_chunk.size();
-		if (count == 0) {
-			scanner.reset();
-			return;
-		}
-
 		// figure out which tuples didn't find a match in the RHS
-		result_count = 0;
+		const auto count = rhs_chunk.size();
+		idx_t result_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			if (!rhs_matches[rhs_position + i]) {
 				rsel.set_index(result_count++, i);
 			}
 		}
+		if (!result_count) {
+			continue;
+		}
+
+		// if there were any tuples that didn't find a match, output them
+		const auto &op = gsource.op;
+		const idx_t left_column_count = op.children[0].get().GetTypes().size();
+		for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
+			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(chunk.data[col_idx], true);
+		}
+		for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
+			const auto rhs_idx = op.right_projection_map[col_idx];
+			chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
+		}
+		chunk.SetCardinality(result_count);
+		return;
 	}
 
-	// if there were any tuples that didn't find a match, output them
-	const auto &op = gsource.op;
-	const idx_t left_column_count = op.children[0].get().GetTypes().size();
-	for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-		chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(chunk.data[col_idx], true);
-	}
-	for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
-		const auto rhs_idx = op.right_projection_map[col_idx];
-		chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
-	}
-	chunk.SetCardinality(result_count);
+	//	Exhausted the task data
+	scanner.reset();
 }
 
 //===--------------------------------------------------------------------===//
