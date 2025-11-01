@@ -532,6 +532,53 @@ MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &arg
 
 #endif
 
+double GetHue(const HighlightColorInfo &input) {
+	double r = input.r / 255.0;
+	double g = input.g / 255.0;
+	double b = input.b / 255.0;
+
+	double max = std::max({r, g, b});
+	double min = std::min({r, g, b});
+	double delta = max - min;
+
+	if (delta == 0) {
+		return 0;
+	}
+	double hue;
+	if (max == r) {
+		hue = (g - b) / delta;
+	} else if (max == g) {
+		hue = 2.0 + (b - r) / delta;
+	} else {
+		hue = 4.0 + (r - g) / delta;
+	}
+	hue *= 60.0;
+	if (hue < 0) {
+		hue += 360;
+	}
+	return hue;
+}
+
+double GetLum(const HighlightColorInfo &input) {
+	return sqrt(0.241 * input.r + 0.691 * input.g + 0.068 * input.b);
+}
+
+idx_t FindColorGroup(const vector<vector<string>> &groups, const string &name) {
+	optional_idx group_idx;
+	for (idx_t grp_idx = 0; grp_idx < groups.size(); grp_idx++) {
+		for (auto &group_name : groups[grp_idx]) {
+			if (StringUtil::Contains(name, group_name)) {
+				group_idx = grp_idx;
+				break;
+			}
+		}
+	}
+	if (!group_idx.IsValid()) {
+		throw InternalException("Color %s does not have a group", name);
+	}
+	return group_idx.GetIndex();
+}
+
 MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
 	bool bold = false;
 	bool underline = false;
@@ -553,11 +600,47 @@ MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
 		intensity = PrintIntensity::UNDERLINE;
 	}
 	ShellHighlight highlighter(state);
+	vector<duckdb::const_reference<HighlightColorInfo>> color_list;
 	for (idx_t i = 0; i < static_cast<idx_t>(PrintColor::EXTENDED_COLOR_COUNT); i++) {
 		auto color = static_cast<PrintColor>(i);
-		auto color_info = ShellHighlight::GetColorInfo(color);
-		string print_text = color_info->color_name;
-		highlighter.PrintText(print_text, PrintOutput::STDOUT, color, intensity);
+		color_list.push_back(*ShellHighlight::GetColorInfo(color));
+	}
+	// group and sort the colors
+	// groups color by whether or not their name contains certain words
+	// this is the order in which colors are displayed
+	vector<vector<string>> color_groups {{"red", "maroon", "coral"},
+	                                     {"orange"},
+	                                     {"yellow", "gold", "khaki", "wheat"},
+	                                     {"green", "chartreuse", "lime", "honeydew", "olive"},
+	                                     {"cyan", "aqua", "turquoise"},
+	                                     {"blue", "navy"},
+	                                     {"pink", "orchid", "rose", "thistle", "salmon", "tan"},
+	                                     {"purple", "magenta", "plum", "fuchsia", "violet"},
+	                                     {"brown"},
+	                                     {"grey", "gray", "black"},
+	                                     {"white", "silver", "cornsilk"}};
+	std::sort(color_list.begin(), color_list.end(), [&](const HighlightColorInfo &a, const HighlightColorInfo &b) {
+		// find the group index of this color
+		auto a_group = FindColorGroup(color_groups, a.color_name);
+		auto b_group = FindColorGroup(color_groups, b.color_name);
+		if (a_group != b_group) {
+			return a_group < b_group;
+		}
+		// for colors in the same group - sort on hue, followed by luminosity
+		auto a_hue = GetHue(a);
+		auto b_hue = GetHue(b);
+
+		if (a_hue != b_hue) {
+			return a_hue < b_hue;
+		}
+		return GetLum(a) < GetLum(b);
+	});
+
+	// now print the colors
+	for (auto &color_info_ref : color_list) {
+		auto &color_info = color_info_ref.get();
+		auto color = static_cast<PrintColor>(color_info.code);
+		highlighter.PrintText(color_info.color_name, PrintOutput::STDOUT, color, intensity);
 		state.Print(" ");
 	}
 	state.Print("\n");
