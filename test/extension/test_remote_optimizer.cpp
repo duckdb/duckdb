@@ -28,6 +28,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test using a remote optimizer pass in case thats important to someone", "[extension]") {
+#ifdef THREAD_SANITIZER_ENABLED
+	return;
+#endif
 	pid_t pid = fork();
 
 	int port = 4242;
