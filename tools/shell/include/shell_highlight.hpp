@@ -32,6 +32,10 @@ enum class HighlightElementType : uint32_t {
 	LAYOUT,
 	STARTUP_TEXT,
 	STARTUP_VERSION,
+	CONTINUATION,
+	CONTINUATION_SELECTED,
+	BRACKET,
+	COMMENT,
 	NONE
 };
 
@@ -41,6 +45,12 @@ struct HighlightColorInfo {
 	uint8_t r;
 	uint8_t g;
 	uint8_t b;
+};
+
+struct HighlightElement {
+	const char *name;
+	PrintColor color;
+	PrintIntensity intensity;
 };
 
 struct ShellHighlight {
@@ -54,10 +64,12 @@ struct ShellHighlight {
 	bool SetColor(const char *element_type, const char *color, const char *intensity);
 	//! Whether or not a color is part of the extended color set (not available on all platforms)
 	static bool IsExtendedColor(PrintColor color);
-	static optional_ptr<HighlightColorInfo> GetColorInfo(PrintColor color);
+	static optional_ptr<const HighlightColorInfo> GetColorInfo(PrintColor color);
 	static bool TryGetPrintColor(const char *name, PrintColor &result, string &error_msg);
 	//! Gets the terminal code for a given print color (POSIX only)
-	static string TerminalCode(PrintColor color);
+	static string TerminalCode(PrintColor color, PrintIntensity intensity);
+
+	static const HighlightElement &GetHighlightElement(HighlightElementType type);
 
 public:
 	ShellState &state;

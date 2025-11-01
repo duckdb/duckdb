@@ -462,16 +462,11 @@ MetadataResult ToggleSingleLine(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult TrySetHighlightColor(ShellState &state, const string &component, const string &code) {
-	char error[1024];
-	if (!linenoiseTrySetHighlightColor(component.c_str(), code.c_str(), error, 1024)) {
-		state.PrintF(PrintOutput::STDERR, "%s\n", error);
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetRenderHighlightColor(ShellState &state, const vector<string> &args) {
-	return TrySetHighlightColor(state, args[1], args[2]);
+	vector<string> args;
+	args.push_back("highlight_colors");
+	args.push_back(component);
+	args.push_back(code);
+	return SetHighlightColors(state, args);
 }
 
 enum class DeprecatedHighlightColors {
@@ -661,8 +656,6 @@ static const MetadataCommand metadata_commands[] = {
     {"quit", 0, QuitProcess, "", "Exit this program", 0, ""},
     {"read", 2, ReadFromFile, "FILE", "Read input from FILE", 3, ""},
 #ifdef HAVE_LINENOISE
-    {"render_color", 3, SetRenderHighlightColor, "?COMP? ?COLOR?",
-     "Configure highlighting colors for the interactive prompt", 0, ""},
     {"render_completion", 2, ToggleCompletionRendering, "on|off",
      "Toggle displaying of completion prompts in the shell on/off", 0, ""},
     {"render_errors", 2, ToggleErrorRendering, "on|off", "Toggle rendering of errors in the shell on/off", 0, ""},

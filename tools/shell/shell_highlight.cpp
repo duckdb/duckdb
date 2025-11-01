@@ -8,12 +8,6 @@
 
 namespace duckdb_shell {
 
-struct HighlightElement {
-	const char *name;
-	PrintColor color;
-	PrintIntensity intensity;
-};
-
 static HighlightElement highlight_elements[] = {{"error", PrintColor::RED, PrintIntensity::BOLD},
                                                 {"keyword", PrintColor::GREEN, PrintIntensity::STANDARD},
                                                 {"numeric_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
@@ -29,8 +23,21 @@ static HighlightElement highlight_elements[] = {{"error", PrintColor::RED, Print
                                                 {"layout", PrintColor::GRAY, PrintIntensity::STANDARD},
                                                 {"startup_text", PrintColor::GRAY, PrintIntensity::STANDARD},
                                                 {"startup_version", PrintColor::STANDARD, PrintIntensity::STANDARD},
+                                                {"continuation", PrintColor::GRAY, PrintIntensity::STANDARD},
+                                                {"continuation_selected", PrintColor::GREEN, PrintIntensity::STANDARD},
+                                                {"bracket", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
+                                                {"comment", PrintColor::GRAY, PrintIntensity::STANDARD},
                                                 {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
                                                 {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
+
+const HighlightElement &ShellHighlight::GetHighlightElement(HighlightElementType type) {
+	auto index = static_cast<uint32_t>(type);
+	auto max_index = static_cast<uint32_t>(HighlightElementType::NONE);
+	if (index > max_index) {
+		index = max_index;
+	}
+	return highlight_elements[index];
+}
 
 ShellHighlight::ShellHighlight(ShellState &state) : state(state) {
 }
@@ -91,38 +98,17 @@ void ShellHighlight::PrintText(const string &text, PrintOutput output, PrintColo
 }
 #else
 void ShellHighlight::PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
-	const char *bold_prefix = "";
-	string color_prefix;
 	const char *suffix = "";
-	switch (intensity) {
-	case PrintIntensity::BOLD:
-		bold_prefix = "\033[1m";
-		break;
-	case PrintIntensity::UNDERLINE:
-		bold_prefix = "\033[4m";
-		break;
-	case PrintIntensity::BOLD_UNDERLINE:
-		bold_prefix = "\033[1m\033[4m";
-		break;
-	default:
-		break;
-	}
-	color_prefix = TerminalCode(color);
-	if (!color_prefix.empty() || *bold_prefix) {
+	string terminal_code = TerminalCode(color, intensity);
+	if (!terminal_code.empty()) {
 		suffix = "\033[0m";
 	}
-	fprintf(output == PrintOutput::STDOUT ? state.out : stderr, "%s%s%s%s", bold_prefix, color_prefix.c_str(),
-	        text.c_str(), suffix);
+	fprintf(output == PrintOutput::STDOUT ? state.out : stderr, "%s%s%s", terminal_code.c_str(), text.c_str(), suffix);
 }
 #endif
 
 void ShellHighlight::PrintText(const string &text, PrintOutput output, HighlightElementType type) {
-	auto index = static_cast<uint32_t>(type);
-	auto max_index = static_cast<uint32_t>(HighlightElementType::NONE);
-	if (index > max_index) {
-		index = max_index;
-	}
-	auto highlight_info = highlight_elements[index];
+	auto &highlight_info = GetHighlightElement(type);
 	PrintText(text, output, highlight_info.color, highlight_info.intensity);
 }
 
@@ -507,7 +493,7 @@ bool ShellHighlight::IsExtendedColor(PrintColor color) {
 	return color >= PrintColor::STANDARD_COLOR_COUNT;
 }
 
-optional_ptr<HighlightColorInfo> ShellHighlight::GetColorInfo(PrintColor color) {
+optional_ptr<const HighlightColorInfo> ShellHighlight::GetColorInfo(PrintColor color) {
 	if (color == PrintColor::STANDARD) {
 		return nullptr;
 	}
@@ -533,22 +519,35 @@ bool ShellHighlight::TryGetPrintColor(const char *name, PrintColor &result, stri
 	return false;
 }
 
-string ShellHighlight::TerminalCode(PrintColor color) {
-	if (color == PrintColor::STANDARD) {
-		return string();
+string ShellHighlight::TerminalCode(PrintColor color, PrintIntensity intensity) {
+	string terminal_code;
+	switch (intensity) {
+	case PrintIntensity::BOLD:
+		terminal_code = "\033[1m";
+		break;
+	case PrintIntensity::UNDERLINE:
+		terminal_code = "\033[4m";
+		break;
+	case PrintIntensity::BOLD_UNDERLINE:
+		terminal_code = "\033[1m\033[4m";
+		break;
+	default:
+		break;
 	}
-	string terminal_code = "\033[";
-	if (color >= PrintColor::RED && color <= PrintColor::BRIGHTGRAY) {
-		// standard colors have as codes \033[31m through \033[37m
-		terminal_code += to_string(31 + static_cast<uint16_t>(color) - static_cast<uint16_t>(PrintColor::RED));
-	} else if (color >= PrintColor::GRAY && color <= PrintColor::WHITE) {
-		// bright colors have as codes \033[90m through \033[97m
-		terminal_code += to_string(90 + static_cast<uint16_t>(color) - static_cast<uint16_t>(PrintColor::GRAY));
-	} else {
-		// extended color codes have as code \033[38;5;{code}m
-		terminal_code += "38;5;" + to_string(static_cast<uint16_t>(color));
+	if (color != PrintColor::STANDARD) {
+		terminal_code += "\033[";
+		if (color >= PrintColor::RED && color <= PrintColor::BRIGHTGRAY) {
+			// standard colors have as codes \033[31m through \033[37m
+			terminal_code += to_string(31 + static_cast<uint16_t>(color) - static_cast<uint16_t>(PrintColor::RED));
+		} else if (color >= PrintColor::GRAY && color <= PrintColor::WHITE) {
+			// bright colors have as codes \033[90m through \033[97m
+			terminal_code += to_string(90 + static_cast<uint16_t>(color) - static_cast<uint16_t>(PrintColor::GRAY));
+		} else {
+			// extended color codes have as code \033[38;5;{code}m
+			terminal_code += "38;5;" + to_string(static_cast<uint16_t>(color));
+		}
+		terminal_code += "m";
 	}
-	terminal_code += "m";
 	return terminal_code;
 }
 
