@@ -47,7 +47,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchCollector::GetGlobalSinkState(ClientCon
 	return make_uniq<BatchCollectorGlobalState>(context, *this);
 }
 
-unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) {
+unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<BatchCollectorGlobalState>();
 	D_ASSERT(gstate.result);
 	return std::move(gstate.result);

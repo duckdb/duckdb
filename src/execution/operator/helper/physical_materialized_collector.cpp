@@ -2,6 +2,7 @@
 
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
@@ -9,6 +10,19 @@ PhysicalMaterializedCollector::PhysicalMaterializedCollector(PhysicalPlan &physi
                                                              bool parallel)
     : PhysicalResultCollector(physical_plan, data), parallel(parallel) {
 }
+
+class MaterializedCollectorGlobalState : public GlobalSinkState {
+public:
+	mutex glock;
+	unique_ptr<ColumnDataCollection> collection;
+	shared_ptr<ClientContext> context;
+};
+
+class MaterializedCollectorLocalState : public LocalSinkState {
+public:
+	unique_ptr<ColumnDataCollection> collection;
+	ColumnDataAppendState append_state;
+};
 
 SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                                    OperatorSinkInput &input) const {
@@ -43,15 +57,15 @@ unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(Cl
 
 unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<MaterializedCollectorLocalState>();
-	state->collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	state->collection = CreateCollection(context.client);
 	state->collection->InitializeAppend(state->append_state);
 	return std::move(state);
 }
 
-unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState &state) {
+unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<MaterializedCollectorGlobalState>();
 	if (!gstate.collection) {
-		gstate.collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+		gstate.collection = CreateCollection(*gstate.context);
 	}
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(gstate.collection),
 	                                                 gstate.context->GetClientProperties());

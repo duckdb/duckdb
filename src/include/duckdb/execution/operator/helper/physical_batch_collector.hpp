@@ -18,7 +18,7 @@ public:
 	PhysicalBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
 
 public:
-	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
+	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;
 
 public:
 	// Sink interface
@@ -44,7 +44,14 @@ public:
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
-	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
+	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op)
+	    : data(context, op.types,
+	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
+	               ? ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR
+	               : ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
+	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
+	               ? ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES
+	               : ColumnDataCollectionLifetime::REGULAR) {
 	}
 
 	mutex glock;
@@ -54,7 +61,14 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op)
+	    : data(context, op.types,
+	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
+	               ? ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR
+	               : ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
+	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
+	               ? ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES
+	               : ColumnDataCollectionLifetime::REGULAR) {
 	}
 
 	BatchedDataCollection data;
