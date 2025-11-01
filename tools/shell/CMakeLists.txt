@@ -23,6 +23,7 @@ set(SHELL_SOURCES
     shell.cpp
     shell_helpers.cpp
     shell_metadata_command.cpp
+    shell_prompt.cpp
     shell_renderer.cpp
     shell_highlight.cpp
     shell_windows.cpp)

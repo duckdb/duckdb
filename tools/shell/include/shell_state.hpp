@@ -40,6 +40,10 @@ using duckdb::SQLIdentifier;
 using duckdb::SQLString;
 using duckdb::unordered_map;
 struct ShellState;
+using duckdb::InternalException;
+using duckdb::InvalidInputException;
+using duckdb::to_string;
+struct Prompt;
 
 using idx_t = uint64_t;
 
@@ -194,7 +198,7 @@ public:
 	**   .prompt main continue
 	*/
 	static constexpr idx_t MAX_PROMPT_SIZE = 20;
-	char mainPrompt[MAX_PROMPT_SIZE];             /* First line prompt. default: "D "*/
+	unique_ptr<Prompt> main_prompt;
 	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
 
@@ -234,6 +238,7 @@ public:
 
 	idx_t RenderLength(const char *z);
 	idx_t RenderLength(const string &str);
+	bool IsCharacter(char c);
 	void SetBinaryMode();
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
@@ -252,8 +257,7 @@ public:
 		PrintF(PrintOutput::STDOUT, str, std::forward<ARGS>(params)...);
 	}
 	bool ColumnTypeIsInteger(const char *type);
-	string strdup_handle_newline(const char *z);
-	void ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result);
+	void ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
@@ -339,6 +343,7 @@ public:
 
 private:
 	ShellState();
+	~ShellState();
 };
 
 } // namespace duckdb_shell
