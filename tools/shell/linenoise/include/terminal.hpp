@@ -86,6 +86,8 @@ enum class EscapeSequence {
 	ALT_LEFT_ARROW,
 	ALT_RIGHT_ARROW,
 	ALT_BACKSLASH,
+	CTRL_UP,
+	CTRL_DOWN
 };
 
 struct TerminalSize {
