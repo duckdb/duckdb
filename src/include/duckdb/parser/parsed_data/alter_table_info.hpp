@@ -177,6 +177,7 @@ private:
 //===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
+struct PersistentCollectionData;
 struct AddColumnInfo : public AlterTableInfo {
 	AddColumnInfo(AlterEntryData data, ColumnDefinition new_column, bool if_column_not_exists);
 	~AddColumnInfo() override;
@@ -185,6 +186,10 @@ struct AddColumnInfo : public AlterTableInfo {
 	ColumnDefinition new_column;
 	//! Whether or not an error should be thrown if the column exist
 	bool if_column_not_exists;
+	//! Whether or not need to serialize (or deserialize) a stable function execution result
+	bool replay_stable_result = false;
+	//! If `replay_stable_result` is true, stable result is used
+	shared_ptr<PersistentCollectionData> stable_result;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
