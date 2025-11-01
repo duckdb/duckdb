@@ -73,7 +73,7 @@ PhysicalType GetTypeId() {
 		return PhysicalType::VARCHAR;
 	} else if (std::is_same<T, interval_t>()) {
 		return PhysicalType::INTERVAL;
-	} else if (std::is_same<T, list_entry_t>()) {
+	} else if (std::is_same<T, const list_entry_t>() || std::is_same<T, list_entry_t>()) {
 		return PhysicalType::LIST;
 	} else if (std::is_pointer<T>() || std::is_same<T, uintptr_t>()) {
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
