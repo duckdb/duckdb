@@ -4,6 +4,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/execution/physical_table_scan_enum.hpp"
 
 #include <utility>
 
@@ -16,6 +18,7 @@ PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<Logical
                                      idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
                                      vector<Value> parameters_p, virtual_column_map_t virtual_columns_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
+
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
       table_filters(std::move(table_filters_p)), extra_info(std::move(extra_info)), parameters(std::move(parameters_p)),
@@ -25,6 +28,14 @@ PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<Logical
 class TableScanGlobalSourceState : public GlobalSourceState {
 public:
 	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
+		Value tmp_value;
+		if (context.TryGetCurrentSetting("debug_physical_table_scan_execution_strategy", tmp_value)) {
+			physical_table_scan_execution_strategy =
+			    EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(tmp_value.ToString());
+		} else {
+			physical_table_scan_execution_strategy = PhysicalTableScanExecutionStrategy::TASK_EXECUTOR;
+		}
+
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
@@ -56,6 +67,7 @@ public:
 	}
 
 	idx_t max_threads = 0;
+	PhysicalTableScanExecutionStrategy physical_table_scan_execution_strategy;
 	unique_ptr<GlobalTableFunctionState> global_state;
 	bool in_out_final = false;
 	DataChunk input_chunk;
@@ -104,7 +116,46 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	if (function.function) {
 		data.async_result = AsyncResultType::IMPLICIT;
 		data.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
+
+		switch (g_state.physical_table_scan_execution_strategy) {
+		case PhysicalTableScanExecutionStrategy::DEFAULT:
+		case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR:
+		case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS:
+			data.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
+			break;
+		case PhysicalTableScanExecutionStrategy::SYNCHRONOUS:
+			data.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;
+			break;
+		}
+
 		function.function(context.client, data, chunk);
+
+		switch (g_state.physical_table_scan_execution_strategy) {
+		case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS:
+			// This is a funny one, expected to crash on non-trivial workflows
+		case PhysicalTableScanExecutionStrategy::SYNCHRONOUS:
+			switch (data.async_result.GetResultType()) {
+			case AsyncResultType::INVALID:
+				throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found INVALID");
+			case AsyncResultType::BLOCKED:
+				throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found BLOCKED");
+			case AsyncResultType::FINISHED:
+				if (chunk.size() > 0) {
+					throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found FINISHED with non-empty chunk");
+				}
+				break;
+			case AsyncResultType::HAVE_MORE_OUTPUT:
+				if (chunk.size() == 0) {
+					throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found HAVE_MORE_OUTPUT with empty chunk");
+				}
+				break;
+			case AsyncResultType::IMPLICIT:
+				break;
+			}
+			break;
+		default:
+			break;
+		}
 
 		switch (data.async_result.GetResultType()) {
 		case AsyncResultType::BLOCKED: {

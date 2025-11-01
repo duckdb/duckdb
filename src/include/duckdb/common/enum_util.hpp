@@ -308,6 +308,8 @@ enum class PendingExecutionResult : uint8_t;
 
 enum class PhysicalOperatorType : uint8_t;
 
+enum class PhysicalTableScanExecutionStrategy : uint8_t;
+
 enum class PhysicalType : uint8_t;
 
 enum class PragmaType : uint8_t;
@@ -870,6 +872,9 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value);
+
+template<>
+const char* EnumUtil::ToChars<PhysicalTableScanExecutionStrategy>(PhysicalTableScanExecutionStrategy value);
 
 template<>
 const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value);
@@ -1507,6 +1512,9 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value);
+
+template<>
+PhysicalTableScanExecutionStrategy EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(const char *value);
 
 template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value);
