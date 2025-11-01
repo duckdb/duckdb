@@ -582,7 +582,7 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 void SingleFileBlockManager::ReadAndChecksum(QueryContext context, FileBuffer &block, uint64_t location,
                                              bool skip_block_header) const {
 	// read the buffer from disk
-	block.Read(context, *handle, location);
+	ReadSingleBlock(block, context, *handle, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -913,10 +913,29 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 	CheckChecksum(internal_buffer, delta, skip_block_header);
 }
 
+template void SingleFileBlockManager::ReadSingleBlock(Block &block, QueryContext &context, FileHandle &handle,
+                                                      const idx_t location) const;
+template void SingleFileBlockManager::ReadSingleBlock(FileBuffer &block, QueryContext &context, FileHandle &handle,
+                                                      const idx_t location) const;
+
+template <class BLOCK>
+void SingleFileBlockManager::ReadSingleBlock(BLOCK &block, QueryContext &context, FileHandle &handle,
+                                             const idx_t location) const {
+	try {
+		block.Read(context, handle, location);
+	} catch (...) {
+		if (handle.IsInvalidated()) {
+			// TODO: db.Close();
+		}
+		throw;
+	}
+}
+
 void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) const {
 	// read the buffer from disk
 	auto location = GetBlockLocation(block.id);
-	block.Read(QueryContext(), *handle, location);
+	QueryContext context;
+	ReadSingleBlock(block, context, *handle, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;

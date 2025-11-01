@@ -97,6 +97,10 @@ void VirtualFileSystem::FileSync(FileHandle &handle) {
 	handle.file_system.FileSync(handle);
 }
 
+bool VirtualFileSystem::IsInvalidated(FileHandle &handle) {
+	return handle.file_system.IsInvalidated(handle);
+}
+
 // need to look up correct fs for this
 bool VirtualFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	return FindFileSystem(directory).DirectoryExists(directory, opener);
