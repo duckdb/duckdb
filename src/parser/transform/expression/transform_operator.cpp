@@ -12,6 +12,7 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/parser_options.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -95,6 +96,69 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		// left=ANY(right)
 		// we turn this into left=ANY((SELECT UNNEST(right)))
 		auto left_expr = TransformExpression(root.lexpr);
+		// Special-case LIKE ANY/ILIKE ANY with an explicit list of patterns: rewrite to OR of LIKE/ILIKE
+		// Postgres encodes LIKE/ILIKE operators as "~~" and "~~*" respectively.
+		if (root.kind == duckdb_libpgquery::PG_AEXPR_OP_ANY && (name == "~~" || name == "~~*") && root.rexpr) {
+			// Accept raw list, ARRAY[...] literal (PGAArrayExpr or PGArrayExpr), or a TypeCast around an ARRAY literal
+			// Transform list into disjunction of function calls: left ~~ pat1 OR left ~~ pat2 ...
+			duckdb_libpgquery::PGList *list = nullptr;
+			duckdb_libpgquery::PGNode *rexpr_node = root.rexpr;
+			// Unwrap a type cast if present (e.g., ARRAY[]::VARCHAR[])
+			if (rexpr_node->type == duckdb_libpgquery::T_PGTypeCast) {
+				auto type_cast = PGPointerCast<duckdb_libpgquery::PGTypeCast>(rexpr_node);
+				rexpr_node = type_cast->arg;
+			}
+
+			if (rexpr_node->type == duckdb_libpgquery::T_PGList) {
+				list = PGPointerCast<duckdb_libpgquery::PGList>(rexpr_node).get();
+			} else if (rexpr_node->type == duckdb_libpgquery::T_PGAArrayExpr) {
+				// ARRAY[...] in raw parse tree
+				auto aarray = PGPointerCast<duckdb_libpgquery::PGAArrayExpr>(rexpr_node);
+				list = aarray->elements;
+			} else if (rexpr_node->type == duckdb_libpgquery::T_PGArrayExpr) {
+				// Primnode ARRAY (less common in raw parse), handle for completeness
+				auto parray = PGPointerCast<duckdb_libpgquery::PGArrayExpr>(rexpr_node);
+				list = parray->elements;
+			} else if (rexpr_node->type == duckdb_libpgquery::T_PGFuncCall) {
+				// Some ARRAY[...] forms arrive as a FuncCall("array", args)
+				auto fcall = PGPointerCast<duckdb_libpgquery::PGFuncCall>(rexpr_node);
+				if (fcall->funcname && fcall->funcname->length >= 1) {
+					auto fname_val = PGPointerCast<duckdb_libpgquery::PGValue>(fcall->funcname->head->data.ptr_value);
+					string fname = fname_val->val.str ? string(fname_val->val.str) : string();
+					auto fname_lower = StringUtil::Lower(fname);
+					if (fname_lower == "array" || fname_lower == "construct_array") {
+						list = fcall->args;
+						if (!list || list->length == 0) {
+							throw ParserException("LIKE ANY() requires at least one pattern");
+						}
+					}
+				}
+			}
+
+			if (list) {
+				if (!list->head || list->length == 0) {
+					throw ParserException("LIKE ANY() requires at least one pattern");
+				}
+				vector<unique_ptr<ParsedExpression>> or_children;
+				for (auto cell = list->head; cell != nullptr; cell = cell->next) {
+					auto n = PGPointerCast<duckdb_libpgquery::PGNode>(cell->data.ptr_value);
+					vector<unique_ptr<ParsedExpression>> like_children;
+					like_children.push_back(left_expr->Copy());
+					like_children.push_back(TransformExpression(n));
+					auto like_func = make_uniq<FunctionExpression>(name, std::move(like_children));
+					like_func->is_operator = true;
+					or_children.push_back(std::move(like_func));
+				}
+				if (or_children.size() == 1) {
+					return std::move(or_children[0]);
+				}
+				auto disjunction = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+				disjunction->children = std::move(or_children);
+				SetQueryLocation(*disjunction, root.location);
+				return std::move(disjunction);
+			}
+		}
+
 		auto right_expr = TransformExpression(root.rexpr);
 
 		auto subquery_expr = make_uniq<SubqueryExpression>();
