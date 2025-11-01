@@ -94,9 +94,8 @@ public:
 	//! Get the first byte greater than or equal to the byte.
 	bool GetNextByte(ART &art, uint8_t &byte) const;
 
-	//! Returns the string representation of the node, if only_verify is false.
-	//! Else, it traverses and verifies the node.
-	string VerifyAndToString(ART &art, const bool only_verify) const;
+	//! Traverses and verifies the node.
+	void Verify(ART &art) const;
 	//! Counts each node type.
 	void VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 
@@ -106,6 +105,9 @@ public:
 	//! Transform the node storage to deprecated storage.
 	static void TransformToDeprecated(ART &art, Node &node,
 	                                  unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator);
+
+	//! Returns the string representation of the node at indentation level.
+	string ToString(ART &art, idx_t indent_level, bool inside_gate = false, bool display_ascii = false) const;
 
 	//! Returns the node type.
 	inline NType GetType() const {

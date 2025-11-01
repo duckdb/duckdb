@@ -1,0 +1,40 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 218aa0e..89e909d 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -566,8 +566,12 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void HNSWIndex::Vacuum(IndexLock &state) {
+ }
+ 
+-string HNSWIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+-	throw NotImplementedException("HNSWIndex::VerifyAndToString() not implemented");
++void HNSWIndex::Verify(IndexLock &l) {
++	throw NotImplementedException("HNSWIndex::Verify() not implemented");
++}
++
++string HNSWIndex::ToString(IndexLock &l, bool display_ascii) {
++	throw NotImplementedException("HNSWIndex::ToString() not implemented");
+ }
+ 
+ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 83fb9e7..a22a0b8 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -91,8 +91,14 @@ public:
+ 	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+ 
+-	//! Returns the string representation of the HNSWIndex, or only traverses and verifies the index.
+-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
++	//! Traverses and verifies the index.
++	//! Currently not implemented.
++	void Verify(IndexLock &l) override;
++
++	//! Returns the string representation of an index.
++	//! Currently not implemented.
++	string ToString(IndexLock &l, bool display_ascii = false) override;
++
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
+ 

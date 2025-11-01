@@ -391,44 +391,29 @@ void Node::TransformToDeprecated(ART &art, Node &node,
 // Verification
 //===--------------------------------------------------------------------===//
 
-string Node::VerifyAndToString(ART &art, const bool only_verify) const {
+void Node::Verify(ART &art) const {
 	D_ASSERT(HasMetadata());
 
 	auto type = GetType();
 	switch (type) {
 	case NType::LEAF_INLINED:
-		return only_verify ? "" : "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]";
+		return;
 	case NType::LEAF:
-		return Leaf::DeprecatedVerifyAndToString(art, *this, only_verify);
+		Leaf::DeprecatedVerify(art, *this);
+		return;
 	case NType::PREFIX: {
-		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
-		if (GetGateStatus() == GateStatus::GATE_SET) {
-			str = "Gate [ " + str + " ]";
-		}
-		return only_verify ? "" : "\n" + str;
+		Prefix::Verify(art, *this);
+		return;
 	}
 	default:
 		break;
 	}
 
-	string str = "Node" + to_string(GetCapacity(type)) + ": [ ";
-	uint8_t byte = 0;
-
-	if (IsLeafNode()) {
-		str = "Leaf " + str;
-		auto has_byte = GetNextByte(art, byte);
-		while (has_byte) {
-			str += to_string(byte) + "-";
-			if (byte == NumericLimits<uint8_t>::Maximum()) {
-				break;
-			}
-			byte++;
-			has_byte = GetNextByte(art, byte);
-		}
-	} else {
+	if (!IsLeafNode()) {
+		uint8_t byte = 0;
 		auto child = GetNextChild(art, byte);
 		while (child) {
-			str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
+			child->Verify(art);
 			if (byte == NumericLimits<uint8_t>::Maximum()) {
 				break;
 			}
@@ -436,11 +421,6 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 			child = GetNextChild(art, byte);
 		}
 	}
-
-	if (GetGateStatus() == GateStatus::GATE_SET) {
-		str = "Gate [ " + str + " ]";
-	}
-	return only_verify ? "" : "\n" + str + "]";
 }
 
 void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
@@ -480,6 +460,89 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 
 	ARTScanner<ARTScanHandling::EMPLACE, const Node> scanner(art, handler, *this);
 	scanner.Scan(handler);
+}
+
+//===--------------------------------------------------------------------===//
+// Printing
+//===--------------------------------------------------------------------===//
+
+string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool display_ascii) const {
+	auto indent = [](string &str, const idx_t n) {
+		for (idx_t i = 0; i < n; ++i) {
+			str += " ";
+		}
+	};
+	// if inside gate, print byte values not ascii.
+	auto format_byte = [&](uint8_t byte) {
+		if (!inside_gate && display_ascii && byte >= 32 && byte <= 126) {
+			return string(1, static_cast<char>(byte));
+		}
+		return to_string(byte);
+	};
+	auto type = GetType();
+	bool is_gate = GetGateStatus() == GateStatus::GATE_SET;
+	bool propagate_gate = inside_gate || is_gate;
+
+	switch (type) {
+	case NType::LEAF_INLINED: {
+		string str = "";
+		indent(str, indent_level);
+		return str + "Inlined Leaf [row ID: " + to_string(GetRowId()) + "]\n";
+	}
+	case NType::LEAF:
+		return Leaf::DeprecatedToString(art, *this);
+	case NType::PREFIX: {
+		string str = Prefix::ToString(art, *this, indent_level, propagate_gate, display_ascii);
+		if (is_gate) {
+			string s = "";
+			indent(s, indent_level);
+			s += "Gate\n";
+			return s + str;
+		}
+		string s = "";
+		return s + str;
+	}
+	default:
+		break;
+	}
+	string str = "";
+	indent(str, indent_level);
+	str = str + "Node" + to_string(GetCapacity(type)) += "\n";
+	uint8_t byte = 0;
+
+	if (IsLeafNode()) {
+		indent(str, indent_level);
+		str += "Leaf |";
+		auto has_byte = GetNextByte(art, byte);
+		while (has_byte) {
+			str += format_byte(byte) + "|";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			has_byte = GetNextByte(art, byte);
+		}
+		str += "\n";
+	} else {
+		auto child = GetNextChild(art, byte);
+		while (child) {
+			string c = child->ToString(art, indent_level + 2, propagate_gate, display_ascii);
+			indent(str, indent_level);
+			str = str + format_byte(byte) + ",\n" + c;
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
+			byte++;
+			child = GetNextChild(art, byte);
+		}
+	}
+
+	if (is_gate) {
+		string s = "";
+		indent(s, indent_level + 2);
+		str = "Gate\n" + s + str;
+	}
+	return str;
 }
 
 } // namespace duckdb
