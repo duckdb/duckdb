@@ -3,6 +3,7 @@
 #include "highlighting.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string.hpp"
+#include "shell_highlight.hpp"
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
 // disable highlighting on windows (for now?)
@@ -12,22 +13,10 @@
 namespace duckdb {
 
 #ifdef DISABLE_HIGHLIGHT
-static int enableHighlighting = 0;
+static bool enableHighlighting = 0;
 #else
-static int enableHighlighting = 1;
+static bool enableHighlighting = 1;
 #endif
-struct Color {
-	const char *color_name;
-	const char *highlight;
-};
-static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033[32m"},
-                                  {"yellow", "\033[33m"},        {"blue", "\033[34m"},
-                                  {"magenta", "\033[35m"},       {"cyan", "\033[36m"},
-                                  {"white", "\033[37m"},         {"brightblack", "\033[90m"},
-                                  {"brightred", "\033[91m"},     {"brightgreen", "\033[92m"},
-                                  {"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
-                                  {"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
-                                  {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
 static std::string bold = "\033[1m";
 static std::string underline = "\033[4m";
 static std::string keyword = "\033[32m";
@@ -48,17 +37,6 @@ void Highlighting::Disable() {
 
 bool Highlighting::IsEnabled() {
 	return enableHighlighting;
-}
-
-const char *Highlighting::GetColorOption(const char *option) {
-	size_t index = 0;
-	while (terminal_colors[index].color_name) {
-		if (strcmp(terminal_colors[index].color_name, option) == 0) {
-			return terminal_colors[index].highlight;
-		}
-		index++;
-	}
-	return nullptr;
 }
 
 void Highlighting::SetHighlightingColor(HighlightingType type, const char *color) {

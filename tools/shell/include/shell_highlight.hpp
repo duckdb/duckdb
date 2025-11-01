@@ -55,6 +55,9 @@ struct ShellHighlight {
 	//! Whether or not a color is part of the extended color set (not available on all platforms)
 	static bool IsExtendedColor(PrintColor color);
 	static optional_ptr<HighlightColorInfo> GetColorInfo(PrintColor color);
+	static bool TryGetPrintColor(const char *name, PrintColor &result, string &error_msg);
+	//! Gets the terminal code for a given print color (POSIX only)
+	static string TerminalCode(PrintColor color);
 
 public:
 	ShellState &state;

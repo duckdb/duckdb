@@ -4,6 +4,7 @@
 #include "terminal.hpp"
 #include "highlighting.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "shell_highlight.hpp"
 
 using duckdb::Highlighting;
 using duckdb::History;
@@ -170,16 +171,14 @@ int linenoiseTrySetHighlightColor(const char *component, const char *code, char 
 	}
 	// if this is not a raw code - lookup the color codes
 	if (!raw_code) {
-		const char *option = Highlighting::GetColorOption(code);
-		if (!option) {
-			snprintf(out_error, out_error_len - 1,
-			         "Unknown highlighting color '%s'.\nSupported highlighting colors: "
-			         "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
-			         "brightblue|brightmagenta|brightcyan|brightwhite]",
-			         code);
+		duckdb::string error_msg;
+		duckdb_shell::PrintColor color;
+		if (!duckdb_shell::ShellHighlight::TryGetPrintColor(code, color, error_msg)) {
+			snprintf(out_error, out_error_len - 1, "%s", error_msg.c_str());
 			return 0;
 		}
-		Highlighting::SetHighlightingColor(type, option);
+		auto terminal_code = duckdb_shell::ShellHighlight::TerminalCode(color);
+		Highlighting::SetHighlightingColor(type, terminal_code.c_str());
 	} else {
 		Highlighting::SetHighlightingColor(type, code);
 	}

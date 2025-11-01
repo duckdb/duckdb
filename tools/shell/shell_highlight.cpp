@@ -32,17 +32,6 @@ static HighlightElement highlight_elements[] = {{"error", PrintColor::RED, Print
                                                 {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
                                                 {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
 
-struct HighlightColors {
-	const char *name;
-	PrintColor color;
-};
-
-static const HighlightColors highlight_colors[] = {{"standard", PrintColor::STANDARD}, {"red", PrintColor::RED},
-                                                   {"yellow", PrintColor::YELLOW},     {"green", PrintColor::GREEN},
-                                                   {"gray", PrintColor::GRAY},         {"blue", PrintColor::BLUE},
-                                                   {"magenta", PrintColor::MAGENTA},   {"cyan", PrintColor::CYAN},
-                                                   {"white", PrintColor::WHITE},       {nullptr, PrintColor::STANDARD}};
-
 ShellHighlight::ShellHighlight(ShellState &state) : state(state) {
 }
 
@@ -118,20 +107,7 @@ void ShellHighlight::PrintText(const string &text, PrintOutput output, PrintColo
 	default:
 		break;
 	}
-	if (color != PrintColor::STANDARD) {
-		color_prefix = "\033[";
-		if (color >= PrintColor::RED && color <= PrintColor::BRIGHTGRAY) {
-			// standard colors have as codes \033[31m through \033[37m
-			color_prefix += to_string(31 + static_cast<uint16_t>(color) - static_cast<uint16_t>(PrintColor::RED));
-		} else if (color >= PrintColor::GRAY && color <= PrintColor::WHITE) {
-			// bright colors have as codes \033[90m through \033[97m
-			color_prefix += to_string(90 + static_cast<uint16_t>(color) - static_cast<uint16_t>(PrintColor::GRAY));
-		} else {
-			// extended color codes have as code \033[38;5;{code}m
-			color_prefix += "38;5;" + to_string(static_cast<uint16_t>(color));
-		}
-		color_prefix += "m";
-	}
+	color_prefix = TerminalCode(color);
 	if (!color_prefix.empty() || *bold_prefix) {
 		suffix = "\033[0m";
 	}
@@ -239,26 +215,13 @@ bool ShellHighlight::SetColor(const char *element_type, const char *color, const
 	}
 
 	// found the element - parse the color
-	idx_t c;
-	for (c = 0; highlight_colors[c].name; c++) {
-		if (duckdb::StringUtil::CIEquals(color, highlight_colors[c].name)) {
-			break;
-		}
-	}
-	if (!highlight_colors[c].name) {
-		// color not found
-		string supported_options;
-		for (c = 0; highlight_colors[c].name; c++) {
-			if (!supported_options.empty()) {
-				supported_options += ", ";
-			}
-			supported_options += highlight_colors[c].name;
-		}
-		state.Print(PrintOutput::STDERR, duckdb::StringUtil::Format("Unknown color '%s', supported options: %s\n",
-		                                                            color, supported_options.c_str()));
+	PrintColor print_color;
+	string error_msg;
+	if (!TryGetPrintColor(color, print_color, error_msg)) {
+		state.PrintDatabaseError(error_msg);
 		return false;
 	}
-	highlight_elements[i].color = highlight_colors[c].color;
+	highlight_elements[i].color = print_color;
 	highlight_elements[i].intensity = PrintIntensity::STANDARD;
 	if (intensity) {
 		if (duckdb::StringUtil::CIEquals(intensity, "standard")) {
@@ -549,6 +512,44 @@ optional_ptr<HighlightColorInfo> ShellHighlight::GetColorInfo(PrintColor color) 
 		return nullptr;
 	}
 	return highlight_color_info[static_cast<uint16_t>(color)];
+}
+
+bool ShellHighlight::TryGetPrintColor(const char *name, PrintColor &result, string &error_msg) {
+	for (idx_t i = 0; highlight_color_info[i].color_name; i++) {
+		if (StringUtil::CIEquals(name, highlight_color_info[i].color_name)) {
+			result = static_cast<PrintColor>(i);
+			return true;
+		}
+	}
+	// not found
+	error_msg = StringUtil::Format("Unknown highlighting color '%s'\n", name);
+	vector<string> color_names;
+	for (idx_t i = 0; highlight_color_info[i].color_name; i++) {
+		color_names.push_back(highlight_color_info[i].color_name);
+	}
+	auto candidates_msg = StringUtil::CandidatesErrorMessage(color_names, name, "Did you mean");
+	error_msg += candidates_msg + "\n";
+	error_msg += StringUtil::Format("Run '.display_colors' for a list of available colors.\n");
+	return false;
+}
+
+string ShellHighlight::TerminalCode(PrintColor color) {
+	if (color == PrintColor::STANDARD) {
+		return string();
+	}
+	string terminal_code = "\033[";
+	if (color >= PrintColor::RED && color <= PrintColor::BRIGHTGRAY) {
+		// standard colors have as codes \033[31m through \033[37m
+		terminal_code += to_string(31 + static_cast<uint16_t>(color) - static_cast<uint16_t>(PrintColor::RED));
+	} else if (color >= PrintColor::GRAY && color <= PrintColor::WHITE) {
+		// bright colors have as codes \033[90m through \033[97m
+		terminal_code += to_string(90 + static_cast<uint16_t>(color) - static_cast<uint16_t>(PrintColor::GRAY));
+	} else {
+		// extended color codes have as code \033[38;5;{code}m
+		terminal_code += "38;5;" + to_string(static_cast<uint16_t>(color));
+	}
+	terminal_code += "m";
+	return terminal_code;
 }
 
 } // namespace duckdb_shell
