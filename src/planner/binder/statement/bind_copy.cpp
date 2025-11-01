@@ -86,8 +86,9 @@ case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunc
 }
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type) {
-	if (function.plan) {
+	if (function.plan && !stmt.has_been_planned) {
 		// plan rewrite COPY TO
+		stmt.has_been_planned = true;
 		return function.plan(*this, stmt);
 	}
 
