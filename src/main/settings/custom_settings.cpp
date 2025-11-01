@@ -34,6 +34,14 @@
 
 namespace duckdb {
 
+constexpr const char *LoggingMode::Name;
+constexpr const char *LoggingLevel::Name;
+constexpr const char *EnableLogging::Name;
+constexpr const char *LoggingStorage::Name;
+constexpr const char *EnabledLogTypes::Name;
+constexpr const char *DisabledLogTypes::Name;
+constexpr const char *DisabledFilesystemsSetting::Name;
+
 const string GetDefaultUserAgent() {
 	return StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 }
@@ -147,6 +155,27 @@ bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConf
 		}
 		return false;
 	}
+	return true;
+}
+
+//===----------------------------------------------------------------------===//
+// Allow Parser Override
+//===----------------------------------------------------------------------===//
+bool AllowParserOverrideExtensionSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	vector<string> supported_options = {"default", "fallback", "strict", "strict_when_supported"};
+	string supported_option_string;
+	for (const auto &option : supported_options) {
+		if (StringUtil::CIEquals(new_value, option)) {
+			return true;
+		}
+	}
+	throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: %s",
+	                            StringUtil::Join(supported_options, ", "));
+}
+
+bool AllowParserOverrideExtensionSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
+	config.options.allow_parser_override_extension = "default";
 	return true;
 }
 
@@ -494,7 +523,7 @@ Value DefaultSecretStorageSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto list = StringUtil::Split(input.ToString(), ",");
-	set<CompressionType> disabled_compression_methods;
+	vector<CompressionType> disabled_compression_methods;
 	for (auto &entry : list) {
 		auto param = StringUtil::Lower(entry);
 		StringUtil::Trim(param);
@@ -512,19 +541,20 @@ void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			throw InvalidInputException("Unrecognized compression method \"%s\"", entry);
 		}
-		disabled_compression_methods.insert(compression_type);
+		disabled_compression_methods.push_back(compression_type);
 	}
-	config.options.disabled_compression_methods = std::move(disabled_compression_methods);
+	config.SetDisabledCompressionMethods(disabled_compression_methods);
 }
 
 void DisabledCompressionMethodsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.disabled_compression_methods = DBConfigOptions().disabled_compression_methods;
+	vector<CompressionType> disabled_compression_methods;
+	config.SetDisabledCompressionMethods(disabled_compression_methods);
 }
 
 Value DisabledCompressionMethodsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
-	for (auto &optimizer : config.options.disabled_compression_methods) {
+	for (auto &optimizer : config.GetDisabledCompressionMethods()) {
 		if (!result.empty()) {
 			result += ",";
 		}

@@ -128,7 +128,6 @@ jobs:
       run: |
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Sign files with Azure Trusted Signing (TM)
       if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
@@ -211,7 +210,6 @@ jobs:
       run: |
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
 
  win-release-arm64:
@@ -322,11 +320,6 @@ jobs:
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
-
-       - name: Tools Test
-         shell: msys2 {0}
-         run: |
-           tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
 
  win-packaged-upload:
    runs-on: windows-latest

@@ -267,7 +267,6 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 };
 
 struct ICULocalTimestampFunc : public ICUDateFunc {
-
 	struct BindDataNow : public BindData {
 		explicit BindDataNow(ClientContext &context) : BindData(context) {
 			now = MetaTransaction::Get(context).start_timestamp;

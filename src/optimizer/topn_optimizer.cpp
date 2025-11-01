@@ -11,8 +11,28 @@
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+namespace {
+
+bool CanReorderRowGroups(LogicalTopN &op) {
+	// Only reorder row groups if there are no additional limit operators since they could modify the order
+	reference<LogicalOperator> current_op = op;
+	while (!current_op.get().children.empty()) {
+		if (current_op.get().children.size() > 1) {
+			return false;
+		}
+		if (current_op.get().type == LogicalOperatorType::LOGICAL_LIMIT) {
+			return false;
+		}
+		current_op = *current_op.get().children[0];
+	}
+	return true;
+}
+
+} // namespace
 
 TopN::TopN(ClientContext &context_p) : context(context_p) {
 }
@@ -39,6 +59,9 @@ bool TopN::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context)
 		if (child_op->has_estimated_cardinality) {
 			// only check if we should switch to full sorting if we have estimated cardinality
 			auto constant_limit = static_cast<double>(limit.limit_val.GetConstantValue());
+			if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+				constant_limit += static_cast<double>(limit.offset_val.GetConstantValue());
+			}
 			auto child_card = static_cast<double>(child_op->estimated_cardinality);
 
 			// if the limit is > 0.7% of the child cardinality, sorting the whole table is faster
@@ -110,6 +133,9 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
 
+	bool use_custom_rowgroup_order =
+	    CanReorderRowGroups(op) && (colref.return_type.IsNumeric() || colref.return_type.IsTemporal());
+
 	for (auto &target : pushdown_targets) {
 		auto &get = target.get;
 		D_ASSERT(target.columns.size() == 1);
@@ -122,12 +148,23 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		// push the filter into the table scan
 		auto &column_index = get.GetColumnIds()[col_idx];
 		get.table_filters.PushFilter(column_index, std::move(optional_filter));
+
+		// Scan row groups in custom order
+		if (get.function.set_scan_order && use_custom_rowgroup_order) {
+			auto column_type =
+			    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
+			auto order_type =
+			    op.orders[0].type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
+			auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+			auto order_options =
+			    make_uniq<RowGroupOrderOptions>(column_index.GetPrimaryIndex(), order_by, order_type, column_type);
+			get.function.set_scan_order(std::move(order_options), get.bind_data.get());
+		}
 	}
 }
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op, &context)) {
-
 		vector<unique_ptr<LogicalOperator>> projections;
 
 		// traverse operator tree and collect all projection nodes until we reach

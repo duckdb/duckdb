@@ -4,8 +4,21 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/serializer/varint.hpp"
+#include "duckdb/common/types/variant_visitor.hpp"
 
 namespace duckdb {
+
+PhysicalType VariantDecimalData::GetPhysicalType() const {
+	if (width > DecimalWidth<int64_t>::max) {
+		return PhysicalType::INT128;
+	} else if (width > DecimalWidth<int32_t>::max) {
+		return PhysicalType::INT64;
+	} else if (width > DecimalWidth<int16_t>::max) {
+		return PhysicalType::INT32;
+	} else {
+		return PhysicalType::INT16;
+	}
+}
 
 bool VariantUtils::IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
 	auto type_id = variant.GetTypeId(row, value_index);
@@ -19,10 +32,19 @@ VariantDecimalData VariantUtils::DecodeDecimalData(const UnifiedVariantVectorDat
 	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
 	auto ptr = data + byte_offset;
 
-	VariantDecimalData result;
-	result.width = VarintDecode<uint32_t>(ptr);
-	result.scale = VarintDecode<uint32_t>(ptr);
-	return result;
+	auto width = VarintDecode<uint32_t>(ptr);
+	auto scale = VarintDecode<uint32_t>(ptr);
+	auto value_ptr = ptr;
+	return VariantDecimalData(width, scale, value_ptr);
+}
+
+string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index) {
+	auto byte_offset = variant.GetByteOffset(row, value_index);
+	auto data = const_data_ptr_cast(variant.GetData(row).GetData());
+	auto ptr = data + byte_offset;
+
+	auto length = VarintDecode<uint32_t>(ptr);
+	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
 
 VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData &variant, idx_t row,
@@ -53,13 +75,12 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 	return object_keys;
 }
 
-VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant,
-                                                               const VariantPathComponent &component, optional_idx row,
-                                                               SelectionVector &res, VariantNestedData *nested_data,
-                                                               idx_t count) {
-
+//! FIXME: this shouldn't return a "result", it should populate a validity mask instead.
+void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
+                                   optional_ptr<const SelectionVector> sel, SelectionVector &res,
+                                   ValidityMask &res_validity, VariantNestedData *nested_data, idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
-		auto row_index = row.IsValid() ? row.GetIndex() : i;
+		auto row_index = sel ? sel->get_index(i) : i;
 
 		auto &nested_data_entry = nested_data[i];
 		if (nested_data_entry.is_null) {
@@ -67,13 +88,10 @@ VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVari
 		}
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
 			auto child_idx = component.index;
-			if (child_idx == 0) {
-				return VariantChildDataCollectionResult::IndexZero();
-			}
-			child_idx--;
 			if (child_idx >= nested_data_entry.child_count) {
 				//! The list is too small to contain this index
-				return VariantChildDataCollectionResult::NotFound(i);
+				res_validity.SetInvalid(i);
+				continue;
 			}
 			auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
 			res[i] = static_cast<uint8_t>(value_id);
@@ -93,10 +111,9 @@ VariantChildDataCollectionResult VariantUtils::FindChildValues(const UnifiedVari
 			}
 		}
 		if (!found_child) {
-			return VariantChildDataCollectionResult::NotFound(i);
+			res_validity.SetInvalid(i);
 		}
 	}
-	return VariantChildDataCollectionResult();
 }
 
 vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
@@ -146,133 +163,204 @@ VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, Variant
 	return VariantNestedDataCollectionResult();
 }
 
-Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, idx_t values_idx) {
-	if (!variant.RowIsValid(row)) {
-		return Value(LogicalTypeId::SQLNULL);
-	}
+namespace {
 
-	//! The 'values' data of the value we're currently converting
-	auto type_id = variant.GetTypeId(row, values_idx);
-	auto byte_offset = variant.GetByteOffset(row, values_idx);
+struct ValueConverter {
+	using result_type = Value;
 
-	//! The blob data of the Variant, accessed by byte offset retrieved above ^
-	auto blob_data = const_data_ptr_cast(variant.GetData(row).GetData());
-
-	auto ptr = const_data_ptr_cast(blob_data + byte_offset);
-	switch (type_id) {
-	case VariantLogicalType::VARIANT_NULL:
+	static Value VisitNull() {
 		return Value(LogicalType::SQLNULL);
-	case VariantLogicalType::BOOL_TRUE:
-		return Value::BOOLEAN(true);
-	case VariantLogicalType::BOOL_FALSE:
-		return Value::BOOLEAN(false);
-	case VariantLogicalType::INT8:
-		return Value::TINYINT(Load<int8_t>(ptr));
-	case VariantLogicalType::INT16:
-		return Value::SMALLINT(Load<int16_t>(ptr));
-	case VariantLogicalType::INT32:
-		return Value::INTEGER(Load<int32_t>(ptr));
-	case VariantLogicalType::INT64:
-		return Value::BIGINT(Load<int64_t>(ptr));
-	case VariantLogicalType::INT128:
-		return Value::HUGEINT(Load<hugeint_t>(ptr));
-	case VariantLogicalType::UINT8:
-		return Value::UTINYINT(Load<uint8_t>(ptr));
-	case VariantLogicalType::UINT16:
-		return Value::USMALLINT(Load<uint16_t>(ptr));
-	case VariantLogicalType::UINT32:
-		return Value::UINTEGER(Load<uint32_t>(ptr));
-	case VariantLogicalType::UINT64:
-		return Value::UBIGINT(Load<uint64_t>(ptr));
-	case VariantLogicalType::UINT128:
-		return Value::UHUGEINT(Load<uhugeint_t>(ptr));
-	case VariantLogicalType::UUID:
-		return Value::UUID(Load<hugeint_t>(ptr));
-	case VariantLogicalType::INTERVAL:
-		return Value::INTERVAL(Load<interval_t>(ptr));
-	case VariantLogicalType::FLOAT:
-		return Value::FLOAT(Load<float>(ptr));
-	case VariantLogicalType::DOUBLE:
-		return Value::DOUBLE(Load<double>(ptr));
-	case VariantLogicalType::DATE:
-		return Value::DATE(date_t(Load<int32_t>(ptr)));
-	case VariantLogicalType::BLOB: {
-		auto string_length = VarintDecode<uint32_t>(ptr);
-		auto string_data = reinterpret_cast<const char *>(ptr);
-		return Value::BLOB(const_data_ptr_cast(string_data), string_length);
 	}
-	case VariantLogicalType::VARCHAR: {
-		auto string_length = VarintDecode<uint32_t>(ptr);
-		auto string_data = reinterpret_cast<const char *>(ptr);
-		return Value(string_t(string_data, string_length));
-	}
-	case VariantLogicalType::DECIMAL: {
-		auto width = NumericCast<uint8_t>(VarintDecode<idx_t>(ptr));
-		auto scale = NumericCast<uint8_t>(VarintDecode<idx_t>(ptr));
 
-		if (width > DecimalWidth<int64_t>::max) {
-			return Value::DECIMAL(Load<hugeint_t>(ptr), width, scale);
-		} else if (width > DecimalWidth<int32_t>::max) {
-			return Value::DECIMAL(Load<int64_t>(ptr), width, scale);
-		} else if (width > DecimalWidth<int16_t>::max) {
-			return Value::DECIMAL(Load<int32_t>(ptr), width, scale);
+	static Value VisitBoolean(bool val) {
+		return Value::BOOLEAN(val);
+	}
+
+	template <typename T>
+	static Value VisitInteger(T val) {
+		throw InternalException("ValueConverter::VisitInteger not implemented!");
+	}
+
+	static Value VisitTime(dtime_t val) {
+		return Value::TIME(val);
+	}
+
+	static Value VisitTimeNanos(dtime_ns_t val) {
+		return Value::TIME_NS(val);
+	}
+
+	static Value VisitTimeTZ(dtime_tz_t val) {
+		return Value::TIMETZ(val);
+	}
+
+	static Value VisitTimestampSec(timestamp_sec_t val) {
+		return Value::TIMESTAMPSEC(val);
+	}
+
+	static Value VisitTimestampMs(timestamp_ms_t val) {
+		return Value::TIMESTAMPMS(val);
+	}
+
+	static Value VisitTimestamp(timestamp_t val) {
+		return Value::TIMESTAMP(val);
+	}
+
+	static Value VisitTimestampNanos(timestamp_ns_t val) {
+		return Value::TIMESTAMPNS(val);
+	}
+
+	static Value VisitTimestampTZ(timestamp_tz_t val) {
+		return Value::TIMESTAMPTZ(val);
+	}
+
+	static Value VisitFloat(float val) {
+		return Value::FLOAT(val);
+	}
+	static Value VisitDouble(double val) {
+		return Value::DOUBLE(val);
+	}
+	static Value VisitUUID(hugeint_t val) {
+		return Value::UUID(val);
+	}
+	static Value VisitDate(date_t val) {
+		return Value::DATE(val);
+	}
+	static Value VisitInterval(interval_t val) {
+		return Value::INTERVAL(val);
+	}
+
+	static Value VisitString(const string_t &str) {
+		return Value(str);
+	}
+	static Value VisitBlob(const string_t &str) {
+		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	static Value VisitBignum(const string_t &str) {
+		return Value::BIGNUM(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	static Value VisitGeometry(const string_t &str) {
+		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+	static Value VisitBitstring(const string_t &str) {
+		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
+	}
+
+	template <typename T>
+	static Value VisitDecimal(T val, uint32_t width, uint32_t scale) {
+		if (std::is_same<T, int16_t>::value) {
+			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+		} else if (std::is_same<T, int32_t>::value) {
+			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+		} else if (std::is_same<T, int64_t>::value) {
+			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
+		} else if (std::is_same<T, hugeint_t>::value) {
+			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
 		} else {
-			return Value::DECIMAL(Load<int16_t>(ptr), width, scale);
+			throw InternalException("Unhandled decimal type");
 		}
 	}
-	case VariantLogicalType::TIME_MICROS:
-		return Value::TIME(Load<dtime_t>(ptr));
-	case VariantLogicalType::TIME_MICROS_TZ:
-		return Value::TIMETZ(Load<dtime_tz_t>(ptr));
-	case VariantLogicalType::TIMESTAMP_MICROS:
-		return Value::TIMESTAMP(Load<timestamp_t>(ptr));
-	case VariantLogicalType::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(Load<timestamp_sec_t>(ptr));
-	case VariantLogicalType::TIMESTAMP_NANOS:
-		return Value::TIMESTAMPNS(Load<timestamp_ns_t>(ptr));
-	case VariantLogicalType::TIMESTAMP_MILIS:
-		return Value::TIMESTAMPMS(Load<timestamp_ms_t>(ptr));
-	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-		return Value::TIMESTAMPTZ(Load<timestamp_tz_t>(ptr));
-	case VariantLogicalType::ARRAY: {
-		auto count = VarintDecode<uint32_t>(ptr);
-		vector<Value> array_items;
-		if (count) {
-			auto child_index_start = VarintDecode<uint32_t>(ptr);
-			for (idx_t i = 0; i < count; i++) {
-				auto child_index = variant.GetValuesIndex(row, child_index_start + i);
-				array_items.emplace_back(ConvertVariantToValue(variant, row, child_index));
-			}
-		}
+
+	static Value VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data) {
+		auto array_items = VariantVisitor<ValueConverter>::VisitArrayItems(variant, row, nested_data);
 		return Value::LIST(LogicalType::VARIANT(), std::move(array_items));
 	}
-	case VariantLogicalType::OBJECT: {
-		auto count = VarintDecode<uint32_t>(ptr);
-		child_list_t<Value> object_children;
-		if (count) {
-			auto child_index_start = VarintDecode<uint32_t>(ptr);
-			for (idx_t i = 0; i < count; i++) {
-				auto child_value_idx = variant.GetValuesIndex(row, child_index_start + i);
-				auto val = ConvertVariantToValue(variant, row, child_value_idx);
 
-				auto child_key_id = variant.GetKeysIndex(row, child_index_start + i);
-				auto &key = variant.GetKey(row, child_key_id);
-
-				object_children.emplace_back(key.GetString(), std::move(val));
-			}
-		}
+	static Value VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data) {
+		auto object_children = VariantVisitor<ValueConverter>::VisitObjectItems(variant, row, nested_data);
 		return Value::STRUCT(std::move(object_children));
 	}
-	case VariantLogicalType::BITSTRING: {
-		auto string_length = VarintDecode<uint32_t>(ptr);
-		return Value::BIT(ptr, string_length);
+
+	static Value VisitDefault(VariantLogicalType type_id, const_data_ptr_t) {
+		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
 	}
-	case VariantLogicalType::BIGNUM: {
-		auto string_length = VarintDecode<uint32_t>(ptr);
-		return Value::BIGNUM(ptr, string_length);
+};
+
+template <>
+Value ValueConverter::VisitInteger<int8_t>(int8_t val) {
+	return Value::TINYINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<int16_t>(int16_t val) {
+	return Value::SMALLINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<int32_t>(int32_t val) {
+	return Value::INTEGER(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<int64_t>(int64_t val) {
+	return Value::BIGINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<hugeint_t>(hugeint_t val) {
+	return Value::HUGEINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uint8_t>(uint8_t val) {
+	return Value::UTINYINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uint16_t>(uint16_t val) {
+	return Value::USMALLINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uint32_t>(uint32_t val) {
+	return Value::UINTEGER(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uint64_t>(uint64_t val) {
+	return Value::UBIGINT(val);
+}
+
+template <>
+Value ValueConverter::VisitInteger<uhugeint_t>(uhugeint_t val) {
+	return Value::UHUGEINT(val);
+}
+
+} // namespace
+
+Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx) {
+	return VariantVisitor<ValueConverter>::Visit(variant, row, values_idx);
+}
+
+void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
+                                       SelectionVector &sel, idx_t sel_size) {
+	auto &keys = VariantVector::GetKeys(variant);
+	auto &keys_entry = ListVector::GetEntry(keys);
+	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
+
+	bool already_sorted = true;
+
+	vector<uint32_t> unsorted_to_sorted(dictionary.size());
+	auto it = dictionary.begin();
+	for (uint32_t sorted_idx = 0; sorted_idx < dictionary.size(); sorted_idx++) {
+		auto unsorted_idx = it->second;
+		if (unsorted_idx != sorted_idx) {
+			already_sorted = false;
+		}
+		unsorted_to_sorted[unsorted_idx] = sorted_idx;
+		D_ASSERT(sorted_idx < ListVector::GetListSize(keys));
+		keys_entry_data[sorted_idx] = it->first;
+		auto size = static_cast<uint32_t>(keys_entry_data[sorted_idx].GetSize());
+		keys_entry_data[sorted_idx].SetSizeAndFinalize(size, size);
+		it++;
 	}
-	default:
-		throw InternalException("VariantLogicalType(%d) not handled", static_cast<uint8_t>(type_id));
+
+	if (!already_sorted) {
+		//! Adjust the selection vector to point to the right dictionary index
+		for (idx_t i = 0; i < sel_size; i++) {
+			auto &entry = sel[i];
+			auto sorted_idx = unsorted_to_sorted[entry];
+			entry = sorted_idx;
+		}
 	}
 }
 
@@ -352,12 +440,14 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 			if (key_id.validity.RowIsValid(key_id_index)) {
 				auto children_key_id = key_id_data[key_id_index];
 				D_ASSERT(children_key_id < keys_list_entry.length);
+				(void)children_key_id;
 			}
 
 			auto value_id_index = value_id.sel->get_index(j + children_list_entry.offset);
 			D_ASSERT(value_id.validity.RowIsValid(value_id_index));
 			auto children_value_id = value_id_data[value_id_index];
 			D_ASSERT(children_value_id < values_list_entry.length);
+			(void)children_value_id;
 		}
 
 		//! verify values
@@ -397,6 +487,7 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 					} else {
 						D_ASSERT(!key_id.validity.RowIsValid(child_key_id_index));
 					}
+					(void)child_key_id_index;
 				}
 				break;
 			}

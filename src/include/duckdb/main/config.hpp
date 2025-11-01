@@ -110,6 +110,8 @@ struct DBConfigOptions {
 #else
 	bool autoinstall_known_extensions = false;
 #endif
+	//! Setting for the parser override registered by extensions. Allowed options: "default, "fallback", "strict"
+	string allow_parser_override_extension = "default";
 	//! Override for the default extension repository
 	string custom_extension_repo = "";
 	//! Override for the default autoload extension repository
@@ -161,8 +163,6 @@ struct DBConfigOptions {
 	uint64_t zstd_min_string_length = 4096;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
-	//! The set of disabled compression methods (default empty)
-	set<CompressionType> disabled_compression_methods;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Database configuration variables as controlled by SET
@@ -291,6 +291,7 @@ public:
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION);
+	DUCKDB_API bool HasExtensionOption(const string &name);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetcha n alias by index, or nullptr if out of range
@@ -302,7 +303,7 @@ public:
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
-	DUCKDB_API void SetOption(const string &name, Value value);
+	DUCKDB_API void SetOption(const String &name, Value value);
 	DUCKDB_API void ResetOption(const String &name);
 	DUCKDB_API void ResetGenericOption(const String &name);
 	static LogicalType ParseLogicalType(const string &type);
@@ -316,6 +317,10 @@ public:
 	//! Returns the compression function matching the compression and physical type.
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
 	                                                                    const PhysicalType physical_type);
+	//! Sets the disabled compression methods
+	DUCKDB_API void SetDisabledCompressionMethods(const vector<CompressionType> &disabled_compression_methods);
+	//! Returns a list of disabled compression methods
+	DUCKDB_API vector<CompressionType> GetDisabledCompressionMethods() const;
 
 	//! Returns the encode function matching the encoding name.
 	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(const string &name) const;

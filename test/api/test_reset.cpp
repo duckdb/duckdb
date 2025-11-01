@@ -62,6 +62,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
+	    {"allow_parser_override_extension", {"fallback"}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
@@ -120,6 +121,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}},
+	    {"experimental_metadata_reuse", {false}},
+	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {

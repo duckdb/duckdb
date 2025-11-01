@@ -35,14 +35,12 @@ public:
 	transaction_t transaction_id;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
-	//! Highest active query when the transaction finished, used for cleaning up
-	transaction_t highest_active_query;
 
 	atomic<idx_t> catalog_version;
 
 	//! Transactions undergo Cleanup, after (1) removing them directly in RemoveTransaction,
-	//! or (2) after they exist old_transactions.
-	//! Some (after rollback) enter old_transactions, but do not require Cleanup.
+	//! or (2) after they enter cleanup_queue.
+	//! Some (after rollback) enter cleanup_queue, but do not require Cleanup.
 	bool awaiting_cleanup;
 
 public:

@@ -1356,7 +1356,6 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		base_info.Verify();
 		node->Verify();
 	} else {
-
 		// there is no version info yet: create the top level update info and fill it with the updates
 		// allocate space for the UpdateInfo in the allocator
 		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);

@@ -124,7 +124,7 @@ EXPLAIN SELECT (SELECT UNNEST(i)) FROM (VALUES ([])) tbl(i);
 logical_opt	<REGEX>:.*DELIM_JOIN.*SINGLE.*
 
 query II
-EXPLAIN select * from (select [42, 43, 44]) t(a), (select unnest(t.a)) t2(b) where b=43;
+EXPLAIN select * from (select [42, 43, 44]) t(a), (select unnest(t.a)) t2(b);
 ----
 logical_opt	<!REGEX>:.*DELIM_JOIN.*
 

@@ -30,6 +30,8 @@ enum class HighlightElementType : uint32_t {
 	NULL_VALUE,
 	FOOTER,
 	LAYOUT,
+	STARTUP_TEXT,
+	STARTUP_VERSION,
 	NONE
 };
 

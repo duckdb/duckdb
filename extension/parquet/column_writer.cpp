@@ -1,7 +1,7 @@
 #include "column_writer.hpp"
 
 #include "duckdb.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_bss_encoder.hpp"
 #include "parquet_statistics.hpp"
@@ -13,6 +13,7 @@
 #include "writer/list_column_writer.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/struct_column_writer.hpp"
+#include "writer/variant_column_writer.hpp"
 #include "writer/templated_column_writer.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -96,7 +97,7 @@ bool ColumnWriterStatistics::HasGeoStats() {
 	return false;
 }
 
-optional_ptr<GeometryStats> ColumnWriterStatistics::GetGeoStats() {
+optional_ptr<GeometryStatsData> ColumnWriterStatistics::GetGeoStats() {
 	return nullptr;
 }
 
@@ -181,8 +182,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 	}
 }
 
-void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterState *parent, idx_t count,
-                                      idx_t max_repeat) const {
+void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterState *parent, idx_t count) const {
 	if (!parent) {
 		// no repeat levels without a parent node
 		return;
@@ -246,7 +246,8 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 
 ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
                                                     const LogicalType &type, const string &name, bool allow_geometry,
-                                                    optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat,
+                                                    optional_ptr<const ChildFieldIDs> field_ids,
+                                                    optional_ptr<const ShreddingType> shredding_types, idx_t max_repeat,
                                                     idx_t max_define, bool can_have_nulls) {
 	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 	if (!can_have_nulls) {
@@ -262,6 +263,70 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 			field_id = &field_id_it->second;
 			child_field_ids = &field_id->child_field_ids;
 		}
+	}
+	optional_ptr<const ShreddingType> shredding_type;
+	if (shredding_types) {
+		shredding_type = shredding_types->GetChild(name);
+	}
+
+	if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
+		// variant type
+		// variants are stored as follows:
+		// group <name> VARIANT {
+		//	metadata BYTE_ARRAY,
+		//	value BYTE_ARRAY,
+		//	[<typed_value>]
+		// }
+
+		const bool is_shredded = shredding_type != nullptr;
+
+		child_list_t<LogicalType> child_types;
+		child_types.emplace_back("metadata", LogicalType::BLOB);
+		child_types.emplace_back("value", LogicalType::BLOB);
+		if (is_shredded) {
+			auto &typed_value_type = shredding_type->type;
+			if (typed_value_type.id() != LogicalTypeId::ANY) {
+				child_types.emplace_back("typed_value",
+				                         VariantColumnWriter::TransformTypedValueRecursive(typed_value_type));
+			}
+		}
+
+		// variant group
+		duckdb_parquet::SchemaElement top_element;
+		top_element.repetition_type = null_type;
+		top_element.num_children = child_types.size();
+		top_element.logicalType.__isset.VARIANT = true;
+		top_element.logicalType.VARIANT.__isset.specification_version = true;
+		top_element.logicalType.VARIANT.specification_version = 1;
+		top_element.__isset.logicalType = true;
+		top_element.__isset.num_children = true;
+		top_element.__isset.repetition_type = true;
+		top_element.name = name;
+		schemas.push_back(std::move(top_element));
+
+		ParquetColumnSchema variant_column(name, type, max_define, max_repeat, schema_idx, 0);
+		variant_column.children.reserve(child_types.size());
+		for (auto &child_type : child_types) {
+			auto &child_name = child_type.first;
+			bool is_optional;
+			if (child_name == "metadata") {
+				is_optional = false;
+			} else if (child_name == "value") {
+				if (is_shredded) {
+					//! When shredding the variant, the 'value' becomes optional
+					is_optional = true;
+				} else {
+					is_optional = false;
+				}
+			} else {
+				D_ASSERT(child_name == "typed_value");
+				is_optional = true;
+			}
+			variant_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
+			                                                       allow_geometry, child_field_ids, shredding_type,
+			                                                       max_repeat, max_define + 1, is_optional));
+		}
+		return variant_column;
 	}
 
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
@@ -285,8 +350,8 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 		struct_column.children.reserve(child_types.size());
 		for (auto &child_type : child_types) {
 			struct_column.children.emplace_back(FillParquetSchema(schemas, child_type.second, child_type.first,
-			                                                      allow_geometry, child_field_ids, max_repeat,
-			                                                      max_define + 1));
+			                                                      allow_geometry, child_field_ids, shredding_type,
+			                                                      max_repeat, max_define + 1, true));
 		}
 		return struct_column;
 	}
@@ -323,7 +388,8 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 
 		ParquetColumnSchema list_column(name, type, max_define, max_repeat, schema_idx, 0);
 		list_column.children.push_back(FillParquetSchema(schemas, child_type, "element", allow_geometry,
-		                                                 child_field_ids, max_repeat + 1, max_define + 2));
+		                                                 child_field_ids, shredding_type, max_repeat + 1,
+		                                                 max_define + 2, true));
 		return list_column;
 	}
 	if (type.id() == LogicalTypeId::MAP) {
@@ -371,7 +437,7 @@ ParquetColumnSchema ColumnWriter::FillParquetSchema(vector<duckdb_parquet::Schem
 			// key needs to be marked as REQUIRED
 			bool is_key = i == 0;
 			auto child_schema = FillParquetSchema(schemas, kv_types[i], kv_names[i], allow_geometry, child_field_ids,
-			                                      max_repeat + 1, max_define + 2, !is_key);
+			                                      shredding_type, max_repeat + 1, max_define + 2, !is_key);
 
 			map_column.children.push_back(std::move(child_schema));
 		}
@@ -401,6 +467,17 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 	auto &type = schema.type;
 	auto can_have_nulls = parquet_schemas[schema.schema_index].repetition_type == FieldRepetitionType::OPTIONAL;
 	path_in_schema.push_back(schema.name);
+
+	if (type.id() == LogicalTypeId::STRUCT && type.GetAlias() == "PARQUET_VARIANT") {
+		vector<unique_ptr<ColumnWriter>> child_writers;
+		child_writers.reserve(schema.children.size());
+		for (idx_t i = 0; i < schema.children.size(); i++) {
+			child_writers.push_back(
+			    CreateWriterRecursive(context, writer, parquet_schemas, schema.children[i], path_in_schema));
+		}
+		return make_uniq<VariantColumnWriter>(writer, schema, path_in_schema, std::move(child_writers), can_have_nulls);
+	}
+
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
 		// construct the child writers recursively
 		vector<unique_ptr<ColumnWriter>> child_writers;
@@ -438,11 +515,6 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 		auto struct_writer =
 		    make_uniq<StructColumnWriter>(writer, schema, path_in_schema, std::move(child_writers), can_have_nulls);
 		return make_uniq<ListColumnWriter>(writer, schema, path_in_schema, std::move(struct_writer), can_have_nulls);
-	}
-
-	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB") {
-		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(
-		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	}
 
 	switch (type.id()) {
@@ -514,6 +586,9 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 		}
 	case LogicalTypeId::BLOB:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetBlobOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
+	case LogicalTypeId::GEOMETRY:
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(
 		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(

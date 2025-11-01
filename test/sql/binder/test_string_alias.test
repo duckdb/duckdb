@@ -16,6 +16,7 @@ SELECT i AS 'hello world' FROM integers
 statement error
 SELECT i 'hello world' FROM integers
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 # double quotes work everywhere
 statement ok
@@ -32,3 +33,4 @@ SELECT "hello world".i FROM integers AS 'hello world'
 statement error
 SELECT "hello world".i FROM integers 'hello world'
 ----
+Parser Error: syntax error

@@ -156,7 +156,6 @@ public:
 			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 			deserializer.Unset<LogicalType>();
 		} else {
-
 			FunctionBinder binder(context);
 
 			// Resolve templates

@@ -39,7 +39,6 @@ static const ValidityMask &ExtractValidityMask(const Vector &v) {
 
 void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
                             idx_t source_offset, idx_t target_offset, idx_t copy_count) {
-
 	SelectionVector owned_sel;
 	const SelectionVector *sel = &sel_p;
 

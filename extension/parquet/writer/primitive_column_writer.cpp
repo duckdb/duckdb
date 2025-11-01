@@ -7,6 +7,9 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
+
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
                                              vector<string> schema_path, bool can_have_nulls)
     : ColumnWriter(writer, column_schema, std::move(schema_path), can_have_nulls) {
@@ -44,7 +47,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
 	auto &validity = FlatVector::Validity(vector);
-	HandleRepeatLevels(state, parent, count, MaxRepeat());
+	HandleRepeatLevels(state, parent, count);
 	HandleDefineLevels(state, parent, validity, count, MaxDefine(), MaxDefine() - 1);
 
 	idx_t vector_index = 0;
@@ -304,7 +307,6 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	}
 
 	if (state.stats_state->HasGeoStats()) {
-
 		auto gpq_version = writer.GetGeoParquetVersion();
 
 		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH ||

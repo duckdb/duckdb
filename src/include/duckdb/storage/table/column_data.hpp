@@ -39,14 +39,16 @@ struct PersistentColumnData;
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
 struct ColumnCheckpointInfo {
-	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
-	}
+	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx);
 
-	RowGroupWriteInfo &info;
 	idx_t column_idx;
 
 public:
+	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
+
+private:
+	RowGroupWriteInfo &info;
 };
 
 class ColumnData {
@@ -178,7 +180,8 @@ public:
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
 
-	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
+	virtual void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+	                                  vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
 	FilterPropagateResult CheckZonemap(TableFilter &filter);

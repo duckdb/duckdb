@@ -6,7 +6,6 @@ UnscentedKalmanFilter::UnscentedKalmanFilter()
     : x(STATE_DIM, 0.0), P(STATE_DIM, vector<double>(STATE_DIM, 0.0)), Q(STATE_DIM, vector<double>(STATE_DIM, 0.0)),
       R(OBS_DIM, vector<double>(OBS_DIM, 0.0)), last_time(0.0), initialized(false), last_progress(-1.0),
       scale_factor(1.0) {
-
 	// Calculate UKF parameters
 	lambda = ALPHA * ALPHA * (STATE_DIM + KAPPA) - STATE_DIM;
 

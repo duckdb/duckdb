@@ -197,7 +197,7 @@ const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prep
 	}
 	auto &names = wrapper->statement->GetNames();
 
-	if (col_idx < 0 || col_idx >= names.size()) {
+	if (col_idx >= names.size()) {
 		return nullptr;
 	}
 	return strdup(names[col_idx].c_str());
@@ -210,7 +210,7 @@ duckdb_logical_type duckdb_prepared_statement_column_logical_type(duckdb_prepare
 		return nullptr;
 	}
 	auto types = wrapper->statement->GetTypes();
-	if (col_idx < 0 || col_idx >= types.size()) {
+	if (col_idx >= types.size()) {
 		return nullptr;
 	}
 	return reinterpret_cast<duckdb_logical_type>(new LogicalType(types[col_idx]));

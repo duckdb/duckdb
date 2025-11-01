@@ -62,10 +62,14 @@ public:
 	MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager);
 	~MetadataManager();
 
+	BufferManager &GetBufferManager() const {
+		return buffer_manager;
+	}
+
 	MetadataHandle AllocateHandle();
 	MetadataHandle Pin(const MetadataPointer &pointer);
 
-	MetadataHandle Pin(QueryContext context, const MetadataPointer &pointer);
+	MetadataHandle Pin(const QueryContext &context, const MetadataPointer &pointer);
 
 	MetaBlockPointer GetDiskPointer(const MetadataPointer &pointer, uint32_t offset = 0);
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);

@@ -52,7 +52,6 @@ static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &w
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &client,
                                                  WindowSharedExpressions &shared, WindowAggregationMode mode)
     : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared), mode(mode) {
-
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
 	if (!ClientConfig::GetConfig(client).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {
 		if (!WindowNaiveAggregator::CanAggregate(wexpr)) {
@@ -111,7 +110,6 @@ public:
 	                                  const WindowAggregator &aggregator)
 	    : WindowExecutorBoundsLocalState(context, gstate.Cast<WindowAggregateExecutorGlobalState>()),
 	      filter_executor(context.client) {
-
 		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 		aggregator_state = aggregator.GetLocalState(context, *gastate.gsink);
 

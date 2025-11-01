@@ -241,6 +241,35 @@ typedef enum duckdb_error_type {
 //! An enum over DuckDB's different cast modes.
 typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
 
+typedef enum duckdb_file_flag {
+	DUCKDB_FILE_FLAG_INVALID = 0,
+	// Open the file with "read" capabilities.
+	DUCKDB_FILE_FLAG_READ = 1,
+	// Open the file with "write" capabilities.
+	DUCKDB_FILE_FLAG_WRITE = 2,
+	// Create a new file, or open if it already exists.
+	DUCKDB_FILE_FLAG_CREATE = 3,
+	// Create a new file, or fail if it already exists.
+	DUCKDB_FILE_FLAG_CREATE_NEW = 4,
+	// Open the file in "append" mode.
+	DUCKDB_FILE_FLAG_APPEND = 5,
+} duckdb_file_flag;
+
+//! An enum over DuckDB's configuration option scopes.
+//! This enum can be used to specify the default scope when creating a custom configuration option,
+//! but it is also be used to determine the scope in which a configuration option is set when it is
+//! changed or retrieved.
+typedef enum duckdb_config_option_scope {
+	DUCKDB_CONFIG_OPTION_SCOPE_INVALID = 0,
+	// The option is set for the duration of the current transaction only.
+	// !! CURRENTLY NOT IMPLEMENTED !!
+	DUCKDB_CONFIG_OPTION_SCOPE_LOCAL = 1,
+	// The option is set for the current session/connection only.
+	DUCKDB_CONFIG_OPTION_SCOPE_SESSION = 2,
+	// Set the option globally for all sessions/connections.
+	DUCKDB_CONFIG_OPTION_SCOPE_GLOBAL = 3,
+} duckdb_config_option_scope;
+
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -534,6 +563,12 @@ typedef struct _duckdb_config {
 	void *internal_ptr;
 } * duckdb_config;
 
+//! A custom configuration option instance. Used to register custom options that can be set on a duckdb_config.
+//! or by the user in SQL using `SET <option_name> = <value>`.
+typedef struct _duckdb_config_option {
+	void *internal_ptr;
+} * duckdb_config_option;
+
 //! A logical type.
 //! Must be destroyed with `duckdb_destroy_logical_type`.
 typedef struct _duckdb_logical_type {
@@ -757,6 +792,22 @@ typedef struct _duckdb_arrow_options {
 } * duckdb_arrow_options;
 
 //===--------------------------------------------------------------------===//
+// Virtual File System Access
+//===--------------------------------------------------------------------===//
+
+typedef struct _duckdb_file_open_options {
+	void *internal_ptr;
+} * duckdb_file_open_options;
+
+typedef struct _duckdb_file_system {
+	void *internal_ptr;
+} * duckdb_file_system;
+
+typedef struct _duckdb_file_handle {
+	void *internal_ptr;
+} * duckdb_file_handle;
+
+//===--------------------------------------------------------------------===//
 // DuckDB extension access
 //===--------------------------------------------------------------------===//
 
@@ -866,10 +917,10 @@ Interrupt running query
 DUCKDB_C_API void duckdb_interrupt(duckdb_connection connection);
 
 /*!
-Get progress of the running query
+Get the progress of the running query.
 
-* @param connection The working connection
-* @return -1 if no progress or a percentage of the progress
+* @param connection The connection running the query.
+* @return The query progress type containing progress information.
 */
 DUCKDB_C_API duckdb_query_progress_type duckdb_query_progress(duckdb_connection connection);
 
@@ -1284,10 +1335,10 @@ DUCKDB_C_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 // Safe Fetch Functions
 //===--------------------------------------------------------------------===//
 
-// These functions will perform conversions if necessary.
-// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
-// Note that these functions are slow since they perform bounds checking and conversion
-// For fast access of values prefer using `duckdb_result_get_chunk`
+// This function group is deprecated.
+// To access the values in a result, use `duckdb_fetch_chunk` repeatedly.
+// For each chunk, use the `duckdb_data_chunk` interface to access any columns and their values.
+
 #ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
@@ -1416,8 +1467,7 @@ DUCKDB_C_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_
 DUCKDB_C_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null
-bytes.
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 * @return The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
 converted. The result must be freed with `duckdb_free`.
@@ -1427,16 +1477,12 @@ DUCKDB_C_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t 
 /*!
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
-No support for nested types, and for other complex types.
-The resulting field "string.data" must be freed with `duckdb_free.`
-
 * @return The string value at the specified location. Attempts to cast the result value to string.
 */
 DUCKDB_C_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
-null bytes.
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
@@ -1446,8 +1492,8 @@ The result must NOT be freed.
 DUCKDB_C_API char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
-**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
-null bytes.
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
 * @return The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
 
@@ -3306,23 +3352,26 @@ Returns the size of the child vector of the list.
 DUCKDB_C_API idx_t duckdb_list_vector_get_size(duckdb_vector vector);
 
 /*!
-Sets the total size of the underlying child-vector of a list vector.
+Sets the size of the underlying child-vector of a list vector.
+Note that this does NOT reserve the memory in the child buffer,
+and that it is possible to set a size exceeding the capacity.
+To set the capacity, use `duckdb_list_vector_reserve`.
 
 * @param vector The list vector.
 * @param size The size of the child list.
-* @return The duckdb state. Returns DuckDBError if the vector is nullptr.
+* @return The duckdb state. Returns DuckDBError, if the vector is nullptr.
 */
 DUCKDB_C_API duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size);
 
 /*!
-Sets the total capacity of the underlying child-vector of a list.
-
-After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
-data and validity pointers
+Sets the capacity of the underlying child-vector of a list vector.
+We increment to the next power of two, based on the required capacity.
+Thus, the capacity might not match the size of the list (capacity >= size),
+which is set via `duckdb_list_vector_set_size`.
 
 * @param vector The list vector.
-* @param required_capacity the total capacity to reserve.
-* @return The duckdb state. Returns DuckDBError if the vector is nullptr.
+* @param required_capacity The child buffer capacity to reserve.
+* @return The duckdb state. Returns DuckDBError, if the vector is nullptr.
 */
 DUCKDB_C_API duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity);
 
@@ -4646,6 +4695,14 @@ Check if the column at 'index' index of the table has a DEFAULT expression.
 DUCKDB_C_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
 
 /*!
+Return the number of columns of the described table.
+
+* @param table_description The table_description to query.
+* @return The column count.
+*/
+DUCKDB_C_API idx_t duckdb_table_description_get_column_count(duckdb_table_description table_description);
+
+/*!
 Obtain the column name at 'index'.
 The out result must be destroyed with `duckdb_free`.
 
@@ -4654,6 +4711,17 @@ The out result must be destroyed with `duckdb_free`.
 * @return The column name.
 */
 DUCKDB_C_API char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index);
+
+/*!
+Obtain the column type at 'index'.
+The return value must be destroyed with `duckdb_destroy_logical_type`.
+
+* @param table_description The table_description to query.
+* @param index The index of the column to query.
+* @return The column type.
+*/
+DUCKDB_C_API duckdb_logical_type duckdb_table_description_get_column_type(duckdb_table_description table_description,
+                                                                          idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface
@@ -5160,6 +5228,233 @@ Folds an expression creating a folded value.
 */
 DUCKDB_C_API duckdb_error_data duckdb_expression_fold(duckdb_client_context context, duckdb_expression expr,
                                                       duckdb_value *out_value);
+
+//===--------------------------------------------------------------------===//
+// File System Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Get a file system instance associated with the given client context.
+
+* @param context The client context.
+* @return The resulting file system instance. Must be destroyed with `duckdb_destroy_file_system`.
+*/
+DUCKDB_C_API duckdb_file_system duckdb_client_context_get_file_system(duckdb_client_context context);
+
+/*!
+Destroys the given file system instance.
+* @param file_system The file system instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_system(duckdb_file_system *file_system);
+
+/*!
+Retrieves the last error that occurred on the given file system instance.
+
+* @param file_system The file system instance.
+* @return The error data.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_file_system_error_data(duckdb_file_system file_system);
+
+/*!
+Opens a file at the given path with the specified options.
+
+* @param file_system The file system instance.
+* @param path The path to the file.
+* @param options The file open options specifying how to open the file.
+* @param out_file The resulting file handle instance, or `nullptr` if the open failed. Must be destroyed with
+`duckdb_destroy_file_handle`.
+* @return Whether the operation was successful. If not, the error data can be retrieved using
+`duckdb_file_system_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_system_open(duckdb_file_system file_system, const char *path,
+                                                  duckdb_file_open_options options, duckdb_file_handle *out_file);
+
+/*!
+Creates a new file open options instance with blank settings.
+
+* @return The new file open options instance. Must be destroyed with `duckdb_destroy_file_open_options`.
+*/
+DUCKDB_C_API duckdb_file_open_options duckdb_create_file_open_options();
+
+/*!
+Sets a specific flag in the file open options.
+
+* @param options The file open options instance.
+* @param flag The flag to set (e.g., read, write).
+* @param value If the flag is enabled or disabled.
+* @return `DuckDBSuccess` on success or `DuckDBError` if the flag is unrecognized or unsupported by this version of
+DuckDB.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_open_options_set_flag(duckdb_file_open_options options, duckdb_file_flag flag,
+                                                            bool value);
+
+/*!
+Destroys the given file open options instance.
+* @param options The file open options instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_open_options(duckdb_file_open_options *options);
+
+/*!
+Destroys the given file handle and deallocates all associated resources.
+This will also close the file if it is still open.
+
+* @param file_handle The file handle to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_file_handle(duckdb_file_handle *file_handle);
+
+/*!
+Retrieves the last error that occurred on the given file handle.
+
+* @param file_handle The file handle.
+* @return The error data. Must be destroyed with `duckdb_destroy_error_data`
+*/
+DUCKDB_C_API duckdb_error_data duckdb_file_handle_error_data(duckdb_file_handle file_handle);
+
+/*!
+Reads data from the file into the buffer.
+
+* @param file_handle The file handle to read from.
+* @param buffer The buffer to read data into.
+* @param size The number of bytes to read.
+* @return The number of bytes actually read, or negative on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_read(duckdb_file_handle file_handle, void *buffer, int64_t size);
+
+/*!
+Writes data from the buffer to the file.
+
+* @param file_handle The file handle to write to.
+* @param buffer The buffer containing data to write.
+* @param size The number of bytes to write.
+* @return The number of bytes actually written, or negative on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_write(duckdb_file_handle file_handle, const void *buffer, int64_t size);
+
+/*!
+Tells the current position in the file.
+
+* @param file_handle The file handle to tell the position of.
+* @return The current position in the file, or negative on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_tell(duckdb_file_handle file_handle);
+
+/*!
+Gets the size of the file.
+
+* @param file_handle The file handle to get the size of.
+* @return The size of the file in bytes, or negative on error.
+*/
+DUCKDB_C_API int64_t duckdb_file_handle_size(duckdb_file_handle file_handle);
+
+/*!
+Seeks to a specific position in the file.
+
+* @param file_handle The file handle to seek in.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_seek(duckdb_file_handle file_handle, int64_t position);
+
+/*!
+Synchronizes the file's state with the underlying storage.
+
+* @param file_handle The file handle to synchronize.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_sync(duckdb_file_handle file_handle);
+
+/*!
+Closes the given file handle.
+
+* @param file_handle The file handle to close.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure. If unsuccessful, the error data can be retrieved using
+`duckdb_file_handle_error_data`.
+*/
+DUCKDB_C_API duckdb_state duckdb_file_handle_close(duckdb_file_handle file_handle);
+
+//===--------------------------------------------------------------------===//
+// Config Options Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a configuration option instance.
+
+* @return The resulting configuration option instance. Must be destroyed with `duckdb_destroy_config_option`.
+*/
+DUCKDB_C_API duckdb_config_option duckdb_create_config_option();
+
+/*!
+Destroys the given configuration option instance.
+* @param option The configuration option instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_config_option(duckdb_config_option *option);
+
+/*!
+Sets the name of the configuration option.
+
+* @param option The configuration option instance.
+* @param name The name to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_name(duckdb_config_option option, const char *name);
+
+/*!
+Sets the type of the configuration option.
+
+* @param option The configuration option instance.
+* @param type The type to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_type(duckdb_config_option option, duckdb_logical_type type);
+
+/*!
+Sets the default value of the configuration option.
+If the type of this option has already been set with `duckdb_config_option_set_type`, the value is cast to the type.
+Otherwise, the type is inferred from the value.
+
+* @param option The configuration option instance.
+* @param default_value The default value to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_default_value(duckdb_config_option option, duckdb_value default_value);
+
+/*!
+Sets the default scope of the configuration option.
+If not set, this defaults to `DUCKDB_CONFIG_OPTION_SCOPE_SESSION`.
+
+* @param option The configuration option instance.
+* @param default_scope The default scope to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_default_scope(duckdb_config_option option,
+                                                         duckdb_config_option_scope default_scope);
+
+/*!
+Sets the description of the configuration option.
+
+* @param option The configuration option instance.
+* @param description The description to set.
+*/
+DUCKDB_C_API void duckdb_config_option_set_description(duckdb_config_option option, const char *description);
+
+/*!
+Registers the given configuration option on the specified connection.
+
+* @param connection The connection to register the option on.
+* @param option The configuration option instance to register.
+* @return A duckdb_state indicating success or failure.
+*/
+DUCKDB_C_API duckdb_state duckdb_register_config_option(duckdb_connection connection, duckdb_config_option option);
+
+/*!
+Retrieves the value of a configuration option by name from the given client context.
+
+* @param context The client context.
+* @param name The name of the configuration option to retrieve.
+* @param out_scope Output parameter to optionally store the scope that the configuration option was retrieved from.
+If this is `nullptr`, the scope is not returned.
+If the requested option does not exist the scope is set to `DUCKDB_CONFIG_OPTION_SCOPE_INVALID`.
+* @return The value of the configuration option. Returns `nullptr` if the option does not exist.
+*/
+DUCKDB_C_API duckdb_value duckdb_client_context_get_config_option(duckdb_client_context context, const char *name,
+                                                                  duckdb_config_option_scope *out_scope);
 
 #endif
 

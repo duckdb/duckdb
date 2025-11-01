@@ -257,7 +257,6 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_offset, ArrowArrayScanState &array_state,
                                idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                const ValidityMask *parent_mask, int64_t parent_offset) {
-
 	auto &array_info = arrow_type.GetTypeInfo<ArrowArrayInfo>();
 	auto array_size = array_info.FixedSize();
 	auto child_count = array_size * size;
@@ -695,7 +694,6 @@ template <class SRC>
 void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, int64_t nested_offset,
                     uint64_t parent_offset, idx_t chunk_offset, ValidityMask &val_mask,
                     DecimalBitWidth arrow_bit_width) {
-
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::INT16: {
 		auto tgt_ptr = FlatVector::GetData<int16_t>(vector);
@@ -1184,7 +1182,6 @@ static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, i
 
 template <class T>
 static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
-
 	auto indices = reinterpret_cast<T *>(indices_p);
 	for (idx_t row = 0; row < size; row++) {
 		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {

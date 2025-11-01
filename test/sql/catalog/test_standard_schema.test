@@ -6,6 +6,7 @@
 statement error
 DROP SCHEMA main CASCADE;
 ----
+<REGEX>:.*Catalog Error: Cannot drop entry.*
 
 # create and drop an empty schema
 statement ok
@@ -22,6 +23,7 @@ CREATE SCHEMA test;
 statement error
 CREATE SCHEMA test;
 ----
+<REGEX>:.*Catalog Error.*already exists.*
 
 # if not exists ignores error
 statement ok
@@ -35,6 +37,7 @@ CREATE TABLE test.hello(i INTEGER);
 statement error
 CREATE TABLE test2.hello(i INTEGER);
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 # use the table in queries
 # insert into table
@@ -45,6 +48,7 @@ INSERT INTO test.hello VALUES (2), (3), (4)
 statement error
 SELECT * FROM hello
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 # with schema specified should succeed
 query I
@@ -58,6 +62,7 @@ SELECT * FROM test.hello
 statement error
 DROP SCHEMA test;
 ----
+<REGEX>:.*Dependency Error: Cannot drop entry.*
 
 # unless we use cascade to drop
 statement ok
@@ -71,4 +76,4 @@ DROP SCHEMA IF EXISTS test;
 statement error
 DROP SCHEMA test;
 ----
-
+<REGEX>:.*Catalog Error.*does not exist.*

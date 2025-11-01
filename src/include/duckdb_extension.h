@@ -560,6 +560,21 @@ typedef struct {
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
 #endif
 
+// New configuration options functions
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_config_option (*duckdb_create_config_option)();
+	void (*duckdb_destroy_config_option)(duckdb_config_option *option);
+	void (*duckdb_config_option_set_name)(duckdb_config_option option, const char *name);
+	void (*duckdb_config_option_set_type)(duckdb_config_option option, duckdb_logical_type type);
+	void (*duckdb_config_option_set_default_value)(duckdb_config_option option, duckdb_value default_value);
+	void (*duckdb_config_option_set_default_scope)(duckdb_config_option option,
+	                                               duckdb_config_option_scope default_scope);
+	void (*duckdb_config_option_set_description)(duckdb_config_option option, const char *description);
+	duckdb_state (*duckdb_register_config_option)(duckdb_connection connection, duckdb_config_option option);
+	duckdb_value (*duckdb_client_context_get_config_option)(duckdb_client_context context, const char *name,
+	                                                        duckdb_config_option_scope *out_scope);
+#endif
+
 // New functions for duckdb error data
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_error_data (*duckdb_create_error_data)(duckdb_error_type type, const char *message);
@@ -576,6 +591,28 @@ typedef struct {
 	bool (*duckdb_expression_is_foldable)(duckdb_expression expr);
 	duckdb_error_data (*duckdb_expression_fold)(duckdb_client_context context, duckdb_expression expr,
 	                                            duckdb_value *out_value);
+#endif
+
+// API to manage file system operations
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_file_system (*duckdb_client_context_get_file_system)(duckdb_client_context context);
+	void (*duckdb_destroy_file_system)(duckdb_file_system *file_system);
+	duckdb_state (*duckdb_file_system_open)(duckdb_file_system file_system, const char *path,
+	                                        duckdb_file_open_options options, duckdb_file_handle *out_file);
+	duckdb_error_data (*duckdb_file_system_error_data)(duckdb_file_system file_system);
+	duckdb_file_open_options (*duckdb_create_file_open_options)();
+	duckdb_state (*duckdb_file_open_options_set_flag)(duckdb_file_open_options options, duckdb_file_flag flag,
+	                                                  bool value);
+	void (*duckdb_destroy_file_open_options)(duckdb_file_open_options *options);
+	void (*duckdb_destroy_file_handle)(duckdb_file_handle *file_handle);
+	duckdb_error_data (*duckdb_file_handle_error_data)(duckdb_file_handle file_handle);
+	duckdb_state (*duckdb_file_handle_close)(duckdb_file_handle file_handle);
+	int64_t (*duckdb_file_handle_read)(duckdb_file_handle file_handle, void *buffer, int64_t size);
+	int64_t (*duckdb_file_handle_write)(duckdb_file_handle file_handle, const void *buffer, int64_t size);
+	duckdb_state (*duckdb_file_handle_seek)(duckdb_file_handle file_handle, int64_t position);
+	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file_handle);
+	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file_handle);
+	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
 #endif
 
 // New functions around the client context
@@ -619,6 +656,13 @@ typedef struct {
 // New string functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	char *(*duckdb_value_to_string)(duckdb_value value);
+#endif
+
+// New functions around the table description
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
+	duckdb_logical_type (*duckdb_table_description_get_column_type)(duckdb_table_description table_description,
+	                                                                idx_t index);
 #endif
 
 // New functions around table function binding
@@ -1080,6 +1124,17 @@ typedef struct {
 #define duckdb_data_chunk_from_arrow          duckdb_ext_api.duckdb_data_chunk_from_arrow
 #define duckdb_destroy_arrow_converted_schema duckdb_ext_api.duckdb_destroy_arrow_converted_schema
 
+// Version unstable_new_config_options_functions
+#define duckdb_create_config_option             duckdb_ext_api.duckdb_create_config_option
+#define duckdb_destroy_config_option            duckdb_ext_api.duckdb_destroy_config_option
+#define duckdb_config_option_set_name           duckdb_ext_api.duckdb_config_option_set_name
+#define duckdb_config_option_set_type           duckdb_ext_api.duckdb_config_option_set_type
+#define duckdb_config_option_set_default_value  duckdb_ext_api.duckdb_config_option_set_default_value
+#define duckdb_config_option_set_default_scope  duckdb_ext_api.duckdb_config_option_set_default_scope
+#define duckdb_config_option_set_description    duckdb_ext_api.duckdb_config_option_set_description
+#define duckdb_register_config_option           duckdb_ext_api.duckdb_register_config_option
+#define duckdb_client_context_get_config_option duckdb_ext_api.duckdb_client_context_get_config_option
+
 // Version unstable_new_error_data_functions
 #define duckdb_create_error_data     duckdb_ext_api.duckdb_create_error_data
 #define duckdb_destroy_error_data    duckdb_ext_api.duckdb_destroy_error_data
@@ -1092,6 +1147,24 @@ typedef struct {
 #define duckdb_expression_return_type duckdb_ext_api.duckdb_expression_return_type
 #define duckdb_expression_is_foldable duckdb_ext_api.duckdb_expression_is_foldable
 #define duckdb_expression_fold        duckdb_ext_api.duckdb_expression_fold
+
+// Version unstable_new_file_system_api
+#define duckdb_client_context_get_file_system duckdb_ext_api.duckdb_client_context_get_file_system
+#define duckdb_destroy_file_system            duckdb_ext_api.duckdb_destroy_file_system
+#define duckdb_file_system_error_data         duckdb_ext_api.duckdb_file_system_error_data
+#define duckdb_file_system_open               duckdb_ext_api.duckdb_file_system_open
+#define duckdb_create_file_open_options       duckdb_ext_api.duckdb_create_file_open_options
+#define duckdb_file_open_options_set_flag     duckdb_ext_api.duckdb_file_open_options_set_flag
+#define duckdb_destroy_file_open_options      duckdb_ext_api.duckdb_destroy_file_open_options
+#define duckdb_destroy_file_handle            duckdb_ext_api.duckdb_destroy_file_handle
+#define duckdb_file_handle_error_data         duckdb_ext_api.duckdb_file_handle_error_data
+#define duckdb_file_handle_read               duckdb_ext_api.duckdb_file_handle_read
+#define duckdb_file_handle_write              duckdb_ext_api.duckdb_file_handle_write
+#define duckdb_file_handle_tell               duckdb_ext_api.duckdb_file_handle_tell
+#define duckdb_file_handle_size               duckdb_ext_api.duckdb_file_handle_size
+#define duckdb_file_handle_seek               duckdb_ext_api.duckdb_file_handle_seek
+#define duckdb_file_handle_sync               duckdb_ext_api.duckdb_file_handle_sync
+#define duckdb_file_handle_close              duckdb_ext_api.duckdb_file_handle_close
 
 // Version unstable_new_open_connect_functions
 #define duckdb_connection_get_client_context    duckdb_ext_api.duckdb_connection_get_client_context
@@ -1123,6 +1196,10 @@ typedef struct {
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+
+// Version unstable_new_table_description_functions
+#define duckdb_table_description_get_column_count duckdb_ext_api.duckdb_table_description_get_column_count
+#define duckdb_table_description_get_column_type  duckdb_ext_api.duckdb_table_description_get_column_type
 
 // Version unstable_new_table_function_functions
 #define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context

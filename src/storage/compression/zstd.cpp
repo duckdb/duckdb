@@ -81,7 +81,7 @@ struct ZSTDStorage {
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -236,7 +236,6 @@ public:
 	      checkpoint_data(checkpoint_data),
 	      partial_block_manager(checkpoint_data.GetCheckpointState().GetPartialBlockManager()),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
-
 		total_vector_count = GetVectorCount(analyze_state->count);
 		total_segment_count = analyze_state->segment_count;
 		vectors_per_segment = analyze_state->vectors_per_segment;
@@ -983,7 +982,7 @@ public:
 	AllocatedData skip_buffer;
 };
 
-unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<ZSTDScanState>(segment);
 	return std::move(result);
 }

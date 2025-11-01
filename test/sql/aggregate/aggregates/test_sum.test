@@ -74,6 +74,7 @@ SELECT SUM(b) FROM bigints
 statement error
 SELECT SUM(b)::BIGINT FROM bigints
 ----
+Conversion Error: Type INT128 with value 4611686018427388403500
 
 #
 # Order by
@@ -94,4 +95,4 @@ SELECT sum(n ORDER BY ABS(n))::BIGINT FROM doubles;
 statement error
 SELECT (sum(n) WITHIN GROUP(ORDER BY ABS(n)))::BIGINT FROM doubles;
 ----
-
+Parser Error: Unknown ordered aggregate "sum"

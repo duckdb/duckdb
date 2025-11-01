@@ -24,6 +24,8 @@ static const TestConfigOption test_config_options[] = {
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
+    {"base_config", "Config file to load and base initial settings on", LogicalType::VARCHAR,
+     TestConfiguration::LoadBaseConfig},
     {"block_size", "Block Alloction Size; must be a power of 2", LogicalType::BIGINT, nullptr},
     {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalType::BIGINT,
      nullptr},
@@ -299,8 +301,14 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
+		res.push_back("ThrowAsyncTask: Test error handling when throwing mid-task");
 	}
 	return res;
+}
+
+void TestConfiguration::LoadBaseConfig(const Value &input) {
+	auto &test_config = TestConfiguration::Get();
+	test_config.LoadConfig(input.ToString());
 }
 
 void TestConfiguration::ParseConnectScript(const Value &input) {
@@ -365,6 +373,7 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 				tests_to_be_skipped.insert(skipped_test.GetValue<string>());
 			}
 		}
+		options.erase("skip_tests");
 	}
 }
 
