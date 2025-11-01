@@ -61,6 +61,8 @@ string RelationTypeToString(RelationType type) {
 		return "VIEW_RELATION";
 	case RelationType::QUERY_RELATION:
 		return "QUERY_RELATION";
+	case RelationType::EXTENSION_RELATION:
+		return "EXTENSION_RELATION";
 	case RelationType::INVALID_RELATION:
 		break;
 	}
