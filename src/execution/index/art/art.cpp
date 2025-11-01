@@ -633,7 +633,7 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &ro
 	Iterator it(*this);
 
 	// Early-out, if the maximum value in the ART is lower than the lower bound.
-	if (!it.LowerBound(tree, key, equal, 0)) {
+	if (!it.LowerBound(tree, key, equal)) {
 		return true;
 	}
 
@@ -666,7 +666,7 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	Iterator it(*this);
 
 	// Early-out, if the maximum value in the ART is lower than the lower bound.
-	if (!it.LowerBound(tree, lower_bound, left_equal, 0)) {
+	if (!it.LowerBound(tree, lower_bound, left_equal)) {
 		return true;
 	}
 
