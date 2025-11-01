@@ -949,6 +949,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 			column_info.persistent = true;
 			column_info.block_id = segment->GetBlockId();
 			column_info.block_offset = segment->GetBlockOffset();
+			column_info.segment_size = segment->BlockUsage();
 		} else {
 			column_info.persistent = false;
 		}
