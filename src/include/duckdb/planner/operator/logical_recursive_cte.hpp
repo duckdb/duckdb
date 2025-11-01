@@ -34,6 +34,9 @@ public:
 	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
 	bool ref_recurring;
 	vector<unique_ptr<Expression>> key_targets;
+	vector<unique_ptr<Expression>> payload_aggregates;
+	vector<LogicalType> internal_types, result_types;
+	unordered_map<idx_t, unique_ptr<Expression>> payload_aggregate_dest_map;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -50,7 +53,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = children[0]->types;
+		types = !payload_aggregates.empty() ? result_types : children[0]->types;
 	}
 };
 } // namespace duckdb

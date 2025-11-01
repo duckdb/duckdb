@@ -149,10 +149,16 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &rec = op.Cast<LogicalRecursiveCTE>();
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
-		types = op.types;
 		for (auto &expr : rec.key_targets) {
 			VisitExpression(&expr);
 		}
+		for (auto &expr : rec.payload_aggregates) {
+			VisitExpression(&expr);
+		}
+		for (auto &expr : rec.payload_aggregate_dest_map) {
+			VisitExpression(&expr.second);
+		}
+		types = op.types;
 		return;
 	}
 	default:
