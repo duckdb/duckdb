@@ -540,6 +540,18 @@ MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &arg
 
 #endif
 
+MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
+	ShellHighlight highlighter(state);
+	for (idx_t i = 0; i < static_cast<idx_t>(PrintColor::EXTENDED_COLOR_COUNT); i++) {
+		auto color = static_cast<PrintColor>(i);
+		auto color_info = ShellHighlight::GetColorInfo(color);
+		highlighter.PrintText(color_info->color_name, PrintOutput::STDOUT, color, PrintIntensity::STANDARD);
+		state.Print(" ");
+	}
+	state.Print("\n");
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
@@ -577,6 +589,7 @@ static const MetadataCommand metadata_commands[] = {
         "Options:\n\t--newlines\tAllow unescaped newline characters in output\nTABLE is a LIKE pattern for the tables "
         "to dump\nAdditional LIKE patterns can be given in subsequent arguments",
     },
+    {"display_colors", 1, DisplayColors, "", "Display all terminal colors and their names", 0, ""},
     {"echo", 2, ToggleEcho, "on|off", "Turn command echo on or off", 3, ""},
     {"edit", 0, nullptr, "", "Opens an external text editor to edit a query.", 0,
      "Notes:\n\t* The editor is read from the environment variables\n\t  DUCKDB_EDITOR, EDITOR, VISUAL in-order\n\t* "
