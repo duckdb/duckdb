@@ -5,14 +5,14 @@
 using namespace duckdb;
 
 static void TestArrowRoundtrip(const string &query, bool export_large_buffer = false,
-                               bool loseless_conversion = false) {
+                               bool lossless_conversion = false) {
 	DuckDB db;
 	Connection con(db);
 	if (export_large_buffer) {
 		auto res = con.Query("SET arrow_large_buffer_size=True");
 		REQUIRE(!res->HasError());
 	}
-	if (loseless_conversion) {
+	if (lossless_conversion) {
 		auto res = con.Query("SET arrow_lossless_conversion = true");
 		REQUIRE(!res->HasError());
 	}
@@ -86,10 +86,7 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	// FIXME: there seems to be a bug in the enum arrow reader in this test when run with vsize=2
 	return;
 #endif
-	TestArrowRoundtrip("SELECT * EXCLUDE(bit, time_ns, time_tz, bignum) REPLACE "
-	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint, uhugeint::DOUBLE as uhugeint) "
-	                   "FROM test_all_types()",
-	                   false, true);
+	TestArrowRoundtrip("SELECT * FROM test_all_types()", false, true);
 }
 
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
