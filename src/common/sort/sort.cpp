@@ -161,8 +161,8 @@ class SortGlobalSinkState : public GlobalSinkState {
 public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
-	      sorted_tuples(0), external(ClientConfig::GetConfig(context).force_external), any_combined(false), total_count(0),
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
+	      external(ClientConfig::GetConfig(context).force_external), any_combined(false), total_count(0),
 	      partition_size(0) {
 	}
 
