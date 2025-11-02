@@ -175,6 +175,11 @@ yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const Re
 		auto val_str = Time::ToString(val);
 		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
 	}
+	case VariantLogicalType::TIME_NANOS: {
+		auto val = Value::TIME_NS(Load<dtime_ns_t>(ptr));
+		auto val_str = val.ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
 	case VariantLogicalType::TIME_MICROS_TZ: {
 		auto val = Value::TIMETZ(Load<dtime_tz_t>(ptr));
 		auto val_str = val.ToString();

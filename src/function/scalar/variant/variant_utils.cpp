@@ -222,6 +222,8 @@ Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &varian
 	}
 	case VariantLogicalType::TIME_MICROS:
 		return Value::TIME(Load<dtime_t>(ptr));
+	case VariantLogicalType::TIME_NANOS:
+		return Value::TIME_NS(Load<dtime_ns_t>(ptr));
 	case VariantLogicalType::TIME_MICROS_TZ:
 		return Value::TIMETZ(Load<dtime_tz_t>(ptr));
 	case VariantLogicalType::TIMESTAMP_MICROS:
