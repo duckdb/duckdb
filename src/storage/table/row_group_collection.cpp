@@ -665,14 +665,16 @@ void RowGroupCollection::Update(TransactionData transaction, DataTable &data_tab
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	// Collect all indexed columns.
+	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
 	indexes.Scan([&](Index &index) {
-		D_ASSERT(index.IsBound());
 		auto &set = index.GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
 		return false;
 	});
+
+	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
+	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
 	vector<StorageIndex> column_ids;
 	for (auto &col : indexed_column_id_set) {
 		column_ids.emplace_back(col);
@@ -686,10 +688,10 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 
 	// Initialize the fetch state. Only use indexed columns.
 	TableScanState state;
-	state.Initialize(std::move(column_ids));
+	auto column_ids_copy = column_ids;
+	state.Initialize(std::move(column_ids_copy));
 	state.table_state.max_row = row_start + total_rows;
 
-	// Used for scanning data. Only contains the indexed columns.
 	DataChunk fetch_chunk;
 	fetch_chunk.Initialize(GetAllocator(), column_types);
 
@@ -749,17 +751,24 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 		result_chunk.SetCardinality(fetch_chunk);
 
 		// Slice the vector with all rows that are present in this vector.
-		// Then, erase all values from the indexes.
+		// If the index is bound, delete the data. If unbound, buffer into unbound_index.
 		result_chunk.Slice(sel, sel_count);
 		indexes.Scan([&](Index &index) {
 			if (index.IsBound()) {
 				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
 				return false;
 			}
-			throw MissingExtensionException(
-			    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
-			    "extension that provides this index type before table '%s' can be modified.",
-			    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
+			// Buffering takes only the indexed columns in ordering of the column_ids mapping.
+			DataChunk index_column_chunk;
+			index_column_chunk.InitializeEmpty(column_types);
+			for (idx_t i = 0; i < column_types.size(); i++) {
+				auto col_id = column_ids[i].GetPrimaryIndex();
+				index_column_chunk.data[i].Reference(result_chunk.data[col_id]);
+			}
+			index_column_chunk.SetCardinality(result_chunk.size());
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids, BufferedIndexReplay::DEL_ENTRY);
+			return false;
 		});
 	}
 }
