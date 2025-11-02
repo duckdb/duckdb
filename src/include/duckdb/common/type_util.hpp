@@ -22,7 +22,7 @@ struct bignum_t;
 //! Returns the PhysicalType for the given type
 template <class T>
 PhysicalType GetTypeId() {
-	using TYPE = std::remove_cv<T>::type;
+	using TYPE = typename std::remove_cv<T>::type;
 
 	if (std::is_same<TYPE, bool>()) {
 		return PhysicalType::BOOL;
@@ -77,7 +77,7 @@ PhysicalType GetTypeId() {
 		return PhysicalType::INTERVAL;
 	} else if (std::is_same<TYPE, list_entry_t>()) {
 		return PhysicalType::LIST;
-	} else if (std::is_pointer<T>() || std::is_same<TYPE, uintptr_t>()) {
+	} else if (std::is_pointer<TYPE>() || std::is_same<TYPE, uintptr_t>()) {
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
 			return PhysicalType::UINT32;
 		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
@@ -92,6 +92,8 @@ PhysicalType GetTypeId() {
 
 template <class T>
 bool StorageTypeCompatible(PhysicalType type) {
+	using TYPE = typename std::remove_cv<T>::type;
+
 	if (std::is_same<TYPE, int8_t>()) {
 		return type == PhysicalType::INT8 || type == PhysicalType::BOOL;
 	}
@@ -103,7 +105,9 @@ bool StorageTypeCompatible(PhysicalType type) {
 
 template <class T>
 bool TypeIsNumber() {
-	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<TYPE, hugeint_t>() ||
+	using TYPE = typename std::remove_cv<T>::type;
+
+	return std::is_integral<TYPE>() || std::is_floating_point<TYPE>() || std::is_same<TYPE, hugeint_t>() ||
 	       std::is_same<TYPE, uhugeint_t>();
 }
 
