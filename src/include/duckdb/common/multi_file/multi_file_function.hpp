@@ -713,9 +713,6 @@ public:
 					// file is still being read
 					progress_in_file = reader->GetProgressInFile(context);
 				}
-			} else {
-				// file has not been opened yet - progress in this file is zero
-				progress_in_file = 0;
 			}
 			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
 			total_progress += progress_in_file;
