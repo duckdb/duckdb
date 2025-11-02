@@ -1,36 +1,39 @@
 #include "duckdb/common/bignum.hpp"
 #include "duckdb/common/types/bignum.hpp"
-#include <iostream>
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 void PrintBits(const char value) {
-#ifndef DUCKDB_DISABLE_PRINT
+	string result;
 	for (int i = 7; i >= 0; --i) {
-		std::cout << ((value >> i) & 1);
+		result += to_string((value >> i) & 1);
 	}
-#endif
+	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
 }
 
 void bignum_t::Print() const {
-#ifndef DUCKDB_DISABLE_PRINT
 	auto ptr = data.GetData();
 	auto length = data.GetSize();
+	string result;
 	for (idx_t i = 0; i < length; ++i) {
-		PrintBits(ptr[i]);
-		std::cout << "  ";
+		for (int j = 7; j >= 0; --j) {
+			result += to_string((ptr[i] >> j) & 1);
+		}
+		result += "  ";
 	}
-	std::cout << '\n';
-#endif
+	Printer::Print(OutputStream::STREAM_STDOUT, result);
 }
 
 void BignumIntermediate::Print() const {
-#ifndef DUCKDB_DISABLE_PRINT
+	string result;
 	for (idx_t i = 0; i < size; ++i) {
-		PrintBits(static_cast<char>(data[i]));
-		std::cout << "  ";
+		for (int j = 7; j >= 0; --j) {
+			result += to_string((data[i] >> j) & 1);
+		}
+		result += "  ";
 	}
-	std::cout << '\n';
-#endif
+	Printer::Print(OutputStream::STREAM_STDOUT, result);
 }
 
 BignumIntermediate::BignumIntermediate(const bignum_t &value) {
