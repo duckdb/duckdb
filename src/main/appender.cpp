@@ -172,6 +172,9 @@ void BaseAppender::AppendValueInternal(T input) {
 	case LogicalTypeId::TIME:
 		AppendValueInternal<T, dtime_t>(col, input);
 		break;
+	case LogicalTypeId::TIME_NS:
+		AppendValueInternal<T, dtime_ns_t>(col, input);
+		break;
 	case LogicalTypeId::TIME_TZ:
 		AppendValueInternal<T, dtime_tz_t>(col, input);
 		break;
