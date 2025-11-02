@@ -130,12 +130,16 @@ public:
 	}
 
 	void Print() const {
-		Printer::Print(OutputStream::STREAM_STDOUT, "State Machine Options");
-		Printer::Print(OutputStream::STREAM_STDOUT, "Delim: " + state_machine_options.delimiter.GetValue());
-		Printer::Print(OutputStream::STREAM_STDOUT, "Quote: " + state_machine_options.quote.GetValue());
-		Printer::Print(OutputStream::STREAM_STDOUT, "Escape: " + state_machine_options.escape.GetValue());
-		Printer::Print(OutputStream::STREAM_STDOUT, "Comment: " + state_machine_options.comment.GetValue());
-		Printer::Print(OutputStream::STREAM_STDOUT, "---------------------");
+		Printer::Print(OutputStream::STREAM_STDOUT, string("State Machine Options"));
+		Printer::Print(OutputStream::STREAM_STDOUT,
+		               string("Delim: ") + state_machine_options.delimiter.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT,
+		               string("Quote: ") + state_machine_options.quote.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT,
+		               string("Escape: ") + state_machine_options.escape.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT,
+		               string("Comment: ") + state_machine_options.comment.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("---------------------"));
 	}
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
