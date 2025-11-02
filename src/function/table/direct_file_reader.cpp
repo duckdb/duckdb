@@ -73,7 +73,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		if (FileSystem::IsRemoteFile(file.path) && !regular_fs.FileExists(file.path)) {
 			output.SetCardinality(0);
 			done = true;
-			return;
+			return SourceResultType::FINISHED;
 		}
 	}
 
