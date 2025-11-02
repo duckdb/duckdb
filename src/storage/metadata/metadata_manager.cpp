@@ -373,7 +373,7 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 }
 
 void MetadataManager::MarkBlocksAsModified() {
-	lock_guard<mutex> guard(block_lock);
+	unique_lock<mutex> guard(block_lock);
 	// for any blocks that were modified in the last checkpoint - set them to free blocks currently
 	for (auto &kv : modified_blocks) {
 		auto block_id = kv.first;
@@ -387,7 +387,10 @@ void MetadataManager::MarkBlocksAsModified() {
 		if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
 			// if new free_blocks is all blocks - mark entire block as modified
 			blocks.erase(entry);
+
+			guard.unlock();
 			block_manager.MarkBlockAsModified(block_id);
+			guard.lock();
 		} else {
 			// set the new set of free blocks
 			block.FreeBlocksFromInteger(new_free_blocks);
