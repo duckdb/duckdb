@@ -121,6 +121,7 @@
 #include "duckdb/logging/log_storage.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension.hpp"
@@ -3683,6 +3684,24 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	return static_cast<QueryResultType>(StringUtil::StringToEnum(GetQueryResultTypeValues(), 4, "QueryResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRecoveryModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RecoveryMode::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(RecoveryMode::NO_WAL), "NO_WAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value) {
+	return StringUtil::EnumToString(GetRecoveryModeValues(), 2, "RecoveryMode", static_cast<uint32_t>(value));
+}
+
+template<>
+RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value) {
+	return static_cast<RecoveryMode>(StringUtil::StringToEnum(GetRecoveryModeValues(), 2, "RecoveryMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRelationTypeValues() {

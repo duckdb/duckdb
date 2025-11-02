@@ -110,10 +110,10 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	if (wal) {
-		return InMemory() ? in_memory_change_size.load() : wal->GetWALSize();
+	if (InMemory() || wal->GetDatabase().GetRecoveryMode() == RecoveryMode::NO_WAL) {
+		return in_memory_change_size.load();
 	}
-	return 0;
+	return wal->GetWALSize();
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -124,9 +124,7 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 }
 
 void StorageManager::ResetWAL() {
-	if (wal) {
-		wal->Delete();
-	}
+	wal->Delete();
 }
 
 string StorageManager::GetWALPath() const {
@@ -279,10 +277,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		sf_block_manager->CreateNewDatabase(context);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
+		wal = make_uniq<WriteAheadLog>(db, wal_path);
 
-		if (!DBConfig::GetSetting<NoWalModeSetting>(db.GetDatabase())) {
-			wal = make_uniq<WriteAheadLog>(db, wal_path);
-		}
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
 		// try to read the existing file on disk.
@@ -354,11 +350,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 
 		// Replay the WAL.
-
 		auto wal_path = GetWALPath();
-		if (!DBConfig::GetSetting<NoWalModeSetting>(db.GetDatabase())) {
-			wal = WriteAheadLog::Replay(context, fs, db, wal_path);
-		}
+		wal = WriteAheadLog::Replay(context, fs, db, wal_path);
 
 		// End timing the WAL replay step.
 		if (client_context) {
@@ -517,7 +510,8 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 
 	auto &config = DBConfig::Get(db);
 	// We only need to checkpoint if there is anything in the WAL.
-	if (GetWALSize() > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
+	auto wal_size = GetWALSize();
+	if (wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
 		try {
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();

@@ -689,13 +689,6 @@
         "default_value": "5"
     },
     {
-        "name": "no_wal_mode",
-        "description": "Disable WAL mode for the database. Use with caution, disables recovery from crashes for persistent files.",
-        "type": "BOOLEAN",
-        "default_scope": "global",
-        "default_value": "false"
-    },
-    {
         "name": "old_implicit_casting",
         "description": "Allow implicit casting to/from VARCHAR",
         "type": "BOOLEAN",
