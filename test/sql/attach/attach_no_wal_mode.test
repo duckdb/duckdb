@@ -6,6 +6,10 @@ require noforcestorage
 
 require skip_reload
 
+# If we enable alternative verification, then we disable checkpointing on shutdown.
+# Thus, we'll keep the WAL alive on DETACH, only that now we don't have a WAL.
+require no_alternative_verify
+
 statement ok
 SET threads = 1;
 
