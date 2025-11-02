@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-FROM read_csv('data/csv/17738_rn.csv',header=False,skip=3, delim = ';');
+FROM read_csv('{DATA_DIR}/csv/17738_rn.csv',header=False,skip=3, delim = ';');
 ----
 xyz
 lorem ipsum
@@ -21,7 +21,7 @@ Stephen,Tyler,"7452 Terrace ""At the Plaza"" road",SomeTown,SD, 91234
 
 
 query I
-FROM read_csv('data/csv/17738.csv',header=False,skip=3);
+FROM read_csv('{DATA_DIR}/csv/17738.csv',header=False,skip=3);
 ----
 xyz
 lorem ipsum
@@ -35,7 +35,7 @@ Stephen,Tyler,"7452 Terrace ""At the Plaza"" road",SomeTown,SD, 91234
 "Joan ""the bone"", Anne",Jet,"9th, at Terrace plc",Desert City,CO,00123
 
 query I
-FROM read_csv('data/csv/17738.csv',header=False,skip=4);
+FROM read_csv('{DATA_DIR}/csv/17738.csv',header=False,skip=4);
 ----
 lorem ipsum
 NULL
@@ -48,7 +48,7 @@ Stephen,Tyler,"7452 Terrace ""At the Plaza"" road",SomeTown,SD, 91234
 "Joan ""the bone"", Anne",Jet,"9th, at Terrace plc",Desert City,CO,00123
 
 query IIIIII
-FROM read_csv('data/csv/17738.csv',header=False,skip=7);
+FROM read_csv('{DATA_DIR}/csv/17738.csv',header=False,skip=7);
 ----
 John	Doe	120 jefferson st.	Riverside	 NJ	 08075
 Jack	McGinnis	220 hobo Av.	Phila	 PA	09119
