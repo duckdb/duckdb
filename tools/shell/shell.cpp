@@ -1272,6 +1272,7 @@ string GetTypeName(duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::DATE:
 		return "DATE";
 	case duckdb::LogicalTypeId::TIME:
+	case duckdb::LogicalTypeId::TIME_NS:
 		return "TIME";
 	case duckdb::LogicalTypeId::TIMESTAMP:
 	case duckdb::LogicalTypeId::TIMESTAMP_NS:

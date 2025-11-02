@@ -399,6 +399,24 @@ static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset
 	}
 }
 
+template <class T>
+static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
+                             int64_t parent_offset, idx_t size, int64_t conversion) {
+	auto tgt_ptr = FlatVector::GetData<dtime_ns_t>(vector);
+	auto &validity_mask = FlatVector::Validity(vector);
+	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
+	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
+	for (idx_t row = 0; row < size; row++) {
+		if (!validity_mask.RowIsValid(row)) {
+			continue;
+		}
+		// dtime_ns_t.micros actually holds nanos (!)
+		if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+			throw ConversionException("Could not convert TimeNS to Nanoseconds");
+		}
+	}
+}
+
 static void UUIDConversion(Vector &vector, const ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                            int64_t parent_offset, idx_t size) {
 	auto tgt_ptr = FlatVector::GetData<hugeint_t>(vector);
@@ -940,6 +958,35 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		}
 		default:
 			throw NotImplementedException("Unsupported precision for Time Type ");
+		}
+		break;
+	}
+	case LogicalTypeId::TIME_NS: {
+		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDateTimeInfo>();
+		auto precision = datetime_info.GetDateTimeType();
+		switch (precision) {
+		case ArrowDateTimeType::SECONDS: {
+			TimeNSConversion<int32_t>(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset),
+			                          size, 1000000000);
+			break;
+		}
+		case ArrowDateTimeType::MILLISECONDS: {
+			TimeNSConversion<int32_t>(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset),
+			                          size, 1000000);
+			break;
+		}
+		case ArrowDateTimeType::MICROSECONDS: {
+			TimeNSConversion<int64_t>(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset),
+			                          size, 1000);
+			break;
+		}
+		case ArrowDateTimeType::NANOSECONDS: {
+			TimeNSConversion<int64_t>(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset),
+			                          size, 1);
+			break;
+		}
+		default:
+			throw NotImplementedException("Unsupported precision for TimeNS Type ");
 		}
 		break;
 	}

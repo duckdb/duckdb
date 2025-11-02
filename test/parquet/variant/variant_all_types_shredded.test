@@ -14,6 +14,7 @@ create macro data() as table (
 			'hugeint',
 			'uhugeint',
 			'bignum',
+			'time_ns',
 			'timestamp_s',
 			'timestamp_ms',
 			'timestamp_tz',

@@ -53,6 +53,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum, bool use_lar
 	}
 	result.emplace_back(LogicalType::DATE, "date");
 	result.emplace_back(LogicalType::TIME, "time");
+	result.emplace_back(LogicalType::TIME_NS, "time_ns");
 	result.emplace_back(LogicalType::TIMESTAMP, "timestamp");
 	result.emplace_back(LogicalType::TIMESTAMP_S, "timestamp_s");
 	result.emplace_back(LogicalType::TIMESTAMP_MS, "timestamp_ms");
