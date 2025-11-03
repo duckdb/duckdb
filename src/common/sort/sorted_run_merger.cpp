@@ -687,34 +687,6 @@ void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate
 	}
 }
 
-template <class SORT_KEY, class PHYSICAL_TYPE>
-void TemplatedGetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
-                               data_ptr_t *const payload_ptrs) {
-	const auto key_data = FlatVector::GetData<PHYSICAL_TYPE>(key.data[0]);
-	for (idx_t i = 0; i < count; i++) {
-		auto &merged_partition_key = merged_partition_keys[i];
-		merged_partition_key.Deconstruct(key_data[i]);
-		if (SORT_KEY::HAS_PAYLOAD) {
-			payload_ptrs[i] = merged_partition_key.GetPayload();
-		}
-	}
-	key.SetCardinality(count);
-}
-
-template <class SORT_KEY>
-void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
-                      data_ptr_t *const payload_ptrs) {
-	const auto type_id = key.data[0].GetType().id();
-	switch (type_id) {
-	case LogicalTypeId::BLOB:
-		return TemplatedGetKeyAndPayload<SORT_KEY, string_t>(merged_partition_keys, count, key, payload_ptrs);
-	case LogicalTypeId::BIGINT:
-		return TemplatedGetKeyAndPayload<SORT_KEY, int64_t>(merged_partition_keys, count, key, payload_ptrs);
-	default:
-		throw NotImplementedException("GetKeyAndPayload for %s", EnumUtil::ToString(type_id));
-	}
-}
-
 template <SortKeyType SORT_KEY_TYPE>
 void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;

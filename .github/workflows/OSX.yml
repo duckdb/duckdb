@@ -173,14 +173,26 @@ jobs:
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
           python scripts/amalgamation.py
+          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+
+          mkdir build/release_arm64 build/release_amd64
+          lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
+          lipo -extract x86_64 -output build/release_amd64/duckdb build/release/duckdb
+
           zip -j duckdb_cli-osx-universal.zip build/release/duckdb
+          zip -j duckdb_cli-osx-arm64.zip build/release_arm64/duckdb
+          zip -j duckdb_cli-osx-amd64.zip build/release_amd64/duckdb
+
           gzip -9 -k -n -c build/release/duckdb > duckdb_cli-osx-universal.gz
-          zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz
+          gzip -9 -k -n -c build/release_arm64/duckdb > duckdb_cli-osx-arm64.gz
+          gzip -9 -k -n -c build/release_amd64/duckdb > duckdb_cli-osx-amd64.gz
+
+          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz duckdb_cli-osx-arm64.zip duckdb_cli-osx-arm64.gz duckdb_cli-osx-amd64.zip duckdb_cli-osx-amd64.gz
 
       - uses: actions/upload-artifact@v4
         with:

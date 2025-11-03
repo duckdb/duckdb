@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query TT
-SELECT concat('#', columns(*), '#') FROM read_csv('data/csv/unquoted_escape/identical.csv', quote = '"', escape = '"', sep = ',', strict_mode = false);
+SELECT concat('#', columns(*), '#') FROM read_csv('{DATA_DIR}/csv/unquoted_escape/identical.csv', quote = '"', escape = '"', sep = ',', strict_mode = false);
 ----
 ##	#a""b#
 #c""d#	##

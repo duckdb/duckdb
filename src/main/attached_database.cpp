@@ -37,7 +37,6 @@ AttachOptions::AttachOptions(const DBConfigOptions &options)
 
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
     : access_mode(default_access_mode) {
-
 	for (auto &entry : attach_options) {
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			// Extract the read access mode.
@@ -83,7 +82,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
       db(db), type(type) {
-
 	// This database does not have storage, or uses temporary_objects for in-memory storage.
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {

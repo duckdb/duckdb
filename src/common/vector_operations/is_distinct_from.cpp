@@ -471,7 +471,6 @@ using StructEntries = vector<unique_ptr<Vector>>;
 
 void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
                             OptionalSelection &opt) {
-
 	for (idx_t i = 0; i < count;) {
 		const auto slice_idx = slice_sel.get_index(i);
 		const auto result_idx = sel.get_index(slice_idx);
@@ -482,7 +481,6 @@ void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count,
 
 void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
                        ValidityMask *child_mask_p, optional_ptr<ValidityMask> null_mask) {
-
 	if (!child_mask_p) {
 		return;
 	}
@@ -771,8 +769,6 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 		return count;
 	}
 
-	// FIXME: This function can probably be optimized since we know the array size is fixed for every entry.
-
 	D_ASSERT(ArrayType::GetSize(left.GetType()) == ArrayType::GetSize(right.GetType()));
 	auto array_size = ArrayType::GetSize(left.GetType());
 
@@ -812,39 +808,13 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 	}
 
 	idx_t match_count = 0;
-	for (idx_t pos = 0; count > 0; ++pos) {
+	for (idx_t pos = 0; pos < array_size && count > 0; ++pos) {
 		// Set up the cursors for the current position
 		PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
 		PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
 
-		// Tie-break the pairs where one of the LISTs is exhausted.
 		idx_t true_count = 0;
 		idx_t false_count = 0;
-		idx_t maybe_count = 0;
-		for (idx_t i = 0; i < count; ++i) {
-			const auto slice_idx = slice_sel.get_index(i);
-			if (array_size == pos) {
-				const auto idx = sel.get_index(slice_idx);
-				if (PositionComparator::TieBreak<OP>(array_size, array_size)) {
-					true_opt.Append(true_count, idx);
-				} else {
-					false_opt.Append(false_count, idx);
-				}
-			} else {
-				true_sel.set_index(maybe_count++, slice_idx);
-			}
-		}
-		true_opt.Advance(true_count);
-		false_opt.Advance(false_count);
-		match_count += true_count;
-
-		// Redensify the list cursors
-		if (maybe_count < count) {
-			count = maybe_count;
-			DensifyNestedSelection(true_sel, count, slice_sel);
-			PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
-			PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
-		}
 
 		// Find everything that definitely matches
 		true_count =
@@ -880,6 +850,15 @@ idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const Select
 			DensifyNestedSelection(true_sel, true_count, slice_sel);
 		}
 		count = true_count;
+	}
+
+	if (count > 0) {
+		if (PositionComparator::TieBreak<OP>(array_size, array_size)) {
+			ExtractNestedSelection(slice_sel, count, sel, true_opt);
+			match_count += count;
+		} else {
+			ExtractNestedSelection(slice_sel, count, sel, false_opt);
+		}
 	}
 
 	return match_count;
@@ -1015,7 +994,6 @@ template <class OP>
 idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
                                        idx_t count, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

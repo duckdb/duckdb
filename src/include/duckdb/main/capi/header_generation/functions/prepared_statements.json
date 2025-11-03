@@ -1,7 +1,7 @@
 {
     "group": "prepared_statements",
-    "description": "// A prepared statement is a parameterized query that allows you to bind parameters to it.\n// * This is useful to easily supply parameters to functions and avoid SQL injection attacks.\n// * This is useful to speed up queries that you will execute several times with different parameters.\n// Because the query will only be parsed, bound, optimized and planned once during the prepare stage,\n// rather than once per execution.\n// For example:\n//   SELECT * FROM tbl WHERE id=?\n// Or a query with multiple parameters:\n//   SELECT * FROM tbl WHERE id=$1 OR name=$2",
     "deprecated": false,
+    "description": "A prepared statement is a parameterized query, and you can bind parameters to it. Prepared statements are commonly used to easily supply parameters to functions and avoid SQL injection attacks. They also speed up queries that are executed repeatedly with different parameters. That is because the query is only parsed, bound, optimized and planned once during the prepare stage, rather than once per execution, if it is possible to resolve all parameter types.\n//\n// For example:\n//   SELECT * FROM tbl WHERE id = ?\n// Or a query with multiple parameters:\n//   SELECT * FROM tbl WHERE id = $1 OR name = $2",
     "entries": [
         {
             "name": "duckdb_prepare",

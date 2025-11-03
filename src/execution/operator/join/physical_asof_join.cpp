@@ -5,13 +5,11 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -20,7 +18,6 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
                              op.estimated_cardinality),
       comparison_type(ExpressionType::INVALID) {
-
 	// Convert the conditions partitions and sorts
 	D_ASSERT(!op.predicate.get());
 	for (auto &cond : conditions) {
@@ -212,6 +209,11 @@ public:
 	idx_t NextSize() const {
 		return MinValue<idx_t>(Remaining(), STANDARD_VECTOR_SIZE);
 	}
+	void Seek(idx_t row_idx) {
+		chunk_idx = row_idx / STANDARD_VECTOR_SIZE;
+		base = MinValue<idx_t>(chunk_idx * STANDARD_VECTOR_SIZE, count);
+		scanned = base;
+	}
 	bool Scan(DataChunk &chunk) {
 		//  Free the previous blocks
 		block_state.SetKeepPinned(true);
@@ -264,7 +266,6 @@ private:
 AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const HashedSort &hashed_sort)
     : sorted_run(sorted_run), block_state(*sorted_run.key_data, sorted_run.payload_data.get()),
       scan_state(sorted_run.context, sorted_run.sort), scan_ids(hashed_sort.scan_ids), count(sorted_run.Count()) {
-
 	scan_chunk.Initialize(sorted_run.context, hashed_sort.payload_types);
 	const auto sort_key_type = sorted_run.key_data->GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
@@ -342,7 +343,6 @@ public:
 AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const PhysicalAsOfJoin &op)
     : op(op), stage(AsOfJoinSourceStage::INNER), is_right_outer(IsRightOuterJoin(op.join_type)), next_left(0),
       flushed_left(0), next_right(0), flushed_right(0) {
-
 	//	 Take ownership of the hash groups
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 	hashed_groups.resize(2);
@@ -363,12 +363,12 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	auto &rhs_groups = hashed_groups[1];
 	right_outers.reserve(rhs_groups.size());
 	for (const auto &hash_group : rhs_groups) {
-		right_outers.emplace_back(OuterJoinMarker(is_right_outer));
+		right_outers.emplace_back(is_right_outer);
 		right_outers.back().Initialize(hash_group ? hash_group->Count() : 0);
 	}
 }
 
-enum class SortKeyPrefixComparisonType : uint8_t { FIXED, VARCHAR, BLOB, STRUCT, LIST, ARRAY };
+enum class SortKeyPrefixComparisonType : uint8_t { FIXED, VARCHAR, NESTED };
 
 struct SortKeyPrefixComparisonColumn {
 	SortKeyPrefixComparisonType type;
@@ -385,45 +385,63 @@ struct SortKeyPrefixComparisonResult {
 
 struct SortKeyPrefixComparison {
 	unsafe_vector<SortKeyPrefixComparisonColumn> columns;
+	//! Two row buffer for measuring lhs and rhs widths for nested types.
+	//! Gross, but there is currently no way to measure the width of a single key
+	//! except as a side-effect of decoding it...
+	DataChunk decoded;
 
 	template <class SORT_KEY>
-	SortKeyPrefixComparisonResult Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) const {
+	SortKeyPrefixComparisonResult Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) {
 		SortKeyPrefixComparisonResult result {0, ExpressionType::COMPARE_EQUAL};
 
 		auto lhs_copy = lhs;
-		string_t lhs_bytes;
-		lhs_copy.Deconstruct(lhs_bytes);
-		auto lhs_ptr = lhs_bytes.GetData();
+		string_t lhs_key;
+		lhs_copy.Deconstruct(lhs_key);
+		auto lhs_ptr = lhs_key.GetData();
 
 		auto rhs_copy = rhs;
-		string_t rhs_bytes;
-		rhs_copy.Deconstruct(rhs_bytes);
-		auto rhs_ptr = rhs_bytes.GetData();
+		string_t rhs_key;
+		rhs_copy.Deconstruct(rhs_key);
+		auto rhs_ptr = rhs_key.GetData();
 
-		for (const auto &col : columns) {
-			auto width = col.size;
+		//	Partition keys are always sorted this way.
+		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST);
+
+		for (column_t col_idx = 0; col_idx < columns.size(); ++col_idx) {
+			const auto &col = columns[col_idx];
+			auto &vec = decoded.data[col_idx];
+			auto lhs_width = col.size;
+			auto rhs_width = col.size;
 			int cmp = 1;
 			switch (col.type) {
 			case SortKeyPrefixComparisonType::FIXED:
+				cmp = memcmp(lhs_ptr, rhs_ptr, lhs_width);
 				break;
-			case SortKeyPrefixComparisonType::BLOB:
 			case SortKeyPrefixComparisonType::VARCHAR:
 				//	Include first null byte.
-				width = 1 + MinValue<size_t>(strlen(lhs_ptr), strlen(rhs_ptr));
+				lhs_width = 1 + strlen(lhs_ptr);
+				rhs_width = 1 + strlen(rhs_ptr);
+				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
 				break;
-			default:
+			case SortKeyPrefixComparisonType::NESTED:
+				decoded.Reset();
+				lhs_width = CreateSortKeyHelpers::DecodeSortKey(lhs_key, vec, 0, modifiers);
+				rhs_width = CreateSortKeyHelpers::DecodeSortKey(rhs_key, vec, 1, modifiers);
+				cmp = memcmp(lhs_ptr, rhs_ptr, MinValue<idx_t>(lhs_width, rhs_width));
+				if (!cmp) {
+					cmp = (rhs_width < lhs_width) - (lhs_width < rhs_width);
+				}
 				break;
 			}
 
-			cmp = memcmp(lhs_ptr, rhs_ptr, width);
 			if (cmp) {
 				result.type = (cmp < 0) ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_GREATERTHAN;
 				return result;
 			}
 
 			++result.column_index;
-			lhs_ptr += width;
-			rhs_ptr += width;
+			lhs_ptr += lhs_width;
+			rhs_ptr += rhs_width;
 		}
 
 		return result;
@@ -526,6 +544,7 @@ public:
 	unique_ptr<AsOfPayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
 	DataChunk rhs_input;
+	SelectionVector rhs_match_sel;
 	idx_t right_bin = 0;
 
 	//	Predicate evaluation
@@ -538,7 +557,6 @@ public:
 AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &op, AsOfGlobalSourceState &gsource)
     : client(client), op(op), gsource(gsource), strict(IsStrictComparison(op.comparison_type)),
       left_outer(IsLeftOuterJoin(op.join_type)), lhs_executor(client), fetch_next_left(true) {
-
 	lhs_keys.Initialize(client, op.join_key_types);
 	for (const auto &cond : op.conditions) {
 		lhs_executor.AddExpression(*cond.left);
@@ -549,29 +567,26 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 	lhs_match_sel.Initialize();
+	rhs_match_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
 	//	If we have equality predicates, set up the prefix data.
+	vector<LogicalType> prefix_types;
 	for (idx_t i = 0; i < op.conditions.size() - 1; ++i) {
 		const auto &cond = op.conditions[i];
 		const auto &type = cond.left->return_type;
+		prefix_types.emplace_back(type);
 		SortKeyPrefixComparisonColumn col;
 		col.size = DConstants::INVALID_INDEX;
 		switch (type.id()) {
 		case LogicalTypeId::VARCHAR:
+		case LogicalTypeId::BLOB:
 			col.type = SortKeyPrefixComparisonType::VARCHAR;
 			break;
-		case LogicalTypeId::BLOB:
-			col.type = SortKeyPrefixComparisonType::BLOB;
-			break;
 		case LogicalTypeId::STRUCT:
-			col.type = SortKeyPrefixComparisonType::STRUCT;
-			break;
 		case LogicalTypeId::LIST:
-			col.type = SortKeyPrefixComparisonType::LIST;
-			break;
 		case LogicalTypeId::ARRAY:
-			col.type = SortKeyPrefixComparisonType::ARRAY;
+			col.type = SortKeyPrefixComparisonType::NESTED;
 			break;
 		default:
 			col.type = SortKeyPrefixComparisonType::FIXED;
@@ -579,6 +594,10 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 			break;
 		}
 		prefix.columns.emplace_back(col);
+	}
+	if (!prefix_types.empty()) {
+		//	LHS, RHS
+		prefix.decoded.Initialize(client, prefix_types, 2);
 	}
 }
 
@@ -828,24 +847,25 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 
 	//	Extract the rhs input columns from the match
 	rhs_input.Reset();
+	idx_t rhs_match_count = 0;
 	for (idx_t i = 0; i < lhs_match_count; ++i) {
 		const auto idx = lhs_match_sel[i];
 		const auto match_pos = matches[idx];
 		// Skip to the range containing the match
-		while (match_pos >= rhs_scanner->Scanned()) {
+		if (match_pos >= rhs_scanner->Scanned()) {
+			if (rhs_match_count) {
+				rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
+				rhs_match_count = 0;
+			}
 			rhs_payload.Reset();
+			rhs_scanner->Seek(match_pos);
 			rhs_scanner->Scan(rhs_payload);
 		}
-		// Append the individual values
-		// TODO: Batch the copies
-		const auto source_offset = match_pos - (rhs_scanner->Scanned() - rhs_payload.size());
-		for (column_t col_idx = 0; col_idx < rhs_payload.data.size(); ++col_idx) {
-			auto &source = rhs_payload.data[col_idx];
-			auto &target = rhs_input.data[col_idx];
-			VectorOperations::Copy(source, target, source_offset + 1, source_offset, i);
-		}
+		// Select the individual values
+		const auto source_offset = match_pos - rhs_scanner->Base();
+		rhs_match_sel.set_index(rhs_match_count++, source_offset);
 	}
-	rhs_input.SetCardinality(lhs_match_count);
+	rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
 
 	//	Slice the left payload into the result
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
@@ -964,7 +984,6 @@ public:
 AsOfLocalSourceState::AsOfLocalSourceState(ExecutionContext &context, AsOfGlobalSourceState &gsource,
                                            const PhysicalAsOfJoin &op)
     : gsource(gsource), context(context), probe_buffer(context.client, op, gsource), rsel(STANDARD_VECTOR_SIZE) {
-
 	rhs_chunk.Initialize(context.client, op.children[1].get().GetTypes());
 }
 

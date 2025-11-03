@@ -25,7 +25,6 @@ struct SortedAggregateBindData : public FunctionData {
 	                        BindInfoPtr &bind_info, OrderBys &order_bys)
 	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
 	      threshold(DBConfig::GetSetting<OrderedAggregateThresholdSetting>(context)) {
-
 		//	Describe the arguments.
 		for (const auto &child : children) {
 			buffered_cols.emplace_back(buffered_cols.size());
@@ -434,7 +433,6 @@ struct SortedAggregateFunction {
 
 	static void ProjectInputs(Vector inputs[], const SortedAggregateBindData &order_bind, idx_t input_count,
 	                          idx_t count, DataChunk &buffered) {
-
 		//	Only reference the buffered columns
 		buffered.InitializeEmpty(order_bind.buffered_types);
 		const auto &buffered_cols = order_bind.buffered_cols;

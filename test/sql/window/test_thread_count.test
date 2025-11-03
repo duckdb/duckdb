@@ -8,8 +8,8 @@ select      row_number() over ()
 ,           sum(count_ch1_ch2) over ()            as bigram_count_all
 ,           count_ch1_ch2 / bigram_count_all         as actual_bigram_frequency
 ,           ch1.actual_frequency * ch2.actual_frequency as expected_bigram_frequency
-from        read_csv('data/csv/issue_13525/stat_bigrams.csv')    as stat_bigrams
-inner join  read_csv('data/csv/issue_13525/stat_stat_chars.csv') as ch1
+from        read_csv('{DATA_DIR}/csv/issue_13525/stat_bigrams.csv')    as stat_bigrams
+inner join  read_csv('{DATA_DIR}/csv/issue_13525/stat_stat_chars.csv') as ch1
 on          stat_bigrams.ascii_upper_ch1  = ch1.ascii_upper_ch
-inner join  read_csv('data/csv/issue_13525/stat_stat_chars.csv') as ch2
+inner join  read_csv('{DATA_DIR}/csv/issue_13525/stat_stat_chars.csv') as ch2
 on          stat_bigrams.ascii_upper_ch2 = ch2.ascii_upper_ch;

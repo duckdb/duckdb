@@ -6,44 +6,44 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT columns from sniff_csv('data/csv/header_only.csv', header=True, ignore_errors=True)
+SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only.csv', header=True, ignore_errors=True)
 ----
 [{'name': abs_file_name, 'type': VARCHAR}]
 
 
 query I
-SELECT abs_file_name FROM read_csv('data/csv/header_only.csv', header=True, ignore_errors=True)
+SELECT abs_file_name FROM read_csv('{DATA_DIR}/csv/header_only.csv', header=True, ignore_errors=True)
 ----
 
 query I
 SELECT REGEXP_MATCHES(abs_file_name, 'foo')
-  FROM ( SELECT abs_file_name FROM read_csv('data/csv/header_only.csv', header=True, ignore_errors=True))
+  FROM ( SELECT abs_file_name FROM read_csv('{DATA_DIR}/csv/header_only.csv', header=True, ignore_errors=True))
 ----
 
 query I
 SELECT REGEXP_MATCHES(abs_file_name, 'foo')
-  FROM ( SELECT abs_file_name FROM read_csv(['data/csv/header_only.csv','data/csv/header_only.csv'], header=True, ignore_errors=True))
+  FROM ( SELECT abs_file_name FROM read_csv(['{DATA_DIR}/csv/header_only.csv','{DATA_DIR}/csv/header_only.csv'], header=True, ignore_errors=True))
 ----
 
 statement error
 SELECT REGEXP_MATCHES(abs_file_name, 'foo')
-  FROM ( SELECT abs_file_name FROM read_csv(['data/csv/header_only.csv','data/csv/bool.csv','data/csv/header_only.csv'], header=True, ignore_errors=True))
+  FROM ( SELECT abs_file_name FROM read_csv(['{DATA_DIR}/csv/header_only.csv','{DATA_DIR}/csv/bool.csv','{DATA_DIR}/csv/header_only.csv'], header=True, ignore_errors=True))
 ----
 No function matches the given name and argument types 'regexp_matches(BOOLEAN, STRING_LITERAL)'. You might need to add explicit type casts.
 
 # Try to replace column type
 query I
-SELECT columns from sniff_csv('data/csv/header_only.csv', types = ['INTEGER'])
+SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only.csv', types = ['INTEGER'])
 ----
 [{'name': abs_file_name, 'type': INTEGER}]
 
 query I
-SELECT columns from sniff_csv('data/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
+SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
 ----
 [{'name': abs_file_name, 'type': INTEGER}]
 
 statement ok
-CREATE TABLE T AS from read_csv('data/csv/header_only.csv',types = ['INTEGER'])
+CREATE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only.csv',types = ['INTEGER'])
 
 query IIIIII
 DESCRIBE T
@@ -51,7 +51,7 @@ DESCRIBE T
 abs_file_name	INTEGER	YES	NULL	NULL	NULL
 
 statement ok
-CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
+CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
 
 query IIIIII
 DESCRIBE T
@@ -60,23 +60,23 @@ abs_file_name	INTEGER	YES	NULL	NULL	NULL
 
 # Now with two columns
 query I
-SELECT columns from sniff_csv('data/csv/header_only_2.csv', types = ['INTEGER'])
+SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only_2.csv', types = ['INTEGER'])
 ----
 [{'name': foo, 'type': INTEGER}, {'name': bar, 'type': VARCHAR}]
 
 query I
-SELECT columns from sniff_csv('data/csv/header_only_2.csv', types = {'foo':'INTEGER'})
+SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'foo':'INTEGER'})
 ----
 [{'name': foo, 'type': INTEGER}, {'name': bar, 'type': VARCHAR}]
 
 # This is clearly wrong
 query I
-SELECT columns from sniff_csv('data/csv/header_only_2.csv', types = {'bar':'INTEGER'})
+SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'bar':'INTEGER'})
 ----
 [{'name': foo, 'type': VARCHAR}, {'name': bar, 'type': INTEGER}]
 
 statement ok
-CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only_2.csv', types = ['INTEGER'])
+CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = ['INTEGER'])
 
 query IIIIII
 DESCRIBE T
@@ -85,7 +85,7 @@ foo	INTEGER	YES	NULL	NULL	NULL
 bar	VARCHAR	YES	NULL	NULL	NULL
 
 statement ok
-CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only_2.csv', types = {'foo':'INTEGER'})
+CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'foo':'INTEGER'})
 
 query IIIIII
 DESCRIBE T
@@ -94,7 +94,7 @@ foo	INTEGER	YES	NULL	NULL	NULL
 bar	VARCHAR	YES	NULL	NULL	NULL
 
 statement ok
-CREATE OR REPLACE TABLE T AS from read_csv('data/csv/header_only_2.csv', types = {'bar':'INTEGER'})
+CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'bar':'INTEGER'})
 
 query IIIIII
 DESCRIBE T

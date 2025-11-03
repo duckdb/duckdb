@@ -11,7 +11,6 @@ static bool GeometryToVarcharCast(Vector &source, Vector &result, idx_t count, C
 }
 
 BoundCastInfo DefaultCasts::GeoCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-
 	// now switch on the result type
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR:
