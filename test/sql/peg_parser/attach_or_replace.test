@@ -1,8 +1,0 @@
-# name: test/sql/peg_parser/attach_or_replace.test
-# description: Test attach or replace in peg parser
-# group: [peg_parser]
-
-require autocomplete
-
-statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$ATTACH OR REPLACE '__TEST_DIR__/attach_or_replace.db' AS db1;$TEST_PEG_PARSER$);

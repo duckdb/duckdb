@@ -65,7 +65,6 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
                                                ColumnCheckpointInfo &checkpoint_info)
     : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
       intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {
-
 	auto &db = storage_manager.GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 	compression_functions.resize(checkpoint_states.size());

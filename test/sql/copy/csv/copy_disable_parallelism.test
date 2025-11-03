@@ -10,6 +10,6 @@ statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test FROM 'data/csv/test/test.csv';
+COPY test FROM '{DATA_DIR}/csv/test/test.csv';
 ----
 5000

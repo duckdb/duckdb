@@ -181,7 +181,6 @@ struct ICUListRange : public ICUDateFunc {
 	}
 
 	static void AddICUListRangeFunction(ExtensionLoader &loader) {
-
 		ScalarFunctionSet range("range");
 		range.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                 LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>,

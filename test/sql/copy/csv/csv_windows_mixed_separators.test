@@ -9,18 +9,18 @@ PRAGMA enable_verification
 
 # \  and / are interchangeable on Windows
 query I
-SELECT * FROM 'data\csv/test/date.csv'
+SELECT * FROM '{DATA_DIR}\csv/test/date.csv'
 ----
 2019-06-05
 
 query I
-SELECT * FROM glob('data/csv\test/*.csv') t(g) WHERE g LIKE '%date.csv'
+SELECT parse_path(g)[-3:] FROM glob('{DATA_DIR}/csv\test/*.csv') t(g) WHERE g LIKE '%date.csv'
 ----
-data\csv\test\date.csv
+[csv, test, date.csv]
 
 # also for attach
 statement ok
-ATTACH '__TEST_DIR__/windows_test.db' AS s1
+ATTACH '{TEMP_DIR}/windows_test.db' AS s1
 
 statement  ok
 CREATE TABLE s1.tbl AS SELECT * FROM range(10) t(i);
@@ -34,7 +34,7 @@ statement ok
 DETACH s1
 
 statement ok
-ATTACH '__TEST_DIR__\windows_test.db' AS s1
+ATTACH '{TEMP_DIR}\windows_test.db' AS s1
 
 query I
 SELECT SUM(i) FROM s1.tbl

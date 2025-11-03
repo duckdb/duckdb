@@ -5,7 +5,7 @@
 #include "column_reader.hpp"
 #include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -226,9 +226,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 			}
 			return LogicalType::TIME;
 		} else if (s_ele.logicalType.__isset.GEOMETRY) {
-			return LogicalType::BLOB;
+			// TODO: Set CRS too
+			return LogicalType::GEOMETRY();
 		} else if (s_ele.logicalType.__isset.GEOGRAPHY) {
-			return LogicalType::BLOB;
+			return LogicalType::GEOMETRY();
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -406,8 +407,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
                                                               const vector<ColumnIndex> &indexes,
                                                               const ParquetColumnSchema &schema) {
 	switch (schema.schema_type) {
-	case ParquetColumnSchemaType::GEOMETRY:
-		return GeoParquetFileMetadata::CreateColumnReader(*this, schema, context);
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
 		return make_uniq<RowNumberColumnReader>(*this, schema);
 	case ParquetColumnSchemaType::COLUMN: {
@@ -518,56 +517,9 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, parquet_options.can_have_nan);
 }
 
-static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnSchema> &children) {
-	if (children.size() < 2) {
-		return false;
-	}
-	auto &child0 = children[0];
-	auto &child1 = children[1];
-
-	ParquetColumnSchema const *metadata;
-	ParquetColumnSchema const *value;
-
-	if (child0.name == "metadata" && child1.name == "value") {
-		metadata = &child0;
-		value = &child1;
-	} else if (child1.name == "metadata" && child0.name == "value") {
-		metadata = &child1;
-		value = &child0;
-	} else {
-		return false;
-	}
-
-	//! Verify names
-	if (metadata->name != "metadata") {
-		return false;
-	}
-	if (value->name != "value") {
-		return false;
-	}
-
-	//! Verify types
-	if (metadata->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
-		return false;
-	}
-	if (value->parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
-		return false;
-	}
-	if (children.size() == 3) {
-		auto &typed_value = children[2];
-		if (typed_value.name != "typed_value") {
-			return false;
-		}
-	} else if (children.size() != 2) {
-		return false;
-	}
-	return true;
-}
-
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
-
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	if (next_schema_idx >= file_meta_data->schema.size()) {
@@ -593,9 +545,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
 		// geoarrow types, although geometry columns, are structs and have children and are handled below.
 		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name) && s_ele.num_children == 0) {
-			auto root_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
-			return ParquetColumnSchema(std::move(root_schema), GeoParquetFileMetadata::GeometryType(),
-			                           ParquetColumnSchemaType::GEOMETRY);
+			auto geom_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
+			// overwrite the derived type with GEOMETRY
+			geom_schema.type = LogicalType::GEOMETRY();
+			return geom_schema;
 		}
 	}
 
@@ -630,9 +583,6 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
 		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
-		if (!is_variant) {
-			is_variant = parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas);
-		}
 
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
@@ -668,7 +618,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 
 			LogicalType result_type;
 			if (is_variant) {
-				result_type = LogicalType::JSON();
+				result_type = LogicalType::VARIANT();
 			} else {
 				result_type = LogicalType::STRUCT(std::move(struct_types));
 			}
@@ -706,13 +656,6 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			                                next_file_idx);
 			list_schema.children.push_back(std::move(result));
 			return list_schema;
-		}
-
-		// Convert to geometry type if possible
-		if (s_ele.__isset.logicalType && (s_ele.logicalType.__isset.GEOMETRY || s_ele.logicalType.__isset.GEOGRAPHY) &&
-		    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
-			return ParquetColumnSchema(std::move(result), GeoParquetFileMetadata::GeometryType(),
-			                           ParquetColumnSchemaType::GEOMETRY);
 		}
 
 		return result;
@@ -815,9 +758,6 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	Value lookup_value;
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
-	}
-	if (context.TryGetCurrentSetting("variant_legacy_encoding", lookup_value)) {
-		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
 
@@ -1054,7 +994,6 @@ uint64_t ParquetReader::GetGroupSpan(ParquetReaderScanState &state) {
 	idx_t max_offset = NumericLimits<idx_t>::Minimum();
 
 	for (auto &column_chunk : group.columns) {
-
 		// Set the min offset
 		idx_t current_min_offset = NumericLimits<idx_t>::Maximum();
 		if (column_chunk.meta_data.__isset.dictionary_page_offset) {
@@ -1261,13 +1200,14 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	while (ScanInternal(context, state, result)) {
 		if (result.size() > 0) {
-			break;
+			return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 		}
 		result.Reset();
 	}
+	return AsyncResult(SourceResultType::FINISHED);
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {

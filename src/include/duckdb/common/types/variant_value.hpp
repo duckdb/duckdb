@@ -43,6 +43,7 @@ public:
 
 public:
 	duckdb_yyjson::yyjson_mut_val *ToJSON(ClientContext &context, duckdb_yyjson::yyjson_mut_doc *doc) const;
+	static void ToVARIANT(vector<VariantValue> &input, Vector &result);
 
 public:
 	VariantValueType value_type;

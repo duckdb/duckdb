@@ -6,20 +6,20 @@ require json
 
 # original query from the issue should just return an error because it's not an array of objects
 statement error
-SELECT * FROM read_json_auto('data/json/arr.json', columns={'v':'VARCHAR','k':'VARCHAR'});
+SELECT * FROM read_json_auto('{DATA_DIR}/json/arr.json', columns={'v':'VARCHAR','k':'VARCHAR'});
 ----
 Invalid Input Error
 
 # if we ignore errors we get NULLs because the array entries aren't objects
 query II
-SELECT * FROM read_json_auto('data/json/arr.json', columns={'v':'VARCHAR','k':'VARCHAR'}, ignore_errors=true);
+SELECT * FROM read_json_auto('{DATA_DIR}/json/arr.json', columns={'v':'VARCHAR','k':'VARCHAR'}, ignore_errors=true);
 ----
 NULL	NULL
 NULL	NULL
 
 # if we read it as if it's one column we just get the array values as varchar
 query I
-SELECT * FROM read_json_auto('data/json/arr.json', columns={'v':'VARCHAR'});
+SELECT * FROM read_json_auto('{DATA_DIR}/json/arr.json', columns={'v':'VARCHAR'});
 ----
 4
 hello

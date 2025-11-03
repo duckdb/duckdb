@@ -149,7 +149,8 @@ struct ArgMinMaxBase {
 		D_ASSERT(binary.input.bind_data);
 		const auto &bind_data = binary.input.bind_data->Cast<ArgMinMaxFunctionData>();
 
-		if (binary.right_mask.RowIsValid(binary.ridx) && COMPARATOR::Operation(y_data, state.value)) {
+		if (binary.right_mask.RowIsValid(binary.ridx) &&
+		    (state.val_null || COMPARATOR::Operation(y_data, state.value))) {
 			if (bind_data.null_handling != ArgMinMaxNullHandling::IGNORE_ANY_NULL ||
 			    binary.left_mask.RowIsValid(binary.lidx)) {
 				Assign(state, x_data, y_data, !binary.left_mask.RowIsValid(binary.lidx), false, binary.input);
@@ -889,14 +890,14 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, false, LessThan>(fun);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, true, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::IGNORE_ANY_NULL);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, true, GreaterThan>(fun);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::IGNORE_ANY_NULL, false, GreaterThan>(fun);
 	return fun;
 }
 
@@ -915,14 +916,14 @@ AggregateFunctionSet ArgMaxNullFun::GetFunctions() {
 AggregateFunctionSet ArgMinNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan, OrderType::ASCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ANY_NULL);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, false, LessThan>(fun);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, true, LessThan>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ANY_NULL);
-	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, true, GreaterThan>(fun);
+	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, false, GreaterThan>(fun);
 	return fun;
 }
 

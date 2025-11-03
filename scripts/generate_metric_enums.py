@@ -18,6 +18,7 @@ metrics = [
     "ATTACH_REPLAY_WAL_LATENCY",
     "BLOCKED_THREAD_TIME",
     "CHECKPOINT_LATENCY",
+    "COMMIT_WRITE_WAL_LATENCY",
     "CPU_TIME",
     "CUMULATIVE_CARDINALITY",
     "CUMULATIVE_ROWS_SCANNED",
@@ -36,6 +37,7 @@ metrics = [
     "TOTAL_BYTES_READ",
     "TOTAL_BYTES_WRITTEN",
     "WAITING_TO_ATTACH_LATENCY",
+    "WAL_REPLAY_ENTRY_COUNT",
 ]
 
 phase_timing_metrics = [
@@ -56,13 +58,6 @@ query_global_metrics = [
     "CHECKPOINT_LATENCY",
     "SYSTEM_PEAK_BUFFER_MEMORY",
     "SYSTEM_PEAK_TEMP_DIR_SIZE",
-    "WAITING_TO_ATTACH_LATENCY",
-]
-
-excluded_query_global_metrics = [
-    "ATTACH_LOAD_STORAGE_LATENCY",
-    "ATTACH_REPLAY_WAL_LATENCY",
-    "CHECKPOINT_LATENCY",
     "WAITING_TO_ATTACH_LATENCY",
 ]
 
@@ -397,13 +392,7 @@ for test_file, name, description in zip(test_files, test_names, test_description
         metrics.sort()
 
         for metric in metrics:
-            skip = False
-            for excluded_metric in excluded_query_global_metrics:
-                if metric == excluded_metric:
-                    skip = True
-                    break
-            if not skip:
-                f.write(f'"{metric}": "true"\n')
+            f.write(f'"{metric}": "true"\n')
         f.write("\n")
 
         write_statement(

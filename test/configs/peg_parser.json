@@ -1,5 +1,5 @@
 {
-  "description": "Test PEG Parser + transformer",
+  "description": "Test PEG Parser + transformer with fallback mode",
   "skip_compiled": "true",
   "on_init": "set allow_parser_override_extension=fallback;",
   "statically_loaded_extensions": [
@@ -7,16 +7,6 @@
     "autocomplete"
   ],
   "skip_tests": [
-    {
-      "reason": "SIGBUS",
-      "paths": [
-        "test/sql/catalog/sequence/sequence_offset_increment.test",
-        "test/sql/upsert/insert_or_replace/returning_nothing.test",
-        "test/sql/copy_database/copy_database_different_types.test",
-        "test/sql/copy_database/copy_table_with_sequence.test",
-        "test/sql/join/external/external_join_many_duplicates.test_slow"
-      ]
-    },
     {
       "reason": "Arithmetic expression",
       "paths": [
@@ -27,16 +17,22 @@
       ]
     },
     {
-      "reason": "Expression Depth",
+      "reason": "Quatations",
       "paths": [
-        "test/sql/overflow/expression_tree_depth.test"
+        "test/sql/pragma/test_show_tables_from.test",
+        "test/sql/attach/attach_dbname_quotes.test"
+      ]
+    },
+    {
+      "reason": "Conversion Error",
+      "paths": [
+        "test/sql/storage/types/struct/wal_struct_storage.test",
+        "test/sql/storage/types/struct/struct_storage.test"
       ]
     },
     {
       "reason": "Timeout",
       "paths": [
-        "test/sql/copy/csv/afl/test_fuzz_3981.test_slow",
-        "test/sql/join/external/tpch_all_tables.test_slow",
         "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",
         "test/sql/storage/temp_directory/offloading_block_files.test_slow"
       ]

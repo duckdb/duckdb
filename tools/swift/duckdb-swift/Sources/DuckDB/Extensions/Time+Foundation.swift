@@ -28,7 +28,7 @@ public extension Foundation.Date {
   
   /// Creates a date value initialized from a DuckDB Time value
   init(_ date: Time) {
-    self.init(timeIntervalSince1970: TimeInterval(date.microseconds) * 1e-3)
+    self.init(timeIntervalSince1970: TimeInterval(date.microseconds) * 1e-6)
   }
 }
 
@@ -36,6 +36,6 @@ public extension Time {
   
   /// Creates a time value initialized from a Foundation Date
   init(_ date: Foundation.Date) {
-    self.init(microseconds: Int64(date.timeIntervalSince1970 * 1e3))
+    self.init(microseconds: Int64(date.timeIntervalSince1970 * 1e6))
   }
 }
