@@ -2,6 +2,8 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/main/config.hpp"
+#include "shell_state.hpp"
+#include "duckdb/parser/tableref/column_data_ref.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -27,10 +29,26 @@ static unique_ptr<FunctionData> GetEnvBind(ClientContext &context, ScalarFunctio
 	return nullptr;
 }
 
+unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScanInput &input,
+                                         optional_ptr<ReplacementScanData> data) {
+	auto &table_name = input.table_name;
+	if (table_name != "_") {
+		return nullptr;
+	}
+	auto &state = duckdb_shell::ShellState::Get();
+	if (!state.last_result) {
+		throw BinderException("Failed to query last result \"_\": no result available");
+	}
+	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->names);
+}
+
 void ShellExtension::Load(ExtensionLoader &loader) {
 	loader.SetDescription("Adds CLI-specific support and functionalities");
 	loader.RegisterFunction(
 	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind));
+
+	auto &config = duckdb::DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.replacement_scans.push_back(duckdb::ReplacementScan(duckdb::ShellScanLastResult));
 }
 
 std::string ShellExtension::Name() {
