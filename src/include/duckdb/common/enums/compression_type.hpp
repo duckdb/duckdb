@@ -37,6 +37,7 @@ enum class CompressionType : uint8_t {
 };
 
 struct CompressionAvailabilityResult {
+private:
 	enum class UnavailableReason : uint8_t {
 		AVAILABLE,
 		//! Introduced later, not available to this version
