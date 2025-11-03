@@ -198,6 +198,7 @@ public:
 	                           LogicalType return_type)
 	    : CatalogEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, name, 0), schema(schema), arguments(std::move(arguments)),
 	      return_type(std::move(return_type)) {
+		internal = true;
 	}
 
 public:
@@ -216,7 +217,8 @@ struct WindowFunctionExtractor {
 	}
 
 	static Value GetFunctionType() {
-		return Value("window");
+		//! FIXME: should be 'window' but requires adapting generation scripts
+		return Value("aggregate");
 	}
 
 	static Value GetReturnType(WindowFunctionCatalogEntry &entry, idx_t offset) {
