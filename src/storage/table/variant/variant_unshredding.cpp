@@ -7,30 +7,6 @@
 
 namespace duckdb {
 
-static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &shredded, idx_t count) {
-	vector<VariantValue> res;
-
-	D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
-	auto &child_entries = StructVector::GetEntries(shredded);
-	D_ASSERT(child_entries.size() == 2);
-
-	auto &untyped_value_index = *child_entries[0];
-	auto &typed_value = *child_entries[1];
-
-	auto untyped_index_data = FlatVector::GetData<uint32_t>(untyped_value_index);
-	auto &untyped_index_validity = FlatVector::Validity(untyped_value_index);
-
-	auto &typed_value_validity = FlatVector::Validity(typed_value);
-	for (idx_t i = 0; i < count; i++) {
-		if (typed_value_validity.RowIsValid(i)) {
-			//! Shredded, check if it's partially shredded
-			if (untyped_index_validity.RowIsValid(i)) {
-			}
-		} else if (untyped_index_validity.RowIsValid(i)) {
-		}
-	}
-}
-
 static VariantValue UnshreddedVariantValue(UnifiedVariantVectorData &input, uint32_t row, uint32_t values_index) {
 	if (input.RowIsValid(row)) {
 		return VariantValue(Value(LogicalTypeId::SQLNULL));
@@ -71,6 +47,132 @@ static VariantValue UnshreddedVariantValue(UnifiedVariantVectorData &input, uint
 	return VariantValue(std::move(val));
 }
 
+static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &shredded, idx_t count);
+
+static vector<VariantValue> UnshredTypedLeaf(Vector &typed_value, idx_t count) {
+	vector<VariantValue> res(count);
+	auto &typed_value_validity = FlatVector::Validity(typed_value);
+
+	for (idx_t i = 0; i < count; i++) {
+		if (!typed_value_validity.RowIsValid(i)) {
+			continue;
+		}
+		res[i] = VariantValue(typed_value.GetValue(i));
+	}
+	return res;
+}
+
+static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant, Vector &typed_value, idx_t count) {
+	vector<VariantValue> res(count);
+
+	auto &child_types = StructType::GetChildTypes(typed_value.GetType());
+	auto &child_entries = StructVector::GetEntries(typed_value);
+
+	D_ASSERT(child_types.size() == child_entries.size());
+
+	//! First unshred all children
+	vector<vector<VariantValue>> child_values;
+	for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
+		auto &child_entry = child_entries[child_idx];
+		child_values[child_idx] = Unshred(variant, *child_entry, count);
+	}
+
+	//! Then compose the OBJECT value by combining all the children
+	auto &typed_value_validity = FlatVector::Validity(typed_value);
+	for (idx_t child_idx = 0; child_idx < child_idx; child_idx++) {
+		auto &child_name = child_types[child_idx].first;
+		auto &values = child_values[child_idx];
+
+		for (idx_t i = 0; i < count; i++) {
+			if (typed_value_validity.RowIsValid(i)) {
+				continue;
+			}
+			if (values[i].IsMissing()) {
+				continue;
+			}
+			if (res[i].IsMissing()) {
+				res[i] = VariantValue(VariantValueType::OBJECT);
+			}
+			auto &obj_value = res[i];
+			obj_value.AddChild(child_name, std::move(values[i]));
+		}
+	}
+	return std::move(res);
+}
+
+static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant, Vector &typed_value, idx_t count) {
+	auto child_size = ListVector::GetListSize(typed_value);
+	auto &child_vector = ListVector::GetEntry(typed_value);
+	auto child_values = Unshred(variant, child_vector, child_size);
+
+	D_ASSERT(typed_value.GetType().id() == LogicalTypeId::LIST);
+	auto list_data = FlatVector::GetData<list_entry_t>(typed_value);
+
+	auto &typed_value_validity = FlatVector::Validity(typed_value);
+
+	vector<VariantValue> res(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!typed_value_validity.RowIsValid(i)) {
+			continue;
+		}
+		auto &list_entry = list_data[i];
+
+		auto &list_val = res[i];
+		list_val = VariantValue(VariantValueType::ARRAY);
+		list_val.array_items.reserve(list_entry.length);
+		list_val.array_items.insert(
+		    list_val.array_items.end(), std::make_move_iterator(child_values.begin() + list_entry.offset),
+		    std::make_move_iterator(child_values.begin() + list_entry.offset + list_entry.length));
+	}
+	return res;
+}
+
+static vector<VariantValue> UnshredTypedValue(UnifiedVariantVectorData &variant, Vector &typed_value, idx_t count) {
+	auto &type = typed_value.GetType();
+	if (type.id() == LogicalTypeId::STRUCT) {
+		return UnshredTypedObject(variant, typed_value, count);
+	} else if (type.id() == LogicalTypeId::LIST) {
+		return UnshredTypedArray(variant, typed_value, count);
+	} else {
+		D_ASSERT(type.IsNested());
+		return UnshredTypedLeaf(typed_value, count);
+	}
+}
+
+static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &shredded, idx_t count) {
+	D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
+	auto &child_entries = StructVector::GetEntries(shredded);
+	D_ASSERT(child_entries.size() == 2);
+
+	auto &untyped_value_index = *child_entries[0];
+	auto &typed_value = *child_entries[1];
+
+	auto untyped_index_data = FlatVector::GetData<uint32_t>(untyped_value_index);
+	auto &untyped_index_validity = FlatVector::Validity(untyped_value_index);
+
+	auto res = UnshredTypedValue(variant, typed_value, count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!untyped_index_validity.RowIsValid(i)) {
+			continue;
+		}
+		auto value_index = untyped_index_data[i];
+		if (res[i].IsMissing()) {
+			//! Unshredded, has no shredded value
+			res[i] = UnshreddedVariantValue(variant, i, value_index);
+		} else {
+			//! Partial shredding, already has a shredded value that this has to be combined into
+			D_ASSERT(res[i].value_type == VariantValueType::OBJECT);
+			auto unshredded = UnshreddedVariantValue(variant, i, value_index);
+			D_ASSERT(unshredded.value_type == VariantValueType::OBJECT);
+			auto &object_children = unshredded.object_children;
+			for (auto &entry : object_children) {
+				res[i].AddChild(entry.first, std::move(entry.second));
+			}
+		}
+	}
+	return res;
+}
+
 void VariantColumnData::UnshredVariantData(Vector &input, Vector &output, idx_t count) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::STRUCT);
 	auto &child_vectors = StructVector::GetEntries(input);
@@ -82,12 +184,6 @@ void VariantColumnData::UnshredVariantData(Vector &input, Vector &output, idx_t 
 	RecursiveUnifiedVectorFormat recursive_format;
 	Vector::RecursiveToUnifiedFormat(unshredded, count, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
-
-	//! First convert all the unshredded values at the root
-	vector<VariantValue> res(count);
-	for (idx_t i = 0; i < count; i++) {
-		res[i] = UnshreddedVariantValue(variant, i, 0);
-	}
 
 	auto shredded_values = Unshred(variant, shredded, count);
 }
