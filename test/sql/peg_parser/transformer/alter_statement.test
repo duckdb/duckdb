@@ -15,7 +15,14 @@ statement ok
 set allow_parser_override_extension=strict_when_supported;
 
 statement ok
+CREATE TABLE test3(s integer);
+
+statement ok
+ALTER TABLE test3 ADD COLUMN l INTEGER DEFAULT 42;
+
+statement ok
 CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER)[])
+
 
 statement ok
 INSERT INTO test VALUES ([ROW(1, 1)]), ([ROW(2, 2)])

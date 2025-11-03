@@ -401,6 +401,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
 		}
 	}
 	if (try_cast_as_integer) {
+		int32_t int_value;
+		if (TryCast::Operation<string_t, int32_t>(str_val, int_value)) {
+			return make_uniq<ConstantExpression>(Value::INTEGER(int_value));
+		}
 		int64_t bigint_value;
 		// try to cast as bigint first
 		if (TryCast::Operation<string_t, int64_t>(str_val, bigint_value)) {
