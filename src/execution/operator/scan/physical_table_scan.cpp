@@ -147,6 +147,11 @@ static void ValidateAsyncStrategyResult(const PhysicalTableScanExecutionStrategy
 		}
 		break;
 	default:
+		if (result_post == AsyncResultType::BLOCKED) {
+			if (output_chunk_size > 0) {
+				throw InternalException("ValidateAsyncStrategyResult: found BLOCKED with non-empty chunk");
+			}
+		}
 		break;
 	}
 }
