@@ -37,8 +37,14 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
+struct AutoCompleteParameters {
+	idx_t max_suggestion_count = 20;
+	idx_t max_file_suggestion_count = 100;
+	bool suggestion_contains_files = false;
+};
+
 static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions,
-                                                         const string &prefix) {
+                                                         const string &prefix, AutoCompleteParameters &parameters) {
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
 
@@ -74,8 +80,13 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 		}
 		scores.emplace_back(str, score);
 	}
+	idx_t suggestion_count = parameters.suggestion_contains_files;
+	if (parameters.suggestion_contains_files) {
+		suggestion_count = parameters.max_file_suggestion_count;
+	}
+
 	vector<AutoCompleteSuggestion> results;
-	auto top_strings = StringUtil::TopNStrings(scores, 20, 999);
+	auto top_strings = StringUtil::TopNStrings(scores, suggestion_count, 999);
 	for (auto &result : top_strings) {
 		auto entry = matches.find(result);
 		if (entry == matches.end()) {
@@ -488,7 +499,8 @@ end:
 	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
-static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
+static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql,
+                                                                           AutoCompleteParameters &parameters) {
 	// tokenize the input
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
@@ -541,7 +553,10 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			new_suggestions = SuggestType(context);
 			break;
 		case SuggestionState::SUGGEST_FILE_NAME:
-			new_suggestions = SuggestFileName(context, tokenizer.last_word, suggestion_pos);
+			if (parameters.max_file_suggestion_count > 0) {
+				new_suggestions = SuggestFileName(context, tokenizer.last_word, suggestion_pos);
+				parameters.suggestion_contains_files = true;
+			}
 			break;
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 			new_suggestions = SuggestScalarFunctionName(context);
@@ -566,7 +581,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			available_suggestions.push_back(std::move(new_suggestion));
 		}
 	}
-	auto result_suggestions = ComputeSuggestions(available_suggestions, tokenizer.last_word);
+	auto result_suggestions = ComputeSuggestions(available_suggestions, tokenizer.last_word, parameters);
 	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result_suggestions));
 }
 
@@ -575,13 +590,24 @@ static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &conte
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
+	AutoCompleteParameters parameters;
+	for (auto &param : input.named_parameters) {
+		if (param.first == "max_suggestion_count") {
+			parameters.max_suggestion_count = UBigIntValue::Get(param.second);
+		} else if (param.first == "max_file_suggestion_count") {
+			parameters.max_file_suggestion_count = UBigIntValue::Get(param.second);
+		} else {
+			throw InternalException("Unsupported parameter for SQL auto complete");
+		}
+	}
+
 	names.emplace_back("suggestion");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("suggestion_start");
 	return_types.emplace_back(LogicalType::INTEGER);
 
-	return GenerateSuggestions(context, StringValue::Get(input.inputs[0]));
+	return GenerateSuggestions(context, StringValue::Get(input.inputs[0]), parameters);
 }
 
 unique_ptr<GlobalTableFunctionState> SQLAutoCompleteInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -725,6 +751,8 @@ public:
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
+	auto_complete_fun.named_parameters["max_suggestion_count"] = LogicalType::UBIGINT;
+	auto_complete_fun.named_parameters["max_file_suggestion_count"] = LogicalType::UBIGINT;
 	loader.RegisterFunction(auto_complete_fun);
 
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
