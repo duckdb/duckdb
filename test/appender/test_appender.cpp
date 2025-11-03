@@ -834,8 +834,9 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 		flush_started.store(true);
 		try {
 			app.Flush();
-		} catch (...) {
-			// Expected when the query is interrupted
+		} catch (std::exception &ex) {
+			ErrorData error_data(ex);
+			REQUIRE((error_data.Type() == ExceptionType::INTERRUPT));
 		}
 	});
 
