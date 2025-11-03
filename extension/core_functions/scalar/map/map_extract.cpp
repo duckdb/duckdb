@@ -118,7 +118,7 @@ ScalarFunction MapExtractValueFun::GetFunction() {
 	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, val_type, MapExtractValueFunc);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
@@ -128,7 +128,7 @@ ScalarFunction MapExtractFun::GetFunction() {
 
 	ScalarFunction fun({LogicalType::MAP(key_type, val_type), key_type}, LogicalType::LIST(val_type),
 	                   MapExtractListFunc);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

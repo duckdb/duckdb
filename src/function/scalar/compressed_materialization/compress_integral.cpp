@@ -231,7 +231,7 @@ ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type,
 #if defined(D_ASSERT_IS_ENABLED)
 	result.SetFallible(); // Can only throw runtime error when assertions are enabled
 #else
-	result.errors = FunctionErrors::CANNOT_ERROR;
+	result.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 #endif
 	return result;
 }

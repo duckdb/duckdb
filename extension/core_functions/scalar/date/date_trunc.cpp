@@ -703,7 +703,7 @@ unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &b
 		default:
 			throw NotImplementedException("Temporal argument type for DATETRUNC");
 		}
-		bound_function.return_type = LogicalType::DATE;
+		bound_function.SetReturnType(LogicalType::DATE);
 		break;
 	default:
 		switch (bound_function.arguments[1].id()) {
@@ -733,7 +733,7 @@ ScalarFunctionSet DateTruncFun::GetFunctions() {
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                                      DateTruncFunction<interval_t, interval_t>));
 	for (auto &func : date_trunc.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return date_trunc;
 }
