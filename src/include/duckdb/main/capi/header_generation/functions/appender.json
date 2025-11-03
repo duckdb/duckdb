@@ -211,6 +211,23 @@
             }
         },
         {
+            "name": "duckdb_appender_clear",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                }
+            ],
+            "comment": {
+                "description": "Clears all buffered data from the appender without flushing it to the table. This discards any data that has been appended but not yet written. The appender can continue to be used after clearing.\n\n",
+                "param_comments": {
+                    "appender": "The appender to clear."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
             "name": "duckdb_appender_close",
             "return_type": "duckdb_state",
             "params": [

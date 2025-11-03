@@ -288,6 +288,7 @@
         "duckdb_appender_column_type",
         "duckdb_appender_error",
         "duckdb_appender_flush",
+        "duckdb_appender_clear",
         "duckdb_appender_close",
         "duckdb_appender_destroy",
         "duckdb_appender_add_column",

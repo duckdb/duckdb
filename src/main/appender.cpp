@@ -387,6 +387,12 @@ void BaseAppender::FlushChunk() {
 	}
 }
 
+void BaseAppender::Clear() {
+	chunk.Reset();
+	collection->Reset();
+	column = 0;
+}
+
 void BaseAppender::Flush() {
 	// Check that all vectors have the same length before appending.
 	if (column != 0) {

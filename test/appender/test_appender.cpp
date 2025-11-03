@@ -91,6 +91,32 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	}
 }
 
+TEST_CASE("Test clear appender data", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// create a table to append to
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1)"));
+
+	// append a bunch of values
+	{
+		Appender appender(con, "integers");
+		for (idx_t i = 0; i < 2000; i++) {
+			appender.BeginRow();
+			appender.Append<int32_t>(1);
+			appender.EndRow();
+		}
+		appender.Clear();
+		appender.Close();
+	}
+
+	// check that the values haven't been added to the database
+	result = con.Query("SELECT SUM(i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
 TEST_CASE("Test AppendRow", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

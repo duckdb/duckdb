@@ -331,6 +331,7 @@ typedef struct {
 	duckdb_logical_type (*duckdb_appender_column_type)(duckdb_appender appender, idx_t col_idx);
 	const char *(*duckdb_appender_error)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_flush)(duckdb_appender appender);
+	duckdb_state (*duckdb_appender_clear)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_close)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_destroy)(duckdb_appender *appender);
 	duckdb_state (*duckdb_appender_add_column)(duckdb_appender appender, const char *name);
@@ -875,6 +876,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_appender_column_type = duckdb_appender_column_type;
 	result.duckdb_appender_error = duckdb_appender_error;
 	result.duckdb_appender_flush = duckdb_appender_flush;
+	result.duckdb_appender_clear = duckdb_appender_clear;
 	result.duckdb_appender_close = duckdb_appender_close;
 	result.duckdb_appender_destroy = duckdb_appender_destroy;
 	result.duckdb_appender_add_column = duckdb_appender_add_column;

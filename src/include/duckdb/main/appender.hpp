@@ -80,6 +80,10 @@ public:
 
 	//! Commit the changes made by the appender.
 	DUCKDB_API void Flush();
+
+	//! Clear all buffered data from the appender.
+	DUCKDB_API void Clear();
+
 	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
 	DUCKDB_API void Close();
 	//! Returns the active types of the appender.
