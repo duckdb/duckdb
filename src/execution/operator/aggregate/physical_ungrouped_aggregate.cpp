@@ -626,7 +626,8 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 #ifdef DEBUG
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
-		if (state.counts[aggr_idx] == 0 && aggr.function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+		if (state.counts[aggr_idx] == 0 &&
+		    aggr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
 			chunk.data[aggr_idx].ToUnifiedFormat(1, vdata);
