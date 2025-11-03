@@ -9,14 +9,15 @@ struct VariantStatsData;
 
 struct VariantColumnStatsData {
 public:
-	VariantColumnStatsData() = default;
+	explicit VariantColumnStatsData(idx_t index) : index(index) {
+	}
 
 public:
 	void SetType(VariantLogicalType type);
-	VariantColumnStatsData &GetOrCreateElement(VariantStatsData &stats);
-	VariantColumnStatsData &GetOrCreateField(VariantStatsData &stats, const string &name);
 
 public:
+	//! The index in the 'columns' of the VariantStatsData
+	idx_t index;
 	//! Count of each variant type encountered
 	idx_t type_counts[static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE)] = {0};
 	//! For decimals, track physical type distribution
@@ -32,6 +33,9 @@ public:
 	void SetUnknown();
 	void Merge(const VariantStatsData &other);
 	void Update(const Value &value);
+
+	VariantColumnStatsData &GetOrCreateElement(idx_t parent_index);
+	VariantColumnStatsData &GetOrCreateField(idx_t parent_index, const string &name);
 
 	VariantColumnStatsData &GetColumnStats(idx_t index);
 	const VariantColumnStatsData &GetColumnStats(idx_t index) const;

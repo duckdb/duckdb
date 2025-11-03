@@ -24,29 +24,41 @@ void VariantColumnStatsData::SetType(VariantLogicalType type) {
 	type_counts[static_cast<uint8_t>(type)]++;
 }
 
-VariantColumnStatsData &VariantColumnStatsData::GetOrCreateElement(VariantStatsData &stats) {
-	if (element_stats == DConstants::INVALID_INDEX) {
-		stats.columns.emplace_back();
-		element_stats = stats.columns.size() - 1;
+VariantColumnStatsData &VariantStatsData::GetOrCreateElement(idx_t parent_index) {
+	auto &parent_column = GetColumnStats(parent_index);
+
+	idx_t element_stats = parent_column.element_stats;
+	if (parent_column.element_stats == DConstants::INVALID_INDEX) {
+		parent_column.element_stats = columns.size();
+		element_stats = parent_column.element_stats;
+		columns.emplace_back(element_stats);
 	}
-	return stats.columns[element_stats];
+	return GetColumnStats(element_stats);
 }
 
-VariantColumnStatsData &VariantColumnStatsData::GetOrCreateField(VariantStatsData &stats, const string &name) {
-	auto it = field_stats.find(name);
-	if (it == field_stats.end()) {
-		stats.columns.emplace_back();
-		it = field_stats.emplace(name, stats.columns.size() - 1).first;
+VariantColumnStatsData &VariantStatsData::GetOrCreateField(idx_t parent_index, const string &name) {
+	auto &parent_column = columns[parent_index];
+	auto it = parent_column.field_stats.find(name);
+
+	idx_t field_stats;
+	if (it == parent_column.field_stats.end()) {
+		it = parent_column.field_stats.emplace(name, columns.size()).first;
+		field_stats = it->second;
+		columns.emplace_back(field_stats);
+	} else {
+		field_stats = it->second;
 	}
-	return stats.columns[it->second];
+	return GetColumnStats(field_stats);
 }
 
 void VariantStatsData::SetEmpty() {
-	columns.resize(1);
+	D_ASSERT(columns.empty());
+	columns.emplace_back(0);
 }
 
 void VariantStatsData::SetUnknown() {
-	columns.resize(1);
+	D_ASSERT(columns.empty());
+	columns.emplace_back(0);
 }
 
 void VariantStatsData::Merge(const VariantStatsData &other) {
@@ -334,74 +346,73 @@ namespace {
 struct VariantStatsVisitor {
 	using result_type = void;
 
-	static void VisitNull(VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitNull(VariantStatsData &stats, idx_t stats_column_index) {
 		return;
 	}
-	static void VisitBoolean(bool val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitBoolean(bool val, VariantStatsData &stats, idx_t stats_column_index) {
 		return;
 	}
 
-	static void VisitMetadata(VariantLogicalType type_id, VariantStatsData &stats,
-	                          VariantColumnStatsData &field_stats) {
-		field_stats.SetType(type_id);
+	static void VisitMetadata(VariantLogicalType type_id, VariantStatsData &stats, idx_t stats_column_index) {
+		auto &column_stats = stats.GetColumnStats(stats_column_index);
+		column_stats.SetType(type_id);
 	}
 
 	template <typename T>
-	static void VisitInteger(T val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitInteger(T val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitFloat(float val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitFloat(float val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitDouble(double val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitDouble(double val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitUUID(hugeint_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitUUID(hugeint_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitDate(date_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitDate(date_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitInterval(interval_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitInterval(interval_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitTime(dtime_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitTime(dtime_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitTimeNanos(dtime_ns_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitTimeNanos(dtime_ns_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitTimeTZ(dtime_tz_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitTimeTZ(dtime_tz_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitTimestampSec(timestamp_sec_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitTimestampSec(timestamp_sec_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitTimestampMs(timestamp_ms_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitTimestampMs(timestamp_ms_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitTimestamp(timestamp_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitTimestamp(timestamp_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitTimestampNanos(timestamp_ns_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitTimestampNanos(timestamp_ns_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitTimestampTZ(timestamp_tz_t val, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitTimestampTZ(timestamp_tz_t val, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void WriteStringInternal(const string_t &str, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void WriteStringInternal(const string_t &str, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitString(const string_t &str, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitString(const string_t &str, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitBlob(const string_t &blob, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitBlob(const string_t &blob, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitBignum(const string_t &bignum, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitBignum(const string_t &bignum, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitGeometry(const string_t &geom, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitGeometry(const string_t &geom, VariantStatsData &stats, idx_t stats_column_index) {
 	}
-	static void VisitBitstring(const string_t &bits, VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	static void VisitBitstring(const string_t &bits, VariantStatsData &stats, idx_t stats_column_index) {
 	}
 
 	template <typename T>
-	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantStatsData &stats,
-	                         VariantColumnStatsData &field_stats) {
+	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantStatsData &stats, idx_t stats_column_index) {
 		//! FIXME: need to visit to be able to shred on DECIMAL values
 	}
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                       VariantStatsData &stats, VariantColumnStatsData &field_stats) {
-		auto &element_stats = field_stats.GetOrCreateElement(stats);
-		VariantVisitor<VariantStatsVisitor>::VisitArrayItems(variant, row, nested_data, stats, element_stats);
+	                       VariantStatsData &stats, idx_t stats_column_index) {
+		auto &element_stats = stats.GetOrCreateElement(stats_column_index);
+		VariantVisitor<VariantStatsVisitor>::VisitArrayItems(variant, row, nested_data, stats, element_stats.index);
 	}
 
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                        VariantStatsData &stats, VariantColumnStatsData &field_stats) {
+	                        VariantStatsData &stats, idx_t stats_column_index) {
 		//! Then visit the fields in sorted order
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			auto source_children_idx = nested_data.children_idx + i;
@@ -410,16 +421,16 @@ struct VariantStatsVisitor {
 			auto keys_index = variant.GetKeysIndex(row, source_children_idx);
 			auto &key = variant.GetKey(row, keys_index);
 
-			auto &child_stats = field_stats.GetOrCreateField(stats, key.GetString());
+			auto &child_stats = stats.GetOrCreateField(stats_column_index, key.GetString());
 
 			//! Visit the child value
 			auto values_index = variant.GetValuesIndex(row, source_children_idx);
-			VariantVisitor<VariantStatsVisitor>::Visit(variant, row, values_index, stats, child_stats);
+			VariantVisitor<VariantStatsVisitor>::Visit(variant, row, values_index, stats, child_stats.index);
 		}
 	}
 
 	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantStatsData &stats,
-	                         VariantColumnStatsData &field_stats) {
+	                         idx_t stats_column_index) {
 		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
 	}
 };
@@ -433,9 +444,8 @@ void VariantStats::Update(BaseStatistics &stats, Vector &vector, idx_t count) {
 	Vector::RecursiveToUnifiedFormat(vector, count, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
 
-	auto &column_stats = data.GetColumnStats(0);
 	for (idx_t i = 0; i < count; i++) {
-		VariantVisitor<VariantStatsVisitor>::Visit(variant, i, 0, data, column_stats);
+		VariantVisitor<VariantStatsVisitor>::Visit(variant, i, 0, data, static_cast<idx_t>(0));
 	}
 }
 

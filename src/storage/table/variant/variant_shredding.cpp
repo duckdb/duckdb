@@ -319,8 +319,8 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 		for (idx_t i = 0; i < unshredded_values.size(); i++) {
 			auto &unshredded_value = unshredded_values[i];
 			auto value_index = unshredded_value.source_value_index;
-			if (unshredded_value.unshredded_children.empty()) {
-				D_ASSERT(variant.GetTypeId(i, value_index) == VariantLogicalType::OBJECT);
+			if (!unshredded_value.unshredded_children.empty()) {
+				D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::OBJECT);
 				auto nested_data = VariantUtils::DecodeNestedData(variant, row, value_index);
 				VisitObject(variant, row, nested_data, normalizer_state, unshredded_value.unshredded_children);
 				continue;
