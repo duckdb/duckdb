@@ -108,6 +108,14 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 		} else {
 			score += StringUtil::SimilarityScore(str, prefix);
 		}
+		auto type = available_suggestions[i].suggestion_type;
+		if (str[0] == '.') {
+			if (type == SuggestionState::SUGGEST_DIRECTORY || type == SuggestionState::SUGGEST_FILE_NAME) {
+				score++;
+			}
+		} else if (type == SuggestionState::SUGGEST_DIRECTORY && score > 0) {
+			score--;
+		}
 		if (!StringUtil::Contains(StringUtil::Lower(str), lower_prefix)) {
 			score += SUBSTRING_PENALTY;
 		}

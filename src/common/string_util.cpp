@@ -400,7 +400,10 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_
 		return vector<string>();
 	}
 	sort(scores.begin(), scores.end(), [](const pair<string, double> &a, const pair<string, double> &b) -> bool {
-		return a.second > b.second || (a.second == b.second && a.first.size() < b.first.size());
+		if (a.second != b.second) {
+			return a.second > b.second;
+		}
+		return a.first < b.first;
 	});
 	vector<string> result;
 	result.push_back(scores[0].first);
