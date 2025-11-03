@@ -3,6 +3,7 @@
 #include "highlighting.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string.hpp"
+#include "shell_highlight.hpp"
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
 // disable highlighting on windows (for now?)
@@ -11,77 +12,8 @@
 
 namespace duckdb {
 
-#ifdef DISABLE_HIGHLIGHT
-static int enableHighlighting = 0;
-#else
-static int enableHighlighting = 1;
-#endif
-struct Color {
-	const char *color_name;
-	const char *highlight;
-};
-static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033[32m"},
-                                  {"yellow", "\033[33m"},        {"blue", "\033[34m"},
-                                  {"magenta", "\033[35m"},       {"cyan", "\033[36m"},
-                                  {"white", "\033[37m"},         {"brightblack", "\033[90m"},
-                                  {"brightred", "\033[91m"},     {"brightgreen", "\033[92m"},
-                                  {"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
-                                  {"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
-                                  {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
-static std::string bold = "\033[1m";
-static std::string underline = "\033[4m";
-static std::string keyword = "\033[32m";
-static std::string continuation_selected = "\033[32m";
-static std::string constant = "\033[33m";
-static std::string continuation = "\033[90m";
-static std::string comment = "\033[90m";
-static std::string error = "\033[31m";
-static std::string reset = "\033[00m";
-
-void Highlighting::Enable() {
-	enableHighlighting = 1;
-}
-
-void Highlighting::Disable() {
-	enableHighlighting = 0;
-}
-
 bool Highlighting::IsEnabled() {
-	return enableHighlighting;
-}
-
-const char *Highlighting::GetColorOption(const char *option) {
-	size_t index = 0;
-	while (terminal_colors[index].color_name) {
-		if (strcmp(terminal_colors[index].color_name, option) == 0) {
-			return terminal_colors[index].highlight;
-		}
-		index++;
-	}
-	return nullptr;
-}
-
-void Highlighting::SetHighlightingColor(HighlightingType type, const char *color) {
-	switch (type) {
-	case HighlightingType::KEYWORD:
-		keyword = color;
-		break;
-	case HighlightingType::CONSTANT:
-		constant = color;
-		break;
-	case HighlightingType::COMMENT:
-		comment = color;
-		break;
-	case HighlightingType::ERROR:
-		error = color;
-		break;
-	case HighlightingType::CONTINUATION:
-		continuation = color;
-		break;
-	case HighlightingType::CONTINUATION_SELECTED:
-		continuation_selected = color;
-		break;
-	}
+	return duckdb_shell::ShellHighlight::IsEnabled();
 }
 
 static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
@@ -231,37 +163,55 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 		}
 		prev_pos = start;
 		std::string text = std::string(buf + start, end - start);
-		if (token.search_match) {
-			ss << underline;
-		}
+
+		duckdb_shell::HighlightElementType element_type;
 		switch (token.type) {
 		case tokenType::TOKEN_KEYWORD:
-			ss << keyword << text << reset;
+			element_type = duckdb_shell::HighlightElementType::KEYWORD;
 			break;
 		case tokenType::TOKEN_NUMERIC_CONSTANT:
+			element_type = duckdb_shell::HighlightElementType::NUMERIC_CONSTANT;
+			break;
 		case tokenType::TOKEN_STRING_CONSTANT:
-			ss << constant << text << reset;
+			element_type = duckdb_shell::HighlightElementType::STRING_CONSTANT;
 			break;
 		case tokenType::TOKEN_CONTINUATION:
-			ss << continuation << text << reset;
+			element_type = duckdb_shell::HighlightElementType::CONTINUATION;
 			break;
 		case tokenType::TOKEN_CONTINUATION_SELECTED:
-			ss << continuation_selected << text << reset;
+			element_type = duckdb_shell::HighlightElementType::CONTINUATION_SELECTED;
 			break;
 		case tokenType::TOKEN_BRACKET:
-			ss << underline << text << reset;
+			element_type = duckdb_shell::HighlightElementType::BRACKET;
 			break;
 		case tokenType::TOKEN_ERROR:
-			ss << error << text << reset;
+			element_type = duckdb_shell::HighlightElementType::ERROR_TOKEN;
 			break;
 		case tokenType::TOKEN_COMMENT:
-			ss << comment << text << reset;
+			element_type = duckdb_shell::HighlightElementType::COMMENT;
 			break;
 		default:
-			ss << text;
-			if (token.search_match) {
-				ss << reset;
+			element_type = duckdb_shell::HighlightElementType::NONE;
+			break;
+		}
+		auto &element = duckdb_shell::ShellHighlight::GetHighlightElement(element_type);
+		auto color = element.color;
+		auto intensity = element.intensity;
+		if (token.search_match) {
+			// add underline for search matches
+			if (intensity == duckdb_shell::PrintIntensity::BOLD) {
+				intensity = duckdb_shell::PrintIntensity::BOLD_UNDERLINE;
+			} else {
+				intensity = duckdb_shell::PrintIntensity::UNDERLINE;
 			}
+		}
+		string terminal_code = duckdb_shell::ShellHighlight::TerminalCode(color, intensity);
+		if (terminal_code.empty()) {
+			ss << text;
+		} else {
+			ss << terminal_code;
+			ss << text;
+			ss << duckdb_shell::ShellHighlight::ResetTerminalCode();
 		}
 	}
 	return ss.str();

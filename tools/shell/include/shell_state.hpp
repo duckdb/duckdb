@@ -40,6 +40,10 @@ using duckdb::SQLIdentifier;
 using duckdb::SQLString;
 using duckdb::unordered_map;
 struct ShellState;
+using duckdb::InternalException;
+using duckdb::InvalidInputException;
+using duckdb::to_string;
+struct Prompt;
 
 using idx_t = uint64_t;
 
@@ -69,7 +73,7 @@ enum class RenderMode : uint32_t {
 
 enum class PrintOutput { STDOUT, STDERR };
 
-enum class InputMode { STANDARD, FILE };
+enum class InputMode { STANDARD, FILE, DUCKDB_RC };
 
 enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 
@@ -86,6 +90,7 @@ enum class ShellFlags : uint32_t {
 enum class ShellOpenFlags { EXIT_ON_FAILURE, KEEP_ALIVE_ON_FAILURE };
 enum class SuccessState { SUCCESS, FAILURE };
 enum class OptionType { DEFAULT, ON, OFF };
+enum class StartupText { ALL, VERSION, NONE };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
@@ -182,19 +187,27 @@ public:
 	//! Name of our program
 	const char *program_name;
 
+	//! Whether or not syntax highlighting is enabled
+	bool highlighting_enabled = true;
 	//! Whether or not we are running in safe mode
 	bool safe_mode = false;
 	//! Whether or not we are highlighting errors
 	OptionType highlight_errors = OptionType::DEFAULT;
 	//! Whether or not we are highlighting results
 	OptionType highlight_results = OptionType::DEFAULT;
+	//! Path to .duckdbrc file
+	string duckdb_rc_path;
+	//! Startup text to display
+	StartupText startup_text = StartupText::ALL;
+	//! Whether or not the loading resources message was displayed
+	bool displayed_loading_resources_message = false;
 
 	/*
 	** Prompt strings. Initialized in main. Settable with
 	**   .prompt main continue
 	*/
 	static constexpr idx_t MAX_PROMPT_SIZE = 20;
-	char mainPrompt[MAX_PROMPT_SIZE];             /* First line prompt. default: "D "*/
+	unique_ptr<Prompt> main_prompt;
 	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
 
@@ -234,6 +247,7 @@ public:
 
 	idx_t RenderLength(const char *z);
 	idx_t RenderLength(const string &str);
+	bool IsCharacter(char c);
 	void SetBinaryMode();
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
@@ -252,8 +266,7 @@ public:
 		PrintF(PrintOutput::STDOUT, str, std::forward<ARGS>(params)...);
 	}
 	bool ColumnTypeIsInteger(const char *type);
-	string strdup_handle_newline(const char *z);
-	void ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result);
+	void ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
@@ -339,6 +352,7 @@ public:
 
 private:
 	ShellState();
+	~ShellState();
 };
 
 } // namespace duckdb_shell

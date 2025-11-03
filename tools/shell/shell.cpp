@@ -85,6 +85,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "shell_prompt.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
@@ -462,6 +463,9 @@ ShellState::ShellState() : seenInterrupt(0) {
 	nullValue = "NULL";
 }
 
+ShellState::~ShellState() {
+}
+
 void ShellState::Destroy() {
 	db.reset();
 	conn.reset();
@@ -495,11 +499,11 @@ void ShellState::UTF8WidthPrint(idx_t w, const string &str, bool right_align) {
 			}
 		}
 	if (n >= aw) {
-		PrintF("%.*s", i, zUtf);
+		utf8_printf(out, "%.*s", i, zUtf);
 	} else if (right_align) {
-		PrintF("%*s%s", aw - n, "", zUtf);
+		utf8_printf(out, "%*s%s", aw - n, "", zUtf);
 	} else {
-		PrintF("%s%*s", zUtf, aw - n, "");
+		utf8_printf(out, "%s%*s", zUtf, aw - n, "");
 	}
 }
 
@@ -522,14 +526,19 @@ idx_t ShellState::StringLength(const char *z) {
 /*
 ** Return the length of a string in characters.
 */
+bool ShellState::IsCharacter(char c) {
+	return (c & 0xc0) != 0x80;
+}
+
 idx_t ShellState::RenderLength(const char *z) {
 #ifdef HAVE_LINENOISE
 	return linenoiseComputeRenderWidth(z, strlen(z));
 #else
 	int n = 0;
-	while (*z) {
-		if ((0xc0 & *(z++)) != 0x80)
+	for (; *z; z++) {
+		if (IsCharacter(*z)) {
 			n++;
+		}
 	}
 	return n;
 #endif
@@ -601,8 +610,9 @@ static char *local_getline(char *zLine, FILE *in) {
 		if (n + 100 > nLine) {
 			nLine = nLine * 2 + 100;
 			zLine = (char *)realloc(zLine, nLine);
-			if (zLine == 0)
+			if (!zLine) {
 				shell_out_of_memory();
+			}
 		}
 		if (fgets(&zLine[n], nLine - n, in) == 0) {
 			if (n == 0) {
@@ -655,18 +665,28 @@ static char *local_getline(char *zLine, FILE *in) {
 ** zPrior argument for reuse.
 */
 static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
-	const char *zPrompt;
 	char *zResult;
 	if (in != 0) {
 		zResult = local_getline(zPrior, in);
 	} else {
 		auto &state = ShellState::Get();
-		zPrompt = isContinuation ? state.continuePrompt : state.mainPrompt;
 #if SHELL_USE_LOCAL_GETLINE
-		printf("%s", zPrompt);
+		if (!isContinuation) {
+			state.main_prompt->PrintPrompt(state, PrintOutput::STDOUT);
+		} else {
+			state.Print(state.continuePrompt);
+		}
 		fflush(stdout);
 		zResult = local_getline(zPrior, stdin);
 #else
+		string main_prompt;
+		const char *zPrompt;
+		if (!isContinuation) {
+			main_prompt = state.main_prompt->GeneratePrompt(state);
+			zPrompt = main_prompt.c_str();
+		} else {
+			zPrompt = state.continuePrompt;
+		}
 		free(zPrior);
 		zResult = shell_readline(zPrompt);
 #endif
@@ -1061,7 +1081,7 @@ void ShellState::PrintDashes(idx_t N) {
 		fputs(zDash, out);
 		N -= nDash;
 	}
-	PrintF("%.*s", static_cast<int>(N), zDash);
+	utf8_printf(out, "%.*s", static_cast<int>(N), zDash);
 }
 
 /*
@@ -1173,36 +1193,6 @@ void ShellState::RunTableDumpQuery(const string &zSelect) {
 	}
 }
 
-string ShellState::strdup_handle_newline(const char *z) {
-	static constexpr idx_t MAX_SIZE = 80;
-	if (!z) {
-		return nullValue;
-	}
-	if (cMode != RenderMode::BOX) {
-		return z;
-	}
-	string result;
-	idx_t count = 0;
-	bool interrupted = false;
-	for (const char *s = z; *s; s++) {
-		if (*s == '\n') {
-			result += "\\";
-			result += "n";
-		} else {
-			result += *s;
-		}
-		count++;
-		if (count >= MAX_SIZE && ((*s & 0xc0) != 0x80)) {
-			interrupted = true;
-			break;
-		}
-	}
-	if (interrupted) {
-		result += "...";
-	}
-	return result;
-}
-
 bool ShellState::ColumnTypeIsInteger(const char *type) {
 	if (!type) {
 		return false;
@@ -1307,12 +1297,12 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 	return SuccessState::SUCCESS;
 }
 
-void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result) {
+void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result) {
 	// fetch the column count, column names and types
 	result.column_count = res.ColumnCount();
 	result.data.reserve(result.column_count * 4);
 	for (idx_t c = 0; c < result.column_count; c++) {
-		result.data.push_back(strdup_handle_newline(res.names[c].c_str()));
+		result.data.push_back(renderer.ConvertValue(res.names[c].c_str()));
 		result.types.push_back(res.types[c]);
 		result.type_names.push_back(GetTypeName(res.types[c]));
 	}
@@ -1320,7 +1310,7 @@ void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult 
 	for (auto &row : res) {
 		for (idx_t c = 0; c < result.column_count; c++) {
 			auto str_val = row.GetValue<string>(c);
-			result.data.push_back(strdup_handle_newline(str_val.c_str()));
+			result.data.push_back(renderer.ConvertValue(str_val.c_str()));
 		}
 	}
 
@@ -1356,9 +1346,9 @@ void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult 
 */
 void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
 	ColumnarResult result;
-	ConvertColumnarResult(res, result);
-
 	auto column_renderer = GetColumnRenderer();
+	ConvertColumnarResult(*column_renderer, res, result);
+
 	column_renderer->RenderHeader(result);
 	auto colSep = column_renderer->GetColumnSeparator();
 	auto rowSep = column_renderer->GetRowSeparator();
@@ -2697,18 +2687,24 @@ int ShellState::DoMetaCommand(const string &zLine) {
 	} else {
 		auto &command = *metadata_command;
 		MetadataResult result = MetadataResult::PRINT_USAGE;
-		if (!command.callback) {
-			PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
-			       command.command);
-			result = MetadataResult::FAIL;
-		} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
-			result = command.callback(*this, args);
-		}
-		if (result == MetadataResult::PRINT_USAGE) {
-			string error = StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
-			error += StringUtil::Format("Usage: '.%s %s'", command.command, command.usage);
-			PrintDatabaseError(error);
-			rc = 1;
+		try {
+			if (!command.callback) {
+				PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
+				       command.command);
+				result = MetadataResult::FAIL;
+			} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
+				result = command.callback(*this, args);
+			}
+			if (result == MetadataResult::PRINT_USAGE) {
+				string error = StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
+				error += StringUtil::Format("Usage: '.%s %s'", command.command, command.usage);
+				PrintDatabaseError(error);
+				rc = 1;
+				result = MetadataResult::FAIL;
+			}
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			PrintDatabaseError(error.Message());
 			result = MetadataResult::FAIL;
 		}
 		rc = int(result);
@@ -2989,6 +2985,15 @@ int ShellState::ProcessInput(InputMode mode) {
 		} else {
 			numCtrlC = 0;
 		}
+		if (mode == InputMode::DUCKDB_RC && !StringUtil::StartsWith(zLine, ".startup_text")) {
+			if (startup_text == StartupText::ALL) {
+				ShellHighlight highlight(*this);
+				highlight.PrintText(StringUtil::Format("-- Loading resources from %s\n", duckdb_rc_path),
+				                    PrintOutput::STDERR, HighlightElementType::STARTUP_TEXT);
+				displayed_loading_resources_message = true;
+			}
+			mode = InputMode::FILE;
+		}
 		if (seenInterrupt) {
 			if (in) {
 				break;
@@ -3008,8 +3013,9 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			if (zLine[0] == '.') {
 #ifndef SHELL_USE_LOCAL_GETLINE
-				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3')
+				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3') {
 					shell_add_history(zLine);
+				}
 #endif
 				rc = DoMetaCommand(zLine);
 				if (rc == 2) { /* exit requested */
@@ -3088,10 +3094,12 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 
 	in = fopen(file.c_str(), "rb");
 	if (in) {
+		InputMode input_mode = InputMode::FILE;
 		if (stdin_is_interactive && is_duckdb_rc) {
-			PrintF(PrintOutput::STDERR, "-- Loading resources from %s\n", file.c_str());
+			input_mode = InputMode::DUCKDB_RC;
+			duckdb_rc_path = file;
 		}
-		rc = ProcessInput(InputMode::FILE);
+		rc = ProcessInput(input_mode);
 		fclose(in);
 	} else if (!is_duckdb_rc) {
 		PrintF(PrintOutput::STDERR, "Failed to read file \"%s\"\n", file.c_str());
@@ -3191,7 +3199,11 @@ void ShellState::Initialize() {
 	colSeparator = SEP_Column;
 	rowSeparator = SEP_Row;
 	showHeader = true;
-	strcpy(mainPrompt, "D ");
+	main_prompt = make_uniq<Prompt>();
+	string default_prompt;
+	default_prompt =
+	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	main_prompt->ParsePrompt(default_prompt);
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
@@ -3220,7 +3232,6 @@ int wmain(int argc, wchar_t **wargv) {
 	const char **argv;
 #endif
 	int rc = 0;
-	bool warnInmemoryDb = false;
 	vector<string> extra_commands;
 	ShellStateDestroyer destroyer;
 
@@ -3320,7 +3331,6 @@ int wmain(int argc, wchar_t **wargv) {
 
 	if (data.zDbFilename.empty()) {
 		data.zDbFilename = ":memory:";
-		warnInmemoryDb = argc == 1;
 	}
 	data.out = stdout;
 
@@ -3382,16 +3392,21 @@ int wmain(int argc, wchar_t **wargv) {
 		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
-			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/
-			       "Enter \".help\" for usage hints.\n",
-			       duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
-			if (warnInmemoryDb) {
-				printf("Connected to a ");
-				ShellHighlight highlighter(data);
-				highlighter.PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
-				                      PrintIntensity::BOLD);
-				printf(".\nUse \".open FILENAME\" to reopen on a "
-				       "persistent database.\n");
+
+			ShellHighlight highlight(data);
+			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
+			                                          duckdb::DuckDB::ReleaseCodename());
+			if (StringUtil::Contains(duckdb::DuckDB::ReleaseCodename(), "Development")) {
+				startup_version += ", ";
+				startup_version += duckdb::DuckDB::SourceID();
+			}
+			startup_version += ")\n";
+			if (data.startup_text != StartupText::NONE) {
+				highlight.PrintText(startup_version, PrintOutput::STDOUT, HighlightElementType::STARTUP_VERSION);
+			}
+			if (data.startup_text == StartupText::ALL) {
+				highlight.PrintText("Enter \".help\" for usage hints.\n", PrintOutput::STDOUT,
+				                    HighlightElementType::STARTUP_TEXT);
 			}
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
