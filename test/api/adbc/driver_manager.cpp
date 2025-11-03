@@ -65,37 +65,37 @@ void GetWinError(std::string *buffer) {
 #endif // defined(_WIN32)
 
 // Error handling
-
-void ReleaseError(struct AdbcError *error) {
-	if (error) {
-		if (error->message)
-			delete[] error->message;
-		error->message = nullptr;
-		error->release = nullptr;
-	}
-}
-
-void SetError(struct AdbcError *error, const std::string &message) {
-	if (!error)
-		return;
-	if (error->message) {
-		// Append
-		std::string buffer = error->message;
-		buffer.reserve(buffer.size() + message.size() + 1);
-		buffer += '\n';
-		buffer += message;
-		error->release(error);
-
-		error->message = new char[buffer.size() + 1];
-		buffer.copy(error->message, buffer.size());
-		error->message[buffer.size()] = '\0';
-	} else {
-		error->message = new char[message.size() + 1];
-		message.copy(error->message, message.size());
-		error->message[message.size()] = '\0';
-	}
-	error->release = ReleaseError;
-}
+//
+// void ReleaseError(struct AdbcError *error) {
+// 	if (error) {
+// 		if (error->message)
+// 			delete[] error->message;
+// 		error->message = nullptr;
+// 		error->release = nullptr;
+// 	}
+// }
+//
+// void SetError(struct AdbcError *error, const std::string &message) {
+// 	if (!error)
+// 		return;
+// 	if (error->message) {
+// 		// Append
+// 		std::string buffer = error->message;
+// 		buffer.reserve(buffer.size() + message.size() + 1);
+// 		buffer += '\n';
+// 		buffer += message;
+// 		error->release(error);
+//
+// 		error->message = new char[buffer.size() + 1];
+// 		buffer.copy(error->message, buffer.size());
+// 		error->message[buffer.size()] = '\0';
+// 	} else {
+// 		error->message = new char[message.size() + 1];
+// 		message.copy(error->message, message.size());
+// 		error->message[message.size()] = '\0';
+// 	}
+// 	error->release = ReleaseError;
+// }
 
 // Driver state
 
