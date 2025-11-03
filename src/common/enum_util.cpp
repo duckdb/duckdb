@@ -3689,7 +3689,7 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetRecoveryModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(RecoveryMode::DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(RecoveryMode::NO_WAL), "NO_WAL" }
+		{ static_cast<uint32_t>(RecoveryMode::NO_WAL_WRITES), "NO_WAL_WRITES" }
 	};
 	return values;
 }

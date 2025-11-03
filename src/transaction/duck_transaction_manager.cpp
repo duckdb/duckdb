@@ -285,7 +285,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// in-memory databases don't have a WAL - we estimate how large their changeset is based on the undo properties
 	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
-		if (storage_manager.InMemory() || db.GetRecoveryMode() == RecoveryMode::NO_WAL) {
+		if (storage_manager.InMemory() || db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
 			storage_manager.AddInMemoryChange(undo_properties.estimated_size);
 		}
 	}

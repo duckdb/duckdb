@@ -110,7 +110,7 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	if (InMemory() || wal->GetDatabase().GetRecoveryMode() == RecoveryMode::NO_WAL) {
+	if (InMemory() || wal->GetDatabase().GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
 		return in_memory_change_size.load();
 	}
 	return wal->GetWALSize();

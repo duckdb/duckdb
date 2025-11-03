@@ -37,7 +37,7 @@ enum class AttachVisibility { SHOWN, HIDDEN };
 //! DEFAULT is the standard ACID crash recovery mode.
 //! NO_WAL disables the WAL for the attached database, i.e., disabling the D in ACID.
 //! Use this mode with caution, as it disables recovery from crashes for the file.
-enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL = 1 };
+enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
 
 class DatabaseFilePathManager;
 
