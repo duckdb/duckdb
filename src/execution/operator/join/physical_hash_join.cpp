@@ -880,7 +880,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 }
 
 void JoinFilterPushdownInfo::FinalizeHashJoinFilters(const ClientContext &context, JoinHashTable &ht,
-                                        const PhysicalComparisonJoin &op, const Value &min, const Value &max, const bool is_perfect_hash_table) const {
+                                                     const PhysicalComparisonJoin &op, const Value &min,
+                                                     const Value &max, const bool is_perfect_hash_table) const {
 
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
