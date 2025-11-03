@@ -76,25 +76,6 @@ void GetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, con
 	}
 }
 
-template <class SORT_KEY>
-void TemplatedReconstructSortKey(SORT_KEY *const *const sort_keys, const idx_t &count) {
-	for (idx_t i = 0; i < count; i++) {
-		sort_keys[i]->Reconstruct();
-	}
-}
-
-template <class SORT_KEY>
-void ReconstructSortKey(SORT_KEY *const *const sort_keys, const idx_t &count, const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::BLOB:
-		return TemplatedReconstructSortKey<SORT_KEY>(sort_keys, count);
-	case LogicalTypeId::BIGINT:
-		break; // NOP
-	default:
-		throw NotImplementedException("ReconstructSortKey for %s", EnumUtil::ToString(type.id()));
-	}
-}
-
 template <SortKeyType SORT_KEY_TYPE>
 void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count,
                                        DataChunk &chunk) {
@@ -116,7 +97,6 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 
 		decoded_key.Reset();
 		key_executor.Execute(key, decoded_key);
-		// ReconstructSortKey(sort_keys, count, key.data[0].GetType());
 
 		const auto &decoded_key_entries = StructVector::GetEntries(decoded_key.data[0]);
 		for (; opc_idx < output_projection_columns.size(); opc_idx++) {

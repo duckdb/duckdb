@@ -698,7 +698,8 @@ public:
 				continue;
 			}
 			auto &reader_data = *reader_data_ptr;
-			double progress_in_file;
+			// Initialize progress_in_file with a default value to avoid uninitialized variable usage
+			double progress_in_file = 0.0;
 			if (reader_data.file_state == MultiFileFileState::OPEN) {
 				// file is currently open - get the progress within the file
 				progress_in_file = reader_data.reader->GetProgressInFile(context);
@@ -712,9 +713,6 @@ public:
 					// file is still being read
 					progress_in_file = reader->GetProgressInFile(context);
 				}
-			} else {
-				// file has not been opened yet - progress in this file is zero
-				progress_in_file = 0;
 			}
 			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
 			total_progress += progress_in_file;

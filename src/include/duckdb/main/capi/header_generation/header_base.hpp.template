@@ -721,6 +721,47 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
 
 //===--------------------------------------------------------------------===//
+// Copy function types
+//===--------------------------------------------------------------------===//
+
+//! A COPY function. Must be destroyed with `duckdb_destroy_copy_function`.
+typedef struct _duckdb_copy_function {
+	void *internal_ptr;
+} * duckdb_copy_function;
+
+//! Info for the bind function of a COPY function.
+typedef struct _duckdb_copy_function_bind_info {
+	void *internal_ptr;
+} * duckdb_copy_function_bind_info;
+
+//! Info for the global initialization function of a COPY function.
+typedef struct _duckdb_copy_function_global_init_info {
+	void *internal_ptr;
+} * duckdb_copy_function_global_init_info;
+
+//! Info for the sink function of a COPY function.
+typedef struct _duckdb_copy_function_sink_info {
+	void *internal_ptr;
+} * duckdb_copy_function_sink_info;
+
+//! Info for the finalize function of a COPY function.
+typedef struct _duckdb_copy_function_finalize_info {
+	void *internal_ptr;
+} * duckdb_copy_function_finalize_info;
+
+//! The bind function to use when binding a COPY ... TO function.
+typedef void (*duckdb_copy_function_bind_t)(duckdb_copy_function_bind_info info);
+
+//! The initialization function to use when initializing a COPY ... TO function.
+typedef void (*duckdb_copy_function_global_init_t)(duckdb_copy_function_global_init_info info);
+
+//! The function to sink an input chunk into during execution of a COPY ... TO function.
+typedef void (*duckdb_copy_function_sink_t)(duckdb_copy_function_sink_info info, duckdb_data_chunk input);
+
+//! The function to finalize the COPY ... TO function execution.
+typedef void (*duckdb_copy_function_finalize_t)(duckdb_copy_function_finalize_info info);
+
+//===--------------------------------------------------------------------===//
 // Cast types
 //===--------------------------------------------------------------------===//
 

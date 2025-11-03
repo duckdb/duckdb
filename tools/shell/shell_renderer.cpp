@@ -29,6 +29,10 @@ ShellRenderer::ShellRenderer(ShellState &state)
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
+string ColumnRenderer::ConvertValue(const char *value) {
+	return value ? value : state.nullValue;
+}
+
 void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 }
 
@@ -50,7 +54,7 @@ public:
 			return;
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
-			state.UTF8WidthPrint(state.out, result.column_width[i], result.data[i], result.right_align[i]);
+			state.UTF8WidthPrint(result.column_width[i], result.data[i], result.right_align[i]);
 			state.Print(i == result.column_count - 1 ? "\n" : "  ");
 		}
 		for (idx_t i = 0; i < result.column_count; i++) {
@@ -100,6 +104,12 @@ public:
 class ModeMarkdownRenderer : public ColumnRenderer {
 public:
 	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state) {
+	}
+
+	string ConvertValue(const char *value) override {
+		// when rendering for markdown we need to escape pipes
+		string result = ColumnRenderer::ConvertValue(value);
+		return StringUtil::Replace(result, "|", "\\|");
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
@@ -153,6 +163,34 @@ public:
 class ModeBoxRenderer : public ColumnRenderer {
 public:
 	explicit ModeBoxRenderer(ShellState &state) : ColumnRenderer(state) {
+	}
+
+	string ConvertValue(const char *value) override {
+		// for MODE_Box truncate large values
+		if (!value) {
+			return ColumnRenderer::ConvertValue(value);
+		}
+		static constexpr idx_t MAX_SIZE = 80;
+		string result;
+		idx_t count = 0;
+		bool interrupted = false;
+		for (const char *s = value; *s; s++) {
+			if (*s == '\n') {
+				result += "\\";
+				result += "n";
+			} else {
+				result += *s;
+			}
+			count++;
+			if (count >= MAX_SIZE && ((*s & 0xc0) != 0x80)) {
+				interrupted = true;
+				break;
+			}
+		}
+		if (interrupted) {
+			result += "...";
+		}
+		return result;
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
