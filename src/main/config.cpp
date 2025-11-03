@@ -441,8 +441,14 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	return type_id;
 }
 
+bool DBConfig::HasExtensionOption(const string &name) {
+	lock_guard<mutex> l(config_lock);
+	return extension_parameters.find(name) != extension_parameters.end();
+}
+
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope) {
+	lock_guard<mutex> l(config_lock);
 	extension_parameters.insert(make_pair(
 	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope)));
 	// copy over unrecognized options, if they match the new extension option

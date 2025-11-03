@@ -268,7 +268,6 @@ StructToMapBoundCastData::InitStructToMapCastLocalState(CastLocalStateParameters
 }
 
 static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Optimization: if the source vector is constant, we only have a single physical element, so we can set the
 		// result vectortype to ConstantVector as well and set the (logical) count to 1

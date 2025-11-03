@@ -10,7 +10,7 @@ set threads=8
 
 # only happened with these parameters
 statement error
-from read_json('data/json/multi_file_hang/*.json', sample_size=1, maximum_sample_files=1)
+from read_json('{DATA_DIR}/json/multi_file_hang/*.json', sample_size=1, maximum_sample_files=1)
 ----
 Invalid Input Error: JSON transform error
 
@@ -18,6 +18,6 @@ Invalid Input Error: JSON transform error
 # we cannot ignore errors of this kind when the data is not newline-delimited
 # because we wouldn't know how to continue
 statement error
-SELECT * FROM read_json('data/json/fuzzer_hang.json', ignore_errors=true);
+SELECT * FROM read_json('{DATA_DIR}/json/fuzzer_hang.json', ignore_errors=true);
 ----
 Invalid Input Error

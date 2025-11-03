@@ -294,7 +294,6 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 
 template <class CHILD_TYPE>
 struct ApproxQuantileListOperation : public ApproxQuantileOperation {
-
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(STATE &state, RESULT_TYPE &target, AggregateFinalizeData &finalize_data) {
 		if (state.pos == 0) {

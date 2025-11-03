@@ -39,8 +39,8 @@ int main(int argc_in, char *argv[]) {
 			new_argc++;
 		}
 	}
+	test_config.ChangeWorkingDirectory(test_directory);
 
-	TestChangeDirectory(test_directory);
 	// delete the testing directory if it exists
 	auto dir = TestCreatePath("");
 	try {

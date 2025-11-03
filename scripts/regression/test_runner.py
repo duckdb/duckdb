@@ -46,6 +46,9 @@ parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum t
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
 parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
 parser.add_argument(
+    "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
+)
+parser.add_argument(
     "--regression-threshold-seconds",
     type=float,
     default=0.05,
@@ -84,6 +87,18 @@ if not os.path.isfile(old_runner_path):
 if not os.path.isfile(new_runner_path):
     print(f"Failed to find new runner {new_runner_path}")
     exit(1)
+
+if args.clear_benchmark_cache:
+    old_cache_path = os.path.join(os.path.dirname(old_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
+    new_cache_path = os.path.join(os.path.dirname(new_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
+    try:
+        shutil.rmtree(old_cache_path)
+    except:
+        pass
+    try:
+        shutil.rmtree(new_cache_path)
+    except:
+        pass
 
 config_dict = vars(args)
 old_runner = BenchmarkRunner(BenchmarkRunnerConfig.from_params(old_runner_path, benchmark_file, **config_dict))

@@ -42,7 +42,6 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"!__postfix", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"&&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"**", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"<->", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -477,6 +476,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ord", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"parquet_bloom_probe", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_file_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"parquet_full_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_kv_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_scan", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},

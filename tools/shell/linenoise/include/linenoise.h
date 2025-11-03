@@ -58,13 +58,14 @@ void linenoiseAddCompletion(linenoiseCompletions *, const char *);
 
 char *linenoise(const char *prompt);
 void linenoiseFree(void *ptr);
-int linenoiseParseOption(const char **azArg, int nArg, const char **out_error);
 int linenoiseHistoryAdd(const char *line);
 int linenoiseHistorySetMaxLen(int len);
 int linenoiseHistorySave(const char *filename);
 int linenoiseHistoryLoad(const char *filename);
 void linenoiseClearScreen(void);
 void linenoiseSetMultiLine(int ml);
+void linenoiseSetErrorRendering(int enabled);
+void linenoiseSetCompletionRendering(int enabled);
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len);
 int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *n);
 void linenoiseSetPrompt(const char *continuation, const char *continuationSelected);

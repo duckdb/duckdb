@@ -8,6 +8,6 @@ statement ok
 pragma enable_verification
 
 query I
-select count(*) from 'data/json/sample_utf8_bom.json'
+select count(*) from '{DATA_DIR}/json/sample_utf8_bom.json'
 ----
 1

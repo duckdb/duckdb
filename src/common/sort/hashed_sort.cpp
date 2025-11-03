@@ -89,7 +89,6 @@ private:
 HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort)
     : hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
       allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
-
 	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
 	while (max_bits < 8 && (thread_pages >> max_bits) > 1) {
@@ -318,7 +317,6 @@ public:
 HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, const HashedSort &hashed_sort)
     : hashed_sort(hashed_sort), allocator(Allocator::Get(context.client)), hash_exec(context.client),
       sort_exec(context.client) {
-
 	vector<LogicalType> group_types;
 	for (idx_t prt_idx = 0; prt_idx < hashed_sort.partitions.size(); prt_idx++) {
 		auto &pexpr = *hashed_sort.partitions[prt_idx].expression.get();
@@ -666,7 +664,6 @@ public:
 void HashedSort::GenerateOrderings(Orders &partitions, Orders &orders,
                                    const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
                                    const vector<unique_ptr<BaseStatistics>> &partition_stats) {
-
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	const auto partition_cols = partition_bys.size();
 	for (idx_t prt_idx = 0; prt_idx < partition_cols; prt_idx++) {
