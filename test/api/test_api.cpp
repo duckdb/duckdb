@@ -643,7 +643,6 @@ TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException late
 }
 
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
-
 	DBConfig config;
 	config.options.maximum_threads = 8;
 	DuckDB db(nullptr, &config);

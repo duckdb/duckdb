@@ -6,7 +6,7 @@ require parquet
 
 query I
 select *
-from read_parquet('data/parquet-testing/issue12621.parquet')
+from read_parquet('{DATA_DIR}/parquet-testing/issue12621.parquet')
 limit 1;
 ----
 0.0000

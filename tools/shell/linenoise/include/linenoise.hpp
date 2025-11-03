@@ -62,8 +62,6 @@ public:
 	static size_t ComputeRenderWidth(const char *buf, size_t len);
 	static int GetRenderPosition(const char *buf, size_t len, int max_width, int *n);
 
-	static int ParseOption(const char **azArg, int nArg, const char **out_error);
-
 	int GetPromptWidth() const;
 
 	void RefreshLine();

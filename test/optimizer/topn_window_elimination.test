@@ -15,6 +15,9 @@ statement ok
 CREATE TABLE tbl_with_null AS SELECT * FROM VALUES (0, [0], null), (0, [1], 1), (1, [2], null), (null, [3], 3), (null, [4], 4), t(grp, a, b)
 
 statement ok
+CREATE TABLE tbl2 AS SELECT * FROM VALUES (0, 'a'), (1, 'b'), (null, 'c'), t(x, y)
+
+statement ok
 CREATE MACRO window_fun(table_name, col_names, sort_order, topn) AS TABLE
 FROM query(
 	'SELECT * FROM (SELECT row_number() OVER (PARTITION BY grp ORDER BY b ' || sort_order || ') as rn, ' || array_to_string(col_names, ',') || ' FROM ' || table_name || ' QUALIFY rn <= ' || topn || ') ORDER BY ALL'
@@ -68,6 +71,24 @@ EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_ord
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
+# window function with join and one-sided projections
+query II
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# window function with join and one-sided projections + join column
+query II
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
+
+# window function with join and two-sided projections
+query II
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'y'], '${sort_order}', ${topn})
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
+
 # test lateral join
 query II
 EXPLAIN SELECT * FROM lateral_join('${sort_order}', ${topn})
@@ -97,6 +118,12 @@ CREATE TABLE ${sort_order}${topn}_7 AS SELECT * FROM window_fun('tbl_with_null',
 
 statement ok
 CREATE TABLE ${sort_order}${topn}_8 AS SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_9 AS SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+
+statement ok
+CREATE TABLE ${sort_order}${topn}_10 AS SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
 
 statement ok
 SET disabled_optimizers = 'top_n_window_elimination'
@@ -131,6 +158,14 @@ SELECT * FROM ${sort_order}${topn}_7 EXCEPT SELECT * FROM window_fun('tbl_with_n
 
 query IIII
 SELECT * FROM ${sort_order}${topn}_8 EXCEPT SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+
+query IIII
+SELECT * FROM ${sort_order}${topn}_9 EXCEPT SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+----
+
+query IIIII
+SELECT * FROM ${sort_order}${topn}_10 EXCEPT SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
 ----
 
 statement ok

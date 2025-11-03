@@ -7,7 +7,7 @@ require parquet
 require json
 
 statement ok
-CREATE TABLE json_tbl AS FROM 'data/parquet-testing/json_convertedtype.parquet';
+CREATE TABLE json_tbl AS FROM '{DATA_DIR}/parquet-testing/json_convertedtype.parquet';
 
 query I
 SELECT json_extract(TX_JSON[1], 'block_hash') FROM json_tbl

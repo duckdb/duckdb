@@ -593,7 +593,6 @@ bool ColumnDataCopyCompressedStrings(ColumnDataMetaData &meta_data, const Vector
 template <>
 void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                               idx_t offset, idx_t copy_count) {
-
 	const auto &allocator_type = meta_data.segment.allocator->GetType();
 	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
 	    allocator_type == ColumnDataAllocatorType::HYBRID) {
@@ -733,7 +732,6 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                                   idx_t offset, idx_t copy_count) {
-
 	auto &segment = meta_data.segment;
 
 	auto &child_vector = ListVector::GetEntry(source);
@@ -813,7 +811,6 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 
 void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                          idx_t offset, idx_t copy_count) {
-
 	auto &segment = meta_data.segment;
 
 	// copy the NULL values for the main array vector (the same as for a struct vector)

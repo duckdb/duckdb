@@ -519,7 +519,6 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, AggregateFunction &functio
 template <class COMPARATOR>
 unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &function,
                                      vector<unique_ptr<Expression>> &arguments) {
-
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();

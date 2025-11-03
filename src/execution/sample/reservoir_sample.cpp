@@ -190,7 +190,6 @@ void ReservoirSample::Vacuum() {
 }
 
 unique_ptr<BlockingSample> ReservoirSample::Copy() const {
-
 	auto ret = make_uniq<ReservoirSample>(sample_count);
 	ret->stats_sample = stats_sample;
 
@@ -564,7 +563,6 @@ T ReservoirSample::GetReservoirChunkCapacity() const {
 }
 
 idx_t ReservoirSample::FillReservoir(DataChunk &chunk) {
-
 	idx_t ingested_count = 0;
 	if (!reservoir_chunk) {
 		if (chunk.size() > FIXED_SAMPLE_SIZE) {
@@ -609,7 +607,6 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexes(idx_t sample_chunk_
 }
 
 SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t chunk_length) {
-
 	// how much weight to the other tuples have compared to the ones in this chunk?
 	auto weight_tuples_other = static_cast<double>(chunk_length) / static_cast<double>(GetTuplesSeen() + chunk_length);
 	auto num_to_pop = static_cast<uint32_t>(round(weight_tuples_other * static_cast<double>(sample_count)));

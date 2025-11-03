@@ -309,7 +309,6 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 } // namespace
 
 ScalarFunctionSet ListValueFun::GetFunctions() {
-
 	ScalarFunctionSet set("list_value");
 
 	// Overload for 0 arguments, which returns an empty list.
