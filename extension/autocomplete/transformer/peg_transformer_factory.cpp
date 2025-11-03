@@ -292,6 +292,17 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformWindowFrameNameContentsParens);
 	REGISTER_TRANSFORM(TransformWindowFrameContents);
 	REGISTER_TRANSFORM(TransformWindowPartition);
+
+	REGISTER_TRANSFORM(TransformSpecialFunctionExpression);
+	REGISTER_TRANSFORM(TransformCoalesceExpression);
+	REGISTER_TRANSFORM(TransformUnpackExpression);
+	REGISTER_TRANSFORM(TransformColumnsExpression);
+	REGISTER_TRANSFORM(TransformExtractExpression);
+	REGISTER_TRANSFORM(TransformExtractArgument);
+	REGISTER_TRANSFORM(TransformLambdaExpression);
+	REGISTER_TRANSFORM(TransformNullIfExpression);
+	REGISTER_TRANSFORM(TransformRowExpression);
+	REGISTER_TRANSFORM(TransformPositionExpression);
 }
 
 void PEGTransformerFactory::RegisterInsert() {

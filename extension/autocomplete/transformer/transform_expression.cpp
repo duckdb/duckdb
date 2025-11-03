@@ -1,3 +1,4 @@
+#include "duckdb/common/enums/date_part_specifier.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
@@ -924,6 +925,114 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformWindowParti
 		result.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expression));
 	}
 	return result;
+}
+
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSpecialFunctionExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCoalesceExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	for (auto expr : expr_list) {
+		result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	}
+	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnpackExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+	result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens));
+	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+
+	auto result = make_uniq<StarExpression>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.Child<ListParseResult>(2)));
+	if (expr->GetExpressionType() == ExpressionType::STAR) {
+		result = unique_ptr_cast<ParsedExpression, StarExpression>(std::move(expr));
+	} else {
+		result->expr = std::move(expr);
+	}
+	result->columns = true;
+	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExtractExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_expressions = ExtractResultFromParens(list_pr.Child<ListParseResult>(1))->Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> expr_children;
+	expr_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_expressions.Child<ListParseResult>(0)));
+	expr_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_expressions.Child<ListParseResult>(2)));
+	return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", "date_part", std::move(expr_children));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExtractArgument(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->type == ParseResultType::IDENTIFIER) {
+		return make_uniq<ConstantExpression>(Value(choice_pr->Cast<IdentifierParseResult>().identifier));
+	}
+	if (choice_pr->type == ParseResultType::STRING) {
+		return make_uniq<ConstantExpression>(Value(choice_pr->Cast<StringLiteralParseResult>().result));
+	}
+	auto date_part = transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+	return make_uniq<ConstantExpression>(DatePartSpecifierToString(date_part));
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLambdaExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+
+	auto col_id_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(1));
+	vector<string> parameters;
+	for (auto colid : col_id_list) {
+		parameters.push_back(transformer.Transform<string>(colid));
+	}
+	auto rhs_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
+	auto result = make_uniq<LambdaExpression>(parameters, std::move(rhs_expr));
+	return result;
+}
+
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNullIfExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto nested_list = extract_parens->Cast<ListParseResult>();
+	auto result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NULLIF);
+	result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(nested_list.Child<ListParseResult>(0)));
+	result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(nested_list.Child<ListParseResult>(2)));
+	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	vector<unique_ptr<ParsedExpression>> results;
+	for (auto expr : expr_list) {
+		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	}
+	auto func_expr = make_uniq<FunctionExpression>("row", std::move(results));
+	return func_expr;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPositionExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto position_values = extract_parens->Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> results;
+	//! search_string IN string
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(position_values.Child<ListParseResult>(2)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(position_values.Child<ListParseResult>(0)));
+	return make_uniq<FunctionExpression>("position", std::move(results));
 }
 
 
