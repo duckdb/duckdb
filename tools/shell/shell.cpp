@@ -3138,7 +3138,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			// auto-complete dot command
 			auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
 			for (auto &completion : dot_completions) {
-				linenoiseAddCompletion(lc, zLine, completion.c_str(), completion.size(), nLine);
+				linenoiseAddCompletion(lc, zLine, completion.c_str(), completion.size(), nLine, "keyword");
 			}
 			return;
 		}
@@ -3157,7 +3157,8 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 		for (auto &row : *result) {
 			auto zCompletion = row.GetValue<string>(0);
 			idx_t iStart = row.GetValue<idx_t>(1);
-			linenoiseAddCompletion(lc, zLine, zCompletion.c_str(), zCompletion.size(), iStart);
+			auto completion_type = row.GetValue<string>(2);
+			linenoiseAddCompletion(lc, zLine, zCompletion.c_str(), zCompletion.size(), iStart, completion_type.c_str());
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);

@@ -141,13 +141,14 @@ void linenoiseSetPrompt(const char *continuation, const char *continuationSelect
  * user typed <tab>. See the example.c source code for a very easy to
  * understand example. */
 void linenoiseAddCompletion(linenoiseCompletions *lc, const char *zLine, const char *completion, size_t nCompletion,
-                            size_t completion_start) {
+                            size_t completion_start, const char *completion_type) {
 	auto &completions = *reinterpret_cast<duckdb::TabCompletion *>(lc);
 	duckdb::Completion c;
 	c.original_completion = duckdb::string(completion, nCompletion);
 	c.completion.reserve(completion_start + nCompletion + 1);
 	c.completion += duckdb::string(zLine, completion_start);
 	c.completion += c.original_completion;
+	c.completion_type = Linenoise::GetCompletionType(completion_type);
 	c.cursor_pos = c.completion.size();
 	completions.completions.push_back(std::move(c));
 }

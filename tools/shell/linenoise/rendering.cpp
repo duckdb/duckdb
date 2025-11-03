@@ -974,13 +974,57 @@ void Linenoise::RefreshMultiLine() {
 				}
 				auto &completion = completion_list.completions[i];
 				auto &rendered_text = completion.original_completion;
+				auto element_type = duckdb_shell::HighlightElementType::NONE;
+				switch (completion.completion_type) {
+				case CompletionType::KEYWORD:
+				case CompletionType::TYPE_NAME:
+					element_type = duckdb_shell::HighlightElementType::KEYWORD;
+					break;
+				case CompletionType::CATALOG_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_CATALOG_NAME;
+					break;
+				case CompletionType::SCHEMA_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_SCHEMA_NAME;
+					break;
+				case CompletionType::TABLE_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_TABLE_NAME;
+					break;
+				case CompletionType::COLUMN_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_COLUMN_NAME;
+					break;
+				case CompletionType::FILE_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_FILE_NAME;
+					break;
+				case CompletionType::DIRECTORY_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_DIRECTORY_NAME;
+					break;
+				case CompletionType::SCALAR_FUNCTION:
+				case CompletionType::TABLE_FUNCTION:
+				case CompletionType::PRAGMA_FUNCTION:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_FUNCTION_NAME;
+					break;
+				case CompletionType::SETTING_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_SETTING_NAME;
+					break;
+				default:
+					break;
+				}
+				auto &element = duckdb_shell::ShellHighlight::GetHighlightElement(element_type);
+				auto color = element.color;
+				auto intensity = element.intensity;
 				if (i == completion_idx) {
 					// underline selected completion
-					completion_text += "\033[4m";
+					if (intensity == duckdb_shell::PrintIntensity::BOLD) {
+						intensity = duckdb_shell::PrintIntensity::BOLD_UNDERLINE;
+					} else {
+						intensity = duckdb_shell::PrintIntensity::UNDERLINE;
+					}
 				}
+				auto terminal_text = duckdb_shell::ShellHighlight::TerminalCode(color, intensity);
+				completion_text += terminal_text;
 				completion_text += rendered_text;
-				if (i == completion_idx) {
-					completion_text += "\033[0m";
+				if (!terminal_text.empty()) {
+					completion_text += duckdb_shell::ShellHighlight::ResetTerminalCode();
 				}
 			}
 

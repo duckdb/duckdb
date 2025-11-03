@@ -62,6 +62,43 @@ linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
 	return freeHintsCallback;
 }
 
+CompletionType Linenoise::GetCompletionType(const char *type) {
+	if (StringUtil::Equals(type, "keyword")) {
+		return CompletionType::KEYWORD;
+	}
+	if (StringUtil::Equals(type, "catalog")) {
+		return CompletionType::CATALOG_NAME;
+	}
+	if (StringUtil::Equals(type, "schema")) {
+		return CompletionType::SCHEMA_NAME;
+	}
+	if (StringUtil::Equals(type, "table")) {
+		return CompletionType::TABLE_NAME;
+	}
+	if (StringUtil::Equals(type, "column")) {
+		return CompletionType::COLUMN_NAME;
+	}
+	if (StringUtil::Equals(type, "type")) {
+		return CompletionType::TYPE_NAME;
+	}
+	if (StringUtil::Equals(type, "file_name")) {
+		return CompletionType::FILE_NAME;
+	}
+	if (StringUtil::Equals(type, "directory")) {
+		return CompletionType::DIRECTORY_NAME;
+	}
+	if (StringUtil::Equals(type, "scalar_function")) {
+		return CompletionType::SCALAR_FUNCTION;
+	}
+	if (StringUtil::Equals(type, "table_function")) {
+		return CompletionType::TABLE_FUNCTION;
+	}
+	if (StringUtil::Equals(type, "setting")) {
+		return CompletionType::SETTING_NAME;
+	}
+	return CompletionType::UNKNOWN;
+}
+
 TabCompletion Linenoise::TabComplete() const {
 	TabCompletion result;
 	if (!completionCallback) {

@@ -35,10 +35,27 @@ struct searchMatch {
 	size_t match_end;
 };
 
+enum class CompletionType {
+	UNKNOWN,
+	KEYWORD,
+	CATALOG_NAME,
+	SCHEMA_NAME,
+	TABLE_NAME,
+	TYPE_NAME,
+	COLUMN_NAME,
+	FILE_NAME,
+	DIRECTORY_NAME,
+	SCALAR_FUNCTION,
+	TABLE_FUNCTION,
+	PRAGMA_FUNCTION,
+	SETTING_NAME
+};
+
 struct Completion {
 	string completion;
 	string original_completion;
 	idx_t cursor_pos;
+	CompletionType completion_type;
 };
 
 struct TabCompletion {
@@ -132,6 +149,7 @@ public:
 	static bool AllWhitespace(const char *z);
 	static bool IsSpace(char c);
 
+	static CompletionType GetCompletionType(const char *data);
 	TabCompletion TabComplete() const;
 
 	static void EnableCompletionRendering();

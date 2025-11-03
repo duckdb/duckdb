@@ -43,6 +43,39 @@ struct AutoCompleteParameters {
 	bool suggestion_contains_files = false;
 };
 
+static string GetSuggestionType(SuggestionState type) {
+	switch (type) {
+	case SuggestionState::SUGGEST_KEYWORD:
+		return "keyword";
+	case SuggestionState::SUGGEST_CATALOG_NAME:
+		return "catalog";
+	case SuggestionState::SUGGEST_SCHEMA_NAME:
+		return "schema";
+	case SuggestionState::SUGGEST_TABLE_NAME:
+		return "table";
+	case SuggestionState::SUGGEST_TYPE_NAME:
+		return "type";
+	case SuggestionState::SUGGEST_COLUMN_NAME:
+		return "column";
+	case SuggestionState::SUGGEST_FILE_NAME:
+		return "file_name";
+	case SuggestionState::SUGGEST_DIRECTORY:
+		return "directory";
+	case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+		return "scalar_function";
+	case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+		return "table_function";
+	case SuggestionState::SUGGEST_PRAGMA_NAME:
+		return "pragma_function";
+	case SuggestionState::SUGGEST_SETTING_NAME:
+		return "setting";
+	case SuggestionState::SUGGEST_RESERVED_VARIABLE:
+	case SuggestionState::SUGGEST_VARIABLE:
+	default:
+		return "";
+	}
+}
+
 static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions,
                                                          const string &prefix, AutoCompleteParameters &parameters) {
 	vector<pair<string, idx_t>> scores;
@@ -108,7 +141,8 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 		if (suggestion.extra_char != '\0') {
 			result += suggestion.extra_char;
 		}
-		results.emplace_back(std::move(result), suggestion.suggestion_pos);
+		string type = GetSuggestionType(suggestion.suggestion_type);
+		results.emplace_back(std::move(result), suggestion.suggestion_pos, std::move(type));
 	}
 	return results;
 }
@@ -163,7 +197,7 @@ static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) 
 	auto all_entries = GetAllCatalogs(context);
 	for (auto &entry_ref : all_entries) {
 		auto &entry = *entry_ref;
-		AutoCompleteCandidate candidate(entry.name, 0);
+		AutoCompleteCandidate candidate(entry.name, SuggestionState::SUGGEST_CATALOG_NAME, 0);
 		candidate.extra_char = '.';
 		suggestions.push_back(std::move(candidate));
 	}
@@ -175,7 +209,7 @@ static vector<AutoCompleteCandidate> SuggestSchemaName(ClientContext &context) {
 	auto all_entries = GetAllSchemas(context);
 	for (auto &entry_ref : all_entries) {
 		auto &entry = entry_ref.get();
-		AutoCompleteCandidate candidate(entry.name, 0);
+		AutoCompleteCandidate candidate(entry.name, SuggestionState::SUGGEST_SCHEMA_NAME, 0);
 		candidate.extra_char = '.';
 		suggestions.push_back(std::move(candidate));
 	}
@@ -189,7 +223,7 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 		auto &entry = entry_ref.get();
 		// prioritize user-defined entries (views & tables)
 		int32_t bonus = (entry.internal || entry.type == CatalogType::TABLE_FUNCTION_ENTRY) ? 0 : 1;
-		suggestions.emplace_back(entry.name, bonus);
+		suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TABLE_NAME, bonus);
 	}
 	return suggestions;
 }
@@ -197,7 +231,7 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 static vector<AutoCompleteCandidate> SuggestType(ClientContext &) {
 	vector<AutoCompleteCandidate> suggestions;
 	for (auto &type_entry : BUILTIN_TYPES) {
-		suggestions.emplace_back(type_entry.name, 0, CandidateType::KEYWORD);
+		suggestions.emplace_back(type_entry.name, SuggestionState::SUGGEST_TYPE_NAME, 0, CandidateType::KEYWORD);
 	}
 	return suggestions;
 }
@@ -210,20 +244,20 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 			auto &table = entry.Cast<TableCatalogEntry>();
 			int32_t bonus = entry.internal ? 0 : 3;
 			for (auto &col : table.GetColumns().Logical()) {
-				suggestions.emplace_back(col.GetName(), bonus);
+				suggestions.emplace_back(col.GetName(), SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 			}
 		} else if (entry.type == CatalogType::VIEW_ENTRY) {
 			auto &view = entry.Cast<ViewCatalogEntry>();
 			int32_t bonus = entry.internal ? 0 : 3;
 			for (auto &col : view.aliases) {
-				suggestions.emplace_back(col, bonus);
+				suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 			}
 		} else {
 			if (StringUtil::CharacterIsOperator(entry.name[0])) {
 				continue;
 			}
 			int32_t bonus = entry.internal ? 0 : 2;
-			suggestions.emplace_back(entry.name, bonus);
+			suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
 		};
 	}
 	return suggestions;
@@ -243,7 +277,7 @@ static vector<AutoCompleteCandidate> SuggestPragmaName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_pragmas = Catalog::GetAllEntries(context, CatalogType::PRAGMA_FUNCTION_ENTRY);
 	for (const auto &pragma : all_pragmas) {
-		AutoCompleteCandidate candidate(pragma.get().name, 0);
+		AutoCompleteCandidate candidate(pragma.get().name, SuggestionState::SUGGEST_PRAGMA_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 	return suggestions;
@@ -254,16 +288,16 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 	const auto &options = db_config.GetOptions();
 	vector<AutoCompleteCandidate> suggestions;
 	for (const auto &option : options) {
-		AutoCompleteCandidate candidate(option.name, 0);
+		AutoCompleteCandidate candidate(option.name, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 	const auto &option_aliases = db_config.GetAliases();
 	for (const auto &option_alias : option_aliases) {
-		AutoCompleteCandidate candidate(option_alias.alias, 0);
+		AutoCompleteCandidate candidate(option_alias.alias, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 	for (auto &entry : db_config.extension_parameters) {
-		AutoCompleteCandidate candidate(entry.first, 0);
+		AutoCompleteCandidate candidate(entry.first, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 	return suggestions;
@@ -273,7 +307,7 @@ static vector<AutoCompleteCandidate> SuggestScalarFunctionName(ClientContext &co
 	vector<AutoCompleteCandidate> suggestions;
 	auto scalar_functions = Catalog::GetAllEntries(context, CatalogType::SCALAR_FUNCTION_ENTRY);
 	for (const auto &scalar_function : scalar_functions) {
-		AutoCompleteCandidate candidate(scalar_function.get().name, 0);
+		AutoCompleteCandidate candidate(scalar_function.get().name, SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 
@@ -284,7 +318,7 @@ static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &con
 	vector<AutoCompleteCandidate> suggestions;
 	auto table_functions = Catalog::GetAllEntries(context, CatalogType::TABLE_FUNCTION_ENTRY);
 	for (const auto &table_function : table_functions) {
-		AutoCompleteCandidate candidate(table_function.get().name, 0);
+		AutoCompleteCandidate candidate(table_function.get().name, SuggestionState::SUGGEST_TABLE_FUNCTION_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
 
@@ -328,7 +362,8 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 		if (KnownExtension(fname)) {
 			score = 1;
 		}
-		result.emplace_back(std::move(suggestion), score);
+		auto state = is_dir ? SuggestionState::SUGGEST_DIRECTORY : SuggestionState::SUGGEST_FILE_NAME;
+		result.emplace_back(std::move(suggestion), state, score);
 		result.back().candidate_type = CandidateType::LITERAL;
 	});
 	return result;
@@ -607,6 +642,9 @@ static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &conte
 	names.emplace_back("suggestion_start");
 	return_types.emplace_back(LogicalType::INTEGER);
 
+	names.emplace_back("suggestion_type");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return GenerateSuggestions(context, StringValue::Get(input.inputs[0]), parameters);
 }
 
@@ -633,6 +671,8 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 		// suggestion_start, INTEGER
 		output.SetValue(1, count, Value::INTEGER(NumericCast<int32_t>(entry.pos)));
 
+		// suggestion_type, VARCHAR
+		output.SetValue(2, count, Value(entry.type));
 		count++;
 	}
 	output.SetCardinality(count);
