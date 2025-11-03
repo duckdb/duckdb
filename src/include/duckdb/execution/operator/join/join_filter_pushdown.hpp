@@ -74,14 +74,18 @@ public:
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
 	unique_ptr<DataChunk> Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
-	                               JoinFilterGlobalState &gstate, const PhysicalComparisonJoin &op) const;
+	                               JoinFilterGlobalState &gstate, const PhysicalComparisonJoin &op, bool push_min_max) const;
 
-	void FinalizeBF(const ClientContext &context, JoinHashTable &ht, const PhysicalComparisonJoin &op, const Value &min,
-	                const Value &max) const;
+	void FinalizeHashJoinFilters(const ClientContext &context, JoinHashTable &ht, const PhysicalComparisonJoin &op, const Value &min,
+	                const Value &max, bool is_perfect_hash_table) const;
 
 private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
 	                  idx_t filter_idx, idx_t filter_col_idx) const;
+
+	void PushMinMaxFilters(const JoinFilterPushdownFilter &info, const PhysicalOperator &op,
+	                           const ExpressionType &cmp, idx_t filter_col_idx, const Value &min_val,
+	                           const Value &max_val, bool make_optional) const;
 
 	void PushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
 	                     idx_t filter_col_idx) const;
