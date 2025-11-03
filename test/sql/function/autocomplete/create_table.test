@@ -40,13 +40,13 @@ table 	7
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTE') LIMIT 1;
 ----
-INTEGER 	19
+INTEGER	19
 
 # suggest a type in a list
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTEGER, j INTE') LIMIT 1;
 ----
-INTEGER 	30
+INTEGER	30
 
 # suggest a constraint
 query II

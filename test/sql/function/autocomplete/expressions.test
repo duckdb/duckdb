@@ -14,12 +14,12 @@ FROM 	12
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT CAST(a AS INTE') LIMIT 1;
 ----
-INTEGER 	17
+INTEGER	17
 
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT a::INTE') LIMIT 1;
 ----
-INTEGER 	10
+INTEGER	10
 
 # distinct
 query II
@@ -98,4 +98,4 @@ FROM 	82
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT a::DECIMAL(42), b::INT[3], []::INT[][][], d::ROW(i INT[], c ROW(d INTE') LIMIT 1;
 ----
-INTEGER 	73
+INTEGER	73
