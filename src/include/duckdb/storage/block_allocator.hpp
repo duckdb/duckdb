@@ -17,9 +17,12 @@ namespace duckdb {
 class Allocator;
 class AttachedDatabase;
 class DatabaseInstance;
+class BlockAllocatorThreadLocalState;
 struct BlockQueue;
 
 class BlockAllocator {
+	friend class BlockAllocatorThreadLocalState;
+
 public:
 	BlockAllocator(Allocator &allocator, bool enable, idx_t block_size, idx_t virtual_memory_size);
 	~BlockAllocator();
@@ -36,6 +39,8 @@ public:
 	data_ptr_t ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t new_size) const;
 
 	//! Flush outstanding allocations
+	bool SupportsFlush() const;
+	void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const;
 	void FlushAll() const;
 
 private:
@@ -50,6 +55,7 @@ private:
 	uint32_t GetBlockID(data_ptr_t pointer) const;
 	data_ptr_t GetPointer(uint32_t block_id) const;
 
+	void TryFreeInternal() const;
 	void FreeInternal() const;
 	void FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) const;
 

@@ -77,12 +77,109 @@ static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 }
 
 //===--------------------------------------------------------------------===//
-// BlockAllocator
+// BlockAllocatorThreadLocalState
 //===--------------------------------------------------------------------===//
 struct BlockQueue {
 	duckdb_moodycamel::ConcurrentQueue<uint32_t> q;
 };
 
+class BlockAllocatorThreadLocalState {
+public:
+	explicit BlockAllocatorThreadLocalState(const BlockAllocator &block_allocator_p)
+	    : block_allocator(block_allocator_p) {
+		untouched.reserve(BATCH_SIZE);
+		touched.reserve(FREE_THRESHOLD);
+	}
+	~BlockAllocatorThreadLocalState() {
+		Clear();
+	}
+
+public:
+	data_ptr_t Allocate() {
+		auto pointer = TryAllocateFromLocal();
+		if (pointer) {
+			return pointer;
+		}
+
+		// We have run out of local blocks
+		if (TryGetBatch(touched, *block_allocator.to_free) || TryGetBatch(touched, *block_allocator.touched) ||
+		    TryGetBatch(untouched, *block_allocator.untouched)) {
+			// We have refilled local blocks
+			pointer = TryAllocateFromLocal();
+			D_ASSERT(pointer);
+			return pointer;
+		}
+
+		// We have also run out of global blocks, use fallback allocator
+		return block_allocator.allocator.AllocateData(block_allocator.block_size);
+	}
+
+	void Free(const data_ptr_t pointer) {
+		touched.push_back(block_allocator.GetBlockID(pointer));
+		if (touched.size() < FREE_THRESHOLD) {
+			return;
+		}
+
+		// Upon reaching the threshold, we return a local batch to global
+		block_allocator.to_free->q.enqueue_bulk(touched.end() - BATCH_SIZE, BATCH_SIZE);
+		block_allocator.TryFreeInternal();
+		touched.resize(touched.size() - BATCH_SIZE);
+	}
+
+	void Clear() {
+		// Return all local blocks back to global
+		if (!touched.empty()) {
+			block_allocator.to_free->q.enqueue_bulk(touched.begin(), touched.size());
+			block_allocator.TryFreeInternal();
+			touched.clear();
+		}
+		if (!untouched.empty()) {
+			block_allocator.untouched->q.enqueue_bulk(untouched.begin(), untouched.size());
+			untouched.clear();
+		}
+	}
+
+private:
+	data_ptr_t TryAllocateFromLocal() {
+		if (!touched.empty()) {
+			const auto pointer = block_allocator.GetPointer(touched.back());
+			touched.pop_back();
+			return pointer;
+		}
+		if (!untouched.empty()) {
+			const auto pointer = block_allocator.GetPointer(untouched.back());
+			untouched.pop_back();
+			OnFirstAllocation(pointer, block_allocator.block_size);
+			return pointer;
+		}
+		return nullptr;
+	}
+
+	static bool TryGetBatch(vector<uint32_t> &local, BlockQueue &global) {
+		D_ASSERT(local.empty());
+		local.resize(BATCH_SIZE);
+		local.resize(global.q.try_dequeue_bulk(local.begin(), BATCH_SIZE));
+		return !local.empty();
+	}
+
+private:
+	const BlockAllocator &block_allocator;
+
+	static constexpr idx_t BATCH_SIZE = 128;
+	static constexpr idx_t FREE_THRESHOLD = BATCH_SIZE * 2;
+
+	vector<uint32_t> untouched;
+	vector<uint32_t> touched;
+};
+
+BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAllocator &block_allocator) {
+	thread_local BlockAllocatorThreadLocalState local_state(block_allocator);
+	return local_state;
+}
+
+//===--------------------------------------------------------------------===//
+// BlockAllocator
+//===--------------------------------------------------------------------===//
 BlockAllocator::BlockAllocator(Allocator &allocator_p, bool enable, const idx_t block_size_p,
                                const idx_t virtual_memory_size_p)
     : allocator(allocator_p), enabled(enable), block_size(block_size_p),
@@ -95,6 +192,7 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, bool enable, const idx_t 
 }
 
 BlockAllocator::~BlockAllocator() {
+	GetBlockAllocatorThreadLocalState(*this).Clear();
 	if (IsActive()) {
 		FreeVirtualMemory(virtual_memory_space, virtual_memory_size);
 	}
@@ -167,21 +265,7 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 	if (!IsActive() || !enabled.load(std::memory_order_relaxed) || size != block_size) {
 		return allocator.AllocateData(size);
 	}
-
-	// Try to get a block ID. Reuse previous blocks if possible
-	uint32_t block_id;
-	if (to_free->q.try_dequeue(block_id)) {
-		// NOP: we didn't free this one yet, can immediately reuse
-	} else if (touched->q.try_dequeue(block_id)) {
-		// Nothing to do here
-	} else if (untouched->q.try_dequeue(block_id)) {
-		OnFirstAllocation(GetPointer(block_id), size);
-	} else {
-		// We did not get a block ID, use fallback allocator
-		return allocator.AllocateData(size);
-	}
-
-	return GetPointer(block_id);
+	return GetBlockAllocatorThreadLocalState(*this).Allocate();
 }
 
 void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
@@ -189,14 +273,7 @@ void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const 
 		return allocator.FreeData(pointer, size);
 	}
 	D_ASSERT(size == block_size);
-
-	// Add to queue to free later
-	to_free->q.enqueue(GetBlockID(pointer));
-
-	// Free many blocks in one go once we exceed the threshold
-	if (to_free->q.size_approx() >= TO_FREE_SIZE_THRESHOLD) {
-		FreeInternal();
-	}
+	GetBlockAllocatorThreadLocalState(*this).Free(pointer);
 }
 
 data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t old_size, const idx_t new_size) const {
@@ -216,10 +293,28 @@ data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t 
 	return new_pointer;
 }
 
+bool BlockAllocator::SupportsFlush() const {
+	return (IsActive() && enabled.load(std::memory_order_relaxed)) || Allocator::SupportsFlush();
+}
+
+void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const {
+	GetBlockAllocatorThreadLocalState(*this).Clear();
+	if (Allocator::SupportsFlush()) {
+		Allocator::ThreadFlush(allocator_background_threads, threshold, thread_count);
+	}
+}
+
 void BlockAllocator::FlushAll() const {
 	FreeInternal();
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
+	}
+}
+
+void BlockAllocator::TryFreeInternal() const {
+	// Free many blocks in one go once we exceed the threshold
+	if (to_free->q.size_approx() >= TO_FREE_SIZE_THRESHOLD) {
+		FreeInternal();
 	}
 }
 
