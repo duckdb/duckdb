@@ -327,7 +327,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformExpressionAsCollabel);
 	REGISTER_TRANSFORM(TransformColIdExpression);
 	REGISTER_TRANSFORM(TransformExpressionOptIdentifier);
-
+	REGISTER_TRANSFORM(TransformNamedParameter);
 	REGISTER_TRANSFORM(TransformTableRef);
 	REGISTER_TRANSFORM(TransformJoinOrPivot);
 	REGISTER_TRANSFORM(TransformJoinClause);

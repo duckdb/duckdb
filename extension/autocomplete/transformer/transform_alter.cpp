@@ -225,8 +225,12 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformChangeNullability(PEG
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(PEGTransformer &transformer,
                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	LogicalType target_type;
+	LogicalType target_type = LogicalType::UNKNOWN;
 	transformer.TransformOptional<LogicalType>(list_pr, 2, target_type);
+	auto using_expr_opt = list_pr.Child<OptionalParseResult>(3);
+	if (target_type == LogicalType::UNKNOWN && !using_expr_opt.HasResult()) {
+		throw ParserException("Omitting the type is only possible in combination with USING");
+	}
 	unique_ptr<ParsedExpression> expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 3, expr);
 	return make_uniq<ChangeColumnTypeInfo>(AlterEntryData(), "", target_type, std::move(expr));

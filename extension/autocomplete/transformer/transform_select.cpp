@@ -19,7 +19,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PE
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
 	result->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
 	return result;
 }
