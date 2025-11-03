@@ -80,7 +80,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 		}
 		scores.emplace_back(str, score);
 	}
-	idx_t suggestion_count = parameters.suggestion_contains_files;
+	idx_t suggestion_count = parameters.max_suggestion_count;
 	if (parameters.suggestion_contains_files) {
 		suggestion_count = parameters.max_file_suggestion_count;
 	}
