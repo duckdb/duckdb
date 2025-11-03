@@ -47,7 +47,7 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
 	case ColumnDataAllocatorType::HYBRID:
 		alloc.buffer_manager = other.alloc.buffer_manager;
-		if (other.managed_result_set) {
+		if (other.managed_result_set.IsValid()) {
 			ResultSetManager::Get(alloc.buffer_manager->GetDatabase()).Add(*this);
 		}
 		break;
@@ -63,9 +63,9 @@ ColumnDataAllocator::~ColumnDataAllocator() {
 	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		return;
 	}
-	if (managed_result_set) {
+	if (managed_result_set.IsValid()) {
 		D_ASSERT(type != ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
-		auto db = managed_result_set->db.lock();
+		auto db = managed_result_set.GetDatabase();
 		if (db) {
 			ResultSetManager::Get(*db).Remove(*this);
 		}
@@ -259,7 +259,7 @@ void ColumnDataAllocator::SetDestroyBufferUponUnpin(uint32_t block_id) {
 }
 
 shared_ptr<DatabaseInstance> ColumnDataAllocator::GetDatabase() const {
-	return managed_result_set ? managed_result_set->db.lock() : nullptr;
+	return managed_result_set.IsValid() ? managed_result_set.GetDatabase() : nullptr;
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {
@@ -317,10 +317,9 @@ shared_ptr<BlockHandle> BlockMetaData::GetHandle() const {
 	return res;
 }
 
-void BlockMetaData::SetHandle(optional_ptr<ManagedResultSet> managed_result_set, shared_ptr<BlockHandle> handle_p) {
-	if (managed_result_set) {
-		auto &handles = managed_result_set->handles;
-		handles.emplace_back(handle_p);
+void BlockMetaData::SetHandle(ManagedResultSet &managed_result_set, shared_ptr<BlockHandle> handle_p) {
+	if (managed_result_set.IsValid()) {
+		managed_result_set.GetHandles().emplace_back(handle_p);
 		weak_handle = handle_p;
 	} else {
 		handle = std::move(handle_p);

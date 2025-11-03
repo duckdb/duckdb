@@ -9,13 +9,13 @@
 #pragma once
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
 struct ChunkMetaData;
 struct VectorMetaData;
 struct SwizzleMetaData;
-class ManagedResultSet;
 
 struct BlockMetaData {
 public:
@@ -32,7 +32,7 @@ private:
 
 public:
 	shared_ptr<BlockHandle> GetHandle() const;
-	void SetHandle(optional_ptr<ManagedResultSet> managed_result_set, shared_ptr<BlockHandle> handle);
+	void SetHandle(ManagedResultSet &managed_result_set, shared_ptr<BlockHandle> handle);
 	uint32_t Capacity();
 };
 
@@ -130,7 +130,7 @@ private:
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Lifetime management for this allocator
-	optional_ptr<ManagedResultSet> managed_result_set;
+	ManagedResultSet managed_result_set;
 };
 
 } // namespace duckdb
