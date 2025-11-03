@@ -118,6 +118,9 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 		}
 		if (!StringUtil::Contains(StringUtil::Lower(str), lower_prefix)) {
 			score += SUBSTRING_PENALTY;
+		} else if (score > 0 && StringUtil::Contains(str, prefix)) {
+			// prefer case matching if possible
+			score--;
 		}
 		scores.emplace_back(str, score);
 	}
@@ -569,6 +572,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
 	}
 	vector<AutoCompleteCandidate> available_suggestions;
+	case_insensitive_set_t seen_suggestions;
 	for (auto &suggestion : suggestions) {
 		idx_t suggestion_pos = tokenizer.last_pos;
 		// run the suggestions
@@ -617,9 +621,13 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			throw InternalException("Unrecognized suggestion state");
 		}
 		for (auto &new_suggestion : new_suggestions) {
+			if (seen_suggestions.find(new_suggestion.candidate) != seen_suggestions.end()) {
+				continue;
+			}
 			if (new_suggestion.extra_char == '\0') {
 				new_suggestion.extra_char = suggestion.extra_char;
 			}
+			seen_suggestions.insert(new_suggestion.candidate);
 			new_suggestion.suggestion_pos = suggestion_pos;
 			available_suggestions.push_back(std::move(new_suggestion));
 		}

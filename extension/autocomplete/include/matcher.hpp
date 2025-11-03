@@ -93,12 +93,11 @@ struct MatcherToken {
 
 struct MatcherSuggestion {
 	// NOLINTNEXTLINE: allow implicit conversion from auto-complete candidate
-	MatcherSuggestion(AutoCompleteCandidate keyword_p)
-	    : keyword(std::move(keyword_p)), type(SuggestionState::SUGGEST_KEYWORD) {
+	MatcherSuggestion(AutoCompleteCandidate keyword_p) : keyword(std::move(keyword_p)), type(keyword.suggestion_type) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from suggestion state
 	MatcherSuggestion(SuggestionState type, char extra_char = '\0')
-	    : keyword("", SuggestionState::SUGGEST_KEYWORD), type(type), extra_char(extra_char) {
+	    : keyword("", type), type(type), extra_char(extra_char) {
 	}
 
 	//! Literal suggestion
