@@ -63,6 +63,7 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformAlterOptions);
 	REGISTER_TRANSFORM(TransformAlterTableStmt);
 	REGISTER_TRANSFORM(TransformAlterViewStmt);
+	REGISTER_TRANSFORM(TransformAlterDatabaseStmt);
 	REGISTER_TRANSFORM(TransformAlterSequenceStmt);
 	REGISTER_TRANSFORM(TransformAlterSequenceOptions);
 	REGISTER_TRANSFORM(TransformSetSequenceOption);

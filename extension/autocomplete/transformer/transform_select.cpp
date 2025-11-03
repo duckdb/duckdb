@@ -543,18 +543,20 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformTableStatement(PEGTr
 	return result;
 }
 
-
-vector<OrderByNode> PEGTransformerFactory::TransformOrderByClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<OrderByNode> PEGTransformerFactory::TransformOrderByClause(PEGTransformer &transformer,
+                                                                  optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<vector<OrderByNode>>(list_pr.Child<ListParseResult>(2));
 }
 
-vector<OrderByNode> PEGTransformerFactory::TransformOrderByExpressions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<OrderByNode> PEGTransformerFactory::TransformOrderByExpressions(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<vector<OrderByNode>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-vector<OrderByNode> PEGTransformerFactory::TransformOrderByExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<OrderByNode> PEGTransformerFactory::TransformOrderByExpressionList(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<OrderByNode> result;
 	auto expr_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
@@ -564,7 +566,8 @@ vector<OrderByNode> PEGTransformerFactory::TransformOrderByExpressionList(PEGTra
 	return result;
 }
 
-vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &transformer,
+                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<OrderByNode> result;
 	auto order_type = OrderType::ORDER_DEFAULT;
@@ -583,7 +586,8 @@ vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &t
 	return result;
 }
 
-OrderByNode PEGTransformerFactory::TransformOrderByExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+OrderByNode PEGTransformerFactory::TransformOrderByExpression(PEGTransformer &transformer,
+                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto order_type = OrderType::ORDER_DEFAULT;
@@ -593,12 +597,14 @@ OrderByNode PEGTransformerFactory::TransformOrderByExpression(PEGTransformer &tr
 	return OrderByNode(order_type, order_by_null_type, std::move(expr));
 }
 
-OrderType PEGTransformerFactory::TransformDescOrAsc(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+OrderType PEGTransformerFactory::TransformDescOrAsc(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<OrderType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-OrderByNullType PEGTransformerFactory::TransformNullsFirstOrLast(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+OrderByNullType PEGTransformerFactory::TransformNullsFirstOrLast(PEGTransformer &transformer,
+                                                                 optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<OrderByNullType>(list_pr.Child<ChoiceParseResult>(0).result);
 }

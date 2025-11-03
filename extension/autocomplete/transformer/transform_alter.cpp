@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_database_info.hpp"
 
 namespace duckdb {
 
@@ -34,6 +35,18 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterTableStmt(PEGTransfor
 	result->name = table->table_name;
 
 	return std::move(result);
+}
+
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTransformer &transformer,
+		optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	OnEntryNotFound not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+
+	auto catalog_name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	auto new_name = list_pr.Child<IdentifierParseResult>(5).identifier;
+	auto result = make_uniq<RenameDatabaseInfo>(catalog_name, new_name, not_found);
+	return result;
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransformer &transformer,
