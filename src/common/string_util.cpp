@@ -403,7 +403,7 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_
 		if (a.second != b.second) {
 			return a.second > b.second;
 		}
-		return StringUtil::Lower(a.first) < StringUtil::Lower(b.first);
+		return StringUtil::CILessThan(a.first, b.first);
 	});
 	vector<string> result;
 	result.push_back(scores[0].first);
