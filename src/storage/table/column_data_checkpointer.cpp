@@ -109,9 +109,10 @@ CompressionType ForceCompression(StorageManager &storage_manager,
                                  CompressionType compression_type) {
 	// One of the force_compression flags has been set
 	// check if this compression method is available
-	// if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
+	// auto compression_availability_result = CompressionTypeIsAvailable(compression_type, storage_manager);
+	// if (!compression_availability_result.IsAvailable()) {
 	//	throw InvalidInputException("The forced compression method (%s) is not available in the current storage
-	// version", 	                            CompressionTypeToString(compression_type));
+	// version", CompressionTypeToString(compression_type));
 	//}
 
 	bool found = false;
