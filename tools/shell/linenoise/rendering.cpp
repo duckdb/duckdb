@@ -944,7 +944,7 @@ void Linenoise::RefreshMultiLine() {
 	Linenoise::Log("\n");
 	old_cursor_rows = new_cursor_row;
 
-	if (rendered_completion_lines > 0 || !completion_list.completions.empty()) {
+	if (rendered_completion_lines > 0 || (render_completion_suggestion && !completion_list.completions.empty())) {
 		// if we are tab-completing - write the list of completions one line below
 		if (rendered_completion_lines == 0) {
 			// move to the next line if we haven't rendered completions yet

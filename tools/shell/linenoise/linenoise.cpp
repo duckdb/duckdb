@@ -86,6 +86,8 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 
 	completion_list = TabComplete();
 	auto &completions = completion_list.completions;
+	// we only start rendering completion suggestions once we start tabbing through them
+	render_completion_suggestion = false;
 	if (completions.empty()) {
 		Terminal::Beep();
 	} else {
@@ -120,6 +122,7 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 			switch (c) {
 			case TAB: /* tab */
 				completion_idx = (completion_idx + 1) % completions.size();
+				render_completion_suggestion = true;
 				break;
 			case ESC: { /* escape */
 				auto escape = Terminal::ReadEscapeSequence(ifd);
@@ -130,10 +133,12 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 						// pressing shift-tab at the first completion cancels completion
 						RefreshLine();
 						current_sequence = escape;
+						c = ENTER;
 						stop = true;
 					} else {
 						completion_idx--;
 					}
+					render_completion_suggestion = true;
 					break;
 				case EscapeSequence::ESCAPE:
 					/* Re-show original buffer */
@@ -995,6 +1000,9 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	continuation_markers = true;
 	insert = false;
 	search_index = 0;
+	completion_idx = 0;
+	rendered_completion_lines = 0;
+	render_completion_suggestion = false;
 
 	/* Buffer starts empty. */
 	buf[0] = '\0';
