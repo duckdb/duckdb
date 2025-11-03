@@ -317,6 +317,9 @@ void QueryProfiler::EndQuery() {
 
 	guard.unlock();
 
+	// To log is inexpensive, whether to log or not depends on whether logging is active
+	ToLog();
+
 	if (emit_output) {
 		string tree = ToString();
 		auto save_location = GetSaveLocation();
@@ -648,7 +651,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	profiler.operator_infos.clear();
 }
 
-void QueryProfiler::SetInfo(const double &blocked_thread_time) {
+void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -880,6 +883,19 @@ static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val 
 	}
 	auto result = string(json_holder.stringified_json);
 	return result;
+}
+
+void QueryProfiler::ToLog() const {
+	lock_guard<std::mutex> guard(lock);
+
+	if (!root) {
+		// No root, not much to do
+		return;
+	}
+
+	auto &settings = root->GetProfilingInfo();
+
+	settings.WriteMetricsToLog(context);
 }
 
 string QueryProfiler::ToJSON() const {

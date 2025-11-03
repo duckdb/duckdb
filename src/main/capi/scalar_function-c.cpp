@@ -28,6 +28,7 @@ struct CScalarFunctionInfo : public ScalarFunctionInfo {
 struct CScalarFunctionBindData : public FunctionData {
 	explicit CScalarFunctionBindData(CScalarFunctionInfo &info) : info(info) {
 	}
+
 	~CScalarFunctionBindData() override {
 		if (bind_data && delete_callback) {
 			delete_callback(bind_data);
@@ -45,6 +46,7 @@ struct CScalarFunctionBindData : public FunctionData {
 		}
 		return std::move(copy);
 	}
+
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<CScalarFunctionBindData>();
 		return info.extra_info == other.info.extra_info && info.function == other.info.function;

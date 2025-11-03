@@ -85,6 +85,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "shell_prompt.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
 #endif
@@ -151,10 +152,6 @@
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
 
-using duckdb::KeywordHelper;
-using duckdb::SQLIdentifier;
-using duckdb::SQLString;
-using duckdb::StringUtil;
 using namespace duckdb_shell;
 
 #if defined(_WIN32) || defined(WIN32)
@@ -235,8 +232,8 @@ static bool enableTimer = false;
 
 /* Return the current wall-clock time */
 static int64_t timeOfDay(void) {
-	using namespace std::chrono;
-	return (int64_t)duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	auto current_time = std::chrono::system_clock::now().time_since_epoch();
+	return (int64_t)std::chrono::duration_cast<std::chrono::milliseconds>(current_time).count();
 }
 
 #if !defined(_WIN32) && !defined(WIN32) && !defined(__minux)
@@ -378,69 +375,14 @@ static void endTimer(void) {
 */
 #define ArraySize(X) (int)(sizeof(X) / sizeof(X[0]))
 
-/*
-** If the following flag is set, then command execution stops at an error
-** if we are not interactive, including any error in processed files.
-*/
-static bool bail_on_error = false;
-
-/*
-** Treat stdin as an interactive input if the following variable
-** is true.  Otherwise, assume stdin is connected to a file or pipe.
-*/
-static bool stdin_is_interactive = true;
-
-/*
-** On Windows systems we have to know if standard output is a console
-** in order to translate UTF-8 into MBCS.  The following variable is
-** true if translation is required.
-*/
-static bool stdout_is_console = true;
-static bool stderr_is_console = true;
-
-/*
-** The following is the open database.  We make a pointer
-** to this database a static variable so that it can be accessed
-** by the SIGINT handler to interrupt database processing.
-*/
-static duckdb_shell::ShellState *globalState = nullptr;
-
-/*
-** True if an interrupt (Control-C) has been received.
-*/
-static volatile int seenInterrupt = 0;
-
-/*
-** This is the name of our program. It is set in main(), used
-** in a number of other places, mostly for error messages.
-*/
-static const char *program_name;
-
-enum class OptionType { DEFAULT, ON, OFF };
-
-/*
-** Whether or not we are running in safe mode
-*/
-static bool safe_mode = false;
-
-/*
-** Whether or not we are highlighting errors
-*/
-static OptionType highlight_errors = OptionType::DEFAULT;
-
-static bool HighlightErrors() {
+bool ShellState::HighlightErrors() const {
 	if (highlight_errors == OptionType::DEFAULT) {
 		return stderr_is_console;
 	}
 	return highlight_errors == OptionType::ON;
 }
 
-/*
-** Whether or not we are highlighting results
-*/
-static OptionType highlight_results = OptionType::DEFAULT;
-
-static bool HighlightResults() {
+bool ShellState::HighlightResults() const {
 	if (highlight_results == OptionType::DEFAULT) {
 		return stdout_is_console;
 	}
@@ -448,25 +390,16 @@ static bool HighlightResults() {
 }
 
 /*
-** Prompt strings. Initialized in main. Settable with
-**   .prompt main continue
-*/
-static char mainPrompt[20];             /* First line prompt. default: "D "*/
-static char continuePrompt[20];         /* Continuation prompt. default: "   ...> " */
-static char continuePromptSelected[20]; /* Selected continuation prompt. default: "   ...> " */
-
-/*
 ** Render output like fprintf().  Except, if the output is going to the
 ** console and if this is running on a Windows machine, translate the
 ** output from UTF-8 into MBCS.
 */
 #if defined(_WIN32) || defined(WIN32)
-static int win_utf8_mode = 0;
-
 void utf8_printf(FILE *out, const char *zFormat, ...) {
 	va_list ap;
 	va_start(ap, zFormat);
-	if (stdout_is_console && (out == stdout || out == stderr)) {
+	auto &state = ShellState::Get();
+	if (state.stdout_is_console && (out == stdout || out == stderr)) {
 		char buffer[2048];
 		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
 		const char *z1;
@@ -478,7 +411,7 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 		} else {
 			z1 = buffer;
 		}
-		if (win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
+		if (state.win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
 			// we can write UTF8 directly
 			fputs(z1, out);
 		} else {
@@ -494,29 +427,6 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 #elif !defined(utf8_printf)
 #define utf8_printf fprintf
 #endif
-
-/*
-** Render output like fprintf().  This should not be used on anything that
-** includes string formatting (e.g. "%s").
-*/
-#if !defined(raw_printf)
-#define raw_printf fprintf
-#endif
-
-/* Indicate out-of-memory and exit. */
-static void shell_out_of_memory(void) {
-	raw_printf(stderr, "Error: out of memory\n");
-	exit(1);
-}
-
-ShellState::ShellState() {
-	config.error_manager->AddCustomError(
-	    duckdb::ErrorType::UNSIGNED_EXTENSION,
-	    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
-	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
-	    "(e.g. duckdb -unsigned).");
-	nullValue = "NULL";
-}
 
 void ShellState::Print(PrintOutput output, const char *str) {
 	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
@@ -538,13 +448,37 @@ void ShellState::PrintPadded(const char *str, idx_t len) {
 	utf8_printf(out, "%*s", int(len), str);
 }
 
+/* Indicate out-of-memory and exit. */
+static void shell_out_of_memory(void) {
+	fprintf(stderr, "Error: out of memory\n");
+	exit(1);
+}
+
+ShellState::ShellState() : seenInterrupt(0) {
+	config.error_manager->AddCustomError(
+	    duckdb::ErrorType::UNSIGNED_EXTENSION,
+	    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
+	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
+	    "(e.g. duckdb -unsigned).");
+	nullValue = "NULL";
+}
+
+ShellState::~ShellState() {
+}
+
+void ShellState::Destroy() {
+	db.reset();
+	conn.reset();
+	last_result.reset();
+}
+
 /*
 ** Output string zUtf to stream pOut as w characters.  If w is negative,
 ** then right-justify the text.  W is the width in UTF-8 characters, not
 ** in bytes.  This is different from the %*.*s specification in printf
 ** since with %*.*s the width is measured in bytes, not characters.
 */
-void ShellState::UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool right_align) {
+void ShellState::UTF8WidthPrint(idx_t w, const string &str, bool right_align) {
 	auto zUtf = str.c_str();
 	int i;
 	int n;
@@ -565,11 +499,11 @@ void ShellState::UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool rig
 			}
 		}
 	if (n >= aw) {
-		utf8_printf(pOut, "%.*s", i, zUtf);
+		utf8_printf(out, "%.*s", i, zUtf);
 	} else if (right_align) {
-		utf8_printf(pOut, "%*s%s", aw - n, "", zUtf);
+		utf8_printf(out, "%*s%s", aw - n, "", zUtf);
 	} else {
-		utf8_printf(pOut, "%s%*s", zUtf, aw - n, "");
+		utf8_printf(out, "%s%*s", zUtf, aw - n, "");
 	}
 }
 
@@ -592,14 +526,19 @@ idx_t ShellState::StringLength(const char *z) {
 /*
 ** Return the length of a string in characters.
 */
+bool ShellState::IsCharacter(char c) {
+	return (c & 0xc0) != 0x80;
+}
+
 idx_t ShellState::RenderLength(const char *z) {
 #ifdef HAVE_LINENOISE
 	return linenoiseComputeRenderWidth(z, strlen(z));
 #else
 	int n = 0;
-	while (*z) {
-		if ((0xc0 & *(z++)) != 0x80)
+	for (; *z; z++) {
+		if (IsCharacter(*z)) {
 			n++;
+		}
 	}
 	return n;
 #endif
@@ -658,9 +597,10 @@ static char *local_getline(char *zLine, FILE *in) {
 	idx_t n = 0;
 
 #if defined(_WIN32) || defined(WIN32)
-	int is_stdin = stdin_is_interactive && in == stdin;
+	auto &state = ShellState::Get();
+	int is_stdin = state.stdin_is_interactive && in == stdin;
 	int is_utf8 = 0;
-	if (is_stdin && win_utf8_mode) {
+	if (is_stdin && state.win_utf8_mode) {
 		if (SetConsoleCP(CP_UTF8)) {
 			is_utf8 = 1;
 		}
@@ -670,8 +610,9 @@ static char *local_getline(char *zLine, FILE *in) {
 		if (n + 100 > nLine) {
 			nLine = nLine * 2 + 100;
 			zLine = (char *)realloc(zLine, nLine);
-			if (zLine == 0)
+			if (!zLine) {
 				shell_out_of_memory();
+			}
 		}
 		if (fgets(&zLine[n], nLine - n, in) == 0) {
 			if (n == 0) {
@@ -724,17 +665,28 @@ static char *local_getline(char *zLine, FILE *in) {
 ** zPrior argument for reuse.
 */
 static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
-	char *zPrompt;
 	char *zResult;
 	if (in != 0) {
 		zResult = local_getline(zPrior, in);
 	} else {
-		zPrompt = isContinuation ? continuePrompt : mainPrompt;
+		auto &state = ShellState::Get();
 #if SHELL_USE_LOCAL_GETLINE
-		printf("%s", zPrompt);
+		if (!isContinuation) {
+			state.main_prompt->PrintPrompt(state, PrintOutput::STDOUT);
+		} else {
+			state.Print(state.continuePrompt);
+		}
 		fflush(stdout);
 		zResult = local_getline(zPrior, stdin);
 #else
+		string main_prompt;
+		const char *zPrompt;
+		if (!isContinuation) {
+			main_prompt = state.main_prompt->GeneratePrompt(state);
+			zPrompt = main_prompt.c_str();
+		} else {
+			zPrompt = state.continuePrompt;
+		}
 		free(zPrior);
 		zResult = shell_readline(zPrompt);
 #endif
@@ -747,12 +699,15 @@ static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
 ** is not a hex digit.
 */
 static int hexDigitValue(char c) {
-	if (c >= '0' && c <= '9')
+	if (c >= '0' && c <= '9') {
 		return c - '0';
-	if (c >= 'a' && c <= 'f')
+	}
+	if (c >= 'a' && c <= 'f') {
 		return c - 'a' + 10;
-	if (c >= 'A' && c <= 'F')
+	}
+	if (c >= 'A' && c <= 'F') {
 		return c - 'A' + 10;
+	}
 	return -1;
 }
 
@@ -800,9 +755,12 @@ int64_t ShellState::StringToInt(const string &arg) {
 	return isNeg ? -v : v;
 }
 
-static const char *modeDescr[] = {"line",     "column", "list",    "semi",  "html",        "insert",    "quote",
-                                  "tcl",      "csv",    "explain", "ascii", "prettyprint", "eqp",       "json",
-                                  "markdown", "table",  "box",     "latex", "trash",       "jsonlines", "duckbox"};
+string ShellState::ModeToString(RenderMode mode) {
+	static const char *modeDescr[] = {"line",     "column", "list",    "semi",  "html",        "insert",    "quote",
+	                                  "tcl",      "csv",    "explain", "ascii", "prettyprint", "eqp",       "json",
+	                                  "markdown", "table",  "box",     "latex", "trash",       "jsonlines", "duckbox"};
+	return modeDescr[int(mode)];
+}
 
 /*
 ** These are the column/row/line separators used by the various
@@ -840,11 +798,11 @@ void ShellState::PopOutputMode() {
 void ShellState::OutputHexBlob(const void *pBlob, int nBlob) {
 	int i;
 	char *zBlob = (char *)pBlob;
-	raw_printf(out, "X'");
+	PrintF("X'");
 	for (i = 0; i < nBlob; i++) {
-		raw_printf(out, "%02x", zBlob[i] & 0xff);
+		PrintF("%02x", zBlob[i] & 0xff);
 	}
-	raw_printf(out, "'");
+	PrintF("'");
 }
 
 /*
@@ -859,20 +817,20 @@ void ShellState::OutputQuotedString(const char *z) {
 	for (i = 0; (c = z[i]) != 0 && c != '\''; i++) {
 	}
 	if (c == 0) {
-		utf8_printf(out, "'%s'", z);
+		PrintF("'%s'", z);
 	} else {
-		raw_printf(out, "'");
+		PrintF("'");
 		while (*z) {
 			for (i = 0; (c = z[i]) != 0 && c != '\''; i++) {
 			}
 			if (c == '\'')
 				i++;
 			if (i) {
-				utf8_printf(out, "%.*s", i, z);
+				PrintF("%.*s", i, z);
 				z += i;
 			}
 			if (c == '\'') {
-				raw_printf(out, "'");
+				PrintF("'");
 				continue;
 			}
 			if (c == 0) {
@@ -880,7 +838,7 @@ void ShellState::OutputQuotedString(const char *z) {
 			}
 			z++;
 		}
-		raw_printf(out, "'");
+		PrintF("'");
 	}
 	SetTextMode();
 }
@@ -908,7 +866,7 @@ void ShellState::OutputQuotedEscapedString(const char *z) {
 		}
 	}
 	if (!needs_quoting) {
-		utf8_printf(out, "'%s'", z);
+		PrintF("'%s'", z);
 		return;
 	}
 	string res;
@@ -943,7 +901,7 @@ void ShellState::OutputQuotedEscapedString(const char *z) {
 	if (needs_concat) {
 		res += ")";
 	}
-	utf8_printf(out, "%s", res.c_str());
+	PrintF("%s", res.c_str());
 }
 
 /*
@@ -969,7 +927,7 @@ void ShellState::OutputCString(const char *z) {
 			fputc('\\', out);
 			fputc('r', out);
 		} else if (!isprint(c & 0xff)) {
-			raw_printf(out, "\\%03o", c & 0xff);
+			PrintF("\\%03o", c & 0xff);
 		} else {
 			fputc(c, out);
 		}
@@ -1003,7 +961,7 @@ void ShellState::OutputJSONString(const char *z, int n) {
 			} else if (c == '\t') {
 				fputc('t', out);
 			} else {
-				raw_printf(out, "u%04x", c);
+				PrintF("u%04x", c);
 			}
 		} else {
 			fputc(c, out);
@@ -1066,12 +1024,13 @@ void ShellState::OutputCSV(const char *z, int bSep) {
 */
 static void interrupt_handler(int NotUsed) {
 	UNUSED_PARAMETER(NotUsed);
-	seenInterrupt++;
-	if (seenInterrupt > 2) {
+	auto &state = ShellState::Get();
+	state.seenInterrupt++;
+	if (state.seenInterrupt > 2) {
 		exit(1);
 	}
-	if (globalState && globalState->conn) {
-		globalState->conn->Interrupt();
+	if (state.conn) {
+		state.conn->Interrupt();
 	}
 }
 
@@ -1100,9 +1059,9 @@ void ShellState::PrintSchemaLine(const char *z, const char *zTail) {
 		return;
 	}
 	if (StringGlob("CREATE TABLE ['\"]*", z)) {
-		utf8_printf(out, "CREATE TABLE IF NOT EXISTS %s%s", z + 13, zTail);
+		PrintF("CREATE TABLE IF NOT EXISTS %s%s", z + 13, zTail);
 	} else {
-		utf8_printf(out, "%s%s", z, zTail);
+		PrintF("%s%s", z, zTail);
 	}
 }
 void ShellState::PrintSchemaLineN(char *z, int n, const char *zTail) {
@@ -1122,7 +1081,7 @@ void ShellState::PrintDashes(idx_t N) {
 		fputs(zDash, out);
 		N -= nDash;
 	}
-	raw_printf(out, "%.*s", static_cast<int>(N), zDash);
+	utf8_printf(out, "%.*s", static_cast<int>(N), zDash);
 }
 
 /*
@@ -1212,7 +1171,7 @@ void ShellState::RunTableDumpQuery(const string &zSelect) {
 	auto &con = *conn;
 	auto result = con.Query(zSelect);
 	if (result->HasError()) {
-		utf8_printf(out, "/**** ERROR: %s *****/\n", result->GetError().c_str());
+		PrintF("/**** ERROR: %s *****/\n", result->GetError().c_str());
 		AddError();
 		return;
 	}
@@ -1227,41 +1186,11 @@ void ShellState::RunTableDumpQuery(const string &zSelect) {
 			z++;
 		}
 		if (z[0]) {
-			raw_printf(out, "\n;\n");
+			PrintF("\n;\n");
 		} else {
-			raw_printf(out, ";\n");
+			PrintF(";\n");
 		}
 	}
-}
-
-string ShellState::strdup_handle_newline(const char *z) {
-	static constexpr idx_t MAX_SIZE = 80;
-	if (!z) {
-		return nullValue;
-	}
-	if (cMode != RenderMode::BOX) {
-		return z;
-	}
-	string result;
-	idx_t count = 0;
-	bool interrupted = false;
-	for (const char *s = z; *s; s++) {
-		if (*s == '\n') {
-			result += "\\";
-			result += "n";
-		} else {
-			result += *s;
-		}
-		count++;
-		if (count >= MAX_SIZE && ((*s & 0xc0) != 0x80)) {
-			interrupted = true;
-			break;
-		}
-	}
-	if (interrupted) {
-		result += "...";
-	}
-	return result;
 }
 
 bool ShellState::ColumnTypeIsInteger(const char *type) {
@@ -1348,7 +1277,7 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 	}
 	for (auto &row : query_result) {
 		if (seenInterrupt) {
-			utf8_printf(out, "Interrupt\n");
+			PrintF("Interrupt\n");
 			return SuccessState::FAILURE;
 		}
 		result.is_null.clear();
@@ -1368,12 +1297,12 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 	return SuccessState::SUCCESS;
 }
 
-void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult &result) {
+void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result) {
 	// fetch the column count, column names and types
 	result.column_count = res.ColumnCount();
 	result.data.reserve(result.column_count * 4);
 	for (idx_t c = 0; c < result.column_count; c++) {
-		result.data.push_back(strdup_handle_newline(res.names[c].c_str()));
+		result.data.push_back(renderer.ConvertValue(res.names[c].c_str()));
 		result.types.push_back(res.types[c]);
 		result.type_names.push_back(GetTypeName(res.types[c]));
 	}
@@ -1381,7 +1310,7 @@ void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult 
 	for (auto &row : res) {
 		for (idx_t c = 0; c < result.column_count; c++) {
 			auto str_val = row.GetValue<string>(c);
-			result.data.push_back(strdup_handle_newline(str_val.c_str()));
+			result.data.push_back(renderer.ConvertValue(str_val.c_str()));
 		}
 	}
 
@@ -1417,9 +1346,9 @@ void ShellState::ConvertColumnarResult(duckdb::QueryResult &res, ColumnarResult 
 */
 void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
 	ColumnarResult result;
-	ConvertColumnarResult(res, result);
-
 	auto column_renderer = GetColumnRenderer();
+	ConvertColumnarResult(*column_renderer, res, result);
+
 	column_renderer->RenderHeader(result);
 	auto colSep = column_renderer->GetColumnSeparator();
 	auto rowSep = column_renderer->GetRowSeparator();
@@ -1431,7 +1360,7 @@ void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
 		}
 		idx_t w = result.column_width[j];
 		bool right_align = result.right_align[j];
-		UTF8WidthPrint(out, w, result.data[i], right_align);
+		UTF8WidthPrint(w, result.data[i], right_align);
 		if (j == result.column_count - 1) {
 			Print(rowSep);
 			j = -1;
@@ -1485,7 +1414,7 @@ public:
 		if (highlight) {
 			shell_highlight.PrintText(text, output, element_type);
 		} else {
-			utf8_printf(shell_highlight.state.out, "%s", text.c_str());
+			shell_highlight.state.Print(text);
 		}
 	}
 
@@ -1496,7 +1425,8 @@ private:
 };
 
 ShellState &ShellState::Get() {
-	return *globalState;
+	static ShellState state;
+	return state;
 }
 
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
@@ -1514,7 +1444,6 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		result = con.Query(std::move(statement));
 	}
 	auto &res = *result;
-	;
 	if (res.HasError()) {
 		PrintDatabaseError(res.GetError());
 		return SuccessState::FAILURE;
@@ -1610,7 +1539,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 
 			/* echo the sql statement if echo on */
 			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
-				utf8_printf(out, "%s\n", !zStmtSql.empty() ? zStmtSql.c_str() : zSql.c_str());
+				PrintF("%s\n", !zStmtSql.empty() ? zStmtSql.c_str() : zSql.c_str());
 			}
 
 			cMode = mode;
@@ -1755,7 +1684,7 @@ SuccessState ShellState::ExecuteQuery(const string &query) {
 	auto &con = *conn;
 	auto res = con.Query(query);
 	if (res->HasError()) {
-		utf8_printf(stderr, "Failed to execute query \"%s\": %s\n", query.c_str(), res->GetError().c_str());
+		PrintF(PrintOutput::STDERR, "Failed to execute query \"%s\": %s\n", query.c_str(), res->GetError().c_str());
 		return SuccessState::FAILURE;
 	}
 	return SuccessState::SUCCESS;
@@ -1853,7 +1782,7 @@ static string resolve_backslashes(const string &z) {
 ** Interpret zArg as either an integer or a boolean value.  Return 1 or 0
 ** for TRUE and FALSE.  Return the integer value if appropriate.
 */
-static bool booleanValue(const string &zArg) {
+bool ShellState::StringToBool(const string &zArg) {
 	idx_t i;
 	if (zArg[0] == '0' && zArg[1] == 'x') {
 		for (i = 2; hexDigitValue(zArg[i]) >= 0; i++) {
@@ -1871,7 +1800,7 @@ static bool booleanValue(const string &zArg) {
 	if (StringUtil::CIEquals(zArg, "off") || StringUtil::CIEquals(zArg, "no")) {
 		return false;
 	}
-	utf8_printf(stderr, "ERROR: Not a boolean value: \"%s\". Assuming \"no\".\n", zArg.c_str());
+	PrintF(PrintOutput::STDERR, "ERROR: Not a boolean value: \"%s\". Assuming \"no\".\n", zArg.c_str());
 	return false;
 }
 
@@ -1879,7 +1808,7 @@ static bool booleanValue(const string &zArg) {
 ** Set or clear a shell flag according to a boolean value.
 */
 void ShellState::SetOrClearFlag(ShellFlags mFlag, const string &zArg) {
-	if (booleanValue(zArg)) {
+	if (StringToBool(zArg)) {
 		ShellSetFlag(mFlag);
 	} else {
 		ShellClearFlag(mFlag);
@@ -1889,9 +1818,10 @@ void ShellState::SetOrClearFlag(ShellFlags mFlag, const string &zArg) {
 /*
 ** Close an output file, assuming it is not stderr or stdout
 */
-static void output_file_close(FILE *f) {
-	if (f && f != stdout && f != stderr)
+void ShellState::CloseOutputFile(FILE *f) {
+	if (f && f != stdout && f != stderr) {
 		fclose(f);
+	}
 }
 
 /*
@@ -1899,7 +1829,7 @@ static void output_file_close(FILE *f) {
 ** recognized and do the right thing.  NULL is returned if the output
 ** filename is "off".
 */
-static FILE *output_file_open(const char *zFile, int bTextMode) {
+FILE *ShellState::OpenOutputFile(const char *zFile, int bTextMode) {
 	FILE *f = nullptr;
 	if (strcmp(zFile, "stdout") == 0) {
 		f = stdout;
@@ -1911,166 +1841,10 @@ static FILE *output_file_open(const char *zFile, int bTextMode) {
 		const string expanded_path = duckdb::FileSystem::ExpandPath(zFile, /*opener=*/nullptr);
 		f = fopen(expanded_path.c_str(), bTextMode ? "w" : "wb");
 		if (f == 0) {
-			utf8_printf(stderr, "Error: cannot open \"%s\"\n", zFile);
+			PrintF(PrintOutput::STDERR, "Error: cannot open \"%s\"\n", zFile);
 		}
 	}
 	return f;
-}
-
-/*
-** An object used to read a CSV and other files for import.
-*/
-typedef struct ImportCtx ImportCtx;
-struct ImportCtx {
-	const char *zFile;      /* Name of the input file */
-	FILE *in;               /* Read the CSV text from this input stream */
-	int (*xCloser)(FILE *); /* Func to close in */
-	string z;
-	int nLine;     /* Current line number */
-	int nRow;      /* Number of rows imported */
-	int nErr;      /* Number of errors encountered */
-	int bNotFirst; /* True if one or more bytes already read */
-	int cTerm;     /* Character that terminated the most recent field */
-	int cColSep;   /* The column separator character.  (Usually ",") */
-	int cRowSep;   /* The row separator character.  (Usually "\n") */
-
-	void AddError() {
-		nErr++;
-	}
-};
-
-/* Clean up resourced used by an ImportCtx */
-static void import_cleanup(ImportCtx *p) {
-	if (p->in != 0 && p->xCloser != 0) {
-		p->xCloser(p->in);
-		p->in = 0;
-	}
-	p->z = string();
-}
-
-/* Append a single byte to z[] */
-static void import_append_char(ImportCtx *p, int c) {
-	p->z += char(c);
-}
-
-/* Read a single field of CSV text.  Compatible with rfc4180 and extended
-** with the option of having a separator other than ",".
-**
-**   +  Input comes from p->in.
-**   +  Store results in p->z of length p->n.
-**   +  Use p->cSep as the column separator.  The default is ",".
-**   +  Use p->rSep as the row separator.  The default is "\n".
-**   +  Keep track of the line number in p->nLine.
-**   +  Store the character that terminates the field in p->cTerm.  Store
-**      EOF on end-of-file.
-**   +  Report syntax errors on stderr
-*/
-static const char *csv_read_one_field(ImportCtx *p) {
-	int c;
-	int cSep = p->cColSep;
-	int rSep = p->cRowSep;
-	p->z.clear();
-	c = fgetc(p->in);
-	if (c == EOF || seenInterrupt) {
-		p->cTerm = EOF;
-		return 0;
-	}
-	if (c == '"') {
-		int pc, ppc;
-		int startLine = p->nLine;
-		int cQuote = c;
-		pc = ppc = 0;
-		while (1) {
-			c = fgetc(p->in);
-			if (c == rSep)
-				p->nLine++;
-			if (c == cQuote) {
-				if (pc == cQuote) {
-					pc = 0;
-					continue;
-				}
-			}
-			if ((c == cSep && pc == cQuote) || (c == rSep && pc == cQuote) ||
-			    (c == rSep && pc == '\r' && ppc == cQuote) || (c == EOF && pc == cQuote)) {
-				do {
-					p->z.pop_back();
-				} while (!p->z.empty() && p->z.back() != cQuote);
-				p->cTerm = c;
-				break;
-			}
-			if (pc == cQuote && c != '\r') {
-				utf8_printf(stderr, "%s:%d: unescaped %c character\n", p->zFile, p->nLine, cQuote);
-			}
-			if (c == EOF) {
-				utf8_printf(stderr, "%s:%d: unterminated %c-quoted field\n", p->zFile, startLine, cQuote);
-				p->cTerm = c;
-				break;
-			}
-			import_append_char(p, c);
-			ppc = pc;
-			pc = c;
-		}
-	} else {
-		/* If this is the first field being parsed and it begins with the
-		** UTF-8 BOM  (0xEF BB BF) then skip the BOM */
-		if ((c & 0xff) == 0xef && p->bNotFirst == 0) {
-			import_append_char(p, c);
-			c = fgetc(p->in);
-			if ((c & 0xff) == 0xbb) {
-				import_append_char(p, c);
-				c = fgetc(p->in);
-				if ((c & 0xff) == 0xbf) {
-					p->bNotFirst = 1;
-					p->z.clear();
-					return csv_read_one_field(p);
-				}
-			}
-		}
-		while (c != EOF && c != cSep && c != rSep) {
-			import_append_char(p, c);
-			c = fgetc(p->in);
-		}
-		if (c == rSep) {
-			p->nLine++;
-			if (!p->z.empty() && p->z.back() == '\r')
-				p->z.pop_back();
-		}
-		p->cTerm = c;
-	}
-	p->bNotFirst = 1;
-	return p->z.c_str();
-}
-
-/* Read a single field of ASCII delimited text.
-**
-**   +  Input comes from p->in.
-**   +  Store results in p->z of length p->n.
-**   +  Use p->cSep as the column separator.  The default is "\x1F".
-**   +  Use p->rSep as the row separator.  The default is "\x1E".
-**   +  Keep track of the row number in p->nLine.
-**   +  Store the character that terminates the field in p->cTerm.  Store
-**      EOF on end-of-file.
-**   +  Report syntax errors on stderr
-*/
-static const char *ascii_read_one_field(ImportCtx *p) {
-	int c;
-	int cSep = p->cColSep;
-	int rSep = p->cRowSep;
-	p->z.clear();
-	c = fgetc(p->in);
-	if (c == EOF || seenInterrupt) {
-		p->cTerm = EOF;
-		return nullptr;
-	}
-	while (c != EOF && c != cSep && c != rSep) {
-		import_append_char(p, c);
-		c = fgetc(p->in);
-	}
-	if (c == rSep) {
-		p->nLine++;
-	}
-	p->cTerm = c;
-	return p->z.c_str();
 }
 
 /*
@@ -2086,7 +1860,7 @@ void ShellState::ResetOutput() {
 		pclose(out);
 #endif
 	} else {
-		output_file_close(out);
+		CloseOutputFile(out);
 #ifndef SQLITE_NOHAVE_SYSTEM
 		if (doXdgOpen) {
 			const char *zXdgOpenCmd =
@@ -2099,7 +1873,7 @@ void ShellState::ResetOutput() {
 #endif
 			auto zCmd = StringUtil::Format("%s %s", zXdgOpenCmd, zTempFile);
 			if (system(zCmd.c_str())) {
-				utf8_printf(stderr, "Failed: [%s]\n", zCmd.c_str());
+				PrintF(PrintOutput::STDERR, "Failed: [%s]\n", zCmd.c_str());
 			} else {
 				/* Give the start/open/xdg-open command some time to get
 				** going before we continue, and potential delete the
@@ -2118,7 +1892,7 @@ void ShellState::ResetOutput() {
 
 void ShellState::PrintDatabaseError(const string &zErr) {
 	if (!HighlightErrors()) {
-		utf8_printf(stderr, "%s\n", zErr.c_str());
+		PrintF(PrintOutput::STDERR, "%s\n", zErr.c_str());
 		return;
 	}
 	ShellHighlight shell_highlight(*this);
@@ -2199,288 +1973,13 @@ void ShellState::NewTempFile(const char *zSuffix) {
 		zTempFile = StringUtil::Format("%z.%s", zTempFile, zSuffix);
 	}
 	if (zTempFile.empty()) {
-		raw_printf(stderr, "out of memory\n");
+		PrintF(PrintOutput::STDERR, "out of memory\n");
 		exit(1);
 	}
 }
 
-enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
-
-typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
-
-struct MetadataCommand {
-	const char *command;
-	idx_t argument_count;
-	metadata_command_t callback;
-	const char *usage;
-	const char *description;
-	idx_t match_size;
-	const char *extra_description;
-};
-
-MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
-	bail_on_error = booleanValue(args[1]);
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleBinary(ShellState &state, const vector<string> &args) {
-	if (booleanValue(args[1])) {
-		state.SetBinaryMode();
-	} else {
-		state.SetTextMode();
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ChangeDirectory(ShellState &state, const vector<string> &args) {
-	if (safe_mode) {
-		utf8_printf(stderr, ".cd cannot be used in -safe mode\n");
-		return MetadataResult::FAIL;
-	}
-	int rc;
-#if defined(_WIN32) || defined(WIN32)
-	auto z = ShellState::Win32Utf8ToUnicode(args[1].c_str());
-	rc = !SetCurrentDirectoryW((wchar_t *)z.get());
-#else
-	rc = chdir(args[1].c_str());
-#endif
-	if (rc) {
-		utf8_printf(stderr, "Cannot change to directory \"%s\"\n", args[1].c_str());
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleChanges(ShellState &state, const vector<string> &args) {
-	state.SetOrClearFlag(ShellFlags::SHFLG_CountChanges, args[1]);
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ShowDatabases(ShellState &state, const vector<string> &args) {
-	state.OpenDB();
-
-	auto renderer = state.GetRowRenderer(RenderMode::LIST);
-	renderer->show_header = false;
-	renderer->col_sep = ": ";
-	auto res = state.RenderQuery(*renderer, "SELECT name, file FROM pragma_database_list");
-	if (res == SuccessState::FAILURE) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetSeparator(ShellState &state, const vector<string> &args, const char *separator_name,
-                            char &separator) {
-	if (args.size() == 1) {
-		raw_printf(state.out, "current %s separator: %c\n", separator_name, separator);
-	} else if (args.size() != 2) {
-		return MetadataResult::PRINT_USAGE;
-	} else if (StringUtil::Equals(args[1], "space")) {
-		separator = ' ';
-	} else if (StringUtil::Equals(args[1], "none")) {
-		separator = '\0';
-	} else if (args[1].size() != 1) {
-		raw_printf(stderr, ".%s_sep SEP must be one byte, \"space\" or \"none\"\n", separator_name);
-		return MetadataResult::FAIL;
-	} else {
-		separator = args[1][0];
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetDecimalSep(ShellState &state, const vector<string> &args) {
-	return SetSeparator(state, args, "decimal", state.decimal_separator);
-}
-
-MetadataResult SetThousandSep(ShellState &state, const vector<string> &args) {
-	return SetSeparator(state, args, "thousand", state.thousand_separator);
-}
-
-MetadataResult SetLargeNumberRendering(ShellState &state, const vector<string> &args) {
-	if (StringUtil::Equals(args[1], "all")) {
-		state.large_number_rendering = LargeNumberRendering::ALL;
-	} else if (StringUtil::Equals(args[1], "footer")) {
-		state.large_number_rendering = LargeNumberRendering::FOOTER;
-	} else {
-		if (booleanValue(args[1])) {
-			state.large_number_rendering = LargeNumberRendering::DEFAULT;
-		} else {
-			state.large_number_rendering = LargeNumberRendering::NONE;
-		}
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
-	string zLike;
-	bool savedShowHeader = state.showHeader;
-	int savedShellFlags = state.shellFlgs;
-	state.ShellClearFlag(ShellFlags::SHFLG_Newlines);
-	state.ShellClearFlag(ShellFlags::SHFLG_Echo);
-	for (idx_t i = 1; i < args.size(); i++) {
-		if (args[i][0] == '-') {
-			const char *z = args[i].c_str() + 1;
-			if (z[0] == '-')
-				z++;
-			if (StringUtil::Equals(z, "newlines")) {
-				state.ShellSetFlag(ShellFlags::SHFLG_Newlines);
-			} else {
-				raw_printf(stderr, "Unknown option \"%s\" on \".dump\"\n", args[i].c_str());
-				return MetadataResult::FAIL;
-			}
-		} else if (!zLike.empty()) {
-			zLike = StringUtil::Format("%s OR name LIKE %s ESCAPE '\\'", zLike, SQLString(args[i]));
-		} else {
-			zLike = StringUtil::Format("name LIKE %s ESCAPE '\\'", SQLString(args[i]));
-		}
-	}
-
-	state.OpenDB();
-
-	/* When playing back a "dump", the content might appear in an order
-	** which causes immediate foreign key constraints to be violated.
-	** So disable foreign-key constraint enforcement to prevent problems. */
-	raw_printf(state.out, "BEGIN TRANSACTION;\n");
-	state.showHeader = 0;
-	state.nErr = 0;
-	if (zLike.empty()) {
-		zLike = "true";
-	}
-
-	// Emit CREATE SCHEMA for non-main schemas first
-	auto zSql = StringUtil::Format("SELECT DISTINCT table_schema FROM information_schema.tables "
-	                               "WHERE table_schema != 'main' AND table_schema NOT LIKE 'pg_%%' "
-	                               "AND table_schema != 'information_schema' "
-	                               "AND table_name IN (SELECT name FROM sqlite_schema WHERE (%s) AND type=='table') "
-	                               "ORDER BY table_schema",
-	                               zLike);
-	auto result = state.conn->Query(zSql);
-	for (auto &row : *result) {
-		auto schema = row.GetValue<string>(0);
-		auto create_schema = StringUtil::Format("CREATE SCHEMA IF NOT EXISTS %s;", SQLIdentifier(schema));
-		raw_printf(state.out, "%s;\n", create_schema.c_str());
-	}
-
-	zSql = StringUtil::Format("SELECT name, type, sql FROM sqlite_schema "
-	                          "WHERE (%s) AND type=='table'"
-	                          "  AND sql NOT NULL"
-	                          " ORDER BY tbl_name='sqlite_sequence'",
-	                          zLike);
-	state.RunSchemaDumpQuery(zSql);
-	zSql = StringUtil::Format("SELECT sql FROM sqlite_schema "
-	                          "WHERE (%s) AND sql NOT NULL"
-	                          "  AND type IN ('index','trigger','view')",
-	                          zLike);
-	state.RunTableDumpQuery(zSql);
-	raw_printf(state.out, state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
-	state.showHeader = savedShowHeader;
-	state.shellFlgs = savedShellFlags;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleEcho(ShellState &state, const vector<string> &args) {
-	state.SetOrClearFlag(ShellFlags::SHFLG_Echo, args[1]);
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
-	if (args.size() > 2) {
-		return MetadataResult::PRINT_USAGE;
-	}
-	int rc = 0;
-	if (args.size() > 1 && (rc = (int)ShellState::StringToInt(args[1])) != 0) {
-		// exit immediately if a custom error code is provided
-		exit(rc);
-	}
-	return MetadataResult::EXIT;
-}
-
-MetadataResult ToggleHeaders(ShellState &state, const vector<string> &args) {
-	state.showHeader = booleanValue(args[1]);
-	state.ShellSetFlag(ShellFlags::SHFLG_HeaderSet);
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetHighlightColors(ShellState &state, const vector<string> &args) {
-	if (args.size() < 3 || args.size() > 4) {
-		return MetadataResult::PRINT_USAGE;
-	}
-	ShellHighlight highlighter(state);
-	if (!highlighter.SetColor(args[1].c_str(), args[2].c_str(), args.size() == 3 ? nullptr : args[3].c_str())) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleHighlighErrors(ShellState &state, const vector<string> &args) {
-	highlight_errors = booleanValue(args[1]) ? OptionType::ON : OptionType::OFF;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &args) {
-	highlight_results = booleanValue(args[1]) ? OptionType::ON : OptionType::OFF;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
-	if (args.size() >= 2) {
-		idx_t n = state.PrintHelp(args[1].c_str());
-		if (n == 0) {
-			utf8_printf(state.out, "Nothing matches '%s'\n", args[1].c_str());
-		}
-	} else {
-		state.PrintHelp(0);
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
-	if (safe_mode) {
-		utf8_printf(stderr, ".log cannot be used in -safe mode\n");
-		return MetadataResult::FAIL;
-	}
-	const char *zFile = args[1].c_str();
-	output_file_close(state.pLog);
-	state.pLog = output_file_open(zFile, 0);
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetMaxRows(ShellState &state, const vector<string> &args) {
-	if (args.size() > 2) {
-		return MetadataResult::PRINT_USAGE;
-	}
-	if (args.size() == 1) {
-		raw_printf(state.out, "current max rows: %zu\n", state.max_rows);
-	} else {
-		state.max_rows = (size_t)ShellState::StringToInt(args[1]);
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetMaxWidth(ShellState &state, const vector<string> &args) {
-	if (args.size() > 2) {
-		return MetadataResult::PRINT_USAGE;
-	}
-	if (args.size() == 1) {
-		raw_printf(state.out, "current max rows: %zu\n", state.max_width);
-	} else {
-		state.max_width = (size_t)ShellState::StringToInt(args[1]);
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetColumnRendering(ShellState &state, const vector<string> &args) {
-	state.columns = 1;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetRowRendering(ShellState &state, const vector<string> &args) {
-	state.columns = 0;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args) {
-	safe_mode = true;
+MetadataResult ShellState::EnableSafeMode(ShellState &state, const vector<string> &args) {
+	state.safe_mode = true;
 	if (state.db) {
 		// db has been opened - disable external access
 		state.ExecuteQuery("SET enable_external_access=false");
@@ -2493,7 +1992,7 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 	idx_t n2 = mode_name.size();
 	char c2 = mode_str[0];
 	if (tbl_name && !(c2 == 'i' && strncmp(mode_str, "insert", n2) == 0)) {
-		raw_printf(stderr, "TABLE argument can only be used with .mode insert");
+		PrintF(PrintOutput::STDERR, "TABLE argument can only be used with .mode insert");
 		return false;
 	}
 	if (c2 == 'l' && n2 > 2 && strncmp(mode_str, "lines", n2) == 0) {
@@ -2550,304 +2049,151 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 	} else if (c2 == 'j' && strncmp(mode_str, "jsonlines", n2) == 0) {
 		mode = RenderMode::JSONLINES;
 	} else {
-		raw_printf(stderr, "Error: mode should be one of: "
-		                   "ascii box column csv duckbox html insert json jsonlines latex line "
-		                   "list markdown quote table tabs tcl trash \n");
+		PrintF(PrintOutput::STDERR, "Error: mode should be one of: "
+		                            "ascii box column csv duckbox html insert json jsonlines latex line "
+		                            "list markdown quote table tabs tcl trash \n");
 		return false;
 	}
 	cMode = mode;
 	return true;
 }
 
-MetadataResult SetOutputMode(ShellState &state, const vector<string> &args) {
-	if (args.size() > 3) {
-		return MetadataResult::PRINT_USAGE;
-	}
-	if (args.size() == 1) {
-		raw_printf(state.out, "current output mode: %s\n", modeDescr[int(state.mode)]);
-	} else {
-		if (!state.SetOutputMode(args[1], args.size() > 2 ? args[2].c_str() : nullptr)) {
-			return MetadataResult::FAIL;
-		}
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetNullValue(ShellState &state, const vector<string> &args) {
+MetadataResult ShellState::SetNullValue(ShellState &state, const vector<string> &args) {
 	state.nullValue = args[1];
 	return MetadataResult::SUCCESS;
 }
 
 bool ShellState::ImportData(const vector<string> &args) {
 	if (safe_mode) {
-		utf8_printf(stderr, ".import cannot be used in -safe mode\n");
+		PrintF(PrintOutput::STDERR, ".import cannot be used in -safe mode\n");
 		return false;
 	}
-	const char *zTable = nullptr;      /* Insert data into this table */
-	const char *zFile = nullptr;       /* Name of file to extra content from */
-	ImportCtx sCtx;                    /* Reader context */
-	const char *(*xRead)(ImportCtx *); /* Func to read one value */
-	int eVerbose = 0;                  /* Larger for more console output */
-	int nSkip = 0;                     /* Initial lines to skip */
-	int useOutputMode = 1;             /* Use output mode to determine separators */
+	string table_name;
+	string file_name;
+	unordered_map<string, string> generic_parameters;
+	string function;
 
-	memset(&sCtx, 0, sizeof(sCtx));
-	if (mode == RenderMode::ASCII) {
-		xRead = ascii_read_one_field;
-	} else {
-		xRead = csv_read_one_field;
-	}
 	for (idx_t i = 1; i < args.size(); i++) {
 		auto z = args[i].c_str();
 		if (z[0] == '-' && z[1] == '-') {
 			z++;
 		}
 		if (z[0] != '-') {
-			if (zFile == nullptr) {
-				zFile = z;
-			} else if (zTable == nullptr) {
-				zTable = z;
+			if (file_name.empty()) {
+				file_name = z;
+			} else if (table_name.empty()) {
+				table_name = z;
 			} else {
-				utf8_printf(out, "ERROR: extra argument: \"%s\".  Usage:\n", z);
+				PrintF("ERROR: extra argument: \"%s\".  Usage:\n", z);
 				PrintHelp("import");
 				return false;
 			}
 		} else if (strcmp(z, "-v") == 0) {
-			eVerbose++;
-		} else if (strcmp(z, "-skip") == 0 && i < args.size() - 1) {
-			nSkip = (int)StringToInt(args[++i]);
+			// verbose - ignore
 		} else if (strcmp(z, "-ascii") == 0) {
-			sCtx.cColSep = SEP_Unit[0];
-			sCtx.cRowSep = SEP_Record[0];
-			xRead = ascii_read_one_field;
-			useOutputMode = 0;
+			PrintF(PrintOutput::STDERR, "-ascii mode is no longer supported for .import");
+			exit(1);
 		} else if (strcmp(z, "-csv") == 0) {
-			sCtx.cColSep = ',';
-			sCtx.cRowSep = '\n';
-			xRead = csv_read_one_field;
-			useOutputMode = 0;
+			function = "read_csv";
+		} else if (strcmp(z, "-parquet") == 0) {
+			function = "read_parquet";
+		} else if (strcmp(z, "-json") == 0) {
+			function = "read_json";
 		} else {
-			utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", z);
-			PrintHelp("import");
-			return false;
+			z++;
+			if (i + 1 >= args.size()) {
+				PrintF("ERROR: expected an argument for generic parameter: \"%s\".  Usage:\n", z);
+				PrintHelp("import");
+				return false;
+			}
+			generic_parameters[z] = args[++i];
 		}
 	}
-	if (zTable == 0) {
-		utf8_printf(out, "ERROR: missing %s argument. Usage:\n", zFile == 0 ? "FILE" : "TABLE");
+	if (table_name.empty()) {
+		PrintF("ERROR: missing %s argument. Usage:\n", file_name.empty() ? "FILE" : "TABLE");
 		PrintHelp("import");
 		return false;
 	}
+	if (function.empty()) {
+		// derive function to use from file extension
+		// FIXME: get this list from the system somehow
+		unordered_map<string, string> function_map;
+		function_map[".parquet"] = "read_parquet";
+		function_map[".csv"] = "read_csv";
+		function_map[".tsv"] = "read_csv";
+		function_map[".tbl"] = "read_csv";
+		function_map[".json"] = "read_json";
+		function_map[".jsonl"] = "read_json";
+		function_map[".ndjson"] = "read_json";
+		function_map[".avro"] = "read_avro";
+		function_map[".xlsx"] = "read_xlsx";
+
+		vector<string> compression_suffixes {"", ".gz", ".zst"};
+
+		for (auto &entry : function_map) {
+			for (auto &compression_suffix : compression_suffixes) {
+				auto suffix = entry.first + compression_suffix;
+				if (StringUtil::EndsWith(file_name, suffix)) {
+					function = entry.second;
+					break;
+				}
+			}
+			if (!function.empty()) {
+				break;
+			}
+		}
+		if (function.empty()) {
+			// fallback to read_csv
+			function = "read_csv";
+		}
+	}
+	if (function == "read_csv" && generic_parameters.find("ignore_errors") == generic_parameters.end()) {
+		generic_parameters["ignore_errors"] = "true";
+	}
 	seenInterrupt = 0;
-	OpenDB();
-	if (useOutputMode) {
-		/* If neither the --csv or --ascii options are specified, then set
-		** the column and row separator characters from the output mode. */
-		int nSep = colSeparator.size();
-		if (nSep == 0) {
-			raw_printf(stderr, "Error: non-null column separator required for import\n");
-			return false;
-		}
-		if (nSep > 1) {
-			raw_printf(stderr, "Error: multi-character column separators not allowed"
-			                   " for import\n");
-			return false;
-		}
-		nSep = rowSeparator.size();
-		if (nSep == 0) {
-			raw_printf(stderr, "Error: non-null row separator required for import\n");
-			return false;
-		}
-		if (nSep == 2 && mode == RenderMode::CSV && rowSeparator == SEP_CrLf) {
-			/* When importing CSV (only), if the row separator is set to the
-			** default output row separator, change it to the default input
-			** row separator.  This avoids having to maintain different input
-			** and output row separators. */
-			rowSeparator = SEP_Row;
-			nSep = rowSeparator.size();
-		}
-		if (nSep > 1) {
-			raw_printf(stderr, "Error: multi-character row separators not allowed"
-			                   " for import\n");
-			return false;
-		}
-		sCtx.cColSep = colSeparator[0];
-		sCtx.cRowSep = rowSeparator[0];
-	}
-	sCtx.zFile = zFile;
-	sCtx.nLine = 1;
-	if (sCtx.zFile[0] == '|') {
-#ifdef SQLITE_OMIT_POPEN
-		raw_printf(stderr, "Error: pipes are not supported in this OS\n");
-		rc = 1;
-		goto meta_command_exit;
-#else
-		sCtx.in = popen(sCtx.zFile + 1, "r");
-		sCtx.zFile = "<pipe>";
-		sCtx.xCloser = pclose;
-#endif
-	} else {
-		sCtx.in = fopen(sCtx.zFile, "rb");
-		sCtx.xCloser = fclose;
-	}
-	if (sCtx.in == 0) {
-		utf8_printf(stderr, "Error: cannot open \"%s\"\n", zFile);
-		return false;
-	}
-	if (eVerbose >= 2 || (eVerbose >= 1 && useOutputMode)) {
-		char zSep[2];
-		zSep[1] = 0;
-		zSep[0] = sCtx.cColSep;
-		utf8_printf(out, "Column separator ");
-		OutputCString(zSep);
-		utf8_printf(out, ", row separator ");
-		zSep[0] = sCtx.cRowSep;
-		OutputCString(zSep);
-		utf8_printf(out, "\n");
-	}
-	while ((nSkip--) > 0) {
-		while (xRead(&sCtx) && sCtx.cTerm == sCtx.cColSep) {
-		}
-	}
 	// check if the table exists
+	OpenDB();
 	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
 	if (needCommit) {
-		ExecuteQuery("BEGIN");
+		con.BeginTransaction();
 	}
-	auto table_info = con.TableInfo(zTable);
+	auto table_info = con.TableInfo(table_name);
 
-	import_append_char(&sCtx, 0); /* To ensure sCtx.z is allocated */
-	idx_t nCol;
+	string import_query;
+
 	if (!table_info) {
-		// table does not exist - read the first line and create it based on the row values in the first line
-		string zCreate = "CREATE TABLE ";
-		zCreate += zTable;
-		char cSep = '(';
-		nCol = 0;
-		while (xRead(&sCtx)) {
-			zCreate += cSep;
-			zCreate += "\"";
-			zCreate += sCtx.z;
-			zCreate += "\"";
-			zCreate += " TEXT";
-			cSep = ',';
-			nCol++;
-			if (sCtx.cTerm != sCtx.cColSep) {
-				break;
-			}
-		}
-		if (nCol == 0) {
-			import_cleanup(&sCtx);
-			utf8_printf(stderr, "%s: empty file\n", sCtx.zFile);
-			return false;
-		}
-		zCreate += "\n)";
-		if (eVerbose >= 1) {
-			utf8_printf(out, "%s\n", zCreate.c_str());
-		}
-		auto res = ExecuteQuery(zCreate);
-		if (res == SuccessState::FAILURE) {
-			import_cleanup(&sCtx);
-			return false;
-		}
+		// table does not exist - create it
+		import_query = StringUtil::Format("CREATE TABLE %s AS ", SQLIdentifier(table_name));
 	} else {
-		nCol = table_info->columns.size();
+		// table exists - insert into it
+		import_query = StringUtil::Format("INSERT INTO %s ", SQLIdentifier(table_name));
 	}
-	string zSql = StringUtil::Format("INSERT INTO %s VALUES(?", SQLIdentifier(zTable));
-	for (idx_t i = 1; i < nCol; i++) {
-		zSql += ",?";
+	import_query += StringUtil::Format("SELECT * FROM %s(%s", function, SQLString(file_name));
+	// add the generic parameters
+	for (auto &entry : generic_parameters) {
+		import_query += StringUtil::Format(", %s=%s", SQLIdentifier(entry.first), SQLString(entry.second));
 	}
-	zSql += ")";
-	if (eVerbose >= 2) {
-		utf8_printf(out, "Insert using: %s\n", zSql.c_str());
-	}
-	auto prepared = con.Prepare(zSql);
-	if (prepared->HasError()) {
-		PrintDatabaseError(prepared->GetError());
-		import_cleanup(&sCtx);
+	import_query += ")";
+	auto result = con.Query(import_query);
+	if (result->HasError()) {
+		if (needCommit) {
+			con.Rollback();
+		}
+		string error = StringUtil::Format("Failed To Import Error: Failed to import from file '%s'\n", file_name);
+		PrintDatabaseError(error);
+		PrintDatabaseError(result->GetError());
 		return false;
 	}
-	do {
-		duckdb::vector<duckdb::Value> bind_values;
-		int startLine = sCtx.nLine;
-		int i;
-		for (i = 0; i < nCol; i++) {
-			const char *z = xRead(&sCtx);
-			/*
-			** Did we reach end-of-file before finding any columns?
-			** If so, stop instead of NULL filling the remaining columns.
-			*/
-			if (z == nullptr && i == 0) {
-				break;
-			}
-			/*
-			** Did we reach end-of-file OR end-of-line before finding any
-			** columns in ASCII mode?  If so, stop instead of NULL filling
-			** the remaining columns.
-			*/
-			if (mode == RenderMode::ASCII && (z == nullptr || z[0] == 0) && i == 0) {
-				break;
-			}
-			if (!duckdb::Value::StringIsValid(z, strlen(z))) {
-				bind_values.emplace_back();
-			} else {
-				bind_values.emplace_back(z);
-			}
-			if (i < nCol - 1 && sCtx.cTerm != sCtx.cColSep) {
-				utf8_printf(stderr,
-				            "%s:%d: expected %d columns but found %d - "
-				            "filling the rest with NULL\n",
-				            sCtx.zFile, startLine, (int)nCol, i + 1);
-				i += 2;
-				while (i <= nCol) {
-					bind_values.emplace_back();
-					i++;
-				}
-			}
-		}
-		if (sCtx.cTerm == sCtx.cColSep) {
-			do {
-				xRead(&sCtx);
-				i++;
-			} while (sCtx.cTerm == sCtx.cColSep);
-			utf8_printf(stderr,
-			            "%s:%d: expected %d columns but found %d - "
-			            "extras ignored\n",
-			            sCtx.zFile, startLine, (int)nCol, i);
-		}
-		if (i >= nCol) {
-			auto result = prepared->Execute(bind_values);
-			if (result->HasError()) {
-				utf8_printf(stderr, "%s:%d: INSERT failed: %s\n", sCtx.zFile, startLine, result->GetError().c_str());
-				sCtx.AddError();
-			} else {
-				sCtx.nRow++;
-			}
-		}
-	} while (sCtx.cTerm != EOF);
-
-	prepared.reset();
-	import_cleanup(&sCtx);
 	if (needCommit) {
-		ExecuteQuery("COMMIT");
-	}
-	if (eVerbose > 0) {
-		utf8_printf(out, "Added %d rows with %d errors using %d lines of input\n", sCtx.nRow, sCtx.nErr,
-		            sCtx.nLine - 1);
+		con.Commit();
 	}
 	return true;
 }
 
-MetadataResult ImportData(ShellState &state, const vector<string> &args) {
-	if (!state.ImportData(args)) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
 bool ShellState::OpenDatabase(const vector<string> &args) {
 	if (safe_mode) {
-		utf8_printf(stderr, ".open cannot be used in -safe mode\n");
+		PrintF(PrintOutput::STDERR, ".open cannot be used in -safe mode\n");
 		return false;
 	}
 	string zNewFilename;  /* Name of the database file to open */
@@ -2868,7 +2214,7 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		} else if (optionMatch(z, "nofollow")) {
 		} else if (z[0] == '-') {
-			utf8_printf(stderr, "unknown option: %s\n", z);
+			PrintF(PrintOutput::STDERR, "unknown option: %s\n", z);
 			return false;
 		}
 	}
@@ -2883,7 +2229,7 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 		zDbFilename = zNewFilename;
 		OpenDB(ShellOpenFlags::KEEP_ALIVE_ON_FAILURE);
 		if (!db) {
-			utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename.c_str());
+			PrintF(PrintOutput::STDERR, "Error: cannot open '%s'\n", zNewFilename.c_str());
 		}
 	}
 	if (!db) {
@@ -2894,38 +2240,7 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 	return true;
 }
 
-MetadataResult OpenDatabase(ShellState &state, const vector<string> &args) {
-	if (!state.OpenDatabase(args)) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult PrintArguments(ShellState &state, const vector<string> &args) {
-	for (idx_t i = 1; i < args.size(); i++) {
-		if (i > 1) {
-			raw_printf(state.out, " ");
-		}
-		utf8_printf(state.out, "%s", args[i].c_str());
-	}
-	raw_printf(state.out, "\n");
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetPrompt(ShellState &, const vector<string> &args) {
-	if (args.size() >= 2) {
-		strncpy(mainPrompt, args[1].c_str(), (int)ArraySize(mainPrompt) - 1);
-	}
-	if (args.size() >= 3) {
-		strncpy(continuePrompt, args[2].c_str(), (int)ArraySize(continuePrompt) - 1);
-	}
-	if (args.size() >= 4) {
-		strncpy(continuePromptSelected, args[3].c_str(), (int)ArraySize(continuePromptSelected) - 1);
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetSeparator(ShellState &state, const vector<string> &args) {
+MetadataResult ShellState::SetSeparator(ShellState &state, const vector<string> &args) {
 	if (args.size() < 2 || args.size() > 3) {
 		return MetadataResult::PRINT_USAGE;
 	}
@@ -2936,13 +2251,9 @@ MetadataResult SetSeparator(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult QuitProcess(ShellState &, const vector<string> &args) {
-	return MetadataResult::EXIT;
-}
-
 bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 	if (safe_mode) {
-		utf8_printf(stderr, ".output/.once/.excel cannot be used in -safe mode\n");
+		PrintF(PrintOutput::STDERR, ".output/.once/.excel cannot be used in -safe mode\n");
 		return false;
 	}
 	string zFile;
@@ -2972,14 +2283,14 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 			} else if (output_mode != 'e' && strcmp(z, "-e") == 0) {
 				eMode = 'e'; /* text editor */
 			} else {
-				utf8_printf(out, "ERROR: unknown option: \"%s\".  Usage:\n", args[i].c_str());
+				PrintF("ERROR: unknown option: \"%s\".  Usage:\n", args[i].c_str());
 				PrintHelp(args[0].c_str());
 				return false;
 			}
 		} else if (zFile.empty()) {
 			zFile = z;
 		} else {
-			utf8_printf(out, "ERROR: extra parameter: \"%s\".  Usage:\n", args[i].c_str());
+			PrintF("ERROR: extra parameter: \"%s\".  Usage:\n", args[i].c_str());
 			PrintHelp(args[0].c_str());
 			return false;
 		}
@@ -3014,13 +2325,13 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 #endif /* SQLITE_NOHAVE_SYSTEM */
 	if (zFile[0] == '|') {
 #ifdef SQLITE_OMIT_POPEN
-		raw_printf(stderr, "Error: pipes are not supported in this OS\n");
+		PrintF(PrintOutput::STDERR, "Error: pipes are not supported in this OS\n");
 		out = stdout;
 		return false;
 #else
 		out = popen(zFile.c_str() + 1, "w");
-		if (out == 0) {
-			utf8_printf(stderr, "Error: cannot open pipe \"%s\"\n", zFile.c_str() + 1);
+		if (out == nullptr) {
+			PrintF(PrintOutput::STDERR, "Error: cannot open pipe \"%s\"\n", zFile.c_str() + 1);
 			out = stdout;
 			return false;
 		} else {
@@ -3031,10 +2342,10 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 		}
 #endif
 	} else {
-		out = output_file_open(zFile.c_str(), bTxtMode);
+		out = OpenOutputFile(zFile.c_str(), bTxtMode);
 		if (!out) {
 			if (zFile == "off") {
-				utf8_printf(stderr, "Error: cannot write to \"%s\"\n", zFile.c_str());
+				PrintF(PrintOutput::STDERR, "Error: cannot write to \"%s\"\n", zFile.c_str());
 			}
 			out = stdout;
 			return false;
@@ -3049,37 +2360,16 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 	return true;
 }
 
-MetadataResult SetOutput(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, '\0')) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetOutputOnce(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, 'o')) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetOutputExcel(ShellState &state, const vector<string> &args) {
-	if (!state.SetOutputFile(args, 'e')) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
 bool ShellState::ReadFromFile(const string &file) {
 	if (safe_mode) {
-		utf8_printf(stderr, ".read cannot be used in -safe mode\n");
+		PrintF(PrintOutput::STDERR, ".read cannot be used in -safe mode\n");
 		return false;
 	}
 	FILE *inSaved = in;
 	int savedLineno = lineno;
 	int rc;
 	if (notNormalFile(file.c_str()) || (in = fopen(file.c_str(), "rb")) == 0) {
-		utf8_printf(stderr, "Error: cannot open \"%s\"\n", file.c_str());
+		PrintF(PrintOutput::STDERR, "Error: cannot open \"%s\"\n", file.c_str());
 		rc = 1;
 	} else {
 		rc = ProcessInput(InputMode::FILE);
@@ -3088,13 +2378,6 @@ bool ShellState::ReadFromFile(const string &file) {
 	in = inSaved;
 	lineno = savedLineno;
 	return rc == 0;
-}
-
-MetadataResult ReadFromFile(ShellState &state, const vector<string> &args) {
-	if (!state.ReadFromFile(args[1])) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
 }
 
 bool ShellState::DisplaySchemas(const vector<string> &args) {
@@ -3113,7 +2396,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 		} else if (zName == 0) {
 			zName = args[ii].c_str();
 		} else {
-			raw_printf(stderr, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
+			PrintF(PrintOutput::STDERR, "Usage: .schema ?--indent? ?LIKE-PATTERN?\n");
 			return false;
 		}
 	}
@@ -3140,103 +2423,38 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 	sSelect += "type!='meta' AND sql IS NOT NULL"
 	           " ORDER BY name";
 	if (bDebug) {
-		utf8_printf(out, "SQL: %s;\n", sSelect.c_str());
+		PrintF("SQL: %s;\n", sSelect.c_str());
 	} else {
 		rc = RenderQuery(*renderer, sSelect);
 	}
 	if (rc == SuccessState::FAILURE) {
-		raw_printf(stderr, "Error: querying schema information\n");
+		PrintF(PrintOutput::STDERR, "Error: querying schema information\n");
 		return false;
 	} else {
 		return true;
 	}
 }
 
-MetadataResult DisplaySchemas(ShellState &state, const vector<string> &args) {
-	if (!state.DisplaySchemas(args)) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult RunShellCommand(ShellState &state, const vector<string> &args) {
-	if (safe_mode) {
-		utf8_printf(stderr, ".sh/.system cannot be used in -safe mode\n");
-		return MetadataResult::FAIL;
-	}
-	int x;
-	if (args.size() < 2) {
-		return MetadataResult::PRINT_USAGE;
-	}
-	auto zCmd = StringUtil::Format(StringUtil::Contains(args[1], ' ') ? "%s" : "\"%s\"", args[1]);
-	for (idx_t i = 2; i < args.size(); i++) {
-		zCmd += StringUtil::Format(StringUtil::Contains(args[i], ' ') ? " %s" : " \"%s\"", args[i]);
-	}
-	x = system(zCmd.c_str());
-	if (x) {
-		raw_printf(stderr, "System command returns %d\n", x);
-	}
-	return MetadataResult::SUCCESS;
-}
-
 void ShellState::ShowConfiguration() {
-	utf8_printf(out, "%12.12s: %s\n", "echo", ShellHasFlag(ShellFlags::SHFLG_Echo) ? "on" : "off");
-	utf8_printf(out, "%12.12s: %s\n", "headers", showHeader ? "on" : "off");
-	utf8_printf(out, "%12.12s: %s\n", "mode", modeDescr[int(mode)]);
-	utf8_printf(out, "%12.12s: ", "nullvalue");
+	PrintF("%12.12s: %s\n", "echo", ShellHasFlag(ShellFlags::SHFLG_Echo) ? "on" : "off");
+	PrintF("%12.12s: %s\n", "headers", showHeader ? "on" : "off");
+	PrintF("%12.12s: %s\n", "mode", ModeToString(mode));
+	PrintF("%12.12s: ", "nullvalue");
 	OutputCString(nullValue.c_str());
-	raw_printf(out, "\n");
-	utf8_printf(out, "%12.12s: %s\n", "output", !outfile.empty() ? outfile.c_str() : "stdout");
-	utf8_printf(out, "%12.12s: ", "colseparator");
+	PrintF("\n");
+	PrintF("%12.12s: %s\n", "output", !outfile.empty() ? outfile.c_str() : "stdout");
+	PrintF("%12.12s: ", "colseparator");
 	OutputCString(colSeparator.c_str());
-	raw_printf(out, "\n");
-	utf8_printf(out, "%12.12s: ", "rowseparator");
+	PrintF("\n");
+	PrintF("%12.12s: ", "rowseparator");
 	OutputCString(rowSeparator.c_str());
-	raw_printf(out, "\n");
-	utf8_printf(out, "%12.12s: ", "width");
+	PrintF("\n");
+	PrintF("%12.12s: ", "width");
 	for (auto w : colWidth) {
-		raw_printf(out, "%d ", w);
+		PrintF("%d ", w);
 	}
-	raw_printf(out, "\n");
-	utf8_printf(out, "%12.12s: %s\n", "filename", zDbFilename.c_str());
-}
-
-MetadataResult ShowConfiguration(ShellState &state, const vector<string> &args) {
-	state.ShowConfiguration();
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleTimer(ShellState &state, const vector<string> &args) {
-	enableTimer = booleanValue(args[1]);
-	if (enableTimer && !HAS_TIMER) {
-		raw_printf(stderr, "Error: timer not available on this system.\n");
-		enableTimer = false;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ShowVersion(ShellState &state, const vector<string> &args) {
-	utf8_printf(state.out, "DuckDB %s (%s) %s\n" /*extra-version-info*/, duckdb::DuckDB::LibraryVersion(),
-	            duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
-#define CTIMEOPT_VAL_(opt) #opt
-#define CTIMEOPT_VAL(opt)  CTIMEOPT_VAL_(opt)
-#if defined(__clang__) && defined(__clang_major__)
-	utf8_printf(state.out, "clang-" CTIMEOPT_VAL(__clang_major__) "." CTIMEOPT_VAL(__clang_minor__) "." CTIMEOPT_VAL(
-	                           __clang_patchlevel__) "\n");
-#elif defined(_MSC_VER)
-	utf8_printf(state.out, "msvc-" CTIMEOPT_VAL(_MSC_VER) "\n");
-#elif defined(__GNUC__) && defined(__VERSION__)
-	utf8_printf(state.out, "gcc-" __VERSION__ "\n");
-#endif
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetWidths(ShellState &state, const vector<string> &args) {
-	state.colWidth.clear();
-	for (idx_t j = 1; j < args.size(); j++) {
-		state.colWidth.push_back((int)ShellState::StringToInt(args[j]));
-	}
-	return MetadataResult::SUCCESS;
+	PrintF("\n");
+	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
 }
 
 MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
@@ -3361,428 +2579,45 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 		for (idx_t i = 0; i < nPrintRow; i++) {
 			for (idx_t j = i; j < result.size(); j += nPrintRow) {
 				const char *zSp = j < nPrintRow ? "" : "  ";
-				utf8_printf(out, "%s%-*s", zSp, static_cast<int>(maxlen), result[j].c_str());
+				PrintF("%s%-*s", zSp, static_cast<int>(maxlen), result[j].c_str());
 			}
-			raw_printf(out, "\n");
+			PrintF("\n");
 		}
 	}
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
-	return state.DisplayEntries(args, 'i');
-}
-
-MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
-	return state.DisplayEntries(args, 't');
-}
-
-MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
-	if (args.size() < 1) {
-		return MetadataResult::PRINT_USAGE;
-	}
-	string command;
-	for (idx_t i = 1; i < args.size(); i++) {
-		if (i > 1) {
-			command += " ";
-		}
-		command += args[i];
-	}
-	state.ui_command = "CALL " + command;
-	return MetadataResult::SUCCESS;
-}
-
+SuccessState ShellState::ChangeDirectory(const string &path) {
+	int rc;
 #if defined(_WIN32) || defined(WIN32)
-MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
-	win_utf8_mode = 1;
-	return MetadataResult::SUCCESS;
-}
+	auto z = ShellState::Win32Utf8ToUnicode(path.c_str());
+	rc = !SetCurrentDirectoryW((wchar_t *)z.get());
+#else
+	rc = chdir(path.c_str());
 #endif
-
-#ifdef HAVE_LINENOISE
-MetadataResult ToggleHighlighting(ShellState &state, const vector<string> &args) {
-	linenoiseSetHighlighting(booleanValue(args[1]));
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleErrorRendering(ShellState &state, const vector<string> &args) {
-	linenoiseSetErrorRendering(booleanValue(args[1]));
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleCompletionRendering(ShellState &state, const vector<string> &args) {
-	linenoiseSetCompletionRendering(booleanValue(args[1]));
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleMultiLine(ShellState &state, const vector<string> &args) {
-	if (!args.empty()) {
-		return MetadataResult::PRINT_USAGE;
+	if (rc) {
+		PrintF(PrintOutput::STDERR, "Cannot change to directory \"%s\"\n", path);
+		return SuccessState::FAILURE;
 	}
-	linenoiseSetMultiLine(true);
-	return MetadataResult::SUCCESS;
+	return SuccessState::SUCCESS;
 }
 
-MetadataResult ToggleSingleLine(ShellState &state, const vector<string> &args) {
-	if (!args.empty()) {
-		return MetadataResult::PRINT_USAGE;
-	}
-	linenoiseSetMultiLine(false);
-	return MetadataResult::SUCCESS;
+SuccessState ShellState::ShowDatabases() {
+	OpenDB();
+
+	auto renderer = GetRowRenderer(RenderMode::LIST);
+	renderer->show_header = false;
+	renderer->col_sep = ": ";
+	return RenderQuery(*renderer, "SELECT name, file FROM pragma_database_list");
 }
 
-MetadataResult TrySetHighlightColor(const string &component, const string &code) {
-	char error[1024];
-	if (!linenoiseTrySetHighlightColor(component.c_str(), code.c_str(), error, 1024)) {
-		utf8_printf(stderr, "%s\n", error);
-		return MetadataResult::FAIL;
+MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &args) {
+	enableTimer = state.StringToBool(args[1]);
+	if (enableTimer && !HAS_TIMER) {
+		state.PrintF(PrintOutput::STDERR, "Error: timer not available on this system.\n");
+		enableTimer = false;
 	}
 	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetRenderHighlightColor(ShellState &state, const vector<string> &args) {
-	return TrySetHighlightColor(args[1], args[2]);
-}
-
-enum class DeprecatedHighlightColors {
-	COMMENT,
-	COMMENT_CODE,
-	CONSTANT,
-	CONSTANT_CODE,
-	KEYWORD,
-	KEYWORD_CODE,
-	ERROR,
-	ERROR_CODE,
-	CONT,
-	CONT_CODE,
-	CONT_SEL,
-	CONT_SEL_CODE
-};
-
-template <DeprecatedHighlightColors T>
-MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &args) {
-	string literal;
-	switch (T) {
-	case DeprecatedHighlightColors::COMMENT:
-		literal = "comment";
-		break;
-	case DeprecatedHighlightColors::COMMENT_CODE:
-		literal = "commentcode";
-		break;
-	case DeprecatedHighlightColors::CONSTANT:
-		literal = "constant";
-		break;
-	case DeprecatedHighlightColors::CONSTANT_CODE:
-		literal = "constantcode";
-		break;
-	case DeprecatedHighlightColors::KEYWORD:
-		literal = "keyword";
-		break;
-	case DeprecatedHighlightColors::KEYWORD_CODE:
-		literal = "keywordcode";
-		break;
-	case DeprecatedHighlightColors::ERROR:
-		literal = "error";
-		break;
-	case DeprecatedHighlightColors::ERROR_CODE:
-		literal = "errorcode";
-		break;
-	case DeprecatedHighlightColors::CONT:
-		literal = "cont";
-		break;
-	case DeprecatedHighlightColors::CONT_CODE:
-		literal = "contcode";
-		break;
-	case DeprecatedHighlightColors::CONT_SEL:
-		literal = "cont_sel";
-		break;
-	case DeprecatedHighlightColors::CONT_SEL_CODE:
-		literal = "cont_selcode";
-		break;
-	default:
-		throw std::runtime_error("eek");
-	}
-	utf8_printf(stderr, "WARNING: .%s [COLOR] will be removed in a future release, use .render_color %s %s instead\n",
-	            literal.c_str(), literal.c_str(), args[1].c_str());
-	return TrySetHighlightColor(literal, args[1]);
-}
-
-#endif
-
-static const MetadataCommand metadata_commands[] = {
-    {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
-    {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
-    {"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0, ""},
-    {"changes", 2, ToggleChanges, "on|off", "Show number of rows changed by SQL", 3, ""},
-    {"columns", 1, SetColumnRendering, "", "Column-wise rendering of query results", 0, ""},
-#ifdef HAVE_LINENOISE
-    {"comment", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT>, "?COLOR?",
-     "DEPRECATED: Sets the syntax highlighting color used for comment values", 0, nullptr},
-    {"commentcode", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for comment values", 0, nullptr},
-    {"constant", 2, SetHighlightingColor<DeprecatedHighlightColors::CONSTANT>, "?COLOR?",
-     "DEPRECATED: Sets the syntax highlighting color used for constant values", 0, nullptr},
-    {"constantcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONSTANT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for constant values", 0, nullptr},
-    {"cont", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT>, "?COLOR?",
-     "DEPRECATED: Sets the syntax highlighting color used for continuation markers", 0, nullptr},
-    {"contcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for continuation markers", 0, nullptr},
-    {"cont_sel", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_SEL>, "?COLOR?",
-     "DEPRECATED: Sets the syntax highlighting color used for continuation markers", 0, nullptr},
-    {"cont_selcode", 2, SetHighlightingColor<DeprecatedHighlightColors::CONT_SEL_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for continuation markers", 0, nullptr},
-#endif
-    {"decimal_sep", 0, SetDecimalSep, "SEP",
-     "Sets the decimal separator used when rendering numbers. Only for duckbox mode.", 3, ""},
-    {"databases", 1, ShowDatabases, "", "List names and files of attached databases", 2, ""},
-    {
-        "dump",
-        0,
-        DumpTable,
-        "?TABLE?",
-        "Render database content as SQL",
-        0,
-        "Options:\n\t--newlines\tAllow unescaped newline characters in output\nTABLE is a LIKE pattern for the tables "
-        "to dump\nAdditional LIKE patterns can be given in subsequent arguments",
-    },
-    {"echo", 2, ToggleEcho, "on|off", "Turn command echo on or off", 3, ""},
-    {"edit", 0, nullptr, "", "Opens an external text editor to edit a query.", 0,
-     "Notes:\n\t* The editor is read from the environment variables\n\t  DUCKDB_EDITOR, EDITOR, VISUAL in-order\n\t* "
-     "If "
-     "none of these are set, the default editor is vi\n\t* \\e can be used as an alias for .edit"},
-#ifdef HAVE_LINENOISE
-    {"error", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR>, "?COLOR?",
-     "DEPRECATED: Sets the syntax highlighting color used for errors", 0, nullptr},
-    {"errorcode", 2, SetHighlightingColor<DeprecatedHighlightColors::ERROR_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for errors", 0, nullptr},
-#endif
-    {"excel", 0, SetOutputExcel, "", "Display the output of next command in spreadsheet", 0,
-     "--bom\tPut a UTF8 byte-order mark on intermediate file"},
-    {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0, ""},
-    {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0, ""},
-    {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0, ""},
-#ifdef HAVE_LINENOISE
-    {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
-#endif
-    {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
-    {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
-    {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},
-    {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0,
-     "Options:\n\t--ascii\tUse \\037 and \\036 as column and row separators\n\t--csv\tUse , and \\n as column and row "
-     "separators\n\t--skip N\tSkip the first N rows of input\n\t-v\t\"Verbose\" - increase auxiliary "
-     "output\nNotes:\n\t* If TABLE does not exist, it is created. The first row of input\n\t  determines the column "
-     "names.\n\t* If neither --csv or --ascii are used, the input mode is derived\n\t  from the \".mode\" output "
-     "mode\n\t* If FILE begins with \"|\" then it is a command that generates the\n\t  input text."},
-    {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0,
-     "Notes:\n\t* If TABLE is specified, only show indexes for\n\t  tables matching TABLE using the LIKE operator."},
-    {"indices", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
-#ifdef HAVE_LINENOISE
-    {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
-     "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
-    {"keywordcode", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD_CODE>, "?CODE?",
-     "DEPRECATED: Sets the syntax highlighting terminal code used for keywords", 0, nullptr},
-#endif
-    {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
-     "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
-    {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
-    {"maxrows", 0, SetMaxRows, "COUNT",
-     "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
-    {"maxwidth", 0, SetMaxWidth, "COUNT",
-     "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0, ""},
-    {"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0,
-     "MODE is one of:\n\tascii\tColumns/rows delimited by 0x1F and 0x1E\n\tbox\tTables using unicode box-drawing "
-     "characters\n\tcsv\tComma-separated values\n\tcolumn\tOutput in columns. (See .width)\n\tduckbox\tTables "
-     "with extensive features\n\thtml\tHTML <table> code\n\tinsert\tSQL insert statements for TABLE\n\t"
-     "json\tResults in a JSON array\n\tjsonlines\tResults in a NDJSON\n\tlatex\tLaTeX tabular environment code\n\t"
-     "line\tOne value per line\n\tlist\tValues delimited by \"|\"\n\tmarkdown\tMarkdown table format\n\t"
-     "quote\tEscape answers as for SQL\n\ttable\tASCII-art table\n\ttabs\tTab-separated values\n\ttcl\tTCL list "
-     "elements\n\ttrash\tNo output"},
-#ifdef HAVE_LINENOISE
-    {"multiline", 1, ToggleMultiLine, "", "Sets the render mode to multi-line", 0, ""},
-#endif
-    {"nullvalue", 2, SetNullValue, "STRING", "Use STRING in place of NULL values", 0, ""},
-
-    {"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2,
-     "Options:\n\t--new\tInitialize FILE to an empty database\n\t--nofollow\tDo not follow symbolic "
-     "links\n\t--readonly\tOpen FILE in read-only mode"},
-    {"once", 0, SetOutputOnce, "?FILE?", "Output for the next SQL command only to FILE", 0,
-     "If FILE begins with '|' then open as a pipe\n\t--bom\tPut a UTF8 byte-order mark at the beginning\n\t-e\tSend "
-     "output to the system text editor\n\t-x\tSend output as CSV to a spreadsheet (same as \".excel\")"},
-    {"output", 0, SetOutput, "?FILE?", "Send output to FILE or stdout if FILE is omitted", 0,
-     "If FILE begins with '|' then open as a pipe\n\t--bom\tPut a UTF8 byte-order mark at the beginning\n\t-e\tSend "
-     "output to the system text editor\n\t-x\tSend output as CSV to a spreadsheet (same as \".excel\")"},
-    {"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3, ""},
-    {"prompt", 0, SetPrompt, "MAIN CONTINUE", "Replace the standard prompts", 0, ""},
-
-    {"quit", 0, QuitProcess, "", "Exit this program", 0, ""},
-    {"read", 2, ReadFromFile, "FILE", "Read input from FILE", 3, ""},
-#ifdef HAVE_LINENOISE
-    {"render_color", 3, SetRenderHighlightColor, "?COMP? ?COLOR?",
-     "Configure highlighting colors for the interactive prompt", 0, ""},
-    {"render_completion", 2, ToggleCompletionRendering, "on|off",
-     "Toggle displaying of completion prompts in the shell on/off", 0, ""},
-    {"render_errors", 2, ToggleErrorRendering, "on|off", "Toggle rendering of errors in the shell on/off", 0, ""},
-#endif
-    {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0, ""},
-    {"safe_mode", 0, EnableSafeMode, "", "enable safe-mode", 0, ""},
-    {"separator", 0, SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
-    {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0,
-     "Options:\n\t--indent\tTry to pretty-print the schema"},
-    {"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, ""},
-    {"show", 1, ShowConfiguration, "", "Show the current values for various settings", 0, ""},
-#ifdef HAVE_LINENOISE
-    {"singleline", 1, ToggleSingleLine, "", "Sets the render mode to single-line", 0, ""},
-#endif
-    {"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0, ""},
-    {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2, ""},
-    {"thousand_sep", 0, SetThousandSep, "SEP",
-     "Sets the thousand separator used when rendering numbers. Only for duckbox mode.", 4, ""},
-    {"timer", 2, ToggleTimer, "on|off", "Turn SQL timer on or off", 0, ""},
-    {"ui_command", 0, SetUICommand, "[command]", "Set the UI command", 0, ""},
-    {"version", 1, ShowVersion, "", "Show the version", 0, ""},
-    {"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0,
-     "Negative values right-justify"},
-#if defined(_WIN32) || defined(WIN32)
-    {"utf8", 1, SetUTF8Mode, "", "Enable experimental UTF-8 console output mode", 0, ""},
-#endif
-    {nullptr, 0, nullptr, 0, nullptr}};
-
-bool ShouldPrintCommand(const MetadataCommand &command, const string &glob_pattern) {
-	if (!command.extra_description) {
-		return false;
-	}
-	if (StringUtil::Contains(command.description, "DEPRECATED")) {
-		return false;
-	}
-	// check if the command matches the pattern
-	if (glob_pattern.empty()) {
-		// no pattern - always matches
-		return true;
-	}
-	// explicit pattern provided - glob
-	return ShellState::StringGlob(glob_pattern.c_str(), command.command);
-}
-
-struct PrintCommandInfo {
-	string command_name;
-	string first_part;
-	string second_part;
-	HighlightElementType first_part_highlight = HighlightElementType::NONE;
-};
-
-idx_t ShellState::PrintHelp(const char *pattern) {
-	bool print_extended = false;
-	string glob_pattern;
-	if (pattern) {
-		// if a pattern is provided we always print extended info
-		print_extended = true;
-		if (StringUtil::Equals(pattern, "-a") || StringUtil::Equals(pattern, "-all") ||
-		    StringUtil::Equals(pattern, "--all")) {
-			// --all matches all commands
-			glob_pattern = string();
-		} else {
-			glob_pattern = StringUtil::Format("%s*", pattern);
-		}
-	}
-
-	constexpr idx_t MIN_SPACING = 4;
-	constexpr idx_t SPACING_PER_LAYER = 2;
-	vector<PrintCommandInfo> print_info_list;
-	// gather a list of all print statements
-	for (idx_t i = 0; metadata_commands[i].command; i++) {
-		auto &command = metadata_commands[i];
-		if (!ShouldPrintCommand(command, glob_pattern)) {
-			continue;
-		}
-		PrintCommandInfo print_info;
-		print_info.command_name = StringUtil::Format(".%s", command.command);
-		print_info.first_part += StringUtil::Format(" %s", command.usage);
-		print_info.second_part = command.description;
-		print_info.first_part_highlight = HighlightElementType::STRING_CONSTANT;
-		print_info_list.push_back(std::move(print_info));
-
-		if (print_extended) {
-			// process extended info
-			PrintCommandInfo current_command;
-			bool first_part = true;
-			bool after_newline = true;
-			for (auto c = command.extra_description; *c; c++) {
-				if (*c == '\n') {
-					// newline - flush the current command and reset
-					print_info_list.push_back(std::move(current_command));
-					current_command = PrintCommandInfo();
-					first_part = true;
-					after_newline = true;
-				} else if (*c == '\t') {
-					// tab
-					if (after_newline) {
-						// tab right after newline - add spaces
-						current_command.first_part += string(SPACING_PER_LAYER, ' ');
-					} else {
-						// tab not right after newline move to second part
-						if (!first_part) {
-							throw duckdb::InternalException(
-							    "Failed to parse extra description for command \"%s\" - only one tab (switch from "
-							    "first -> second part) was expected",
-							    command.command);
-						}
-						first_part = false;
-					}
-				} else {
-					if (after_newline) {
-						// add one more "layer" to commands
-						current_command.first_part += string(SPACING_PER_LAYER, ' ');
-						if (*c == '-') {
-							current_command.first_part_highlight = HighlightElementType::STRING_CONSTANT;
-						}
-					}
-					after_newline = false;
-					if (first_part) {
-						current_command.first_part += *c;
-					} else {
-						current_command.second_part += *c;
-					}
-				}
-			}
-			if (!current_command.first_part.empty()) {
-				// push final command
-				print_info_list.push_back(std::move(current_command));
-			}
-		}
-	}
-	// figure out alignment based on the total first part print size
-	idx_t max_lhs_size = 0;
-	for (auto &print_info : print_info_list) {
-		if (print_info.second_part.empty()) {
-			// only print info with two parts needs to influence padding
-			continue;
-		}
-		idx_t lhs_size = print_info.command_name.size() + print_info.first_part.size() + MIN_SPACING;
-		if (lhs_size > max_lhs_size) {
-			max_lhs_size = lhs_size;
-		}
-	}
-
-	// print
-	for (auto &print_info : print_info_list) {
-		idx_t lhs_size = print_info.command_name.size() + print_info.first_part.size();
-		string spaces;
-		if (!print_info.second_part.empty()) {
-			// only add padding for lines that have extra info
-			spaces = string(max_lhs_size - lhs_size, ' ');
-		}
-		ShellHighlight highlighter(*this);
-		if (!print_info.command_name.empty()) {
-			highlighter.PrintText(print_info.command_name, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
-		}
-		highlighter.PrintText(print_info.first_part, PrintOutput::STDOUT, print_info.first_part_highlight);
-		utf8_printf(out, "%s%s\n", spaces.c_str(), print_info.second_part.c_str());
-	}
-	if (!print_extended) {
-		utf8_printf(out, "\nRun .help --all for extended information\n");
-	}
-	return print_info_list.size();
 }
 
 /*
@@ -3792,7 +2627,6 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 ** Return 1 on error, 2 to exit, and 0 otherwise.
 */
 int ShellState::DoMetaCommand(const string &zLine) {
-	int n, c;
 	int rc = 0;
 	vector<string> args;
 	// skip initial dot
@@ -3842,48 +2676,38 @@ int ShellState::DoMetaCommand(const string &zLine) {
 	if (args.empty()) {
 		return 0; /* no tokens, no error */
 	}
-	n = args[0].size();
-	c = args[0][0];
 	ClearTempFile();
 
-	bool found_argument = false;
-	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
-		auto &command = metadata_commands[command_idx];
-		idx_t match_size = command.match_size ? command.match_size : n;
-		if (n < int(match_size) || c != *command.command || strncmp(args[0].c_str(), command.command, n) != 0) {
-			continue;
-		}
-		found_argument = true;
+	string error_msg;
+	auto metadata_command = FindMetadataCommand(args[0], error_msg);
+	if (!metadata_command) {
+		// command not found
+		PrintDatabaseError(error_msg);
+		rc = 1;
+	} else {
+		auto &command = *metadata_command;
 		MetadataResult result = MetadataResult::PRINT_USAGE;
-		if (!command.callback) {
-			raw_printf(stderr, "Command \"%s\" is unsupported in the current version of the CLI\n", command.command);
-			result = MetadataResult::FAIL;
-		} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
-			result = command.callback(*this, args);
-		}
-		if (result == MetadataResult::PRINT_USAGE) {
-			string error = StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
-			error += StringUtil::Format("Usage: '.%s %s'", command.command, command.usage);
-			PrintDatabaseError(error);
-			rc = 1;
+		try {
+			if (!command.callback) {
+				PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
+				       command.command);
+				result = MetadataResult::FAIL;
+			} else if (command.argument_count == 0 || int(command.argument_count) == args.size()) {
+				result = command.callback(*this, args);
+			}
+			if (result == MetadataResult::PRINT_USAGE) {
+				string error = StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
+				error += StringUtil::Format("Usage: '.%s %s'", command.command, command.usage);
+				PrintDatabaseError(error);
+				rc = 1;
+				result = MetadataResult::FAIL;
+			}
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			PrintDatabaseError(error.Message());
 			result = MetadataResult::FAIL;
 		}
 		rc = int(result);
-		break;
-	}
-	if (!found_argument) {
-		string error = StringUtil::Format("Unknown Command Error: Unrecognized command '%s'\n", args[0]);
-
-		vector<string> command_names;
-		for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
-			auto &command = metadata_commands[command_idx];
-			command_names.push_back(string(".") + command.command);
-		}
-		auto candidates_msg = StringUtil::CandidatesErrorMessage(command_names, args[0], "Did you mean");
-		error += candidates_msg + "\n";
-		error += "Run '.help' for more information.";
-		PrintDatabaseError(error);
-		rc = 1;
 	}
 
 	if (outCount) {
@@ -4110,8 +2934,8 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	if (success != SuccessState::SUCCESS) {
 		return 1;
 	} else if (ShellHasFlag(ShellFlags::SHFLG_CountChanges)) {
-		raw_printf(out, "changes: %3llu   total_changes: %llu\n", (unsigned long long)last_changes,
-		           (unsigned long long)total_changes);
+		PrintF("changes: %3llu   total_changes: %llu\n", (unsigned long long)last_changes,
+		       (unsigned long long)total_changes);
 	}
 	return 0;
 }
@@ -4161,6 +2985,15 @@ int ShellState::ProcessInput(InputMode mode) {
 		} else {
 			numCtrlC = 0;
 		}
+		if (mode == InputMode::DUCKDB_RC && !StringUtil::StartsWith(zLine, ".startup_text")) {
+			if (startup_text == StartupText::ALL) {
+				ShellHighlight highlight(*this);
+				highlight.PrintText(StringUtil::Format("-- Loading resources from %s\n", duckdb_rc_path),
+				                    PrintOutput::STDERR, HighlightElementType::STARTUP_TEXT);
+				displayed_loading_resources_message = true;
+			}
+			mode = InputMode::FILE;
+		}
 		if (seenInterrupt) {
 			if (in) {
 				break;
@@ -4180,8 +3013,9 @@ int ShellState::ProcessInput(InputMode mode) {
 			}
 			if (zLine[0] == '.') {
 #ifndef SHELL_USE_LOCAL_GETLINE
-				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3')
+				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3') {
 					shell_add_history(zLine);
+				}
 #endif
 				rc = DoMetaCommand(zLine);
 				if (rc == 2) { /* exit requested */
@@ -4260,13 +3094,15 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 
 	in = fopen(file.c_str(), "rb");
 	if (in) {
+		InputMode input_mode = InputMode::FILE;
 		if (stdin_is_interactive && is_duckdb_rc) {
-			utf8_printf(stderr, "-- Loading resources from %s\n", file.c_str());
+			input_mode = InputMode::DUCKDB_RC;
+			duckdb_rc_path = file;
 		}
-		rc = ProcessInput(InputMode::FILE);
+		rc = ProcessInput(input_mode);
 		fclose(in);
 	} else if (!is_duckdb_rc) {
-		utf8_printf(stderr, "Failed to read file \"%s\"\n", file.c_str());
+		PrintF(PrintOutput::STDERR, "Failed to read file \"%s\"\n", file.c_str());
 		rc = 1;
 	}
 	in = inSaved;
@@ -4281,8 +3117,8 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 		path = ShellState::GetDefaultDuckDBRC();
 		if (path.empty()) {
 			// could not find home directory - return
-			raw_printf(stderr, "-- warning: cannot find home directory;"
-			                   " cannot read ~/.duckdbrc\n");
+			PrintF(PrintOutput::STDERR, "-- warning: cannot find home directory;"
+			                            " cannot read ~/.duckdbrc\n");
 			return true;
 		}
 		file = path.c_str();
@@ -4295,77 +3131,55 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 ** Linenoise completion callback
 */
 static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
-	idx_t nLine = ShellState::StringLength(zLine);
-	char zBuf[1000];
+	auto &state = ShellState::Get();
+	try {
+		idx_t nLine = ShellState::StringLength(zLine);
+		char zBuf[1000];
 
-	if (nLine > sizeof(zBuf) - 30) {
-		return;
-	}
-	if (!globalState) {
-		return;
-	}
-	if (zLine[0] == '.') {
-		// auto-complete dot command
-		for (idx_t c = 0; metadata_commands[c].command; c++) {
-			auto &command = metadata_commands[c];
-			auto &line = command.command;
-			bool found_match = true;
-			idx_t line_pos;
-			zBuf[0] = '.';
-			for (line_pos = 0; !ShellState::IsSpace(line[line_pos]) && line[line_pos] && line_pos + 2 < sizeof(zBuf);
-			     line_pos++) {
-				zBuf[line_pos + 1] = line[line_pos];
-				if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
-					// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
-					found_match = false;
-					break;
-				}
+		if (nLine > sizeof(zBuf) - 30) {
+			return;
+		}
+		if (zLine[0] == '.') {
+			// auto-complete dot command
+			auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
+			for (auto &completion : dot_completions) {
+				linenoiseAddCompletion(lc, completion.c_str());
 			}
-			zBuf[line_pos + 1] = '\0';
-			if (found_match && line_pos + 1 >= nLine) {
+			return;
+		}
+		if (zLine[0] == '#') {
+			return;
+		}
+		auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
+		unique_ptr<duckdb::DuckDB> localDB;
+		unique_ptr<duckdb::Connection> localCon;
+
+		if (!state.conn) {
+			state.OpenDB();
+		}
+		auto &con = *state.conn;
+		bool copiedSuggestion = false;
+		auto result = con.Query(zSql);
+		for (auto &row : *result) {
+			auto zCompletion = row.GetValue<string>(0);
+			auto nCompletion = zCompletion.size();
+			idx_t iStart = row.GetValue<idx_t>(1);
+			if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
+				if (!copiedSuggestion) {
+					memcpy(zBuf, zLine, iStart);
+					copiedSuggestion = true;
+				}
+				memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
 				linenoiseAddCompletion(lc, zBuf);
 			}
 		}
-		return;
-	}
-	if (zLine[0] == '#') {
-		return;
-	}
-	//  if( i==nLine-1 ) return;
-	auto zSql = StringUtil::Format("CALL sql_auto_complete(%s)", SQLString(zLine));
-	unique_ptr<duckdb::DuckDB> localDB;
-	unique_ptr<duckdb::Connection> localCon;
-
-	if (!globalState->conn) {
-		globalState->OpenDB();
-	}
-	auto &con = *globalState->conn;
-	bool copiedSuggestion = false;
-	auto result = con.Query(zSql);
-	for (auto &row : *result) {
-		auto zCompletion = row.GetValue<string>(0);
-		auto nCompletion = zCompletion.size();
-		idx_t iStart = row.GetValue<idx_t>(1);
-		if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
-			if (!copiedSuggestion) {
-				memcpy(zBuf, zLine, iStart);
-				copiedSuggestion = true;
-			}
-			memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
-			linenoiseAddCompletion(lc, zBuf);
-		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		state.PrintF(PrintOutput::STDERR, "Failure during auto-completion: %s\n", error.Message());
+		exit(1);
 	}
 }
 #endif
-
-struct CommandLineOption {
-	const char *option;
-	idx_t argument_count;
-	const char *arguments;
-	metadata_command_t pre_init_callback;
-	metadata_command_t post_init_callback;
-	const char *description;
-};
 
 struct CommandLineCall {
 	CommandLineCall(const CommandLineOption &option, vector<string> arguments_p)
@@ -4376,260 +3190,20 @@ struct CommandLineCall {
 	vector<string> arguments;
 };
 
-template <RenderMode output_mode>
-MetadataResult ToggleOutputMode(ShellState &state, const vector<string> &args) {
-	state.cMode = state.mode = output_mode;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleASCIIMode(ShellState &state, const vector<string> &args) {
-	state.cMode = state.mode = RenderMode::ASCII;
-	state.colSeparator = SEP_Unit;
-	state.rowSeparator = SEP_Record;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ToggleCSVMode(ShellState &state, const vector<string> &args) {
-	state.cMode = state.mode = RenderMode::CSV;
-	state.colSeparator = ",";
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult EnableBail(ShellState &state, const vector<string> &args) {
-	bail_on_error = true;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult EnableBatch(ShellState &state, const vector<string> &args) {
-	stdin_is_interactive = false;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult DisableBatch(ShellState &state, const vector<string> &args) {
-	stdin_is_interactive = true;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetReadOnlyMode(ShellState &state, const vector<string> &args) {
-	state.config.options.access_mode = duckdb::AccessMode::READ_ONLY;
-	return MetadataResult::SUCCESS;
-}
-
-template <bool HEADER>
-MetadataResult ToggleHeader(ShellState &state, const vector<string> &args) {
-	state.showHeader = HEADER;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult DisableStdin(ShellState &state, const vector<string> &args) {
-	state.readStdin = false;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult EnableEcho(ShellState &state, const vector<string> &args) {
-	state.ShellSetFlag(ShellFlags::SHFLG_Echo);
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult AllowUnredacted(ShellState &state, const vector<string> &args) {
-	state.config.options.allow_unredacted_secrets = true;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
-	state.config.options.allow_unsigned_extensions = true;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ShowVersionAndExit(ShellState &state, const vector<string> &args) {
-	printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
-	       duckdb::DuckDB::SourceID());
-	return MetadataResult::EXIT;
-}
-
-MetadataResult PrintHelpAndExit(ShellState &state, const vector<string> &args) {
-	state.PrintUsage();
-	return MetadataResult::EXIT;
-}
-
-MetadataResult LaunchUI(ShellState &state, const vector<string> &args) {
-	// run the UI command
-	auto rc = state.RunInitialCommand((char *)state.ui_command.c_str(), true);
-	if (rc != 0) {
-		exit(rc);
-		return MetadataResult::EXIT;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args) {
-	// run the UI command
-	state.rowSeparator = args[1];
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) {
-	auto &storage_version = args[1];
-	try {
-		state.config.options.serialization_compatibility =
-		    duckdb::SerializationCompatibility::FromString(storage_version);
-	} catch (std::exception &ex) {
-		duckdb::ErrorData error(ex);
-		utf8_printf(stderr, "%s: Error: unknown argument (%s) for '-storage-version': %s\n", program_name,
-		            storage_version.c_str(), error.Message().c_str());
-		return MetadataResult::EXIT;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
-	state.readStdin = false;
-	auto old_bail = bail_on_error;
-	bail_on_error = true;
-	auto &file = args[1];
-	if (!state.ProcessFile(file)) {
-		exit(1);
-		return MetadataResult::EXIT;
-	}
-	bail_on_error = old_bail;
-	return MetadataResult::SUCCESS;
-}
-
-MetadataResult SetInitFile(ShellState &state, const vector<string> &args) {
-	state.initFile = args[1];
-	return MetadataResult::SUCCESS;
-}
-
-template <bool EXIT>
-MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
-	if (EXIT) {
-		state.readStdin = false;
-	}
-	// Always bail if -c or -s fail
-	bool bail = bail_on_error || EXIT;
-	auto &cmd = args[1];
-	auto rc = state.RunInitialCommand(cmd.c_str(), bail);
-	if (rc != 0) {
-		exit(rc);
-		return MetadataResult::EXIT;
-	}
-	return MetadataResult::SUCCESS;
-}
-
-static const CommandLineOption command_line_options[] = {
-    {"ascii", 0, "", nullptr, ToggleASCIIMode, "set output mode to 'ascii'"},
-    {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error'"},
-    {"batch", 0, "", EnableBatch, EnableBatch, "force batch I/O'"},
-    {"box", 0, "", nullptr, ToggleOutputMode<RenderMode::BOX>, "set output mode to 'box'"},
-    {"column", 0, "", nullptr, ToggleOutputMode<RenderMode::COLUMN>, "set output mode to 'column'"},
-    {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
-    {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
-    {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
-    {"echo", 0, "", nullptr, EnableEcho, "print commands before execution"},
-    {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
-    {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
-    {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
-    {"help", 0, "", PrintHelpAndExit, nullptr, "show this message"},
-    {"html", 0, "", nullptr, ToggleOutputMode<RenderMode::HTML>, "set output mode to HTML"},
-    {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
-    {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
-    {"line", 0, "", nullptr, ToggleOutputMode<RenderMode::LINE>, "set output mode to 'line'"},
-    {"list", 0, "", nullptr, ToggleOutputMode<RenderMode::LIST>, "set output mode to 'list'"},
-    {"markdown", 0, "", nullptr, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},
-    {"newline", 1, "SEP", nullptr, SetNewlineSeparator, "set output row separator. Default: '\\n'"},
-    {"no-stdin", 0, "", nullptr, DisableStdin, "exit after processing options instead of reading stdin"},
-    {"noheader", 0, "", nullptr, ToggleHeader<false>, "turn headers off"},
-    {"nullvalue", 1, "TEXT", nullptr, SetNullValue, "set text string for NULL values. Default 'NULL'"},
-    {"quote", 0, "", nullptr, ToggleOutputMode<RenderMode::QUOTE>, "set output mode to 'quote'"},
-    {"readonly", 0, "", SetReadOnlyMode, nullptr, "open the database read-only"},
-    {"s", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
-    {"safe", 0, "", EnableSafeMode, nullptr, "enable safe-mode"},
-    {"separator", 1, "SEP", nullptr, SetSeparator, "set output column separator. Default: '|'"},
-    {"storage-version", 1, "VER", SetStorageVersion, nullptr,
-     "database storage compatibility version to use. Default: 'v0.10.0'"},
-    {"table", 0, "", nullptr, ToggleOutputMode<RenderMode::TABLE>, "set output mode to 'table'"},
-    {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
-    {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
-    {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},
-    {"version", 0, "", nullptr, ShowVersionAndExit, "show DuckDB version"},
-    {nullptr, 0, nullptr, nullptr, nullptr, nullptr}};
-
-duckdb::optional_idx FindOption(const char *name) {
-	for (idx_t c = 0; command_line_options[c].option; c++) {
-		auto &option = command_line_options[c];
-		if (!StringUtil::Equals(name, option.option)) {
-			// not this one
-			continue;
-		}
-		// found it!
-		return c;
-	}
-	return duckdb::optional_idx();
-}
-
-struct PrintOptionInfo {
-	string command_name;
-	string arguments;
-	string description;
-};
-
-void ShellState::PrintUsage() {
-	ShellHighlight highlighter(*this);
-	highlighter.PrintText("Usage: ", PrintOutput::STDOUT, PrintColor::STANDARD, PrintIntensity::BOLD);
-	highlighter.PrintText(program_name, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
-	highlighter.PrintText(" [OPTIONS] FILENAME [SQL]\n\n", PrintOutput::STDOUT, HighlightElementType::STRING_CONSTANT);
-	highlighter.PrintText("FILENAME", PrintOutput::STDOUT, PrintColor::STANDARD, PrintIntensity::BOLD);
-	utf8_printf(stdout, " is the name of a DuckDB database. A new database is created\n"
-	                    "if the file does not previously exist.\n\n");
-	highlighter.PrintText("OPTIONS:\n", PrintOutput::STDOUT, PrintColor::STANDARD, PrintIntensity::BOLD);
-	constexpr idx_t INITIAL_SPACING = 2;
-	constexpr idx_t MIN_SPACING = 4;
-	vector<PrintOptionInfo> print_options;
-	for (idx_t c = 0; command_line_options[c].option; c++) {
-		auto &option = command_line_options[c];
-		PrintOptionInfo print_option;
-		print_option.command_name = string(INITIAL_SPACING, ' ') + "-" + option.option;
-		print_option.arguments = option.arguments;
-		print_option.description = option.description;
-		print_options.push_back(std::move(print_option));
-	}
-	idx_t max_lhs_length = 0;
-	for (auto &option : print_options) {
-		auto lhs_length = option.command_name.size() + option.arguments.size();
-		if (!option.arguments.empty()) {
-			lhs_length++;
-		}
-		if (lhs_length > max_lhs_length) {
-			max_lhs_length = lhs_length;
-		}
-	}
-	// print the options
-	for (auto &option : print_options) {
-		auto lhs_length = option.command_name.size() + option.arguments.size();
-		if (!option.arguments.empty()) {
-			lhs_length++;
-		}
-		idx_t padding = max_lhs_length - lhs_length + MIN_SPACING;
-		string spaces(padding, ' ');
-		highlighter.PrintText(option.command_name, PrintOutput::STDOUT, HighlightElementType::KEYWORD);
-		if (!option.arguments.empty()) {
-			highlighter.PrintText(" " + option.arguments, PrintOutput::STDOUT, HighlightElementType::STRING_CONSTANT);
-		}
-		utf8_printf(stdout, "%s%s\n", spaces.c_str(), option.description.c_str());
-	}
-	exit(0);
-}
-
 /*
 ** Initialize the state information in data
 */
-static void main_init(ShellState *data) {
-	data->normalMode = data->cMode = data->mode = RenderMode::DUCKBOX;
-	data->max_rows = 40;
-	data->colSeparator = SEP_Column;
-	data->rowSeparator = SEP_Row;
-	data->showHeader = true;
-	strcpy(mainPrompt, "D ");
+void ShellState::Initialize() {
+	normalMode = cMode = mode = RenderMode::DUCKBOX;
+	max_rows = 40;
+	colSeparator = SEP_Column;
+	rowSeparator = SEP_Row;
+	showHeader = true;
+	main_prompt = make_uniq<Prompt>();
+	string default_prompt;
+	default_prompt =
+	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
+	main_prompt->ParsePrompt(default_prompt);
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
@@ -4645,54 +3219,46 @@ static void main_init(ShellState *data) {
 #endif
 #endif
 
+struct ShellStateDestroyer {
+	~ShellStateDestroyer() {
+		ShellState::Get().Destroy();
+	}
+};
+
 #if SQLITE_SHELL_IS_UTF8
-int main(int argc, char **argv) {
+int main(int argc, const char **argv) {
 #else
 int wmain(int argc, wchar_t **wargv) {
-	char **argv;
+	const char **argv;
 #endif
-	ShellState data;
-	int i;
 	int rc = 0;
-	bool warnInmemoryDb = false;
 	vector<string> extra_commands;
-#if !SQLITE_SHELL_IS_UTF8
-	char **argvToFree = 0;
-	int argcToFree = 0;
-#endif
+	ShellStateDestroyer destroyer;
 
+	auto &data = ShellState::Get();
 	data.out = stdout;
-	globalState = &data;
 
 	setBinaryMode(stdin, 0);
 	setvbuf(stderr, 0, _IONBF, 0); /* Make sure stderr is unbuffered */
-	stdin_is_interactive = isatty(0);
-	stdout_is_console = isatty(1);
-	stderr_is_console = isatty(2);
+	data.stdin_is_interactive = isatty(0);
+	data.stdout_is_console = isatty(1);
+	data.stderr_is_console = isatty(2);
 
-	main_init(&data);
+	data.Initialize();
 
 	/* On Windows, we must translate command-line arguments into UTF-8.
 	 */
 #if !SQLITE_SHELL_IS_UTF8
-	argvToFree = (char **)malloc(sizeof(argv[0]) * argc * 2);
-	argcToFree = argc;
-	argv = argvToFree + argc;
-	if (argv == 0)
-		shell_out_of_memory();
+	vector<string> utf8_args;
+	utf8_args.resize(argc);
 	for (i = 0; i < argc; i++) {
-		auto z = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		argv[i] = (char *)malloc(z.size() + 1);
-		if (argv[i] == 0) {
-			shell_out_of_memory();
-		}
-		memcpy(argv[i], z.c_str(), z.size() + 1);
-		argvToFree[i] = argv[i];
+		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
+		argv[i] = utf8_args[i].c_str();
 	}
 #endif
 
 	assert(argc >= 1 && argv && argv[0]);
-	program_name = argv[0];
+	data.program_name = argv[0];
 
 	/* Make sure we have a valid signal handler early, before anything
 	** else is done.
@@ -4709,9 +3275,8 @@ int wmain(int argc, wchar_t **wargv) {
 	** and the first command to execute.
 	*/
 	vector<CommandLineCall> command_line_calls;
-	for (i = 1; i < argc; i++) {
-		char *z;
-		z = argv[i];
+	for (int i = 1; i < argc; i++) {
+		auto z = argv[i];
 		if (z[0] != '-') {
 			if (data.zDbFilename.empty()) {
 				data.zDbFilename = z;
@@ -4719,7 +3284,7 @@ int wmain(int argc, wchar_t **wargv) {
 				/* Excesss arguments are interpreted as SQL (or dot-commands) and
 				** mean that nothing is read from stdin */
 				data.readStdin = false;
-				stdin_is_interactive = false;
+				data.stdin_is_interactive = false;
 				extra_commands.emplace_back(z);
 			}
 			continue;
@@ -4730,28 +3295,13 @@ int wmain(int argc, wchar_t **wargv) {
 			z++;
 		}
 
-		auto c = FindOption(z);
-		if (!c.IsValid()) {
-			// we haven't found it yet - try substituting all underscores with dashes
-			// this is legacy behavior - we allow e.g. "-storage_version" to be used instead of "-storage-version"
-			auto option_name = StringUtil::Replace(z, "_", "-");
-			c = FindOption(option_name.c_str());
-		}
-		if (!c.IsValid()) {
-			// not found
-			string error = StringUtil::Format("Unknown Option Error: Unrecognized option '-%s'\n", z);
-			vector<string> option_names;
-			for (idx_t c = 0; command_line_options[c].option; c++) {
-				auto &option = command_line_options[c];
-				option_names.push_back(string("-") + option.option);
-			}
-			auto candidates_msg = StringUtil::CandidatesErrorMessage(option_names, string("-") + z, "Did you mean");
-			error += candidates_msg + "\n";
-			error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
-			data.PrintDatabaseError(error);
+		string error_msg;
+		auto command_line_option = data.FindCommandLineOption(z, error_msg);
+		if (!command_line_option) {
+			data.PrintDatabaseError(error_msg);
 			return 1;
 		}
-		auto &option = command_line_options[c.GetIndex()];
+		auto &option = *command_line_option;
 		// parse arguments
 		vector<string> arguments;
 		arguments.push_back(option.option);
@@ -4762,7 +3312,7 @@ int wmain(int argc, wchar_t **wargv) {
 				                       option.option, option.argument_count, arg_idx);
 				error += StringUtil::Format("OPTION:\n  -%s %s    %s\n\n", option.option, option.arguments,
 				                            option.description);
-				error += StringUtil::Format("Run '%s -help' for a list of options.\n", program_name);
+				error += StringUtil::Format("Run '%s -help' for a list of options.\n", data.program_name);
 				data.PrintDatabaseError(error);
 				return 1;
 			}
@@ -4781,7 +3331,6 @@ int wmain(int argc, wchar_t **wargv) {
 
 	if (data.zDbFilename.empty()) {
 		data.zDbFilename = ":memory:";
-		warnInmemoryDb = argc == 1;
 	}
 	data.out = stdout;
 
@@ -4798,7 +3347,7 @@ int wmain(int argc, wchar_t **wargv) {
 	** is given on the command line, look for a file named ~/.sqliterc and
 	** try to process it.
 	*/
-	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str()) && bail_on_error) {
+	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str()) && data.bail_on_error) {
 		return 1;
 	}
 
@@ -4840,19 +3389,24 @@ int wmain(int argc, wchar_t **wargv) {
 	} else {
 		/* Run commands received from standard input
 		 */
-		if (stdin_is_interactive) {
+		if (data.stdin_is_interactive) {
 			string zHome;
 			const char *zHistory;
-			printf("DuckDB %s (%s) %.19s\n" /*extra-version-info*/
-			       "Enter \".help\" for usage hints.\n",
-			       duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
-			if (warnInmemoryDb) {
-				printf("Connected to a ");
-				ShellHighlight highlighter(data);
-				highlighter.PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
-				                      PrintIntensity::BOLD);
-				printf(".\nUse \".open FILENAME\" to reopen on a "
-				       "persistent database.\n");
+
+			ShellHighlight highlight(data);
+			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
+			                                          duckdb::DuckDB::ReleaseCodename());
+			if (StringUtil::Contains(duckdb::DuckDB::ReleaseCodename(), "Development")) {
+				startup_version += ", ";
+				startup_version += duckdb::DuckDB::SourceID();
+			}
+			startup_version += ")\n";
+			if (data.startup_text != StartupText::NONE) {
+				highlight.PrintText(startup_version, PrintOutput::STDOUT, HighlightElementType::STARTUP_VERSION);
+			}
+			if (data.startup_text == StartupText::ALL) {
+				highlight.PrintText("Enter \".help\" for usage hints.\n", PrintOutput::STDOUT,
+				                    HighlightElementType::STARTUP_TEXT);
 			}
 			zHistory = getenv("DUCKDB_HISTORY");
 			if (!zHistory) {
@@ -4884,11 +3438,5 @@ int wmain(int argc, wchar_t **wargv) {
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
-#if !SQLITE_SHELL_IS_UTF8
-	for (i = 0; i < argcToFree; i++) {
-		free(argvToFree[i]);
-	}
-	free(argvToFree);
-#endif
 	return rc;
 }

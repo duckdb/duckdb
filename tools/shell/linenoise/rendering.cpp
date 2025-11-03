@@ -2,6 +2,7 @@
 #include "highlighting.hpp"
 #include "history.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "shell_highlight.hpp"
 #include <unistd.h>
 
 namespace duckdb {
@@ -230,7 +231,7 @@ void Linenoise::RefreshSearch() {
 			search_prompt += "> ";
 		}
 	}
-	auto oldHighlighting = Highlighting::IsEnabled();
+	auto old_highlighting = duckdb_shell::ShellHighlight::IsEnabled();
 	Linenoise clone = *this;
 	prompt = search_prompt.c_str();
 	plen = search_prompt.size();
@@ -240,7 +241,7 @@ void Linenoise::RefreshSearch() {
 		len = no_matches_text.size();
 		pos = 0;
 		// don't highlight the "no_matches" text
-		Highlighting::Disable();
+		duckdb_shell::ShellHighlight::SetHighlighting(false);
 	} else {
 		// if there are matches render the current history item
 		auto search_match = search_matches[search_index];
@@ -252,8 +253,8 @@ void Linenoise::RefreshSearch() {
 	}
 	RefreshLine();
 
-	if (oldHighlighting) {
-		Highlighting::Enable();
+	if (old_highlighting) {
+		duckdb_shell::ShellHighlight::SetHighlighting(true);
 	}
 	buf = clone.buf;
 	len = clone.len;

@@ -120,6 +120,12 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 		return make_uniq<StringAggBindData>(",");
 	}
 	D_ASSERT(arguments.size() == 2);
+	// Check if any argument is of UNKNOWN type (parameter not yet bound)
+	for (auto &arg : arguments) {
+		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+	}
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
