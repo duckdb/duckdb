@@ -495,10 +495,10 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
                             idx_t append_count) {
 	idx_t offset = 0;
-	this->count += append_count;
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vdata, offset, append_count);
+		this->count += copied_elements;
 		append_stats.Merge(state.current->stats.statistics);
 		if (copied_elements == append_count) {
 			// finished copying everything

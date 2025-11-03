@@ -14,6 +14,6 @@ duckdb_extension_load(parquet)
 
 # The Linux allocator has issues so we use jemalloc, but only on x86 because page sizes are fixed at 4KB.
 # Configuring jemalloc properly for 32bit is a hassle, and not worth it so we only enable on 64bit
-if(CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND NOT WASM_LOADABLE_EXTENSIONS AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
+if(CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND NOT WASM_LOADABLE_EXTENSIONS AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS AND NOT BSD AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(jemalloc)
 endif()
