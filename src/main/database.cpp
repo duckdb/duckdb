@@ -32,7 +32,6 @@
 #include "duckdb/common/http_util.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
-#include "duckdb/execution/physical_table_scan_enum.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"

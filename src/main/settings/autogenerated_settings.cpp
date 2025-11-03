@@ -255,13 +255,6 @@ Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Debug Physical Table Scan Execution Strategy
-//===----------------------------------------------------------------------===//
-void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // Debug Verify Vector
 //===----------------------------------------------------------------------===//
 void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

@@ -349,7 +349,6 @@ struct DebugPhysicalTableScanExecutionStrategySetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "DEFAULT";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
-	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DebugSkipCheckpointOnCommitSetting {
