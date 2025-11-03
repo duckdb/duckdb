@@ -103,7 +103,7 @@ TEST_CASE("Test clear appender data", "[appender]") {
 	// append a bunch of values
 	{
 		Appender appender(con, "integers");
-		for (idx_t i = 0; i < 2000; i++) {
+		for (idx_t i = 0; i < 4000; i++) {
 			appender.BeginRow();
 			appender.Append<int32_t>(1);
 			appender.EndRow();
