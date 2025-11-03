@@ -38,7 +38,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterTableStmt(PEGTransfor
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTransformer &transformer,
-		optional_ptr<ParseResult> parse_result) {
+                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	OnEntryNotFound not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
@@ -70,8 +70,12 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTrans
 	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto sequence_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
 	auto alter_info = transformer.Transform<unique_ptr<AlterInfo>>(list_pr.Child<ListParseResult>(3));
-	alter_info->catalog = sequence_name.catalog;
-	alter_info->schema = sequence_name.schema;
+	if (sequence_name.schema.empty()) {
+		alter_info->schema = sequence_name.catalog;
+	} else {
+		alter_info->catalog = sequence_name.catalog;
+		alter_info->schema = sequence_name.schema;
+	}
 	alter_info->name = sequence_name.name;
 	alter_info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return alter_info;
@@ -326,7 +330,8 @@ string PEGTransformerFactory::TransformSequenceName(PEGTransformer &transformer,
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
-unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetSortedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetSortedBy(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(3));
 	auto order_by_exprs = transformer.Transform<vector<OrderByNode>>(extract_parens);
@@ -334,7 +339,8 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetSortedBy(PEGTransf
 	return result;
 }
 
-unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetSortedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetSortedBy(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
 	vector<OrderByNode> order_by_exprs;
 	auto result = make_uniq<SetSortedByInfo>(AlterEntryData(), std::move(order_by_exprs));
 	return result;
