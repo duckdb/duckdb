@@ -105,6 +105,56 @@ unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientCont
 	return make_uniq<TableScanGlobalSourceState>(context, *this);
 }
 
+static void ValidateAsyncStrategyResult(const PhysicalTableScanExecutionStrategy &strategy,
+                                        const AsyncResultsExecutionMode &execution_mode_pre,
+                                        const AsyncResultsExecutionMode &execution_mode_post,
+                                        const AsyncResultType &result_pre, const AsyncResultType &result_post,
+                                        const idx_t output_chunk_size) {
+	auto execution_mode_pre_computed = AsyncResult::ConvertToAsyncResultExecutionMode(strategy);
+	if (execution_mode_pre_computed != execution_mode_pre) {
+		throw InternalException("ValidateAsyncStrategyResult: invalid conversion PhysicalTableScanExecutionStrategy to "
+		                        "AsyncResultsExecutionMode, from '%s', to '%s'",
+		                        EnumUtil::ToChars(strategy), EnumUtil::ToChars(execution_mode_pre));
+	}
+
+	if (execution_mode_pre != execution_mode_post) {
+		throw InternalException("ValidateAsyncStrategyResult: results_execution_mode changed within table API's "
+		                        "`function` call, before '%s', after '%s'",
+		                        EnumUtil::ToChars(execution_mode_pre), EnumUtil::ToChars(execution_mode_post));
+	}
+	if (result_pre != AsyncResultType::IMPLICIT) {
+		throw InternalException("ValidateAsyncStrategyResult: async_result is supposed to be IMPLICIT, was '%s', "
+		                        "before table API's `function` call",
+		                        EnumUtil::ToChars(result_pre));
+	}
+	switch (strategy) {
+	case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS:
+		// This is a funny one, expected to throw on non-trivial workflows in this function
+	case PhysicalTableScanExecutionStrategy::SYNCHRONOUS:
+		switch (result_post) {
+		case AsyncResultType::INVALID:
+			throw InternalException("ValidateAsyncStrategyResult: found INVALID");
+		case AsyncResultType::BLOCKED:
+			throw InternalException("ValidateAsyncStrategyResult: found BLOCKED");
+		case AsyncResultType::FINISHED:
+			if (output_chunk_size) {
+				throw InternalException("ValidateAsyncStrategyResult: found FINISHED with non-empty chunk");
+			}
+			break;
+		case AsyncResultType::HAVE_MORE_OUTPUT:
+			if (output_chunk_size) {
+				throw InternalException("ValidateAsyncStrategyResult: found HAVE_MORE_OUTPUT with empty chunk");
+			}
+			break;
+		case AsyncResultType::IMPLICIT:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSourceInput &input) const {
 	D_ASSERT(!column_ids.empty());
@@ -115,49 +165,24 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 	if (function.function) {
 		data.async_result = AsyncResultType::IMPLICIT;
-		data.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
 
-		switch (g_state.physical_table_scan_execution_strategy) {
-		case PhysicalTableScanExecutionStrategy::DEFAULT:
-		case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR:
-		case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS:
-			data.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
-			break;
-		case PhysicalTableScanExecutionStrategy::SYNCHRONOUS:
-			data.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;
-			break;
-		}
+		const auto initial_async_result = data.async_result.GetResultType();
+		const auto execution_strategy = g_state.physical_table_scan_execution_strategy;
+		const auto input_execution_mode = AsyncResult::ConvertToAsyncResultExecutionMode(execution_strategy);
+		data.results_execution_mode = input_execution_mode;
 
+		// Actually call the function
 		function.function(context.client, data, chunk);
 
-		switch (g_state.physical_table_scan_execution_strategy) {
-		case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS:
-			// This is a funny one, expected to crash on non-trivial workflows
-		case PhysicalTableScanExecutionStrategy::SYNCHRONOUS:
-			switch (data.async_result.GetResultType()) {
-			case AsyncResultType::INVALID:
-				throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found INVALID");
-			case AsyncResultType::BLOCKED:
-				throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found BLOCKED");
-			case AsyncResultType::FINISHED:
-				if (chunk.size() > 0) {
-					throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found FINISHED with non-empty chunk");
-				}
-				break;
-			case AsyncResultType::HAVE_MORE_OUTPUT:
-				if (chunk.size() == 0) {
-					throw InternalException("SYNCHRONOUS_PHYSICAL_TABLE_SCAN: found HAVE_MORE_OUTPUT with empty chunk");
-				}
-				break;
-			case AsyncResultType::IMPLICIT:
-				break;
-			}
-			break;
-		default:
-			break;
-		}
+		const auto output_async_result = data.async_result.GetResultType();
 
-		switch (data.async_result.GetResultType()) {
+		// Compare and check whether state before and after function.function call is compatible, will throw in case of
+		// inconsistencies
+		ValidateAsyncStrategyResult(execution_strategy, input_execution_mode, data.results_execution_mode,
+		                            initial_async_result, output_async_result, chunk.size());
+
+		// Handle results
+		switch (output_async_result) {
 		case AsyncResultType::BLOCKED: {
 			D_ASSERT(data.async_result.HasTasks());
 			auto guard = g_state.Lock();
