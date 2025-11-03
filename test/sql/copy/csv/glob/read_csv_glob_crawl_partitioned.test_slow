@@ -2,7 +2,7 @@
 # description: Test glob **
 # group: [glob]
 
-# files from: 'data/csv/glob/crawl/'
+# files from: '{DATA_DIR}/csv/glob/crawl/'
 
 statement ok
 PRAGMA enable_verification
@@ -10,7 +10,7 @@ PRAGMA enable_verification
 # simple crawling
 # example from:	https://stackoverflow.com/a/66744400
 query II
-SELECT * FROM read_csv('data/csv/glob/crawl/stackoverflow/**/*.csv', auto_detect=1) ORDER BY 2;
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/crawl/stackoverflow/**/*.csv', auto_detect=1) ORDER BY 2;
 ----
 0	0
 1	1
@@ -21,7 +21,7 @@ SELECT * FROM read_csv('data/csv/glob/crawl/stackoverflow/**/*.csv', auto_detect
 
 # test with ** as the last entry
 query II
-SELECT * FROM read_csv('data/csv/glob/crawl/stackoverflow/**', auto_detect=1) ORDER BY 2;
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/crawl/stackoverflow/**', auto_detect=1) ORDER BY 2;
 ----
 0	0
 1	1
@@ -32,7 +32,7 @@ SELECT * FROM read_csv('data/csv/glob/crawl/stackoverflow/**', auto_detect=1) OR
 
 # test with nested same name dirs
 query I
-SELECT * FROM read_csv('data/csv/glob/crawl/samename/**/*.csv', auto_detect=1);
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/crawl/samename/**/*.csv', auto_detect=1);
 ----
 42
 42
@@ -45,7 +45,7 @@ SELECT * FROM read_csv('data/csv/glob/crawl/samename/**/*.csv', auto_detect=1);
 
 # test with nested same name dirs, but with ** as last entry
 query I
-SELECT sum(column0) FROM read_csv('data/csv/glob/crawl/samename/**', auto_detect=1);
+SELECT sum(column0) FROM read_csv('{DATA_DIR}/csv/glob/crawl/samename/**', auto_detect=1);
 ----
 336
 
@@ -55,118 +55,118 @@ SELECT sum(column0) FROM read_csv('data/csv/glob/crawl/samename/**', auto_detect
 #    	touch file.csv {d00,d01,d02}/file.csv && touch {d00,d01,d02}/{d10,d11,d12}/file.csv && touch {d00,d01,d02}/{d10,d11,d12}/{d20,d21,d22}/file.csv && touch {d00,d01,d02}/{d10,d11,d12}/{d20,d21,d22}/mid/file.csv && touch {d00,d01,d02}/{d10,d11,d12}/{d20,d21,d22}/mid/{d40,d41,d42}/file.csv
 
 query I
-SELECT count(*) FROM read_csv('data/csv/glob/crawl/d/**/*.csv', auto_detect=1);
+SELECT count(*) FROM read_csv('{DATA_DIR}/csv/glob/crawl/d/**/*.csv', auto_detect=1);
 ----
 148
 
 query I
-SELECT count(*) FROM glob('data/csv/glob/crawl/d/**');
+SELECT count(*) FROM glob('{DATA_DIR}/csv/glob/crawl/d/**');
 ----
 148
 
 query I
-SELECT sum(column0) FROM read_csv('data/csv/glob/crawl/d/**', auto_detect=1);
+SELECT sum(column0) FROM read_csv('{DATA_DIR}/csv/glob/crawl/d/**', auto_detect=1);
 ----
 6216
 
 query I
-SELECT count(*) FROM glob('data/csv/glob/crawl/d/**/');
+SELECT count(*) FROM glob('{DATA_DIR}/csv/glob/crawl/d/**/');
 ----
 148
 
 query I
-SELECT count(*) FROM glob('data/csv/glob/crawl/d/**/mid/*.csv');
+SELECT count(*) FROM glob('{DATA_DIR}/csv/glob/crawl/d/**/mid/*.csv');
 ----
 27
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/mid/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/mid/*.csv';
 ----
 27
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/mid/*/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/mid/*/*.csv';
 ----
 81
 
 query I
-SELECT count(*) FROM glob('data/csv/glob/crawl/d/**/mid/*/');
+SELECT count(*) FROM glob('{DATA_DIR}/csv/glob/crawl/d/**/mid/*/');
 ----
 81
 
 statement error
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/mid/**/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/mid/**/*.csv';
 ----
 Cannot use multiple '**' in one path
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/???/*/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/???/*/*.csv';
 ----
 144
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/*/???/**/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/*/???/**/*.csv';
 ----
 144
 
 statement error
-SELECT count(*) FROM 'data/csv/glob/crawl/d/*/mid/**/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/*/mid/**/*.csv';
 ----
 No files found that match the pattern
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/*/*/*/mid/**/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/*/*/*/mid/**/*.csv';
 ----
 108
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/???/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/???/*.csv';
 ----
 147
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/*/???/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/*/???/*.csv';
 ----
 9
 
 statement error
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/*/**/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/*/**/*.csv';
 ----
 Cannot use multiple '**' in one path
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/d2?/*/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/d2?/*/*.csv';
 ----
 27
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/*/*/d2?/**/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/*/*/d2?/**/*.csv';
 ----
 135
 
 query I
-SELECT sum(column0) FROM read_csv('data/csv/glob/crawl/d/*/*/d2?/**', auto_detect=1);
+SELECT sum(column0) FROM read_csv('{DATA_DIR}/csv/glob/crawl/d/*/*/d2?/**', auto_detect=1);
 ----
 5670
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/d?0/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/d?0/*.csv';
 ----
 40
 
 query I
-SELECT count(*) FROM 'data/csv/glob/crawl/d/*/**/d?0/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/*/**/d?0/*.csv';
 ----
 39
 
 statement error
-SELECT count(*) FROM 'data/csv/glob/crawl/d/**/**/**/**/*.csv';
+SELECT count(*) FROM '{DATA_DIR}/csv/glob/crawl/d/**/**/**/**/*.csv';
 ----
 Cannot use multiple '**' in one path
 
 # Test with hidden files. By default python does not return hidden files, but duckdb does.
 query II
-FROM read_csv_auto('data/csv/glob/crawl/hidden/**');
+FROM read_csv_auto('{DATA_DIR}/csv/glob/crawl/hidden/**');
 ----
 42	42
 42	42
@@ -177,64 +177,64 @@ statement ok
 CREATE TABLE t0 AS SELECT (i%2) AS c_2, (i%3) AS c_3, (i*i) AS c_pow FROM RANGE(0,10) tbl(i);
 
 statement ok
-COPY t0 TO '__TEST_DIR__/partitioned0' (PARTITION_BY(c_2,c_3));
+COPY t0 TO '{TEMP_DIR}/partitioned0' (PARTITION_BY(c_2,c_3));
 
 query I
-from glob('__TEST_DIR__/partitioned0/*');
+from glob('{TEMP_DIR}/partitioned0/*');
 ----
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*');
-----
-0
-
-query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*/*/*');
-----
-6
-
-query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*/*/**')
-----
-6
-
-query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*/*/*/**')
+select count(*) from glob('{TEMP_DIR}/partitioned0/*');
 ----
 0
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**');
+select count(*) from glob('{TEMP_DIR}/partitioned0/*/*/*');
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**/*');
+select count(*) from glob('{TEMP_DIR}/partitioned0/*/*/**')
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*/**');
+select count(*) from glob('{TEMP_DIR}/partitioned0/*/*/*/**')
+----
+0
+
+query I
+select count(*) from glob('{TEMP_DIR}/partitioned0/**');
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**/data_0.csv');
+select count(*) from glob('{TEMP_DIR}/partitioned0/**/*');
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**/*/data_0.csv')
+select count(*) from glob('{TEMP_DIR}/partitioned0/*/**');
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**/c_3=0/data_0.csv')
+select count(*) from glob('{TEMP_DIR}/partitioned0/**/data_0.csv');
+----
+6
+
+query I
+select count(*) from glob('{TEMP_DIR}/partitioned0/**/*/data_0.csv')
+----
+6
+
+query I
+select count(*) from glob('{TEMP_DIR}/partitioned0/**/c_3=0/data_0.csv')
 ----
 2
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/c_2=0/**/data_0.csv')
+select count(*) from glob('{TEMP_DIR}/partitioned0/c_2=0/**/data_0.csv')
 ----
 3
 
@@ -242,65 +242,65 @@ select count(*) from glob('__TEST_DIR__/partitioned0/c_2=0/**/data_0.csv')
 
 #   put a file with a different name in the partitioned0 directory
 statement ok
-COPY t0 TO '__TEST_DIR__/partitioned0/data_1.csv';
+COPY t0 TO '{TEMP_DIR}/partitioned0/data_1.csv';
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*');
+select count(*) from glob('{TEMP_DIR}/partitioned0/*');
 ----
 1
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*');
+select count(*) from glob('{TEMP_DIR}/partitioned0/*');
 ----
 1
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*/*/*');
+select count(*) from glob('{TEMP_DIR}/partitioned0/*/*/*');
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*/*/**')
+select count(*) from glob('{TEMP_DIR}/partitioned0/*/*/**')
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*/*/*/**')
+select count(*) from glob('{TEMP_DIR}/partitioned0/*/*/*/**')
 ----
 0
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**');
+select count(*) from glob('{TEMP_DIR}/partitioned0/**');
 ----
 7
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**/*');
+select count(*) from glob('{TEMP_DIR}/partitioned0/**/*');
 ----
 7
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/*/**');
+select count(*) from glob('{TEMP_DIR}/partitioned0/*/**');
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**/data_0.csv');
+select count(*) from glob('{TEMP_DIR}/partitioned0/**/data_0.csv');
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**/*/data_0.csv')
+select count(*) from glob('{TEMP_DIR}/partitioned0/**/*/data_0.csv')
 ----
 6
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/**/c_3=0/data_0.csv')
+select count(*) from glob('{TEMP_DIR}/partitioned0/**/c_3=0/data_0.csv')
 ----
 2
 
 query I
-select count(*) from glob('__TEST_DIR__/partitioned0/c_2=0/**/data_0.csv')
+select count(*) from glob('{TEMP_DIR}/partitioned0/c_2=0/**/data_0.csv')
 ----
 3
 
@@ -308,12 +308,12 @@ require notwindows
 
 # symlink test: symlinks will not be searched
 query I
-FROM read_csv_auto('data/csv/glob/crawl/.symbolic_link/**');
+FROM read_csv_auto('{DATA_DIR}/csv/glob/crawl/.symbolic_link/**');
 ----
 -42
 
 
 statement error
-SELECT sum(column0) FROM read_csv('data/csv/glob/crawl/d/**/', auto_detect=1);
+SELECT sum(column0) FROM read_csv('{DATA_DIR}/csv/glob/crawl/d/**/', auto_detect=1);
 ----
 Could not read from file

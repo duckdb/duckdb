@@ -11,7 +11,7 @@ statement ok
 drop table if exists reject_errors;
 
 query IIIIIII
-FROM read_csv('data/csv/error/banklist.csv', store_rejects=true) order by all limit 5
+FROM read_csv('{DATA_DIR}/csv/error/banklist.csv', store_rejects=true) order by all limit 5
 ----
 1st American State Bank of Minnesota	Hancock	MN	15448	Community Development Bank, FSB	5-Feb-10	10183
 1st Centennial Bank	Redlands	CA	33025	First California Bank	23-Jan-09	10030

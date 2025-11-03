@@ -10,10 +10,10 @@ CREATE TABLE date_tests (a DATE)
 
 # -- Working cases (AUTO is Auto-Detected):
 statement ok
-copy date_tests from 'data/csv/auto_date/date_example_1.csv';
+copy date_tests from '{DATA_DIR}/csv/auto_date/date_example_1.csv';
 
 statement ok
-copy date_tests from 'data/csv/auto_date/date_example_2.csv';
+copy date_tests from '{DATA_DIR}/csv/auto_date/date_example_2.csv';
 
 query I
 FROM date_tests
@@ -34,12 +34,12 @@ CREATE TABLE date_tests (a DATE)
 # -- Failed cases (AUTO is Set By User)
 # -- file's date format is YYYY-MM-DD
 statement ok
-copy date_tests from 'data/csv/auto_date/date_example_1.csv' WITH (dateformat 'AUTO');
+copy date_tests from '{DATA_DIR}/csv/auto_date/date_example_1.csv' WITH (dateformat 'AUTO');
 
 
 # -- file's date format is %m/%d/%y
 statement ok
-copy date_tests from 'data/csv/auto_date/date_example_2.csv' WITH (dateformat 'AUTO');
+copy date_tests from '{DATA_DIR}/csv/auto_date/date_example_2.csv' WITH (dateformat 'AUTO');
 
 query I
 FROM date_tests
@@ -71,7 +71,7 @@ CREATE TABLE stg_device_metadata_with_dates (
 
 statement ok
 COPY stg_device_metadata_with_dates
- FROM 'data/csv/auto_date/device_metadata_1.csv' WITH (
+ FROM '{DATA_DIR}/csv/auto_date/device_metadata_1.csv' WITH (
  delimiter ',',
  skip '1',
  header 'false'

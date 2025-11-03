@@ -566,7 +566,6 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
-
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	if (next_schema_idx >= file_meta_data->schema.size()) {
@@ -1047,7 +1046,6 @@ uint64_t ParquetReader::GetGroupSpan(ParquetReaderScanState &state) {
 	idx_t max_offset = NumericLimits<idx_t>::Minimum();
 
 	for (auto &column_chunk : group.columns) {
-
 		// Set the min offset
 		idx_t current_min_offset = NumericLimits<idx_t>::Maximum();
 		if (column_chunk.meta_data.__isset.dictionary_page_offset) {
@@ -1254,13 +1252,14 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	while (ScanInternal(context, state, result)) {
 		if (result.size() > 0) {
-			break;
+			return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 		}
 		result.Reset();
 	}
+	return AsyncResult(SourceResultType::FINISHED);
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {

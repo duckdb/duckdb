@@ -96,7 +96,6 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
                                 vector<unordered_set<string>> &lambda_params) {
-
 	for (auto &child : function.children) {
 		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child, table_name, lambda_params);
@@ -138,7 +137,6 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 
 void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
                         vector<unordered_set<string>> &lambda_params) {
-
 	// We avoid ambiguity with EXCLUDED columns by qualifying all column references.
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {

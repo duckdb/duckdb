@@ -347,7 +347,6 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       debug_use_openssl(debug_use_openssl_p), parquet_version(parquet_version), geoparquet_version(geoparquet_version),
       total_written(0), num_row_groups(0) {
-
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -373,7 +372,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*writer));
 
 	file_meta_data.num_rows = 0;
-	file_meta_data.version = 1;
+	file_meta_data.version = UnsafeNumericCast<int32_t>(parquet_version);
 
 	file_meta_data.__isset.created_by = true;
 	file_meta_data.created_by =
@@ -671,7 +670,6 @@ struct BlobStatsUnifier : public BaseStringStatsUnifier {
 };
 
 struct GeoStatsUnifier : public ColumnStatsUnifier {
-
 	void UnifyGeoStats(const GeometryStatsData &other) override {
 		if (geo_stats) {
 			geo_stats->Merge(other);
@@ -890,7 +888,6 @@ void ParquetWriter::GatherWrittenStatistics() {
 			const auto &types = stats_unifier->geo_stats->types;
 
 			if (bbox.HasXY()) {
-
 				column_stats["bbox_xmin"] = Value::DOUBLE(bbox.x_min);
 				column_stats["bbox_xmax"] = Value::DOUBLE(bbox.x_max);
 				column_stats["bbox_ymin"] = Value::DOUBLE(bbox.y_min);
@@ -920,7 +917,6 @@ void ParquetWriter::GatherWrittenStatistics() {
 }
 
 void ParquetWriter::Finalize() {
-
 	// dump the bloom filters right before footer, not if stuff is encrypted
 
 	for (auto &bloom_filter_entry : bloom_filters) {

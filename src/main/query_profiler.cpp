@@ -179,7 +179,6 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		auto type = PhysicalOperatorType(info.GetMetricValue<uint8_t>(MetricsType::OPERATOR_TYPE));
 		if (type == PhysicalOperatorType::UNION &&
 		    info.Enabled(info.expanded_settings, MetricsType::OPERATOR_CARDINALITY)) {
-
 			auto &child_info = child->GetProfilingInfo();
 			auto value = child_info.metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>();
 			info.MetricSum(MetricsType::OPERATOR_CARDINALITY, value);
@@ -292,6 +291,13 @@ void QueryProfiler::EndQuery() {
 				info.metrics[MetricsType::ATTACH_REPLAY_WAL_LATENCY] =
 				    query_metrics.attach_replay_wal_latency.Elapsed();
 			}
+			if (info.Enabled(settings, MetricsType::COMMIT_WRITE_WAL_LATENCY)) {
+				info.metrics[MetricsType::COMMIT_WRITE_WAL_LATENCY] = query_metrics.commit_write_wal_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::WAL_REPLAY_ENTRY_COUNT)) {
+				info.metrics[MetricsType::WAL_REPLAY_ENTRY_COUNT] =
+				    Value::UBIGINT(query_metrics.wal_replay_entry_count);
+			}
 			if (info.Enabled(settings, MetricsType::CHECKPOINT_LATENCY)) {
 				info.metrics[MetricsType::CHECKPOINT_LATENCY] = query_metrics.checkpoint_latency.Elapsed();
 			}
@@ -311,6 +317,9 @@ void QueryProfiler::EndQuery() {
 
 	guard.unlock();
 
+	// To log is inexpensive, whether to log or not depends on whether logging is active
+	ToLog();
+
 	if (emit_output) {
 		string tree = ToString();
 		auto save_location = GetSaveLocation();
@@ -324,19 +333,27 @@ void QueryProfiler::EndQuery() {
 	}
 }
 
-void QueryProfiler::AddBytesRead(const idx_t nr_bytes) {
-	if (IsEnabled()) {
-		query_metrics.total_bytes_read += nr_bytes;
+void QueryProfiler::AddToCounter(const MetricsType type, const idx_t amount) {
+	if (!IsEnabled()) {
+		return;
+	}
+
+	switch (type) {
+	case MetricsType::TOTAL_BYTES_READ:
+		query_metrics.total_bytes_read += amount;
+		return;
+	case MetricsType::TOTAL_BYTES_WRITTEN:
+		query_metrics.total_bytes_written += amount;
+		return;
+	case MetricsType::WAL_REPLAY_ENTRY_COUNT:
+		query_metrics.wal_replay_entry_count += amount;
+		return;
+	default:
+		return;
 	}
 }
 
-void QueryProfiler::AddBytesWritten(const idx_t nr_bytes) {
-	if (IsEnabled()) {
-		query_metrics.total_bytes_written += nr_bytes;
-	}
-}
-
-void QueryProfiler::StartTimer(MetricsType type) {
+void QueryProfiler::StartTimer(const MetricsType type) {
 	if (!IsEnabled()) {
 		return;
 	}
@@ -353,6 +370,9 @@ void QueryProfiler::StartTimer(MetricsType type) {
 		return;
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.Start();
+		return;
+	case MetricsType::COMMIT_WRITE_WAL_LATENCY:
+		query_metrics.commit_write_wal_latency.Start();
 		return;
 	default:
 		return;
@@ -631,7 +651,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	profiler.operator_infos.clear();
 }
 
-void QueryProfiler::SetInfo(const double &blocked_thread_time) {
+void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -863,6 +883,19 @@ static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val 
 	}
 	auto result = string(json_holder.stringified_json);
 	return result;
+}
+
+void QueryProfiler::ToLog() const {
+	lock_guard<std::mutex> guard(lock);
+
+	if (!root) {
+		// No root, not much to do
+		return;
+	}
+
+	auto &settings = root->GetProfilingInfo();
+
+	settings.WriteMetricsToLog(context);
 }
 
 string QueryProfiler::ToJSON() const {

@@ -322,7 +322,6 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
                                                                              const vector<ColumnChunk> &columns,
                                                                              bool can_have_nan) {
-
 	// Not supported types
 	auto &type = schema.type;
 	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP || type.id() == LogicalTypeId::LIST) {
@@ -625,7 +624,6 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 }
 
 ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_false_positive_ratio) {
-
 	// aim for hit ratio of 0.01%
 	// see http://tfk.mit.edu/pdf/bloom.pdf
 	double f = bloom_filter_false_positive_ratio;

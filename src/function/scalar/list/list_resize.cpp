@@ -8,7 +8,6 @@
 namespace duckdb {
 
 static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
-
 	// Early-out, if the return value is a constant NULL.
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -63,7 +62,6 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-
 		auto list_idx = lists_data.sel->get_index(row_idx);
 		auto new_size_idx = new_sizes_data.sel->get_index(row_idx);
 
