@@ -787,29 +787,20 @@ TEST_CASE("Appender::Clear() clears the data", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE ints(i INTEGER)"));
 	Appender appender(con, "main", "ints");
 
-	// Those should be flushed due to the max chunk size trigger
-	for (idx_t i = 0; i < BaseAppender::DEFAULT_FLUSH_COUNT; i++) {
+	// We will append rows to reach the maximum chunk size, so we will make sure that also the collection is being cleared
+	const auto rows_to_append = DEFAULT_STANDARD_VECTOR_SIZE + 100;
+
+	for (idx_t i = 0; i < rows_to_append; i++) {
 		appender.AppendRow(i);
 	}
 
-	// This one should be cleared, and not flushed
-	appender.AppendRow(BaseAppender::DEFAULT_FLUSH_COUNT + 1);
+	// We're clearing, which means we're expecting to have only the `1` appended after the clear.
 	appender.Clear();
-
-	// This one should be also flushed as it's right after the Clear
-	appender.AppendRow(BaseAppender::DEFAULT_FLUSH_COUNT + 2);
+	appender.AppendRow(1);
 	appender.Close();
 
-	// the expected results are {0...2047, 2049}
-	duckdb::vector<duckdb::Value> expected;
-	for (idx_t i = 0; i < BaseAppender::DEFAULT_FLUSH_COUNT; i++) {
-		expected.push_back(duckdb::Value::INTEGER((int32_t)i));
-	}
-	expected.push_back(duckdb::Value::INTEGER((int32_t)(BaseAppender::DEFAULT_FLUSH_COUNT + 2)));
-
-	// We expect the result to be just the second row, after we cleared the appender
 	duckdb::unique_ptr<QueryResult> result = con.Query("SELECT * FROM ints");
-	REQUIRE(CHECK_COLUMN(result, 0, expected));
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
 TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes", "[appender]") {
