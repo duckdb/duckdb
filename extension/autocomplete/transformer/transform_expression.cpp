@@ -62,6 +62,20 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEG
 	return transformer.Transform<unique_ptr<ColumnRefExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
+unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformSchemaReservedTableColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<string> column_names;
+	column_names.push_back(transformer.Transform<string>(list_pr.Child<ListParseResult>(0)));
+	column_names.push_back(transformer.Transform<string>(list_pr.Child<ListParseResult>(1)));
+	column_names.push_back(list_pr.Child<IdentifierParseResult>(2).identifier);
+	return make_uniq<ColumnRefExpression>(std::move(column_names));
+}
+
+string PEGTransformerFactory::TransformReservedTableQualification(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.Child<IdentifierParseResult>(0).identifier;
+}
+
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
                                                    optional_ptr<ParseResult> parse_result) {
@@ -1062,5 +1076,7 @@ PEGTransformerFactory::TransformPositionExpression(PEGTransformer &transformer,
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(position_values.Child<ListParseResult>(0)));
 	return make_uniq<FunctionExpression>("position", std::move(results));
 }
+
+
 
 } // namespace duckdb

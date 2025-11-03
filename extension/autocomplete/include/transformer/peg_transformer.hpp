@@ -473,6 +473,8 @@ private:
 	                                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformColumnReference(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ColumnRefExpression> TransformSchemaReservedTableColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformReservedTableQualification(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLiteralExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformParensExpression(PEGTransformer &transformer,

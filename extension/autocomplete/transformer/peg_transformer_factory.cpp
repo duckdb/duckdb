@@ -251,6 +251,8 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformColumnReference);
+	REGISTER_TRANSFORM(TransformSchemaReservedTableColumnName);
+	REGISTER_TRANSFORM(TransformReservedTableQualification);
 	REGISTER_TRANSFORM(TransformLiteralExpression);
 	REGISTER_TRANSFORM(TransformParensExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
