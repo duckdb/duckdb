@@ -394,7 +394,6 @@ typedef struct {
 	duckdb_logical_type (*duckdb_appender_column_type)(duckdb_appender appender, idx_t col_idx);
 	const char *(*duckdb_appender_error)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_flush)(duckdb_appender appender);
-	duckdb_state (*duckdb_appender_clear)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_close)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_destroy)(duckdb_appender *appender);
 	duckdb_state (*duckdb_appender_add_column)(duckdb_appender appender, const char *name);
@@ -545,6 +544,7 @@ typedef struct {
 	duckdb_state (*duckdb_appender_create_query)(duckdb_connection connection, const char *query, idx_t column_count,
 	                                             duckdb_logical_type *types, const char *table_name,
 	                                             const char **column_names, duckdb_appender *out_appender);
+	duckdb_state (*duckdb_appender_clear)(duckdb_appender appender);
 #endif
 
 // New arrow interface functions
@@ -1049,7 +1049,6 @@ typedef struct {
 #define duckdb_appender_column_type                 duckdb_ext_api.duckdb_appender_column_type
 #define duckdb_appender_error                       duckdb_ext_api.duckdb_appender_error
 #define duckdb_appender_flush                       duckdb_ext_api.duckdb_appender_flush
-#define duckdb_appender_clear                       duckdb_ext_api.duckdb_appender_clear
 #define duckdb_appender_close                       duckdb_ext_api.duckdb_appender_close
 #define duckdb_appender_destroy                     duckdb_ext_api.duckdb_appender_destroy
 #define duckdb_appender_add_column                  duckdb_ext_api.duckdb_appender_add_column
@@ -1165,6 +1164,7 @@ typedef struct {
 // Version unstable_new_append_functions
 #define duckdb_appender_create_query   duckdb_ext_api.duckdb_appender_create_query
 #define duckdb_appender_error_data     duckdb_ext_api.duckdb_appender_error_data
+#define duckdb_appender_clear          duckdb_ext_api.duckdb_appender_clear
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
 
 // Version unstable_new_arrow_functions

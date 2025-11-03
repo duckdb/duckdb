@@ -1271,7 +1271,7 @@ TEST_CASE("Test clear appender data in C API", "[capi]") {
 	REQUIRE(duckdb_appender_error(appender) == nullptr);
 
 	// append a bunch of values that should be cleared
-	for (idx_t i = 0; i < 2000; i++) {
+	for (idx_t i = 0; i < 4000; i++) {
 		status = duckdb_appender_begin_row(appender);
 		REQUIRE(status == DuckDBSuccess);
 		status = duckdb_append_int32(appender, 999);
