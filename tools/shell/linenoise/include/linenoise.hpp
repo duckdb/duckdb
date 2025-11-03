@@ -81,6 +81,7 @@ public:
 	static int GetRenderPosition(const char *buf, size_t len, int max_width, int *n);
 
 	int GetPromptWidth() const;
+	void HandleTerminalResize();
 
 	void RefreshLine();
 	int CompleteLine(EscapeSequence &current_sequence);

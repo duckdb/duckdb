@@ -133,6 +133,7 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 		completion_idx = 0;
 
 		while (!stop) {
+			HandleTerminalResize();
 			/* Show completion or original buffer */
 			if (completion_idx < completions.size()) {
 				Linenoise saved = *this;
@@ -1046,6 +1047,38 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	buflen--; /* Make sure there is always space for the nulterm */
 }
 
+void Linenoise::HandleTerminalResize() {
+	if (!Terminal::IsMultiline()) {
+		return;
+	}
+	TerminalSize new_size = Terminal::GetTerminalSize();
+	if (new_size.ws_col == ws.ws_col && new_size.ws_row == ws.ws_row) {
+		return;
+	}
+	// terminal resize! re-compute max lines
+	ws = new_size;
+	int rows, cols;
+	int cursor_row, cursor_col;
+	PositionToColAndRow(pos, cursor_row, cursor_col, rows, cols);
+	old_cursor_rows = cursor_row;
+	maxrows = rows;
+
+	if (rendered_completion_lines > 0) {
+		// if we have rendered completions - figure out how many rows this takes up post-resize
+		string completion_text;
+		for (idx_t i = 0; i < completion_list.completions.size(); i++) {
+			if (i > 0) {
+				completion_text += " ";
+			}
+			auto &completion = completion_list.completions[i];
+			auto &rendered_text = completion.original_completion;
+			completion_text += rendered_text;
+		}
+		PositionToColAndRow(0, completion_text.c_str(), completion_text.size(), 0, cursor_row, cursor_col, rows, cols);
+		rendered_completion_lines = rows;
+	}
+}
+
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
  * will be returned ASAP to read().
@@ -1074,17 +1107,8 @@ int Linenoise::Edit() {
 		has_more_data = Terminal::HasMoreData(ifd);
 		render = true;
 		insert = false;
-		if (Terminal::IsMultiline() && !has_more_data) {
-			TerminalSize new_size = Terminal::GetTerminalSize();
-			if (new_size.ws_col != ws.ws_col || new_size.ws_row != ws.ws_row) {
-				// terminal resize! re-compute max lines
-				ws = new_size;
-				int rows, cols;
-				int cursor_row, cursor_col;
-				PositionToColAndRow(pos, cursor_row, cursor_col, rows, cols);
-				old_cursor_rows = cursor_row;
-				maxrows = rows;
-			}
+		if (!has_more_data) {
+			HandleTerminalResize();
 		}
 
 		if (search) {
