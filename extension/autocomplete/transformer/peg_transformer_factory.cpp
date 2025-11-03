@@ -175,6 +175,7 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformTopUniqueConstraint);
 	REGISTER_TRANSFORM(TransformCheckConstraint);
 	REGISTER_TRANSFORM(TransformTopForeignKeyConstraint);
+	REGISTER_TRANSFORM(TransformDefaultValue);
 }
 
 void PEGTransformerFactory::RegisterDeallocate() {

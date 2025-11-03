@@ -1,3 +1,4 @@
+#include "ast/column_constraints.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -80,10 +81,38 @@ ColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
 	auto qualified_name = StringToQualifiedName(dotted_identifier);
 	auto type = transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
-
+	auto constraints_opt = list_pr.Child<OptionalParseResult>(2);
+	ColumnConstraint column_constraint;
+	if (constraints_opt.HasResult()) {
+		auto constraints_repeat = constraints_opt.optional_result->Cast<RepeatParseResult>();
+		for (auto &constraint_entry : constraints_repeat.children) {
+			auto constraint_list = constraint_entry->Cast<ListParseResult>();
+			auto constraint = constraint_list.Child<ChoiceParseResult>(0).result;
+			if (constraint->name == "DefaultValue") {
+				if (column_constraint.default_value) {
+					throw ParserException("Cannot define a default value twice");
+				}
+				column_constraint.default_value = transformer.Transform<unique_ptr<ParsedExpression>>(constraint);
+			} else {
+				throw NotImplementedException("Constraints are not yet implemented.");
+				// TODO(Dtenwolde)
+				// column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));
+			}
+		}
+	}
 	// TODO(Dtenwolde) Deal with ColumnConstraint
 	auto result = ColumnDefinition(qualified_name.name, type);
+	if (column_constraint.default_value) {
+		result.SetDefaultValue(std::move(column_constraint.default_value));
+	}
+
 	return result;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultValue(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 }
 
 LogicalType PEGTransformerFactory::TransformTypeOrGenerated(PEGTransformer &transformer,

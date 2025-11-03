@@ -354,6 +354,8 @@ private:
 	                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<Constraint> TransformTopForeignKeyConstraint(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformDefaultValue(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
 
 	// deallocate.gram
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,

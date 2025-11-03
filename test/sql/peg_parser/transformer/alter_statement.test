@@ -30,11 +30,22 @@ CREATE TABLE person (
     )
 );
 
+statement ok
+INSERT INTO person VALUES (0, ('Bob', 'happy'))
+
+statement ok
+alter table person add column b integer default 5;
+
+query III
+select * from person;
+----
+0	{'name': Bob, 'current_mood': happy}	5
+
 statement error
 ALTER TABLE person ADD COLUMN c STRUCT(
-                name text,
-                current_mood mood
-    );
+    name text,
+    current_mood mood
+);
 ----
 Catalog Error: Column with name c already exists!
 
