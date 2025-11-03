@@ -1,6 +1,8 @@
 #include "shell_prompt.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb_shell {
 
@@ -204,7 +206,11 @@ string Prompt::EvaluateSQL(ShellState &state, const string &sql) {
 
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
 	if (!state.conn) {
-		return component.literal == "current_schema" ? "main" : "memory";
+		if (component.literal == "current_schema") {
+			return "main";
+		}
+		duckdb::LocalFileSystem lfs;
+		return duckdb::AttachedDatabase::ExtractDatabaseName(state.zDbFilename, lfs);
 	}
 	auto &con = *state.conn;
 	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(*con.context);
