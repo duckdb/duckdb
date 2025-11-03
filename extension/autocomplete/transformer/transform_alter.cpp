@@ -1,3 +1,4 @@
+#include "ast/add_column_entry.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
@@ -109,10 +110,48 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterTableOptions(PEG
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransformer &transformer,
                                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	ColumnDefinition new_column = transformer.Transform<ColumnDefinition>(list_pr.Child<ListParseResult>(3));
+	AddColumnEntry new_column = transformer.Transform<AddColumnEntry>(list_pr.Child<ListParseResult>(3));
 	bool if_not_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
-	auto result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(new_column), if_not_exists);
-	return std::move(result);
+	auto column_definition = ColumnDefinition(new_column.column_path.back(), new_column.type);
+	if (new_column.default_value) {
+		column_definition.SetDefaultValue(std::move(new_column.default_value));
+	}
+
+	unique_ptr<AlterTableInfo> result;
+
+	if (new_column.column_path.size() == 1) {
+		result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(column_definition), if_not_exists);
+	} else {
+		const auto parent_path = vector<string>(new_column.column_path.begin(), new_column.column_path.end() - 1);
+		result = make_uniq<AddFieldInfo>(AlterEntryData(), parent_path, std::move(column_definition), if_not_exists);
+	}
+	return result;
+}
+
+AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &transformer,
+                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	AddColumnEntry new_column;
+	new_column.column_path = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
+	new_column.type = transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
+	auto constraints_opt = list_pr.Child<OptionalParseResult>(2);
+	if (!constraints_opt.HasResult()) {
+		return new_column;
+	}
+	auto constraints_repeat = constraints_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &constraint_entry : constraints_repeat.children) {
+		auto constraint_list = constraint_entry->Cast<ListParseResult>();
+		auto constraint = constraint_list.Child<ChoiceParseResult>(0).result;
+		if (constraint->name == "DefaultValue") {
+			if (new_column.default_value) {
+				throw ParserException("Cannot define a default value twice");
+			}
+			new_column.default_value = transformer.Transform<unique_ptr<ParsedExpression>>(constraint);
+		} else {
+			throw ParserException("Adding columns with constraints not yet supported");
+		}
+	}
+	return new_column;
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropColumn(PEGTransformer &transformer,

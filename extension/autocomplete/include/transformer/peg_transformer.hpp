@@ -4,6 +4,7 @@
 #include "parse_result.hpp"
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
+#include "ast/add_column_entry.hpp"
 #include "ast/extension_repository_info.hpp"
 #include "ast/generic_copy_option.hpp"
 #include "ast/insert_values.hpp"
@@ -218,6 +219,7 @@ private:
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformAddColumn(PEGTransformer &transformer,
 	                                                     optional_ptr<ParseResult> parse_result);
+	static AddColumnEntry TransformAddColumnEntry(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformDropColumn(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 	static unique_ptr<AlterTableInfo> TransformSetPartitionedBy(PEGTransformer &transformer,

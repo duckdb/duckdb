@@ -1176,7 +1176,8 @@ AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
 AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy
 
 AddConstraint <- 'ADD' TopLevelConstraint
-AddColumn <- 'ADD' 'COLUMN'? IfNotExists? ColumnDefinition
+AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
+AddColumnEntry <- DottedIdentifier TypeOrGenerated ColumnConstraint*
 DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
 AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
 RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier

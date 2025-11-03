@@ -15,6 +15,21 @@ statement ok
 set allow_parser_override_extension=strict_when_supported;
 
 statement ok
+CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER)[])
+
+statement ok
+INSERT INTO test VALUES ([ROW(1, 1)]), ([ROW(2, 2)])
+
+statement ok
+ALTER TABLE test ADD COLUMN s.element.k INTEGER
+
+query I
+SELECT * FROM test;
+----
+[{'i': 1, 'j': 1, 'k': NULL}]
+[{'i': 2, 'j': 2, 'k': NULL}]
+
+statement ok
 CREATE TYPE mood AS ENUM (
 	'sad',
 	'ok',
@@ -55,9 +70,9 @@ ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * am
 Parser Error: Adding generated columns after table creation is not supported yet
 
 statement error
-ALTER TABLE test DROP s.s2.v1;
+ALTER TABLE test2 DROP s.s2.v1;
 ----
-Catalog Error: Table with name test does not exist!
+Catalog Error: Table with name test2 does not exist!
 
 statement error
 ALTER TABLE tbl SET PARTITIONED BY (i);
