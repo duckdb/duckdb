@@ -81,3 +81,8 @@ query R
 SELECT SUM(a) FROM test HAVING COUNT(*)>10;
 ----
 
+# HAVING without GROUP BY and without aggregates should evaluate once, not per input row
+query I
+SELECT 1 AS one FROM (values(1,2),(2,3)) HAVING 1 < 2;
+----
+1
