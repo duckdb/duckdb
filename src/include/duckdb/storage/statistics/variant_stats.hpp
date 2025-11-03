@@ -20,6 +20,7 @@ public:
 	idx_t index;
 	//! Count of each variant type encountered
 	idx_t type_counts[static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE)] = {0};
+	idx_t total_count = 0;
 	//! For decimals, track physical type distribution
 	idx_t decimal_physical_types[3] = {0}; // INT16, INT32, INT64, INT128
 	//! indices into the top-level 'columns' vector where the stats for the field/element live

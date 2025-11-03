@@ -22,6 +22,7 @@ static void AssertVariant(const BaseStatistics &stats) {
 
 void VariantColumnStatsData::SetType(VariantLogicalType type) {
 	type_counts[static_cast<uint8_t>(type)]++;
+	total_count++;
 }
 
 VariantColumnStatsData &VariantStatsData::GetOrCreateElement(idx_t parent_index) {
@@ -166,6 +167,12 @@ static bool GetShreddedTypeInternal(const VariantStatsData &data, const VariantC
                                     LogicalType &out_type) {
 	idx_t max_count = 0;
 	uint8_t type_index;
+	if (column.type_counts[0] == column.total_count) {
+		//! All NULL, emit INT32
+		out_type = SetShreddedType(LogicalTypeId::INTEGER);
+		return true;
+	}
+
 	//! Skip the 'VARIANT_NULL' type, we can't shred on NULL
 	for (uint8_t i = 1; i < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE); i++) {
 		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL)) {
