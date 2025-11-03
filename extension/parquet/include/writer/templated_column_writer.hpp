@@ -208,7 +208,7 @@ public:
 			// Fast path
 			for (; vector_index < vcount; vector_index++) {
 				const auto &src_value = data_ptr[vector_index];
-				state.dictionary.Insert<true>(src_value);
+				state.dictionary.template Insert<true>(src_value);
 				state.total_value_count++;
 				state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 			}
@@ -219,7 +219,7 @@ public:
 				}
 				if (validity.RowIsValid(vector_index)) {
 					const auto &src_value = data_ptr[vector_index];
-					state.dictionary.Insert<true>(src_value);
+					state.dictionary.template Insert<true>(src_value);
 					state.total_value_count++;
 					state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 				}

@@ -19,6 +19,14 @@ struct PrimitiveCastOperator {
 	static TGT Operation(SRC input) {
 		return TGT(input);
 	}
+	template <class SRC, class TGT>
+	static constexpr idx_t WriteSize(const TGT &input) {
+		return sizeof(TGT);
+	}
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &input, WriteStream &ser) {
+		ser.WriteData(const_data_ptr_cast(&input), sizeof(TGT));
+	}
 };
 
 template <class SRC, class TGT = SRC, class OP = PrimitiveCastOperator>
