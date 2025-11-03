@@ -6,6 +6,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <utility>
 
@@ -28,13 +29,8 @@ PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<Logical
 class TableScanGlobalSourceState : public GlobalSourceState {
 public:
 	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
-		Value tmp_value;
-		if (context.TryGetCurrentSetting("debug_physical_table_scan_execution_strategy", tmp_value)) {
-			physical_table_scan_execution_strategy =
-			    EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(tmp_value.ToString());
-		} else {
-			physical_table_scan_execution_strategy = PhysicalTableScanExecutionStrategy::TASK_EXECUTOR;
-		}
+		physical_table_scan_execution_strategy =
+		    DBConfig::GetSetting<DebugPhysicalTableScanExecutionStrategySetting>(context);
 
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
