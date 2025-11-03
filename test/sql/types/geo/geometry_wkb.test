@@ -5,34 +5,29 @@
 statement ok
 create table t1(id INT, g GEOMETRY);
 
-# statement ok
-# insert into t1 values
-# 	(1, 'POINT(0 1)'),
-# 	(2, 'LINESTRING(0 0, 1 1, 2 2)'),
-# 	(3, 'POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))'),
-# 	(4, 'MULTIPOINT((1 1), (2 2), (3 3))'),
-# 	(5, 'MULTILINESTRING((0 0, 1 1), (2 2, 3 3))'),
-# 	(6, 'MULTIPOLYGON(((0 0, 4 0, 4 4, 0 4, 0 0)), ((5 5, 7 5, 7 7, 5 7, 5 5)))'),
-# 	(7, 'GEOMETRYCOLLECTION(POINT(1 1), LINESTRING(0 0, 1 1))'),
-# 	(8, NULL);
-#
-#
-# # Roundtrip through WKB
-# query II
-# select id, ST_AsText(ST_GeomFromWKB(ST_AsWKB(g))) from t1 order by id;
-# ----
-# 1	POINT (0 1)
-# 2	LINESTRING (0 0, 1 1, 2 2)
-# 3	POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0))
-# 4	MULTIPOINT (1 1, 2 2, 3 3)
-# 5 	MULTILINESTRING ((0 0, 1 1), (2 2, 3 3))
-# 6	MULTIPOLYGON (((0 0, 4 0, 4 4, 0 4, 0 0)), ((5 5, 7 5, 7 7, 5 7, 5 5)))
-# 7	GEOMETRYCOLLECTION (POINT (1 1), LINESTRING (0 0, 1 1))
-# 8	NULL
+statement ok
+insert into t1 values
+	(1, 'POINT(0 1)'),
+	(2, 'LINESTRING(0 0, 1 1, 2 2)'),
+	(3, 'POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))'),
+	(4, 'MULTIPOINT((1 1), (2 2), (3 3))'),
+	(5, 'MULTILINESTRING((0 0, 1 1), (2 2, 3 3))'),
+	(6, 'MULTIPOLYGON(((0 0, 4 0, 4 4, 0 4, 0 0)), ((5 5, 7 5, 7 7, 5 7, 5 5)))'),
+	(7, 'GEOMETRYCOLLECTION(POINT(1 1), LINESTRING(0 0, 1 1))'),
+	(8, NULL);
 
-
-# ---
-
+# Roundtrip through WKB
+query II
+select id, ST_AsText(ST_GeomFromWKB(ST_AsWKB(g))) from t1 order by id;
+----
+1	POINT (0 1)
+2	LINESTRING (0 0, 1 1, 2 2)
+3	POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0))
+4	MULTIPOINT (1 1, 2 2, 3 3)
+5 	MULTILINESTRING ((0 0, 1 1), (2 2, 3 3))
+6	MULTIPOLYGON (((0 0, 4 0, 4 4, 0 4, 0 0)), ((5 5, 7 5, 7 7, 5 7, 5 5)))
+7	GEOMETRYCOLLECTION (POINT (1 1), LINESTRING (0 0, 1 1))
+8	NULL
 
 # Create a table with all types and all z/m combinations
 statement ok
