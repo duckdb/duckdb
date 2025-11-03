@@ -80,10 +80,6 @@ bool PreferCaseMatching(SuggestionState suggestion_state) {
 	switch (suggestion_state) {
 	case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 	case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-	case SuggestionState::SUGGEST_CATALOG_NAME:
-	case SuggestionState::SUGGEST_SCHEMA_NAME:
-	case SuggestionState::SUGGEST_TABLE_NAME:
-	case SuggestionState::SUGGEST_COLUMN_NAME:
 	case SuggestionState::SUGGEST_PRAGMA_NAME:
 	case SuggestionState::SUGGEST_SETTING_NAME:
 		return true;
