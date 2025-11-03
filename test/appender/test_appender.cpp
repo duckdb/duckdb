@@ -787,7 +787,8 @@ TEST_CASE("Appender::Clear() clears the data", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE ints(i INTEGER)"));
 	Appender appender(con, "main", "ints");
 
-	// We will append rows to reach the maximum chunk size, so we will make sure that also the collection is being cleared
+	// We will append rows to reach the maximum chunk size,
+	// so we will make sure that also the collection is being cleared
 	const auto rows_to_append = DEFAULT_STANDARD_VECTOR_SIZE + 100;
 
 	for (idx_t i = 0; i < rows_to_append; i++) {
