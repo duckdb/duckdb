@@ -1021,6 +1021,7 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, ColumnData
 
 void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
                                           ColumnDataScanProperties properties) const {
+	state.db = allocator->GetDatabase();
 	state.chunk_index = 0;
 	state.segment_index = 0;
 	state.current_row_index = 0;
@@ -1028,7 +1029,6 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<col
 	state.current_chunk_state.handles.clear();
 	state.properties = properties;
 	state.column_ids = std::move(column_ids);
-	state.db = allocator->GetDatabase();
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,

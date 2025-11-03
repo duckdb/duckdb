@@ -80,10 +80,10 @@ public:
 	//! one active StreamQueryResult per Connection object. Calling SendQuery() will invalidate any previously existing
 	//! StreamQueryResult.
 	DUCKDB_API unique_ptr<QueryResult>
-	SendQuery(const string &query, QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	SendQuery(const string &query, QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
 	DUCKDB_API unique_ptr<QueryResult>
 	SendQuery(unique_ptr<SQLStatement> statement,
-	          QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
+	          QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
 	//! Issues a query to the database and materializes the result (if necessary). Always returns a
 	//! MaterializedQueryResult.
 	DUCKDB_API unique_ptr<MaterializedQueryResult> Query(const string &query);

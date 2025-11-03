@@ -54,6 +54,9 @@ struct ColumnDataAppendState {
 };
 
 struct ColumnDataScanState {
+	//! Database instance if scanning ColumnDataCollectionLifetime::DATABASE_INSTANCE
+	shared_ptr<DatabaseInstance> db;
+
 	ChunkManagementState current_chunk_state;
 	idx_t segment_index;
 	idx_t chunk_index;
@@ -61,8 +64,6 @@ struct ColumnDataScanState {
 	idx_t next_row_index;
 	ColumnDataScanProperties properties;
 	vector<column_t> column_ids;
-	//! Database instance if scanning ColumnDataCollectionLifetime::DATABASE_INSTANCE
-	shared_ptr<DatabaseInstance> db;
 };
 
 struct ColumnDataParallelScanState {
