@@ -2,7 +2,11 @@
 #include "linenoise.h"
 #include "history.hpp"
 #include "terminal.hpp"
+#include "highlighting.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "shell_highlight.hpp"
 
+using duckdb::Highlighting;
 using duckdb::History;
 using duckdb::idx_t;
 using duckdb::Linenoise;
@@ -112,6 +116,22 @@ void linenoiseSetMultiLine(int ml) {
 	Terminal::SetMultiLine(ml);
 }
 
+void linenoiseSetErrorRendering(int enabled) {
+	if (enabled) {
+		Linenoise::EnableErrorRendering();
+	} else {
+		Linenoise::DisableErrorRendering();
+	}
+}
+
+void linenoiseSetCompletionRendering(int enabled) {
+	if (enabled) {
+		Linenoise::EnableCompletionRendering();
+	} else {
+		Linenoise::DisableCompletionRendering();
+	}
+}
+
 void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {
 	Linenoise::SetPrompt(continuation, continuationSelected);
 }
@@ -147,8 +167,4 @@ int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *
 
 void linenoiseClearScreen(void) {
 	Terminal::ClearScreen();
-}
-
-int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
-	return Linenoise::ParseOption(azArg, nArg, out_error);
 }
