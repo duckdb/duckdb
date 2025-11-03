@@ -44,14 +44,16 @@ static inline void VERIFY(const string &filename, const string_t &content) {
 	}
 }
 
-void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                            LocalTableFunctionState &local_state, DataChunk &output) {
+AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                                   LocalTableFunctionState &local_state, DataChunk &output) {
 	auto &state = global_state.Cast<ReadFileGlobalState>();
 	if (done || file_list_idx.GetIndex() >= state.file_list->GetTotalFileCount()) {
-		return;
+		return AsyncResult(SourceResultType::FINISHED);
 	}
 
 	auto files = state.file_list;
+
+	auto &regular_fs = FileSystem::GetFileSystem(context);
 	auto fs = CachingFileSystem::Get(context);
 	idx_t out_idx = 0;
 
@@ -64,7 +66,15 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 		if (FileSystem::IsRemoteFile(file.path)) {
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		}
-		file_handle = fs.OpenFile(context, file, flags);
+		file_handle = fs.OpenFile(QueryContext(context), file, flags);
+	} else {
+		// At least verify that the file exist
+		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
+		if (FileSystem::IsRemoteFile(file.path) && !regular_fs.FileExists(file.path)) {
+			output.SetCardinality(0);
+			done = true;
+			return SourceResultType::FINISHED;
+		}
 	}
 
 	for (idx_t col_idx = 0; col_idx < state.column_ids.size(); col_idx++) {
@@ -163,6 +173,7 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 	}
 	output.SetCardinality(1);
 	done = true;
+	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 };
 
 void DirectFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {

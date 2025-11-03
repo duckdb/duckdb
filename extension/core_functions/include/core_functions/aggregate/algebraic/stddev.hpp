@@ -9,7 +9,8 @@
 #pragma once
 
 #include "duckdb/function/aggregate_function.hpp"
-#include <ctgmath>
+#include <complex>
+#include <cmath>
 
 namespace duckdb {
 

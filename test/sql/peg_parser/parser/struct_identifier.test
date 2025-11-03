@@ -1,0 +1,33 @@
+# name: test/sql/peg_parser/parser/struct_identifier.test
+# description: Test struct identifier in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test ADD COLUMN s.i INTEGER$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test RENAME s.i TO v1$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test RENAME s.s2.v1 TO i$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test DROP COLUMN s.i$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test DROP s.s2.v1$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test ADD COLUMN s.k INTEGER$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test RENAME COLUMN s.value.j TO abc$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test RENAME COLUMN s.element.j TO k$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE test DROP COLUMN s.element.j$TEST_PEG_PARSER$);
+

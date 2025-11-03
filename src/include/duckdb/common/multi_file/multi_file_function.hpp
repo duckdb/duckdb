@@ -590,6 +590,7 @@ public:
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
+			data_p.async_result = SourceResultType::FINISHED;
 			return;
 		}
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
@@ -600,19 +601,44 @@ public:
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
 
-			data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+
+			if (res.GetResultType() == AsyncResultType::BLOCKED) {
+				if (scan_chunk.size() != 0) {
+					throw InternalException("Unexpected behaviour from Scan, no rows should be returned");
+				}
+				switch (data_p.results_execution_mode) {
+				case AsyncResultsExecutionMode::TASK_EXECUTOR:
+					data_p.async_result = std::move(res);
+					return;
+				case AsyncResultsExecutionMode::SYNCHRONOUS:
+					res.ExecuteTasksSynchronously();
+					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
+						throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
+					}
+					// scan_chunk.size() is 0, see check above, and result is HAVE_MORE_OUTPUT, we need to loop again
+					continue;
+				}
+			}
+
 			output.SetCardinality(scan_chunk.size());
+
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				return;
 			}
+
 			scan_chunk.Reset();
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
+				data_p.async_result = SourceResultType::FINISHED;
 				return;
 			}
 		} while (true);
+		// This is not expected to be ever taken
+		throw InternalException("MultiFileScan is malformed");
 	}
 
 	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
@@ -672,7 +698,8 @@ public:
 				continue;
 			}
 			auto &reader_data = *reader_data_ptr;
-			double progress_in_file;
+			// Initialize progress_in_file with a default value to avoid uninitialized variable usage
+			double progress_in_file = 0.0;
 			if (reader_data.file_state == MultiFileFileState::OPEN) {
 				// file is currently open - get the progress within the file
 				progress_in_file = reader_data.reader->GetProgressInFile(context);
@@ -686,9 +713,6 @@ public:
 					// file is still being read
 					progress_in_file = reader->GetProgressInFile(context);
 				}
-			} else {
-				// file has not been opened yet - progress in this file is zero
-				progress_in_file = 0;
 			}
 			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
 			total_progress += progress_in_file;

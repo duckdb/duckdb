@@ -1,9 +1,8 @@
 #include "history.hpp"
 #include "linenoise.hpp"
 #include "terminal.hpp"
-#include "duckdb_shell_wrapper.h"
-#include "sqlite3.h"
 #include "utf8proc_wrapper.hpp"
+#include "shell_state.hpp"
 #include <sys/stat.h>
 
 namespace duckdb {
@@ -349,7 +348,7 @@ int History::Load(const char *filename) {
 		}
 		// else we are parsing a SQL statement
 		result += buf;
-		if (sqlite3_complete(result.c_str())) {
+		if (duckdb_shell::ShellState::SQLIsComplete(result.c_str())) {
 			// this line contains a full SQL statement - add it to the history
 			History::Add(result.c_str(), result.size());
 			result = std::string();
