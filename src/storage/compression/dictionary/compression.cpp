@@ -7,10 +7,11 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
                                                                        const idx_t max_unique_count_across_all_segments)
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
-      current_string_map(info.GetBlockManager().buffer_manager.GetBufferAllocator(),
-                         max_unique_count_across_all_segments, // maximum_size_p (amount of elements)
-                         1 // maximum_target_capacity_p, 1 because we don't care about target for our use-case, as we
-                           // only use PrimitiveDictionary for duplicate checks, and not for writing to any target
+      current_string_map(
+          info.GetBlockManager().buffer_manager.GetBufferAllocator(),
+          max_unique_count_across_all_segments * 2, // * 2 results in less linear probing, improving performance
+          1 // maximum_target_capacity_p, 1 because we don't care about target for our use-case, as we
+            // only use PrimitiveDictionary for duplicate checks, and not for writing to any target
       ) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
