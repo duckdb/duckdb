@@ -228,89 +228,13 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
-		if (everything_referenced) {
-			return;
-		}
 		auto &get = op.Cast<LogicalGet>();
-		if (!get.function.projection_pushdown) {
-			return;
-		}
-
-		auto final_column_ids = get.GetColumnIds();
-
-		// Create "selection vector" of all column ids
-		vector<idx_t> proj_sel;
-		for (idx_t col_idx = 0; col_idx < final_column_ids.size(); col_idx++) {
-			proj_sel.push_back(col_idx);
-		}
-		// Create a copy that we can use to match ids later
-		auto col_sel = proj_sel;
-		// Clear unused ids, exclude filter columns that are projected out immediately
-		ClearUnusedExpressions(proj_sel, get.table_index, false);
-
-		vector<unique_ptr<Expression>> filter_expressions;
-		// for every table filter, push a column binding into the column references map to prevent the column from
-		// being projected out
-		for (auto &filter : get.table_filters.filters) {
-			optional_idx index;
-			for (idx_t i = 0; i < final_column_ids.size(); i++) {
-				if (final_column_ids[i].GetPrimaryIndex() == filter.first) {
-					index = i;
-					break;
-				}
-			}
-			if (!index.IsValid()) {
-				throw InternalException("Could not find column index for table filter");
-			}
-
-			auto column_type = get.GetColumnType(ColumnIndex(filter.first));
-
-			ColumnBinding filter_binding(get.table_index, index.GetIndex());
-			auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
-			auto filter_expr = filter.second->ToExpression(*column_ref);
-			if (filter_expr->IsScalar()) {
-				filter_expr = std::move(column_ref);
-			}
-			VisitExpression(&filter_expr);
-			filter_expressions.push_back(std::move(filter_expr));
-		}
-
-		// Clear unused ids, include filter columns that are projected out immediately
-		ClearUnusedExpressions(col_sel, get.table_index);
-
-		// Now set the column ids in the LogicalGet using the "selection vector"
-		vector<ColumnIndex> column_ids;
-		column_ids.reserve(col_sel.size());
-		for (auto col_sel_idx : col_sel) {
-			auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
-			if (entry == column_references.end()) {
-				throw InternalException("RemoveUnusedColumns - could not find referenced column");
-			}
-			ColumnIndex new_index(final_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
-			column_ids.emplace_back(new_index);
-		}
-		if (column_ids.empty()) {
-			// this generally means we are only interested in whether or not anything exists in the table (e.g.
-			// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
-			// need to read any of the columns
-			column_ids.emplace_back(get.GetAnyColumn());
-		}
-		get.SetColumnIds(std::move(column_ids));
-
-		if (!get.function.filter_prune) {
-			return;
-		}
-		// Now set the projection cols by matching the "selection vector" that excludes filter columns
-		// with the "selection vector" that includes filter columns
-		idx_t col_idx = 0;
-		get.projection_ids.clear();
-		for (auto proj_sel_idx : proj_sel) {
-			for (; col_idx < col_sel.size(); col_idx++) {
-				if (proj_sel_idx == col_sel[col_idx]) {
-					get.projection_ids.push_back(col_idx);
-					break;
-				}
-			}
+		RemoveColumnsFromLogicalGet(get);
+		if (!op.children.empty()) {
+			// Some LOGICAL_GET operators (e.g., table in out functions) may have a
+			// child operator. So we recurse into it if it exists.
+			RemoveUnusedColumns remove(binder, context, true);
+			remove.VisitOperator(*op.children[0]);
 		}
 		return;
 	}
@@ -360,6 +284,92 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		comp_join.conditions = std::move(unique_conditions);
+	}
+}
+
+void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
+	if (everything_referenced) {
+		return;
+	}
+	if (!get.function.projection_pushdown) {
+		return;
+	}
+
+	auto final_column_ids = get.GetColumnIds();
+
+	// Create "selection vector" of all column ids
+	vector<idx_t> proj_sel;
+	for (idx_t col_idx = 0; col_idx < final_column_ids.size(); col_idx++) {
+		proj_sel.push_back(col_idx);
+	}
+	// Create a copy that we can use to match ids later
+	auto col_sel = proj_sel;
+	// Clear unused ids, exclude filter columns that are projected out immediately
+	ClearUnusedExpressions(proj_sel, get.table_index, false);
+
+	vector<unique_ptr<Expression>> filter_expressions;
+	// for every table filter, push a column binding into the column references map to prevent the column from
+	// being projected out
+	for (auto &filter : get.table_filters.filters) {
+		optional_idx index;
+		for (idx_t i = 0; i < final_column_ids.size(); i++) {
+			if (final_column_ids[i].GetPrimaryIndex() == filter.first) {
+				index = i;
+				break;
+			}
+		}
+		if (!index.IsValid()) {
+			throw InternalException("Could not find column index for table filter");
+		}
+
+		auto column_type = get.GetColumnType(ColumnIndex(filter.first));
+
+		ColumnBinding filter_binding(get.table_index, index.GetIndex());
+		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
+		auto filter_expr = filter.second->ToExpression(*column_ref);
+		if (filter_expr->IsScalar()) {
+			filter_expr = std::move(column_ref);
+		}
+		VisitExpression(&filter_expr);
+		filter_expressions.push_back(std::move(filter_expr));
+	}
+
+	// Clear unused ids, include filter columns that are projected out immediately
+	ClearUnusedExpressions(col_sel, get.table_index);
+
+	// Now set the column ids in the LogicalGet using the "selection vector"
+	vector<ColumnIndex> column_ids;
+	column_ids.reserve(col_sel.size());
+	for (auto col_sel_idx : col_sel) {
+		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
+		if (entry == column_references.end()) {
+			throw InternalException("RemoveUnusedColumns - could not find referenced column");
+		}
+		ColumnIndex new_index(final_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
+		column_ids.emplace_back(new_index);
+	}
+	if (column_ids.empty()) {
+		// this generally means we are only interested in whether or not anything exists in the table (e.g.
+		// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
+		// need to read any of the columns
+		column_ids.emplace_back(get.GetAnyColumn());
+	}
+	get.SetColumnIds(std::move(column_ids));
+
+	if (!get.function.filter_prune) {
+		return;
+	}
+	// Now set the projection cols by matching the "selection vector" that excludes filter columns
+	// with the "selection vector" that includes filter columns
+	idx_t col_idx = 0;
+	get.projection_ids.clear();
+	for (auto proj_sel_idx : proj_sel) {
+		for (; col_idx < col_sel.size(); col_idx++) {
+			if (proj_sel_idx == col_sel[col_idx]) {
+				get.projection_ids.push_back(col_idx);
+				break;
+			}
+		}
 	}
 }
 
