@@ -133,12 +133,12 @@ static void ValidateAsyncStrategyResult(const PhysicalTableScanExecutionStrategy
 		case AsyncResultType::BLOCKED:
 			throw InternalException("ValidateAsyncStrategyResult: found BLOCKED");
 		case AsyncResultType::FINISHED:
-			if (output_chunk_size) {
+			if (output_chunk_size > 0) {
 				throw InternalException("ValidateAsyncStrategyResult: found FINISHED with non-empty chunk");
 			}
 			break;
 		case AsyncResultType::HAVE_MORE_OUTPUT:
-			if (output_chunk_size) {
+			if (output_chunk_size == 0) {
 				throw InternalException("ValidateAsyncStrategyResult: found HAVE_MORE_OUTPUT with empty chunk");
 			}
 			break;
