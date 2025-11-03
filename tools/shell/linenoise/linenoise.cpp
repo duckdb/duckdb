@@ -37,17 +37,6 @@ int linenoiseHistoryAdd(const char *line);
 
 /* ============================== Completion ================================ */
 
-/* Free a list of completion option populated by linenoiseAddCompletion(). */
-static void freeCompletions(linenoiseCompletions *lc) {
-	size_t i;
-	for (i = 0; i < lc->len; i++) {
-		free(lc->cvec[i]);
-	}
-	if (lc->cvec != nullptr) {
-		free(lc->cvec);
-	}
-}
-
 /* Register a callback function to be called for tab-completion. */
 void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
 	completionCallback = fn;
@@ -78,23 +67,11 @@ TabCompletion Linenoise::TabComplete() const {
 	if (!completionCallback) {
 		return result;
 	}
-	linenoiseCompletions lc;
-	lc.cvec = nullptr;
-	lc.len = 0;
 	// complete based on the cursor position
 	auto prev_char = buf[pos];
 	buf[pos] = '\0';
-	completionCallback(buf, &lc);
+	completionCallback(buf, reinterpret_cast<linenoiseCompletions *>(&result));
 	buf[pos] = prev_char;
-	result.completions.reserve(lc.len);
-	for (idx_t i = 0; i < lc.len; i++) {
-		Completion c;
-		c.completion = lc.cvec[i];
-		c.cursor_pos = c.completion.size();
-		c.completion += buf + pos;
-		result.completions.emplace_back(std::move(c));
-	}
-	freeCompletions(&lc);
 	return result;
 }
 /* This is an helper function for linenoiseEdit() and is called when the
@@ -107,23 +84,23 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 	int nread, nwritten;
 	char c = 0;
 
-	auto completion_list = TabComplete();
+	completion_list = TabComplete();
 	auto &completions = completion_list.completions;
 	if (completions.empty()) {
 		Terminal::Beep();
 	} else {
 		bool stop = false;
 		bool accept_completion = false;
-		idx_t i = 0;
+		completion_idx = 0;
 
 		while (!stop) {
 			/* Show completion or original buffer */
-			if (i < completions.size()) {
+			if (completion_idx < completions.size()) {
 				Linenoise saved = *this;
 
-				len = completions[i].completion.size();
-				pos = completions[i].cursor_pos;
-				buf = (char *)completions[i].completion.c_str();
+				len = completions[completion_idx].completion.size();
+				pos = completions[completion_idx].cursor_pos;
+				buf = (char *)completions[completion_idx].completion.c_str();
 				RefreshLine();
 				len = saved.len;
 				pos = saved.pos;
@@ -134,26 +111,28 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 
 			nread = read(ifd, &c, 1);
 			if (nread <= 0) {
+				// no longer completing - clear list of completions
+				completion_list.completions.clear();
 				return -1;
 			}
 
 			Linenoise::Log("\nComplete Character %d\n", (int)c);
 			switch (c) {
 			case TAB: /* tab */
-				i = (i + 1) % completions.size();
+				completion_idx = (completion_idx + 1) % completions.size();
 				break;
 			case ESC: { /* escape */
 				auto escape = Terminal::ReadEscapeSequence(ifd);
 				switch (escape) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
-					if (i == 0) {
+					if (completion_idx == 0) {
 						// pressing shift-tab at the first completion cancels completion
 						RefreshLine();
 						current_sequence = escape;
 						stop = true;
 					} else {
-						i--;
+						completion_idx--;
 					}
 					break;
 				case EscapeSequence::ESCAPE:
@@ -175,17 +154,43 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				stop = true;
 				break;
 			}
-			if (stop && accept_completion && i < completions.size()) {
+			if (stop && accept_completion && completion_idx < completions.size()) {
 				/* Update buffer and return */
-				if (i < completions.size()) {
-					nwritten = snprintf(buf, buflen, "%s", completions[i].completion.c_str());
-					pos = completions[i].cursor_pos;
+				if (completion_idx < completions.size()) {
+					nwritten = snprintf(buf, buflen, "%s", completions[completion_idx].completion.c_str());
+					pos = completions[completion_idx].cursor_pos;
 					len = nwritten;
 				}
 			}
 		}
 	}
+	// no longer completing - clear list of completions
+	completion_list.completions.clear();
+	if (c == ENTER) {
+		return 0;
+	}
 	return c; /* Return last read character */
+}
+
+bool Linenoise::HandleANSIEscape(const char *buf, size_t len, size_t &cpos) {
+	// --- Handle ANSI escape sequences ---
+	if (buf[cpos] != '\033') {
+		// not an escape sequence
+		return false;
+	}
+	cpos++;
+	if (cpos < len && buf[cpos] == '[') { // CSI sequence
+		cpos++;
+		while (cpos < len && !(buf[cpos] >= '@' && buf[cpos] <= '~')) {
+			cpos++;
+		}
+		if (cpos < len)
+			cpos++; // skip final letter
+	} else {
+		// standalone ESC
+		cpos++;
+	}
+	return true;
 }
 
 size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
@@ -209,20 +214,8 @@ size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
 		}
 
 		// --- 3. Handle ANSI escape sequences ---
-		if (buf[cpos] == '\033') {
-			cpos++;
-			if (cpos < len && buf[cpos] == '[') { // CSI sequence
-				cpos++;
-				while (cpos < len && !(buf[cpos] >= '@' && buf[cpos] <= '~')) {
-					cpos++;
-				}
-				if (cpos < len)
-					cpos++; // skip final letter
-			} else {
-				// standalone ESC
-				cpos++;
-			}
-			continue; // width does not increase
+		if (HandleANSIEscape(buf, len, cpos)) {
+			continue;
 		}
 
 		// --- 4. Handle UTF-8 grapheme clusters ---
@@ -282,6 +275,9 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 		}
 		return;
 	}
+	if (HandleANSIEscape(buf, len, cpos)) {
+		return;
+	}
 	int sz;
 	int char_render_width;
 	if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
@@ -299,15 +295,15 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 	cols += char_render_width;
 }
 
-void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const {
-	int plen = GetPromptWidth();
+void Linenoise::PositionToColAndRow(int prompt_len, const char *render_buf, idx_t render_len, size_t target_pos,
+                                    int &out_row, int &out_col, int &rows, int &cols) const {
 	out_row = -1;
 	out_col = 0;
 	rows = 1;
-	cols = plen;
+	cols = prompt_len;
 	size_t cpos = 0;
-	while (cpos < len) {
-		if (cols >= ws.ws_col && !IsNewline(buf[cpos])) {
+	while (cpos < render_len) {
+		if (cols >= ws.ws_col && !IsNewline(render_buf[cpos])) {
 			// exceeded width - move to next line
 			rows++;
 			cols = 0;
@@ -316,12 +312,17 @@ void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_co
 			out_row = rows;
 			out_col = cols;
 		}
-		NextPosition(buf, len, cpos, rows, cols, plen);
+		NextPosition(render_buf, render_len, cpos, rows, cols, prompt_len);
 	}
-	if (target_pos == len) {
+	if (target_pos == render_len) {
 		out_row = rows;
 		out_col = cols;
 	}
+}
+
+void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const {
+	int plen = GetPromptWidth();
+	PositionToColAndRow(plen, buf, len, target_pos, out_row, out_col, rows, cols);
 }
 
 size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
@@ -1070,6 +1071,7 @@ int Linenoise::Edit() {
 			}
 			/* Read next character when 0 */
 			if (c == 0) {
+				RefreshLine();
 				continue;
 			}
 		}

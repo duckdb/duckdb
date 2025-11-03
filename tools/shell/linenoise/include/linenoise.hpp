@@ -37,6 +37,7 @@ struct searchMatch {
 
 struct Completion {
 	string completion;
+	string original_completion;
 	idx_t cursor_pos;
 };
 
@@ -115,7 +116,10 @@ public:
 
 	void NextPosition(const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) const;
 	void PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const;
+	void PositionToColAndRow(int plen, const char *buf, idx_t len, size_t target_pos, int &out_row, int &out_col,
+	                         int &rows, int &cols) const;
 	size_t ColAndRowToPosition(int target_row, int target_col) const;
+	static bool HandleANSIEscape(const char *buf, size_t len, size_t &cpos);
 
 	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
 	                              vector<highlightToken> &tokens) const;
@@ -183,6 +187,9 @@ public:
 	std::string search_buf;                  //! The search buffer
 	std::vector<searchMatch> search_matches; //! The set of search matches in our history
 	size_t search_index;                     //! The current match index
+	TabCompletion completion_list;           //! Set of tab completions of current completion
+	idx_t completion_idx;                    //! Index in set of tab completions
+	idx_t rendered_completion_lines;         //! The number of completion lines rendered
 };
 
 } // namespace duckdb

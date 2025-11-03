@@ -941,11 +941,68 @@ void Linenoise::RefreshMultiLine() {
 	Linenoise::Log("pos %d", pos);
 	Linenoise::Log("max cols %d", ws.ws_col);
 
-	/* Go up till we reach the expected position. */
-	if (rows - new_cursor_row > 0) {
-		Linenoise::Log("go-up %d", rows - new_cursor_row);
-		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
-		append_buffer.Append(seq);
+	Linenoise::Log("\n");
+	old_cursor_rows = new_cursor_row;
+
+	if (rendered_completion_lines > 0 || !completion_list.completions.empty()) {
+		// if we are tab-completing - write the list of completions one line below
+		if (rendered_completion_lines == 0) {
+			// move to the next line if we haven't rendered completions yet
+			append_buffer.Append("\n");
+		} else {
+			// if we have already rendered then just jump down to the last line that contains the completions
+			Linenoise::Log("go down %d", int(rendered_completion_lines));
+			snprintf(seq, 64, "\x1b[%dB", int(rendered_completion_lines));
+			append_buffer.Append(seq);
+
+			/* Now for every row clear it, go up. */
+			for (idx_t j = 0; j < rendered_completion_lines - 1; j++) {
+				Linenoise::Log("clear+up");
+				append_buffer.Append("\r\x1b[0K\x1b[1A");
+			}
+		}
+
+		/* Clean the top line. */
+		Linenoise::Log("clear");
+		append_buffer.Append("\r\x1b[0K");
+
+		if (!completion_list.completions.empty()) {
+			string completion_text;
+			for (idx_t i = 0; i < completion_list.completions.size(); i++) {
+				if (i > 0) {
+					completion_text += " ";
+				}
+				auto &completion = completion_list.completions[i];
+				auto &rendered_text = completion.original_completion;
+				if (i == completion_idx) {
+					// underline selected completion
+					completion_text += "\033[4m";
+				}
+				completion_text += rendered_text;
+				if (i == completion_idx) {
+					completion_text += "\033[0m";
+				}
+			}
+
+			// write the set of tab completions
+			int completion_rows, completion_cols;
+			int unused_row, unused_x;
+			PositionToColAndRow(0, completion_text.c_str(), completion_text.size(), 0, unused_row, unused_x,
+			                    completion_rows, completion_cols);
+			append_buffer.Append(completion_text.c_str(), completion_text.size());
+			rendered_completion_lines = completion_rows;
+
+			// jump back up the amount of rendered lines
+			snprintf(seq, 64, "\x1b[%dA", int(rendered_completion_lines));
+			append_buffer.Append(seq);
+		} else {
+			// we are just clearing the completion lines - reset to 0
+			rendered_completion_lines = 0;
+
+			// jump back up one last line
+			snprintf(seq, 64, "\x1b[1A");
+			append_buffer.Append(seq);
+		}
 	}
 
 	/* Set column. */
@@ -958,8 +1015,6 @@ void Linenoise::RefreshMultiLine() {
 	}
 	append_buffer.Append(seq);
 
-	Linenoise::Log("\n");
-	old_cursor_rows = new_cursor_row;
 	append_buffer.Write(fd);
 }
 
