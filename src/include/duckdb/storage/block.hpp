@@ -61,28 +61,8 @@ struct MetaBlockPointer {
 	block_id_t GetBlockId() const;
 	uint32_t GetBlockIndex() const;
 
-	friend bool operator==(const MetaBlockPointer &lhs, const MetaBlockPointer &rhs) {
-		return lhs.block_pointer == rhs.block_pointer && lhs.offset == rhs.offset;
-	}
-	friend bool operator!=(const MetaBlockPointer &lhs, const MetaBlockPointer &rhs) {
-		return !(lhs == rhs);
-	}
-
-	friend bool operator<(const MetaBlockPointer &lhs, const MetaBlockPointer &rhs) {
-		if (lhs.block_pointer < rhs.block_pointer)
-			return true;
-		if (rhs.block_pointer < lhs.block_pointer)
-			return false;
-		return lhs.offset < rhs.offset;
-	}
-	friend bool operator<=(const MetaBlockPointer &lhs, const MetaBlockPointer &rhs) {
-		return !(rhs < lhs);
-	}
-	friend bool operator>(const MetaBlockPointer &lhs, const MetaBlockPointer &rhs) {
-		return rhs < lhs;
-	}
-	friend bool operator>=(const MetaBlockPointer &lhs, const MetaBlockPointer &rhs) {
-		return !(lhs < rhs);
+	bool operator==(const MetaBlockPointer &rhs) const {
+		return block_pointer == rhs.block_pointer && offset == rhs.offset;
 	}
 
 	friend std::ostream &operator<<(std::ostream &os, const MetaBlockPointer &obj) {

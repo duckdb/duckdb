@@ -95,9 +95,6 @@ void MetadataReader::ReadNextBlock(QueryContext context) {
 	offset = next_offset;
 	next_offset = sizeof(block_id_t);
 	capacity = GetMetadataManager().GetMetadataBlockSize();
-	if (read_pointers) {
-		read_pointers->push_back(GetMetaBlockPointer());
-	}
 }
 
 data_ptr_t MetadataReader::BasePtr() {

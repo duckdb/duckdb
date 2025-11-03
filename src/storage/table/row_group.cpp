@@ -973,27 +973,15 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
-vector<MetaBlockPointer> RowGroup::GetColumnPointers(bool force) {
-	vector<MetaBlockPointer> result;
-	if (has_metadata_blocks && !force) {
-		// we have the column metadata from the file itself - no need to deserialize metadata to fetch it
-		// read if from "column_pointers" and "extra_metadata_blocks"
-		for (auto block : column_pointers) {
-			block.offset = 0;
-			if (std::find(result.begin(), result.end(), block) != result.end()) {
-				continue;
-			}
-			result.push_back(block);
-		}
-		for (auto &block_pointer : extra_metadata_blocks) {
-			result.emplace_back(block_pointer, 0);
-		}
-		return result;
+vector<idx_t> RowGroup::GetOrComputeExtraMetadataBlocks(bool force_compute) {
+	if (has_metadata_blocks && !force_compute) {
+		return extra_metadata_blocks;
 	}
 	if (column_pointers.empty()) {
 		// no pointers
-		return result;
+		return {};
 	}
+	vector<MetaBlockPointer> read_pointers;
 	// column_pointers stores the beginning of each column
 	// if columns are big - they may span multiple metadata blocks
 	// we need to figure out all blocks that this row group points to
@@ -1004,31 +992,24 @@ vector<MetaBlockPointer> RowGroup::GetColumnPointers(bool force) {
 		// for all but the last column pointer - we can just follow the linked list until we reach the last column
 		MetadataReader reader(metadata_manager, column_pointers[0]);
 		auto last_pointer = column_pointers[last_idx];
-		result = reader.GetRemainingBlocks(last_pointer);
+		read_pointers = reader.GetRemainingBlocks(last_pointer);
 	}
 	// for the last column we need to deserialize the column - because we don't know where it stops
 	auto &types = GetCollection().GetTypes();
-	MetadataReader reader(metadata_manager, column_pointers[last_idx], &result);
+	MetadataReader reader(metadata_manager, column_pointers[last_idx], &read_pointers);
 	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, start, reader, types[last_idx]);
-	return result;
+
+	unordered_set<idx_t> result_as_set;
+	for (auto &ptr : read_pointers) {
+		result_as_set.emplace(ptr.block_pointer);
+	}
+	for (auto &ptr : column_pointers) {
+		result_as_set.erase(ptr.block_pointer);
+	}
+	return {result_as_set.begin(), result_as_set.end()};
 }
 
-vector<MetaBlockPointer> RowGroup::GetAllColumnPointers() {
-	vector<MetaBlockPointer> result;
-	if (column_pointers.empty()) {
-		// no pointers
-		return result;
-	}
-	auto &types = GetCollection().GetTypes();
-	auto &metadata_manager = GetCollection().GetMetadataManager();
-	for (idx_t i = 0; i < column_pointers.size(); i++) {
-		MetadataReader reader(metadata_manager, column_pointers[i], &result);
-		ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, start, reader, types[i]);
-	}
-	return result;
-}
-
-vector<MetaBlockPointer> RowGroup::GetColumnStartPointers() {
+const vector<MetaBlockPointer> &RowGroup::GetColumnStartPointers() const {
 	return column_pointers;
 }
 
@@ -1038,7 +1019,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		// we have existing metadata and the row group has not been changed
 		// re-use previous metadata
 		RowGroupWriteData result;
-		result.existing_pointers = GetColumnPointers();
+		result.reuse_existing_metadata_blocks = true;
+		result.existing_extra_metadata_blocks = GetOrComputeExtraMetadataBlocks();
 		return result;
 	}
 	auto &compression_types = writer.GetCompressionTypes();
@@ -1066,14 +1048,22 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	// construct the row group pointer and write the column meta data to disk
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
-	if (!write_data.existing_pointers.empty()) {
+	if (write_data.reuse_existing_metadata_blocks) {
 		// we are re-using the previous metadata
 		row_group_pointer.data_pointers = column_pointers;
-		row_group_pointer.has_metadata_blocks = has_metadata_blocks;
-		row_group_pointer.extra_metadata_blocks = extra_metadata_blocks;
+		row_group_pointer.has_metadata_blocks = true;
+		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
 		row_group_pointer.deletes_pointers = deletes_pointers;
-		metadata_manager->ClearModifiedBlocks(write_data.existing_pointers);
+		vector<MetaBlockPointer> extra_metadata_block_pointers(write_data.existing_extra_metadata_blocks.size());
+		for (auto &block_pointer : write_data.existing_extra_metadata_blocks) {
+			extra_metadata_block_pointers.emplace_back(block_pointer, 0);
+		}
+		metadata_manager->ClearModifiedBlocks(column_pointers);
+		metadata_manager->ClearModifiedBlocks(extra_metadata_block_pointers);
 		metadata_manager->ClearModifiedBlocks(deletes_pointers);
+		// remember metadata_blocks to avoid loading them on future checkpoints
+		has_metadata_blocks = true;
+		extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
 		return row_group_pointer;
 	}
 	D_ASSERT(write_data.states.size() == columns.size());
