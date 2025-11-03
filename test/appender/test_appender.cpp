@@ -855,7 +855,7 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 	// Should finish eventually. Close must complete quickly since no data remains to flush
 	auto future = std::async(std::launch::async, [&]() { app.Close(); });
 
-	auto status = future.wait_for(std::chrono::seconds(1));
+	auto status = future.wait_for(std::chrono::milliseconds(50));
 
 	if (status == std::future_status::ready) {
 		REQUIRE_NOTHROW(future.get());
