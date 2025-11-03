@@ -72,12 +72,14 @@ private:
 
 struct UnshreddedValue {
 public:
-	explicit UnshreddedValue(uint32_t value_index, vector<uint32_t> &&children = {})
-	    : source_value_index(value_index), unshredded_children(std::move(children)) {
+	UnshreddedValue(uint32_t value_index, uint32_t &target_value_index, vector<uint32_t> &&children = {})
+	    : source_value_index(value_index), target_value_index(target_value_index),
+	      unshredded_children(std::move(children)) {
 	}
 
 public:
 	uint32_t source_value_index;
+	uint32_t &target_value_index;
 	vector<uint32_t> unshredded_children;
 };
 
@@ -202,8 +204,8 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 				validity.SetInvalid(result_index);
 			} else {
 				//! Deal with partially shredded objects
-				untyped_data[result_index] = static_cast<uint32_t>(unshredded_values[row].size()) + 1;
-				unshredded_values[row].emplace_back(value_index, std::move(unshredded_children));
+				unshredded_values[row].emplace_back(value_index, untyped_data[result_index],
+				                                    std::move(unshredded_children));
 			}
 			continue;
 		}
@@ -213,8 +215,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 			//! 0 is reserved for NULL
 			untyped_data[result_index] = 0;
 		} else {
-			untyped_data[result_index] = static_cast<uint32_t>(unshredded_values[row].size()) + 1;
-			unshredded_values[row].emplace_back(value_index);
+			unshredded_values[row].emplace_back(value_index, untyped_data[result_index]);
 		}
 	}
 }
@@ -319,9 +320,16 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 		for (idx_t i = 0; i < unshredded_values.size(); i++) {
 			auto &unshredded_value = unshredded_values[i];
 			auto value_index = unshredded_value.source_value_index;
+
+			unshredded_value.target_value_index = normalizer_state.values_size + 1;
 			if (!unshredded_value.unshredded_children.empty()) {
 				D_ASSERT(variant.GetTypeId(row, value_index) == VariantLogicalType::OBJECT);
 				auto nested_data = VariantUtils::DecodeNestedData(variant, row, value_index);
+
+				normalizer_state.type_ids[normalizer_state.values_size] =
+				    static_cast<uint8_t>(VariantLogicalType::OBJECT);
+				normalizer_state.byte_offsets[normalizer_state.values_size] = normalizer_state.blob_size;
+				normalizer_state.values_size++;
 				VisitObject(variant, row, nested_data, normalizer_state, unshredded_value.unshredded_children);
 				continue;
 			}

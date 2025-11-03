@@ -7,6 +7,7 @@
 
 namespace duckdb {
 
+template <bool ALLOW_NULL = false>
 static VariantValue UnshreddedVariantValue(UnifiedVariantVectorData &input, uint32_t row, uint32_t values_index) {
 	if (!input.RowIsValid(row)) {
 		return VariantValue(Value(LogicalTypeId::SQLNULL));
@@ -20,8 +21,9 @@ static VariantValue UnshreddedVariantValue(UnifiedVariantVectorData &input, uint
 	values_index--;
 
 	auto type_id = input.GetTypeId(row, values_index);
-	if (type_id == VariantLogicalType::VARIANT_NULL) {
-		return VariantValue(Value(LogicalTypeId::SQLNULL));
+	if (!ALLOW_NULL) {
+		//! We don't expect NULLs at the root, those should have the 'values_index' of 0
+		D_ASSERT(type_id != VariantLogicalType::VARIANT_NULL);
 	}
 
 	if (type_id == VariantLogicalType::OBJECT) {
@@ -30,7 +32,7 @@ static VariantValue UnshreddedVariantValue(UnifiedVariantVectorData &input, uint
 		auto object_data = VariantUtils::DecodeNestedData(input, row, values_index);
 		for (idx_t i = 0; i < object_data.child_count; i++) {
 			auto child_values_index = input.GetValuesIndex(row, object_data.children_idx + i);
-			auto val = UnshreddedVariantValue(input, row, child_values_index);
+			auto val = UnshreddedVariantValue<true>(input, row, child_values_index + 1);
 
 			auto keys_index = input.GetKeysIndex(row, object_data.children_idx + i);
 			auto &key = input.GetKey(row, keys_index);
@@ -45,7 +47,7 @@ static VariantValue UnshreddedVariantValue(UnifiedVariantVectorData &input, uint
 		auto array_data = VariantUtils::DecodeNestedData(input, row, values_index);
 		for (idx_t i = 0; i < array_data.child_count; i++) {
 			auto child_values_index = input.GetValuesIndex(row, array_data.children_idx + i);
-			auto val = UnshreddedVariantValue(input, row, child_values_index);
+			auto val = UnshreddedVariantValue<true>(input, row, child_values_index + 1);
 
 			res.AddItem(std::move(val));
 		}
