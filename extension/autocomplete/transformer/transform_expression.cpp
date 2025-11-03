@@ -856,4 +856,75 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	return std::move(result);
 }
 
+
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformOverClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(1));
+}
+
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
+		throw NotImplementedException("Identifier in Window Function has not yet been implemented");
+	}
+	return transformer.Transform<unique_ptr<WindowExpression>>(choice_pr.result);
+}
+
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrameDefinition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrameContentsParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	return transformer.Transform<unique_ptr<WindowExpression>>(extract_parens);
+}
+
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0))->Cast<ListParseResult>();
+	auto window_name_opt = extract_parens.Child<OptionalParseResult>(0);
+	if (window_name_opt.HasResult()) {
+		throw NotImplementedException("Window name has not yet been implemented");
+	}
+	// TODO(Dtenwolde) Use the window name
+	auto window_frame_contents = transformer.Transform<unique_ptr<WindowExpression>>(extract_parens.Child<ListParseResult>(1));
+	return window_frame_contents;
+}
+
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrameContents(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	//! Create a dummy result to add modifiers to
+	auto result = make_uniq<WindowExpression>(ExpressionType::WINDOW_AGGREGATE, INVALID_CATALOG, INVALID_SCHEMA, string());
+	auto partition_opt = list_pr.Child<OptionalParseResult>(0);
+	if (partition_opt.HasResult()) {
+		result->partitions = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(partition_opt.optional_result);
+	}
+	auto order_by_opt = list_pr.Child<OptionalParseResult>(1);
+	if (order_by_opt.HasResult()) {
+		result->orders = transformer.Transform<vector<OrderByNode>>(order_by_opt.optional_result);
+	}
+	auto frame_opt = list_pr.Child<OptionalParseResult>(2);
+	if (frame_opt.HasResult()) {
+		throw NotImplementedException("Frame has not yet been implemented");
+	} else {
+		result->start = WindowBoundary::UNBOUNDED_PRECEDING;
+		result->end = WindowBoundary::CURRENT_ROW_RANGE;
+	}
+	return result;
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformWindowPartition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expression_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
+	vector<unique_ptr<ParsedExpression>> result;
+	for (auto expression : expression_list) {
+		result.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expression));
+	}
+	return result;
+}
+
+
 } // namespace duckdb

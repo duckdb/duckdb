@@ -532,6 +532,14 @@ private:
 	static unique_ptr<ParsedExpression> TransformStarExpression(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 
+	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<WindowExpression> TransformWindowFrame(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<WindowExpression> TransformWindowFrameDefinition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<WindowExpression> TransformWindowFrameContentsParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<WindowExpression> TransformWindowFrameNameContentsParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<WindowExpression> TransformWindowFrameContents(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformWindowPartition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 	// insert.gram
 	static unique_ptr<SQLStatement> TransformInsertStatement(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
