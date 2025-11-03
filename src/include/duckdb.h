@@ -721,6 +721,47 @@ typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
 typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
 
 //===--------------------------------------------------------------------===//
+// Copy function types
+//===--------------------------------------------------------------------===//
+
+//! A COPY function. Must be destroyed with `duckdb_destroy_copy_function`.
+typedef struct _duckdb_copy_function {
+	void *internal_ptr;
+} * duckdb_copy_function;
+
+//! Info for the bind function of a COPY function.
+typedef struct _duckdb_copy_function_bind_info {
+	void *internal_ptr;
+} * duckdb_copy_function_bind_info;
+
+//! Info for the global initialization function of a COPY function.
+typedef struct _duckdb_copy_function_global_init_info {
+	void *internal_ptr;
+} * duckdb_copy_function_global_init_info;
+
+//! Info for the sink function of a COPY function.
+typedef struct _duckdb_copy_function_sink_info {
+	void *internal_ptr;
+} * duckdb_copy_function_sink_info;
+
+//! Info for the finalize function of a COPY function.
+typedef struct _duckdb_copy_function_finalize_info {
+	void *internal_ptr;
+} * duckdb_copy_function_finalize_info;
+
+//! The bind function to use when binding a COPY ... TO function.
+typedef void (*duckdb_copy_function_bind_t)(duckdb_copy_function_bind_info info);
+
+//! The initialization function to use when initializing a COPY ... TO function.
+typedef void (*duckdb_copy_function_global_init_t)(duckdb_copy_function_global_init_info info);
+
+//! The function to sink an input chunk into during execution of a COPY ... TO function.
+typedef void (*duckdb_copy_function_sink_t)(duckdb_copy_function_sink_info info, duckdb_data_chunk input);
+
+//! The function to finalize the COPY ... TO function execution.
+typedef void (*duckdb_copy_function_finalize_t)(duckdb_copy_function_finalize_info info);
+
+//===--------------------------------------------------------------------===//
 // Cast types
 //===--------------------------------------------------------------------===//
 
@@ -5572,6 +5613,349 @@ If the requested option does not exist the scope is set to `DUCKDB_CONFIG_OPTION
 */
 DUCKDB_C_API duckdb_value duckdb_client_context_get_config_option(duckdb_client_context context, const char *name,
                                                                   duckdb_config_option_scope *out_scope);
+
+//===--------------------------------------------------------------------===//
+// Copy Functions
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new empty copy function.
+
+The return value must be destroyed with `duckdb_destroy_copy_function`.
+
+* @return The copy function object.
+*/
+DUCKDB_C_API duckdb_copy_function duckdb_create_copy_function();
+
+/*!
+Sets the name of the copy function.
+
+* @param copy_function The copy function
+* @param name The name to set
+*/
+DUCKDB_C_API void duckdb_copy_function_set_name(duckdb_copy_function copy_function, const char *name);
+
+/*!
+Sets the extra info pointer of the copy function, which can be used to store arbitrary data.
+
+* @param copy_function The copy function
+* @param extra_info The extra info pointer
+* @param destructor  A destructor function to call to destroy the extra info
+*/
+DUCKDB_C_API void duckdb_copy_function_set_extra_info(duckdb_copy_function copy_function, void *extra_info,
+                                                      duckdb_delete_callback_t destructor);
+
+/*!
+Registers the given copy function on the database connection under the specified name.
+
+* @param connection The database connection
+* @param copy_function The copy function to register
+*/
+DUCKDB_C_API duckdb_state duckdb_register_copy_function(duckdb_connection connection,
+                                                        duckdb_copy_function copy_function);
+
+/*!
+Destroys the given copy function object.
+* @param copy_function The copy function to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_copy_function(duckdb_copy_function *copy_function);
+
+/*!
+Sets the bind function of the copy function, to use when binding `COPY ... TO`.
+
+* @param bind The bind function
+*/
+DUCKDB_C_API void duckdb_copy_function_set_bind(duckdb_copy_function copy_function, duckdb_copy_function_bind_t bind);
+
+/*!
+Report that an error occurred during the binding-phase of a `COPY ... TO` function.
+
+* @param info The bind info provided to the bind function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_bind_set_error(duckdb_copy_function_bind_info info, const char *error);
+
+/*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The bind info provided to the bind function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_bind_get_extra_info(duckdb_copy_function_bind_info info);
+
+/*!
+Retrieves the client context of the current connection binding the `COPY ... TO` function.
+
+Must be destroyed with `duckdb_destroy_client_context`
+
+* @param info The bind info provided to the bind function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context duckdb_copy_function_bind_get_client_context(duckdb_copy_function_bind_info info);
+
+/*!
+Retrieves the number of columns that will be provided to the `COPY ... TO` function.
+
+* @param info The bind info provided to the bind function
+* @return The number of columns.
+*/
+DUCKDB_C_API idx_t duckdb_copy_function_bind_get_column_count(duckdb_copy_function_bind_info info);
+
+/*!
+Retrieves the type of a column that will be provided to the `COPY ... TO` function.
+
+* @param info The bind info provided to the bind function
+* @param col_idx The index of the column to retrieve the type for
+* @return The type of the column. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
+DUCKDB_C_API duckdb_logical_type duckdb_copy_function_bind_get_column_type(duckdb_copy_function_bind_info info,
+                                                                           idx_t col_idx);
+
+/*!
+Retrieves all values for the given options provided to the `COPY ... TO` function.
+
+* @param info The bind info provided to the bind function
+* @return A STRUCT value containing all options as fields. Must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_C_API duckdb_value duckdb_copy_function_bind_get_options(duckdb_copy_function_bind_info info);
+
+/*!
+Sets the bind data of the copy function, to be provided to the init, sink and finalize functions.
+
+* @param info The bind info provided to the bind function
+* @param bind_data The bind data pointer
+* @param destructor  A destructor function to call to destroy the bind data
+*/
+DUCKDB_C_API void duckdb_copy_function_bind_set_bind_data(duckdb_copy_function_bind_info info, void *bind_data,
+                                                          duckdb_delete_callback_t destructor);
+
+/*!
+Sets the initialization function of the copy function, called right before executing `COPY ... TO`.
+
+* @param init The init function
+*/
+DUCKDB_C_API void duckdb_copy_function_set_global_init(duckdb_copy_function copy_function,
+                                                       duckdb_copy_function_global_init_t init);
+
+/*!
+Report that an error occurred during the initialization-phase of a `COPY ... TO` function.
+
+* @param info The init info provided to the init function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_global_init_set_error(duckdb_copy_function_global_init_info info,
+                                                             const char *error);
+
+/*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The init info provided to the init function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_global_init_get_extra_info(duckdb_copy_function_global_init_info info);
+
+/*!
+Retrieves the client context of the current connection initializing the `COPY ... TO` function.
+
+Must be destroyed with `duckdb_destroy_client_context`
+
+* @param info The init info provided to the init function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context
+duckdb_copy_function_global_init_get_client_context(duckdb_copy_function_global_init_info info);
+
+/*!
+Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
+
+* @param info The init info provided to the init function
+* @return The bind data pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_global_init_get_bind_data(duckdb_copy_function_global_init_info info);
+
+/*!
+Retrieves the file path provided to the `COPY ... TO` function.
+
+Lives for the duration of the initialization callback, must not be destroyed.
+
+* @param info The init info provided to the init function
+* @return The file path.
+*/
+DUCKDB_C_API const char *duckdb_copy_function_global_init_get_file_path(duckdb_copy_function_global_init_info info);
+
+/*!
+Sets the global state of the copy function, to be provided to all subsequent local init, sink and finalize functions.
+
+* @param info The init info provided to the init function
+* @param global_state The global state pointer
+* @param destructor  A destructor function to call to destroy the global state
+*/
+DUCKDB_C_API void duckdb_copy_function_global_init_set_global_state(duckdb_copy_function_global_init_info info,
+                                                                    void *global_state,
+                                                                    duckdb_delete_callback_t destructor);
+
+/*!
+Sets the sink function of the copy function, called during `COPY ... TO`.
+
+* @param function The sink function
+*/
+DUCKDB_C_API void duckdb_copy_function_set_sink(duckdb_copy_function copy_function,
+                                                duckdb_copy_function_sink_t function);
+
+/*!
+Report that an error occurred during the sink-phase of a `COPY ... TO` function.
+
+* @param info The sink info provided to the sink function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_sink_set_error(duckdb_copy_function_sink_info info, const char *error);
+
+/*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The sink info provided to the sink function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_sink_get_extra_info(duckdb_copy_function_sink_info info);
+
+/*!
+Retrieves the client context of the current connection during the sink-phase of the `COPY ... TO` function.
+
+Must be destroyed with `duckdb_destroy_client_context`
+
+* @param info The sink info provided to the sink function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context duckdb_copy_function_sink_get_client_context(duckdb_copy_function_sink_info info);
+
+/*!
+Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
+
+* @param info The sink info provided to the sink function
+* @return The bind data pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_sink_get_bind_data(duckdb_copy_function_sink_info info);
+
+/*!
+Retrieves the global state provided during the init-phase of a `COPY ... TO` function.
+
+* @param info The sink info provided to the sink function
+* @return The global state pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_sink_get_global_state(duckdb_copy_function_sink_info info);
+
+/*!
+Sets the finalize function of the copy function, called at the end of `COPY ... TO`.
+
+* @param finalize The finalize function
+*/
+DUCKDB_C_API void duckdb_copy_function_set_finalize(duckdb_copy_function copy_function,
+                                                    duckdb_copy_function_finalize_t finalize);
+
+/*!
+Report that an error occurred during the finalize-phase of a `COPY ... TO` function
+
+* @param info The finalize info provided to the finalize function
+* @param error The error message
+*/
+DUCKDB_C_API void duckdb_copy_function_finalize_set_error(duckdb_copy_function_finalize_info info, const char *error);
+
+/*!
+Retrieves the extra info pointer of the copy function.
+
+* @param info The finalize info provided to the finalize function
+* @return The extra info pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_finalize_get_extra_info(duckdb_copy_function_finalize_info info);
+
+/*!
+Retrieves the client context of the current connection during the finalize-phase of the `COPY ... TO` function.
+
+Must be destroyed with `duckdb_destroy_client_context`
+
+* @param info The finalize info provided to the finalize function
+* @return The client context.
+*/
+DUCKDB_C_API duckdb_client_context
+duckdb_copy_function_finalize_get_client_context(duckdb_copy_function_finalize_info info);
+
+/*!
+Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.
+
+* @param info The finalize info provided to the finalize function
+* @return The bind data pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_finalize_get_bind_data(duckdb_copy_function_finalize_info info);
+
+/*!
+Retrieves the global state provided during the init-phase of a `COPY ... TO` function.
+
+* @param info The finalize info provided to the finalize function
+* @return The global state pointer.
+*/
+DUCKDB_C_API void *duckdb_copy_function_finalize_get_global_state(duckdb_copy_function_finalize_info info);
+
+/*!
+Sets the table function to use when executing a `COPY ... FROM (...)` statement with this copy function.
+
+The table function must have a `duckdb_table_function_bind_t`, `duckdb_table_function_init_t` and
+`duckdb_table_function_t` set.
+
+The table function must take a single VARCHAR parameter (the file path).
+
+Options passed to the `COPY ... FROM (...)` statement are forwarded as named parameters to the table function.
+
+Since `COPY ... FROM` copies into an already existing table, the table function should not define its own result columns
+using `duckdb_bind_add_result_column` when binding . Instead use `duckdb_table_function_bind_get_result_column_count`
+and related functions in the bind callback of the table function to retrieve the schema of the target table of the `COPY
+... FROM` statement.
+
+* @param copy_function The copy function
+* @param table_function The table function to use for `COPY ... FROM`
+*/
+DUCKDB_C_API void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_function,
+                                                              duckdb_table_function table_function);
+
+/*!
+Retrieves the number of result columns of a table function.
+
+If the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the number of columns in the
+target table at the start of the bind callback.
+
+* @param info The bind info provided to the bind function
+* @return The number of result columns.
+*/
+DUCKDB_C_API idx_t duckdb_table_function_bind_get_result_column_count(duckdb_bind_info info);
+
+/*!
+Retrieves the name of a result column of a table function.
+
+If the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the names of the columns in
+the target table at the start of the bind callback.
+
+The result is valid for the duration of the bind callback or until the next call to `duckdb_bind_add_result_column`, so
+it must not be destroyed.
+
+* @param info The bind info provided to the bind function
+* @param col_idx The index of the result column to retrieve the name for
+* @return The name of the result column.
+*/
+DUCKDB_C_API const char *duckdb_table_function_bind_get_result_column_name(duckdb_bind_info info, idx_t col_idx);
+
+/*!
+Retrieves the type of a result column of a table function.
+
+If the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the types of the columns in
+the target table at the start of the bind callback.
+
+The result must be destroyed with `duckdb_destroy_logical_type`.
+
+* @param info The bind info provided to the bind function
+* @param col_idx The index of the result column to retrieve the type for
+* @return The type of the result column.
+*/
+DUCKDB_C_API duckdb_logical_type duckdb_table_function_bind_get_result_column_type(duckdb_bind_info info,
+                                                                                   idx_t col_idx);
 
 #endif
 
