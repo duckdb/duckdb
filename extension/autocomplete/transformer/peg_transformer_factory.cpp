@@ -86,6 +86,8 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformAddConstraint);
 	REGISTER_TRANSFORM(TransformQualifiedSequenceName);
 	REGISTER_TRANSFORM(TransformSequenceName);
+	REGISTER_TRANSFORM(TransformSetSortedBy);
+	REGISTER_TRANSFORM(TransformResetSortedBy);
 }
 
 void PEGTransformerFactory::RegisterAttach() {
@@ -329,6 +331,15 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformExpressionOptIdentifier);
 	REGISTER_TRANSFORM(TransformNamedParameter);
 	REGISTER_TRANSFORM(TransformTableRef);
+
+	REGISTER_TRANSFORM(TransformOrderByClause);
+	REGISTER_TRANSFORM(TransformOrderByExpressions);
+	REGISTER_TRANSFORM(TransformOrderByExpressionList);
+	REGISTER_TRANSFORM(TransformOrderByAll);
+	REGISTER_TRANSFORM(TransformOrderByExpression);
+	REGISTER_TRANSFORM(TransformDescOrAsc);
+	REGISTER_TRANSFORM(TransformNullsFirstOrLast);
+
 	REGISTER_TRANSFORM(TransformJoinOrPivot);
 	REGISTER_TRANSFORM(TransformJoinClause);
 	REGISTER_TRANSFORM(TransformRegularJoinClause);

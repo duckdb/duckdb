@@ -312,4 +312,18 @@ string PEGTransformerFactory::TransformSequenceName(PEGTransformer &transformer,
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetSortedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(3));
+	auto order_by_exprs = transformer.Transform<vector<OrderByNode>>(extract_parens);
+	auto result = make_uniq<SetSortedByInfo>(AlterEntryData(), std::move(order_by_exprs));
+	return result;
+}
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetSortedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	vector<OrderByNode> order_by_exprs;
+	auto result = make_uniq<SetSortedByInfo>(AlterEntryData(), std::move(order_by_exprs));
+	return result;
+}
 } // namespace duckdb

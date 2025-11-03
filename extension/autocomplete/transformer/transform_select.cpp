@@ -543,4 +543,64 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformTableStatement(PEGTr
 	return result;
 }
 
+
+vector<OrderByNode> PEGTransformerFactory::TransformOrderByClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<vector<OrderByNode>>(list_pr.Child<ListParseResult>(2));
+}
+
+vector<OrderByNode> PEGTransformerFactory::TransformOrderByExpressions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<vector<OrderByNode>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+vector<OrderByNode> PEGTransformerFactory::TransformOrderByExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<OrderByNode> result;
+	auto expr_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
+	for (auto expr : expr_list) {
+		result.push_back(transformer.Transform<OrderByNode>(expr));
+	}
+	return result;
+}
+
+vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<OrderByNode> result;
+	auto order_type = OrderType::ORDER_DEFAULT;
+	auto order_type_pr = list_pr.Child<OptionalParseResult>(1);
+	if (order_type_pr.HasResult()) {
+		order_type = transformer.Transform<OrderType>(order_type_pr.optional_result);
+	}
+	auto order_by_null_type = OrderByNullType::ORDER_DEFAULT;
+	auto order_by_null_pr = list_pr.Child<OptionalParseResult>(2);
+	if (order_by_null_pr.HasResult()) {
+		order_by_null_type = transformer.Transform<OrderByNullType>(order_by_null_pr.optional_result);
+	}
+	auto star_expr = make_uniq<StarExpression>();
+	star_expr->columns = true;
+	result.push_back(OrderByNode(order_type, order_by_null_type, std::move(star_expr)));
+	return result;
+}
+
+OrderByNode PEGTransformerFactory::TransformOrderByExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	auto order_type = OrderType::ORDER_DEFAULT;
+	transformer.TransformOptional<OrderType>(list_pr, 1, order_type);
+	auto order_by_null_type = OrderByNullType::ORDER_DEFAULT;
+	transformer.TransformOptional<OrderByNullType>(list_pr, 2, order_by_null_type);
+	return OrderByNode(order_type, order_by_null_type, std::move(expr));
+}
+
+OrderType PEGTransformerFactory::TransformDescOrAsc(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<OrderType>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+OrderByNullType PEGTransformerFactory::TransformNullsFirstOrLast(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<OrderByNullType>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
 } // namespace duckdb

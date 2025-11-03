@@ -250,6 +250,8 @@ private:
 	static unique_ptr<AlterTableInfo> TransformAddConstraint(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
 	static string TransformSequenceName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<AlterTableInfo> TransformSetSortedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<AlterTableInfo> TransformResetSortedBy(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// attach.gram
 	static unique_ptr<SQLStatement> TransformAttachStatement(PEGTransformer &transformer,
@@ -599,6 +601,14 @@ private:
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformExpressionOptIdentifier(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
+
+	static vector<OrderByNode> TransformOrderByClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<OrderByNode> TransformOrderByExpressions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<OrderByNode> TransformOrderByExpressionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<OrderByNode> TransformOrderByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static OrderByNode TransformOrderByExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static OrderType TransformDescOrAsc(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static OrderByNullType TransformNullsFirstOrLast(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	static unique_ptr<TableRef> TransformTableRef(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformJoinOrPivot(PEGTransformer &transformer,
