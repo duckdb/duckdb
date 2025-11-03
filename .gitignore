@@ -358,3 +358,6 @@ extension_external
 
 test/sql/pragma/output.json
 tools/pythonpkg/duckdb_build/
+
+# generated benchmark comparison plots
+plots
