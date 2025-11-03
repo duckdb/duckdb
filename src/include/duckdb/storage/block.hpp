@@ -61,6 +61,10 @@ struct MetaBlockPointer {
 	block_id_t GetBlockId() const;
 	uint32_t GetBlockIndex() const;
 
+	bool operator==(const MetaBlockPointer &rhs) const {
+		return block_pointer == rhs.block_pointer && offset == rhs.offset;
+	}
+
 	void Serialize(Serializer &serializer) const;
 	static MetaBlockPointer Deserialize(Deserializer &source);
 };
