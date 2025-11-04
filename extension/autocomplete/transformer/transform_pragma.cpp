@@ -16,9 +16,21 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaAssign(PEGTransfo
 	auto result = make_uniq<PragmaStatement>();
 	auto &info = *result->info;
 	info.name = list_pr.Child<IdentifierParseResult>(0).identifier;
-	auto value = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
-	info.parameters.push_back(std::move(value));
-
+	auto value_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	if (value_list.size() > 1) {
+		throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
+	}
+	auto &expr = value_list[0];
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		auto &colref = value_list[0]->Cast<ColumnRefExpression>();
+		if (!colref.IsQualified()) {
+			info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));
+		} else {
+			info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(expr->ToString())));
+		}
+	} else {
+		throw ParserException("PRAGMA statement received unexpected expression");
+	}
 	auto set_statement = make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
 	return std::move(set_statement);
 }
