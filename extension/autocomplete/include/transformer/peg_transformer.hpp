@@ -154,6 +154,7 @@ public:
 	void RegisterComment();
 	void RegisterCommon();
 	void RegisterCopy();
+	void RegisterCreateIndex();
 	void RegisterCreateSequence();
 	void RegisterCreateTable();
 	void RegisterDeallocate();
@@ -350,6 +351,13 @@ private:
 	                                                 optional_ptr<ParseResult> parse_result);
 	static GenericCopyOption TransformForceQuoteOption(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
+
+	// create_index.gram
+	static unique_ptr<CreateStatement> TransformCreateIndexStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformIndexType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformIndexElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<Value> TransformWithList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_sequence.gram
 	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,

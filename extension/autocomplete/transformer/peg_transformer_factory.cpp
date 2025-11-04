@@ -169,6 +169,15 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformForceQuoteOption);
 }
 
+void PEGTransformerFactory::RegisterCreateIndex() {
+	// create_index.gram
+	REGISTER_TRANSFORM(TransformCreateIndexStmt);
+	REGISTER_TRANSFORM(TransformIndexType);
+	REGISTER_TRANSFORM(TransformIndexElement);
+	REGISTER_TRANSFORM(TransformWithList);
+	REGISTER_TRANSFORM(TransformIndexName);
+}
+
 void PEGTransformerFactory::RegisterCreateSequence() {
 	REGISTER_TRANSFORM(TransformCreateSequenceStmt);
 	REGISTER_TRANSFORM(TransformSequenceOption);
@@ -581,6 +590,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterComment();
 	RegisterCommon();
 	RegisterCopy();
+	RegisterCreateIndex();
 	RegisterCreateSequence();
 	RegisterCreateTable();
 	RegisterDeallocate();

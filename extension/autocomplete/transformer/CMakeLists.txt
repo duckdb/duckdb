@@ -10,6 +10,7 @@ add_library_unity(
   transform_comment.cpp
   transform_common.cpp
   transform_copy.cpp
+  transform_create_index.cpp
   transform_create_sequence.cpp
   transform_create_table.cpp
   transform_deallocate.cpp
