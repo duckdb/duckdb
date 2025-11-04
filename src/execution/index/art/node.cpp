@@ -11,7 +11,9 @@
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
@@ -369,7 +371,8 @@ void Node::TransformToDeprecated(ART &art, Node &node,
 	auto type = node.GetType();
 	switch (type) {
 	case NType::PREFIX:
-		return Prefix::TransformToDeprecated(art, node, deprecated_prefix_allocator);
+		return PrefixHandle::TransformToDeprecated(art, node, deprecated_prefix_allocator);
+		// return Prefix::TransformToDeprecated(art, node, deprecated_prefix_allocator);
 	case NType::LEAF_INLINED:
 		return;
 	case NType::LEAF:
@@ -402,7 +405,7 @@ void Node::Verify(ART &art) const {
 		Leaf::DeprecatedVerify(art, *this);
 		return;
 	case NType::PREFIX: {
-		Prefix::Verify(art, *this);
+		ConstPrefixHandle::Verify(art, *this);
 		return;
 	}
 	default:
@@ -492,7 +495,7 @@ string Node::ToString(ART &art, idx_t indent_level, bool inside_gate, bool displ
 	case NType::LEAF:
 		return Leaf::DeprecatedToString(art, *this);
 	case NType::PREFIX: {
-		string str = Prefix::ToString(art, *this, indent_level, propagate_gate, display_ascii);
+		string str = ConstPrefixHandle::ToString(art, *this, indent_level, propagate_gate, display_ascii);
 		if (is_gate) {
 			string s = "";
 			indent(s, indent_level);

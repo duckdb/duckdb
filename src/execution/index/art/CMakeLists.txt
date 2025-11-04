@@ -14,7 +14,9 @@ add_library_unity(
   node256_leaf.cpp
   node48.cpp
   plan_art.cpp
-  prefix.cpp)
+  prefix.cpp
+  prefix_handle.cpp
+  const_prefix_handle.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution_index_art>
