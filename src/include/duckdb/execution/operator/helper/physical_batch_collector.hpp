@@ -45,13 +45,7 @@ public:
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
 	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op)
-	    : data(context, op.types,
-	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
-	               ? ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR
-	               : ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
-	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
-	               ? ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES
-	               : ColumnDataCollectionLifetime::REGULAR) {
+	    : data(context, op.types, op.memory_type) {
 	}
 
 	mutex glock;
@@ -62,13 +56,7 @@ public:
 class BatchCollectorLocalState : public LocalSinkState {
 public:
 	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op)
-	    : data(context, op.types,
-	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
-	               ? ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR
-	               : ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
-	           op.memory_type == QueryResultMemoryType::BUFFER_MANAGED
-	               ? ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES
-	               : ColumnDataCollectionLifetime::REGULAR) {
+	    : data(context, op.types, op.memory_type) {
 	}
 
 	BatchedDataCollection data;

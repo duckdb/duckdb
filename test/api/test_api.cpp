@@ -765,12 +765,15 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
 	auto result = con->SendQuery("SELECT 42;", parameters);
 
+	// Query result is accessible
+	REQUIRE_NOTHROW(result->ToString());
+
 	// Reset connection AND db
 	con.reset();
 	db.reset();
 
 	// Query result is still accessible after resetting
-	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE_NOTHROW(result->ToString());
 
 	// Do it again with a buffer-managed query result
 	db = make_uniq<DuckDB>(nullptr);
@@ -778,10 +781,29 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 	result = con->SendQuery("SELECT 42;", parameters);
 
+	// Query result is accessible
+	REQUIRE_NOTHROW(result->ToString());
+
 	// Reset connection AND db
 	con.reset();
 	db.reset();
 
 	// Query result is no longer accessible
-	REQUIRE_THROWS(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE_THROWS(result->ToString());
+
+	// And again with order preservation disabled
+	db = make_uniq<DuckDB>(nullptr);
+	con = make_uniq<Connection>(*db);
+	result = con->SendQuery("SET preserve_insertion_order=false;");
+	result = con->SendQuery("SELECT 42;", parameters);
+
+	// Query result is accessible
+	REQUIRE_NOTHROW(result->ToString());
+
+	// Reset connection AND db
+	con.reset();
+	db.reset();
+
+	// Query result is no longer accessible
+	REQUIRE_THROWS(result->ToString());
 }

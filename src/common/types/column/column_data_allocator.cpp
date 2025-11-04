@@ -259,7 +259,14 @@ void ColumnDataAllocator::SetDestroyBufferUponUnpin(uint32_t block_id) {
 }
 
 shared_ptr<DatabaseInstance> ColumnDataAllocator::GetDatabase() const {
-	return managed_result_set.IsValid() ? managed_result_set.GetDatabase() : nullptr;
+	if (!managed_result_set.IsValid()) {
+		return nullptr;
+	}
+	auto db = managed_result_set.GetDatabase();
+	if (!db) {
+		throw ConnectionException("Trying to access a query result after the database instance has been closed");
+	}
+	return db;
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {

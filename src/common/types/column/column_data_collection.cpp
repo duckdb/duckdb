@@ -260,12 +260,13 @@ ColumnDataRowIterationHelper::ColumnDataRowIterationHelper(const ColumnDataColle
     : collection(collection_p) {
 }
 
-ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p)
+ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p,
+                                                                           ColumnDataScanProperties properties)
     : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), current_row(*scan_chunk, 0, 0) {
 	if (!collection) {
 		return;
 	}
-	collection->InitializeScan(scan_state);
+	collection->InitializeScan(scan_state, properties);
 	collection->InitializeScanChunk(*scan_chunk);
 	collection->Scan(scan_state, *scan_chunk);
 }
