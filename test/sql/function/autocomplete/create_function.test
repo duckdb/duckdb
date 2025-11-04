@@ -5,31 +5,31 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('CREATE MA') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MA') LIMIT 1;
 ----
 MACRO 	7
 
 query II
-FROM sql_auto_complete('CREATE F') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE F') LIMIT 1;
 ----
 FUNCTION 	7
 
 query II
-FROM sql_auto_complete('CREATE MACRO name(a) A') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MACRO name(a) A') LIMIT 1;
 ----
 AS 	21
 
 query II
-FROM sql_auto_complete('CREATE MACRO name(a) AS a+1, (b) A') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MACRO name(a) AS a+1, (b) A') LIMIT 1;
 ----
 AS 	33
 
 query II
-FROM sql_auto_complete('CREATE MACRO name (a) AS TA') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MACRO name (a) AS TA') LIMIT 1;
 ----
 TABLE 	25
 
 query II
-FROM sql_auto_complete('CREATE MACRO name (a) AS TABLE SEL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MACRO name (a) AS TABLE SEL') LIMIT 1;
 ----
 SELECT 	31

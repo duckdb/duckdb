@@ -3,6 +3,7 @@
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/execution/physical_table_scan_enum.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include "duckdb/parallel/sleep_async_task.hpp"
@@ -174,5 +175,18 @@ vector<unique_ptr<AsyncTask>> AsyncResult::GenerateTestTasks() {
 	return tasks;
 }
 #endif
+
+AsyncResultsExecutionMode
+AsyncResult::ConvertToAsyncResultExecutionMode(const PhysicalTableScanExecutionStrategy &execution_mode) {
+	switch (execution_mode) {
+	case PhysicalTableScanExecutionStrategy::DEFAULT:
+	case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR:
+	case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS:
+		return AsyncResultsExecutionMode::TASK_EXECUTOR;
+	case PhysicalTableScanExecutionStrategy::SYNCHRONOUS:
+		return AsyncResultsExecutionMode::SYNCHRONOUS;
+	}
+	throw InternalException("ConvertToAsyncResultExecutionMode passed an unexpected execution_mode");
+}
 
 } // namespace duckdb

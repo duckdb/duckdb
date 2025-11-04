@@ -62,6 +62,9 @@ public:
 	static vector<unique_ptr<AsyncTask>> GenerateTestTasks();
 #endif
 
+	static AsyncResultsExecutionMode
+	ConvertToAsyncResultExecutionMode(const PhysicalTableScanExecutionStrategy &execution_mode);
+
 private:
 	AsyncResultType result_type {AsyncResultType::INVALID};
 	vector<unique_ptr<AsyncTask>> async_tasks {};

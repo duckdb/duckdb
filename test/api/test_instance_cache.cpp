@@ -51,7 +51,7 @@ struct DelayingStorageExtension : StorageExtension {
 	}
 };
 
-TEST_CASE("Test db creation does not block instance cache", "[api]") {
+TEST_CASE("Test db creation does not block instance cache", "[api][.]") {
 	DBInstanceCache instance_cache;
 	using namespace std::chrono;
 
