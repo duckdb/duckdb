@@ -4,6 +4,9 @@
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/function/variant/variant_normalize.hpp"
 #include "duckdb/common/serializer/varint.hpp"
+#ifdef DEBUG
+#include "duckdb/common/value_operations/value_operations.hpp"
+#endif
 
 namespace duckdb {
 
@@ -211,7 +214,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 		}
 
 		//! Deal with unshredded values
-		if (variant.GetTypeId(row, value_index) == VariantLogicalType::VARIANT_NULL) {
+		if (!variant.RowIsValid(row) || variant.GetTypeId(row, value_index) == VariantLogicalType::VARIANT_NULL) {
 			//! 0 is reserved for NULL
 			untyped_data[result_index] = 0;
 		} else {
@@ -351,6 +354,21 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		unshredded.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+
+#ifdef DEBUG
+	Vector roundtrip_result(LogicalType::VARIANT(), count);
+	VariantColumnData::UnshredVariantData(output, roundtrip_result, count);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto input_val = input.GetValue(i);
+		auto roundtripped_val = roundtrip_result.GetValue(i);
+		if (!ValueOperations::NotDistinctFrom(input_val, roundtripped_val)) {
+			throw InternalException("Shredding roundtrip verification failed for row: %d, expected: %s, actual: %s", i,
+			                        input_val.ToString(), roundtripped_val.ToString());
+		}
+	}
+
+#endif
 }
 
 } // namespace duckdb

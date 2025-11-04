@@ -32,6 +32,7 @@ void VariantColumnData::ReplaceColumns(unique_ptr<ColumnData> &&unshredded, uniq
 	sub_columns.clear();
 	sub_columns.push_back(std::move(unshredded));
 	sub_columns.push_back(std::move(shredded));
+	is_shredded = true;
 }
 
 void VariantColumnData::CreateScanStates(ColumnScanState &state) {

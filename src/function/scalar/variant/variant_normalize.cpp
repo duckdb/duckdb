@@ -177,11 +177,7 @@ void VariantNormalizer::VisitDefault(VariantLogicalType type_id, const_data_ptr_
 	throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
 }
 
-static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto count = input.size();
-
-	D_ASSERT(input.ColumnCount() == 1);
-	auto &variant_vec = input.data[0];
+void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t count) {
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
 
 	//! Set up the access helper for the source VARIANT
@@ -250,10 +246,18 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, ListVector::GetListSize(keys));
 	keys_entry.Slice(keys_selvec, ListVector::GetListSize(keys));
 
-	if (input.AllConstant()) {
+	if (variant_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	result.Verify(count);
+}
+
+static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto count = input.size();
+
+	D_ASSERT(input.ColumnCount() == 1);
+	auto &variant_vec = input.data[0];
+	VariantNormalizer::Normalize(variant_vec, result, count);
 }
 
 ScalarFunction VariantNormalizeFun::GetFunction() {

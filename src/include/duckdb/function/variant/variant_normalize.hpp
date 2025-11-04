@@ -80,6 +80,9 @@ struct VariantNormalizer {
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
 	                        VariantNormalizerState &state);
 	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantNormalizerState &state);
+
+public:
+	static void Normalize(Vector &input, Vector &output, idx_t count);
 };
 
 } // namespace duckdb
