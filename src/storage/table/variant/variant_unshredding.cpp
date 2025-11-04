@@ -67,7 +67,7 @@ static vector<VariantValue> UnshredTypedLeaf(Vector &typed_value, idx_t count) {
 	auto &typed_value_validity = vector_format.validity;
 
 	for (idx_t i = 0; i < count; i++) {
-		if (!typed_value_validity.RowIsValid(i)) {
+		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
 			continue;
 		}
 		res[i] = VariantValue(typed_value.GetValue(i));
@@ -130,7 +130,7 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 
 	SelectionVector child_sel(child_size);
 	for (idx_t i = 0; i < count; i++) {
-		if (!typed_value_validity.RowIsValid(i)) {
+		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
 			continue;
 		}
 		auto row = row_sel ? row_sel->get_index(i) : i;
@@ -143,7 +143,7 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 
 	vector<VariantValue> res(count);
 	for (idx_t i = 0; i < count; i++) {
-		if (!typed_value_validity.RowIsValid(i)) {
+		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
 			continue;
 		}
 		auto &list_entry = list_data[i];
