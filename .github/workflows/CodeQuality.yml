@@ -46,7 +46,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
-      - name: Preliminary checks on CI 
+      - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
   format-check:
@@ -57,6 +57,12 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
+
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
@@ -77,13 +83,25 @@ jobs:
           clang-format --version
           clang-format --dump-config
           black --version
-          make format-check-silent
+          make format-fix
 
       - name: Generated Check
         shell: bash
         run: |
           make generate-files
-          git diff --exit-code
+
+      - name: Add review comments
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: reviewdog/action-suggester@v1
+        with:
+          fail_level: info
+          cleanup: false
+
+      - name: Show diff
+        run: |
+          git status
+          git --no-pager --exit-code diff
+        shell: bash
 
   enum-check:
     name: C Enum Integrity Check
