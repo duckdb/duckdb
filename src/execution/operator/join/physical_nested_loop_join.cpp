@@ -247,7 +247,7 @@ SinkFinalizeType PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &eve
                                                   OperatorSinkFinalizeInput &input) const {
 	auto &gsink = input.global_state.Cast<NestedLoopJoinGlobalState>();
 	if (filter_pushdown && !gsink.skip_filter_pushdown) {
-		(void)filter_pushdown->Finalize(context, nullptr, *gsink.global_filter_state, *this, true);
+		(void)filter_pushdown->Finalize(context, nullptr, *gsink.global_filter_state, *this);
 	}
 
 	gsink.right_outer.Initialize(gsink.right_payload_data.Count());

@@ -752,48 +752,6 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	return;
 }
 
-void JoinFilterPushdownInfo::PushMinMaxFilters(const JoinFilterPushdownFilter &info, const PhysicalOperator &op,
-                                               const ExpressionType &cmp, idx_t filter_col_idx, const Value &min_val,
-                                               const Value &max_val, const bool make_optional) const {
-
-	// min != max - generate a range filter
-	// for non-equalities, the range must be half-open
-	// e.g., for lhs < rhs we can only use lhs <= max
-	switch (cmp) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-		auto greater_equals = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, min_val);
-		if (make_optional) {
-			auto optional_greater_equals = make_uniq<OptionalFilter>(std::move(greater_equals));
-			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
-		} else {
-			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
-		}
-
-		break;
-	}
-	default:
-		break;
-	}
-	switch (cmp) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-		auto less_equals = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val);
-		if (make_optional) {
-			auto optional_less_equals = make_uniq<OptionalFilter>(std::move(less_equals));
-			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
-		} else {
-			info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
-		}
-		break;
-	}
-	default:
-		break;
-	}
-}
-
 bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, JoinHashTable &ht,
                                                const PhysicalComparisonJoin &op, const ExpressionType &cmp) const {
 
@@ -825,8 +783,8 @@ void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &inf
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                                       JoinFilterGlobalState &gstate, const PhysicalComparisonJoin &op,
-                                                       const bool push_min_max) const {
+                                                       JoinFilterGlobalState &gstate,
+                                                       const PhysicalComparisonJoin &op) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -870,8 +828,34 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				// Note that this also works for equalities.
 				auto constant_filter = make_uniq<ConstantFilter>(cmp, std::move(min_val));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(constant_filter));
-			} else if (push_min_max) {
-				PushMinMaxFilters(info, op, cmp, filter_col_idx, min_val, max_val, false);
+			} else {
+				// min != max - generate a range filter
+				// for non-equalities, the range must be half-open
+				// e.g., for lhs < rhs we can only use lhs <= max
+				switch (cmp) {
+				case ExpressionType::COMPARE_EQUAL:
+				case ExpressionType::COMPARE_GREATERTHAN:
+				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+					auto greater_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
+					break;
+				}
+				default:
+					break;
+				}
+				switch (cmp) {
+				case ExpressionType::COMPARE_EQUAL:
+				case ExpressionType::COMPARE_LESSTHAN:
+				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+					auto less_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
+					break;
+				}
+				default:
+					break;
+				}
 			}
 		}
 	}
@@ -879,21 +863,15 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 	return final_min_max;
 }
 
-void JoinFilterPushdownInfo::FinalizeHashJoinFilters(const ClientContext &context, JoinHashTable &ht,
-                                                     const PhysicalComparisonJoin &op, const Value &min,
-                                                     const Value &max, const bool is_perfect_hash_table) const {
-
+void JoinFilterPushdownInfo::FinalizeBF(const ClientContext &context, JoinHashTable &ht,
+                                        const PhysicalComparisonJoin &op, const Value &min, const Value &max) const {
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
 		for (auto &info : probe_info) {
-			const auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
-			if (!Value::NotDistinctFrom(min, max)) {
-				const bool can_use_bf = CanUseBloomFilter(context, ht, op, cmp);
-				if (can_use_bf) {
-					PushBloomFilter(info, ht, op, filter_col_idx);
-				}
-				PushMinMaxFilters(info, op, cmp, filter_col_idx, min, max, can_use_bf);
+			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
+			if (CanUseBloomFilter(context, ht, op, cmp) && !Value::NotDistinctFrom(min, max)) {
+				PushBloomFilter(info, ht, op, filter_col_idx);
 			}
 		}
 	}
@@ -972,7 +950,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	Value min;
 	Value max;
 	if (filter_pushdown && !sink.skip_filter_pushdown && ht.Count() > 0) {
-		auto final_min_max = filter_pushdown->Finalize(context, &ht, *sink.global_filter_state, *this, false);
+		auto final_min_max = filter_pushdown->Finalize(context, &ht, *sink.global_filter_state, *this);
 		min = final_min_max->data[0].GetValue(0);
 		max = final_min_max->data[1].GetValue(0);
 	} else if (TypeIsIntegral(conditions[0].right->return_type.InternalType())) {
@@ -987,17 +965,14 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		auto key_type = ht.equality_types[0];
 		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
 	}
-
-	if (filter_pushdown && !sink.skip_filter_pushdown) {
-		filter_pushdown->FinalizeHashJoinFilters(context, ht, *this, min, max, use_perfect_hash);
-	}
-
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
+		if (filter_pushdown && !sink.skip_filter_pushdown) {
+			filter_pushdown->FinalizeBF(context, ht, *this, min, max);
+		}
 		sink.perfect_join_executor.reset();
 		sink.ScheduleFinalize(pipeline, event);
 	}
-
 	sink.finalized = true;
 	if (ht.Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
