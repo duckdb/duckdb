@@ -155,15 +155,16 @@ public:
 	void RegisterCommon();
 	void RegisterCreateSequence();
 	void RegisterCreateTable();
-
 	void RegisterDeallocate();
 	void RegisterDelete();
 	void RegisterDetach();
 	void RegisterDrop();
 	void RegisterExport();
 	void RegisterExpression();
+	void RegisterImport();
 	void RegisterInsert();
 	void RegisterLoad();
+	void RegisterPragma();
 	void RegisterSelect();
 	void RegisterUse();
 	void RegisterSet();
@@ -617,6 +618,16 @@ private:
 	static ExtensionRepositoryInfo TransformFromSource(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
 	static string TransformVersionNumber(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// pragma.gram
+	static unique_ptr<SQLStatement> TransformPragmaStatement(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformPragmaAssign(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformPragmaFunction(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+TransformPragmaParameters(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// select.gram
 	static unique_ptr<ParsedExpression> TransformFunctionArgument(PEGTransformer &transformer,

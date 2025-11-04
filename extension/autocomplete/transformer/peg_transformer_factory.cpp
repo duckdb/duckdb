@@ -342,6 +342,14 @@ void PEGTransformerFactory::RegisterLoad() {
 	REGISTER_TRANSFORM(TransformVersionNumber);
 }
 
+void PEGTransformerFactory::RegisterPragma() {
+	// pragma.gram
+	REGISTER_TRANSFORM(TransformPragmaStatement);
+	REGISTER_TRANSFORM(TransformPragmaAssign);
+	REGISTER_TRANSFORM(TransformPragmaFunction);
+	REGISTER_TRANSFORM(TransformPragmaParameters);
+}
+
 void PEGTransformerFactory::RegisterSelect() {
 	// select.gram
 	REGISTER_TRANSFORM(TransformFunctionArgument);
