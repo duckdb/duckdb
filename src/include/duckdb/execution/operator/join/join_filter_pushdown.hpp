@@ -76,8 +76,9 @@ public:
 	unique_ptr<DataChunk> Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
 	                               JoinFilterGlobalState &gstate, const PhysicalComparisonJoin &op) const;
 
-	void FinalizeBF(const ClientContext &context, JoinHashTable &ht, const PhysicalComparisonJoin &op, const Value &min,
-	                const Value &max) const;
+	unique_ptr<DataChunk> FinalizeMinMax(JoinFilterGlobalState &gstate) const;
+	unique_ptr<DataChunk> FinalizeFilters(ClientContext &context, optional_ptr<JoinHashTable> ht, const PhysicalComparisonJoin &op,
+	                     unique_ptr<DataChunk> final_min_max, bool is_perfect_hashtable) const;
 
 private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
@@ -87,8 +88,8 @@ private:
 	                     idx_t filter_col_idx) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
-	bool CanUseBloomFilter(const ClientContext &context, JoinHashTable &ht, const PhysicalComparisonJoin &op,
-	                       const ExpressionType &cmp) const;
+	bool CanUseBloomFilter(const ClientContext &context,  optional_ptr<JoinHashTable> ht, const PhysicalComparisonJoin &op,
+	                       const ExpressionType &cmp, bool is_perfect_hashtable) const;
 };
 
 } // namespace duckdb
