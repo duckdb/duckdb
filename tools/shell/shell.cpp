@@ -3280,17 +3280,19 @@ void ShellState::Initialize() {
 	default_prompt =
 	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
-	string default_status_bar;
-	default_status_bar = "{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}";
-	default_status_bar +=
-	    "{component}{align:right}{min_size:18}{display_if_not_contains:0 bytes}Written: {setting:bytes_written}";
-	default_status_bar +=
-	    "{component}{align:right}{min_size:15}{display_if_not_contains:0 bytes}Read: {setting:bytes_read}";
-	default_status_bar += "{component}{align:right}{min_size:17}Memory: {setting:memory_usage}";
-	default_status_bar +=
-	    "{component}{align:right}{min_size:15}{display_if_not_contains:0 bytes}Swap: {setting:swap_usage}";
+	vector<string> default_components;
+	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
+	default_components.push_back(
+	    "{align:right}{min_size:18}{display_if_not_contains:0 bytes}Written: {setting:bytes_written}");
+	default_components.push_back(
+	    "{align:right}{min_size:15}{display_if_not_contains:0 bytes}Read: {setting:bytes_read}");
+	default_components.push_back("{align:right}{min_size:17}Memory: {setting:memory_usage}");
+	default_components.push_back(
+	    "{align:right}{min_size:15}{display_if_not_contains:0 bytes}Swap: {setting:swap_usage}");
 	status_bar = make_uniq<StatusBar>();
-	status_bar->ParseStatusBar(default_status_bar);
+	for (auto &component : default_components) {
+		status_bar->AddComponent(component);
+	}
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE

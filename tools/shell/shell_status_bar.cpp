@@ -130,13 +130,14 @@ StatusBar::StatusBar() {
 StatusBar::~StatusBar() {
 }
 
-void StatusBar::ParseStatusBar(const string &text) {
-	auto split_components = StringUtil::Split(text, "{component}");
-	for (auto &component_text : split_components) {
-		auto component = make_uniq<StatusBarPrompt>(*this);
-		component->ParsePrompt(component_text);
-		components.push_back(std::move(component));
-	}
+void StatusBar::AddComponent(const string &component_text) {
+	auto component = make_uniq<StatusBarPrompt>(*this);
+	component->ParsePrompt(component_text);
+	components.push_back(std::move(component));
+}
+
+void StatusBar::ClearComponents() {
+	components.clear();
 }
 
 string StatusBar::GenerateStatusBar(ShellState &state) {

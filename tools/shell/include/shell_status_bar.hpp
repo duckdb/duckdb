@@ -23,7 +23,8 @@ public:
 	~StatusBar();
 
 public:
-	void ParseStatusBar(const string &text);
+	void AddComponent(const string &text);
+	void ClearComponents();
 	string GenerateStatusBar(ShellState &state);
 
 private:
