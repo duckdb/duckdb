@@ -99,7 +99,10 @@ SingleExpression <-
     DefaultExpression
 
 # LEVEL 1 (Lowest)
-Expression <- LogicalOrExpression
+Expression <- LambdaArrowExpression
+# LEVEL 1.5
+LambdaArrowExpression <- LogicalOrExpression (LambdaOperator LogicalOrExpression)*
+LambdaOperator <- '->'
 LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
 # LEVEL 2
 LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
@@ -142,10 +145,9 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
-    AnyAllOperator / LambdaOperator / InetOperator / JsonOperator / ListOperator / StringOperator
+    AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
 AnyAllOperator <- ComparisonOperator AnyOrAll
 AnyOrAll <- 'ANY' / 'ALL'
-LambdaOperator <- '->'
 InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
 ListOperator <- '&&' / '@>' / '<@'

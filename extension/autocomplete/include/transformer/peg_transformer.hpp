@@ -420,7 +420,8 @@ private:
 	                                                            optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformExpression(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
-
+	static unique_ptr<ParsedExpression> TransformLambdaArrowExpression(PEGTransformer &transformer,
+	                                                                   optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLogicalOrExpression(PEGTransformer &transformer,
 	                                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLogicalAndExpression(PEGTransformer &transformer,
@@ -451,6 +452,8 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
+	static ExpressionType TransformOtherOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBitwiseExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformAdditiveExpression(PEGTransformer &transformer,
@@ -473,8 +476,10 @@ private:
 	                                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformColumnReference(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ColumnRefExpression> TransformSchemaReservedTableColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static string TransformReservedTableQualification(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ColumnRefExpression>
+	TransformSchemaReservedTableColumnName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformReservedTableQualification(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLiteralExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformParensExpression(PEGTransformer &transformer,
@@ -508,7 +513,6 @@ private:
 	                                                   optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformIsOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformInOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformBetweenOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformParenthesisExpression(PEGTransformer &transformer,
 	                                                                   optional_ptr<ParseResult> parse_result);

@@ -224,6 +224,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformExpression);
+	REGISTER_TRANSFORM(TransformLambdaArrowExpression);
 	REGISTER_TRANSFORM(TransformLogicalOrExpression);
 	REGISTER_TRANSFORM(TransformLogicalAndExpression);
 	REGISTER_TRANSFORM(TransformLogicalNotExpression);
@@ -239,6 +240,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformComparisonExpression);
 	REGISTER_TRANSFORM(TransformComparisonOperator);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
+	REGISTER_TRANSFORM(TransformOtherOperator);
+	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformBitwiseExpression);
 	REGISTER_TRANSFORM(TransformAdditiveExpression);
 	REGISTER_TRANSFORM(TransformTerm);
@@ -272,7 +275,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformConjunctionOperator);
 	REGISTER_TRANSFORM(TransformIsOperator);
 	REGISTER_TRANSFORM(TransformInOperator);
-	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformBetweenOperator);
 	REGISTER_TRANSFORM(TransformParenthesisExpression);
 	REGISTER_TRANSFORM(TransformIndirection);
