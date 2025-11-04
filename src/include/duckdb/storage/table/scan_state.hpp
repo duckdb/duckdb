@@ -197,6 +197,7 @@ private:
 	const OrderByStatistics order_by;
 	const RowGroupOrderType order_type;
 	const OrderByColumnType column_type;
+	const optional_idx row_limit;
 
 	idx_t offset;
 	bool initialized;
@@ -204,6 +205,11 @@ private:
 
 private:
 	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
+	void SetRowGroupVectorWithLimit(
+	    const multimap<Value, pair<unique_ptr<BaseStatistics>, reference<RowGroup>>> &row_group_map);
+	void AddRowGroupWithLimit(const Value &order_by_value, BaseStatistics &row_group_stats,
+	                          reference<RowGroup> current_row_group, Value &row_group_boundary,
+	                          idx_t &qualifying_tuples, idx_t &seen_tuples, OrderByStatistics stat_type);
 };
 
 class CollectionScanState {

@@ -112,7 +112,7 @@ void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
 
 RowGroupReorderer::RowGroupReorderer(const RowGroupOrderOptions &options)
     : column_idx(options.column_idx), order_by(options.order_by), order_type(options.order_type),
-      column_type(options.column_type), offset(0), initialized(false) {
+      column_type(options.column_type), row_limit(options.row_limit), offset(0), initialized(false) {
 }
 
 optional_ptr<RowGroup> RowGroupReorderer::GetNextRowGroup(optional_ptr<RowGroup> row_group) {
@@ -134,6 +134,62 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 	return Value();
 }
 
+void RowGroupReorderer::SetRowGroupVectorWithLimit(
+    const multimap<Value, pair<unique_ptr<BaseStatistics>, reference<RowGroup>>> &row_group_map) {
+	D_ASSERT(row_limit.IsValid());
+	idx_t qualifying_tuples = 0;
+	idx_t seen_tuples = 0;
+
+	const auto stat_type = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MAX : OrderByStatistics::MIN;
+	Value row_group_boundary = RetrieveStat(*row_group_map.begin()->second.first, stat_type, column_type);
+
+	ordered_row_groups.reserve(row_group_map.size());
+
+	if (order_type == RowGroupOrderType::ASC) {
+		for (auto &stats_row_group_pair : row_group_map) {
+			auto &current_min = stats_row_group_pair.first;
+			auto &stats = *stats_row_group_pair.second.first;
+			auto &row_group = stats_row_group_pair.second.second;
+
+			AddRowGroupWithLimit(current_min, stats, row_group, row_group_boundary, qualifying_tuples, seen_tuples,
+			                     stat_type);
+
+			if (qualifying_tuples >= row_limit.GetIndex()) {
+				break;
+			}
+		}
+	} else {
+		for (auto it = row_group_map.rbegin(); it != row_group_map.rend(); ++it) {
+			auto &current_max = it->first;
+			auto &stats = *it->second.first;
+			auto &row_group = it->second.second;
+
+			AddRowGroupWithLimit(current_max, stats, row_group, row_group_boundary, qualifying_tuples, seen_tuples,
+			                     stat_type);
+
+			if (qualifying_tuples >= row_limit.GetIndex()) {
+				break;
+			}
+		}
+	}
+}
+
+void RowGroupReorderer::AddRowGroupWithLimit(const Value &order_by_value, BaseStatistics &row_group_stats,
+                                             reference<RowGroup> current_row_group, Value &row_group_boundary,
+                                             idx_t &qualifying_tuples, idx_t &seen_tuples,
+                                             OrderByStatistics stat_type) {
+	ordered_row_groups.emplace_back(current_row_group);
+	seen_tuples += current_row_group.get().count;
+
+	if ((stat_type == OrderByStatistics::MAX && order_by_value > row_group_boundary) ||
+	    (order_by_value < row_group_boundary)) {
+		row_group_boundary = RetrieveStat(row_group_stats, stat_type, column_type);
+		qualifying_tuples = seen_tuples;
+	} else {
+		qualifying_tuples++;
+	}
+}
+
 optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
 	if (initialized) {
 		return ordered_row_groups.empty() ? nullptr : ordered_row_groups[0];
@@ -141,25 +197,30 @@ optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &ro
 
 	initialized = true;
 
-	multimap<Value, const reference<RowGroup>> row_group_map;
+	multimap<Value, pair<unique_ptr<BaseStatistics>, reference<RowGroup>>> row_group_map;
 	for (auto &row_group : row_groups.Segments()) {
 		auto stats = row_group.GetStatistics(column_idx);
 		Value comparison_value = RetrieveStat(*stats, order_by, column_type);
-		row_group_map.emplace(comparison_value, row_group);
+		row_group_map.emplace(std::piecewise_construct, std::forward_as_tuple(comparison_value),
+		                      std::forward_as_tuple(std::move(stats), row_group));
 	}
 
 	if (row_group_map.empty()) {
 		return nullptr;
 	}
 
-	ordered_row_groups.reserve(row_group_map.size());
-	if (order_type == RowGroupOrderType::ASC) {
-		for (auto &row_group : row_group_map) {
-			ordered_row_groups.emplace_back(row_group.second);
-		}
+	if (row_limit.IsValid()) {
+		SetRowGroupVectorWithLimit(row_group_map);
 	} else {
-		for (auto it = row_group_map.rbegin(); it != row_group_map.rend(); ++it) {
-			ordered_row_groups.emplace_back(it->second);
+		ordered_row_groups.reserve(row_group_map.size());
+		if (order_type == RowGroupOrderType::ASC) {
+			for (auto &row_group : row_group_map) {
+				ordered_row_groups.emplace_back(row_group.second.second);
+			}
+		} else {
+			for (auto it = row_group_map.rbegin(); it != row_group_map.rend(); ++it) {
+				ordered_row_groups.emplace_back(it->second.second);
+			}
 		}
 	}
 
