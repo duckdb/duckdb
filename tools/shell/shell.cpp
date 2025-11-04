@@ -3276,6 +3276,11 @@ void ShellState::Initialize() {
 	default_prompt =
 	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
+	status_bar = make_uniq<StatusBar>();
+	string default_status_bar;
+	default_status_bar = "{setting:progress_bar_percentage}{setting:progress_bar}{setting:eta}";
+	status_bar = make_uniq<StatusBar>();
+	status_bar->ParseStatusBar(default_status_bar);
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE

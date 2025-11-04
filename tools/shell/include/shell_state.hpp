@@ -44,6 +44,7 @@ using duckdb::InternalException;
 using duckdb::InvalidInputException;
 using duckdb::to_string;
 struct Prompt;
+struct StatusBar;
 
 using idx_t = uint64_t;
 
@@ -219,6 +220,8 @@ public:
 	unique_ptr<Prompt> main_prompt;
 	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
+	//! Status bar used to render the components that are displayed when query status / progress is rendered
+	unique_ptr<StatusBar> status_bar;
 
 #if defined(_WIN32) || defined(WIN32)
 	bool win_utf8_mode = false;

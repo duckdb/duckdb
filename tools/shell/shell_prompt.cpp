@@ -33,6 +33,10 @@ string Prompt::HandleColor(const PromptComponent &component) {
 	}
 }
 
+vector<string> Prompt::GetSupportedSettings() {
+	return vector<string> {"current_database", "current_schema", "current_database_and_schema"};
+}
+
 void Prompt::AddComponent(const string &bracket_type, const string &value) {
 	PromptComponent component;
 	if (bracket_type == "max_length") {
@@ -45,7 +49,7 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 		if (value.empty()) {
 			throw InvalidInputException("setting requires a parameter");
 		}
-		vector<string> supported_settings {"current_database", "current_schema", "current_database_and_schema"};
+		auto supported_settings = GetSupportedSettings();
 		bool found = false;
 		for (auto &entry : supported_settings) {
 			if (value == entry) {
@@ -184,8 +188,12 @@ void Prompt::ParsePrompt(const string &prompt) {
 	}
 }
 
+duckdb::Connection &Prompt::GetConnection(ShellState &state) {
+	return *state.conn;
+}
+
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
-	auto &con = *state.conn;
+	auto &con = GetConnection(state);
 	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(*con.context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
 	if (component.literal == "current_database") {
