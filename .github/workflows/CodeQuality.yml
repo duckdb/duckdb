@@ -101,7 +101,7 @@ jobs:
       - name: Show diff
         run: |
           git status
-          git --no-pager --exit-code diff
+          git --no-pager diff --exit-code
         shell: bash
 
   enum-check:
