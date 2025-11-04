@@ -749,7 +749,6 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	// the IN-list is expensive to execute otherwise
 	auto filter = make_uniq<OptionalFilter>(std::move(in_filter));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
-	return;
 }
 
 bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
@@ -775,10 +774,8 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, opt
 	    static_cast<double>(op.children[0].get().estimated_cardinality) / static_cast<double>(ht->Count());
 	const bool probe_larger_then_build = build_to_probe_ratio > 1.0;
 
-	const bool can_use_in_filter = CanUseInFilter(context, ht, cmp);
-
 	// only use bloom filter if there is no in-filter already
-	return can_use_bf && !can_use_in_filter && build_side_has_filter && probe_larger_then_build;
+	return can_use_bf && build_side_has_filter && probe_larger_then_build;
 }
 
 void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,

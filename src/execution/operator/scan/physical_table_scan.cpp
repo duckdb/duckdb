@@ -194,22 +194,20 @@ static string GetFilterInfo(const PhysicalTableScan *scan, const unique_ptr<Tabl
 	for (auto &f : filter_set->filters) {
 		auto &column_index = f.first;
 		auto &filter = f.second;
-		if (column_index < scan->names.size()) {
-			if (!first_item) {
-				filters_info += "\n";
-			}
-			first_item = false;
+		if (!first_item) {
+			filters_info += "\n";
+		}
+		first_item = false;
 
-			const auto col_id = scan->column_ids[column_index].GetPrimaryIndex();
-			if (IsVirtualColumn(col_id)) {
-				auto entry = scan->virtual_columns.find(col_id);
-				if (entry == scan->virtual_columns.end()) {
-					throw InternalException("Virtual column not found");
-				}
-				filters_info += filter->ToString(entry->second.name);
-			} else {
-				filters_info += filter->ToString(scan->names[col_id]);
+		const auto col_id = scan->column_ids[column_index].GetPrimaryIndex();
+		if (IsVirtualColumn(col_id)) {
+			auto entry = scan->virtual_columns.find(col_id);
+			if (entry == scan->virtual_columns.end()) {
+				throw InternalException("Virtual column not found");
 			}
+			filters_info += filter->ToString(entry->second.name);
+		} else {
+			filters_info += filter->ToString(scan->names[col_id]);
 		}
 	}
 	return filters_info;
