@@ -44,16 +44,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - version: "macos-13"
+          - xcode_target_flag: "x86_64"
             architecture: "amd64"
-          - version: "macos-14"
+          - xcode_target_flag: "arm64"
             architecture: "arm64"
-    runs-on: ${{ matrix.version }}
+    runs-on: macos-latest
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
+      OSX_BUILD_ARCH: ${{ matrix.xcode_target_flag }}
+      DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
 
     steps:
       - uses: actions/checkout@v4
@@ -83,13 +85,10 @@ jobs:
         run: |
           make gather-libs
 
-      - name: Print platform
-        shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
-
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
@@ -102,6 +101,7 @@ jobs:
           name: duckdb-static-libs-osx-${{ matrix.architecture }}
           path: |
             static-libs-osx-${{ matrix.architecture }}.zip
+
 
   bundle-mingw-static-lib:
     name: Windows MingW static libs
@@ -149,6 +149,7 @@ jobs:
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
@@ -209,6 +210,7 @@ jobs:
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |

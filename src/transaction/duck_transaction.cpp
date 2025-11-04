@@ -32,8 +32,8 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id, idx_t catalog_version_p)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), catalog_version(catalog_version_p), awaiting_cleanup(false),
-      transaction_manager(manager), undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
+      catalog_version(catalog_version_p), awaiting_cleanup(false), transaction_manager(manager),
+      undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -126,11 +126,11 @@ void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_co
 	append_info->count = row_count;
 }
 
-UndoBufferReference DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
+UndoBufferReference DuckTransaction::CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries) {
 	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
 	auto &update_info = UpdateInfo::Get(undo_entry);
-	UpdateInfo::Initialize(update_info, transaction_id);
+	UpdateInfo::Initialize(update_info, data_table, transaction_id);
 	return undo_entry;
 }
 
@@ -208,10 +208,10 @@ ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCo
 	try {
 		D_ASSERT(ShouldWriteToWAL(db));
 		auto &storage_manager = db.GetStorageManager();
-		auto log = storage_manager.GetWAL();
-		commit_state = storage_manager.GenStorageCommitState(*log);
+		auto wal = storage_manager.GetWAL();
+		commit_state = storage_manager.GenStorageCommitState(*wal);
 		storage->Commit(commit_state.get());
-		undo_buffer.WriteToWAL(*log, commit_state.get());
+		undo_buffer.WriteToWAL(*wal, commit_state.get());
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
 			// optimistically written blocks
@@ -245,14 +245,6 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	if (!ChangesMade()) {
 		// no need to flush anything if we made no changes
 		return ErrorData();
-	}
-	for (auto &entry : modified_tables) {
-		auto &tbl = entry.first.get();
-		if (!tbl.IsMainTable()) {
-			return ErrorData(
-			    TransactionException("Attempting to modify table %s but another transaction has %s this table",
-			                         tbl.GetTableName(), tbl.TableModification()));
-		}
 	}
 	D_ASSERT(db.IsSystem() || db.IsTemporary() || !IsReadOnly());
 

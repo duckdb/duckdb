@@ -190,10 +190,50 @@ vector<string> SplitQueries(const string &input_query) {
 	return queries;
 }
 
+StatementType Parser::GetStatementType(const string &query) {
+	Transformer transformer(options);
+	vector<unique_ptr<SQLStatement>> statements;
+	PostgresParser parser;
+	parser.Parse(query);
+	if (parser.success) {
+		if (!parser.parse_tree) {
+			// empty statement
+			return StatementType::INVALID_STATEMENT;
+		}
+		transformer.TransformParseTree(parser.parse_tree, statements);
+		return statements[0]->type;
+	} else {
+		return StatementType::INVALID_STATEMENT;
+	}
+}
+
+void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
+	if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
+		throw ParserException("Parser override failed to return a valid statement: %s\n\nConsider restarting the "
+		                      "database and "
+		                      "using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
+		                      "default parser.",
+		                      result.error.RawMessage());
+	}
+	if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+		if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
+			throw NotImplementedException("Parser override has not yet implemented this "
+			                              "transformer rule. (Original error: %s)",
+			                              result.error.RawMessage());
+		}
+		if (result.error.Type() == ExceptionType::PARSER) {
+			throw ParserException("Parser override could not parse this query. (Original error: %s)",
+			                      result.error.RawMessage());
+		}
+		result.error.Throw();
+	}
+}
+
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
 	optional_idx parser_error_location;
+	string parser_override_option = StringUtil::Lower(options.parser_override_setting);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
@@ -209,12 +249,39 @@ void Parser::ParseQuery(const string &query) {
 				if (!ext.parser_override) {
 					continue;
 				}
+				if (StringUtil::CIEquals(parser_override_option, "default")) {
+					continue;
+				}
 				auto result = ext.parser_override(ext.parser_info.get(), query);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 					statements = std::move(result.statements);
 					return;
-				} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-					throw ParserException(result.error);
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict")) {
+					ThrowParserOverrideError(result);
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict_when_supported")) {
+					auto statement_type = GetStatementType(query);
+					bool is_supported = false;
+					switch (statement_type) {
+					case StatementType::CALL_STATEMENT:
+					case StatementType::TRANSACTION_STATEMENT:
+					case StatementType::VARIABLE_SET_STATEMENT:
+					case StatementType::LOAD_STATEMENT:
+					case StatementType::ATTACH_STATEMENT:
+					case StatementType::DETACH_STATEMENT:
+					case StatementType::DELETE_STATEMENT:
+						is_supported = true;
+						break;
+					default:
+						is_supported = false;
+						break;
+					}
+					if (is_supported) {
+						ThrowParserOverrideError(result);
+					}
+				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
+					continue;
 				}
 			}
 		}
@@ -286,7 +353,9 @@ void Parser::ParseQuery(const string &query) {
 				bool parsed_single_statement = false;
 				for (auto &ext : *options.extensions) {
 					D_ASSERT(!parsed_single_statement);
-					D_ASSERT(ext.parse_function);
+					if (!ext.parse_function) {
+						continue;
+					}
 					auto result = ext.parse_function(ext.parser_info.get(), query_statement);
 					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 						auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));

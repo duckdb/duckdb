@@ -157,13 +157,14 @@ void RowGroupCollection::Verify() {
 void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionScanState &state,
                                         const vector<StorageIndex> &column_ids,
                                         optional_ptr<TableFilterSet> table_filters) {
-	auto row_group = row_groups->GetRootSegment();
+	state.row_groups = row_groups.get();
+	auto row_group = state.GetRootSegment();
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
 	state.max_row = row_start + total_rows;
 	state.Initialize(context, GetTypes());
 	while (row_group && !row_group->InitializeScan(state)) {
-		row_group = row_groups->GetNextSegment(row_group);
+		row_group = state.GetNextRowGroup(*row_group);
 	}
 }
 
@@ -199,7 +200,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, C
 
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
 	state.collection = this;
-	state.current_row_group = row_groups->GetRootSegment();
+	state.current_row_group = state.GetRootSegment(*row_groups).get();
 	state.vector_index = 0;
 	state.max_row = row_start + total_rows;
 	state.batch_index = 0;
@@ -230,14 +231,14 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				D_ASSERT(vector_index * STANDARD_VECTOR_SIZE < state.current_row_group->count);
 				state.vector_index++;
 				if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
-					state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+					state.current_row_group = state.GetNextRowGroup(*row_groups, row_group).get();
 					state.vector_index = 0;
 				}
 			} else {
 				state.processed_rows += state.current_row_group->count;
 				vector_index = 0;
 				max_row = state.current_row_group->start + state.current_row_group->count;
-				state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+				state.current_row_group = state.GetNextRowGroup(*row_groups, row_group).get();
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;
@@ -271,7 +272,7 @@ bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<Storage
 	// initialize the scan
 	TableScanState state;
 	state.Initialize(column_ids, nullptr);
-	InitializeScan(transaction.context, state.local_state, column_ids, nullptr);
+	InitializeScan(QueryContext(), state.local_state, column_ids, nullptr);
 
 	while (true) {
 		chunk.Reset();
@@ -650,14 +651,14 @@ optional_ptr<RowGroup> RowGroupCollection::NextUpdateRowGroup(row_t *ids, idx_t 
 	return row_group;
 }
 
-void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids,
-                                DataChunk &updates) {
+void RowGroupCollection::Update(TransactionData transaction, DataTable &data_table, row_t *ids,
+                                const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
-		row_group->Update(transaction, updates, ids, start, pos - start, column_ids);
+		row_group->Update(transaction, data_table, updates, ids, start, pos - start, column_ids);
 
 		auto l = stats.GetLock();
 		for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -770,15 +771,15 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	}
 }
 
-void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
-                                      DataChunk &updates) {
+void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &data_table, Vector &row_ids,
+                                      const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(updates.size() >= 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
-		row_group->UpdateColumn(transaction, updates, row_ids, start, pos - start, column_path);
+		row_group->UpdateColumn(transaction, data_table, updates, row_ids, start, pos - start, column_path);
 
 		auto lock = stats.GetLock();
 		auto primary_column_idx = column_path[0];

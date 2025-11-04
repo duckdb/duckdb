@@ -37,9 +37,6 @@ public:
 	// Projection mappings
 	vector<column_t> right_projection_map;
 
-	// Predicate (join conditions that don't reference both sides)
-	unique_ptr<Expression> predicate;
-
 protected:
 	// CachingOperator Interface
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

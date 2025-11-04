@@ -53,6 +53,8 @@ ProfilerPrintFormat QueryProfiler::GetPrintFormat(ExplainFormat format) const {
 		return ProfilerPrintFormat::HTML;
 	case ExplainFormat::GRAPHVIZ:
 		return ProfilerPrintFormat::GRAPHVIZ;
+	case ExplainFormat::MERMAID:
+		return ProfilerPrintFormat::MERMAID;
 	default:
 		throw NotImplementedException("No mapping from ExplainFormat::%s to ProfilerPrintFormat",
 		                              EnumUtil::ToString(format));
@@ -70,6 +72,8 @@ ExplainFormat QueryProfiler::GetExplainFormat(ProfilerPrintFormat format) const 
 		return ExplainFormat::HTML;
 	case ProfilerPrintFormat::GRAPHVIZ:
 		return ExplainFormat::GRAPHVIZ;
+	case ProfilerPrintFormat::MERMAID:
+		return ExplainFormat::MERMAID;
 	case ProfilerPrintFormat::NO_OUTPUT:
 		throw InternalException("Should not attempt to get ExplainFormat for ProfilerPrintFormat::NO_OUTPUT");
 	default:
@@ -103,9 +107,7 @@ void QueryProfiler::Reset() {
 	phase_timings.clear();
 	phase_stack.clear();
 	running = false;
-	query_metrics.query = "";
-	query_metrics.total_bytes_read = 0;
-	query_metrics.total_bytes_written = 0;
+	query_metrics.Reset();
 }
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
@@ -181,7 +183,6 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		auto type = PhysicalOperatorType(info.GetMetricValue<uint8_t>(MetricsType::OPERATOR_TYPE));
 		if (type == PhysicalOperatorType::UNION &&
 		    info.Enabled(info.expanded_settings, MetricsType::OPERATOR_CARDINALITY)) {
-
 			auto &child_info = child->GetProfilingInfo();
 			auto value = child_info.metrics[MetricsType::OPERATOR_CARDINALITY].GetValue<idx_t>();
 			info.MetricSum(MetricsType::OPERATOR_CARDINALITY, value);
@@ -282,6 +283,28 @@ void QueryProfiler::EndQuery() {
 			if (info.Enabled(settings, MetricsType::RESULT_SET_SIZE)) {
 				info.metrics[MetricsType::RESULT_SET_SIZE] = child_info.metrics[MetricsType::RESULT_SET_SIZE];
 			}
+			if (info.Enabled(settings, MetricsType::WAITING_TO_ATTACH_LATENCY)) {
+				info.metrics[MetricsType::WAITING_TO_ATTACH_LATENCY] =
+				    query_metrics.waiting_to_attach_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::ATTACH_LOAD_STORAGE_LATENCY)) {
+				info.metrics[MetricsType::ATTACH_LOAD_STORAGE_LATENCY] =
+				    query_metrics.attach_load_storage_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::ATTACH_REPLAY_WAL_LATENCY)) {
+				info.metrics[MetricsType::ATTACH_REPLAY_WAL_LATENCY] =
+				    query_metrics.attach_replay_wal_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::COMMIT_WRITE_WAL_LATENCY)) {
+				info.metrics[MetricsType::COMMIT_WRITE_WAL_LATENCY] = query_metrics.commit_write_wal_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::WAL_REPLAY_ENTRY_COUNT)) {
+				info.metrics[MetricsType::WAL_REPLAY_ENTRY_COUNT] =
+				    Value::UBIGINT(query_metrics.wal_replay_entry_count);
+			}
+			if (info.Enabled(settings, MetricsType::CHECKPOINT_LATENCY)) {
+				info.metrics[MetricsType::CHECKPOINT_LATENCY] = query_metrics.checkpoint_latency.Elapsed();
+			}
 
 			MoveOptimizerPhasesToRoot();
 			if (info.Enabled(settings, MetricsType::CUMULATIVE_OPTIMIZER_TIMING)) {
@@ -298,6 +321,9 @@ void QueryProfiler::EndQuery() {
 
 	guard.unlock();
 
+	// To log is inexpensive, whether to log or not depends on whether logging is active
+	ToLog();
+
 	if (emit_output) {
 		string tree = ToString();
 		auto save_location = GetSaveLocation();
@@ -311,15 +337,72 @@ void QueryProfiler::EndQuery() {
 	}
 }
 
-void QueryProfiler::AddBytesRead(const idx_t nr_bytes) {
-	if (IsEnabled()) {
-		query_metrics.total_bytes_read += nr_bytes;
+void QueryProfiler::AddToCounter(const MetricsType type, const idx_t amount) {
+	if (!IsEnabled()) {
+		return;
+	}
+
+	switch (type) {
+	case MetricsType::TOTAL_BYTES_READ:
+		query_metrics.total_bytes_read += amount;
+		return;
+	case MetricsType::TOTAL_BYTES_WRITTEN:
+		query_metrics.total_bytes_written += amount;
+		return;
+	case MetricsType::WAL_REPLAY_ENTRY_COUNT:
+		query_metrics.wal_replay_entry_count += amount;
+		return;
+	default:
+		return;
 	}
 }
 
-void QueryProfiler::AddBytesWritten(const idx_t nr_bytes) {
-	if (IsEnabled()) {
-		query_metrics.total_bytes_written += nr_bytes;
+void QueryProfiler::StartTimer(const MetricsType type) {
+	if (!IsEnabled()) {
+		return;
+	}
+
+	switch (type) {
+	case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		query_metrics.waiting_to_attach_latency.Start();
+		return;
+	case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		query_metrics.attach_load_storage_latency.Start();
+		return;
+	case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		query_metrics.attach_replay_wal_latency.Start();
+		return;
+	case MetricsType::CHECKPOINT_LATENCY:
+		query_metrics.checkpoint_latency.Start();
+		return;
+	case MetricsType::COMMIT_WRITE_WAL_LATENCY:
+		query_metrics.commit_write_wal_latency.Start();
+		return;
+	default:
+		return;
+	}
+}
+
+void QueryProfiler::EndTimer(MetricsType type) {
+	if (!IsEnabled()) {
+		return;
+	}
+
+	switch (type) {
+	case MetricsType::WAITING_TO_ATTACH_LATENCY:
+		query_metrics.waiting_to_attach_latency.End();
+		return;
+	case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+		query_metrics.attach_load_storage_latency.End();
+		return;
+	case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
+		query_metrics.attach_replay_wal_latency.End();
+		return;
+	case MetricsType::CHECKPOINT_LATENCY:
+		query_metrics.checkpoint_latency.End();
+		return;
+	default:
+		return;
 	}
 }
 
@@ -340,7 +423,8 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return "";
 	case ProfilerPrintFormat::HTML:
-	case ProfilerPrintFormat::GRAPHVIZ: {
+	case ProfilerPrintFormat::GRAPHVIZ:
+	case ProfilerPrintFormat::MERMAID: {
 		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
@@ -405,7 +489,7 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	}
 
 	// Reduce.
-	auto root_metrics = ProfilingInfo::DefaultRootSettings();
+	auto root_metrics = ProfilingInfo::RootScopeSettings();
 	for (const auto metric : root_metrics) {
 		settings.erase(metric);
 	}
@@ -572,7 +656,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	profiler.operator_infos.clear();
 }
 
-void QueryProfiler::SetInfo(const double &blocked_thread_time) {
+void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -780,8 +864,10 @@ static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, ProfilingNode &node)
 	auto result_obj = yyjson_mut_obj(doc);
 	auto &profiling_info = node.GetProfilingInfo();
 
-	profiling_info.metrics[MetricsType::EXTRA_INFO] =
-	    QueryProfiler::JSONSanitize(profiling_info.metrics.at(MetricsType::EXTRA_INFO));
+	if (profiling_info.Enabled(profiling_info.settings, MetricsType::EXTRA_INFO)) {
+		profiling_info.metrics[MetricsType::EXTRA_INFO] =
+		    QueryProfiler::JSONSanitize(profiling_info.metrics.at(MetricsType::EXTRA_INFO));
+	}
 
 	profiling_info.WriteMetricsToJSON(doc, result_obj);
 
@@ -802,6 +888,19 @@ static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val 
 	}
 	auto result = string(json_holder.stringified_json);
 	return result;
+}
+
+void QueryProfiler::ToLog() const {
+	lock_guard<std::mutex> guard(lock);
+
+	if (!root) {
+		// No root, not much to do
+		return;
+	}
+
+	auto &settings = root->GetProfilingInfo();
+
+	settings.WriteMetricsToLog(context);
 }
 
 string QueryProfiler::ToJSON() const {
@@ -913,6 +1012,12 @@ string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
 				    node_0_0 [label="Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!"];
 				}
 			)";
+	case ProfilerPrintFormat::MERMAID:
+		return R"(flowchart TD
+    node_0_0["`**DISABLED**
+Query profiling is disabled.
+Use 'PRAGMA enable_profiling;' to enable profiling!`"]
+)";
 	case ProfilerPrintFormat::JSON: {
 		ConvertedJSONHolder json_holder;
 		json_holder.doc = yyjson_mut_doc_new(nullptr);
@@ -970,9 +1075,6 @@ void QueryProfiler::MoveOptimizerPhasesToRoot() {
 			root_metrics[phase] = Value::CreateValue(timing);
 		}
 	}
-}
-
-void QueryProfiler::Propagate(QueryProfiler &) {
 }
 
 } // namespace duckdb

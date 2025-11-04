@@ -156,7 +156,8 @@ protected:
 	bool load_complete = false;
 	//! The serialization compatibility version when reading and writing from this database
 	optional_idx storage_version;
-	//! Estimated size of changes for determining automatic checkpointing on in-memory databases
+	//! Estimated size of changes for determining automatic checkpointing on in-memory databases and databases without a
+	//! WAL.
 	atomic<idx_t> in_memory_change_size;
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;

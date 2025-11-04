@@ -293,13 +293,13 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
 }
 
-void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                                idx_t update_count, Vector &base_vector) {
+void ColumnData::UpdateInternal(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                                Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_uniq<UpdateSegment>(*this);
 	}
-	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -495,10 +495,10 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
                             idx_t append_count) {
 	idx_t offset = 0;
-	this->count += append_count;
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vdata, offset, append_count);
+		this->count += copied_elements;
 		append_stats.Merge(state.current->stats.statistics);
 		if (copied_elements == append_count) {
 			// finished copying everything
@@ -578,24 +578,23 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 	return fetch_count;
 }
 
-void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                        idx_t update_count) {
+void ColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+                        row_t *row_ids, idx_t update_count) {
 	Vector base_vector(type);
 	ColumnScanState state;
 	FetchUpdateData(state, row_ids, base_vector);
 
-	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
-void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-                              row_t *row_ids, idx_t update_count, idx_t depth) {
+void ColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+	ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count);
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-
 	const auto block_size = block_manager.GetBlockSize();
 	const auto type_size = GetTypeIdSize(type.InternalType());
 	auto vector_segment_size = block_size;

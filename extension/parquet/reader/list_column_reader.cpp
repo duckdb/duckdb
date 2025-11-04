@@ -175,7 +175,6 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, const ParquetColumnSch
                                    unique_ptr<ColumnReader> child_column_reader_p)
     : ColumnReader(reader, schema), child_column_reader(std::move(child_column_reader_p)),
       read_cache(reader.allocator, ListType::GetChildType(Type())), read_vector(read_cache), overflow_child_count(0) {
-
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_defines_ptr = (uint8_t *)child_defines.ptr;

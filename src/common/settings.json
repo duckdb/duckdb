@@ -50,6 +50,16 @@
         "default_value": "false"
     },
     {
+        "name": "allow_parser_override_extension",
+        "description": "Allow extensions to override the current parser",
+        "type": "VARCHAR",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "allow_persistent_secrets",
         "description": "Allow the creation of persistent secrets, that are stored and loaded on restarts",
         "type": "BOOLEAN",
@@ -217,6 +227,13 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"
+    },
+    {
+        "name": "debug_physical_table_scan_execution_strategy",
+        "description": "DEBUG SETTING: force use of given strategy for executing physical table scans",
+        "type": "ENUM<PhysicalTableScanExecutionStrategy>",
+        "default_scope": "global",
+        "default_value": "DEFAULT"
     },
     {
         "name": "debug_skip_checkpoint_on_commit",
@@ -461,7 +478,7 @@
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
         "default_scope": "global",
-        "default_value": "false"
+        "default_value": "true"
     },
     {
         "name": "explain_output",

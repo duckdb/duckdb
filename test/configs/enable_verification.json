@@ -113,7 +113,8 @@
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
-        "test/sql/storage/compression/rle/rle_constant.test"
+        "test/sql/storage/compression/rle/rle_constant.test",
+        "test/sql/types/geo/geometry_stats.test"
       ]
     },
     {
@@ -178,7 +179,8 @@
         "test/sql/catalog/comment_on_pg_description.test",
         "test/sql/collate/test_collate_between.test",
         "test/sql/index/create_index_options.test",
-        "test/sql/pragma/test_show_tables.test"
+        "test/sql/pragma/test_show_tables.test",
+        "test/sql/peg_parser/transformer/use_statement.test"
       ]
     },
     {

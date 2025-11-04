@@ -39,7 +39,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -120,11 +119,11 @@ void Binder::SearchSchema(CreateInfo &info) {
 	if (!info.temporary) {
 		// non-temporary create: not read only
 		if (info.catalog == TEMP_CATALOG) {
-			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", TEMP_CATALOG);
+			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", std::string(TEMP_CATALOG));
 		}
 	} else {
 		if (info.catalog != TEMP_CATALOG) {
-			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
+			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", std::string(TEMP_CATALOG));
 		}
 	}
 }
@@ -544,23 +543,21 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		                                   create_index_info.table);
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
-		if (bound_table->type != TableReferenceType::BASE_TABLE) {
+		auto plan = std::move(bound_table.plan);
+		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
+			throw BinderException("can only create an index on a base table");
+		}
+		auto &get = plan->Cast<LogicalGet>();
+		auto table_ptr = get.GetTable();
+		if (!table_ptr) {
 			throw BinderException("can only create an index on a base table");
 		}
 
-		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-		auto &table = table_binding.table;
+		auto &table = *table_ptr;
 		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
 		properties.RegisterDBModify(table.catalog, context);
-
-		// create a plan over the bound table
-		auto plan = CreatePlan(*bound_table);
-		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
-			throw BinderException("Cannot create index on a view!");
-		}
-
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}

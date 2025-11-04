@@ -1,6 +1,7 @@
 {
     "group": "table_function_bind",
     "deprecated": false,
+    "description": "Functions to implement the bind-phase of a table function. The bind-phase happens once before the execution of the table function. It is useful to, e.g., set up any read-only information for the different threads during execution.",
     "entries": [
         {
             "name": "duckdb_bind_get_extra_info",

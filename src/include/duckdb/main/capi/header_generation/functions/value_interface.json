@@ -1,6 +1,7 @@
 {
     "group": "value_interface",
     "deprecated": false,
+    "description": "Functions to create a `duckdb_value` for each of DuckDB's supported data types, and to access the contents of a `duckdb_value`. The `duckdb_value` wrapper allows handling of primitive and arbitrarily (nested) types through the same interface.",
     "entries": [
         {
             "name": "duckdb_destroy_value",

@@ -403,7 +403,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 }
 
 TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
-
 	auto elem_type = duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER);
 	auto array_type = duckdb_create_array_type(elem_type, 3);
 	duckdb_logical_type schema[] = {array_type};

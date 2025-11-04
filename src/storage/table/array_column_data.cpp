@@ -120,7 +120,7 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 				// not consecutive - break
 				break;
 			}
-			end_idx = next_idx;
+			end_idx = next_idx + 1;
 		}
 		consecutive_ranges++;
 	}
@@ -224,13 +224,14 @@ idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 	throw NotImplementedException("Array Fetch");
 }
 
-void ArrayColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                             idx_t update_count) {
+void ArrayColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                             Vector &update_vector, row_t *row_ids, idx_t update_count) {
 	throw NotImplementedException("Array Update is not supported.");
 }
 
-void ArrayColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                   Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void ArrayColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+                                   const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                                   idx_t update_count, idx_t depth) {
 	throw NotImplementedException("Array Update Column is not supported");
 }
 
@@ -240,7 +241,6 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 
 void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                idx_t result_idx) {
-
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());

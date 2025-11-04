@@ -28,6 +28,7 @@ add_library_unity(
   in_clause_rewriter.cpp
   join_filter_pushdown_optimizer.cpp
   late_materialization.cpp
+  late_materialization_helper.cpp
   optimizer.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
@@ -35,6 +36,7 @@ add_library_unity(
   statistics_propagator.cpp
   limit_pushdown.cpp
   topn_optimizer.cpp
+  topn_window_elimination.cpp
   unnest_rewriter.cpp
   sampling_pushdown.cpp
   sum_rewriter.cpp)

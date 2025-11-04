@@ -4,6 +4,10 @@
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
+constexpr idx_t Storage::MAX_ROW_GROUP_SIZE;
+constexpr idx_t Storage::MAX_BLOCK_ALLOC_SIZE;
+constexpr idx_t Storage::MIN_BLOCK_ALLOC_SIZE;
+constexpr idx_t Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
@@ -83,6 +87,8 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.3.1", 66},
 	{"v1.3.2", 66},
 	{"v1.4.0", 67},
+	{"v1.4.1", 67},
+	{"v1.4.2", 67},
 	{"v1.5.0", 67},
 	{nullptr, 0}
 };
@@ -109,6 +115,8 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.3.1", 5},
 	{"v1.3.2", 5},
 	{"v1.4.0", 6},
+	{"v1.4.1", 6},
+	{"v1.4.2", 6},
 	{"v1.5.0", 7},
 	{"latest", 7},
 	{nullptr, 0}

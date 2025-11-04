@@ -495,7 +495,6 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
-
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
 
@@ -543,8 +542,10 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
                                                                   BlockHandle &block,
                                                                   unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(!temporary_directory.path.empty());
-	D_ASSERT(temporary_directory.handle.get());
 	auto id = block.BlockId();
+	if (!temporary_directory.handle) {
+		throw InternalException("ReadTemporaryBuffer called but temporary directory has not been instantiated yet");
+	}
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer));
@@ -640,6 +641,10 @@ bool StandardBufferManager::HasFilesInTemporaryDirectory() const {
 		}
 	});
 	return found;
+}
+
+BlockManager &StandardBufferManager::GetTemporaryBlockManager() {
+	return *temp_block_manager;
 }
 
 vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {

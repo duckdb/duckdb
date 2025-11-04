@@ -85,6 +85,8 @@ public:
 
 private:
 	const vector<unique_ptr<ParsedExpression>> empty_select_list = {};
+
+	const vector<unique_ptr<ParsedExpression>> &GetSelectList(QueryNode &node);
 };
 
 } // namespace duckdb

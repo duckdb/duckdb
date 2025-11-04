@@ -1,0 +1,55 @@
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index a925782..b1d8f9d 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -284,8 +284,12 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void RTreeIndex::Vacuum(IndexLock &state) {
+ }
+ 
+-string RTreeIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+-	throw NotImplementedException("RTreeIndex::VerifyAndToString() not implemented");
++void RTreeIndex::Verify(IndexLock &l) {
++	throw NotImplementedException("RTreeIndex::Verify() not implemented");
++}
++
++string RTreeIndex::ToString(IndexLock &l, bool display_ascii) {
++	throw NotImplementedException("RTreeIndex::ToString() not implemented");
+ }
+ 
+ void RTreeIndex::VerifyAllocations(IndexLock &state) {
+diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
+index 202a6c7..243a476 100644
+--- a/src/spatial/index/rtree/rtree_index.hpp
++++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -61,8 +61,13 @@ public:
+ 	//! Traverses an RTreeIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+ 
+-	//! Returns the string representation of the RTreeIndex, or only traverses and verifies the index
+-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
++	//! Traverses and verifies the index.
++	//! Currently not implemented.
++	void Verify(IndexLock &l) override;
++
++	//! Returns the string representation of an index.
++	//! Currently not implemented.
++	string ToString(IndexLock &l, bool display_ascii = false) override;
+ 
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 60ca737..a44cfc7 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -9243,6 +9243,11 @@ struct ST_MMin : VertexAggFunctionBase<ST_MMin, VertexMinAggOp> {
+ 	static constexpr auto ORDINATE = VertexOrdinate::M;
+ };
+ 
++constexpr const char * ST_M::NAME;
++constexpr const char * ST_X::NAME;
++constexpr const char * ST_Y::NAME;
++constexpr const char * ST_Z::NAME;
++
+ } // namespace
+ 
+ // Helper to access the constant distance from the bind data
