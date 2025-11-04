@@ -85,7 +85,7 @@ private:
 	//! Blocks that should be freed
 	unsafe_unique_ptr<BlockQueue> to_free;
 	//! Actually free freed blocks once queue size hits this threshold
-	static constexpr idx_t TO_FREE_SIZE_THRESHOLD = 512;
+	static constexpr idx_t TO_FREE_SIZE_THRESHOLD = 4096;
 	//! Free up to this many blocks per iteration in FreeInternal()
 	static constexpr idx_t MAXIMUM_FREE_COUNT = 32768;
 	//! Lock so that only one thread at a time frees

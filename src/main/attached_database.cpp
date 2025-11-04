@@ -280,8 +280,6 @@ void AttachedDatabase::Close() {
 	catalog.reset();
 	storage.reset();
 	stored_database_path.reset();
-
-	BlockAllocator::Get(db).FlushAll();
 }
 
 } // namespace duckdb
