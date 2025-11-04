@@ -155,6 +155,7 @@ public:
 	void RegisterCommon();
 	void RegisterCopy();
 	void RegisterCreateIndex();
+	void RegisterCreateMacro();
 	void RegisterCreateSequence();
 	void RegisterCreateTable();
 	void RegisterDeallocate();
@@ -358,6 +359,15 @@ private:
 	static unique_ptr<ParsedExpression> TransformIndexElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static case_insensitive_map_t<Value> TransformWithList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// create_macro.gram
+	static unique_ptr<CreateStatement> TransformCreateMacroStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MacroFunction> TransformMacroDefinition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MacroFunction> TransformTableMacroDefinition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MacroFunction> TransformScalarMacroDefinition(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformMacroParameters(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformMacroParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformSimpleParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_sequence.gram
 	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,

@@ -178,6 +178,18 @@ void PEGTransformerFactory::RegisterCreateIndex() {
 	REGISTER_TRANSFORM(TransformIndexName);
 }
 
+void PEGTransformerFactory::RegisterCreateMacro() {
+
+	// create_macro.gram
+	REGISTER_TRANSFORM(TransformCreateMacroStmt);
+	REGISTER_TRANSFORM(TransformMacroDefinition);
+	REGISTER_TRANSFORM(TransformTableMacroDefinition);
+	REGISTER_TRANSFORM(TransformScalarMacroDefinition);
+	REGISTER_TRANSFORM(TransformMacroParameters);
+	REGISTER_TRANSFORM(TransformMacroParameter);
+	REGISTER_TRANSFORM(TransformSimpleParameter);
+}
+
 void PEGTransformerFactory::RegisterCreateSequence() {
 	REGISTER_TRANSFORM(TransformCreateSequenceStmt);
 	REGISTER_TRANSFORM(TransformSequenceOption);
