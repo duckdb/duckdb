@@ -414,26 +414,32 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 
-	auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
-	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
-	auto &type_entries = StructType::GetChildTypes(shredded_type);
-	if (type_entries.size() == 2) {
-		//! STRUCT(unshredded VARIANT, shredded <...>)
-		auto shredded_data = WriteShreddedData(row_group, shredded_type);
-		D_ASSERT(shredded_data.size() == 2);
-		auto &unshredded = shredded_data[0];
-		auto &shredded = shredded_data[1];
-
-		//! Now checkpoint the shredded data
-		checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
-		checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
-
-		//! Replace the old data with the new
-		ReplaceColumns(std::move(unshredded), std::move(shredded));
+	if (!HasChanges()) {
+		for (idx_t i = 0; i < sub_columns.size(); i++) {
+			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
+		}
 	} else {
-		D_ASSERT(type_entries.size() == 1);
-		//! STRUCT(unshredded VARIANT)
-		checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
+		auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
+		D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
+		auto &type_entries = StructType::GetChildTypes(shredded_type);
+		if (type_entries.size() == 2) {
+			//! STRUCT(unshredded VARIANT, shredded <...>)
+			auto shredded_data = WriteShreddedData(row_group, shredded_type);
+			D_ASSERT(shredded_data.size() == 2);
+			auto &unshredded = shredded_data[0];
+			auto &shredded = shredded_data[1];
+
+			//! Now checkpoint the shredded data
+			checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
+			checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
+
+			//! Replace the old data with the new
+			ReplaceColumns(std::move(unshredded), std::move(shredded));
+		} else {
+			D_ASSERT(type_entries.size() == 1);
+			//! STRUCT(unshredded VARIANT)
+			checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
+		}
 	}
 
 	return std::move(checkpoint_state);
