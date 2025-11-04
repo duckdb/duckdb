@@ -753,8 +753,8 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 }
 
 bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                               const PhysicalComparisonJoin &op, const ExpressionType &cmp, const bool
-                                               is_perfect_hashtable) const {
+                                               const PhysicalComparisonJoin &op, const ExpressionType &cmp,
+                                               const bool is_perfect_hashtable) const {
 
 	if (!ht) {
 		return false;
@@ -806,8 +806,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalSta
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                             const PhysicalComparisonJoin &op,
-                                             unique_ptr<DataChunk> final_min_max, const bool is_perfect_hashtable) const {
+                                                              const PhysicalComparisonJoin &op,
+                                                              unique_ptr<DataChunk> final_min_max,
+                                                              const bool is_perfect_hashtable) const {
 	if (probe_info.empty()) {
 		return final_min_max; // There are not table souces in which we can push down filters
 	}
@@ -897,7 +898,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 	auto final_min_max = FinalizeMinMax(gstate);
 	return FinalizeFilters(context, ht, op, std::move(final_min_max), false);
 }
-
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             OperatorSinkFinalizeInput &input) const {

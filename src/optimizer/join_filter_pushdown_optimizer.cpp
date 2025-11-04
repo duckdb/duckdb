@@ -146,7 +146,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	}
 }
 
-bool JoinFilterPushdownOptimizer::HasFilter(const unique_ptr<LogicalOperator> &op) {
+bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op->Cast<LogicalGet>();
@@ -155,9 +155,12 @@ bool JoinFilterPushdownOptimizer::HasFilter(const unique_ptr<LogicalOperator> &o
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		return true;
 	}
+	case LogicalOperatorType::LOGICAL_TOP_N: {
+		return true;
+	}
 	default:
 		for (const unique_ptr<LogicalOperator> &child : op->children) {
-			if (HasFilter(child)) {
+			if (IsFiltering(child)) {
 				return true;
 			}
 		}
@@ -274,9 +277,9 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	if (!pushdown_info->probe_info.empty()) {
 		const auto &rhs_child = join.children[1];
 		if (rhs_child->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
-			pushdown_info->build_side_has_filter = HasFilter(join.children[0]);
+			pushdown_info->build_side_has_filter = IsFiltering(join.children[0]);
 		} else {
-			pushdown_info->build_side_has_filter = HasFilter(join.children[1]);
+			pushdown_info->build_side_has_filter = IsFiltering(join.children[1]);
 		}
 	}
 	// set up the filter pushdown in the join itself
