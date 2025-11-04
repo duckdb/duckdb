@@ -281,6 +281,7 @@ public:
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
+	string EvaluateSQL(const string &sql);
 	SuccessState ExecuteSQL(const string &zSql);
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
