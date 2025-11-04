@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/windows.hpp"
 
 namespace duckdb {
 
@@ -128,6 +129,11 @@ public:
 	static int EditRaw(char *buf, size_t buflen, const char *prompt);
 
 	static EscapeSequence ReadEscapeSequence(int ifd);
+
+
+#if defined(_WIN32) || defined(WIN32)
+    static HANDLE GetConsoleInput();
+#endif
 
 private:
 	static TerminalSize TryMeasureTerminalSize();

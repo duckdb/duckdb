@@ -3,6 +3,7 @@
 #include "history.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "shell_highlight.hpp"
+#include "shell_state.hpp"
 #if defined(_WIN32) || defined(WIN32)
 #include <io.h>
 #else

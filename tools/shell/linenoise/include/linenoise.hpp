@@ -157,6 +157,7 @@ public:
 	static void DisableCompletionRendering();
 	static void EnableErrorRendering();
 	static void DisableErrorRendering();
+    static string GetTemporaryDirectory();
 
 public:
 	static void LogTokens(const vector<highlightToken> &tokens);

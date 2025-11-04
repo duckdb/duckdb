@@ -2,7 +2,6 @@
 #include "history.hpp"
 #include "linenoise.hpp"
 #if defined(_WIN32) || defined(WIN32)
-#include "duckdb/common/windows.hpp"
 #include <io.h>
 #define STDIN_FILENO  0
 #define STDOUT_FILENO 1
@@ -38,6 +37,12 @@ static void linenoiseAtExit(void) {
 	Terminal::DisableRawMode();
 	History::Free();
 }
+
+#if defined(_WIN32) || defined(WIN32)
+HANDLE Terminal::GetConsoleInput() {
+    return console_in;
+}
+#endif
 
 /* Return true if the terminal name is in the list of terminals we know are
  * not able to understand basic escape sequences. */

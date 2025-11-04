@@ -1095,6 +1095,124 @@ void Linenoise::HandleTerminalResize() {
 }
 
 bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
+#if defined(_WIN32) || defined(WIN32)
+  INPUT_RECORD rec;
+  DWORD count;
+  int modifierKeys = 0;
+  while (true) {
+    ReadConsoleInput(Terminal::GetConsoleInput(), &rec, 1, &count);
+    if (rec.EventType == WINDOW_BUFFER_SIZE_EVENT) {
+        // resizing buffer - handle resize and continue processing
+		HandleTerminalResize();
+        continue;
+    }
+    if (rec.EventType != KEY_EVENT) {
+        // not a key press - continue
+      continue;
+    }
+    auto &key_event = rec.Event.KeyEvent;
+    if (!key_event.bKeyDown) {
+        // releasing a key - ignore
+        continue;
+    }
+    bool control_pressed = false;
+    bool alt_pressed = false;
+    modifierKeys = 0;
+    Linenoise::Log("Unicode character %d, ascii character %d", key_event.uChar.UnicodeChar, key_event.uChar.AsciiChar);
+
+    if ((key_event.dwControlKeyState &
+         (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) ==
+        (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) {
+      key_event.dwControlKeyState &=
+          ~(LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED);
+    }
+    if (key_event.dwControlKeyState &
+        (RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED)) {
+      control_pressed = true;
+    }
+    if (key_event.dwControlKeyState &
+        (RIGHT_ALT_PRESSED | LEFT_ALT_PRESSED)) {
+      alt_pressed = true;
+    }
+    if (key_event.uChar.UnicodeChar == 0) {
+      switch (key_event.wVirtualKeyCode) {
+        case VK_LEFT:
+            key_press.action = ESC;
+            if (control_pressed) {
+                key_press.sequence = EscapeSequence::CTRL_MOVE_BACKWARDS;
+            } else if (alt_pressed) {
+                key_press.sequence = EscapeSequence::ALT_LEFT_ARROW;
+            } else {
+                key_press.sequence = EscapeSequence::LEFT;
+            }
+            return true;
+        case VK_RIGHT:
+            key_press.action = ESC;
+            if (control_pressed) {
+                key_press.sequence = EscapeSequence::CTRL_MOVE_FORWARDS;
+            } else if (alt_pressed) {
+                key_press.sequence = EscapeSequence::ALT_RIGHT_ARROW;
+            } else {
+                key_press.sequence = EscapeSequence::RIGHT;
+            }
+            return true;
+        case VK_UP:
+            key_press.action = ESC;
+            key_press.sequence = EscapeSequence::UP;
+            return true;
+        case VK_DOWN:
+            key_press.action = ESC;
+            key_press.sequence = EscapeSequence::DOWN;
+            return true;
+        case VK_DELETE:
+            key_press.action = ESC;
+            key_press.sequence = EscapeSequence::DELETE_KEY;
+            return true;
+        case VK_HOME:
+            key_press.action = ESC;
+            key_press.sequence = EscapeSequence::HOME;
+            return true;
+        case VK_END:
+            key_press.action = ESC;
+            key_press.sequence = EscapeSequence::END;
+            return true;
+        case VK_PRIOR:
+            key_press.action = CTRL_A;
+            return true;
+        case VK_NEXT:
+            key_press.action = CTRL_E;
+            return true;
+        default:
+          continue;  // in raw mode, ReadConsoleInput shows shift, ctrl ...
+      }              //  ... ignore them
+    } else {
+        if (key_event.uChar.AsciiChar != 0) {
+            if (alt_pressed && !control_pressed) {
+                // support ALT codes
+                if (key_event.uChar.AsciiChar >= 'a' && key_event.uChar.AsciiChar <= 'z') {
+                    key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (key_event.uChar.AsciiChar - 'a'));
+                } else if (key_event.uChar.AsciiChar >= 'A' && key_event.uChar.AsciiChar <= 'Z') {
+                    key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (key_event.uChar.AsciiChar - 'A'));
+                } else if (key_event.uChar.AsciiChar == BACKSPACE) {
+                    key_press.sequence = EscapeSequence::ALT_BACKSPACE;
+                } else if (key_event.uChar.AsciiChar == '\\') {
+                    key_press.sequence = EscapeSequence::ALT_BACKSLASH;
+                }
+            }
+            if (key_press.sequence != EscapeSequence::INVALID) {
+                key_press.action = ESC;
+            } else {
+                key_press.action = (KEY_ACTION) key_event.uChar.AsciiChar;
+            }
+            return true;
+        }
+      // we got a real character, return it
+      continue;
+    }
+  }
+  return true;
+
+#else
 	char c;
 	int nread;
 
@@ -1112,6 +1230,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 		key_press.sequence = Terminal::ReadEscapeSequence(ifd);
 	}
 	return true;
+#endif
 }
 
 /* This function is the core of the line editing capability of linenoise.
@@ -1442,7 +1561,13 @@ int Linenoise::Edit() {
 void Linenoise::LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values) {
 	static FILE *lndebug_fp = NULL;
 	if (!lndebug_fp) {
-		lndebug_fp = fopen("/tmp/lndebug.txt", "a");
+        string path;
+#if defined(_WIN32) || defined(WIN32)
+        path = GetTemporaryDirectory();
+#else
+        path = "/tmp/lndebug.txt";
+#endif
+        lndebug_fp = fopen(path.c_str(), "a");
 	}
 	auto log_message = Exception::ConstructMessageRecursive(msg, values);
 	fprintf(lndebug_fp, "%s", log_message.c_str());
@@ -1533,28 +1658,36 @@ bool Linenoise::EditFileWithEditor(const string &file_name, const char *editor) 
 	return result == 0;
 }
 
-bool Linenoise::EditBufferWithEditor(const char *editor) {
-	/* make a temp file to edit */
+string Linenoise::GetTemporaryDirectory() {
 #ifndef WIN32
+	/* make a temp file to edit */
 	const char *tmpdir = getenv("TMPDIR");
 	if (!tmpdir) {
 		tmpdir = "/tmp";
 	}
+    return tmpdir;
 #else
+    static constexpr const idx_t MAX_PATH_LENGTH = 261;
 	char tmpdir[MAX_PATH_LENGTH];
 	int ret;
 
+    // FIXME: use GetTempPathW
 	ret = GetTempPath(MAX_PATH_LENGTH, tmpdir);
 	if (ret == 0 || ret > MAX_PATH_LENGTH) {
 		Log("cannot locate temporary directory: %s", !ret ? strerror(errno) : "");
 		return false;
 	}
+    return tmpdir;
 #endif
+}
+
+bool Linenoise::EditBufferWithEditor(const char *editor) {
+    auto tmpdir = GetTemporaryDirectory();
 	string temporary_file_name;
 #ifndef WIN32
-	temporary_file_name = string(tmpdir) + "/duckdb.edit." + std::to_string(getpid()) + ".sql";
+	temporary_file_name = tmpdir + "/duckdb.edit." + std::to_string(getpid()) + ".sql";
 #else
-	temporary_file_name = string(tmpdir) + "duckdb.edit." + std::to_string(getpid()) + ".sql";
+	temporary_file_name = tmpdir + "duckdb.edit." + std::to_string(getpid()) + ".sql";
 #endif
 
 	FILE *f = fopen(temporary_file_name.c_str(), "w+");
