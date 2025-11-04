@@ -136,7 +136,7 @@ jobs:
         name: Configure External extensions
         env:
           CONFIG_FILE: .github/config/external_extensions.cmake
-          DEFAULT_EXCLUDE_ARCHS: ''
+          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
         run: |
           echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
           external_extensions="`cat .github/config/external_extensions.cmake`"
