@@ -14,7 +14,7 @@ int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 	return int32_t(percentage);
 }
 
-static string FormatETA(double seconds, bool elapsed = false) {
+string TerminalProgressBarDisplay::FormatETA(double seconds, bool elapsed) {
 	// for terminal rendering purposes, we need to make sure the length is always the same
 	// we pad the end with spaces if that is not the case
 	// the maximum length here is "(~10.35 minutes remaining)" (26 bytes)

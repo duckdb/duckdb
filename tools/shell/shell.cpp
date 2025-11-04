@@ -85,6 +85,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "shell_status_bar.hpp"
 #include "shell_prompt.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
@@ -151,6 +152,7 @@
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/client_config.hpp"
 
 using namespace duckdb_shell;
 
@@ -1699,6 +1701,10 @@ SuccessState ShellState::ExecuteQuery(const string &query) {
 	return SuccessState::SUCCESS;
 }
 
+unique_ptr<duckdb::ProgressBarDisplay> CreateStatusBar() {
+	return make_uniq<ShellStatusBarDisplay>();
+}
+
 void ShellState::OpenDB(ShellOpenFlags flags) {
 	if (!db) {
 		try {
@@ -1714,6 +1720,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 				exit(1);
 			}
 		}
+		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
+		client_config.display_create_func = CreateStatusBar;
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif

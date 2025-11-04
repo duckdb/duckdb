@@ -62,9 +62,13 @@ private:
 #endif
 	static constexpr const idx_t PROGRESS_BAR_WIDTH = 38;
 
+protected:
+	virtual void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds,
+	                                   bool is_finished = false);
+	string FormatETA(double seconds, bool elapsed = false);
+
 private:
 	static int32_t NormalizePercentage(double percentage);
-	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds, bool is_finished = false);
 	double GetElapsedDuration() {
 		auto now = std::chrono::steady_clock::now();
 		return std::chrono::duration<double>(now - start_time).count();
