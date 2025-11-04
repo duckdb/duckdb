@@ -1033,7 +1033,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(P
 		result->expr = std::move(expr);
 	}
 	result->columns = true;
-	return std::move(result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExtractExpression(PEGTransformer &transformer,
