@@ -1054,7 +1054,8 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.has_metadata_blocks = true;
 		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
 		row_group_pointer.deletes_pointers = deletes_pointers;
-		vector<MetaBlockPointer> extra_metadata_block_pointers(write_data.existing_extra_metadata_blocks.size());
+		vector<MetaBlockPointer> extra_metadata_block_pointers;
+		extra_metadata_block_pointers.reserve(write_data.existing_extra_metadata_blocks.size());
 		for (auto &block_pointer : write_data.existing_extra_metadata_blocks) {
 			extra_metadata_block_pointers.emplace_back(block_pointer, 0);
 		}

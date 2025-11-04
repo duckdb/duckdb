@@ -1161,8 +1161,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				auto &write_state = checkpoint_state.write_data[segment_idx];
 				metadata_manager.ClearModifiedBlocks(row_group.GetColumnStartPointers());
 				D_ASSERT(write_state.reuse_existing_metadata_blocks);
-				vector<MetaBlockPointer> extra_metadata_block_pointers(
-				    write_state.existing_extra_metadata_blocks.size());
+				vector<MetaBlockPointer> extra_metadata_block_pointers;
+				extra_metadata_block_pointers.reserve(write_state.existing_extra_metadata_blocks.size());
 				for (auto &block_pointer : write_state.existing_extra_metadata_blocks) {
 					extra_metadata_block_pointers.emplace_back(block_pointer, 0);
 				}
