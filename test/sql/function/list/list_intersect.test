@@ -123,7 +123,7 @@ execute q1(['abc', 'def'], ['def', 'ghi']);
 [def]
 
 statement ok
-CREATE TABLE all_types AS SELECT * FROM test_all_types();
+CREATE TABLE all_types AS SELECT * EXCLUDE(time_ns) FROM test_all_types();
 
 foreach colname bool tinyint smallint int bigint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 uuid interval varchar small_enum medium_enum large_enum
 

@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification;
 
 statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum, "union", bit) from test_all_types();
+create table all_types as select * exclude(time_ns, small_enum, medium_enum, large_enum, "union", bit) from test_all_types();
 
 statement ok
 copy all_types to '__TEST_DIR__/sample_all_types.csv' (FORMAT CSV);
