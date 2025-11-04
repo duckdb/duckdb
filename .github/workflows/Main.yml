@@ -499,6 +499,12 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/compressed_in_memory.json
 
+    - name: Test sycnronous table scan implementation
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"
+
     - name: Test block prefetching
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash

@@ -103,6 +103,7 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -3468,6 +3469,26 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value) {
 	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 82, "PhysicalOperatorType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPhysicalTableScanExecutionStrategyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PhysicalTableScanExecutionStrategy::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(PhysicalTableScanExecutionStrategy::TASK_EXECUTOR), "TASK_EXECUTOR" },
+		{ static_cast<uint32_t>(PhysicalTableScanExecutionStrategy::SYNCHRONOUS), "SYNCHRONOUS" },
+		{ static_cast<uint32_t>(PhysicalTableScanExecutionStrategy::TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS), "TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PhysicalTableScanExecutionStrategy>(PhysicalTableScanExecutionStrategy value) {
+	return StringUtil::EnumToString(GetPhysicalTableScanExecutionStrategyValues(), 4, "PhysicalTableScanExecutionStrategy", static_cast<uint32_t>(value));
+}
+
+template<>
+PhysicalTableScanExecutionStrategy EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(const char *value) {
+	return static_cast<PhysicalTableScanExecutionStrategy>(StringUtil::StringToEnum(GetPhysicalTableScanExecutionStrategyValues(), 4, "PhysicalTableScanExecutionStrategy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalTypeValues() {
