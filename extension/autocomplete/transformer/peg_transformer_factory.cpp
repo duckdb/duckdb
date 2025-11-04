@@ -190,6 +190,10 @@ void PEGTransformerFactory::RegisterCreateMacro() {
 	REGISTER_TRANSFORM(TransformSimpleParameter);
 }
 
+void PEGTransformerFactory::RegisterCreateSchema() {
+	REGISTER_TRANSFORM(TransformCreateSchemaStmt);
+}
+
 void PEGTransformerFactory::RegisterCreateSequence() {
 	REGISTER_TRANSFORM(TransformCreateSequenceStmt);
 	REGISTER_TRANSFORM(TransformSequenceOption);
@@ -603,6 +607,8 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCommon();
 	RegisterCopy();
 	RegisterCreateIndex();
+	RegisterCreateMacro();
+	RegisterCreateSchema();
 	RegisterCreateSequence();
 	RegisterCreateTable();
 	RegisterDeallocate();

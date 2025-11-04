@@ -156,6 +156,7 @@ public:
 	void RegisterCopy();
 	void RegisterCreateIndex();
 	void RegisterCreateMacro();
+	void RegisterCreateSchema();
 	void RegisterCreateSequence();
 	void RegisterCreateTable();
 	void RegisterDeallocate();
@@ -368,6 +369,9 @@ private:
 	static vector<unique_ptr<ParsedExpression>> TransformMacroParameters(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformMacroParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformSimpleParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// create_schema.gram
+	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_sequence.gram
 	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,
