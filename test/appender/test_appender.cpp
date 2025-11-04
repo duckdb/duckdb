@@ -788,9 +788,10 @@ TEST_CASE("Appender::Clear() clears the data", "[appender]") {
 	Appender appender(con, "main", "ints");
 
 	// We will append rows to reach more than the maximum chunk size
-	// so we will make sure that also the collection is being cleared
-	// Hardcoded because sometimes it's being overridden in tests
-	const auto rows_to_append = 100000;
+	// (DEFAULT_FLUSH_COUNT will always be more than a chunk size),
+	// so we will make sure that also the collection is being cleared.
+	// We use the DEFAULT_FLUSH_COUNT so we won't flush before calling the `Clear`
+	constexpr auto rows_to_append = BaseAppender::DEFAULT_FLUSH_COUNT - 10;
 
 	for (idx_t i = 0; i < rows_to_append; i++) {
 		appender.AppendRow(i);
