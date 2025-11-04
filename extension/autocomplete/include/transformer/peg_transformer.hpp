@@ -160,6 +160,7 @@ public:
 	void RegisterDelete();
 	void RegisterDetach();
 	void RegisterDrop();
+	void RegisterExport();
 	void RegisterExpression();
 	void RegisterInsert();
 	void RegisterLoad();
@@ -414,6 +415,12 @@ private:
 	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer,
 	                                                     optional_ptr<ParseResult> parse_result);
 	static string TransformDropSecretStorage(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// export.gram
+	static unique_ptr<SQLStatement> TransformExportStatement(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result);
+	static string TransformExportSource(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result);
 
 	// expression.gram
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,
