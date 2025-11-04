@@ -21,7 +21,7 @@ public:
 	//! Padding of the content of the status bar
 	StatusBarPadding padding_type = StatusBarPadding::NO_PADDING;
 	//! In case there is padding (i.e. padding_type is not NO_PADDING) - where to position the content
-	StatusBarAlignment content_alignment = StatusBarAlignment::MIDDLE;
+	StatusBarAlignment content_alignment = StatusBarAlignment::LEFT;
 	//! Display condition, if any
 	string does_not_contain;
 	//! Minimum render size
@@ -33,9 +33,6 @@ public:
 			return;
 		}
 		auto padding_required = min_size.GetIndex() - render_length;
-		if (padding_required < 2) {
-			return;
-		}
 		// need to add at least one space of padding to each side
 		idx_t left_padding;
 		idx_t right_padding;
