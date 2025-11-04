@@ -1008,7 +1008,7 @@ PEGTransformerFactory::TransformCoalesceExpression(PEGTransformer &transformer,
 	for (auto expr : expr_list) {
 		result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnpackExpression(PEGTransformer &transformer,
@@ -1017,7 +1017,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnpackExpression(PE
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
 	result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens));
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(PEGTransformer &transformer,
@@ -1033,7 +1033,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(P
 		result->expr = std::move(expr);
 	}
 	result->columns = true;
-	return result;
+	return std::move(result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExtractExpression(PEGTransformer &transformer,
@@ -1073,7 +1073,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLambdaExpression(PE
 	}
 	auto rhs_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
 	auto result = make_uniq<LambdaExpression>(parameters, std::move(rhs_expr));
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNullIfExpression(PEGTransformer &transformer,
@@ -1086,7 +1086,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNullIfExpression(PE
 	    transformer.Transform<unique_ptr<ParsedExpression>>(nested_list.Child<ListParseResult>(0)));
 	result->children.push_back(
 	    transformer.Transform<unique_ptr<ParsedExpression>>(nested_list.Child<ListParseResult>(2)));
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowExpression(PEGTransformer &transformer,
@@ -1099,7 +1099,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowExpression(PEGTr
 		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	auto func_expr = make_uniq<FunctionExpression>("row", std::move(results));
-	return func_expr;
+	return std::move(func_expr);
 }
 
 unique_ptr<ParsedExpression>

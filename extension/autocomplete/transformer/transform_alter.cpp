@@ -46,7 +46,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTrans
 	auto catalog_name = list_pr.Child<IdentifierParseResult>(2).identifier;
 	auto new_name = list_pr.Child<IdentifierParseResult>(5).identifier;
 	auto result = make_uniq<RenameDatabaseInfo>(catalog_name, new_name, not_found);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransformer &transformer,
@@ -336,13 +336,13 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetSortedBy(PEGTransf
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(3));
 	auto order_by_exprs = transformer.Transform<vector<OrderByNode>>(extract_parens);
 	auto result = make_uniq<SetSortedByInfo>(AlterEntryData(), std::move(order_by_exprs));
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetSortedBy(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
 	vector<OrderByNode> order_by_exprs;
 	auto result = make_uniq<SetSortedByInfo>(AlterEntryData(), std::move(order_by_exprs));
-	return result;
+	return std::move(result);
 }
 } // namespace duckdb
