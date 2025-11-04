@@ -1,0 +1,185 @@
+# name: test/sql/storage/types/variant/test_all_types_single_table.test
+# group: [variant]
+
+load __TEST_DIR__/variant_test_all_types_single_table.db
+
+statement ok
+create table tbl (col VARIANT)
+
+foreach col <all_types_columns>
+
+statement ok
+insert into tbl select "${col}"::VARIANT from test_all_types()
+
+statement ok
+checkpoint
+
+endloop
+
+statement ok
+checkpoint
+
+restart
+
+query I
+select * from tbl
+----
+false
+true
+NULL
+-128
+127
+NULL
+-32768
+32767
+NULL
+-2147483648
+2147483647
+NULL
+-9223372036854775808
+9223372036854775807
+NULL
+-170141183460469231731687303715884105728
+170141183460469231731687303715884105727
+NULL
+0
+340282366920938463463374607431768211455
+NULL
+0
+255
+NULL
+0
+65535
+NULL
+0
+4294967295
+NULL
+0
+18446744073709551615
+NULL
+5877642-06-25 (BC)
+5881580-07-10
+NULL
+00:00:00
+24:00:00
+NULL
+290309-12-22 (BC) 00:00:00
+294247-01-10 04:00:54.775806
+NULL
+290309-12-22 (BC) 00:00:00
+294247-01-10 04:00:54
+NULL
+290309-12-22 (BC) 00:00:00
+294247-01-10 04:00:54.775
+NULL
+1677-09-22 00:00:00
+2262-04-11 23:47:16.854775806
+NULL
+00:00:00+15:59:59
+24:00:00-15:59:59
+NULL
+290309-12-22 (BC) 00:00:00+00
+294247-01-10 04:00:54.775806+00
+NULL
+-3.4028235e+38
+3.4028235e+38
+NULL
+-1.7976931348623157e+308
+1.7976931348623157e+308
+NULL
+-999.9
+999.9
+NULL
+-99999.9999
+99999.9999
+NULL
+-999999999999.999999
+999999999999.999999
+NULL
+-9999999999999999999999999999.9999999999
+9999999999999999999999999999.9999999999
+NULL
+00000000-0000-0000-0000-000000000000
+ffffffff-ffff-ffff-ffff-ffffffffffff
+NULL
+00:00:00
+83 years 3 months 999 days 00:16:39.999999
+NULL
+🦆🦆🦆🦆🦆🦆
+goo\0se
+NULL
+thisisalongblob\x00withnullbytes
+\x00\x00\x00a
+NULL
+0010001001011100010101011010111
+10101
+NULL
+DUCK_DUCK_ENUM
+GOOSE
+NULL
+enum_0
+enum_299
+NULL
+enum_0
+enum_69999
+NULL
+[]
+[42, 999, NULL, NULL, -42]
+NULL
+[]
+[42.0, nan, inf, -inf, NULL, -42.0]
+NULL
+[]
+[1970-01-01, infinity, -infinity, NULL, 2022-05-12]
+NULL
+[]
+[1970-01-01 00:00:00, infinity, -infinity, NULL, 2022-05-12 16:23:45]
+NULL
+[]
+[1970-01-01 00:00:00+00, infinity, -infinity, NULL, 2022-05-12 23:23:45+00]
+NULL
+[]
+[🦆🦆🦆🦆🦆🦆, goose, NULL, ]
+NULL
+[]
+[[], [42, 999, NULL, NULL, -42], NULL, [], [42, 999, NULL, NULL, -42]]
+NULL
+{'a': NULL, 'b': NULL}
+{'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}
+NULL
+{'a': NULL, 'b': NULL}
+{'a': [42, 999, NULL, NULL, -42], 'b': [🦆🦆🦆🦆🦆🦆, goose, NULL, ]}
+NULL
+[]
+[{'a': NULL, 'b': NULL}, {'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}, NULL]
+NULL
+[]
+[{'key': key1, 'value': 🦆🦆🦆🦆🦆🦆}, {'key': key2, 'value': goose}]
+NULL
+Frank
+5
+NULL
+[NULL, 2, 3]
+[4, 5, 6]
+NULL
+[a, NULL, c]
+[d, e, f]
+NULL
+[[NULL, 2, 3], NULL, [NULL, 2, 3]]
+[[4, 5, 6], [NULL, 2, 3], [4, 5, 6]]
+NULL
+[[a, NULL, c], NULL, [a, NULL, c]]
+[[d, e, f], [a, NULL, c], [d, e, f]]
+NULL
+[{'a': NULL, 'b': NULL}, {'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}, {'a': NULL, 'b': NULL}]
+[{'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}, {'a': NULL, 'b': NULL}, {'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}]
+NULL
+{'a': [NULL, 2, 3], 'b': [a, NULL, c]}
+{'a': [4, 5, 6], 'b': [d, e, f]}
+NULL
+[[], [42, 999, NULL, NULL, -42], []]
+[[42, 999, NULL, NULL, -42], [], [42, 999, NULL, NULL, -42]]
+NULL
+[[NULL, 2, 3], [4, 5, 6], [NULL, 2, 3]]
+[[4, 5, 6], [NULL, 2, 3], [4, 5, 6]]
+NULL
