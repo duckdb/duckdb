@@ -14,6 +14,7 @@ add_library_unity(
   transform_create_macro.cpp
   transform_create_schema.cpp
   transform_create_sequence.cpp
+  transform_create_secret.cpp
   transform_create_table.cpp
   transform_deallocate.cpp
   transform_delete.cpp

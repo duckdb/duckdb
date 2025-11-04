@@ -158,6 +158,7 @@ public:
 	void RegisterCreateMacro();
 	void RegisterCreateSchema();
 	void RegisterCreateSequence();
+	void RegisterCreateSecret();
 	void RegisterCreateTable();
 	void RegisterDeallocate();
 	void RegisterDelete();
@@ -372,6 +373,10 @@ private:
 
 	// create_schema.gram
 	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// create_secret.gram
+	static unique_ptr<CreateStatement> TransformCreateSecretStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformSecretStorageSpecifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_sequence.gram
 	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,

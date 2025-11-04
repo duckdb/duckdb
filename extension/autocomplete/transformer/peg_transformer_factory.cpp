@@ -194,6 +194,12 @@ void PEGTransformerFactory::RegisterCreateSchema() {
 	REGISTER_TRANSFORM(TransformCreateSchemaStmt);
 }
 
+void PEGTransformerFactory::RegisterCreateSecret() {
+	// create_secret.gram
+	REGISTER_TRANSFORM(TransformCreateSecretStmt);
+	REGISTER_TRANSFORM(TransformSecretStorageSpecifier);
+}
+
 void PEGTransformerFactory::RegisterCreateSequence() {
 	REGISTER_TRANSFORM(TransformCreateSequenceStmt);
 	REGISTER_TRANSFORM(TransformSequenceOption);
@@ -610,6 +616,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateMacro();
 	RegisterCreateSchema();
 	RegisterCreateSequence();
+	RegisterCreateSecret();
 	RegisterCreateTable();
 	RegisterDeallocate();
 	RegisterDelete();
