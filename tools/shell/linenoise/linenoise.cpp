@@ -115,15 +115,15 @@ TabCompletion Linenoise::TabComplete() const {
 	buf[pos] = prev_char;
 	return result;
 }
+
 /* This is an helper function for linenoiseEdit() and is called when the
  * user types the <tab> key in order to complete the string currently in the
  * input.
  *
  * The state of the editing is encapsulated into the pointed linenoiseState
  * structure as described in the structure definition. */
-int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
-	int nread, nwritten;
-	char c = 0;
+bool Linenoise::CompleteLine(KeyPress &next_key) {
+	int nwritten;
 
 	completion_list = TabComplete();
 	auto &completions = completion_list.completions;
@@ -153,29 +153,27 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				RefreshLine();
 			}
 
-			nread = read(ifd, &c, 1);
-			if (nread <= 0) {
+			KeyPress key_press;
+			if (!TryGetKeyPress(ifd, key_press)) {
 				// no longer completing - clear list of completions
 				completion_list.completions.clear();
-				return -1;
+				return false;
 			}
 
-			Linenoise::Log("\nComplete Character %d\n", (int)c);
-			switch (c) {
+			Linenoise::Log("\nComplete Character %d\n", (int)key_press.action);
+			switch (key_press.action) {
 			case TAB: /* tab */
 				completion_idx = (completion_idx + 1) % completions.size();
 				render_completion_suggestion = true;
 				break;
 			case ESC: { /* escape */
-				auto escape = Terminal::ReadEscapeSequence(ifd);
-				switch (escape) {
+				switch (key_press.sequence) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
 					if (completion_idx == 0) {
 						// pressing shift-tab at the first completion cancels completion
 						RefreshLine();
-						current_sequence = escape;
-						c = ENTER;
+						next_key.action = ENTER;
 						stop = true;
 					} else {
 						completion_idx--;
@@ -185,11 +183,11 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				case EscapeSequence::ESCAPE:
 					/* Re-show original buffer */
 					RefreshLine();
-					current_sequence = escape;
+					next_key = key_press;
 					stop = true;
 					break;
 				default:
-					current_sequence = escape;
+					next_key = key_press;
 					accept_completion = true;
 					stop = true;
 					break;
@@ -213,10 +211,11 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 	}
 	// no longer completing - clear list of completions
 	completion_list.completions.clear();
-	if (c == ENTER) {
-		return 0;
+	if (next_key.action == ENTER) {
+		// if we accepted the completion by pressing ENTER
+		next_key.action = KEY_NULL;
 	}
-	return c; /* Return last read character */
+	return true; /* Return last read character */
 }
 
 bool Linenoise::HandleANSIEscape(const char *buf, size_t len, size_t &cpos) {
@@ -841,7 +840,7 @@ void Linenoise::CancelSearch() {
 	RefreshLine();
 }
 
-char Linenoise::AcceptSearch(char nextCommand) {
+void Linenoise::AcceptSearch() {
 	if (search_index < search_matches.size()) {
 		// if there is a match - copy it into the buffer
 		auto match = search_matches[search_index];
@@ -853,7 +852,6 @@ char Linenoise::AcceptSearch(char nextCommand) {
 		len = history_len;
 	}
 	CancelSearch();
-	return nextCommand;
 }
 
 void Linenoise::PerformSearch() {
@@ -905,12 +903,13 @@ void Linenoise::SearchNext() {
 	}
 }
 
-char Linenoise::Search(char c) {
-	switch (c) {
+KeyPress Linenoise::Search(KeyPress key_press) {
+	switch (key_press.action) {
 	case CTRL_J:
 	case ENTER: /* enter */
 		// accept search and run
-		return AcceptSearch(ENTER);
+		AcceptSearch();
+		return ENTER;
 	case CTRL_R:
 	case CTRL_S:
 		// move to the next match index
@@ -921,7 +920,8 @@ char Linenoise::Search(char c) {
 		switch (escape) {
 		case EscapeSequence::ESCAPE:
 			// double escape accepts search without any additional command
-			return AcceptSearch(0);
+			AcceptSearch();
+			return KEY_NULL;
 		case EscapeSequence::UP:
 			SearchPrev();
 			break;
@@ -929,35 +929,47 @@ char Linenoise::Search(char c) {
 			SearchNext();
 			break;
 		case EscapeSequence::HOME:
-			return AcceptSearch(CTRL_A);
+			AcceptSearch();
+			return CTRL_A;
 		case EscapeSequence::END:
-			return AcceptSearch(CTRL_E);
+			AcceptSearch();
+			return CTRL_E;
 		case EscapeSequence::LEFT:
-			return AcceptSearch(CTRL_B);
+			AcceptSearch();
+			return CTRL_B;
 		case EscapeSequence::RIGHT:
-			return AcceptSearch(CTRL_F);
+			AcceptSearch();
+			return CTRL_F;
 		default:
 			break;
 		}
 		break;
 	}
 	case CTRL_A: // accept search, move to start of line
-		return AcceptSearch(CTRL_A);
+		AcceptSearch();
+		return CTRL_A;
 	case '\t':
 	case CTRL_E: // accept search - move to end of line
-		return AcceptSearch(CTRL_E);
+		AcceptSearch();
+		return CTRL_E;
 	case CTRL_B: // accept search - move cursor left
-		return AcceptSearch(CTRL_B);
+		AcceptSearch();
+		return CTRL_B;
 	case CTRL_F: // accept search - move cursor right
-		return AcceptSearch(CTRL_F);
+		AcceptSearch();
+		return CTRL_F;
 	case CTRL_T: // accept search: swap character
-		return AcceptSearch(CTRL_T);
+		AcceptSearch();
+		return CTRL_T;
 	case CTRL_U: // accept search, clear buffer
-		return AcceptSearch(CTRL_U);
+		AcceptSearch();
+		return CTRL_U;
 	case CTRL_K: // accept search, clear after cursor
-		return AcceptSearch(CTRL_K);
+		AcceptSearch();
+		return CTRL_K;
 	case CTRL_D: // accept search, delete a character
-		return AcceptSearch(CTRL_D);
+		AcceptSearch();
+		return CTRL_D;
 	case CTRL_L:
 		linenoiseClearScreen();
 		break;
@@ -971,7 +983,7 @@ char Linenoise::Search(char c) {
 	case CTRL_G:
 		// abort search
 		CancelSearch();
-		return 0;
+		return KEY_NULL;
 	case BACKSPACE: /* backspace */
 	case CTRL_H:    /* ctrl-h */
 	case CTRL_W:    /* ctrl-w */
@@ -987,13 +999,13 @@ char Linenoise::Search(char c) {
 		break;
 	default:
 		// add input to search buffer
-		search_buf += c;
+		search_buf += key_press.action;
 		// perform the search
 		PerformSearch();
 		break;
 	}
 	RefreshSearch();
-	return 0;
+	return KEY_NULL;
 }
 
 bool Linenoise::AllWhitespace(const char *z) {
@@ -1083,6 +1095,26 @@ void Linenoise::HandleTerminalResize() {
 	}
 }
 
+bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
+	char c;
+	int nread;
+
+	nread = read(ifd, &c, 1);
+	if (nread <= 0) {
+		return false;
+	}
+	has_more_data = Terminal::HasMoreData(ifd);
+	if (!has_more_data) {
+		HandleTerminalResize();
+	}
+	key_press.action = (KEY_ACTION)c;
+	if (key_press.action == ESC) {
+		// for ESC we need to read an escape sequence
+		key_press.sequence = Terminal::ReadEscapeSequence(ifd);
+	}
+	return true;
+}
+
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
  * will be returned ASAP to read().
@@ -1100,35 +1132,27 @@ int Linenoise::Edit() {
 		return -1;
 	}
 	while (true) {
-		EscapeSequence current_sequence = EscapeSequence::INVALID;
-		char c;
-		int nread;
-
-		nread = read(ifd, &c, 1);
-		if (nread <= 0) {
+		KeyPress key_press;
+		if (!TryGetKeyPress(ifd, key_press)) {
 			return len;
 		}
-		has_more_data = Terminal::HasMoreData(ifd);
 		render = true;
 		insert = false;
-		if (!has_more_data) {
-			HandleTerminalResize();
-		}
 
 		if (search) {
-			char ret = Search(c);
-			if (search || ret == '\0') {
+			auto next_action = Search(key_press);
+			if (search || next_action.action == KEY_NULL) {
 				// still searching - continue searching
 				continue;
 			}
 			// run subsequent command
-			c = ret;
+			key_press = next_action;
 		}
 
 		/* Only autocomplete when the callback is set. It returns < 0 when
 		 * there was an error reading from fd. Otherwise it will return the
 		 * character that should be handled next. */
-		if (c == TAB && completionCallback != NULL) {
+		if (key_press.action == TAB && completionCallback != NULL) {
 			if (has_more_data) {
 				// if there is more data, this tab character was added as part of copy-pasting data
 				// instead insert some spaces
@@ -1137,20 +1161,19 @@ int Linenoise::Edit() {
 				}
 				continue;
 			}
-			c = CompleteLine(current_sequence);
-			/* Return on errors */
-			if (c < 0) {
+			if (!CompleteLine(key_press)) {
+				/* Return on errors */
 				return len;
 			}
 			/* Read next character when 0 */
-			if (c == 0) {
+			if (key_press.action == KEY_NULL) {
 				RefreshLine();
 				continue;
 			}
 		}
 
-		Linenoise::Log("%d\n", (int)c);
-		switch (c) {
+		Linenoise::Log("%d\n", (int)key_press.action);
+		switch (key_press.action) {
 		case CTRL_G:
 		case CTRL_J:
 		case ENTER: { /* enter */
@@ -1189,7 +1212,7 @@ int Linenoise::Edit() {
 				if (buf[0] != '.' && !AllWhitespace(buf) && !duckdb_shell::ShellState::SQLIsComplete(buf)) {
 					// not a complete SQL statement yet! continuation
 					pos = len;
-					if (c != CTRL_G) {
+					if (key_press.action != CTRL_G) {
 						// insert "\r\n" at the end if this is enter/ctrl+j
 						if (EditInsertMulti("\r\n")) {
 							return -1;
@@ -1300,15 +1323,7 @@ int Linenoise::Edit() {
 			break;
 		}
 		case ESC: /* escape sequence */ {
-			EscapeSequence escape;
-			if (current_sequence == EscapeSequence::INVALID) {
-				// read escape sequence
-				escape = Terminal::ReadEscapeSequence(ifd);
-			} else {
-				// use stored sequence
-				escape = current_sequence;
-				current_sequence = EscapeSequence::INVALID;
-			}
+			EscapeSequence escape = key_press.sequence;
 			switch (escape) {
 			case EscapeSequence::ALT_LEFT_ARROW:
 				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_START);
@@ -1414,7 +1429,7 @@ int Linenoise::Edit() {
 			// unsupported
 			break;
 		default: {
-			if (EditInsert(c)) {
+			if (EditInsert(key_press.action)) {
 				return -1;
 			}
 			break;

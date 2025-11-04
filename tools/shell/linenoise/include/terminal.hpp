@@ -88,6 +88,22 @@ enum class EscapeSequence {
 	ALT_BACKSLASH,
 };
 
+struct KeyPress {
+	KeyPress() {
+	}
+	KeyPress(KEY_ACTION action)
+	    : // NOLINT: allow implicit conversion from action
+	      action(action) {
+	}
+	KeyPress(EscapeSequence sequence)
+	    : // NOLINT: allow implicit conversion from escape sequence
+	      action(ESC), sequence(sequence) {
+	}
+
+	KEY_ACTION action = KEY_NULL;
+	EscapeSequence sequence = EscapeSequence::INVALID;
+};
+
 struct TerminalSize {
 	int ws_col = 0;
 	int ws_row = 0;

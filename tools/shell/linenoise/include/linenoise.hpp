@@ -84,7 +84,7 @@ public:
 	void HandleTerminalResize();
 
 	void RefreshLine();
-	int CompleteLine(EscapeSequence &current_sequence);
+	bool CompleteLine(KeyPress &next_key);
 	void InsertCharacter(char c);
 	int EditInsert(char c);
 	int EditInsertMulti(const char *c);
@@ -112,7 +112,7 @@ public:
 
 	void StartSearch();
 	void CancelSearch();
-	char AcceptSearch(char nextCommand);
+	void AcceptSearch();
 	void PerformSearch();
 	void SearchPrev();
 	void SearchNext();
@@ -122,7 +122,7 @@ public:
 	bool EditFileWithEditor(const string &file_name, const char *editor);
 #endif
 
-	char Search(char c);
+	KeyPress Search(KeyPress key_press);
 
 	void RefreshMultiLine();
 	void RefreshSingleLine() const;
@@ -182,6 +182,8 @@ public:
 		// nop
 	}
 #endif
+protected:
+	bool TryGetKeyPress(int fd, KeyPress &key_press);
 
 public:
 	int ifd;                                 /* Terminal stdin file descriptor. */

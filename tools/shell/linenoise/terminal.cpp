@@ -4,7 +4,7 @@
 #if defined(_WIN32) || defined(WIN32)
 #include "duckdb/common/windows.hpp"
 #include <io.h>
-#define STDIN_FILENO 0
+#define STDIN_FILENO  0
 #define STDOUT_FILENO 1
 #else
 #include <sys/ioctl.h>
@@ -22,15 +22,15 @@
 
 namespace duckdb {
 
-static int mlmode = 1;              /* Multi line mode. Default is multi line. */
+static int mlmode = 1; /* Multi line mode. Default is multi line. */
 #if defined(_WIN32) || defined(WIN32)
 static HANDLE console_in = nullptr;
 static DWORD old_mode;
 #else
 static struct termios orig_termios; /* In order to restore at exit.*/
 #endif
-static int atexit_registered = 0;   /* Register atexit just 1 time. */
-static int rawmode = 0;             /* For atexit() function to check if restore is needed*/
+static int atexit_registered = 0; /* Register atexit just 1 time. */
+static int rawmode = 0;           /* For atexit() function to check if restore is needed*/
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 
 /* At exit we'll try to fix the terminal to the initial conditions. */
@@ -62,16 +62,15 @@ int Terminal::IsUnsupportedTerm() {
 /* Raw mode: 1960 magic shit. */
 int Terminal::EnableRawMode() {
 #if defined(_WIN32) || defined(WIN32)
-  if (console_in) {
-      // already in raw mode
-      return 0;
-  }
-    console_in = GetStdHandle(STD_INPUT_HANDLE);
+	if (console_in) {
+		// already in raw mode
+		return 0;
+	}
+	console_in = GetStdHandle(STD_INPUT_HANDLE);
 
-    GetConsoleMode(console_in, &old_mode);
-    auto new_mode = old_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT |
-                                     ENABLE_PROCESSED_INPUT);
-    SetConsoleMode(console_in, new_mode);
+	GetConsoleMode(console_in, &old_mode);
+	auto new_mode = old_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+	SetConsoleMode(console_in, new_mode);
 #else
 	int fd = STDIN_FILENO;
 
@@ -197,7 +196,7 @@ int Terminal::EditRaw(char *buf, size_t buflen, const char *prompt) {
 // returns true if there is more data available to read in a particular stream
 int Terminal::HasMoreData(int fd) {
 #if defined(_WIN32) || defined(WIN32)
-    return false;
+	return false;
 #else
 	fd_set rfds;
 	FD_ZERO(&rfds);
