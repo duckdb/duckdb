@@ -11,7 +11,7 @@ FROM sniff_csv('{DATA_DIR}/csv/14512.csv', names := [NULL]);
 Binder Error: read_csv names parameter cannot have a NULL value
 
 statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+create table all_types as select * exclude(time_ns, small_enum, medium_enum, large_enum) from test_all_types() limit 0;
 
 statement error
 SELECT DISTINCT NULL, c3, (c4 <= c1), (c3 BETWEEN c4 AND c2)
