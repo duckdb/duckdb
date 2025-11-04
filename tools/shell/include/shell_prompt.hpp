@@ -42,6 +42,7 @@ private:
 	string HandleColor(const PromptComponent &component);
 	string HandleSetting(ShellState &state, const PromptComponent &component);
 	string HandleText(ShellState &state, const string &text, idx_t &length);
+	string ExecuteSQL(ShellState &state, const string &query);
 };
 
 } // namespace duckdb_shell

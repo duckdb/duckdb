@@ -247,6 +247,26 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 	return truncated_text;
 }
 
+string Prompt::ExecuteSQL(ShellState &state, const string &query) {
+	string query_result;
+	auto exec_result = state.ExecuteSQLSingleValue(query, query_result);
+	switch (exec_result) {
+	case ExecuteSQLSingleValueResult::SUCCESS:
+		return query_result;
+	case ExecuteSQLSingleValueResult::EMPTY_RESULT:
+		return "#EMPTY#";
+	case ExecuteSQLSingleValueResult::MULTIPLE_ROWS:
+		return "#MULTIPLE_ROWS#";
+	case ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS:
+		return "#MULTIPLE_COLUMNS#";
+	case ExecuteSQLSingleValueResult::NULL_RESULT:
+		return "#NULL#";
+	case ExecuteSQLSingleValueResult::EXECUTION_ERROR:
+	default:
+		return "#ERROR";
+	}
+}
+
 string Prompt::GeneratePrompt(ShellState &state) {
 	string prompt;
 	idx_t length = 0;
@@ -256,8 +276,8 @@ string Prompt::GeneratePrompt(ShellState &state) {
 			prompt += HandleText(state, component.literal, length);
 			break;
 		case PromptComponentType::SQL: {
-			auto query_result = state.EvaluateSQL(component.literal);
-			prompt += HandleText(state, query_result, length);
+			auto result = ExecuteSQL(state, component.literal);
+			prompt += HandleText(state, result, length);
 			break;
 		}
 		case PromptComponentType::SET_COLOR:
@@ -289,7 +309,7 @@ void Prompt::PrintPrompt(ShellState &state, PrintOutput output) {
 			highlight.PrintText(HandleText(state, component.literal, length), output, color, intensity);
 			break;
 		case PromptComponentType::SQL: {
-			auto result = state.EvaluateSQL(component.literal);
+			auto result = ExecuteSQL(state, component.literal);
 			highlight.PrintText(HandleText(state, result, length), output, color, intensity);
 			break;
 		}
