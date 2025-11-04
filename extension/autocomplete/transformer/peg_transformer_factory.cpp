@@ -309,6 +309,10 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformPositionExpression);
 }
 
+void PEGTransformerFactory::RegisterImport() {
+	REGISTER_TRANSFORM(TransformImportStatement);
+}
+
 void PEGTransformerFactory::RegisterInsert() {
 	// insert.gram
 	REGISTER_TRANSFORM(TransformInsertStatement);
@@ -551,6 +555,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterDetach();
 	RegisterDrop();
 	RegisterExpression();
+	RegisterImport();
 	RegisterInsert();
 	RegisterLoad();
 	RegisterSelect();

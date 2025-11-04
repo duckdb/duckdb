@@ -574,6 +574,10 @@ private:
 	static unique_ptr<ParsedExpression> TransformPositionExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 
+	// import.gram
+	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result);
+
 	// insert.gram
 	static unique_ptr<SQLStatement> TransformInsertStatement(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
