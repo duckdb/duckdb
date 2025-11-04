@@ -352,7 +352,7 @@ public:
 
 	//! The maximum number of chunks that we will scan for each state
 	idx_t MaximumChunks() const {
-		return LeftChunks() + RightChunks();
+		return MaxValue(LeftChunks(), RightChunks());
 	}
 
 	//! Try to move to the next stage
@@ -479,7 +479,6 @@ bool AsOfHashGroup::TryNextTask(AsOfSourceTask &task) {
 		if (next_task < stage_begin[stage]) {
 			task.stage = AsOfJoinSourceStage(stage - 1);
 			task.thread_idx = next_task - stage_begin[size_t(task.stage)];
-			task.max_idx = stage_tasks[size_t(task.stage)];
 			break;
 		}
 	}
@@ -496,18 +495,21 @@ bool AsOfHashGroup::TryNextTask(AsOfSourceTask &task) {
 	case AsOfJoinSourceStage::MATERIALIZE:
 		if (!left_group || !right_group) {
 			task.begin_idx = task.thread_idx * per_thread;
+			task.max_idx = LeftChunks() + RightChunks();
 			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 		}
 		break;
 	case AsOfJoinSourceStage::LEFT:
 		if (left_group) {
 			task.begin_idx = task.thread_idx * per_thread;
+			task.max_idx = LeftChunks();
 			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 		}
 		break;
 	case AsOfJoinSourceStage::RIGHT:
 		if (right_group) {
 			task.begin_idx = task.thread_idx * per_thread;
+			task.max_idx = RightChunks();
 			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 		}
 		break;
@@ -1449,7 +1451,7 @@ void AsOfLocalSourceState::ExecuteMaterializeTask(ExecutionContext &context, Dat
 	auto &asof_group = *gsource.asof_groups[task_local.group_idx];
 
 	//	Left or right?
-	const idx_t child = task_local.thread_idx >= asof_group.LeftChunks();
+	const idx_t child = task_local.begin_idx >= asof_group.LeftChunks();
 	const auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
 	auto &hashed_sort = *gsink.hashed_sorts[child];
 	auto &hashed_source = *gsource.hashed_sources[child];
