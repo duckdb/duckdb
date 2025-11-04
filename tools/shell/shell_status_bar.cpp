@@ -116,6 +116,13 @@ protected:
 		}
 		return Prompt::HandleSetting(state, component);
 	}
+
+	duckdb::Connection &GetConnection(ShellState &state) override {
+		if (!status_bar.connection) {
+			status_bar.connection = make_uniq<duckdb::Connection>(*state.db);
+		}
+		return *status_bar.connection;
+	}
 };
 
 StatusBar::StatusBar() {
@@ -177,8 +184,8 @@ void ShellStatusBarDisplay::PrintProgressInternal(int32_t percentage, double est
 	// clear previous display
 	result += "\r\x1b[0K";
 	if (!is_finished) {
+		auto &state = ShellState::Get();
 		try {
-			auto &state = ShellState::Get();
 			state.status_bar->percentage = percentage;
 			state.status_bar->estimated_remaining_seconds = estimated_remaining_seconds;
 			result += state.status_bar->GenerateStatusBar(state);
@@ -186,6 +193,7 @@ void ShellStatusBarDisplay::PrintProgressInternal(int32_t percentage, double est
 			ErrorData error(ex);
 			result += error.Message();
 		}
+		state.status_bar->connection.reset();
 	}
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
 }

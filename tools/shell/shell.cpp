@@ -2207,8 +2207,8 @@ bool ShellState::ImportData(const vector<string> &args) {
 	return true;
 }
 
-ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql, string &result_value) {
-	auto &con = *conn;
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql,
+                                                              string &result_value) {
 	auto result = con.Query(sql);
 	if (result->HasError()) {
 		// store error in the result
@@ -2236,6 +2236,10 @@ ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql,
 	}
 	result_value = value.ToString();
 	return ExecuteSQLSingleValueResult::SUCCESS;
+}
+
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql, string &result_value) {
+	return ExecuteSQLSingleValue(*conn, sql, result_value);
 }
 
 bool ShellState::OpenDatabase(const vector<string> &args) {
@@ -3276,13 +3280,12 @@ void ShellState::Initialize() {
 	default_prompt =
 	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
-	status_bar = make_uniq<StatusBar>();
 	string default_status_bar;
 	default_status_bar = "{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}";
 	default_status_bar +=
 	    "{component}{align:right}{min_size:18}{display_if_not_contains:0 bytes}Written: {setting:bytes_written}";
 	default_status_bar +=
-	    "{component}{align:right}{min_size:15){display_if_not_contains:0 bytes}Read: {setting:bytes_read}";
+	    "{component}{align:right}{min_size:15}{display_if_not_contains:0 bytes}Read: {setting:bytes_read}";
 	default_status_bar += "{component}{align:right}{min_size:17}Memory: {setting:memory_usage}";
 	default_status_bar +=
 	    "{component}{align:right}{min_size:15}{display_if_not_contains:0 bytes}Swap: {setting:swap_usage}";

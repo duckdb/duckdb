@@ -1,6 +1,7 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 #include "shell_prompt.hpp"
+#include "shell_status_bar.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -292,6 +293,13 @@ MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 4) {
 		ShellState::SetPrompt(state.continuePromptSelected, args[3]);
 	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetProgressBar(ShellState &state, const vector<string> &args) {
+	auto new_status_bar = make_uniq<StatusBar>();
+	new_status_bar->ParseStatusBar(args[1]);
+	state.status_bar = std::move(new_status_bar);
 	return MetadataResult::SUCCESS;
 }
 
@@ -735,6 +743,7 @@ static const MetadataCommand metadata_commands[] = {
      "If FILE begins with '|' then open as a pipe\n\t--bom\tPut a UTF8 byte-order mark at the beginning\n\t-e\tSend "
      "output to the system text editor\n\t-x\tSend output as CSV to a spreadsheet (same as \".excel\")"},
     {"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3, ""},
+    {"progress_bar", 2, SetProgressBar, "Configure the progress bar display"},
     {"prompt", 0, SetPrompt, "MAIN CONTINUE", "Replace the standard prompts", 0, ""},
 
     {"quit", 0, QuitProcess, "", "Exit this program", 0, ""},

@@ -298,7 +298,8 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 
 string Prompt::ExecuteSQL(ShellState &state, const string &query) {
 	string query_result;
-	auto exec_result = state.ExecuteSQLSingleValue(query, query_result);
+	auto &con = GetConnection(state);
+	auto exec_result = state.ExecuteSQLSingleValue(con, query, query_result);
 	switch (exec_result) {
 	case ExecuteSQLSingleValueResult::SUCCESS:
 		return query_result;

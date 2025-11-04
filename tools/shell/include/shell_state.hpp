@@ -346,6 +346,7 @@ public:
 	SuccessState ExecuteQuery(const string &query);
 	//! Execute a SQL query and extracts a single string value
 	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(const string &sql, string &result);
+	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql, string &result_value);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
 	SuccessState RenderQuery(RowRenderer &renderer, const string &query);
