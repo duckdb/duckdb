@@ -39,8 +39,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaAssign(PEGTransfo
 	if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
 		return std::move(result);
 	}
-	auto set_statement =
-		make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
+
 	return std::move(set_statement);
 }
 
@@ -52,7 +51,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaFunction(PEGTrans
 	result->info->name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto &optional_parameters_pr = list_pr.Child<OptionalParseResult>(1);
 	if (optional_parameters_pr.HasResult()) {
-		auto parameters = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(optional_parameters_pr.optional_result);
+		auto parameters =
+		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(optional_parameters_pr.optional_result);
 		for (auto &parameter : parameters) {
 			if (parameter->GetExpressionType() == ExpressionType::COLUMN_REF) {
 				auto &colref = parameter->Cast<ColumnRefExpression>();
