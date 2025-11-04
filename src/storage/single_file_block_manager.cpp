@@ -365,7 +365,9 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
 	if (encryption_enabled) {
 		if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
-			throw InvalidConfigurationException("The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.");
+			throw InvalidConfigurationException(
+			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
+			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.");
 		}
 	}
 
@@ -496,7 +498,10 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 
 			//! Check if our encryption module can write, if not, we should throw here
 			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
-				throw InvalidConfigurationException("The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD httpfs`.");
+				throw InvalidConfigurationException(
+				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
+				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
+				    "httpfs`.");
 			}
 
 			//! Check if the given key upon attach is correct
@@ -519,13 +524,15 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			                       EncryptionTypes::CipherToString(stored_cipher));
 		}
 
-		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation of the cipher used instead
-		// of this trick to avoid downgrades
+		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation
+		// of the cipher used instead of this trick to avoid downgrades
 		if (stored_cipher != EncryptionTypes::GCM) {
 			if (config_cipher == EncryptionTypes::INVALID) {
-				throw CatalogException("Cannot open encrypted database \"%s\" without explicitly specifying the "
-						   "encryption cipher for security reasons. Please make sure you understand the security implications "
-						   "and re-attach the database specifying the desired cipher.", path);
+				throw CatalogException(
+				    "Cannot open encrypted database \"%s\" without explicitly specifying the "
+				    "encryption cipher for security reasons. Please make sure you understand the security implications "
+				    "and re-attach the database specifying the desired cipher.",
+				    path);
 			}
 		}
 

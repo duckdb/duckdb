@@ -19,7 +19,8 @@ EncryptionKey::EncryptionKey(data_ptr_t encryption_key_p) {
 	D_ASSERT(memcmp(key, encryption_key_p, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH) == 0);
 
 	// zero out the encryption key in memory
-	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(encryption_key_p, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(encryption_key_p,
+	                                                                 MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	LockEncryptionKey(key);
 }
 
