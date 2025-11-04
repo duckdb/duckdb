@@ -131,14 +131,10 @@ public:
 
 	void Print() const {
 		Printer::Print(OutputStream::STREAM_STDOUT, string("State Machine Options"));
-		Printer::Print(OutputStream::STREAM_STDOUT,
-		               string("Delim: ") + state_machine_options.delimiter.FormatValue());
-		Printer::Print(OutputStream::STREAM_STDOUT,
-		               string("Quote: ") + state_machine_options.quote.FormatValue());
-		Printer::Print(OutputStream::STREAM_STDOUT,
-		               string("Escape: ") + state_machine_options.escape.FormatValue());
-		Printer::Print(OutputStream::STREAM_STDOUT,
-		               string("Comment: ") + state_machine_options.comment.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Delim: ") + state_machine_options.delimiter.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Quote: ") + state_machine_options.quote.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Escape: ") + state_machine_options.escape.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Comment: ") + state_machine_options.comment.FormatValue());
 		Printer::Print(OutputStream::STREAM_STDOUT, string("---------------------"));
 	}
 	//! The Transition Array is a Finite State Machine
