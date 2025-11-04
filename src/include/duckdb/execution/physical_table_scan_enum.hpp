@@ -1,17 +1,22 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/explain_format.hpp
+// duckdb/common/enums/physical_table_scan_enum.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/typedefs.hpp"
+#include <stdint.h>
 
 namespace duckdb {
 
-enum class ExplainFormat : uint8_t { DEFAULT, TEXT, JSON, HTML, GRAPHVIZ, YAML, MERMAID };
+enum class PhysicalTableScanExecutionStrategy : uint8_t {
+	DEFAULT,
+	TASK_EXECUTOR,
+	SYNCHRONOUS,
+	TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS
+};
 
-} // namespace duckdb
+}; // namespace duckdb

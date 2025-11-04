@@ -34,6 +34,11 @@ enum class AttachedDatabaseType {
 
 enum class AttachVisibility { SHOWN, HIDDEN };
 
+//! DEFAULT is the standard ACID crash recovery mode.
+//! NO_WAL_WRITES disables the WAL for the attached database, i.e., disabling the D in ACID.
+//! Use this mode with caution, as it disables recovery from crashes for the file.
+enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
+
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
@@ -58,6 +63,8 @@ struct AttachOptions {
 
 	//! Defaults to the access mode configured in the DBConfig, unless specified otherwise.
 	AccessMode access_mode;
+	//! The recovery type of the database.
+	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	//! The file format type. The default type is a duckdb database file, but other file formats are possible.
 	string db_type;
 	//! Set of remaining (key, value) options
@@ -116,6 +123,9 @@ public:
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
 	void OnDetach(ClientContext &context);
+	RecoveryMode GetRecoveryMode() const {
+		return recovery_mode;
+	}
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
@@ -133,6 +143,7 @@ private:
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
 	optional_ptr<StorageExtension> storage_extension;
+	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;

@@ -14,6 +14,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/execution/physical_table_scan_enum.hpp"
 
 namespace duckdb {
 
