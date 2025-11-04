@@ -213,6 +213,7 @@ public:
 	idx_t completion_idx;                    //! Index in set of tab completions
 	idx_t rendered_completion_lines;         //! The number of completion lines rendered
 	bool render_completion_suggestion;       //! Whether or not to render auto-complete suggestions
+	string remaining_characters;             //! Remaining characters that haven't been consumed yet
 };
 
 } // namespace duckdb

@@ -1096,11 +1096,19 @@ void Linenoise::HandleTerminalResize() {
 
 bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 #if defined(_WIN32) || defined(WIN32)
+    if (!remaining_characters.empty()) {
+        // there are still characters left to consume
+        key_press.action = (KEY_ACTION) remaining_characters[0];
+        remaining_characters = remaining_characters.substr(1);
+            Linenoise::Log("Consumed 1 byte, leaving %d bytes to be processed", int(remaining_characters.size()));
+        return true;
+    }
   INPUT_RECORD rec;
   DWORD count;
-  int modifierKeys = 0;
   while (true) {
-    ReadConsoleInput(Terminal::GetConsoleInput(), &rec, 1, &count);
+    if (!ReadConsoleInputW(Terminal::GetConsoleInput(), &rec, 1, &count)) {
+        return false;
+    }
     if (rec.EventType == WINDOW_BUFFER_SIZE_EVENT) {
         // resizing buffer - handle resize and continue processing
 		HandleTerminalResize();
@@ -1117,7 +1125,6 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
     }
     bool control_pressed = false;
     bool alt_pressed = false;
-    modifierKeys = 0;
     Linenoise::Log("Unicode character %d, ascii character %d", key_event.uChar.UnicodeChar, key_event.uChar.AsciiChar);
 
     if ((key_event.dwControlKeyState &
@@ -1135,6 +1142,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
       alt_pressed = true;
     }
     if (key_event.uChar.UnicodeChar == 0) {
+            Linenoise::Log("Virtual code");
       switch (key_event.wVirtualKeyCode) {
         case VK_LEFT:
             key_press.action = ESC;
@@ -1186,28 +1194,49 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
           continue;  // in raw mode, ReadConsoleInput shows shift, ctrl ...
       }              //  ... ignore them
     } else {
-        if (key_event.uChar.AsciiChar != 0) {
+        // we got a character - handle it
+        // we need to convert from unicode to UTF8 first
+        auto wc = key_event.uChar.UnicodeChar;
+        char utf8[20] = {0};
+        int len = WideCharToMultiByte(
+            CP_UTF8,           // Target code page (UTF-8)
+            0,                 // Flags
+            &wc,               // Input UTF-16 string
+           1,                 // One wchar_t
+            utf8,              // Output buffer
+            sizeof(utf8),      // Output buffer size
+            NULL, NULL
+        );
+        if (len == 1 && utf8[0] > 0 && utf8[0] <= BACKSPACE) {
+            char c = utf8[0];
+            // ascii character
             if (alt_pressed && !control_pressed) {
                 // support ALT codes
-                if (key_event.uChar.AsciiChar >= 'a' && key_event.uChar.AsciiChar <= 'z') {
-                    key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (key_event.uChar.AsciiChar - 'a'));
+                if (c >= 'a' && c <= 'z') {
+                    key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'a'));
                 } else if (key_event.uChar.AsciiChar >= 'A' && key_event.uChar.AsciiChar <= 'Z') {
-                    key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (key_event.uChar.AsciiChar - 'A'));
-                } else if (key_event.uChar.AsciiChar == BACKSPACE) {
+                    key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'A'));
+                } else if (c == BACKSPACE) {
                     key_press.sequence = EscapeSequence::ALT_BACKSPACE;
-                } else if (key_event.uChar.AsciiChar == '\\') {
+                } else if (c == '\\') {
                     key_press.sequence = EscapeSequence::ALT_BACKSLASH;
                 }
             }
             if (key_press.sequence != EscapeSequence::INVALID) {
                 key_press.action = ESC;
             } else {
-                key_press.action = (KEY_ACTION) key_event.uChar.AsciiChar;
+                key_press.action = (KEY_ACTION) c;
             }
             return true;
         }
-      // we got a real character, return it
-      continue;
+        // unicode character - these can consist of multiple bytes
+        // return the first byte and buffer the remaining bytes
+        remaining_characters = string(utf8, len);
+        Linenoise::Log("UTF8 %s", remaining_characters.c_str());
+        key_press.action = (KEY_ACTION) remaining_characters[0];
+        remaining_characters = remaining_characters.substr(1);
+        Linenoise::Log("Leaving %d bytes to be processed", int(remaining_characters.size()));
+        return true;
     }
   }
   return true;
@@ -1563,7 +1592,7 @@ void Linenoise::LogMessageRecursive(const string &msg, std::vector<ExceptionForm
 	if (!lndebug_fp) {
         string path;
 #if defined(_WIN32) || defined(WIN32)
-        path = GetTemporaryDirectory();
+        path = GetTemporaryDirectory() + "\\lndebug.txt";
 #else
         path = "/tmp/lndebug.txt";
 #endif

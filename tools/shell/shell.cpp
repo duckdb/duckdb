@@ -3291,8 +3291,8 @@ void ShellState::Initialize() {
 	for (auto &component : default_components) {
 		progress_bar->AddComponent(component);
 	}
-	strcpy(continuePrompt, "\xC2\xB7 ");
-	strcpy(continuePromptSelected, "\xE2\x80\xA3 ");
+	strcpy(continuePrompt, "· ");
+	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
 	linenoiseSetPrompt(continuePrompt, continuePromptSelected);
 #endif
