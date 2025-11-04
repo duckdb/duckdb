@@ -183,3 +183,13 @@ NULL
 [[NULL, 2, 3], [4, 5, 6], [NULL, 2, 3]]
 [[4, 5, 6], [NULL, 2, 3], [4, 5, 6]]
 NULL
+
+query I
+select col from tbl where variant_typeof(col).starts_with('OBJECT')
+----
+{'a': NULL, 'b': NULL}
+{'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}
+{'a': NULL, 'b': NULL}
+{'a': [42, 999, NULL, NULL, -42], 'b': [🦆🦆🦆🦆🦆🦆, goose, NULL, ]}
+{'a': [NULL, 2, 3], 'b': [a, NULL, c]}
+{'a': [4, 5, 6], 'b': [d, e, f]}
