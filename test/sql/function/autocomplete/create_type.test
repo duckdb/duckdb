@@ -5,21 +5,21 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('CREATE TY') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TY') LIMIT 1;
 ----
 TYPE 	7
 
 query II
-FROM sql_auto_complete('CREATE TYPE my_type AS ENU') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TYPE my_type AS ENU') LIMIT 1;
 ----
 ENUM	23
 
 query II
-FROM sql_auto_complete('CREATE TYPE my_type AS TIME WITH TI') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TYPE my_type AS TIME WITH TI') LIMIT 1;
 ----
 TIME 	33
 
 query II
-FROM sql_auto_complete('CREATE TYPE my_type AS ROW(ts TIMESTAMP WITH TIME ZON') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TYPE my_type AS ROW(ts TIMESTAMP WITH TIME ZON') LIMIT 1;
 ----
 ZONE 	50

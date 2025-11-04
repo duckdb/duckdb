@@ -3134,16 +3134,11 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	auto &state = ShellState::Get();
 	try {
 		idx_t nLine = ShellState::StringLength(zLine);
-		char zBuf[1000];
-
-		if (nLine > sizeof(zBuf) - 30) {
-			return;
-		}
 		if (zLine[0] == '.') {
 			// auto-complete dot command
 			auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
 			for (auto &completion : dot_completions) {
-				linenoiseAddCompletion(lc, completion.c_str());
+				linenoiseAddCompletion(lc, zLine, completion.c_str(), completion.size(), nLine, "keyword");
 			}
 			return;
 		}
@@ -3158,20 +3153,12 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			state.OpenDB();
 		}
 		auto &con = *state.conn;
-		bool copiedSuggestion = false;
 		auto result = con.Query(zSql);
 		for (auto &row : *result) {
 			auto zCompletion = row.GetValue<string>(0);
-			auto nCompletion = zCompletion.size();
 			idx_t iStart = row.GetValue<idx_t>(1);
-			if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
-				if (!copiedSuggestion) {
-					memcpy(zBuf, zLine, iStart);
-					copiedSuggestion = true;
-				}
-				memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
-				linenoiseAddCompletion(lc, zBuf);
-			}
+			auto completion_type = row.GetValue<string>(2);
+			linenoiseAddCompletion(lc, zLine, zCompletion.c_str(), zCompletion.size(), iStart, completion_type.c_str());
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
