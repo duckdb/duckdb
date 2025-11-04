@@ -18,7 +18,7 @@ set temp_directory='__TEST_DIR__/max_swap_space_reached'
 
 # Ensure the temp_directory is used
 statement ok
-PRAGMA memory_limit='3MiB'
+PRAGMA memory_limit='1024KiB'
 
 # Zero blocks
 statement ok
@@ -73,7 +73,7 @@ CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 failed to offload data block
 
 query I
-SELECT CASE WHEN sum("size") > 900_000 THEN true ELSE CONCAT('Expected size 900000, but got ', sum("size"))::UNION(msg VARCHAR, b BOOLEAN) END FROM duckdb_temporary_files();
+SELECT CASE WHEN sum("size") > 1000000 THEN true ELSE CONCAT('Expected size 1000000, but got ', sum("size"))::UNION(msg VARCHAR, b BOOLEAN) END FROM duckdb_temporary_files();
 ----
 true
 
