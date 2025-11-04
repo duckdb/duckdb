@@ -275,6 +275,7 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::ALTER_STATEMENT:
 					case StatementType::PRAGMA_STATEMENT:
 					case StatementType::COPY_DATABASE_STATEMENT:
+					case StatementType::CREATE_STATEMENT:
 						is_supported = true;
 						break;
 					default:

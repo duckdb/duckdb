@@ -1,4 +1,4 @@
-CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?
+CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList?
 
 WithList <- 'WITH' Parens(List(RelOption)) / Oids
 Oids <- ('WITH' / 'WITHOUT') 'OIDS'

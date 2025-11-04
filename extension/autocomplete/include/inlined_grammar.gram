@@ -748,8 +748,7 @@ CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? Pa
 
 SecretStorageSpecifier <- 'IN' Identifier
 
-CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? 'AS' SelectStatement
-
+CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? 'AS' SelectStatementInternal
 DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
 
 ShowSelect <- ShowOrDescribeOrSummarize SelectStatement
@@ -806,13 +805,17 @@ PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
 
 TypeList <- Parens(List(Type))
 
-CreateStatement <- 'CREATE' OrReplace? Temporary? (CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt)
+CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
+CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt
 OrReplace <- 'OR' 'REPLACE'
-Temporary <- 'TEMP' / 'TEMPORARY' / 'PERSISTENT'
+Temporary <- Persistent / TempPersistent / TemporaryPersistent
+Persistent <- 'PERSISTENT'
+TempPersistent <- 'TEMP'
+TemporaryPersistent <- 'TEMPORARY'
 
 CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
 
-CreateTableAs <- IdentifierList? 'AS' SelectStatement WithData?
+CreateTableAs <- IdentifierList? 'AS' SelectStatementInternal WithData?
 WithData <- 'WITH' 'NO'? 'DATA'
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)
@@ -876,7 +879,7 @@ GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete
 PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'
 
-CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?
+CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList?
 
 WithList <- 'WITH' Parens(List(RelOption)) / Oids
 Oids <- ('WITH' / 'WITHOUT') 'OIDS'
@@ -1114,11 +1117,10 @@ TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
 TargetOptAlias <- BaseTableName 'AS'? ColId?
 DeleteUsingClause <- 'USING' List(TableRef)
 
-CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
-CreateType <- ('ENUM' Parens(SelectStatement)) /
-              ('ENUM' Parens(List(StringLiteral))) /
-              Type
-
+CreateTypeStmt <- 'TYPE'i IfNotExists? QualifiedName 'AS' CreateType
+CreateType <- EnumSelectType / EnumStringLiteralList / Type
+EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
+EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral))
 SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
@@ -1224,7 +1226,7 @@ SetSequenceOption <- List(SequenceOption)
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'RENAME' 'TO' Identifier
 
-CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
+CreateSequenceStmt <- 'SEQUENCE'i IfNotExists? QualifiedName SequenceOption*
 
 SequenceOption <-
 	SeqSetCycle /
@@ -1241,10 +1243,9 @@ SeqNoMinMax <- 'NO' SeqMinOrMax
 SeqStartWith <- 'START' 'WITH'? Expression
 SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
 
-
-SeqMinOrMax <- 'MINVALUE' / 'MAXVALUE'
-
-
+SeqMinOrMax <- MinValue / MaxValue
+MinValue <- 'MINVALUE'
+MaxValue <- 'MAXVALUE'
 Statement <-
 	CreateStatement /
 	SelectStatement /
@@ -1409,10 +1410,11 @@ MacroOrFunction <- 'MACRO' / 'FUNCTION'
 MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
 
 MacroParameters <- List(MacroParameter)
-MacroParameter <- NamedParameter / (TypeFuncName Type?)
+MacroParameter <- NamedParameter / SimpleParameter
+SimpleParameter <- TypeFuncName
 
 ScalarMacroDefinition <- Expression
-TableMacroDefinition <- 'TABLE' SelectStatement
+TableMacroDefinition <- 'TABLE' SelectStatementInternal
 
 CommentStatement <- 'COMMENT' 'ON' CommentOnType DottedIdentifier 'IS' CommentValue
 

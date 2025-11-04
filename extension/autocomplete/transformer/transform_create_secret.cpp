@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<CreateStatement>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
@@ -19,7 +20,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEG
 	}
 	auto options_pr = list_pr.Child<ListParseResult>(4);
 	auto generic_options_list = ExtractResultFromParens(options_pr);
-	auto option_list =  transformer.Transform<unordered_map<string, vector<Value>>>(generic_options_list);
+	auto option_list = transformer.Transform<unordered_map<string, vector<Value>>>(generic_options_list);
 	for (auto option : option_list) {
 		auto lower_name = StringUtil::Lower(option.first);
 		if (lower_name == "scope") {
@@ -40,7 +41,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEG
 	return result;
 }
 
-string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer,
+                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(1).identifier;
 }
