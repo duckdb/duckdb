@@ -13,7 +13,6 @@
 #include "duckdb/common/unicode_bar.hpp"
 #include "duckdb/common/progress_bar/unscented_kalman_filter.hpp"
 #include <chrono>
-#include <thread>
 
 namespace duckdb {
 
@@ -31,20 +30,6 @@ struct TerminalProgressBarDisplayedProgressInfo {
 };
 
 class TerminalProgressBarDisplay : public ProgressBarDisplay {
-private:
-	UnscentedKalmanFilter ukf;
-	std::chrono::steady_clock::time_point start_time;
-
-	// track the progress info that has been previously
-	// displayed to prevent redundant updates
-	struct TerminalProgressBarDisplayedProgressInfo displayed_progress_info;
-
-	double GetElapsedDuration() {
-		auto now = std::chrono::steady_clock::now();
-		return std::chrono::duration<double>(now - start_time).count();
-	}
-	void StopPeriodicUpdates();
-
 public:
 	TerminalProgressBarDisplay() {
 		start_time = std::chrono::steady_clock::now();
@@ -59,9 +44,6 @@ public:
 	void Finish() override;
 
 private:
-	std::mutex mtx;
-	std::thread periodic_update_thread;
-	std::condition_variable cv;
 	void PeriodicUpdate();
 
 	static constexpr const idx_t PARTIAL_BLOCK_COUNT = UnicodeBar::PartialBlocksCount();
@@ -83,6 +65,19 @@ private:
 private:
 	static int32_t NormalizePercentage(double percentage);
 	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds, bool is_finished = false);
+	double GetElapsedDuration() {
+		auto now = std::chrono::steady_clock::now();
+		return std::chrono::duration<double>(now - start_time).count();
+	}
+	void StopPeriodicUpdates();
+
+private:
+	UnscentedKalmanFilter ukf;
+	std::chrono::steady_clock::time_point start_time;
+
+	// track the progress info that has been previously
+	// displayed to prevent redundant updates
+	struct TerminalProgressBarDisplayedProgressInfo displayed_progress_info;
 };
 
 } // namespace duckdb
