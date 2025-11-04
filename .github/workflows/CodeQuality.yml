@@ -94,11 +94,9 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: reviewdog/action-suggester@v1
         with:
+          github_token: ${{ secrets.GH_TOKEN }}
           fail_level: info
           cleanup: false
-          # Note: For PRs from forks, reviewdog will use annotations as a fallback
-          # since the GITHUB_TOKEN doesn't have write permissions for security reasons
-          reporter: github-pr-review
 
       - name: Show diff
         run: |
