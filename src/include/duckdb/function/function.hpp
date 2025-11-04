@@ -177,7 +177,7 @@ public:
 
 public:
 	void SetReturnType(LogicalType return_type_p) {
-		return_type = return_type_p;
+		return_type = std::move(return_type_p);
 	}
 	const LogicalType &GetReturnType() const {
 		return return_type;
