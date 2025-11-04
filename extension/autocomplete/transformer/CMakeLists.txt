@@ -16,6 +16,8 @@ add_library_unity(
   transform_create_sequence.cpp
   transform_create_secret.cpp
   transform_create_table.cpp
+  transform_create_view.cpp
+  transform_create_type.cpp
   transform_deallocate.cpp
   transform_delete.cpp
   transform_detach.cpp

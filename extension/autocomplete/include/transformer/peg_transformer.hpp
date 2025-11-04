@@ -162,6 +162,8 @@ public:
 	void RegisterCreateSequence();
 	void RegisterCreateSecret();
 	void RegisterCreateTable();
+	void RegisterCreateType();
+	void RegisterCreateView();
 	void RegisterDeallocate();
 	void RegisterDelete();
 	void RegisterDetach();
@@ -452,6 +454,17 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformDefaultValue(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
+
+	// create_type.gram
+	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer,
+																		 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<CreateTypeInfo> TransformCreateType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformEnumSelectType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LogicalType TransformEnumStringLiteralList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// create_view.gram
+	static unique_ptr<CreateStatement> TransformCreateViewStmt(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result);
 
 	// deallocate.gram
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,

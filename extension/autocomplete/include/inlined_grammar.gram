@@ -964,16 +964,21 @@ OnConflictNothing <- 'DO' 'NOTHING'
 ReturningClause <- 'RETURNING' TargetList
 
 CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
-SelectStatement <- SelectOrParens (SetopClause SelectStatement)* ResultModifiers
-
+SelectStatement <- SelectStatementInternal
+SelectStatementInternal <- SelectOrParens RepeatSetopSelect* ResultModifiers?
+RepeatSetopSelect <- SetOpClause SelectStatementInternal
 SetopClause <- ('UNION' / 'EXCEPT' / 'INTERSECT') DistinctOrAll? ByName?
 ByName <- 'BY' 'NAME'
-SelectOrParens <- BaseSelect / Parens(SelectStatement)
+SelectOrParens <- BaseSelect / SelectParens
+SelectParens <- Parens(SelectStatementInternal)
 
-BaseSelect <- WithClause? (OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement) ResultModifiers
-ResultModifiers <- OrderByClause? LimitClause? OffsetClause?
+BaseSelect <- WithClause? SelectStatementType ResultModifiers?
+SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
+ResultModifiers <- OrderByClause? LimitOffsetClause?
+LimitOffsetClause <- LimitClause? OffsetClause?
 TableStatement <- 'TABLE' BaseTableName
-OptionalParensSimpleSelect <- Parens(SimpleSelect) / SimpleSelect
+OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
+SimpleSelectParens <- Parens(SimpleSelect)
 SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
@@ -1117,7 +1122,7 @@ TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
 TargetOptAlias <- BaseTableName 'AS'? ColId?
 DeleteUsingClause <- 'USING' List(TableRef)
 
-CreateTypeStmt <- 'TYPE'i IfNotExists? QualifiedName 'AS' CreateType
+CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
 CreateType <- EnumSelectType / EnumStringLiteralList / Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
 EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral))
@@ -1226,7 +1231,7 @@ SetSequenceOption <- List(SequenceOption)
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'RENAME' 'TO' Identifier
 
-CreateSequenceStmt <- 'SEQUENCE'i IfNotExists? QualifiedName SequenceOption*
+CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
 
 SequenceOption <-
 	SeqSetCycle /

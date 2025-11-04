@@ -239,6 +239,18 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformDefaultValue);
 }
 
+void PEGTransformerFactory::RegisterCreateType() {
+	// create_type.gram
+	REGISTER_TRANSFORM(TransformCreateTypeStmt);
+	REGISTER_TRANSFORM(TransformCreateType);
+	REGISTER_TRANSFORM(TransformEnumSelectType);
+	REGISTER_TRANSFORM(TransformEnumStringLiteralList);
+}
+
+void PEGTransformerFactory::RegisterCreateView() {
+	REGISTER_TRANSFORM(TransformCreateViewStmt);
+}
+
 void PEGTransformerFactory::RegisterDeallocate() {
 	// deallocate.gram
 	REGISTER_TRANSFORM(TransformDeallocateStatement);
@@ -625,6 +637,8 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateSequence();
 	RegisterCreateSecret();
 	RegisterCreateTable();
+	RegisterCreateType();
+	RegisterCreateView();
 	RegisterDeallocate();
 	RegisterDelete();
 	RegisterDetach();

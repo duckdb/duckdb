@@ -1,4 +1,4 @@
-CreateSequenceStmt <- 'SEQUENCE'i IfNotExists? QualifiedName SequenceOption*
+CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*
 
 SequenceOption <-
 	SeqSetCycle /
