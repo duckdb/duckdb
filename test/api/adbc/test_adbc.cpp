@@ -123,16 +123,6 @@ public:
 		input_data.release = nullptr;
 	}
 
-	// FIXME: this is evil
-	bool HasExtension(const string &extension_name) {
-		if (!adbc_connection.private_data) {
-			return false;
-		}
-		auto con = reinterpret_cast<Connection *>(
-		    static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data)->connection);
-		return con->context->db->ExtensionIsLoaded(extension_name);
-	}
-
 	AdbcError adbc_error;
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
@@ -1136,13 +1126,13 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 
 	REQUIRE(!SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "b", "duckdb_indexes", &arrow_schema, &adbc_error)));
-	REQUIRE((std::strstr(adbc_error.message, "Error") != nullptr));
+	REQUIRE((std::strstr(adbc_error.message, "Catalog Error") != nullptr));
 	adbc_error.release(&adbc_error);
 
 	// Test invalid table
 	REQUIRE(!SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "duckdb_indexeeees", &arrow_schema, &adbc_error)));
-	REQUIRE((std::strstr(adbc_error.message, "Error") != nullptr));
+	REQUIRE((std::strstr(adbc_error.message, "Catalog Error") != nullptr));
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 	adbc_error.release(&adbc_error);
@@ -1189,9 +1179,6 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	}
 
 	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
-	if (!db.HasExtension("core_extensions")) {
-		return;
-	}
 
 	// Create Arrow Result
 	auto &input_data = db.QueryArrow("SELECT 42 as value");
@@ -1248,14 +1235,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-
 	// Let's first try what works
 	// 1. Test ADBC_OBJECT_DEPTH_CATALOGS
 	{
 		ADBCTestDatabase db("test_catalog_depth");
-		if (!db.HasExtension("core_extensions")) {
-			return;
-		}
 		// Create Arrow Result
 		auto &input_data = db.QueryArrow("SELECT 42 as value");
 		// Create Table 'my_table' from the Arrow Result
