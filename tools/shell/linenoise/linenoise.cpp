@@ -1105,6 +1105,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
     }
   INPUT_RECORD rec;
   DWORD count;
+  has_more_data = false;
   while (true) {
     if (!ReadConsoleInputW(Terminal::GetConsoleInput(), &rec, 1, &count)) {
         return false;
@@ -1142,7 +1143,6 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
       alt_pressed = true;
     }
     if (key_event.uChar.UnicodeChar == 0) {
-            Linenoise::Log("Virtual code");
       switch (key_event.wVirtualKeyCode) {
         case VK_LEFT:
             key_press.action = ESC;
@@ -1226,16 +1226,22 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
                 key_press.action = ESC;
             } else {
                 key_press.action = (KEY_ACTION) c;
+                if (c == TAB) {
+                    // if we encounter a tab character this might be part of copy-pasting
+                    // if it is, we want to just emit a tab literal instead of auto-completing at this location
+                    // set "has_more_data" based on whether there are more events waiting to detect this scenario
+                    DWORD event_count = 0;
+                    GetNumberOfConsoleInputEvents(Terminal::GetConsoleInput(), &event_count);
+                    has_more_data = event_count > 0;
+                }
             }
             return true;
         }
         // unicode character - these can consist of multiple bytes
         // return the first byte and buffer the remaining bytes
         remaining_characters = string(utf8, len);
-        Linenoise::Log("UTF8 %s", remaining_characters.c_str());
         key_press.action = (KEY_ACTION) remaining_characters[0];
         remaining_characters = remaining_characters.substr(1);
-        Linenoise::Log("Leaving %d bytes to be processed", int(remaining_characters.size()));
         return true;
     }
   }
