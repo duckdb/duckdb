@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import argparse
 from typing import Optional, Union, Tuple, List
 import functools
+import sys
 
 print = functools.partial(print, flush=True)
 
@@ -39,7 +40,7 @@ class BenchmarkRunnerConfig:
     no_summary: bool = False
 
     @classmethod
-    def from_params(cls, benchmark_runner, benchmark_file, **kwargs) -> "BenchmarkRunnerConfig":
+    def from_params(cls, benchmark_runner, benchmark_file=None, **kwargs) -> "BenchmarkRunnerConfig":
         verbose = kwargs.get("verbose", False)
         threads = kwargs.get("threads", None)
         memory_limit = kwargs.get("memory_limit", None)
@@ -103,8 +104,9 @@ class BenchmarkRunner:
         self.config = config
         self.complete_timings = []
         self.benchmark_list: List[str] = []
-        with open(self.config.benchmark_file, 'r') as f:
-            self.benchmark_list = [x.strip() for x in f.read().split('\n') if len(x) > 0]
+        if self.config.benchmark_file:
+            with open(self.config.benchmark_file, 'r') as f:
+                self.benchmark_list = [x.strip() for x in f.read().split('\n') if len(x) > 0]
 
     def construct_args(self, benchmark_path):
         benchmark_args = []
@@ -121,18 +123,45 @@ class BenchmarkRunner:
             benchmark_args.extend(["--no-summary"])
         return benchmark_args
 
-    def run_benchmark(self, benchmark) -> Tuple[Union[float, str], Optional[str]]:
+    def run_benchmark(self, benchmark, output_file=None) -> Tuple[Union[float, str], Optional[str]]:
         benchmark_args = self.construct_args(benchmark)
         timeout_seconds = DEFAULT_TIMEOUT
         if self.config.disable_timeout:
             timeout_seconds = self.config.max_timeout
 
         try:
-            proc = subprocess.run(
-                benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_seconds
-            )
-            out = proc.stdout.decode('utf8')
-            err = proc.stderr.decode('utf8')
+            if output_file:
+                proc = subprocess.Popen(
+                    benchmark_args,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,  # decode automatically to string
+                    bufsize=1,  # line-buffered
+                )
+
+                captured_output = []
+
+                output_file_handle = None
+                if output_file:
+                    output_file_handle = open(output_file, "w")
+
+                for line in proc.stdout:
+                    captured_output.append(line)
+                    if output_file_handle:
+                        sys.stdout.write(line)
+                        output_file_handle.write(line)
+
+                if output_file_handle:
+                    sys.stdout.flush()
+                    output_file_handle.close()
+                out = ''.join(captured_output)
+                err = out
+            else:
+                proc = subprocess.run(
+                    benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_seconds
+                )
+                out = proc.stdout.decode('utf8')
+                err = proc.stderr.decode('utf8')
             returncode = proc.returncode
         except subprocess.TimeoutExpired:
             print("Failed to run benchmark " + benchmark)

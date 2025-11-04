@@ -4,7 +4,7 @@
 
 It handles building both versions, running the given set of benchmarks, and generating a single plot that compares the median runtimes with percentage changes.
 ## Usage 
-First, install the requirements: ``  pip install pandas plotly kaleido``
+First, install the requirements: ``pip install pandas plotly kaleido``
 ### Example
 ```bash
 python3 scripts/autobench.py --old_path "/path/to/my/duckdb_main"  --new_path "/path/to/my/duckdb_fork" --benchmark "benchmark/parquet/.*"
