@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import argparse
 from typing import Optional, Union, Tuple, List
 import functools
-
+import sys
 print = functools.partial(print, flush=True)
 
 STDERR_HEADER = '''====================================================
@@ -86,7 +86,6 @@ class BenchmarkRunnerConfig:
         # Create an instance of BenchmarkRunnerConfig using parsed arguments
         config = cls(
             benchmark_runner=parsed_args.path,
-            benchmark_file=parsed_args.benchmarks,
             verbose=parsed_args.verbose,
             threads=parsed_args.threads,
             memory_limit=parsed_args.memory_limit,
@@ -102,9 +101,16 @@ class BenchmarkRunner:
     def __init__(self, config: BenchmarkRunnerConfig):
         self.config = config
         self.complete_timings = []
+        self.benchmark_names = set() # to be able to get the file names for plotting when using with a regex
         self.benchmark_list: List[str] = []
-        with open(self.config.benchmark_file, 'r') as f:
-            self.benchmark_list = [x.strip() for x in f.read().split('\n') if len(x) > 0]
+        if self.config.benchmark_file.endswith(".csv"):
+            # Support .csv files with a list of benchmark files to run
+            with open(self.config.benchmark_file, 'r') as f:
+                self.benchmark_list = [x.strip() for x in f.read().split('\n') if len(x) > 0]
+        else:
+            # Is not a .csv so it is a benchmark_runner name_pattern
+            self.benchmark_list = [self.config.benchmark_file]
+
 
     def construct_args(self, benchmark_path):
         benchmark_args = []
@@ -121,58 +127,70 @@ class BenchmarkRunner:
             benchmark_args.extend(["--no-summary"])
         return benchmark_args
 
-    def run_benchmark(self, benchmark) -> Tuple[Union[float, str], Optional[str]]:
-        benchmark_args = self.construct_args(benchmark)
+    def run_benchmark(self, benchmark_path, show_runner_output = False) -> Tuple[Union[float, str], Optional[str]]:
+        print("Constructing args with benchmark_path: ", benchmark_path)
+        benchmark_args = self.construct_args(benchmark_path)
         timeout_seconds = DEFAULT_TIMEOUT
         if self.config.disable_timeout:
             timeout_seconds = self.config.max_timeout
-
         try:
-            proc = subprocess.run(
-                benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_seconds
+            proc = subprocess.Popen(
+                benchmark_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,  # decode automatically to string
+                bufsize=1,  # line-buffered
             )
-            out = proc.stdout.decode('utf8')
-            err = proc.stderr.decode('utf8')
+
+            captured_output = []
+
+            for line in proc.stdout:
+                captured_output.append(line)
+                if show_runner_output:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+
+            proc.wait(timeout=timeout_seconds)
+
+            full_output = ''.join(captured_output)  # contains both stdout and stderr
+
             returncode = proc.returncode
-        except subprocess.TimeoutExpired:
-            print("Failed to run benchmark " + benchmark)
-            print(f"Aborted due to exceeding the limit of {timeout_seconds} seconds")
-            return (
-                'Failed to run benchmark ' + benchmark,
-                f"Aborted due to exceeding the limit of {timeout_seconds} seconds",
-            )
-        if returncode != 0:
-            print("Failed to run benchmark " + benchmark)
-            print(STDERR_HEADER)
-            print(err)
-            print(STDOUT_HEADER)
-            print(out)
-            if 'HTTP' in err:
-                print("Ignoring HTTP error and terminating the running of the regression tests")
-                exit(0)
-            return 'Failed to run benchmark ' + benchmark, err
-        if self.config.verbose:
-            print(err)
-        # read the input CSV
-        f = StringIO(err)
-        csv_reader = csv.reader(f, delimiter='\t')
-        header = True
-        timings = []
-        try:
-            for row in csv_reader:
-                if len(row) == 0:
-                    continue
-                if header:
-                    header = False
-                else:
-                    timings.append(row[2])
-                    self.complete_timings.append(row[2])
-            return float(statistics.median(timings)), None
-        except:
-            print("Failed to run benchmark " + benchmark)
-            print(err)
-            return 'Failed to run benchmark ' + benchmark, err
 
+            if returncode != 0:
+                print("Failed to run benchmark " + benchmark_path)
+                print(STDOUT_HEADER)
+                print(full_output)
+                if 'HTTP' in full_output:
+                    print("Ignoring HTTP error and terminating the running of the regression tests")
+                    exit(0)
+                return 'Failed to run benchmark ' + benchmark_path, full_output
+
+            if self.config.verbose:
+                print(full_output)
+
+            # read the input CSV from the output
+            f = StringIO(full_output)
+            csv_reader = csv.reader(f, delimiter='\t')
+            header = True
+            timings = []
+            try:
+                for row in csv_reader:
+                    if len(row) == 0:
+                        continue
+                    if header:
+                        header = False
+                    else:
+                        timings.append(row[2])
+                        self.complete_timings.append(row[2])
+                        self.benchmark_names.add(row[0])
+                return float(statistics.median(timings)), None
+            except Exception:
+                print("Failed to run benchmark " + benchmark_path)
+                print(full_output)
+                return 'Failed to run benchmark ' + benchmark_path, full_output
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return "timeout", None
     def run_benchmarks(self, benchmark_list: List[str]):
         results = {}
         failures = {}
