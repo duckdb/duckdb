@@ -415,7 +415,8 @@ struct VariantStatsVisitor {
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
 	                       VariantStatsData &stats, idx_t stats_column_index) {
 		auto &element_stats = stats.GetOrCreateElement(stats_column_index);
-		VariantVisitor<VariantStatsVisitor>::VisitArrayItems(variant, row, nested_data, stats, element_stats.index);
+		auto index = element_stats.index;
+		VariantVisitor<VariantStatsVisitor>::VisitArrayItems(variant, row, nested_data, stats, index);
 	}
 
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
@@ -429,10 +430,11 @@ struct VariantStatsVisitor {
 			auto &key = variant.GetKey(row, keys_index);
 
 			auto &child_stats = stats.GetOrCreateField(stats_column_index, key.GetString());
+			auto index = child_stats.index;
 
 			//! Visit the child value
 			auto values_index = variant.GetValuesIndex(row, source_children_idx);
-			VariantVisitor<VariantStatsVisitor>::Visit(variant, row, values_index, stats, child_stats.index);
+			VariantVisitor<VariantStatsVisitor>::Visit(variant, row, values_index, stats, index);
 		}
 	}
 
