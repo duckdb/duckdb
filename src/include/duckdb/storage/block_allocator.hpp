@@ -62,6 +62,8 @@ private:
 	void VerifyBlockID(uint32_t block_id) const;
 
 private:
+	//! Identifier
+	const hugeint_t uuid;
 	//! Fallback allocator
 	Allocator &allocator;
 	//! Whether this is open for new allocations

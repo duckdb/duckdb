@@ -3,8 +3,8 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #if defined(_WIN32)
 #include "duckdb/common/windows.hpp"
@@ -85,16 +85,21 @@ struct BlockQueue {
 
 class BlockAllocatorThreadLocalState {
 public:
-	explicit BlockAllocatorThreadLocalState(const BlockAllocator &block_allocator_p)
-	    : block_allocator(block_allocator_p) {
-		untouched.reserve(BATCH_SIZE);
-		touched.reserve(FREE_THRESHOLD);
+	explicit BlockAllocatorThreadLocalState(const BlockAllocator &block_allocator_p) {
+		Initialize(block_allocator_p);
 	}
 	~BlockAllocatorThreadLocalState() {
 		Clear();
 	}
 
 public:
+	void TryInitialize(const BlockAllocator &block_allocator_p) {
+		// Local state can be invalidated if DB closes but thread stays alive
+		if (cached_uuid != block_allocator_p.uuid) {
+			Initialize(block_allocator_p);
+		}
+	}
+
 	data_ptr_t Allocate() {
 		auto pointer = TryAllocateFromLocal();
 		if (pointer) {
@@ -102,8 +107,8 @@ public:
 		}
 
 		// We have run out of local blocks
-		if (TryGetBatch(touched, *block_allocator.to_free) || TryGetBatch(touched, *block_allocator.touched) ||
-		    TryGetBatch(untouched, *block_allocator.untouched)) {
+		if (TryGetBatch(touched, *block_allocator->to_free) || TryGetBatch(touched, *block_allocator->touched) ||
+		    TryGetBatch(untouched, *block_allocator->untouched)) {
 			// We have refilled local blocks
 			pointer = TryAllocateFromLocal();
 			D_ASSERT(pointer);
@@ -111,45 +116,54 @@ public:
 		}
 
 		// We have also run out of global blocks, use fallback allocator
-		return block_allocator.allocator.AllocateData(block_allocator.block_size);
+		return block_allocator->allocator.AllocateData(block_allocator->block_size);
 	}
 
 	void Free(const data_ptr_t pointer) {
-		touched.push_back(block_allocator.GetBlockID(pointer));
+		touched.push_back(block_allocator->GetBlockID(pointer));
 		if (touched.size() < FREE_THRESHOLD) {
 			return;
 		}
 
 		// Upon reaching the threshold, we return a local batch to global
-		block_allocator.to_free->q.enqueue_bulk(touched.end() - BATCH_SIZE, BATCH_SIZE);
-		block_allocator.TryFreeInternal();
+		block_allocator->to_free->q.enqueue_bulk(touched.end() - BATCH_SIZE, BATCH_SIZE);
+		block_allocator->TryFreeInternal();
 		touched.resize(touched.size() - BATCH_SIZE);
 	}
 
 	void Clear() {
 		// Return all local blocks back to global
 		if (!touched.empty()) {
-			block_allocator.to_free->q.enqueue_bulk(touched.begin(), touched.size());
-			block_allocator.TryFreeInternal();
+			block_allocator->to_free->q.enqueue_bulk(touched.begin(), touched.size());
+			block_allocator->TryFreeInternal();
 			touched.clear();
 		}
 		if (!untouched.empty()) {
-			block_allocator.untouched->q.enqueue_bulk(untouched.begin(), untouched.size());
+			block_allocator->untouched->q.enqueue_bulk(untouched.begin(), untouched.size());
 			untouched.clear();
 		}
 	}
 
 private:
+	void Initialize(const BlockAllocator &block_allocator_p) {
+		cached_uuid = block_allocator_p.uuid;
+		block_allocator = block_allocator_p;
+		untouched.clear();
+		touched.clear();
+		untouched.reserve(BATCH_SIZE);
+		touched.reserve(FREE_THRESHOLD);
+	}
+
 	data_ptr_t TryAllocateFromLocal() {
 		if (!touched.empty()) {
-			const auto pointer = block_allocator.GetPointer(touched.back());
+			const auto pointer = block_allocator->GetPointer(touched.back());
 			touched.pop_back();
 			return pointer;
 		}
 		if (!untouched.empty()) {
-			const auto pointer = block_allocator.GetPointer(untouched.back());
+			const auto pointer = block_allocator->GetPointer(untouched.back());
 			untouched.pop_back();
-			OnFirstAllocation(pointer, block_allocator.block_size);
+			OnFirstAllocation(pointer, block_allocator->block_size);
 			return pointer;
 		}
 		return nullptr;
@@ -158,12 +172,14 @@ private:
 	static bool TryGetBatch(vector<uint32_t> &local, BlockQueue &global) {
 		D_ASSERT(local.empty());
 		local.resize(BATCH_SIZE);
-		local.resize(global.q.try_dequeue_bulk(local.begin(), BATCH_SIZE));
+		const auto size = global.q.try_dequeue_bulk(local.begin(), BATCH_SIZE);
+		local.resize(size);
 		return !local.empty();
 	}
 
 private:
-	const BlockAllocator &block_allocator;
+	hugeint_t cached_uuid;
+	optional_ptr<const BlockAllocator> block_allocator;
 
 	static constexpr idx_t BATCH_SIZE = 128;
 	static constexpr idx_t FREE_THRESHOLD = BATCH_SIZE * 2;
@@ -174,6 +190,7 @@ private:
 
 BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAllocator &block_allocator) {
 	thread_local BlockAllocatorThreadLocalState local_state(block_allocator);
+	local_state.TryInitialize(block_allocator);
 	return local_state;
 }
 
@@ -182,7 +199,7 @@ BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAll
 //===--------------------------------------------------------------------===//
 BlockAllocator::BlockAllocator(Allocator &allocator_p, bool enable, const idx_t block_size_p,
                                const idx_t virtual_memory_size_p)
-    : allocator(allocator_p), enabled(enable), block_size(block_size_p),
+    : uuid(UUID::GenerateRandomUUID()), allocator(allocator_p), enabled(enable), block_size(block_size_p),
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)),
       virtual_memory_space(AllocateVirtualMemory(virtual_memory_size)), untouched(make_unsafe_uniq<BlockQueue>()),
