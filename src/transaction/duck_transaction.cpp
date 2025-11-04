@@ -208,10 +208,10 @@ ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCo
 	try {
 		D_ASSERT(ShouldWriteToWAL(db));
 		auto &storage_manager = db.GetStorageManager();
-		auto log = storage_manager.GetWAL();
-		commit_state = storage_manager.GenStorageCommitState(*log);
+		auto wal = storage_manager.GetWAL();
+		commit_state = storage_manager.GenStorageCommitState(*wal);
 		storage->Commit(commit_state.get());
-		undo_buffer.WriteToWAL(*log, commit_state.get());
+		undo_buffer.WriteToWAL(*wal, commit_state.get());
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
 			// optimistically written blocks

@@ -184,25 +184,6 @@ void Prompt::ParsePrompt(const string &prompt) {
 	}
 }
 
-string Prompt::EvaluateSQL(ShellState &state, const string &sql) {
-	auto &con = *state.conn;
-	auto result = con.Query(sql);
-	if (result->HasError()) {
-		return "#ERROR#:" + result->GetError();
-	}
-	auto &collection = result->Collection();
-	if (collection.Count() > 1) {
-		return "#TOO MANY ROWS#";
-	}
-	if (collection.ColumnCount() != 1) {
-		return "#TOO MANY COLUMNS#";
-	}
-	for (auto &row : collection.Rows()) {
-		return row.GetValue(0).ToString();
-	}
-	return "#EMPTY#";
-}
-
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
 	auto &con = *state.conn;
 	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(*con.context);
@@ -275,7 +256,7 @@ string Prompt::GeneratePrompt(ShellState &state) {
 			prompt += HandleText(state, component.literal, length);
 			break;
 		case PromptComponentType::SQL: {
-			auto query_result = EvaluateSQL(state, component.literal);
+			auto query_result = state.EvaluateSQL(component.literal);
 			prompt += HandleText(state, query_result, length);
 			break;
 		}
@@ -308,7 +289,7 @@ void Prompt::PrintPrompt(ShellState &state, PrintOutput output) {
 			highlight.PrintText(HandleText(state, component.literal, length), output, color, intensity);
 			break;
 		case PromptComponentType::SQL: {
-			auto result = EvaluateSQL(state, component.literal);
+			auto result = state.EvaluateSQL(component.literal);
 			highlight.PrintText(HandleText(state, result, length), output, color, intensity);
 			break;
 		}

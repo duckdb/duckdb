@@ -727,7 +727,7 @@ static const MetadataCommand metadata_commands[] = {
 
     {"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2,
      "Options:\n\t--new\tInitialize FILE to an empty database\n\t--nofollow\tDo not follow symbolic "
-     "links\n\t--readonly\tOpen FILE in read-only mode"},
+     "links\n\t--readonly\tOpen FILE in read-only mode\n\t--sql\tSet FILE using SQL"},
     {"once", 0, SetOutputOnce, "?FILE?", "Output for the next SQL command only to FILE", 0,
      "If FILE begins with '|' then open as a pipe\n\t--bom\tPut a UTF8 byte-order mark at the beginning\n\t-e\tSend "
      "output to the system text editor\n\t-x\tSend output as CSV to a spreadsheet (same as \".excel\")"},

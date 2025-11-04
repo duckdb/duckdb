@@ -16,7 +16,7 @@ statement ok
 CREATE SCHEMA abcdefgh;
 
 query II
-FROM sql_auto_complete('CREATE TABLE abcd') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE abcd') LIMIT 1;
 ----
 abcdefgh.	13
 
@@ -25,7 +25,7 @@ statement ok
 CALL dbgen(sf=0);
 
 query II
-FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
 ----
 lineitem	12
 
