@@ -1,4 +1,4 @@
-#include "shell_status_bar.hpp"
+#include "shell_progress_bar.hpp"
 #include "duckdb/common/printer.hpp"
 #include "shell_state.hpp"
 
@@ -6,22 +6,22 @@ namespace duckdb_shell {
 using duckdb::OutputStream;
 using duckdb::Printer;
 
-enum class StatusBarPadding { NO_PADDING };
+enum class ProgressBarPadding { NO_PADDING };
 
-enum class StatusBarAlignment { LEFT, MIDDLE, RIGHT };
+enum class ProgressBarAlignment { LEFT, MIDDLE, RIGHT };
 
-struct StatusBarPrompt : public Prompt {
+struct ProgressBarPrompt : public Prompt {
 public:
-	StatusBarPrompt(StatusBar &status_bar_p) : status_bar(status_bar_p) {
+	ProgressBarPrompt(ShellProgressBar &status_bar_p) : status_bar(status_bar_p) {
 	}
 
-	StatusBar &status_bar;
+	ShellProgressBar &status_bar;
 	//! Alignment of the status bar relative to the total bar
-	StatusBarAlignment alignment = StatusBarAlignment::LEFT;
+	ProgressBarAlignment alignment = ProgressBarAlignment::LEFT;
 	//! Padding of the content of the status bar
-	StatusBarPadding padding_type = StatusBarPadding::NO_PADDING;
+	ProgressBarPadding padding_type = ProgressBarPadding::NO_PADDING;
 	//! In case there is padding (i.e. padding_type is not NO_PADDING) - where to position the content
-	StatusBarAlignment content_alignment = StatusBarAlignment::LEFT;
+	ProgressBarAlignment content_alignment = ProgressBarAlignment::LEFT;
 	//! Display condition, if any
 	string does_not_contain;
 	//! Minimum render size
@@ -37,15 +37,15 @@ public:
 		idx_t left_padding;
 		idx_t right_padding;
 		switch (content_alignment) {
-		case StatusBarAlignment::LEFT:
+		case ProgressBarAlignment::LEFT:
 			left_padding = 1;
 			right_padding = padding_required - 1;
 			break;
-		case StatusBarAlignment::MIDDLE:
+		case ProgressBarAlignment::MIDDLE:
 			right_padding = padding_required / 2;
 			left_padding = padding_required - right_padding;
 			break;
-		case StatusBarAlignment::RIGHT:
+		case ProgressBarAlignment::RIGHT:
 			left_padding = padding_required - 1;
 			right_padding = 1;
 			break;
@@ -72,9 +72,9 @@ protected:
 	bool ParseSetting(const string &bracket_type, const string &value) override {
 		if (bracket_type == "align") {
 			if (value == "right") {
-				alignment = StatusBarAlignment::RIGHT;
+				alignment = ProgressBarAlignment::RIGHT;
 			} else if (value == "left") {
-				alignment = StatusBarAlignment::LEFT;
+				alignment = ProgressBarAlignment::LEFT;
 			} else {
 				throw InvalidInputException("Unsupported type %s for align: expected left or right", value);
 			}
@@ -82,11 +82,11 @@ protected:
 		}
 		if (bracket_type == "content_align") {
 			if (value == "right") {
-				content_alignment = StatusBarAlignment::RIGHT;
+				content_alignment = ProgressBarAlignment::RIGHT;
 			} else if (value == "left") {
-				content_alignment = StatusBarAlignment::LEFT;
+				content_alignment = ProgressBarAlignment::LEFT;
 			} else if (value == "middle") {
-				content_alignment = StatusBarAlignment::MIDDLE;
+				content_alignment = ProgressBarAlignment::MIDDLE;
 			} else {
 				throw InvalidInputException("Unsupported type %s for content_align: expected left or right", value);
 			}
@@ -134,24 +134,22 @@ protected:
 	}
 };
 
-StatusBar::StatusBar() {
+ShellProgressBar::ShellProgressBar() {
 }
-StatusBar::~StatusBar() {
+ShellProgressBar::~ShellProgressBar() {
 }
 
-void StatusBar::AddComponent(const string &component_text) {
-	auto component = make_uniq<StatusBarPrompt>(*this);
+void ShellProgressBar::AddComponent(const string &component_text) {
+	auto component = make_uniq<ProgressBarPrompt>(*this);
 	component->ParsePrompt(component_text);
 	components.push_back(std::move(component));
 }
 
-void StatusBar::ClearComponents() {
+void ShellProgressBar::ClearComponents() {
 	components.clear();
 }
 
-string StatusBar::GenerateStatusBar(ShellState &state) {
-	auto terminal_width = Printer::TerminalWidth();
-
+string ShellProgressBar::GenerateProgressBar(ShellState &state, idx_t terminal_width) {
 	string lhs;
 	string rhs;
 	idx_t total_render_length = 0;
@@ -170,7 +168,7 @@ string StatusBar::GenerateStatusBar(ShellState &state) {
 			break;
 		}
 		total_render_length += render_length;
-		if (component->alignment == StatusBarAlignment::LEFT) {
+		if (component->alignment == ProgressBarAlignment::LEFT) {
 			lhs += text;
 		} else {
 			rhs += text;
@@ -185,25 +183,37 @@ string StatusBar::GenerateStatusBar(ShellState &state) {
 	return result;
 }
 
-ShellStatusBarDisplay::ShellStatusBarDisplay() {
+ShellProgressBarDisplay::ShellProgressBarDisplay() {
 }
 
-void ShellStatusBarDisplay::PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds,
-                                                  bool is_finished) {
+void ShellProgressBarDisplay::PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds,
+                                                    bool is_finished) {
+	auto terminal_width = Printer::TerminalWidth();
 	string result;
-	// clear previous display
+	if (previous_terminal_width.IsValid() && terminal_width < previous_terminal_width.GetIndex()) {
+		// terminal size got smaller - need to erase more lines
+		idx_t line_count = (previous_terminal_width.GetIndex() + terminal_width - 1) / terminal_width;
+		D_ASSERT(line_count > 1);
+
+		for (idx_t i = 1; i < line_count; i++) {
+			// go up + clear line until we reach the first line again
+			result += "\r\x1b[0K\x1b[1A";
+		}
+	}
+	// clear the current line
 	result += "\r\x1b[0K";
+	previous_terminal_width = terminal_width;
 	if (!is_finished) {
 		auto &state = ShellState::Get();
 		try {
-			state.status_bar->percentage = percentage;
-			state.status_bar->estimated_remaining_seconds = estimated_remaining_seconds;
-			result += state.status_bar->GenerateStatusBar(state);
+			state.progress_bar->percentage = percentage;
+			state.progress_bar->estimated_remaining_seconds = estimated_remaining_seconds;
+			result += state.progress_bar->GenerateProgressBar(state, terminal_width);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			result += error.Message();
 		}
-		state.status_bar->connection.reset();
+		state.progress_bar->connection.reset();
 	}
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
 }

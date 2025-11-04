@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// shell_status_bar.hpp
+// shell_progress_bar.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,23 +12,23 @@
 #include "shell_prompt.hpp"
 
 namespace duckdb_shell {
-struct StatusBarPrompt;
+struct ProgressBarPrompt;
 
-struct StatusBar {
-	friend class ShellStatusBarDisplay;
-	friend struct StatusBarPrompt;
+struct ShellProgressBar {
+	friend class ShellProgressBarDisplay;
+	friend struct ProgressBarPrompt;
 
 public:
-	StatusBar();
-	~StatusBar();
+	ShellProgressBar();
+	~ShellProgressBar();
 
 public:
 	void AddComponent(const string &text);
 	void ClearComponents();
-	string GenerateStatusBar(ShellState &state);
+	string GenerateProgressBar(ShellState &state, idx_t terminal_width);
 
 private:
-	vector<unique_ptr<StatusBarPrompt>> components;
+	vector<unique_ptr<ProgressBarPrompt>> components;
 	duckdb::ProgressBarDisplayInfo display_info;
 	int32_t percentage = 0;
 	double estimated_remaining_seconds = 0;
@@ -36,12 +36,15 @@ private:
 };
 
 //! Displays a status bar alongside the progress bar
-class ShellStatusBarDisplay : public duckdb::TerminalProgressBarDisplay {
+class ShellProgressBarDisplay : public duckdb::TerminalProgressBarDisplay {
 public:
-	ShellStatusBarDisplay();
+	ShellProgressBarDisplay();
 
 protected:
 	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds, bool is_finished) override;
+
+private:
+	optional_idx previous_terminal_width;
 };
 
 } // namespace duckdb_shell

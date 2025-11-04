@@ -1,7 +1,7 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 #include "shell_prompt.hpp"
-#include "shell_status_bar.hpp"
+#include "shell_progress_bar.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -297,7 +297,6 @@ MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ConfigureProgressBar(ShellState &state, const vector<string> &args) {
-	auto new_status_bar = make_uniq<StatusBar>();
 	if (args.size() < 2 || args.size() > 3) {
 		return MetadataResult::PRINT_USAGE;
 	}
@@ -305,12 +304,12 @@ MetadataResult ConfigureProgressBar(ShellState &state, const vector<string> &arg
 		if (args.size() != 2) {
 			return MetadataResult::PRINT_USAGE;
 		}
-		state.status_bar->ClearComponents();
+		state.progress_bar->ClearComponents();
 	} else if (args[1] == "--add") {
 		if (args.size() != 3) {
 			return MetadataResult::PRINT_USAGE;
 		}
-		state.status_bar->AddComponent(args[2]);
+		state.progress_bar->AddComponent(args[2]);
 	} else {
 		return MetadataResult::PRINT_USAGE;
 	}

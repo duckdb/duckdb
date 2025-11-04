@@ -85,7 +85,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "shell_status_bar.hpp"
+#include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
@@ -1701,8 +1701,8 @@ SuccessState ShellState::ExecuteQuery(const string &query) {
 	return SuccessState::SUCCESS;
 }
 
-unique_ptr<duckdb::ProgressBarDisplay> CreateStatusBar() {
-	return make_uniq<ShellStatusBarDisplay>();
+unique_ptr<duckdb::ProgressBarDisplay> CreateProgressBar() {
+	return make_uniq<ShellProgressBarDisplay>();
 }
 
 void ShellState::OpenDB(ShellOpenFlags flags) {
@@ -1721,7 +1721,7 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 			}
 		}
 		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
-		client_config.display_create_func = CreateStatusBar;
+		client_config.display_create_func = CreateProgressBar;
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
@@ -3287,9 +3287,9 @@ void ShellState::Initialize() {
 	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Read: {setting:bytes_read}");
 	default_components.push_back("{align:right}{min_size:17}Memory: {setting:memory_usage}");
 	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Swap: {setting:swap_usage}");
-	status_bar = make_uniq<StatusBar>();
+	progress_bar = make_uniq<ShellProgressBar>();
 	for (auto &component : default_components) {
-		status_bar->AddComponent(component);
+		progress_bar->AddComponent(component);
 	}
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
