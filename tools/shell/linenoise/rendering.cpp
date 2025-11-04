@@ -3,7 +3,11 @@
 #include "history.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "shell_highlight.hpp"
+#if defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace duckdb {
 static const char *continuationPrompt = "> ";

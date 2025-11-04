@@ -53,7 +53,7 @@ enum class EscapeSequence {
 	DOWN,
 	RIGHT,
 	LEFT,
-	DELETE,
+	DELETE_KEY,
 	SHIFT_TAB,
 	ESCAPE,
 	ALT_A,

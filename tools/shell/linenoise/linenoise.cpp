@@ -1,8 +1,12 @@
+#if defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#else
 #include <sys/stat.h>
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <signal.h>
 #include <unistd.h>
+#endif
 #include "linenoise.h"
 #include "linenoise.hpp"
 #include "history.hpp"
@@ -1267,9 +1271,12 @@ int Linenoise::Edit() {
 			}
 			break;
 		case CTRL_Z: /* ctrl-z, suspends shell */
+#if defined(_WIN32) || defined(WIN32)
+#else
 			Terminal::DisableRawMode();
 			raise(SIGTSTP);
 			Terminal::EnableRawMode();
+#endif
 			RefreshLine();
 			break;
 		case CTRL_T: /* ctrl-t, swaps current character with previous. */
@@ -1369,7 +1376,7 @@ int Linenoise::Edit() {
 			case EscapeSequence::LEFT:
 				EditMoveLeft();
 				break;
-			case EscapeSequence::DELETE:
+			case EscapeSequence::DELETE_KEY:
 				EditDelete();
 				break;
 			default:

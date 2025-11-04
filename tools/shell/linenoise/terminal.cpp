@@ -1,22 +1,34 @@
 #include "terminal.hpp"
 #include "history.hpp"
 #include "linenoise.hpp"
+#if defined(_WIN32) || defined(WIN32)
+#include "duckdb/common/windows.hpp"
+#include <io.h>
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+#else
+#include <sys/ioctl.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include <termios.h>
 #include <unistd.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <sys/ioctl.h>
-#include <sys/select.h>
-#include <sys/time.h>
 
 namespace duckdb {
 
 static int mlmode = 1;              /* Multi line mode. Default is multi line. */
+#if defined(_WIN32) || defined(WIN32)
+static HANDLE console_in = nullptr;
+static DWORD old_mode;
+#else
 static struct termios orig_termios; /* In order to restore at exit.*/
+#endif
 static int atexit_registered = 0;   /* Register atexit just 1 time. */
 static int rawmode = 0;             /* For atexit() function to check if restore is needed*/
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
@@ -30,6 +42,8 @@ static void linenoiseAtExit(void) {
 /* Return true if the terminal name is in the list of terminals we know are
  * not able to understand basic escape sequences. */
 int Terminal::IsUnsupportedTerm() {
+#if defined(_WIN32) || defined(WIN32)
+#else
 	char *term = getenv("TERM");
 	int j;
 
@@ -41,11 +55,24 @@ int Terminal::IsUnsupportedTerm() {
 			return 1;
 		}
 	}
+#endif
 	return 0;
 }
 
 /* Raw mode: 1960 magic shit. */
 int Terminal::EnableRawMode() {
+#if defined(_WIN32) || defined(WIN32)
+  if (console_in) {
+      // already in raw mode
+      return 0;
+  }
+    console_in = GetStdHandle(STD_INPUT_HANDLE);
+
+    GetConsoleMode(console_in, &old_mode);
+    auto new_mode = old_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT |
+                                     ENABLE_PROCESSED_INPUT);
+    SetConsoleMode(console_in, new_mode);
+#else
 	int fd = STDIN_FILENO;
 
 	if (!isatty(STDIN_FILENO)) {
@@ -86,15 +113,19 @@ int Terminal::EnableRawMode() {
 		return -1;
 	}
 	rawmode = 1;
+#endif
 	return 0;
 }
 
 void Terminal::DisableRawMode() {
+#if defined(_WIN32) || defined(WIN32)
+#else
 	int fd = STDIN_FILENO;
 	/* Don't even check the return value as it's too late. */
 	if (rawmode && tcsetattr(fd, TCSADRAIN, &orig_termios) != -1) {
 		rawmode = 0;
 	}
+#endif
 }
 
 bool Terminal::IsMultiline() {
@@ -165,6 +196,9 @@ int Terminal::EditRaw(char *buf, size_t buflen, const char *prompt) {
 
 // returns true if there is more data available to read in a particular stream
 int Terminal::HasMoreData(int fd) {
+#if defined(_WIN32) || defined(WIN32)
+    return false;
+#else
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
@@ -174,6 +208,7 @@ int Terminal::HasMoreData(int fd) {
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
 	return select(1, &rfds, NULL, NULL, &tv);
+#endif
 }
 
 /* ======================= Low level terminal handling ====================== */
@@ -289,6 +324,14 @@ TerminalSize Terminal::TryMeasureTerminalSize() {
 TerminalSize Terminal::GetTerminalSize() {
 	TerminalSize result;
 
+#if defined(_WIN32) || defined(WIN32)
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	int rows;
+
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+	result.ws_col = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+	result.ws_row = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+#else
 	// try ioctl first
 	{
 		struct winsize ws;
@@ -321,6 +364,7 @@ TerminalSize Terminal::GetTerminalSize() {
 	if (!result.ws_row) {
 		result.ws_row = 24;
 	}
+#endif
 	return result;
 }
 
@@ -422,7 +466,7 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 			case '1':
 				return EscapeSequence::HOME;
 			case '3': /* Delete key. */
-				return EscapeSequence::DELETE;
+				return EscapeSequence::DELETE_KEY;
 			case '4':
 			case '8':
 				return EscapeSequence::END;
