@@ -1,6 +1,7 @@
 {
     "group": "threading_information",
     "deprecated": false,
+    "description": "Functions to create and execute tasks.",
     "entries": [
         {
             "name": "duckdb_execute_tasks",
