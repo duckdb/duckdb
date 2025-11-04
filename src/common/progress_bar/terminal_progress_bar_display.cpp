@@ -83,8 +83,8 @@ string TerminalProgressBarDisplay::FormatProgressBar(const ProgressBarDisplayInf
 	}
 	if (i < display.width) {
 		// print a partial block based on the percentage of the progress bar remaining
-		idx_t index =
-		    idx_t((blocks_to_draw - static_cast<double>(idx_t(blocks_to_draw))) * display.partial_block_count);
+		idx_t index = idx_t((blocks_to_draw - static_cast<double>(idx_t(blocks_to_draw))) *
+		                    static_cast<double>(display.partial_block_count));
 		if (index >= display.partial_block_count) {
 			index = display.partial_block_count - 1;
 		}

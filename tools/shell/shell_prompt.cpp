@@ -33,19 +33,21 @@ string Prompt::HandleColor(const PromptComponent &component) {
 	}
 }
 
-vector<string> Prompt::GetSupportedSettings() {
-	return vector<string> {"current_database", "current_schema", "current_database_and_schema"};
-}
-
-void Prompt::AddComponent(const string &bracket_type, const string &value) {
-	PromptComponent component;
+bool Prompt::ParseSetting(const string &bracket_type, const string &value) {
 	if (bracket_type == "max_length") {
 		if (value.empty()) {
 			throw InvalidInputException("max_length requires a parameter");
 		}
 		max_length = StringUtil::ToUnsigned(value);
-		return;
-	} else if (bracket_type == "setting") {
+		return true;
+	}
+	// unknown setting
+	return false;
+}
+
+void Prompt::AddComponent(const string &bracket_type, const string &value) {
+	PromptComponent component;
+	if (bracket_type == "setting") {
 		if (value.empty()) {
 			throw InvalidInputException("setting requires a parameter");
 		}
@@ -89,6 +91,8 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 			}
 			component.type = PromptComponentType::SET_COLOR;
 		}
+	} else if (ParseSetting(bracket_type, value)) {
+		return;
 	} else {
 		throw InvalidInputException("Unknown bracket type %s", bracket_type);
 	}
@@ -192,9 +196,46 @@ duckdb::Connection &Prompt::GetConnection(ShellState &state) {
 	return *state.conn;
 }
 
+vector<string> Prompt::GetSupportedSettings() {
+	return vector<string> {"current_database", "current_schema", "current_database_and_schema",
+	                       "memory_limit",     "memory_usage",   "swap_usage",
+	                       "swap_max",         "bytes_written",  "bytes_read"};
+}
+
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
 	auto &con = GetConnection(state);
-	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(*con.context);
+	auto &context = *con.context;
+	if (component.literal == "memory_limit") {
+		auto &config = duckdb::DBConfig::GetConfig(context);
+		return StringUtil::BytesToHumanReadableString(config.options.maximum_memory, 1000);
+	}
+	if (component.literal == "memory_usage") {
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(context);
+		return StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory(), 1000);
+	}
+	if (component.literal == "swap_usage") {
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(context);
+		return StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedSwap(), 1000);
+	}
+	if (component.literal == "swap_max") {
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(context);
+		auto max_swap = buffer_manager.GetMaxSwap();
+		if (!max_swap.IsValid()) {
+			return "INF";
+		}
+		return StringUtil::BytesToHumanReadableString(max_swap.GetIndex(), 1000);
+	}
+	if (component.literal == "bytes_read") {
+		auto &client_data = duckdb::ClientData::Get(context);
+		auto profiler = client_data.profiler;
+		return StringUtil::BytesToHumanReadableString(profiler->GetBytesRead(), 1000);
+	}
+	if (component.literal == "bytes_written") {
+		auto &client_data = duckdb::ClientData::Get(context);
+		auto profiler = client_data.profiler;
+		return StringUtil::BytesToHumanReadableString(profiler->GetBytesWritten(), 1000);
+	}
+	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
 	if (component.literal == "current_database") {
 		return current_db;

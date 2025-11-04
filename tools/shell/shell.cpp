@@ -3278,7 +3278,14 @@ void ShellState::Initialize() {
 	main_prompt->ParsePrompt(default_prompt);
 	status_bar = make_uniq<StatusBar>();
 	string default_status_bar;
-	default_status_bar = "{setting:progress_bar_percentage} {setting:progress_bar} {setting:eta}";
+	default_status_bar = "{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}";
+	default_status_bar +=
+	    "{component}{align:right}{min_size:18}{display_if_not_contains:0 bytes}Written: {setting:bytes_written}";
+	default_status_bar +=
+	    "{component}{align:right}{min_size:15){display_if_not_contains:0 bytes}Read: {setting:bytes_read}";
+	default_status_bar += "{component}{align:right}{min_size:17}Memory: {setting:memory_usage}";
+	default_status_bar +=
+	    "{component}{align:right}{min_size:15}{display_if_not_contains:0 bytes}Swap: {setting:swap_usage}";
 	status_bar = make_uniq<StatusBar>();
 	status_bar->ParseStatusBar(default_status_bar);
 	strcpy(continuePrompt, "· ");

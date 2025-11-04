@@ -33,7 +33,7 @@ public:
 	string GeneratePrompt(ShellState &state);
 	void PrintPrompt(ShellState &state, PrintOutput output);
 
-private:
+protected:
 	vector<PromptComponent> components;
 	optional_idx max_length;
 
@@ -42,6 +42,7 @@ protected:
 	void AddComponent(const string &bracket_type, const string &value);
 	string EvaluateSQL(ShellState &state, const string &sql);
 	string HandleColor(const PromptComponent &component);
+	virtual bool ParseSetting(const string &bracket_type, const string &value);
 	virtual string HandleSetting(ShellState &state, const PromptComponent &component);
 	virtual vector<string> GetSupportedSettings();
 	string HandleText(ShellState &state, const string &text, idx_t &length);
