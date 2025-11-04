@@ -7,20 +7,21 @@ It handles building both versions, running the given set of benchmarks, and gene
 First, install the requirements: ``  pip install pandas plotly kaleido``
 ### Example
 ```bash
-NEW_PATH=/path/to/my/duckdb_fork \
-OLD_PATH=/path/to/my/duckdb_main \
-BENCHMARK="benchmark/parquet/.*" \
-./autobench.sh
+python3 scripts/autobench.py --old_path "/path/to/my/duckdb_main"  --new_path "/path/to/my/duckdb_fork" --benchmark "benchmark/parquet/.*"
   ```
 
 You must provide three environment variables to run the script.
 Make sure you have cloned duckdb twice, one should be the main branch, and the other is your forked version, for development.
 
-* `NEW_PATH`: The absolute path to your "new" or "feature" branch forked repository.
-* `OLD_PATH`: The absolute path to the "old" (e.g., `main`) branch repository.
-* `BENCHMARK`: The RELATIVE path to a .benchmark file (e.g. benchmark/parquet/parquet_load.benchmark), or a regex string to select which benchmarks to run,  (e.g., `benchmark/parquet/.*` will run all inside the parquet folder).
+* `old_path`: The absolute path to the "old" (e.g., `main`) branch repository.
+* `new_path`: The absolute path to your "new" or "feature" branch forked repository.
+* `benchmark_pattern`: The RELATIVE path to a .benchmark file (e.g. benchmark/parquet/parquet_load.benchmark), or a regex string to select which benchmarks to run,  (e.g., `benchmark/parquet/.*` will run all inside the parquet folder).
 
-
+#### Tip:
+Set an alias with your new and old path, so in the future you can just invoke `autobench` and only need to pass the benchmark you want
+```bash
+echo "alias autobench='python3 scripts/autobench.py --old_path \"/path/to/my/duckdb_main\" --new_path \"/path/to/my/duckdb_fork\"'" >> ~/.zshrc && source ~/.zshrc
+```
 ## What It Does: The Workflow
 
 The script performs the following steps:

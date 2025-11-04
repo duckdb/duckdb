@@ -3,22 +3,108 @@ import plotly.graph_objects as go
 from pathlib import Path
 from datetime import datetime
 import argparse
-
+import subprocess
+import sys, os
 import kaleido
 # kaleido.get_chrome_sync()
 
 # Set up the argument parser
 parser = argparse.ArgumentParser(description="Script called by autobench.sh toplot benchmark comparisons")
 
-parser.add_argument("--new_path", type=str, help="Path to the new repo.", required=True)
+parser.add_argument("--new_path", type=str, help="The absolute path to your 'new' or 'feature' branch forked repository.", required=True)
+parser.add_argument("--old_path", type=str, help="The absolute path to the 'old' (e.g., main branch) repository.", required=True)
+parser.add_argument("--benchmark_pattern", type=str, help="The RELATIVE path to a .benchmark file (e.g. benchmark/parquet/parquet_load.benchmark), or a regex string to select which benchmarks to run,  (e.g., `benchmark/parquet/.*` will run all inside the parquet folder).", required=True)
 args = parser.parse_args()
 new_repo_path = args.new_path
+old_repo_path = args.old_path
+benchmark_pattern = args.benchmark_pattern
 
 # -------------------------------------------------------------------
 # File loading
 # -------------------------------------------------------------------
-old_file_path = Path(f"{new_repo_path}/plots/timings/timings_old.out")
-new_file_path = Path(f"{new_repo_path}/plots/timings/timings_new.out")
+timings_dir = Path(new_repo_path) / "plots" / "timings"
+timings_dir.mkdir(parents=True, exist_ok=True)  # ensure folder exists
+old_file_path = Path(f"{timings_dir}/timings_old.out")
+new_file_path = Path(f"{timings_dir}/timings_new.out")
+
+
+def run_build_and_benchmarks(path_dir: str, tag: str):
+    timings_file = Path(new_repo_path) / "plots" / "timings" / f"timings_{tag}.out"
+
+    print(f"\033[1;36mBuilding {tag}...\033[0m")
+
+    env = os.environ.copy()
+    env.update({
+        "BUILD_BENCHMARK": "1",
+        "CORE_EXTENSIONS": "tpch"
+    })
+
+    # Run build, stream output live (like tee), and capture it in memory
+    process = subprocess.Popen(
+        ["make", "-C", path_dir],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+        bufsize=1  # line-buffered
+    )
+
+    build_output = []
+    for line in process.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        build_output.append(line)
+
+    process.wait()
+    build_exit_code = process.returncode
+    build_output_str = "".join(build_output)
+
+    if build_exit_code != 0:
+        print(f"\033[1;31m❌ Build failed for {tag} with exit code {build_exit_code}\033[0m")
+        sys.exit(1)
+
+    # Detect whether Ninja built anything
+    built = (
+            "Building CXX object" in build_output_str
+            or "Linking CXX executable" in build_output_str
+    )
+
+    # Check if timings file exists
+    timings_missing = not timings_file.exists()
+
+    if built or timings_missing:
+        print(f"\033[1;32mRunning benchmarks for {tag}...\033[0m")
+
+        benchmark_runner = Path(path_dir) / "build" / "release" / "benchmark" / "benchmark_runner"
+        if not benchmark_runner.exists():
+            print(f"\033[1;31m❌ Benchmark runner not found at {benchmark_runner}\033[0m")
+            sys.exit(1)
+
+        # Run benchmark with live output and tee to timings_file
+        with open(timings_file, "w") as f:
+            bench_proc = subprocess.Popen(
+                [str(benchmark_runner), benchmark_pattern, "--root-dir", new_repo_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+
+            for line in bench_proc.stdout:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                f.write(line)
+
+            bench_proc.wait()
+            if bench_proc.returncode != 0:
+                print(f"\033[1;31m❌ Benchmark failed for {tag}\033[0m")
+                sys.exit(1)
+    else:
+        print(f"\033[1;33mSkipping benchmarks for {tag} (no code changes and timings file exists).\033[0m")
+
+
+run_build_and_benchmarks(args.new_path, "new")
+run_build_and_benchmarks(args.old_path, "old")
 
 if not old_file_path.exists() or not new_file_path.exists():
     raise FileNotFoundError("Both 'timings_old.out' and 'timings_new.out' must exist in the current directory.")
