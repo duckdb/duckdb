@@ -29,9 +29,18 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaAssign(PEGTransfo
 			info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(expr->ToString())));
 		}
 	} else {
-		throw ParserException("PRAGMA statement received unexpected expression");
+		info.parameters.emplace_back(std::move(expr));
 	}
-	auto set_statement = make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
+	// SQLite does not distinguish between:
+	// "PRAGMA table_info='integers'"
+	// "PRAGMA table_info('integers')"
+	// for compatibility, any pragmas that match the SQLite ones are parsed as calls
+	case_insensitive_set_t sqlite_compat_pragmas {"table_info"};
+	if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
+		return std::move(result);
+	}
+	auto set_statement =
+		make_uniq<SetVariableStatement>(info.name, std::move(info.parameters[0]), SetScope::AUTOMATIC);
 	return std::move(set_statement);
 }
 
@@ -43,8 +52,19 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaFunction(PEGTrans
 	result->info->name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto &optional_parameters_pr = list_pr.Child<OptionalParseResult>(1);
 	if (optional_parameters_pr.HasResult()) {
-		result->info->parameters =
-		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(optional_parameters_pr.optional_result);
+		auto parameters = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(optional_parameters_pr.optional_result);
+		for (auto &parameter : parameters) {
+			if (parameter->GetExpressionType() == ExpressionType::COLUMN_REF) {
+				auto &colref = parameter->Cast<ColumnRefExpression>();
+				if (!colref.IsQualified()) {
+					result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));
+				} else {
+					result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(parameter->ToString())));
+				}
+			} else {
+				result->info->parameters.emplace_back(std::move(parameter));
+			}
+		}
 	}
 	return result;
 }
@@ -54,7 +74,8 @@ PEGTransformerFactory::TransformPragmaParameters(PEGTransformer &transformer, op
 	// TODO(Dtenwolde) Check about named parameters
 	// PragmaParameters <- List(Expression)
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto expr_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto expr_list = ExtractParseResultsFromList(extract_parens);
 	vector<unique_ptr<ParsedExpression>> parameters;
 	for (auto expr : expr_list) {
 		parameters.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));

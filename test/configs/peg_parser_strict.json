@@ -98,7 +98,8 @@
         "test/sql/keywords/escaped_quotes_expressions.test",
         "test/sql/keywords/keywords_in_expressions.test",
         "test/sql/show_select/test_describe_quoted.test",
-        "test/sql/show_select/test_summarize_quoted.test"
+        "test/sql/show_select/test_summarize_quoted.test",
+        "test/sql/pragma/test_show_tables.test"
       ]
     },
     {

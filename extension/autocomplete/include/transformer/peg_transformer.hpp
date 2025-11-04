@@ -100,7 +100,7 @@ public:
 			throw InternalException("Enum mapping for rule '%s' has an unexpected type.", enum_rule_name);
 		}
 
-		return std::move(typed_enum_ptr->value);
+		return typed_enum_ptr->value;
 	}
 
 	template <typename T>

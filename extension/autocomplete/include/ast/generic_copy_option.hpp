@@ -17,6 +17,25 @@ struct GenericCopyOption {
 	GenericCopyOption(const string &name_p, const Value &value) : name(name_p) {
 		children.push_back(value);
 	}
+
+	GenericCopyOption(const GenericCopyOption &other)
+	    : name(other.name), children(other.children),
+	      expression(other.expression ? other.expression->Copy() : nullptr) {
+	}
+
+	GenericCopyOption &operator=(const GenericCopyOption &other) {
+		if (this == &other) {
+			return *this;
+		}
+
+		name = other.name;
+		children = other.children;
+		expression = other.expression ? other.expression->Copy() : nullptr;
+
+		return *this;
+	}
+	GenericCopyOption(GenericCopyOption &&other) noexcept = default;
+	GenericCopyOption &operator=(GenericCopyOption &&other) noexcept = default;
 };
 
 } // namespace duckdb

@@ -766,7 +766,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"PragmaStatement <- 'PRAGMA' (PragmaAssign / PragmaFunction)\n"
 	"PragmaAssign <- SettingName '=' VariableList\n"
 	"PragmaFunction <- PragmaName PragmaParameters?\n"
-	"PragmaParameters <- List(Expression)\n"
+	"PragmaParameters <- Parens(List(Expression))\n"
 	"DeallocateStatement <- 'DEALLOCATE' 'PREPARE'? Identifier\n"
 	"PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement\n"
 	"TypeList <- Parens(List(Type))\n"
