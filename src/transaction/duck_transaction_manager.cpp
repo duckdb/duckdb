@@ -271,10 +271,13 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// grab the WAL lock and hold it until the entire commit is finished
 		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
 
-		auto &profiler = *context.client_data->profiler;
-		profiler.StartTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
-		error = transaction.WriteToWAL(db, commit_state);
-		profiler.EndTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
+		// Commit the changes to the WAL.
+		if (db.GetRecoveryMode() == RecoveryMode::DEFAULT) {
+			auto &profiler = *context.client_data->profiler;
+			profiler.StartTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
+			error = transaction.WriteToWAL(db, commit_state);
+			profiler.EndTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
+		}
 
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();
@@ -282,7 +285,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// in-memory databases don't have a WAL - we estimate how large their changeset is based on the undo properties
 	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
-		if (storage_manager.InMemory()) {
+		if (storage_manager.InMemory() || db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
 			storage_manager.AddInMemoryChange(undo_properties.estimated_size);
 		}
 	}
