@@ -185,7 +185,6 @@ void Prompt::ParsePrompt(const string &prompt) {
 }
 
 string Prompt::EvaluateSQL(ShellState &state, const string &sql) {
-	state.OpenDB();
 	auto &con = *state.conn;
 	auto result = con.Query(sql);
 	if (result->HasError()) {
@@ -205,17 +204,9 @@ string Prompt::EvaluateSQL(ShellState &state, const string &sql) {
 }
 
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
-	if (!state.conn) {
-		if (component.literal == "current_schema") {
-			return "main";
-		}
-		duckdb::LocalFileSystem lfs;
-		return duckdb::AttachedDatabase::ExtractDatabaseName(state.zDbFilename, lfs);
-	}
 	auto &con = *state.conn;
 	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(*con.context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
-	;
 	if (component.literal == "current_database") {
 		return current_db;
 	}

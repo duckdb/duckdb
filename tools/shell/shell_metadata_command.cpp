@@ -108,8 +108,6 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 		}
 	}
 
-	state.OpenDB();
-
 	/* When playing back a "dump", the content might appear in an order
 	** which causes immediate foreign key constraints to be violated.
 	** So disable foreign-key constraint enforcement to prevent problems. */
