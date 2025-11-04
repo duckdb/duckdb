@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE orders_small AS SELECT * FROM parquet_scan('data/parquet-testing/orders_small_parquet.test');
+CREATE TABLE orders_small AS SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/orders_small_parquet.test');
 
 query IIII nosort
 select o_orderkey, o_clerk, o_orderstatus, o_totalprice from orders_small

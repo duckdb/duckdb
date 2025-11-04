@@ -1,6 +1,7 @@
 {
     "group": "replacement_scans",
     "deprecated": false,
+    "description": "Functions to create, execute, and register a custom replacement scan. A replacement scan is a callback replacing a scan of a table that does not exist in the catalog.",
     "entries": [
         {
             "name": "duckdb_add_replacement_scan",

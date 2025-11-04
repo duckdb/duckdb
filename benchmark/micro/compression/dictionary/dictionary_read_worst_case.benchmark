@@ -4,7 +4,7 @@
 
 name Dictionary Compression Scan
 group aggregate
-storage persistent
+storage persistent v1.4.0
 
 load
 DROP TABLE IF EXISTS test;

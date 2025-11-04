@@ -11,7 +11,7 @@ statement ok
 SET memory_limit='200MiB';
 
 query I
-SELECT * FROM read_json_objects('data/json/example_rn.ndjson', format='nd');
+SELECT * FROM read_json_objects('{DATA_DIR}/json/example_rn.ndjson', format='nd');
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -23,6 +23,6 @@ statement ok
 SET memory_limit='50MiB';
 
 statement error
-SELECT * FROM read_json_objects('data/json/example_rn.ndjson', format='nd');
+SELECT * FROM read_json_objects('{DATA_DIR}/json/example_rn.ndjson', format='nd');
 ----
 Out of Memory Error

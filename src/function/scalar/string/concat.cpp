@@ -208,9 +208,13 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ConcatFunctionData>();
+	if (info.return_type.id() == LogicalTypeId::SQLNULL) {
+		return;
+	}
 	if (info.return_type.id() == LogicalTypeId::LIST) {
 		return ListConcatFunction(args, state, result, info.is_operator);
-	} else if (info.is_operator) {
+	}
+	if (info.is_operator) {
 		return ConcatOperator(args, state, result);
 	}
 	return StringConcatFunction(args, state, result);
@@ -288,6 +292,7 @@ unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &
 unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, ScalarFunction &bound_function,
                                                     vector<unique_ptr<Expression>> &arguments, bool is_operator) {
 	bool list_concat = false;
+	bool all_null = true;
 	// blob concat is only supported for the concat operator - regular concat converts to varchar
 	bool all_blob = is_operator ? true : false;
 	for (auto &arg : arguments) {
@@ -300,8 +305,11 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 		if (arg->return_type.id() != LogicalTypeId::BLOB) {
 			all_blob = false;
 		}
+		if (arg->return_type.id() != LogicalTypeId::SQLNULL) {
+			all_null = false;
+		}
 	}
-	if (list_concat) {
+	if (list_concat || all_null) {
 		return BindListConcat(context, bound_function, arguments, is_operator);
 	}
 	auto return_type = all_blob ? LogicalType::BLOB : LogicalType::VARCHAR;
