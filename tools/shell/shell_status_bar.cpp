@@ -24,7 +24,15 @@ protected:
 
 	string HandleSetting(ShellState &state, const PromptComponent &component) override {
 		if (component.literal == "progress_bar_percentage") {
-			return to_string(status_bar.percentage) + "%";
+			string result;
+			if (status_bar.percentage < 100) {
+				result += " ";
+			}
+			if (status_bar.percentage < 10) {
+				result += " ";
+			}
+			result += to_string(status_bar.percentage) + "%";
+			return result;
 		}
 		if (component.literal == "progress_bar") {
 			return duckdb::TerminalProgressBarDisplay::FormatProgressBar(status_bar.display_info,
