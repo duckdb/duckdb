@@ -3,7 +3,7 @@
 # group: [duckfuzz]
 
 statement ok
-create table my_table as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+create table my_table as select * exclude(time_ns, small_enum, medium_enum, large_enum) from test_all_types();
 
 # should error, not crash
 statement error
