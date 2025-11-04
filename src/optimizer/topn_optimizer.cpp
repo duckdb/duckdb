@@ -18,17 +18,28 @@ namespace duckdb {
 namespace {
 
 bool CanReorderRowGroups(LogicalTopN &op, bool &use_limit) {
+	use_limit = true;
+	for (const auto &order : op.orders) {
+		// We do not support any null-first orders as this requires unimplemented logic in the row group reorderer
+		if (order.null_order == OrderByNullType::NULLS_FIRST) {
+			use_limit = false;
+			break;
+		}
+	}
+
 	// Only reorder row groups if there are no additional limit operators since they could modify the order
 	reference<LogicalOperator> current_op = op;
-	use_limit = true;
+
 	while (!current_op.get().children.empty()) {
 		if (current_op.get().children.size() > 1) {
 			return false;
 		}
-		if (current_op.get().type == LogicalOperatorType::LOGICAL_LIMIT) {
+		const auto op_type = current_op.get().type;
+		if (op_type == LogicalOperatorType::LOGICAL_LIMIT) {
 			return false;
 		}
-		if (current_op.get().type == LogicalOperatorType::LOGICAL_FILTER) {
+		if (op_type == LogicalOperatorType::LOGICAL_FILTER ||
+		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 			use_limit = false;
 		}
 		current_op = *current_op.get().children[0];

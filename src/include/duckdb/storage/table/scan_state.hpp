@@ -192,6 +192,8 @@ public:
 	optional_ptr<RowGroup> GetNextRowGroup(optional_ptr<RowGroup> row_group);
 	optional_ptr<RowGroup> GetRootSegment(RowGroupSegmentTree &row_groups);
 
+	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
+
 private:
 	const column_t column_idx;
 	const OrderByStatistics order_by;
@@ -204,12 +206,12 @@ private:
 	vector<optional_ptr<RowGroup>> ordered_row_groups;
 
 private:
-	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
 	void SetRowGroupVectorWithLimit(
 	    const multimap<Value, pair<unique_ptr<BaseStatistics>, reference<RowGroup>>> &row_group_map);
-	void AddRowGroupWithLimit(const Value &order_by_value, BaseStatistics &row_group_stats,
-	                          reference<RowGroup> current_row_group, Value &row_group_boundary,
-	                          idx_t &qualifying_tuples, idx_t &seen_tuples, OrderByStatistics stat_type);
+	bool AddRowGroupWithLimit(const Value &order_by_value, BaseStatistics &row_group_stats,
+	                          reference<RowGroup> current_row_group, const Value &previous_order_by,
+	                          reference<BaseStatistics> &last_row_group_stats, idx_t &qualifying_tuples,
+	                          idx_t &seen_tuples, OrderByStatistics stat_type);
 };
 
 class CollectionScanState {

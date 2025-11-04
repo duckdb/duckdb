@@ -10,6 +10,50 @@
 
 namespace duckdb {
 
+namespace {
+
+template <typename It, typename End>
+void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_groups, const idx_t row_limit,
+                  const OrderByColumnType column_type, const OrderByStatistics stat_type) {
+	auto opposite_stat_type = stat_type == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+
+	idx_t qualifying_tuples = 0;
+	idx_t seen_tuples = 0;
+
+	Value previous_key;
+	reference<BaseStatistics> last_row_group_stats = *it->second.first;
+	for (; it != end; ++it) {
+		auto &current_key = it->first;
+		auto &stats = *it->second.first;
+		auto &row_group = it->second.second;
+
+		auto last_boundary =
+		    RowGroupReorderer::RetrieveStat(last_row_group_stats.get(), opposite_stat_type, column_type);
+		if ((stat_type == OrderByStatistics::MAX && current_key < last_boundary) ||
+		    (stat_type == OrderByStatistics::MIN && current_key > last_boundary)) {
+			// Row groups do not overlap: we can guarantee that the tuples up until now qualify
+			last_row_group_stats = stats;
+			qualifying_tuples = seen_tuples;
+		} else {
+			if (!previous_key.IsNull() && previous_key != current_key) {
+				// Only if the opposite boundaries are inequal, we can guarantee to have >= 1 distinct qualifying rows.
+				// We need distinctness as there may be secondary orders that qualify rows in later row groups.
+				qualifying_tuples++;
+			}
+		}
+		if (qualifying_tuples >= row_limit) {
+			break;
+		}
+
+		seen_tuples += row_group.get().count;
+		ordered_row_groups.emplace_back(row_group);
+
+		previous_key = current_key;
+	}
+}
+
+} // namespace
+
 TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 }
 
@@ -137,57 +181,46 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 void RowGroupReorderer::SetRowGroupVectorWithLimit(
     const multimap<Value, pair<unique_ptr<BaseStatistics>, reference<RowGroup>>> &row_group_map) {
 	D_ASSERT(row_limit.IsValid());
-	idx_t qualifying_tuples = 0;
-	idx_t seen_tuples = 0;
 
-	const auto stat_type = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MAX : OrderByStatistics::MIN;
-	Value row_group_boundary = RetrieveStat(*row_group_map.begin()->second.first, stat_type, column_type);
-
+	const auto stat_type = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 	ordered_row_groups.reserve(row_group_map.size());
 
+	Value previous_key;
 	if (order_type == RowGroupOrderType::ASC) {
-		for (auto &stats_row_group_pair : row_group_map) {
-			auto &current_min = stats_row_group_pair.first;
-			auto &stats = *stats_row_group_pair.second.first;
-			auto &row_group = stats_row_group_pair.second.second;
-
-			AddRowGroupWithLimit(current_min, stats, row_group, row_group_boundary, qualifying_tuples, seen_tuples,
-			                     stat_type);
-
-			if (qualifying_tuples >= row_limit.GetIndex()) {
-				break;
-			}
-		}
+		auto it = row_group_map.begin();
+		auto end = row_group_map.end();
+		AddRowGroups(it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
 	} else {
-		for (auto it = row_group_map.rbegin(); it != row_group_map.rend(); ++it) {
-			auto &current_max = it->first;
-			auto &stats = *it->second.first;
-			auto &row_group = it->second.second;
-
-			AddRowGroupWithLimit(current_max, stats, row_group, row_group_boundary, qualifying_tuples, seen_tuples,
-			                     stat_type);
-
-			if (qualifying_tuples >= row_limit.GetIndex()) {
-				break;
-			}
-		}
+		auto it = row_group_map.rbegin();
+		auto end = row_group_map.rend();
+		AddRowGroups(it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
 	}
 }
 
-void RowGroupReorderer::AddRowGroupWithLimit(const Value &order_by_value, BaseStatistics &row_group_stats,
-                                             reference<RowGroup> current_row_group, Value &row_group_boundary,
-                                             idx_t &qualifying_tuples, idx_t &seen_tuples,
-                                             OrderByStatistics stat_type) {
-	ordered_row_groups.emplace_back(current_row_group);
-	seen_tuples += current_row_group.get().count;
-
-	if ((stat_type == OrderByStatistics::MAX && order_by_value > row_group_boundary) ||
-	    (order_by_value < row_group_boundary)) {
-		row_group_boundary = RetrieveStat(row_group_stats, stat_type, column_type);
+bool RowGroupReorderer::AddRowGroupWithLimit(const Value &order_by_value, BaseStatistics &row_group_stats,
+                                             reference<RowGroup> current_row_group, const Value &previous_order_by,
+                                             reference<BaseStatistics> &last_row_group_stats, idx_t &qualifying_tuples,
+                                             idx_t &seen_tuples, OrderByStatistics stat_type) {
+	auto new_row_group_boundary = RetrieveStat(row_group_stats, stat_type, column_type);
+	if ((stat_type == OrderByStatistics::MAX && new_row_group_boundary < order_by_value) ||
+	    (stat_type == OrderByStatistics::MIN && new_row_group_boundary > order_by_value)) {
+		// Row groups do not overlap: we can guarantee that the tuples up until now qualify
+		last_row_group_stats = row_group_stats;
 		qualifying_tuples = seen_tuples;
 	} else {
-		qualifying_tuples++;
+		if (!previous_order_by.IsNull() && order_by_value != previous_order_by) {
+			// Only if the opposite boundaries are inequal, we can guarantee to have >= 1 distinct qualifying rows.
+			// We need distinctness as there may be secondary orders that qualify rows in later row groups.
+			qualifying_tuples++;
+		}
 	}
+	if (qualifying_tuples >= row_limit.GetIndex()) {
+		return true;
+	}
+
+	seen_tuples += current_row_group.get().count;
+	ordered_row_groups.emplace_back(current_row_group);
+	return false;
 }
 
 optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
