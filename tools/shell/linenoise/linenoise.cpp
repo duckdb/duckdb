@@ -1126,7 +1126,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
     }
     bool control_pressed = false;
     bool alt_pressed = false;
-    Linenoise::Log("Unicode character %d, ascii character %d", key_event.uChar.UnicodeChar, key_event.uChar.AsciiChar);
+    Linenoise::Log("Unicode character %d, ascii character %d, control state %d", key_event.uChar.UnicodeChar, key_event.uChar.AsciiChar, key_event.dwControlKeyState);
 
     if ((key_event.dwControlKeyState &
          (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) ==
@@ -1268,6 +1268,19 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 #endif
 }
 
+bool Linenoise::Write(int fd, const char *data, idx_t size) {
+#if defined(_WIN32) || defined(WIN32)
+    // convert to character encoding in Windows shell
+    auto new_text = duckdb_shell::ShellState::Win32Utf8ToMbcs(data, true);
+    string buffer = string(reinterpret_cast<char *>(new_text.get()));
+    data = buffer.c_str();
+    size = buffer.size();
+#endif
+    if (write(fd, data, size) == -1) {
+        return false;
+    }
+    return true;
+}
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
  * will be returned ASAP to read().
@@ -1281,9 +1294,9 @@ int Linenoise::Edit() {
 	 * initially is just an empty string. */
 	History::Add("");
 
-	if (write(ofd, prompt, plen) == -1) {
-		return -1;
-	}
+    if (!Write(ofd, prompt, plen)) {
+        return -1;
+    }
 	while (true) {
 		KeyPress key_press;
 		if (!TryGetKeyPress(ifd, key_press)) {

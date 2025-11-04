@@ -47,15 +47,10 @@ struct AppendBuffer {
 	}
 
 	void Write(int fd) {
-#if defined(_WIN32) || defined(WIN32)
-        // convert to character encoding in Windows shell
-        auto new_text = duckdb_shell::ShellState::Win32Utf8ToMbcs(buffer.c_str(), true);
-        buffer = string(reinterpret_cast<char *>(new_text.get()));
-#endif
-		if (write(fd, buffer.c_str(), buffer.size()) == -1) {
+        if (!Linenoise::Write(fd, buffer.c_str(), buffer.size())) {
 			/* Can't recover from write error. */
 			Linenoise::Log("%s", "Failed to write buffer\n");
-		}
+        }
 	}
 
 private:

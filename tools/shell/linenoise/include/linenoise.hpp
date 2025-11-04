@@ -158,6 +158,7 @@ public:
 	static void EnableErrorRendering();
 	static void DisableErrorRendering();
     static string GetTemporaryDirectory();
+    static bool Write(int fd, const char *data, idx_t size);
 
 public:
 	static void LogTokens(const vector<highlightToken> &tokens);
