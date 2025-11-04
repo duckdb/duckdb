@@ -4,6 +4,9 @@
   "on_new_connection": "USE __test__config__crypto;",
   "on_load": "skip",
   "skip_compiled": "true",
+  "statically_loaded_extensions": [
+    "httpfs"
+  ],
   "skip_tests": [
     {
       "reason": "TODO",

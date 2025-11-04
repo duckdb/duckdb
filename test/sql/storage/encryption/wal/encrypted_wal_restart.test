@@ -2,6 +2,9 @@
 # description: test wal restart
 # group: [wal]
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 foreach cipher GCM CTR
 
 load __TEST_DIR__/any_wal_db.db

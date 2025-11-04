@@ -6,6 +6,8 @@ require parquet
 
 require tpch
 
+require httpfs
+
 statement ok
 CALL dbgen(sf=1)
 

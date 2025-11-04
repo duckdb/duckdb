@@ -19,7 +19,7 @@ EncryptionKey::EncryptionKey(data_ptr_t encryption_key_p) {
 	D_ASSERT(memcmp(key, encryption_key_p, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH) == 0);
 
 	// zero out the encryption key in memory
-	memset(encryption_key_p, 0, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(encryption_key_p, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	LockEncryptionKey(key);
 }
 
@@ -37,7 +37,7 @@ void EncryptionKey::LockEncryptionKey(data_ptr_t key, idx_t key_len) {
 }
 
 void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, idx_t key_len) {
-	memset(key, 0, key_len);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key, key_len);
 #if defined(_WIN32)
 	VirtualUnlock(key, key_len);
 #else
@@ -64,7 +64,8 @@ EncryptionKeyManager &EncryptionKeyManager::Get(DatabaseInstance &db) {
 
 string EncryptionKeyManager::GenerateRandomKeyID() {
 	uint8_t key_id[KEY_ID_BYTES];
-	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(key_id, KEY_ID_BYTES);
+	RandomEngine engine;
+	engine.RandomData(key_id, KEY_ID_BYTES);
 	string key_id_str(reinterpret_cast<const char *>(key_id), KEY_ID_BYTES);
 	return key_id_str;
 }
@@ -72,7 +73,7 @@ string EncryptionKeyManager::GenerateRandomKeyID() {
 void EncryptionKeyManager::AddKey(const string &key_name, data_ptr_t key) {
 	derived_keys.emplace(key_name, EncryptionKey(key));
 	// Zero-out the encryption key
-	std::memset(key, 0, DERIVED_KEY_LENGTH);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key, DERIVED_KEY_LENGTH);
 }
 
 bool EncryptionKeyManager::HasKey(const string &key_name) const {
@@ -107,7 +108,7 @@ string EncryptionKeyManager::Base64Decode(const string &key) {
 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
 	Blob::FromBase64(key, output.get(), result_size);
 	string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
-	memset(output.get(), 0, result_size);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(output.get(), result_size);
 	return decoded_key;
 }
 
