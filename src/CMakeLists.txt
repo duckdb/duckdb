@@ -94,9 +94,9 @@ target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
 link_threads(duckdb_static PUBLIC)
 
 add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
-target_link_libraries(
-  duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS}
-                $<TARGET_OBJECTS:dummy_static_extension_loader>)
+target_link_libraries(duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS})
+link_extension_libraries(duckdb PRIVATE)
+
 link_threads(duckdb PUBLIC)
 
 if(SET_DUCKDB_LIBRARY_VERSION)
