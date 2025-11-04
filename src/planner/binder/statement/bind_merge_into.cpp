@@ -185,6 +185,20 @@ LogicalGet &ExtractLogicalGet(LogicalOperator &op) {
 	return current_op.get().Cast<LogicalGet>();
 }
 
+void CheckMergeAction(MergeActionCondition condition, MergeActionType action_type) {
+	if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) {
+		switch (action_type) {
+		case MergeActionType::MERGE_UPDATE:
+		case MergeActionType::MERGE_DELETE:
+			throw ParserException("WHEN NOT MATCHED (BY TARGET) cannot be combined with UPDATE or DELETE actions - as "
+			                      "there is no corresponding row in the target to update or delete.\nDid you mean to "
+			                      "use WHEN MATCHED or WHEN NOT MATCHED BY SOURCE?");
+		default:
+			break;
+		}
+	}
+}
+
 BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
@@ -277,6 +291,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	for (auto &entry : stmt.actions) {
 		vector<unique_ptr<BoundMergeIntoAction>> bound_actions;
 		for (auto &action : entry.second) {
+			CheckMergeAction(entry.first, action->action_type);
 			bound_actions.push_back(BindMergeAction(*merge_into, table, get, proj_index, projection_expressions, root,
 			                                        *action, source_aliases, source_names));
 		}
