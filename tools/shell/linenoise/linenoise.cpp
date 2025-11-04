@@ -916,8 +916,7 @@ KeyPress Linenoise::Search(KeyPress key_press) {
 		SearchNext();
 		break;
 	case ESC: /* escape sequence */ {
-		auto escape = Terminal::ReadEscapeSequence(ifd);
-		switch (escape) {
+		switch (key_press.sequence) {
 		case EscapeSequence::ESCAPE:
 			// double escape accepts search without any additional command
 			AcceptSearch();
