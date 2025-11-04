@@ -182,11 +182,6 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 enum class AsOfJoinSourceStage : uint8_t { INIT, MATERIALIZE, LEFT, RIGHT, DONE };
 
 struct AsOfSourceTask {
-	template <typename T>
-	static T BinValue(T n, T val) {
-		return ((n + (val - 1)) / val);
-	}
-
 	AsOfSourceTask() {
 	}
 
@@ -320,6 +315,11 @@ class AsOfHashGroup {
 public:
 	using HashGroupPtr = unique_ptr<SortedRun>;
 
+	template <typename T>
+	static T BinValue(T n, T val) {
+		return ((n + (val - 1)) / val);
+	}
+
 	AsOfHashGroup(const PhysicalAsOfJoin &op, const idx_t left_count, const idx_t right_count, const idx_t hash_group);
 
 	//! Is this a right join (do we have a RIGHT stage?)
@@ -339,12 +339,12 @@ public:
 
 	//! The number of left chunks
 	idx_t LeftChunks() const {
-		return AsOfSourceTask::BinValue<idx_t>(left_count, STANDARD_VECTOR_SIZE);
+		return BinValue<idx_t>(left_count, STANDARD_VECTOR_SIZE);
 	}
 
 	//! The number of left chunks
 	idx_t RightChunks() const {
-		return AsOfSourceTask::BinValue<idx_t>(right_count, STANDARD_VECTOR_SIZE);
+		return BinValue<idx_t>(right_count, STANDARD_VECTOR_SIZE);
 	}
 
 	// Set up the task parameters
@@ -409,18 +409,18 @@ idx_t AsOfHashGroup::InitTasks(idx_t per_thread_p) {
 	stage_tasks.emplace_back(0);
 
 	//	MATERIALIZE
-	auto materialize_tasks = AsOfSourceTask::BinValue(LeftChunks(), per_thread);
-	materialize_tasks += AsOfSourceTask::BinValue(RightChunks(), per_thread);
+	auto materialize_tasks = BinValue(LeftChunks(), per_thread);
+	materialize_tasks += BinValue(RightChunks(), per_thread);
 	stage_tasks.emplace_back(materialize_tasks);
 
 	//	LEFT
 	const auto left_chunks = LeftChunks();
-	const auto left_tasks = AsOfSourceTask::BinValue<idx_t>(left_chunks, per_thread);
+	const auto left_tasks = BinValue(left_chunks, per_thread);
 	stage_tasks.emplace_back(left_tasks);
 
 	//	RIGHT
 	const auto right_chunks = IsRightOuter() ? RightChunks() : 0;
-	const auto right_tasks = AsOfSourceTask::BinValue<idx_t>(right_chunks, per_thread);
+	const auto right_tasks = BinValue(right_chunks, per_thread);
 	stage_tasks.emplace_back(right_tasks);
 
 	//	DONE
@@ -660,7 +660,7 @@ void AsOfGlobalSourceState::CreateTaskList(ClientContext &client) {
 	auto &ts = TaskScheduler::GetScheduler(client);
 	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
 
-	const auto per_thread = AsOfSourceTask::BinValue(max_block.first, threads);
+	const auto per_thread = AsOfHashGroup::BinValue(max_block.first, threads);
 	if (!per_thread) {
 		throw InternalException("No blocks per AsOf thread! %ld threads, %ld groups, %ld blocks, %ld hash group",
 		                        threads, partition_blocks.size(), max_block.first, max_block.second);

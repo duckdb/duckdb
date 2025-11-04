@@ -49,12 +49,22 @@ public:
 	using TaskPtr = optional_ptr<Task>;
 	using ScannerPtr = unique_ptr<WindowCollectionChunkScanner>;
 
-	WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t blocks, const idx_t hash_bin_p);
+	template <typename T>
+	static T BinValue(T n, T val) {
+		return ((n + (val - 1)) / val);
+	}
+
+	WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t count, const idx_t hash_bin_p);
 
 	void AllocateMasks();
 	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx);
 
 	ExecutorGlobalStates &GetGlobalStates(ClientContext &client);
+
+	//! The number of chunks in the group
+	inline idx_t ChunkCount() const {
+		return blocks;
+	}
 
 	// The total number of tasks we will execute per thread
 	inline idx_t GetTaskCount() const {
@@ -127,7 +137,7 @@ public:
 			task.thread_idx = next_task % group_threads;
 			task.group_idx = hash_bin;
 			task.begin_idx = task.thread_idx * per_thread;
-			task.max_idx = rows->ChunkCount();
+			task.max_idx = ChunkCount();
 			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 			++next_task;
 			return true;
@@ -139,13 +149,11 @@ public:
 	//! The shared global state from sinking
 	WindowGlobalSinkState &gsink;
 	//! The hash partition data
-	HashGroupPtr hash_group;
+	HashGroupPtr rows;
 	//! The size of the group
 	idx_t count = 0;
 	//! The number of blocks in the group
 	idx_t blocks = 0;
-	unique_ptr<ColumnDataCollection> rows;
-	TupleDataLayout layout;
 	//! The partition boundary mask
 	ValidityMask partition_mask;
 	//! The order boundary mask
@@ -455,8 +463,8 @@ void WindowGlobalSourceState::CreateTaskList() {
 	// STANDARD_VECTOR_SIZE >> ValidityMask::BITS_PER_VALUE, but if STANDARD_VECTOR_SIZE is say 2,
 	// we need to align the chunk count to the mask width.
 	const auto aligned_scale = MaxValue<idx_t>(ValidityMask::BITS_PER_VALUE / STANDARD_VECTOR_SIZE, 1);
-	const auto aligned_count = (max_block.first + aligned_scale - 1) / aligned_scale;
-	const auto per_thread = aligned_scale * ((aligned_count + threads - 1) / threads);
+	const auto aligned_count = WindowHashGroup::BinValue(max_block.first, aligned_scale);
+	const auto per_thread = aligned_scale * WindowHashGroup::BinValue(aligned_count, threads);
 	if (!per_thread) {
 		throw InternalException("No blocks per thread! %ld threads, %ld groups, %ld blocks, %ld hash group", threads,
 		                        partition_blocks.size(), max_block.first, max_block.second);
@@ -475,12 +483,8 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, idx_t count, cons
 	// 2. One partition (sorting, but no hashing)
 	// 3. Multiple partitions (sorting and hashing)
 
-	//	How big is the partition?
-	auto &gpart = *gsink.global_partition;
-	layout.Initialize(gpart.payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-
 	//	We don't have collections until we sort.
-	blocks = (count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+	blocks = BinValue<idx_t>(count, STANDARD_VECTOR_SIZE);
 
 	// Set up the collection for any fully materialised data
 	const auto &shared = WindowSharedExpressions::GetSortedExpressions(gsink.shared.coll_shared);
@@ -691,7 +695,7 @@ protected:
 
 idx_t WindowHashGroup::InitTasks(idx_t per_thread_p) {
 	per_thread = per_thread_p;
-	group_threads = (rows->ChunkCount() + per_thread - 1) / per_thread;
+	group_threads = BinValue(ChunkCount(), per_thread);
 	thread_states.resize(GetThreadCount());
 
 	return GetTaskCount();
@@ -706,7 +710,10 @@ void WindowLocalSourceState::Materialize(ExecutionContext &context, InterruptSta
 	auto &gsink = gsource.gsink;
 	auto &hashed_sort = *gsink.global_partition;
 	if (hashed_sort.MaterializeColumnData(context, task_local.group_idx, source) == SourceResultType::FINISHED) {
-		window_hash_group->hash_group = hashed_sort.GetColumnData(task_local.group_idx, source);
+		auto column_data = hashed_sort.GetColumnData(task_local.group_idx, source);
+		if (column_data) {
+			window_hash_group->rows = std::move(column_data);
+		}
 	}
 
 	//	Mark this range as done
