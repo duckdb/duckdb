@@ -94,8 +94,8 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: reviewdog/action-suggester@v1
         with:
-          github_token: ${{ github.token }}
-          fail_level: info
+          level: error
+          fail_level: error
           cleanup: false
 
       - name: Show diff
