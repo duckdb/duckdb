@@ -74,7 +74,6 @@ protected:
 	virtual void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds,
 	                                   bool is_finished = false);
 
-private:
 	static int32_t NormalizePercentage(double percentage);
 	double GetElapsedDuration() {
 		auto now = std::chrono::steady_clock::now();

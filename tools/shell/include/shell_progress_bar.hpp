@@ -40,6 +40,9 @@ class ShellProgressBarDisplay : public duckdb::TerminalProgressBarDisplay {
 public:
 	ShellProgressBarDisplay();
 
+public:
+	void Finish() override;
+
 protected:
 	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds, bool is_finished) override;
 

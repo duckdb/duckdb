@@ -186,6 +186,11 @@ string ShellProgressBar::GenerateProgressBar(ShellState &state, idx_t terminal_w
 ShellProgressBarDisplay::ShellProgressBarDisplay() {
 }
 
+void ShellProgressBarDisplay::Finish() {
+	PrintProgressInternal(100, GetElapsedDuration(), true);
+	Printer::Flush(OutputStream::STREAM_STDOUT);
+}
+
 void ShellProgressBarDisplay::PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds,
                                                     bool is_finished) {
 	auto terminal_width = Printer::TerminalWidth();
