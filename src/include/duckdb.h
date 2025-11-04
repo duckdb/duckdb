@@ -5614,9 +5614,12 @@ If the requested option does not exist the scope is set to `DUCKDB_CONFIG_OPTION
 DUCKDB_C_API duckdb_value duckdb_client_context_get_config_option(duckdb_client_context context, const char *name,
                                                                   duckdb_config_option_scope *out_scope);
 
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
 // Copy Functions
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to copy data from and to external file formats.
+//----------------------------------------------------------------------------------------------------------------------
 
 /*!
 Creates a new empty copy function.

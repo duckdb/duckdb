@@ -308,6 +308,8 @@ enum class PendingExecutionResult : uint8_t;
 
 enum class PhysicalOperatorType : uint8_t;
 
+enum class PhysicalTableScanExecutionStrategy : uint8_t;
+
 enum class PhysicalType : uint8_t;
 
 enum class PragmaType : uint8_t;
@@ -327,6 +329,8 @@ enum class QuantileSerializationType : uint8_t;
 enum class QueryNodeType : uint8_t;
 
 enum class QueryResultType : uint8_t;
+
+enum class RecoveryMode : uint8_t;
 
 enum class RelationType : uint8_t;
 
@@ -872,6 +876,9 @@ template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value);
 
 template<>
+const char* EnumUtil::ToChars<PhysicalTableScanExecutionStrategy>(PhysicalTableScanExecutionStrategy value);
+
+template<>
 const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value);
 
 template<>
@@ -900,6 +907,9 @@ const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
+
+template<>
+const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
@@ -1509,6 +1519,9 @@ template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value);
 
 template<>
+PhysicalTableScanExecutionStrategy EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(const char *value);
+
+template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value);
 
 template<>
@@ -1537,6 +1550,9 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
+
+template<>
+RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);

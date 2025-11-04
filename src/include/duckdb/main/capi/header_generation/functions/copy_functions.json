@@ -1,6 +1,7 @@
 {
   "group": "copy_functions",
   "deprecated": false,
+  "description": "Functions to copy data from and to external file formats.",
   "entries": [
     {
       "name": "duckdb_create_copy_function",
