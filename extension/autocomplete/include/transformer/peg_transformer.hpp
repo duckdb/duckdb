@@ -100,7 +100,7 @@ public:
 			throw InternalException("Enum mapping for rule '%s' has an unexpected type.", enum_rule_name);
 		}
 
-		return typed_enum_ptr->value;
+		return std::move(typed_enum_ptr->value);
 	}
 
 	template <typename T>
@@ -153,6 +153,7 @@ public:
 	void RegisterCheckpoint();
 	void RegisterComment();
 	void RegisterCommon();
+	void RegisterCopy();
 	void RegisterCreateSequence();
 	void RegisterCreateTable();
 	void RegisterDeallocate();
@@ -320,6 +321,36 @@ private:
 	static LogicalType TransformIntervalInterval(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static DatePartSpecifier TransformInterval(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
+	// copy.gram
+	static unique_ptr<SQLStatement> TransformCopyStatement(PEGTransformer &transformer,
+	                                                       optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformCopySelect(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformCopyFromDatabase(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static CopyDatabaseType TransformCopyDatabaseFlag(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
+	static string ExtractFormat(const string &file_path);
+	static unique_ptr<SQLStatement> TransformCopyTable(PEGTransformer &transformer,
+	                                                   optional_ptr<ParseResult> parse_result);
+	static bool TransformFromOrTo(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformCopyFileName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformIdentifierColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<vector<Value>> TransformCopyOptions(PEGTransformer &transformer,
+	                                                                  optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<vector<Value>> TransformGenericCopyOptionListParens(
+	    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<vector<Value>> TransformSpecializedOptionList(PEGTransformer &transformer,
+	                                                                            optional_ptr<ParseResult> parse_result);
+
+	static GenericCopyOption TransformSpecializedOption(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static GenericCopyOption TransformSingleOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static GenericCopyOption TransformEncodingOption(PEGTransformer &transformer,
+	                                                 optional_ptr<ParseResult> parse_result);
+	static GenericCopyOption TransformForceQuoteOption(PEGTransformer &transformer,
+	                                                   optional_ptr<ParseResult> parse_result);
+
 	// create_sequence.gram
 	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
@@ -419,9 +450,8 @@ private:
 
 	// export.gram
 	static unique_ptr<SQLStatement> TransformExportStatement(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result);
-	static string TransformExportSource(PEGTransformer &transformer,
-                                                    optional_ptr<ParseResult> parse_result);
+	                                                         optional_ptr<ParseResult> parse_result);
+	static string TransformExportSource(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// expression.gram
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,
@@ -584,7 +614,7 @@ private:
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result);
+	                                                         optional_ptr<ParseResult> parse_result);
 
 	// insert.gram
 	static unique_ptr<SQLStatement> TransformInsertStatement(PEGTransformer &transformer,
@@ -621,13 +651,13 @@ private:
 
 	// pragma.gram
 	static unique_ptr<SQLStatement> TransformPragmaStatement(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result);
+	                                                         optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SQLStatement> TransformPragmaAssign(PEGTransformer &transformer,
-                                                                      optional_ptr<ParseResult> parse_result);
+	                                                      optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SQLStatement> TransformPragmaFunction(PEGTransformer &transformer,
-                                                                        optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>>
-TransformPragmaParameters(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	                                                        optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformPragmaParameters(PEGTransformer &transformer,
+	                                                                      optional_ptr<ParseResult> parse_result);
 
 	// select.gram
 	static unique_ptr<ParsedExpression> TransformFunctionArgument(PEGTransformer &transformer,

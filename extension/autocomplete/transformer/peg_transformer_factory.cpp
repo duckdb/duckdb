@@ -150,6 +150,25 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformInterval);
 }
 
+void PEGTransformerFactory::RegisterCopy() {
+	// copy.gram
+	REGISTER_TRANSFORM(TransformCopyStatement);
+	REGISTER_TRANSFORM(TransformCopySelect);
+	REGISTER_TRANSFORM(TransformCopyFromDatabase);
+	REGISTER_TRANSFORM(TransformCopyDatabaseFlag);
+	REGISTER_TRANSFORM(TransformCopyTable);
+	REGISTER_TRANSFORM(TransformFromOrTo);
+	REGISTER_TRANSFORM(TransformCopyFileName);
+	REGISTER_TRANSFORM(TransformIdentifierColId);
+	REGISTER_TRANSFORM(TransformCopyOptions);
+	REGISTER_TRANSFORM(TransformGenericCopyOptionListParens);
+	REGISTER_TRANSFORM(TransformSpecializedOptionList);
+	REGISTER_TRANSFORM(TransformSpecializedOption);
+	REGISTER_TRANSFORM(TransformSingleOption);
+	REGISTER_TRANSFORM(TransformEncodingOption);
+	REGISTER_TRANSFORM(TransformForceQuoteOption);
+}
+
 void PEGTransformerFactory::RegisterCreateSequence() {
 	REGISTER_TRANSFORM(TransformCreateSequenceStmt);
 	REGISTER_TRANSFORM(TransformSequenceOption);
@@ -561,6 +580,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCheckpoint();
 	RegisterComment();
 	RegisterCommon();
+	RegisterCopy();
 	RegisterCreateSequence();
 	RegisterCreateTable();
 	RegisterDeallocate();
@@ -572,6 +592,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterImport();
 	RegisterInsert();
 	RegisterLoad();
+	RegisterPragma();
 	RegisterSelect();
 	RegisterUse();
 	RegisterSet();
