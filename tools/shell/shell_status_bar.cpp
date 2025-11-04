@@ -83,7 +83,19 @@ protected:
 			}
 			return true;
 		}
-		if (bracket_type == "display_if_not_contains") {
+		if (bracket_type == "content_align") {
+			if (value == "right") {
+				content_alignment = StatusBarAlignment::RIGHT;
+			} else if (value == "left") {
+				content_alignment = StatusBarAlignment::LEFT;
+			} else if (value == "middle") {
+				content_alignment = StatusBarAlignment::MIDDLE;
+			} else {
+				throw InvalidInputException("Unsupported type %s for content_align: expected left or right", value);
+			}
+			return true;
+		}
+		if (bracket_type == "hide_if_contains") {
 			// parse condition
 			does_not_contain = value;
 			return true;

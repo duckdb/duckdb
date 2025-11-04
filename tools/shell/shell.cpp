@@ -3283,12 +3283,10 @@ void ShellState::Initialize() {
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
 	default_components.push_back(
-	    "{align:right}{min_size:18}{display_if_not_contains:0 bytes}Written: {setting:bytes_written}");
-	default_components.push_back(
-	    "{align:right}{min_size:15}{display_if_not_contains:0 bytes}Read: {setting:bytes_read}");
+	    "{align:right}{min_size:18}{hide_if_contains:0 bytes}Written: {setting:bytes_written}");
+	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Read: {setting:bytes_read}");
 	default_components.push_back("{align:right}{min_size:17}Memory: {setting:memory_usage}");
-	default_components.push_back(
-	    "{align:right}{min_size:15}{display_if_not_contains:0 bytes}Swap: {setting:swap_usage}");
+	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Swap: {setting:swap_usage}");
 	status_bar = make_uniq<StatusBar>();
 	for (auto &component : default_components) {
 		status_bar->AddComponent(component);
