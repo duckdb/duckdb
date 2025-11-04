@@ -338,8 +338,8 @@ private:
 	static string TransformIdentifierColId(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static case_insensitive_map_t<vector<Value>> TransformCopyOptions(PEGTransformer &transformer,
 	                                                                  optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<vector<Value>> TransformGenericCopyOptionListParens(
-	    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<vector<Value>>
+	TransformGenericCopyOptionListParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static case_insensitive_map_t<vector<Value>> TransformSpecializedOptionList(PEGTransformer &transformer,
 	                                                                            optional_ptr<ParseResult> parse_result);
 
