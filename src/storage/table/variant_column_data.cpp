@@ -8,6 +8,8 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 
 namespace duckdb {
 
@@ -39,7 +41,7 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	state.child_states.clear();
 	state.child_states.resize(sub_columns.size() + 1);
 
-	auto unshredded_type = VariantStats::GetUnshreddedType();
+	auto unshredded_type = VariantShredding::GetUnshreddedType();
 	state.child_states[1].Initialize(state.context, unshredded_type, state.scan_options);
 	if (is_shredded) {
 		auto &shredded_column = sub_columns[1];
@@ -361,9 +363,9 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	//! Scan + transform + append
 	idx_t total_count = count.load();
 
-	auto transformed_stats = VariantStats::CreateShredded(typed_value_type).ToUnique();
-	auto &unshredded_stats = VariantStats::GetUnshreddedStats(*transformed_stats);
-	auto &shredded_stats = VariantStats::GetShreddedStats(*transformed_stats);
+	auto transformed_stats = VariantStats::CreateShredded(typed_value_type);
+	auto &unshredded_stats = VariantStats::GetUnshreddedStats(transformed_stats);
+	auto &shredded_stats = VariantStats::GetShreddedStats(transformed_stats);
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 
@@ -380,8 +382,29 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 		unshredded->Append(unshredded_stats, unshredded_append_state, unshredded_vector, to_scan);
 		shredded->Append(shredded_stats, shredded_append_state, shredded_vector, to_scan);
 	}
-	stats->statistics.Copy(*transformed_stats);
+	stats->statistics = std::move(transformed_stats);
 	return ret;
+}
+
+LogicalType VariantColumnData::GetShreddedType() {
+	VariantShreddingStats variant_stats;
+
+	//! scan_chunk
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::VARIANT()}, STANDARD_VECTOR_SIZE);
+	auto &scan_vector = scan_chunk.data[0];
+
+	ColumnScanState scan_state;
+	InitializeScan(scan_state);
+	idx_t total_count = count.load();
+	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
+		scan_chunk.Reset();
+		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
+		auto scanned_count = ScanCommitted(0, scan_state, scan_vector, false, to_scan);
+		variant_stats.Update(scan_vector, to_scan);
+	}
+
+	return variant_stats.GetShreddedType();
 }
 
 unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_group,
@@ -390,7 +413,7 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 
-	auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
+	auto shredded_type = GetShreddedType();
 	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
 	auto &type_entries = StructType::GetChildTypes(shredded_type);
 	if (type_entries.size() == 2) {

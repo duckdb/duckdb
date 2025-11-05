@@ -19,6 +19,7 @@
 #include "duckdb/common/serializer/read_stream.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 
 namespace duckdb {
 
@@ -765,7 +766,7 @@ void PersistentColumnData::Serialize(Serializer &serializer) const {
 		D_ASSERT(physical_type == PhysicalType::STRUCT);
 		D_ASSERT(child_columns.size() == 2 || child_columns.size() == 3);
 
-		auto unshredded_type = VariantStats::GetUnshreddedType();
+		auto unshredded_type = VariantShredding::GetUnshreddedType();
 		serializer.WriteProperty<PersistentColumnData>(102, "unshredded", child_columns[1]);
 
 		if (child_columns.size() == 3) {
@@ -803,7 +804,7 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 	result.DeserializeField(deserializer, 101, "validity", LogicalTypeId::VALIDITY);
 
 	if (type.id() == LogicalTypeId::VARIANT) {
-		auto unshredded_type = VariantStats::GetUnshreddedType();
+		auto unshredded_type = VariantShredding::GetUnshreddedType();
 
 		deserializer.Set<const LogicalType &>(unshredded_type);
 		result.child_columns.push_back(deserializer.ReadProperty<PersistentColumnData>(102, "unshredded"));

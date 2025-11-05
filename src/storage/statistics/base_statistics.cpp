@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
@@ -242,8 +243,14 @@ BaseStatistics BaseStatistics::CreateEmpty(LogicalType type) {
 void BaseStatistics::Copy(const BaseStatistics &other) {
 	D_ASSERT(GetType() == other.GetType());
 	CopyBase(other);
-	stats_union = other.stats_union;
-	switch (GetStatsType()) {
+	auto stats_type = GetStatsType();
+
+	if (stats_type != StatisticsType::VARIANT_STATS) {
+		//! FIXME: why were we doing this unconditionally?
+		//! This copy should be part of the ::Copy(*this, other) implementations
+		stats_union = other.stats_union;
+	}
+	switch (stats_type) {
 	case StatisticsType::LIST_STATS:
 		ListStats::Copy(*this, other);
 		break;
@@ -573,7 +580,7 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 	}
 	case StatisticsType::VARIANT_STATS: {
 		auto result = VariantStats::CreateEmpty(input.type());
-		auto unshredded_type = VariantStats::GetUnshreddedType();
+		auto unshredded_type = VariantShredding::GetUnshreddedType();
 		if (input.IsNull()) {
 			VariantStats::SetUnshreddedStats(result, FromConstant(Value(unshredded_type)));
 		} else {

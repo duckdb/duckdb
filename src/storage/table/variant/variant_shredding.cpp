@@ -12,6 +12,101 @@ namespace duckdb {
 
 namespace {
 
+struct VariantStatsVisitor {
+	using result_type = void;
+
+	static void VisitNull(VariantShreddingStats &stats, idx_t stats_column_index) {
+		return;
+	}
+	static void VisitBoolean(bool val, VariantShreddingStats &stats, idx_t stats_column_index) {
+		return;
+	}
+
+	static void VisitMetadata(VariantLogicalType type_id, VariantShreddingStats &stats, idx_t stats_column_index) {
+		auto &column_stats = stats.GetColumnStats(stats_column_index);
+		column_stats.SetType(type_id);
+	}
+
+	template <typename T>
+	static void VisitInteger(T val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitFloat(float val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitDouble(double val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitUUID(hugeint_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitDate(date_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitInterval(interval_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitTime(dtime_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitTimeNanos(dtime_ns_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitTimeTZ(dtime_tz_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitTimestampSec(timestamp_sec_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitTimestampMs(timestamp_ms_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitTimestamp(timestamp_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitTimestampNanos(timestamp_ns_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitTimestampTZ(timestamp_tz_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void WriteStringInternal(const string_t &str, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitString(const string_t &str, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitBlob(const string_t &blob, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitBignum(const string_t &bignum, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitGeometry(const string_t &geom, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+	static void VisitBitstring(const string_t &bits, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
+
+	template <typename T>
+	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantShreddingStats &stats,
+	                         idx_t stats_column_index) {
+		//! FIXME: need to visit to be able to shred on DECIMAL values
+	}
+
+	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
+	                       VariantShreddingStats &stats, idx_t stats_column_index) {
+		auto &element_stats = stats.GetOrCreateElement(stats_column_index);
+		auto index = element_stats.index;
+		VariantVisitor<VariantStatsVisitor>::VisitArrayItems(variant, row, nested_data, stats, index);
+	}
+
+	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
+	                        VariantShreddingStats &stats, idx_t stats_column_index) {
+		//! Then visit the fields in sorted order
+		for (idx_t i = 0; i < nested_data.child_count; i++) {
+			auto source_children_idx = nested_data.children_idx + i;
+
+			//! Add the key of the field to the result
+			auto keys_index = variant.GetKeysIndex(row, source_children_idx);
+			auto &key = variant.GetKey(row, keys_index);
+
+			auto &child_stats = stats.GetOrCreateField(stats_column_index, key.GetString());
+			auto index = child_stats.index;
+
+			//! Visit the child value
+			auto values_index = variant.GetValuesIndex(row, source_children_idx);
+			VariantVisitor<VariantStatsVisitor>::Visit(variant, row, values_index, stats, index);
+		}
+	}
+
+	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantShreddingStats &stats,
+	                         idx_t stats_column_index) {
+		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
+	}
+};
+
 static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::ANY) {
 		return {};
@@ -135,6 +230,209 @@ public:
 };
 
 } // namespace
+
+void VariantColumnStatsData::SetType(VariantLogicalType type) {
+	type_counts[static_cast<uint8_t>(type)]++;
+	total_count++;
+}
+
+VariantColumnStatsData &VariantShreddingStats::GetOrCreateElement(idx_t parent_index) {
+	auto &parent_column = GetColumnStats(parent_index);
+
+	idx_t element_stats = parent_column.element_stats;
+	if (parent_column.element_stats == DConstants::INVALID_INDEX) {
+		parent_column.element_stats = columns.size();
+		element_stats = parent_column.element_stats;
+		columns.emplace_back(element_stats);
+	}
+	return GetColumnStats(element_stats);
+}
+
+VariantColumnStatsData &VariantShreddingStats::GetOrCreateField(idx_t parent_index, const string &name) {
+	auto &parent_column = columns[parent_index];
+	auto it = parent_column.field_stats.find(name);
+
+	idx_t field_stats;
+	if (it == parent_column.field_stats.end()) {
+		it = parent_column.field_stats.emplace(name, columns.size()).first;
+		field_stats = it->second;
+		columns.emplace_back(field_stats);
+	} else {
+		field_stats = it->second;
+	}
+	return GetColumnStats(field_stats);
+}
+
+VariantColumnStatsData &VariantShreddingStats::GetColumnStats(idx_t index) {
+	D_ASSERT(columns.size() > index);
+	return columns[index];
+}
+
+const VariantColumnStatsData &VariantShreddingStats::GetColumnStats(idx_t index) const {
+	D_ASSERT(columns.size() > index);
+	return columns[index];
+}
+
+static LogicalType ProduceShreddedType(VariantLogicalType type_id) {
+	switch (type_id) {
+	case VariantLogicalType::BOOL_TRUE:
+	case VariantLogicalType::BOOL_FALSE:
+		return LogicalTypeId::BOOLEAN;
+	case VariantLogicalType::INT8:
+		return LogicalTypeId::TINYINT;
+	case VariantLogicalType::INT16:
+		return LogicalTypeId::SMALLINT;
+	case VariantLogicalType::INT32:
+		return LogicalTypeId::INTEGER;
+	case VariantLogicalType::INT64:
+		return LogicalTypeId::BIGINT;
+	case VariantLogicalType::INT128:
+		return LogicalTypeId::HUGEINT;
+	case VariantLogicalType::UINT8:
+		return LogicalTypeId::UTINYINT;
+	case VariantLogicalType::UINT16:
+		return LogicalTypeId::USMALLINT;
+	case VariantLogicalType::UINT32:
+		return LogicalTypeId::UINTEGER;
+	case VariantLogicalType::UINT64:
+		return LogicalTypeId::UBIGINT;
+	case VariantLogicalType::UINT128:
+		return LogicalTypeId::UHUGEINT;
+	case VariantLogicalType::FLOAT:
+		return LogicalTypeId::FLOAT;
+	case VariantLogicalType::DOUBLE:
+		return LogicalTypeId::DOUBLE;
+	case VariantLogicalType::DECIMAL:
+		throw InternalException("Can't shred on DECIMAL");
+	case VariantLogicalType::VARCHAR:
+		return LogicalTypeId::VARCHAR;
+	case VariantLogicalType::BLOB:
+		return LogicalTypeId::BLOB;
+	case VariantLogicalType::UUID:
+		return LogicalTypeId::UUID;
+	case VariantLogicalType::DATE:
+		return LogicalTypeId::DATE;
+	case VariantLogicalType::TIME_MICROS:
+		return LogicalTypeId::TIME;
+	case VariantLogicalType::TIME_NANOS:
+		return LogicalTypeId::TIME_NS;
+	case VariantLogicalType::TIMESTAMP_SEC:
+		return LogicalTypeId::TIMESTAMP_SEC;
+	case VariantLogicalType::TIMESTAMP_MILIS:
+		return LogicalTypeId::TIMESTAMP_MS;
+	case VariantLogicalType::TIMESTAMP_MICROS:
+		return LogicalTypeId::TIMESTAMP;
+	case VariantLogicalType::TIMESTAMP_NANOS:
+		return LogicalTypeId::TIMESTAMP_NS;
+	case VariantLogicalType::TIME_MICROS_TZ:
+		return LogicalTypeId::TIME_TZ;
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ;
+	case VariantLogicalType::INTERVAL:
+		return LogicalTypeId::INTERVAL;
+	case VariantLogicalType::BIGNUM:
+		return LogicalTypeId::BIGNUM;
+	case VariantLogicalType::BITSTRING:
+		return LogicalTypeId::BIT;
+	case VariantLogicalType::GEOMETRY:
+		return LogicalTypeId::GEOMETRY;
+	case VariantLogicalType::OBJECT:
+	case VariantLogicalType::ARRAY:
+		throw InternalException("Already handled above");
+	default:
+		throw NotImplementedException("Shredding on VariantLogicalType::%s not supported yet",
+		                              EnumUtil::ToString(type_id));
+	}
+}
+
+static LogicalType SetShreddedType(const LogicalType &typed_value) {
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("untyped_value_index", LogicalType::UINTEGER);
+	child_types.emplace_back("typed_value", typed_value);
+	return LogicalType::STRUCT(child_types);
+}
+
+bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type) const {
+	idx_t max_count = 0;
+	uint8_t type_index;
+	if (column.type_counts[0] == column.total_count) {
+		//! All NULL, emit INT32
+		out_type = SetShreddedType(LogicalTypeId::INTEGER);
+		return true;
+	}
+
+	//! Skip the 'VARIANT_NULL' type, we can't shred on NULL
+	for (uint8_t i = 1; i < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE); i++) {
+		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL)) {
+			//! Can't shred on DECIMAL currently
+			continue;
+		}
+		idx_t count = column.type_counts[i];
+		if (!max_count || count > max_count) {
+			max_count = count;
+			type_index = i;
+		}
+	}
+
+	if (!max_count) {
+		return false;
+	}
+
+	if (type_index == static_cast<uint8_t>(VariantLogicalType::OBJECT)) {
+		child_list_t<LogicalType> child_types;
+		for (auto &entry : column.field_stats) {
+			auto &child_column = GetColumnStats(entry.second);
+			LogicalType child_type;
+			if (GetShreddedTypeInternal(child_column, child_type)) {
+				child_types.emplace_back(entry.first, child_type);
+			}
+		}
+		if (child_types.empty()) {
+			return false;
+		}
+		auto shredded_type = LogicalType::STRUCT(child_types);
+		out_type = SetShreddedType(shredded_type);
+		return true;
+	}
+	if (type_index == static_cast<uint8_t>(VariantLogicalType::ARRAY)) {
+		D_ASSERT(column.element_stats != DConstants::INVALID_INDEX);
+		auto &element_column = GetColumnStats(column.element_stats);
+		LogicalType element_type;
+		if (!GetShreddedTypeInternal(element_column, element_type)) {
+			return false;
+		}
+		auto shredded_type = LogicalType::LIST(element_type);
+		out_type = SetShreddedType(shredded_type);
+		return true;
+	}
+	auto type_id = static_cast<VariantLogicalType>(type_index);
+
+	auto shredded_type = ProduceShreddedType(type_id);
+	out_type = SetShreddedType(shredded_type);
+	return true;
+}
+
+LogicalType VariantShreddingStats::GetShreddedType() const {
+	auto &root_column = GetColumnStats(0);
+
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("unshredded", VariantShredding::GetUnshreddedType());
+	LogicalType shredded_type;
+	if (GetShreddedTypeInternal(root_column, shredded_type)) {
+		child_types.emplace_back("shredded", shredded_type);
+	}
+	return LogicalType::STRUCT(child_types);
+}
+
+void VariantShreddingStats::Update(Vector &input, idx_t count) {
+	RecursiveUnifiedVectorFormat recursive_format;
+	Vector::RecursiveToUnifiedFormat(input, count, recursive_format);
+	UnifiedVariantVectorData variant(recursive_format);
+
+	for (idx_t i = 0; i < count; i++) {
+		VariantVisitor<VariantStatsVisitor>::Visit(variant, i, 0, *this, static_cast<idx_t>(0));
+	}
+}
 
 static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
                         VariantNormalizerState &state, const vector<uint32_t> &child_indices) {

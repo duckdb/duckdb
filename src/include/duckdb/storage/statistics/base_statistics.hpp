@@ -161,9 +161,9 @@ private:
 		StringStatsData string_data;
 		//! Geometry stats data, for geometry stats
 		GeometryStatsData geometry_data;
+		//! Variant stats data, for variant stats
+		VariantStatsData variant_data;
 	} stats_union;
-	//! Variant stats data, for variant stats (not trivially constructable)
-	VariantStatsData variant_data;
 	//! Child stats (for LIST and STRUCT)
 	unsafe_unique_array<BaseStatistics> child_stats;
 };

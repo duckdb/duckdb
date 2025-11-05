@@ -77,6 +77,7 @@ private:
 	idx_t SubColumnsSize() const;
 	void ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded);
 	void CreateScanStates(ColumnScanState &state);
+	LogicalType GetShreddedType();
 };
 
 } // namespace duckdb
