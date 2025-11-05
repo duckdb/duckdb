@@ -332,10 +332,10 @@ public:
 	static void Sleep(idx_t ms);
 	void PrintUsage();
 #if defined(_WIN32) || defined(WIN32)
-	static unique_ptr<uint8_t[]> Win32Utf8ToUnicode(const char *zText);
-	static string Win32UnicodeToUtf8(void *zWideText);
-	static string Win32MbcsToUtf8(const char *zText, bool useAnsi);
-	static unique_ptr<uint8_t[]> Win32Utf8ToMbcs(const char *zText, bool useAnsi);
+	static std::wstring Win32Utf8ToUnicode(const string &zText);
+	static string Win32UnicodeToUtf8(const std::wstring &zWideText);
+	static string Win32MbcsToUtf8(const string &zText, bool useAnsi);
+	static string Win32Utf8ToMbcs(const string &zText, bool useAnsi);
 #endif
 	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
 	optional_ptr<const MetadataCommand> FindMetadataCommand(const string &option, string &error_msg) const;

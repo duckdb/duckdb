@@ -418,8 +418,8 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 			fputs(z1, out);
 		} else {
 			// fallback to writing old style windows unicode
-			auto z2 = ShellState::Win32Utf8ToMbcs(z1, false);
-			fputs((const char *)z2.get(), out);
+			auto z2 = ShellState::Win32Utf8ToMbcs(z1, true);
+			fputs(z2.c_str(), out);
 		}
 	} else {
 		vfprintf(out, zFormat, ap);
@@ -1939,7 +1939,7 @@ int shellDeleteFile(const char *zFilename) {
 	int rc;
 #ifdef _WIN32
 	auto z = ShellState::Win32Utf8ToUnicode(zFilename);
-	rc = _wunlink((wchar_t *)z.get());
+	rc = _wunlink(z.c_str());
 #else
 	rc = unlink(zFilename);
 #endif
@@ -2684,7 +2684,7 @@ SuccessState ShellState::ChangeDirectory(const string &path) {
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
 	auto z = ShellState::Win32Utf8ToUnicode(path.c_str());
-	rc = !SetCurrentDirectoryW((wchar_t *)z.get());
+	rc = !SetCurrentDirectoryW(z.c_str());
 #else
 	rc = chdir(path.c_str());
 #endif

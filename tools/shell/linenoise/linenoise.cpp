@@ -1322,9 +1322,8 @@ bool Linenoise::Write(int fd, const char *data, idx_t size) {
 #if defined(_WIN32) || defined(WIN32)
     // convert to character encoding in Windows shell
     auto new_text = duckdb_shell::ShellState::Win32Utf8ToMbcs(data, true);
-    string buffer = string(reinterpret_cast<char *>(new_text.get()));
-    data = buffer.c_str();
-    size = buffer.size();
+    data = new_text.c_str();
+    size = new_text.size();
 #endif
     if (write(fd, data, size) == -1) {
         return false;
