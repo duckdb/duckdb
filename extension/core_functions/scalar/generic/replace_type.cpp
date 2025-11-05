@@ -26,7 +26,7 @@ unique_ptr<Expression> BindReplaceTypeFunction(FunctionBindExpressionInput &inpu
 ScalarFunction ReplaceTypeFun::GetFunction() {
 	auto fun =
 	    ScalarFunction({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ReplaceTypeFunction);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.bind_expression = BindReplaceTypeFunction;
 	return fun;
 }

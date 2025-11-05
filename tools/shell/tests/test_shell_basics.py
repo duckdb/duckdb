@@ -1,12 +1,10 @@
 # fmt: off
 
-import pytest
-import subprocess
-import sys
-from typing import List
-from conftest import ShellTest
 import os
-from pathlib import Path
+import re
+
+import pytest
+from conftest import ShellTest
 
 
 def test_basic(shell):
@@ -117,31 +115,57 @@ world" """)
     result = test.run()
     result.check_stdout("hello\\nworld")
 
-# FIXME: this test was underspecified, no expected result was provided
-def test_bailing_mechanism(shell):
+def test_bail_on_stops_after_error(shell):
     test = (
         ShellTest(shell)
         .statement(".bail on")
-        .statement(".bail off")
-        .statement(".binary on")
-        .statement("SELECT 42")
-        .statement(".binary off")
-        .statement("SELECT 42")
+        .statement("invalid sql;")
+        .statement("select 'should not reach here'")
     )
 
     result = test.run()
-    result.check_stdout("42")
+    assert result.status_code == 1
+    assert result.stdout == ""
 
-# FIXME: no verification at all?
-def test_cd(shell, tmp_path):
-    current_dir = Path(os.getcwd())
 
+def test_bail_off_continues_after_error(shell):
     test = (
         ShellTest(shell)
-        .statement(f".cd {tmp_path.as_posix()}")
-        .statement(f".cd {current_dir.as_posix()}")
+        .statement(".bail off")
+        .statement("invalid sql;")
+        .statement("select 'reached here'")
+    )
+
+    result = test.run()
+    result.check_stderr("Parser Error: syntax error at or near \"invalid\"")
+    assert "reached here" in str(result.stdout)
+
+@pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
+def test_shell_command(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".shell echo quack")
     )
     result = test.run()
+    result.check_stdout("quack")
+
+def test_cd(shell, tmp_path):
+    pwd_dir = os.getcwd()
+
+    pwd_test = (
+        ShellTest(shell)
+        .statement(".shell pwd")
+    )
+    pwd_result = pwd_test.run()
+    pwd_result.check_stdout('duckdb')
+
+    random_dir_test = (
+        ShellTest(shell)
+        .statement(f".cd {tmp_path.as_posix()}")
+    )
+    random_dir_result = random_dir_test.run()
+    random_dir_result.check_not_exist(pwd_dir)
+    random_dir_result.check_stderr(None)
 
 def test_changes_on(shell):
     test = (
@@ -165,7 +189,8 @@ def test_changes_off(shell):
         .statement("DROP TABLE a;")
     )
     result = test.run()
-    result.check_stdout("")
+    result.check_not_exist("changes:")
+    result.check_stdout(None)
 
 def test_echo(shell):
     test = (
@@ -176,13 +201,22 @@ def test_echo(shell):
     result = test.run()
     result.check_stdout("SELECT 42")
 
+def test_invalid_sql(shell):
+    test = ShellTest(shell).statement("invalid command;")
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr("Parser Error: syntax error at or near \"invalid\"")
+
 @pytest.mark.parametrize("alias", ["exit", "quit"])
 def test_exit(shell, alias):
-    test = ShellTest(shell).statement(f".{alias}")
+    test = ShellTest(shell).statement(f".{alias}").statement("invalid command;")
     result = test.run()
+    # Shows that the exit & quit dot commands exit the shell prior to the error
+    # Still indirect but ensures a failure if they do not work as expected
+    assert result.status_code == 0
 
 def test_exit_rc(shell):
-    test = ShellTest(shell).statement(f".exit 17")
+    test = ShellTest(shell).statement(".exit 17")
     result = test.run()
     assert result.status_code == 17
 
@@ -213,8 +247,8 @@ def test_regexp_matches(shell):
 
 def test_help(shell):
     test = (
-        ShellTest(shell).
-        statement(".help")
+        ShellTest(shell)
+        .statement(".help")
     )
     result = test.run()
     result.check_stdout("Show help text for PATTERN")
@@ -333,18 +367,18 @@ def test_show_basic(shell):
     result.check_stdout("rowseparator")
 
 @pytest.mark.parametrize("cmd", [
-    ".vfsinfo",
-    ".vfsname",
-    ".vfslist"
+    "vfsinfo",
+    "vfsname",
+    "vfslist",
 ])
 def test_volatile_commands(shell, cmd):
-    # The original comment read: don't crash plz
     test = (
         ShellTest(shell)
         .statement(f".{cmd}")
     )
     result = test.run()
-    result.check_stderr("")
+    assert result.status_code == 1
+    result.check_stderr("Unknown Command Error")
 
 @pytest.mark.parametrize("pattern", [
     "test",
@@ -366,7 +400,7 @@ def test_schema_indent(shell):
     test = (
         ShellTest(shell)
         .statement("create table test (a int, b varchar, c int, d int, k int, primary key(a, b));")
-        .statement(f".schema -indent")
+        .statement(".schema -indent")
     )
     result = test.run()
     result.check_stdout("CREATE TABLE test(")
@@ -456,10 +490,12 @@ def test_indexes(shell):
 def test_schema_pattern_no_result(shell):
     test = (
         ShellTest(shell)
-        .statement(".schema %p%")
+        .statement("create table testp (a integer)")
+        .statement("create table test_p (b integer)")
+        .statement(".schema %z%")
     )
     result = test.run()
-    result.check_stdout("")
+    result.check_not_exist("CREATE TABLE")
 
 def test_schema_pattern(shell):
     test = (
@@ -500,7 +536,7 @@ def test_sha3sum(shell):
         .statement(".sha3sum")
     )
     result = test.run()
-    result.check_stderr('')
+    result.check_stderr('Unknown Command Error')
 
 def test_jsonlines(shell):
     test = (
@@ -550,14 +586,20 @@ def test_output_csv_mode(shell, random_filepath):
     result.stdout = open(random_filepath, 'rb').read()
     result.check_stdout(b'42')
 
-def test_issue_6204(shell):
+def test_issue_6204(shell, random_filepath):
     test = (
         ShellTest(shell)
-        .statement(".output foo.txt")
+        .statement(f".output {random_filepath.as_posix()}")
         .statement("select * from range(2049);")
     )
     result = test.run()
-    result.check_stdout("")
+    result.check_stdout(None)
+
+    with open(random_filepath, 'r', encoding='utf-8') as f:
+        output = f.read()
+        nums = set(int(x) for x in re.findall(r'\d+', output))
+
+        assert all(i in nums for i in range(2049))
 
 def test_once(shell, random_filepath):
     test = (
@@ -568,16 +610,6 @@ def test_once(shell, random_filepath):
     result = test.run()
     result.stdout = open(random_filepath, 'rb').read()
     result.check_stdout(b'43')
-
-def test_log(shell, random_filepath):
-    test = (
-        ShellTest(shell)
-        .statement(f".log {random_filepath.as_posix()}")
-        .statement("SELECT 42;")
-        .statement(".log off")
-    )
-    result = test.run()
-    result.check_stdout('')
 
 @pytest.mark.parametrize("dot_command", [
     ".mode ascii",
@@ -786,7 +818,7 @@ def test_enable_profiling(shell):
         .statement("PRAGMA enable_profiling")
     )
     result = test.run()
-    result.check_stderr('')
+    result.check_stderr(None)
 
 def test_profiling_select(shell):
     test = (
@@ -907,7 +939,7 @@ def test_mode_trash(shell):
         .statement("select 1")
     )
     result = test.run()
-    result.check_stdout('')
+    result.check_stdout(None)
 
 def test_sqlite_comments(shell):
     # Using /* <comment> */
@@ -1098,5 +1130,93 @@ def test_help_prints_to_stdout(shell):
     result = test.run()
     result.check_stdout("OPTIONS")
 
+def test_open_with_sql(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .env_var("MY_DB", str(random_filepath))
+        .statement(".open -sql \"select getenv('MY_DB');\"")
+        .statement("show databases;")
+    )
+    result = test.run()
+    result.check_stdout("random_import_file")
+    result.check_stderr(None)
+
+def test_open_with_multiple_sql_flags(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .env_var("MY_DB", str(random_filepath))
+        .statement(".open -sql \"select getenv('MY_DB');\" -sql \"select 42;\"")
+    )
+    result = test.run()
+    result.check_stderr("Error: --sql provided multiple times")
+
+def test_open_with_sql_and_no_query(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .env_var("MY_DB", str(random_filepath))
+        .statement(".open -sql")
+    )
+    result = test.run()
+    result.check_stderr("Error: missing SQL query after --sql")
+
+def test_open_with_sql_and_file(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .env_var("MY_DB", str(random_filepath))
+        .statement(".open -sql \"select getenv('MY_DB');\" \"test.db\"")
+    )
+    result = test.run()
+    result.check_stderr("Error: cannot use both --sql and a FILE argument")
+
+def test_open_with_sql_and_multiple_columns(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .env_var("MY_DB", str(random_filepath))
+        .statement(".open -sql \"select getenv('MY_DB'), 42;\"")
+    )
+    result = test.run()
+    result.check_stderr("Error: --sql query returned multiple columns, expected single value")
+
+def test_open_with_sql_and_multiple_rows(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".open -sql \"select unnest(generate_series(1,2));\"")
+    )
+    result = test.run()
+    result.check_stderr("Error: --sql query returned multiple rows, expected single value")
+
+def test_open_with_sql_w_db_error(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".open -sql \"select 'test'::int;\"")
+    )
+    result = test.run()
+    result.check_stderr("Error: failed to evaluate --sql query")
+
+def test_open_with_sql_and_no_return(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table a (i integer);")
+        .statement(".open -sql \"from a where 1=0;\"")
+    )
+    result = test.run()
+    result.check_stderr("Error")
+
+def test_open_with_sql_and_dml(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table test(i integer);")
+        .statement(".open -sql \"insert into test values (1);\"")
+    )
+    result = test.run()
+    result.check_stderr("Error")
+
+def test_open_with_sql_and_null_return(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".open -sql \"select NULL;\"")
+    )
+    result = test.run()
+    result.check_stderr("Error: --sql query returned a null value")
 
 # fmt: on

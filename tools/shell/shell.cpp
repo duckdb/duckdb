@@ -85,6 +85,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
@@ -151,6 +152,7 @@
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/client_config.hpp"
 
 using namespace duckdb_shell;
 
@@ -428,6 +430,15 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 #define utf8_printf fprintf
 #endif
 
+/* Used with ShellState::EvaluateSQL to indicate special result states */
+const string EVAL_SQL_ERROR = "#ERROR#:";
+const string EVAL_SQL_NOT_A_QUERY = "#NOT A QUERY#";
+const string EVAL_SQL_NO_RESULT = "#NO RESULT#";
+const string EVAL_SQL_TOO_MANY_ROWS = "#TOO MANY ROWS#";
+const string EVAL_SQL_TOO_MANY_COLUMNS = "#TOO MANY COLUMNS#";
+const string EVAL_SQL_NULL = "#NULL#";
+const string EVAL_SQL_EMPTY = "#EMPTY#";
+
 void ShellState::Print(PrintOutput output, const char *str) {
 	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
 }
@@ -557,7 +568,6 @@ int ShellState::RunInitialCommand(const char *sql, bool bail) {
 		}
 	} else {
 		string zErrMsg;
-		OpenDB();
 		BEGIN_TIMER;
 		auto res = ExecuteSQL(sql);
 		END_TIMER;
@@ -819,18 +829,19 @@ void ShellState::OutputQuotedString(const char *z) {
 	if (c == 0) {
 		PrintF("'%s'", z);
 	} else {
-		PrintF("'");
+		Print("'");
 		while (*z) {
 			for (i = 0; (c = z[i]) != 0 && c != '\''; i++) {
 			}
-			if (c == '\'')
+			if (c == '\'') {
 				i++;
+			};
 			if (i) {
-				PrintF("%.*s", i, z);
+				Print(string(z, i));
 				z += i;
 			}
 			if (c == '\'') {
-				PrintF("'");
+				Print("'");
 				continue;
 			}
 			if (c == 0) {
@@ -838,7 +849,7 @@ void ShellState::OutputQuotedString(const char *z) {
 			}
 			z++;
 		}
-		PrintF("'");
+		Print("'");
 	}
 	SetTextMode();
 }
@@ -1441,7 +1452,10 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// for row-wise rendering we can use streaming results
 		result = con.SendQuery(std::move(statement));
 	} else {
-		result = con.Query(std::move(statement));
+		duckdb::QueryParameters parameters;
+		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
+		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
+		result = con.SendQuery(std::move(statement), parameters);
 	}
 	auto &res = *result;
 	if (res.HasError()) {
@@ -1690,6 +1704,10 @@ SuccessState ShellState::ExecuteQuery(const string &query) {
 	return SuccessState::SUCCESS;
 }
 
+unique_ptr<duckdb::ProgressBarDisplay> CreateProgressBar() {
+	return make_uniq<ShellProgressBarDisplay>();
+}
+
 void ShellState::OpenDB(ShellOpenFlags flags) {
 	if (!db) {
 		try {
@@ -1705,6 +1723,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 				exit(1);
 			}
 		}
+		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
+		client_config.display_create_func = CreateProgressBar;
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
@@ -2152,7 +2172,6 @@ bool ShellState::ImportData(const vector<string> &args) {
 	}
 	seenInterrupt = 0;
 	// check if the table exists
-	OpenDB();
 	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
 	if (needCommit) {
@@ -2191,6 +2210,41 @@ bool ShellState::ImportData(const vector<string> &args) {
 	return true;
 }
 
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql,
+                                                              string &result_value) {
+	auto result = con.Query(sql);
+	if (result->HasError()) {
+		// store error in the result
+		result_value = result->GetError();
+		return ExecuteSQLSingleValueResult::EXECUTION_ERROR;
+	}
+	auto is_query = result->properties.return_type == duckdb::StatementReturnType::QUERY_RESULT;
+	if (!is_query) {
+		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
+	}
+	auto &collection = result->Collection();
+	if (collection.Count() == 0) {
+		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
+	}
+	if (collection.Count() > 1) {
+		return ExecuteSQLSingleValueResult::MULTIPLE_ROWS;
+	}
+	if (collection.ColumnCount() != 1) {
+		return ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS;
+	}
+
+	auto value = collection.GetRows().GetValue(0, 0);
+	if (value.IsNull()) {
+		return ExecuteSQLSingleValueResult::NULL_RESULT;
+	}
+	result_value = value.ToString();
+	return ExecuteSQLSingleValueResult::SUCCESS;
+}
+
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql, string &result_value) {
+	return ExecuteSQLSingleValue(*conn, sql, result_value);
+}
+
 bool ShellState::OpenDatabase(const vector<string> &args) {
 	if (safe_mode) {
 		PrintF(PrintOutput::STDERR, ".open cannot be used in -safe mode\n");
@@ -2199,9 +2253,7 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 	string zNewFilename;  /* Name of the database file to open */
 	idx_t iName = 1;      /* Index in azArg[] of the filename */
 	bool newFlag = false; /* True to delete file before opening */
-	/* Close the existing database */
-	db.reset();
-	conn.reset();
+	bool has_sql = false; /* True to use a query to derive the file path or connection string */
 	zDbFilename = string();
 	szMax = 0;
 	/* Check for command-line arguments */
@@ -2213,15 +2265,60 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 		} else if (optionMatch(z, "readonly")) {
 			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		} else if (optionMatch(z, "nofollow")) {
+		} else if (optionMatch(z, "sql")) {
+			if (has_sql) {
+				Print(PrintOutput::STDERR, "Error: --sql provided multiple times\n");
+				return false;
+			}
+			if (iName + 1 >= args.size()) {
+				Print(PrintOutput::STDERR, "Error: missing SQL query after --sql\n");
+				return false;
+			}
+			auto &query = args[++iName];
+
+			string val;
+			auto exec_result = ExecuteSQLSingleValue(query, val);
+			switch (exec_result) {
+			case ExecuteSQLSingleValueResult::EXECUTION_ERROR:
+				PrintF(PrintOutput::STDERR, "Error: failed to evaluate --sql query '%s': %s\n", query, val);
+				return false;
+			case ExecuteSQLSingleValueResult::EMPTY_RESULT:
+				Print(PrintOutput::STDERR, "Error: --sql query returned no rows, expected single value\n");
+				return false;
+			case ExecuteSQLSingleValueResult::MULTIPLE_ROWS:
+				Print(PrintOutput::STDERR, "Error: --sql query returned multiple rows, expected single value\n");
+				return false;
+			case ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS:
+				Print(PrintOutput::STDERR, "Error: --sql query returned multiple columns, expected single value\n");
+				return false;
+			case ExecuteSQLSingleValueResult::NULL_RESULT:
+				Print(PrintOutput::STDERR, "Error: --sql query returned a null value\n");
+				return false;
+			default:
+				break;
+			}
+			zNewFilename = val;
+			has_sql = true;
 		} else if (z[0] == '-') {
 			PrintF(PrintOutput::STDERR, "unknown option: %s\n", z);
 			return false;
 		}
 	}
+
+	if (has_sql && args.size() > iName) {
+		Print(PrintOutput::STDERR, "Error: cannot use both --sql and a FILE argument\n");
+		return false;
+	}
+
 	/* If a filename is specified, try to open it first */
-	if (args.size() > iName) {
+	if (!has_sql && args.size() > iName) {
 		zNewFilename = args[iName];
 	}
+
+	/* Close the existing database */
+	db.reset();
+	conn.reset();
+
 	if (!zNewFilename.empty()) {
 		if (newFlag) {
 			shellDeleteFile(zNewFilename.c_str());
@@ -2232,6 +2329,7 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 			PrintF(PrintOutput::STDERR, "Error: cannot open '%s'\n", zNewFilename.c_str());
 		}
 	}
+
 	if (!db) {
 		/* As a fall-back open a TEMP database */
 		zDbFilename = string();
@@ -2385,8 +2483,6 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 	bool bDebug = 0;
 	SuccessState rc = SuccessState::SUCCESS;
 
-	OpenDB();
-
 	RenderMode mode = RenderMode::SEMI;
 	for (idx_t ii = 1; ii < args.size(); ii++) {
 		if (optionMatch(args[ii], "indent")) {
@@ -2459,7 +2555,6 @@ void ShellState::ShowConfiguration() {
 
 MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
 	string s;
-	OpenDB();
 
 	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
@@ -2578,10 +2673,11 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 		idx_t nPrintRow = (result.size() + nPrintCol - 1) / nPrintCol;
 		for (idx_t i = 0; i < nPrintRow; i++) {
 			for (idx_t j = i; j < result.size(); j += nPrintRow) {
-				const char *zSp = j < nPrintRow ? "" : "  ";
-				PrintF("%s%-*s", zSp, static_cast<int>(maxlen), result[j].c_str());
+				string prefix = (j < nPrintRow) ? "" : "  ";
+				string padded = result[j] + string(maxlen - result[j].length(), ' ');
+				Print(prefix + padded);
 			}
-			PrintF("\n");
+			Print("\n");
 		}
 	}
 	return MetadataResult::SUCCESS;
@@ -2922,7 +3018,6 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	string zErrMsg;
 
-	OpenDB();
 #ifndef SHELL_USE_LOCAL_GETLINE
 	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
 		shell_add_history(zSql);
@@ -3134,16 +3229,11 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	auto &state = ShellState::Get();
 	try {
 		idx_t nLine = ShellState::StringLength(zLine);
-		char zBuf[1000];
-
-		if (nLine > sizeof(zBuf) - 30) {
-			return;
-		}
 		if (zLine[0] == '.') {
 			// auto-complete dot command
 			auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
 			for (auto &completion : dot_completions) {
-				linenoiseAddCompletion(lc, completion.c_str());
+				linenoiseAddCompletion(lc, zLine, completion.c_str(), completion.size(), nLine, "keyword");
 			}
 			return;
 		}
@@ -3154,24 +3244,13 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 		unique_ptr<duckdb::DuckDB> localDB;
 		unique_ptr<duckdb::Connection> localCon;
 
-		if (!state.conn) {
-			state.OpenDB();
-		}
 		auto &con = *state.conn;
-		bool copiedSuggestion = false;
 		auto result = con.Query(zSql);
 		for (auto &row : *result) {
 			auto zCompletion = row.GetValue<string>(0);
-			auto nCompletion = zCompletion.size();
 			idx_t iStart = row.GetValue<idx_t>(1);
-			if (iStart + nCompletion < (sizeof(zBuf) - 1)) {
-				if (!copiedSuggestion) {
-					memcpy(zBuf, zLine, iStart);
-					copiedSuggestion = true;
-				}
-				memcpy(zBuf + iStart, zCompletion.c_str(), nCompletion + 1);
-				linenoiseAddCompletion(lc, zBuf);
-			}
+			auto completion_type = row.GetValue<string>(2);
+			linenoiseAddCompletion(lc, zLine, zCompletion.c_str(), zCompletion.size(), iStart, completion_type.c_str());
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
@@ -3204,6 +3283,17 @@ void ShellState::Initialize() {
 	default_prompt =
 	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
+	vector<string> default_components;
+	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
+	default_components.push_back(
+	    "{align:right}{min_size:18}{hide_if_contains:0 bytes}Written: {setting:bytes_written}");
+	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Read: {setting:bytes_read}");
+	default_components.push_back("{align:right}{min_size:17}Memory: {setting:memory_usage}");
+	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Swap: {setting:swap_usage}");
+	progress_bar = make_uniq<ShellProgressBar>();
+	for (auto &component : default_components) {
+		progress_bar->AddComponent(component);
+	}
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
@@ -3334,14 +3424,8 @@ int wmain(int argc, wchar_t **wargv) {
 	}
 	data.out = stdout;
 
-	/* Go ahead and open the database file if it already exists.  If the
-	** file does not exist, delay opening it.  This prevents empty database
-	** files from being created if a user mistypes the database name argument
-	** to the sqlite command-line tool.
-	*/
-	if (access(data.zDbFilename.c_str(), 0) == 0) {
-		data.OpenDB();
-	}
+	// Open the database file
+	data.OpenDB();
 
 	/* Process the initialization file if there is one.  If no -init option
 	** is given on the command line, look for a file named ~/.sqliterc and
@@ -3379,7 +3463,6 @@ int wmain(int argc, wchar_t **wargv) {
 					return rc == 2 ? 0 : rc;
 				}
 			} else {
-				data.OpenDB();
 				auto success = data.ExecuteSQL(cmd.c_str());
 				if (success != SuccessState::SUCCESS) {
 					return rc != 0 ? rc : 1;

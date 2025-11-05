@@ -190,7 +190,7 @@ scalar_function_t GetIntegralDecompressFunctionInputSwitch(const LogicalType &in
 void CMIntegralSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                          const ScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.arguments);
-	serializer.WriteProperty(101, "return_type", function.return_type);
+	serializer.WriteProperty(101, "return_type", function.GetReturnType());
 }
 
 template <scalar_function_t (*GET_FUNCTION)(const LogicalType &, const LogicalType &)>
@@ -229,9 +229,9 @@ ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type,
 	result.serialize = CMIntegralSerialize;
 	result.deserialize = CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>;
 #if defined(D_ASSERT_IS_ENABLED)
-	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; // Can only throw runtime error when assertions are enabled
+	result.SetFallible(); // Can only throw runtime error when assertions are enabled
 #else
-	result.errors = FunctionErrors::CANNOT_ERROR;
+	result.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 #endif
 	return result;
 }

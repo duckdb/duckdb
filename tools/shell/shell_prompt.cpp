@@ -1,6 +1,8 @@
 #include "shell_prompt.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb_shell {
 
@@ -31,19 +33,25 @@ string Prompt::HandleColor(const PromptComponent &component) {
 	}
 }
 
-void Prompt::AddComponent(const string &bracket_type, const string &value) {
-	PromptComponent component;
+bool Prompt::ParseSetting(const string &bracket_type, const string &value) {
 	if (bracket_type == "max_length") {
 		if (value.empty()) {
 			throw InvalidInputException("max_length requires a parameter");
 		}
 		max_length = StringUtil::ToUnsigned(value);
-		return;
-	} else if (bracket_type == "setting") {
+		return true;
+	}
+	// unknown setting
+	return false;
+}
+
+void Prompt::AddComponent(const string &bracket_type, const string &value) {
+	PromptComponent component;
+	if (bracket_type == "setting") {
 		if (value.empty()) {
 			throw InvalidInputException("setting requires a parameter");
 		}
-		vector<string> supported_settings {"current_database", "current_schema", "current_database_and_schema"};
+		auto supported_settings = GetSupportedSettings();
 		bool found = false;
 		for (auto &entry : supported_settings) {
 			if (value == entry) {
@@ -83,6 +91,8 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 			}
 			component.type = PromptComponentType::SET_COLOR;
 		}
+	} else if (ParseSetting(bracket_type, value)) {
+		return;
 	} else {
 		throw InvalidInputException("Unknown bracket type %s", bracket_type);
 	}
@@ -182,34 +192,51 @@ void Prompt::ParsePrompt(const string &prompt) {
 	}
 }
 
-string Prompt::EvaluateSQL(ShellState &state, const string &sql) {
-	state.OpenDB();
-	auto &con = *state.conn;
-	auto result = con.Query(sql);
-	if (result->HasError()) {
-		return "#ERROR#:" + result->GetError();
-	}
-	auto &collection = result->Collection();
-	if (collection.Count() > 1) {
-		return "#TOO MANY ROWS#";
-	}
-	if (collection.ColumnCount() != 1) {
-		return "#TOO MANY COLUMNS#";
-	}
-	for (auto &row : collection.Rows()) {
-		return row.GetValue(0).ToString();
-	}
-	return "#EMPTY#";
+duckdb::Connection &Prompt::GetConnection(ShellState &state) {
+	return *state.conn;
+}
+
+vector<string> Prompt::GetSupportedSettings() {
+	return vector<string> {"current_database", "current_schema", "current_database_and_schema",
+	                       "memory_limit",     "memory_usage",   "swap_usage",
+	                       "swap_max",         "bytes_written",  "bytes_read"};
 }
 
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
-	if (!state.conn) {
-		return component.literal == "current_schema" ? "main" : "memory";
+	auto &con = GetConnection(state);
+	auto &context = *con.context;
+	if (component.literal == "memory_limit") {
+		auto &config = duckdb::DBConfig::GetConfig(context);
+		return StringUtil::BytesToHumanReadableString(config.options.maximum_memory, 1000);
 	}
-	auto &con = *state.conn;
-	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(*con.context);
+	if (component.literal == "memory_usage") {
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(context);
+		return StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory(), 1000);
+	}
+	if (component.literal == "swap_usage") {
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(context);
+		return StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedSwap(), 1000);
+	}
+	if (component.literal == "swap_max") {
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(context);
+		auto max_swap = buffer_manager.GetMaxSwap();
+		if (!max_swap.IsValid()) {
+			return "INF";
+		}
+		return StringUtil::BytesToHumanReadableString(max_swap.GetIndex(), 1000);
+	}
+	if (component.literal == "bytes_read") {
+		auto &client_data = duckdb::ClientData::Get(context);
+		auto profiler = client_data.profiler;
+		return StringUtil::BytesToHumanReadableString(profiler->GetBytesRead(), 1000);
+	}
+	if (component.literal == "bytes_written") {
+		auto &client_data = duckdb::ClientData::Get(context);
+		auto profiler = client_data.profiler;
+		return StringUtil::BytesToHumanReadableString(profiler->GetBytesWritten(), 1000);
+	}
+	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
-	;
 	if (component.literal == "current_database") {
 		return current_db;
 	}
@@ -269,6 +296,27 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 	return truncated_text;
 }
 
+string Prompt::ExecuteSQL(ShellState &state, const string &query) {
+	string query_result;
+	auto &con = GetConnection(state);
+	auto exec_result = state.ExecuteSQLSingleValue(con, query, query_result);
+	switch (exec_result) {
+	case ExecuteSQLSingleValueResult::SUCCESS:
+		return query_result;
+	case ExecuteSQLSingleValueResult::EMPTY_RESULT:
+		return "#EMPTY#";
+	case ExecuteSQLSingleValueResult::MULTIPLE_ROWS:
+		return "#MULTIPLE_ROWS#";
+	case ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS:
+		return "#MULTIPLE_COLUMNS#";
+	case ExecuteSQLSingleValueResult::NULL_RESULT:
+		return "#NULL#";
+	case ExecuteSQLSingleValueResult::EXECUTION_ERROR:
+	default:
+		return "#ERROR";
+	}
+}
+
 string Prompt::GeneratePrompt(ShellState &state) {
 	string prompt;
 	idx_t length = 0;
@@ -278,8 +326,8 @@ string Prompt::GeneratePrompt(ShellState &state) {
 			prompt += HandleText(state, component.literal, length);
 			break;
 		case PromptComponentType::SQL: {
-			auto query_result = EvaluateSQL(state, component.literal);
-			prompt += HandleText(state, query_result, length);
+			auto result = ExecuteSQL(state, component.literal);
+			prompt += HandleText(state, result, length);
 			break;
 		}
 		case PromptComponentType::SET_COLOR:
@@ -311,7 +359,7 @@ void Prompt::PrintPrompt(ShellState &state, PrintOutput output) {
 			highlight.PrintText(HandleText(state, component.literal, length), output, color, intensity);
 			break;
 		case PromptComponentType::SQL: {
-			auto result = EvaluateSQL(state, component.literal);
+			auto result = ExecuteSQL(state, component.literal);
 			highlight.PrintText(HandleText(state, result, length), output, color, intensity);
 			break;
 		}

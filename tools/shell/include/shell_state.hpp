@@ -44,6 +44,7 @@ using duckdb::InternalException;
 using duckdb::InvalidInputException;
 using duckdb::to_string;
 struct Prompt;
+struct ShellProgressBar;
 
 using idx_t = uint64_t;
 
@@ -93,6 +94,15 @@ enum class OptionType { DEFAULT, ON, OFF };
 enum class StartupText { ALL, VERSION, NONE };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
+
+enum class ExecuteSQLSingleValueResult {
+	SUCCESS,
+	EXECUTION_ERROR,
+	EMPTY_RESULT,
+	MULTIPLE_ROWS,
+	MULTIPLE_COLUMNS,
+	NULL_RESULT
+};
 
 typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
 
@@ -210,6 +220,8 @@ public:
 	unique_ptr<Prompt> main_prompt;
 	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
+	//! Progress bar used to render the components that are displayed when query status / progress is rendered
+	unique_ptr<ShellProgressBar> progress_bar;
 
 #if defined(_WIN32) || defined(WIN32)
 	bool win_utf8_mode = false;
@@ -332,6 +344,9 @@ public:
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE
 	SuccessState ExecuteQuery(const string &query);
+	//! Execute a SQL query and extracts a single string value
+	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(const string &sql, string &result);
+	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql, string &result_value);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
 	SuccessState RenderQuery(RowRenderer &renderer, const string &query);

@@ -209,7 +209,6 @@ private:
 	              shared_ptr<ParquetFileMetadataCache> metadata);
 
 	void InitializeSchema(ClientContext &context);
-	bool ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,

@@ -5,37 +5,37 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('INS') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INS') LIMIT 1;
 ----
 INSERT 	0
 
 query II
-FROM sql_auto_complete('INSERT IN') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT IN') LIMIT 1;
 ----
 INTO 	7
 
 query II
-FROM sql_auto_complete('INSERT INTO tbl VAL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT INTO tbl VAL') LIMIT 1;
 ----
 VALUES 	16
 
 query II
-FROM sql_auto_complete('INSERT INTO tbl(c1, c2) VAL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT INTO tbl(c1, c2) VAL') LIMIT 1;
 ----
 VALUES 	24
 
 query II
-FROM sql_auto_complete('INSERT INTO tbl(c1, c2) SEL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT INTO tbl(c1, c2) SEL') LIMIT 1;
 ----
 SELECT 	24
 
 # on conflict actions
 query II
-FROM sql_auto_complete('INSERT OR IG') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT OR IG') LIMIT 1;
 ----
 IGNORE 	10
 
 query II
-FROM sql_auto_complete('INSERT OR REP') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT OR REP') LIMIT 1;
 ----
 REPLACE 	10
