@@ -7,10 +7,10 @@ It handles building both versions, running the given set of benchmarks, and gene
 First, install the requirements: ``pip install pandas plotly kaleido``
 ### Example
 ```bash
-python3 scripts/autobench.py --old_path "/path/to/my/duckdb_main"  --new_path "/path/to/my/duckdb_fork" --benchmark "benchmark/parquet/.*"
+python3 scripts/autobench/autobench.py --old_path "/path/to/my/duckdb_main"  --new_path "/path/to/my/duckdb_fork" --benchmark "benchmark/parquet/.*"
   ```
 
-You must provide three environment variables to run the script.
+You must provide three command line arguments to run the script.
 Make sure you have cloned duckdb twice, one should be the main branch, and the other is your forked version, for development.
 
 * `old_path`: The absolute path to the "old" (e.g., `main`) branch repository.

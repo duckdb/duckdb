@@ -6,7 +6,6 @@ import argparse
 import subprocess
 import sys, os
 import kaleido
-from regression.benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 
 print("\033[1;34m==============================================================\033[0m")
 print("\033[1;34m🦆📊  DuckDB AutoBench — Automated Benchmark Runner & Comparator\033[0m")
@@ -30,6 +29,9 @@ parser.add_argument(
 )
 args = parser.parse_args()
 new_repo_path = args.new_path
+sys.path.insert(0, new_repo_path)
+from scripts.regression.benchmark import BenchmarkRunner, BenchmarkRunnerConfig
+
 old_repo_path = args.old_path
 benchmark_pattern = args.benchmark_pattern
 
@@ -48,7 +50,7 @@ def run_build_and_benchmarks(path_dir: str, tag: str):
     print(f"\033[1;36mBuilding {tag}...\033[0m")
 
     env = os.environ.copy()
-    env.update({"BUILD_BENCHMARK": "1", "CORE_EXTENSIONS": "tpch"})
+    env.update({"BUILD_BENCHMARK": "1", "CORE_EXTENSIONS": "tpch;tpcds;httpfs"})
 
     # Run build, stream output live (like tee), and capture it in memory
     process = subprocess.Popen(
