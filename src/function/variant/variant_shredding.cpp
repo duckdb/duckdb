@@ -330,7 +330,7 @@ case_insensitive_string_set_t VariantShreddingState::ObjectFields() {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &entry : child_types) {
 		auto &type = entry.first;
-		res.emplace(string_t(type.c_str(), static_cast<uint32_t>(type.size())));
+		res.emplace(type.c_str(), static_cast<uint32_t>(type.size()));
 	}
 	return res;
 }

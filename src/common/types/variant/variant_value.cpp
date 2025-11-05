@@ -16,7 +16,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 
-using namespace duckdb_yyjson;
+using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 

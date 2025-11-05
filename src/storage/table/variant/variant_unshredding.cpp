@@ -152,8 +152,10 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 		list_val = VariantValue(VariantValueType::ARRAY);
 		list_val.array_items.reserve(list_entry.length);
 		list_val.array_items.insert(
-		    list_val.array_items.end(), std::make_move_iterator(child_values.begin() + list_entry.offset),
-		    std::make_move_iterator(child_values.begin() + list_entry.offset + list_entry.length));
+		    list_val.array_items.end(),
+		    std::make_move_iterator(child_values.begin() + static_cast<int64_t>(list_entry.offset)),
+		    std::make_move_iterator(child_values.begin() +
+		                            static_cast<int64_t>(list_entry.offset + list_entry.length)));
 	}
 	return res;
 }

@@ -88,6 +88,8 @@ private:
 struct VariantShreddingState {
 public:
 	explicit VariantShreddingState(const LogicalType &type, idx_t total_count);
+	virtual ~VariantShreddingState() {
+	}
 
 public:
 	bool ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, idx_t values_index);
