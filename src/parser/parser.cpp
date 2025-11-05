@@ -190,7 +190,7 @@ vector<string> SplitQueries(const string &input_query) {
 	return queries;
 }
 
-StatementType Parser::GetStatementType(const string &query) {
+unique_ptr<SQLStatement> Parser::GetStatement(const string &query) {
 	Transformer transformer(options);
 	vector<unique_ptr<SQLStatement>> statements;
 	PostgresParser parser;
@@ -198,13 +198,12 @@ StatementType Parser::GetStatementType(const string &query) {
 	if (parser.success) {
 		if (!parser.parse_tree) {
 			// empty statement
-			return StatementType::INVALID_STATEMENT;
+			return {};
 		}
 		transformer.TransformParseTree(parser.parse_tree, statements);
-		return statements[0]->type;
-	} else {
-		return StatementType::INVALID_STATEMENT;
+		return std::move(statements[0]);
 	}
+	return {};
 }
 
 void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
@@ -218,11 +217,11 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 	if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
 		if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
 			throw NotImplementedException("Parser override has not yet implemented this "
-			                              "transformer rule. (Original error: %s)",
+			                              "transformer rule.\nOriginal Error: %s",
 			                              result.error.RawMessage());
 		}
 		if (result.error.Type() == ExceptionType::PARSER) {
-			throw ParserException("Parser override could not parse this query. (Original error: %s)",
+			throw ParserException("Parser override could not parse this query.\nOriginal Error: %s",
 			                      result.error.RawMessage());
 		}
 		result.error.Throw();
@@ -261,9 +260,12 @@ void Parser::ParseQuery(const string &query) {
 					ThrowParserOverrideError(result);
 				}
 				if (StringUtil::CIEquals(parser_override_option, "strict_when_supported")) {
-					auto statement_type = GetStatementType(query);
+					auto statement = GetStatement(query);
+					if (!statement) {
+						break;
+					}
 					bool is_supported = false;
-					switch (statement_type) {
+					switch (statement->type) {
 					case StatementType::CALL_STATEMENT:
 					case StatementType::TRANSACTION_STATEMENT:
 					case StatementType::VARIABLE_SET_STATEMENT:
@@ -275,9 +277,19 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::ALTER_STATEMENT:
 					case StatementType::PRAGMA_STATEMENT:
 					case StatementType::COPY_DATABASE_STATEMENT:
-					case StatementType::CREATE_STATEMENT:
 						is_supported = true;
 						break;
+					case StatementType::CREATE_STATEMENT: {
+						auto &create_statement = statement->Cast<CreateStatement>();
+						switch (create_statement.info->type) {
+						case CatalogType::SCHEMA_ENTRY:
+							is_supported = true;
+							break;
+						default:
+							is_supported = false;
+						}
+						break;
+					}
 					default:
 						is_supported = false;
 						break;

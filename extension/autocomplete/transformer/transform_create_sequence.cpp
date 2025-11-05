@@ -6,6 +6,7 @@ namespace duckdb {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	throw NotImplementedException("TransformCreateSequenceStmt");
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
 	auto result = make_uniq<CreateStatement>();

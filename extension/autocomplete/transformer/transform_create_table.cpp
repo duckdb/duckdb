@@ -15,10 +15,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateStatement(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool replace = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto result = transformer.Transform<unique_ptr<CreateStatement>>(list_pr.Child<ListParseResult>(3));
-	if (result->info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT && replace) {
-		throw ParserException("Cannot specify both OR REPLACE and IF NOT EXISTS within single create statement");
+	auto& conflict_policy = result->info->on_conflict;
+	if (replace) {
+		if (conflict_policy == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			throw ParserException("Cannot specify both OR REPLACE and IF NOT EXISTS within single create statement");
+		}
+		conflict_policy = OnCreateConflict::REPLACE_ON_CONFLICT;
 	}
-	result->info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto temporary_pr = list_pr.Child<OptionalParseResult>(2);
 	auto persistent_type = SecretPersistType::DEFAULT;
 	transformer.TransformOptional<SecretPersistType>(list_pr, 2, persistent_type);
@@ -47,7 +50,7 @@ PEGTransformerFactory::TransformCreateStatementVariation(PEGTransformer &transfo
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-
+	throw NotImplementedException("CreateTableStmt not implemented");
 	auto result = make_uniq<CreateStatement>();
 	QualifiedName table_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
 	// Use appropriate constructor

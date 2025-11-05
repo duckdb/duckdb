@@ -7,6 +7,7 @@ namespace duckdb {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	throw NotImplementedException("TransformCreateMacroStmt");
 
 	auto result = make_uniq<CreateStatement>();
 	// TODO(Dtenwolde) Figure out when it should be table macro entry
