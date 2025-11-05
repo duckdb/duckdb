@@ -30,19 +30,6 @@ void VariantValue::AddItem(VariantValue &&val) {
 	array_items.push_back(std::move(val));
 }
 
-static void InitializeOffsets(DataChunk &offsets, idx_t count) {
-	auto keys = variant::OffsetData::GetKeys(offsets);
-	auto children = variant::OffsetData::GetChildren(offsets);
-	auto values = variant::OffsetData::GetValues(offsets);
-	auto blob = variant::OffsetData::GetBlob(offsets);
-	for (idx_t i = 0; i < count; i++) {
-		keys[i] = 0;
-		children[i] = 0;
-		values[i] = 0;
-		blob[i] = 0;
-	}
-}
-
 static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offsets) {
 	auto &keys_offset = variant::OffsetData::GetKeys(offsets)[row];
 	auto &children_offset = variant::OffsetData::GetChildren(offsets)[row];
@@ -649,7 +636,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	    Allocator::DefaultAllocator(),
 	    {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
 	analyze_offsets.SetCardinality(count);
-	InitializeOffsets(analyze_offsets, count);
+	variant::InitializeOffsets(analyze_offsets, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
@@ -672,7 +659,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	    Allocator::DefaultAllocator(),
 	    {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
 	conversion_offsets.SetCardinality(count);
-	InitializeOffsets(conversion_offsets, count);
+	variant::InitializeOffsets(conversion_offsets, count);
 
 	VariantVectorData variant_data(result);
 	for (idx_t i = 0; i < count; i++) {
