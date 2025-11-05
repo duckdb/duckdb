@@ -2,11 +2,30 @@
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
+
+struct ListIntersectBindData : public FunctionData {
+	LogicalType original_left_child_type;
+
+	explicit ListIntersectBindData(const LogicalType &original_left_child_type)
+	    : original_left_child_type(original_left_child_type) {
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<ListIntersectBindData>();
+		return original_left_child_type == other.original_left_child_type;
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<ListIntersectBindData>(original_left_child_type);
+	}
+};
 
 static idx_t CalculateMaxResultLength(idx_t row_count, const UnifiedVectorFormat &l_format,
                                       const UnifiedVectorFormat &r_format, const list_entry_t *l_entries,
@@ -40,6 +59,10 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	auto &l_child = ListVector::GetEntry(l_vec);
 	auto &r_child = ListVector::GetEntry(r_vec);
+
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<ListIntersectBindData>();
+	const auto &original_left_child_type = bind_data.original_left_child_type;
+	const auto current_left_child_type = l_child.GetType();
 
 	UnifiedVectorFormat l_format;
 	UnifiedVectorFormat r_format;
@@ -167,9 +190,30 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	ListVector::SetListSize(result, offset);
 
-	result_entry.Slice(l_child, result_sel, offset);
-	result_entry.Flatten(offset);
-	FlatVector::SetValidity(result_entry, result_entry_validity_mask);
+	// If types differ, we need to slice into a temporary vector first, then cast
+	if (original_left_child_type != current_left_child_type) {
+		// Slice into a temporary vector with the coerced type
+		Vector temp_result_entry(current_left_child_type, offset);
+		temp_result_entry.Slice(l_child, result_sel, offset);
+		temp_result_entry.Flatten(offset);
+		FlatVector::SetValidity(temp_result_entry, result_entry_validity_mask);
+
+		// Cast the temporary vector to the original left child type
+		string error_message;
+		if (VectorOperations::DefaultTryCast(temp_result_entry, result_entry, offset, &error_message, false)) {
+			// Cast succeeded, result_entry now has the correct type
+		} else {
+			// Cast failed, fall back to slicing directly (this shouldn't happen if types are compatible)
+			result_entry.Slice(l_child, result_sel, offset);
+			result_entry.Flatten(offset);
+			FlatVector::SetValidity(result_entry, result_entry_validity_mask);
+		}
+	} else {
+		// Types match, slice directly
+		result_entry.Slice(l_child, result_sel, offset);
+		result_entry.Flatten(offset);
+		FlatVector::SetValidity(result_entry, result_entry_validity_mask);
+	}
 
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 }
@@ -179,7 +223,15 @@ static unique_ptr<FunctionData> ListIntersectBind(ClientContext &context, Scalar
 	D_ASSERT(bound_function.arguments.size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
-	return nullptr;
+
+	// Store the original left child type before any type coercion happens
+	// This allows us to preserve the left list's element type in the result
+	auto original_left_child_type = ListType::GetChildType(arguments[0]->return_type);
+
+	// Set the return type to preserve the left list's element type
+	bound_function.return_type = LogicalType::LIST(original_left_child_type);
+
+	return make_uniq<ListIntersectBindData>(original_left_child_type);
 }
 
 ScalarFunction ListIntersectFun::GetFunction() {

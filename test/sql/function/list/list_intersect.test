@@ -173,3 +173,19 @@ SELECT list_sort(list_intersect(range(1, 1000), [100, 200, 300]));
 ----
 [100, 200, 300]
 
+# Test type preservation - preserve left list's element type
+query I
+SELECT list_intersect([true, false], [1, 0]);
+----
+[true, false]
+
+query I
+SELECT list_intersect([1, 0], [true, false]);
+----
+[1, 0]
+
+query I
+SELECT list_intersect([true, false, 1], [1, 0, 1, 1, 1, 1, 1]);
+----
+[1, 0]
+
