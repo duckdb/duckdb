@@ -240,10 +240,10 @@ static unique_ptr<FunctionData> ListIntersectBind(ClientContext &context, Scalar
 	// Store the original left child type before any type coercion happens
 	// This allows us to preserve the left list's element type in the result
 	auto original_left_child_type = ListType::GetChildType(arguments[0]->return_type);
-	
+
 	// Set the return type to preserve the left list's element type
 	bound_function.return_type = LogicalType::LIST(original_left_child_type);
-	
+
 	return make_uniq<ListIntersectBindData>(original_left_child_type);
 }
 
