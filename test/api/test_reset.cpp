@@ -123,8 +123,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_external_file_cache", {false}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
-	    {"pin_threads", {"off"}},
-	    {"enable_block_allocator", {true}}};
+	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -185,7 +184,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "enable_progress_bar_print",
 	    "progress_bar_time",
 	    "index_scan_max_count",
-	    "profiling_mode"};
+	    "profiling_mode",
+	    "block_allocator_size"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }
 

@@ -156,6 +156,17 @@
         "scope": "global"
     },
     {
+        "name": "block_allocator_size",
+        "description": "Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced).",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
         "type": "UBIGINT",
@@ -356,16 +367,6 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
-    },
-    {
-        "name": "enable_block_allocator",
-        "description": "Whether to enable the allocator that lazily frees fixed-size blocks.",
-        "type": "BOOLEAN",
-        "scope": "global",
-        "on_callbacks": [
-            "set",
-            "reset"
-        ]
     },
     {
         "name": "enable_external_access",

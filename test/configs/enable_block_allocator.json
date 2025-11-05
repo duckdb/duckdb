@@ -1,4 +1,0 @@
-{
-  "description": "Run with the BlockAllocator enabled.",
-  "on_init": "SET enable_block_allocator=true;"
-}

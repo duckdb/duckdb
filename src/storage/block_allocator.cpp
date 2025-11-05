@@ -46,20 +46,6 @@ static void FreeVirtualMemory(const data_ptr_t pointer, const idx_t size) {
 	}
 }
 
-static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
-	bool success;
-#if defined(_WIN32)
-	success = VirtualFree(pointer, size, MEM_RESET);
-#elif defined(__APPLE__)
-	success = madvise(pointer, size, MADV_FREE_REUSABLE) == 0;
-#else
-	success = madvise(pointer, size, MADV_FREE) == 0;
-#endif
-	if (!success) {
-		throw InternalException("OnDeallocation failed");
-	}
-}
-
 static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 	bool success = true;
 #if defined(_WIN32)
@@ -107,8 +93,7 @@ public:
 		}
 
 		// We have run out of local blocks
-		if (TryGetBatch(touched, *block_allocator->to_free) || TryGetBatch(touched, *block_allocator->touched) ||
-		    TryGetBatch(untouched, *block_allocator->untouched)) {
+		if (TryGetBatch(touched, *block_allocator->touched) || TryGetBatch(untouched, *block_allocator->untouched)) {
 			// We have refilled local blocks
 			pointer = TryAllocateFromLocal();
 			D_ASSERT(pointer);
@@ -126,16 +111,14 @@ public:
 		}
 
 		// Upon reaching the threshold, we return a local batch to global
-		block_allocator->to_free->q.enqueue_bulk(touched.end() - BATCH_SIZE, BATCH_SIZE);
-		block_allocator->TryFreeInternal();
+		block_allocator->touched->q.enqueue_bulk(touched.end() - BATCH_SIZE, BATCH_SIZE);
 		touched.resize(touched.size() - BATCH_SIZE);
 	}
 
 	void Clear() {
 		// Return all local blocks back to global
 		if (!touched.empty()) {
-			block_allocator->to_free->q.enqueue_bulk(touched.begin(), touched.size());
-			block_allocator->TryFreeInternal();
+			block_allocator->touched->q.enqueue_bulk(touched.begin(), touched.size());
 			touched.clear();
 		}
 		if (!untouched.empty()) {
@@ -197,15 +180,15 @@ BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAll
 //===--------------------------------------------------------------------===//
 // BlockAllocator
 //===--------------------------------------------------------------------===//
-BlockAllocator::BlockAllocator(Allocator &allocator_p, bool enable, const idx_t block_size_p,
-                               const idx_t virtual_memory_size_p)
-    : uuid(UUID::GenerateRandomUUID()), allocator(allocator_p), enabled(enable), block_size(block_size_p),
+BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p, const idx_t virtual_memory_size_p,
+                               const idx_t physical_memory_size_p)
+    : uuid(UUID::GenerateRandomUUID()), allocator(allocator_p), block_size(block_size_p),
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)),
-      virtual_memory_space(AllocateVirtualMemory(virtual_memory_size)), untouched(make_unsafe_uniq<BlockQueue>()),
-      touched(make_unsafe_uniq<BlockQueue>()), to_free(make_unsafe_uniq<BlockQueue>()) {
+      virtual_memory_space(AllocateVirtualMemory(virtual_memory_size)), physical_memory_size(0),
+      untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()) {
 	D_ASSERT(IsPowerOfTwo(block_size));
-	Resize();
+	Resize(physical_memory_size_p);
 }
 
 BlockAllocator::~BlockAllocator() {
@@ -223,29 +206,39 @@ BlockAllocator &BlockAllocator::Get(AttachedDatabase &db) {
 	return Get(db.GetDatabase());
 }
 
-void BlockAllocator::SetEnabled(bool enable) {
-	enabled = enable;
-}
-
-void BlockAllocator::Resize() const {
+void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
 	if (!IsActive()) {
 		return;
 	}
 
+	lock_guard<mutex> guard(physical_memory_lock);
+	if (new_physical_memory_size < physical_memory_size) {
+		throw InvalidInputException("The \"block_allocator_size\" setting cannot be reduced (current: %llu)",
+		                            physical_memory_size.load());
+	}
+
 	// Enqueue block IDs efficiently in batches
 	uint32_t block_ids[STANDARD_VECTOR_SIZE];
-	const auto end = NumericCast<uint32_t>(virtual_memory_size / block_size);
-	for (uint32_t block_id = 0; block_id < end; block_id += STANDARD_VECTOR_SIZE) {
+	const auto start = NumericCast<uint32_t>(DivBlockSize(physical_memory_size));
+	const auto end = NumericCast<uint32_t>(DivBlockSize(new_physical_memory_size));
+	for (auto block_id = start; block_id < end; block_id += STANDARD_VECTOR_SIZE) {
 		const auto next = MinValue<idx_t>(end - block_id, STANDARD_VECTOR_SIZE);
 		for (uint32_t i = 0; i < next; i++) {
 			block_ids[i] = block_id + i;
 		}
 		untouched->q.enqueue_bulk(block_ids, next);
 	}
+
+	// Finally, update to the new size
+	physical_memory_size = new_physical_memory_size;
 }
 
 bool BlockAllocator::IsActive() const {
 	return virtual_memory_space;
+}
+
+bool BlockAllocator::IsEnabled() const {
+	return physical_memory_size.load(std::memory_order_relaxed) != 0;
 }
 
 bool BlockAllocator::IsInPool(const data_ptr_t pointer) const {
@@ -279,7 +272,7 @@ data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
 }
 
 data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
-	if (!IsActive() || !enabled.load(std::memory_order_relaxed) || size != block_size) {
+	if (!IsActive() || IsEnabled() || size != block_size) {
 		return allocator.AllocateData(size);
 	}
 	return GetBlockAllocatorThreadLocalState(*this).Allocate();
@@ -311,7 +304,7 @@ data_ptr_t BlockAllocator::ReallocateData(const data_ptr_t pointer, const idx_t 
 }
 
 bool BlockAllocator::SupportsFlush() const {
-	return (IsActive() && enabled.load(std::memory_order_relaxed)) || Allocator::SupportsFlush();
+	return (IsActive() && IsEnabled()) || Allocator::SupportsFlush();
 }
 
 void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const {
@@ -322,67 +315,9 @@ void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t thresh
 }
 
 void BlockAllocator::FlushAll() const {
-	FreeInternal();
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
 	}
-}
-
-void BlockAllocator::TryFreeInternal() const {
-	// Free many blocks in one go once we exceed the threshold
-	if (to_free->q.size_approx() >= TO_FREE_SIZE_THRESHOLD) {
-		FreeInternal();
-	}
-}
-
-void BlockAllocator::FreeInternal() const {
-	const unique_lock<mutex> guard(to_free_lock, std::try_to_lock);
-	if (!guard.owns_lock()) {
-		return;
-	}
-
-	unsafe_vector<uint32_t> to_free_buffer;
-	do {
-		auto count = to_free->q.size_approx() * 2;
-		to_free_buffer.resize(count);
-		count = to_free->q.try_dequeue_bulk(to_free_buffer.begin(), count);
-		if (count == 0) {
-			return;
-		}
-		to_free_buffer.resize(count);
-
-		// Sort so we can coalesce free calls
-		std::sort(to_free_buffer.begin(), to_free_buffer.end());
-
-		// Coalesce and free
-		uint32_t block_id_start = to_free_buffer[0];
-		for (idx_t i = 1; i < to_free_buffer.size(); i++) {
-			const auto &previous_block_id = to_free_buffer[i - 1];
-			const auto &current_block_id = to_free_buffer[i];
-			if (previous_block_id == current_block_id - 1) {
-				continue; // Current is contiguous with previous block
-			}
-
-			// Previous block is the last contiguous block starting from block_id_start, free them in one go
-			FreeContiguousBlocks(block_id_start, previous_block_id);
-
-			// Continue coalescing from the current
-			block_id_start = current_block_id;
-		}
-
-		// Don't forget the last one
-		FreeContiguousBlocks(block_id_start, to_free_buffer.back());
-
-		// Make freed blocks available to allocate again
-		touched->q.enqueue_bulk(to_free_buffer.begin(), to_free_buffer.size());
-	} while (to_free->q.size_approx() >= TO_FREE_SIZE_THRESHOLD);
-}
-
-void BlockAllocator::FreeContiguousBlocks(const uint32_t block_id_start, const uint32_t block_id_end_including) const {
-	const auto pointer = GetPointer(block_id_start);
-	const auto num_blocks = block_id_end_including - block_id_start + 1;
-	const auto size = num_blocks * block_size;
-	OnDeallocation(pointer, size);
 }
 
 } // namespace duckdb

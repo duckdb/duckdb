@@ -24,14 +24,15 @@ class BlockAllocator {
 	friend class BlockAllocatorThreadLocalState;
 
 public:
-	BlockAllocator(Allocator &allocator, bool enable, idx_t block_size, idx_t virtual_memory_size);
+	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t virtual_memory_size, idx_t physical_memory_size);
 	~BlockAllocator();
 
 public:
 	static BlockAllocator &Get(DatabaseInstance &db);
 	static BlockAllocator &Get(AttachedDatabase &db);
 
-	void SetEnabled(bool enable);
+	//! Resize physical memory (can only be increased)
+	void Resize(idx_t new_physical_memory_size);
 
 	//! Allocation functions (same API as Allocator)
 	data_ptr_t AllocateData(idx_t size) const;
@@ -44,9 +45,8 @@ public:
 	void FlushAll() const;
 
 private:
-	void Resize() const;
-
 	bool IsActive() const;
+	bool IsEnabled() const;
 	bool IsInPool(data_ptr_t pointer) const;
 
 	idx_t ModuloBlockSize(idx_t n) const;
@@ -55,10 +55,6 @@ private:
 	uint32_t GetBlockID(data_ptr_t pointer) const;
 	data_ptr_t GetPointer(uint32_t block_id) const;
 
-	void TryFreeInternal() const;
-	void FreeInternal() const;
-	void FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) const;
-
 	void VerifyBlockID(uint32_t block_id) const;
 
 private:
@@ -66,8 +62,6 @@ private:
 	const hugeint_t uuid;
 	//! Fallback allocator
 	Allocator &allocator;
-	//! Whether this is open for new allocations
-	atomic<bool> enabled;
 
 	//! Block size (power of two)
 	const idx_t block_size;
@@ -79,17 +73,15 @@ private:
 	//! Pointer to the start of the virtual memory
 	const data_ptr_t virtual_memory_space;
 
+	//! Mutex for modifying physical memory size
+	mutex physical_memory_lock;
+	//! Size of the physical memory
+	atomic<idx_t> physical_memory_size;
+
 	//! Untouched block IDs
 	unsafe_unique_ptr<BlockQueue> untouched;
 	//! Touched by block IDs
 	unsafe_unique_ptr<BlockQueue> touched;
-
-	//! Blocks that should be freed
-	unsafe_unique_ptr<BlockQueue> to_free;
-	//! Actually free freed blocks once queue size hits this threshold
-	static constexpr idx_t TO_FREE_SIZE_THRESHOLD = 4096;
-	//! Lock so that only one thread at a time frees
-	mutable mutex to_free_lock;
 };
 
 } // namespace duckdb

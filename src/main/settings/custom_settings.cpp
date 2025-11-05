@@ -316,6 +316,30 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Block Allocator Size
+//===----------------------------------------------------------------------===//
+void BlockAllocatorSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	const auto size = DBConfig::ParseMemoryLimit(input.ToString());
+	if (db) {
+		BlockAllocator::Get(*db).Resize(size);
+	}
+	config.options.block_allocator_size = size;
+}
+
+void BlockAllocatorSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	const auto size = DBConfigOptions().block_allocator_size;
+	if (db) {
+		BlockAllocator::Get(*db).Resize(size);
+	}
+	config.options.block_allocator_size = size;
+}
+
+Value BlockAllocatorSizeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return StringUtil::BytesToHumanReadableString(config.options.block_allocator_size);
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -638,23 +662,6 @@ void DuckDBAPISetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value DuckDBAPISetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(config.options.duckdb_api);
-}
-
-//===----------------------------------------------------------------------===//
-// Enable Block Allocator
-//===----------------------------------------------------------------------===//
-bool EnableBlockAllocatorSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db) {
-		BlockAllocator::Get(*db).SetEnabled(input.GetValue<bool>());
-	}
-	return true;
-}
-
-bool EnableBlockAllocatorSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		BlockAllocator::Get(*db).SetEnabled(DBConfigOptions().enable_block_allocator);
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//

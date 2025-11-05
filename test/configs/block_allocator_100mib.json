@@ -1,0 +1,5 @@
+{
+  "description": "Run with block_allocator_size set to 100MiB.",
+  "on_init": "SET block_allocator_size='100MiB'",
+  "skip_compiled": "true"
+}
