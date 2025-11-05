@@ -19,6 +19,7 @@ void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_gr
 
 	idx_t qualifying_tuples = 0;
 	idx_t seen_tuples = 0;
+	idx_t qualify_later = 0;
 
 	Value previous_key;
 	reference<BaseStatistics> last_row_group_stats = *it->second.first;
@@ -34,17 +35,21 @@ void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_gr
 			// Row groups do not overlap: we can guarantee that the tuples up until now qualify
 			last_row_group_stats = stats;
 			qualifying_tuples = seen_tuples;
+			qualify_later = 0;
 		} else {
 			if (!previous_key.IsNull() && previous_key != current_key) {
 				// Only if the opposite boundaries are inequal, we can guarantee to have >= 1 distinct qualifying rows.
 				// We need distinctness as there may be secondary orders that qualify rows in later row groups.
-				qualifying_tuples++;
+				qualifying_tuples += qualify_later;
+				qualify_later = 0;
 			}
 		}
+
 		if (qualifying_tuples >= row_limit) {
 			break;
 		}
 
+		qualify_later++; // One additional tuple may qualify in the next round if there is overlap
 		seen_tuples += row_group.get().count;
 		ordered_row_groups.emplace_back(row_group);
 

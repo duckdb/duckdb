@@ -1,0 +1,51 @@
+# name: test/sql/topn/top_n_hard_limit.test
+# description: Test Top N with ordered row groups and row limits
+# group: [topn]
+
+statement ok
+ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+CREATE TABLE t AS SELECT i FROM range(0, 2048) t1(i)
+
+statement ok
+INSERT INTO t SELECT i FROM range(0, 2048) t2(i)
+
+statement ok
+INSERT INTO t SELECT i FROM range(1024, 5120) t3(i)
+
+statement ok
+PRAGMA enable_verification
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 1
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2048
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2049
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2050
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
