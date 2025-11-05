@@ -1778,7 +1778,7 @@ string Linenoise::GetTemporaryDirectory() {
 	ret = GetTempPath(MAX_PATH_LENGTH, tmpdir);
 	if (ret == 0 || ret > MAX_PATH_LENGTH) {
 		Log("cannot locate temporary directory: %s", !ret ? strerror(errno) : "");
-		return false;
+		return string();
 	}
 	return tmpdir;
 #endif
