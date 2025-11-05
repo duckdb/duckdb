@@ -17,7 +17,7 @@ namespace duckdb {
 //	Global sink state
 class WindowGlobalSinkState;
 
-enum WindowGroupStage : uint8_t { MATERIALIZE, MASK, SINK, FINALIZE, GETDATA, DONE };
+enum WindowGroupStage : uint8_t { SORT, MATERIALIZE, MASK, SINK, FINALIZE, GETDATA, DONE };
 
 struct WindowSourceTask {
 	WindowSourceTask() {
@@ -69,7 +69,7 @@ public:
 
 	// The total number of tasks we will execute per thread
 	inline idx_t GetTaskCount() const {
-		return GetThreadCount() * (uint8_t(WindowGroupStage::DONE) - uint8_t(WindowGroupStage::MATERIALIZE));
+		return GetThreadCount() * (uint8_t(WindowGroupStage::DONE) - uint8_t(WindowGroupStage::SORT));
 	}
 	// The total number of threads we will use
 	inline idx_t GetThreadCount() const {
@@ -93,6 +93,12 @@ public:
 	bool TryPrepareNextStage() {
 		lock_guard<mutex> prepare_guard(lock);
 		switch (stage.load()) {
+		case WindowGroupStage::SORT:
+			if (sorted == blocks) {
+				stage = WindowGroupStage::MATERIALIZE;
+				return true;
+			}
+			return false;
 		case WindowGroupStage::MATERIALIZE:
 			if (materialized == blocks) {
 				stage = WindowGroupStage::MASK;
@@ -178,6 +184,8 @@ public:
 	idx_t group_threads = 0;
 	//! The next task to process
 	idx_t next_task = 0;
+	//! Count of sorted run blocks
+	std::atomic<idx_t> sorted;
 	//! Count of materialized run blocks
 	std::atomic<idx_t> materialized;
 	//! Count of masked blocks
@@ -477,8 +485,8 @@ void WindowGlobalSourceState::CreateTaskList() {
 }
 
 WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &chunk_row, const idx_t hash_bin_p)
-    : gsink(gsink), count(chunk_row.count), blocks(chunk_row.chunks), stage(WindowGroupStage::MATERIALIZE),
-      hash_bin(hash_bin_p), materialized(0), masked(0), sunk(0), finalized(0), completed(0), batch_base(0) {
+    : gsink(gsink), count(chunk_row.count), blocks(chunk_row.chunks), stage(WindowGroupStage::SORT),
+      hash_bin(hash_bin_p), sorted(0), materialized(0), masked(0), sunk(0), finalized(0), completed(0), batch_base(0) {
 	// There are three types of partitions:
 	// 1. No partition (no sorting)
 	// 2. One partition (sorting, but no hashing)
@@ -666,6 +674,8 @@ public:
 	DataChunk output_chunk;
 
 protected:
+	//! Sort the partition
+	void Sort(ExecutionContext &context, InterruptState &interrupt);
 	//! Materialize the sorted run
 	void Materialize(ExecutionContext &context, InterruptState &interrupt);
 	//! Compute a mask range
@@ -697,6 +707,20 @@ idx_t WindowHashGroup::InitTasks(idx_t per_thread_p) {
 	thread_states.resize(GetThreadCount());
 
 	return GetTaskCount();
+}
+
+void WindowLocalSourceState::Sort(ExecutionContext &context, InterruptState &interrupt) {
+	D_ASSERT(task);
+	D_ASSERT(task->stage == WindowGroupStage::SORT);
+
+	auto &gsink = gsource.gsink;
+	auto &hashed_sort = *gsink.global_partition;
+	OperatorSinkFinalizeInput finalize {*gsink.hashed_sink, interrupt};
+	hashed_sort.SortColumnData(context, task_local.group_idx, finalize);
+
+	//	Mark this range as done
+	window_hash_group->sorted += (task->end_idx - task->begin_idx);
+	task->begin_idx = task->end_idx;
 }
 
 void WindowLocalSourceState::Materialize(ExecutionContext &context, InterruptState &interrupt) {
@@ -945,11 +969,14 @@ void WindowLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 
 	// Process the new state
 	switch (task->stage) {
+	case WindowGroupStage::SORT:
+		Sort(context, interrupt);
+		D_ASSERT(TaskFinished());
+		break;
 	case WindowGroupStage::MATERIALIZE:
 		Materialize(context, interrupt);
 		D_ASSERT(TaskFinished());
 		break;
-
 	case WindowGroupStage::MASK:
 		Mask(context, interrupt);
 		D_ASSERT(TaskFinished());
