@@ -533,25 +533,39 @@ class HashedSortGlobalSourceState : public GlobalSourceState {
 public:
 	using HashGroupPtr = unique_ptr<ColumnDataCollection>;
 	using SortedRunPtr = unique_ptr<SortedRun>;
+	using ChunkRow = HashedSort::ChunkRow;
+	using ChunkRows = HashedSort::ChunkRows;
 
 	HashedSortGlobalSourceState(ClientContext &client, HashedSortGlobalSinkState &gsink) : gsink(gsink) {
 		if (!gsink.count) {
 			return;
 		}
-		auto &sort = *gsink.hashed_sort.sort;
 		for (auto &hash_group : gsink.hash_groups) {
+			ChunkRow chunk_row;
+
 			if (!hash_group) {
-				counts.emplace_back(0);
+				chunk_rows.emplace_back(chunk_row);
 				continue;
 			}
-			auto &global_sink = *hash_group->sort_global;
-			hash_group->sort_source = sort.GetGlobalSourceState(client, global_sink);
-			counts.emplace_back(hash_group->count);
+
+			chunk_row.count = hash_group->count;
+			if (gsink.hashed_sort.sort) {
+				auto &sort = *gsink.hashed_sort.sort;
+				auto &global_sink = *hash_group->sort_global;
+				hash_group->sort_source = sort.GetGlobalSourceState(client, global_sink);
+				//	Sorted data produces dense chunks
+				chunk_row.chunks = (chunk_row.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+				;
+			} else if (hash_group->columns) {
+				//	Unsorted data can have unrelated chunk counts
+				chunk_row.chunks = hash_group->columns->ChunkCount();
+			}
+			chunk_rows.emplace_back(chunk_row);
 		}
 	}
 
 	HashedSortGlobalSinkState &gsink;
-	vector<idx_t> counts;
+	ChunkRows chunk_rows;
 };
 
 //===--------------------------------------------------------------------===//
@@ -644,9 +658,9 @@ unique_ptr<LocalSourceState> HashedSort::GetLocalSourceState(ExecutionContext &c
 	return make_uniq<LocalSourceState>();
 }
 
-const vector<idx_t> &HashedSort::GetHashGroups(GlobalSourceState &gstate) const {
+const HashedSort::ChunkRows &HashedSort::GetHashGroups(GlobalSourceState &gstate) const {
 	auto &gsource = gstate.Cast<HashedSortGlobalSourceState>();
-	return gsource.counts;
+	return gsource.chunk_rows;
 }
 
 static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_t hash_bin, bool build_runs,
@@ -658,8 +672,8 @@ static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_
 	// OVER()
 	if (gsink.hashed_sort.sort_col_count == 0) {
 		D_ASSERT(hash_bin == 0);
-		// Only report finished for the first call
-		return hash_group.get_columns++ ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+		// Hack: Only report finished for the first call
+		return hash_group.get_columns++ ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 	}
 
 	auto &sort = *hash_group.sort;
@@ -694,7 +708,15 @@ HashedSort::HashGroupPtr HashedSort::GetColumnData(idx_t hash_bin, OperatorSourc
 	auto &sort_global = *hash_group.sort_source;
 
 	OperatorSourceInput input {sort_global, source.local_state, source.interrupt_state};
-	return sort.GetColumnData(input);
+	auto result = sort.GetColumnData(input);
+
+	//	Just because MaterializeColumnData returned FINISHED doesn't mean that the same thread will
+	//	get the result...
+	if (result && result->Count() == hash_group.count) {
+		return result;
+	}
+
+	return nullptr;
 }
 
 SourceResultType HashedSort::MaterializeSortedRun(ExecutionContext &context, idx_t hash_bin,

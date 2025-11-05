@@ -48,13 +48,14 @@ public:
 	using Task = WindowSourceTask;
 	using TaskPtr = optional_ptr<Task>;
 	using ScannerPtr = unique_ptr<WindowCollectionChunkScanner>;
+	using ChunkRow = HashedSort::ChunkRow;
 
 	template <typename T>
 	static T BinValue(T n, T val) {
 		return ((n + (val - 1)) / val);
 	}
 
-	WindowHashGroup(WindowGlobalSinkState &gsink, const idx_t count, const idx_t hash_bin_p);
+	WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &chunk_row, const idx_t hash_bin_p);
 
 	void AllocateMasks();
 	void ComputeMasks(const idx_t begin_idx, const idx_t end_idx);
@@ -422,12 +423,12 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &client, WindowGl
 	window_hash_groups.resize(hash_groups.size());
 
 	for (idx_t group_idx = 0; group_idx < hash_groups.size(); ++group_idx) {
-		const auto block_count = hash_groups[group_idx];
+		const auto block_count = hash_groups[group_idx].chunks;
 		if (!block_count) {
 			continue;
 		}
 
-		auto window_hash_group = make_uniq<WindowHashGroup>(gsink, block_count, group_idx);
+		auto window_hash_group = make_uniq<WindowHashGroup>(gsink, hash_groups[group_idx], group_idx);
 		window_hash_group->batch_base = total_blocks;
 		total_blocks += block_count;
 
@@ -475,16 +476,13 @@ void WindowGlobalSourceState::CreateTaskList() {
 	}
 }
 
-WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, idx_t count, const idx_t hash_bin_p)
-    : gsink(gsink), count(count), stage(WindowGroupStage::MATERIALIZE), hash_bin(hash_bin_p), materialized(0),
-      masked(0), sunk(0), finalized(0), completed(0), batch_base(0) {
+WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &chunk_row, const idx_t hash_bin_p)
+    : gsink(gsink), count(chunk_row.count), blocks(chunk_row.chunks), stage(WindowGroupStage::MATERIALIZE),
+      hash_bin(hash_bin_p), materialized(0), masked(0), sunk(0), finalized(0), completed(0), batch_base(0) {
 	// There are three types of partitions:
 	// 1. No partition (no sorting)
 	// 2. One partition (sorting, but no hashing)
 	// 3. Multiple partitions (sorting and hashing)
-
-	//	We don't have collections until we sort.
-	blocks = BinValue<idx_t>(count, STANDARD_VECTOR_SIZE);
 
 	// Set up the collection for any fully materialised data
 	const auto &shared = WindowSharedExpressions::GetSortedExpressions(gsink.shared.coll_shared);

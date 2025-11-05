@@ -59,8 +59,13 @@ public:
 	SourceResultType MaterializeSortedRun(ExecutionContext &context, idx_t hash_bin, OperatorSourceInput &source) const;
 	SortedRunPtr GetSortedRun(ClientContext &client, idx_t hash_bin, OperatorSourceInput &source) const;
 
-	// The row counts of the hash groups.
-	const vector<idx_t> &GetHashGroups(GlobalSourceState &global_state) const;
+	// The chunk and row counts of the hash groups.
+	struct ChunkRow {
+		idx_t chunks = 0;
+		idx_t count = 0;
+	};
+	using ChunkRows = vector<ChunkRow>;
+	const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const;
 
 public:
 	ClientContext &client;

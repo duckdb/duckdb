@@ -611,8 +611,7 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	//	 Take ownership of the hash groups
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 
-	using HashCounts = vector<idx_t>;
-	vector<HashCounts> child_counts(2);
+	vector<HashedSort::ChunkRows> child_counts(2);
 	for (idx_t child = 0; child < child_counts.size(); ++child) {
 		auto &hashed_sort = *gsink.hashed_sorts[child];
 		auto &hashed_sink = *gsink.hashed_sinks[child];
@@ -628,11 +627,11 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	for (idx_t group_idx = 0; group_idx < group_count; ++group_idx) {
 		idx_t lhs_count = 0;
 		if (group_idx < lhs_counts.size()) {
-			lhs_count = lhs_counts[group_idx];
+			lhs_count = lhs_counts[group_idx].count;
 		}
 		idx_t rhs_count = 0;
 		if (group_idx < rhs_counts.size()) {
-			rhs_count = rhs_counts[group_idx];
+			rhs_count = rhs_counts[group_idx].count;
 		}
 		auto asof_group = make_uniq<AsOfHashGroup>(op, lhs_count, rhs_count, group_idx);
 		asof_groups.emplace_back(std::move(asof_group));
