@@ -95,6 +95,7 @@
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -4919,6 +4920,26 @@ const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value) {
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value) {
 	return static_cast<VariantLogicalType>(StringUtil::StringToEnum(GetVariantLogicalTypeValues(), 35, "VariantLogicalType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetVariantValueTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(VariantValueType::PRIMITIVE), "PRIMITIVE" },
+		{ static_cast<uint32_t>(VariantValueType::OBJECT), "OBJECT" },
+		{ static_cast<uint32_t>(VariantValueType::ARRAY), "ARRAY" },
+		{ static_cast<uint32_t>(VariantValueType::MISSING), "MISSING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value) {
+	return StringUtil::EnumToString(GetVariantValueTypeValues(), 4, "VariantValueType", static_cast<uint32_t>(value));
+}
+
+template<>
+VariantValueType EnumUtil::FromString<VariantValueType>(const char *value) {
+	return static_cast<VariantValueType>(StringUtil::StringToEnum(GetVariantValueTypeValues(), 4, "VariantValueType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVectorAuxiliaryDataTypeValues() {
