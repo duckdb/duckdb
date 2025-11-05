@@ -191,6 +191,10 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 			data_offset += GetVarintSize(width);
 			data_offset += GetVarintSize(scale);
 			switch (physical_type) {
+			case PhysicalType::INT16: {
+				data_offset += sizeof(int16_t);
+				break;
+			}
 			case PhysicalType::INT32: {
 				data_offset += sizeof(int32_t);
 				break;
@@ -504,6 +508,11 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 			VarintEncode<uint32_t>(scale, blob_data + data_offset);
 			data_offset += GetVarintSize(scale);
 			switch (physical_type) {
+			case PhysicalType::INT16: {
+				Store(primitive.GetValueUnsafe<int16_t>(), blob_data + data_offset);
+				data_offset += sizeof(int16_t);
+				break;
+			}
 			case PhysicalType::INT32: {
 				Store(primitive.GetValueUnsafe<int32_t>(), blob_data + data_offset);
 				data_offset += sizeof(int32_t);
