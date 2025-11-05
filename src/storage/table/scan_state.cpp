@@ -12,48 +12,53 @@ namespace duckdb {
 
 namespace {
 
+bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics order) {
+	return (order == OrderByStatistics::MAX && v1 < v2) || (order == OrderByStatistics::MIN && v1 > v2);
+}
+
 template <typename It, typename End>
 void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_groups, const idx_t row_limit,
                   const OrderByColumnType column_type, const OrderByStatistics stat_type) {
-	auto opposite_stat_type = stat_type == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+	const auto opposite_stat_type =
+	    stat_type == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 
 	idx_t qualifying_tuples = 0;
-	idx_t seen_tuples = 0;
 	idx_t qualify_later = 0;
 
-	Value previous_key;
-	reference<BaseStatistics> last_row_group_stats = *it->second.first;
+	auto last_unresolved_row_group = it;
+	idx_t last_unresolved_row_group_sum = last_unresolved_row_group->second.second.get().count;
+	auto last_unresolved_boundary =
+	    RowGroupReorderer::RetrieveStat(*last_unresolved_row_group->second.first, opposite_stat_type, column_type);
+
 	for (; it != end; ++it) {
 		auto &current_key = it->first;
-		auto &stats = *it->second.first;
 		auto &row_group = it->second.second;
 
-		auto last_boundary =
-		    RowGroupReorderer::RetrieveStat(last_row_group_stats.get(), opposite_stat_type, column_type);
-		if ((stat_type == OrderByStatistics::MAX && current_key < last_boundary) ||
-		    (stat_type == OrderByStatistics::MIN && current_key > last_boundary)) {
-			// Row groups do not overlap: we can guarantee that the tuples up until now qualify
-			last_row_group_stats = stats;
-			qualifying_tuples = seen_tuples;
-			qualify_later = 0;
-		} else {
-			if (!previous_key.IsNull() && previous_key != current_key) {
-				// Only if the opposite boundaries are inequal, we can guarantee to have >= 1 distinct qualifying rows.
-				// We need distinctness as there may be secondary orders that qualify rows in later row groups.
-				qualifying_tuples += qualify_later;
-				qualify_later = 0;
+		while (last_unresolved_row_group != it) {
+			if (!CompareValues(current_key, last_unresolved_boundary, stat_type)) {
+				if (current_key != std::prev(it)->first) {
+					// Row groups overlap: we can only guarantee one additional qualifying tuple
+					qualifying_tuples += qualify_later;
+					qualify_later = 0;
+					qualifying_tuples++;
+				} else {
+					// Row groups have the same order value, we can only guarantee a qualifying tuple later
+					qualify_later++;
+				}
+
+				break;
 			}
+			// Row groups do not overlap: we can guarantee that the tuples qualify
+			qualifying_tuples = last_unresolved_row_group_sum;
+			++last_unresolved_row_group;
+			last_unresolved_row_group_sum += last_unresolved_row_group->second.second.get().count;
+			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(*last_unresolved_row_group->second.first,
+			                                                           opposite_stat_type, column_type);
 		}
-
 		if (qualifying_tuples >= row_limit) {
-			break;
+			return;
 		}
-
-		qualify_later++; // One additional tuple may qualify in the next round if there is overlap
-		seen_tuples += row_group.get().count;
 		ordered_row_groups.emplace_back(row_group);
-
-		previous_key = current_key;
 	}
 }
 
