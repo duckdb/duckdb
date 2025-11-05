@@ -1094,6 +1094,21 @@ void Linenoise::HandleTerminalResize() {
 	}
 }
 
+#if defined(_WIN32) || defined(WIN32)
+struct KeyPressEntry {
+    KeyPressEntry(KeyPress key_press) : is_unicode(false), key_press(key_press) {}
+    KeyPressEntry(WCHAR w, bool control_pressed, bool alt_pressed) : is_unicode(true), control_pressed(control_pressed), alt_pressed(alt_pressed) {
+        unicode += w;
+    }
+
+    bool is_unicode = false;
+    KeyPress key_press;
+    std::wstring unicode;
+    bool control_pressed = false;
+    bool alt_pressed = false;
+};
+#endif
+
 bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 #if defined(_WIN32) || defined(WIN32)
     if (!remaining_presses.empty()) {
@@ -1107,10 +1122,11 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
   INPUT_RECORD rec;
   DWORD count;
   has_more_data = false;
+  vector<KeyPressEntry> key_presses;
   do {
     key_press.action = KEY_NULL;
     key_press.sequence = EscapeSequence::INVALID;
-    if (!remaining_presses.empty()) {
+    if (!key_presses.empty()) {
         // we already have output that we can emit
         // check if there is more input to process
         // if there are no events anymore, then just break and return our current set of input
@@ -1204,30 +1220,57 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
       }              //  ... ignore them
       if (key_press.action != KEY_NULL) {
           // add the key press to the list of key presses
-          remaining_presses.push_back(key_press);
+          key_presses.emplace_back(key_press);
       }
     } else {
-        // we got a character - handle it
-        // we need to convert from unicode to UTF8 first
+        // we got a character - push it to the stack
+        // in this phase we gather all unicode characters together as much as possible
+        // because of surrogate pairs we might need to convert characters together in groups, rather than individually
         auto wc = key_event.uChar.UnicodeChar;
-        char utf8[20] = {0};
-        int len = WideCharToMultiByte(
+        if (key_presses.empty() || !key_presses.back().is_unicode || key_presses.back().control_pressed != control_pressed || key_presses.back().alt_pressed != alt_pressed) {
+            key_presses.emplace_back(wc, control_pressed, alt_pressed);
+        } else {
+            key_presses.back().unicode += wc;
+        }
+    }
+  } while(true);
+  if (key_presses.empty()) {
+      return false;
+  }
+  // we have key actions - turn them into KeyPress objects
+  // first invert the list
+  std::reverse(key_presses.begin(), key_presses.end());
+  // now process the key presses
+  for(auto &key_action : key_presses) {
+      if (!key_action.is_unicode) {
+          // standard key press - just add it
+          remaining_presses.push_back(key_action.key_press);
+          continue;
+      }
+      auto allocate_size = key_action.unicode.size() * 10;
+      auto data = unique_ptr<char[]>(new char[allocate_size]);
+      // unicode - need to convert
+      char utf8[20] = {0};
+      int len = WideCharToMultiByte(
             CP_UTF8,           // Target code page (UTF-8)
             0,                 // Flags
-            &wc,               // Input UTF-16 string
-           1,                 // One wchar_t
-            utf8,              // Output buffer
-            sizeof(utf8),      // Output buffer size
+            key_action.unicode.c_str(),               // Input UTF-16 string
+           key_action.unicode.size(),                 // One wchar_t
+            data.get(),              // Output buffer
+            allocate_size,      // Output buffer size
             NULL, NULL
-        );
-        if (len == 1 && utf8[0] > 0 && utf8[0] <= BACKSPACE) {
-            char c = utf8[0];
+      );
+      // process the characters in REVERSE order and add the key presses
+      for(int i = len - 1; i >= 0; i--) {
+          char c = data[i];
+          key_press.sequence = EscapeSequence::INVALID;
+          if (c > 0 && c <= BACKSPACE) {
             // ascii character
-            if (alt_pressed && !control_pressed) {
+            if (key_action.alt_pressed && !key_action.control_pressed) {
                 // support ALT codes
                 if (c >= 'a' && c <= 'z') {
                     key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'a'));
-                } else if (key_event.uChar.AsciiChar >= 'A' && key_event.uChar.AsciiChar <= 'Z') {
+                } else if (c >= 'A' && c <= 'Z') {
                     key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'A'));
                 } else if (c == BACKSPACE) {
                     key_press.sequence = EscapeSequence::ALT_BACKSPACE;
@@ -1241,23 +1284,14 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
                 key_press.action = (KEY_ACTION) c;
             }
             // add the key press to the list of key presses
-            remaining_presses.push_back(key_press);
-        } else {
-            // unicode character - these can consist of multiple bytes
-            // return the first byte and buffer the remaining bytes
-            for(idx_t i = 0; i < len; i++) {
-                key_press.sequence = EscapeSequence::INVALID;
-                key_press.action = (KEY_ACTION) utf8[i];
-                remaining_presses.push_back(key_press);
-            }
-        }
-    }
-  } while(true);
-  if (remaining_presses.empty()) {
-      return false;
+          } else {
+                key_press.action = (KEY_ACTION) c;
+          }
+          remaining_presses.push_back(key_press);
+      }
   }
-  // invert the list of remaining presses
-  std::reverse(remaining_presses.begin(), remaining_presses.end());
+
+  // emit the first key press on the stack
   key_press = remaining_presses.back();
   remaining_presses.pop_back();
   has_more_data = !remaining_presses.empty();
