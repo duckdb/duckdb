@@ -1321,13 +1321,16 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 bool Linenoise::Write(int fd, const char *data, idx_t size) {
 #if defined(_WIN32) || defined(WIN32)
     // convert to character encoding in Windows shell
-    auto new_text = duckdb_shell::ShellState::Win32Utf8ToMbcs(data, true);
-    data = new_text.c_str();
-    size = new_text.size();
-#endif
+    auto unicode_text = duckdb_shell::ShellState::Win32Utf8ToUnicode(data);
+    auto out_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (!WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL)) {
+        return false;
+    }
+#else
     if (write(fd, data, size) == -1) {
         return false;
     }
+#endif
     return true;
 }
 /* This function is the core of the line editing capability of linenoise.

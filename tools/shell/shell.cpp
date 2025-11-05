@@ -404,23 +404,20 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 	if (state.stdout_is_console && (out == stdout || out == stderr)) {
 		char buffer[2048];
 		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
-		const char *z1;
+		const char *utf8_data;
 		unique_ptr<char[]> zbuf;
 		if (required_characters > 2048) {
 			zbuf = unique_ptr<char[]>(new char[required_characters + 1]);
 			vsnprintf(zbuf.get(), required_characters + 1, zFormat, ap);
-			z1 = zbuf.get();
+			utf8_data = zbuf.get();
 		} else {
-			z1 = buffer;
+			utf8_data = buffer;
 		}
-		if (state.win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
-			// we can write UTF8 directly
-			fputs(z1, out);
-		} else {
-			// fallback to writing old style windows unicode
-			auto z2 = ShellState::Win32Utf8ToMbcs(z1, true);
-			fputs(z2.c_str(), out);
-		}
+        // convert from utf8 to utf16
+        auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
+        auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE  : STD_ERROR_HANDLE);
+        // use WriteConsoleW to write the unicode codepoints to the console
+        WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
 	} else {
 		vfprintf(out, zFormat, ap);
 	}
