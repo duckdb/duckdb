@@ -357,6 +357,14 @@ void QueryProfiler::AddToCounter(const MetricsType type, const idx_t amount) {
 	}
 }
 
+idx_t QueryProfiler::GetBytesRead() const {
+	return query_metrics.total_bytes_read;
+}
+
+idx_t QueryProfiler::GetBytesWritten() const {
+	return query_metrics.total_bytes_written;
+}
+
 void QueryProfiler::StartTimer(const MetricsType type) {
 	if (!IsEnabled()) {
 		return;

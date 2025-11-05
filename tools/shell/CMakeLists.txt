@@ -26,6 +26,7 @@ set(SHELL_SOURCES
     shell_prompt.cpp
     shell_renderer.cpp
     shell_highlight.cpp
+    shell_progress_bar.cpp
     shell_windows.cpp)
 
 add_executable(shell ${SHELL_SOURCES})
