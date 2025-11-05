@@ -32,7 +32,7 @@ unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &sta
 
 unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
 	bound_function.arguments[0] = LogicalType::SQLNULL;
-	bound_function.return_type = LogicalType::SQLNULL;
+	bound_function.SetReturnType(LogicalType::SQLNULL);
 	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
 }
 
@@ -405,7 +405,7 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
 
 	if (IS_AGGR) {
-		bound_function.return_type = bound_aggr_function->function.return_type;
+		bound_function.SetReturnType(bound_aggr_function->function.GetReturnType());
 	}
 	// check if the aggregate function consumed all the extra input arguments
 	if (bound_aggr_function->children.size() > 1) {
@@ -414,7 +414,7 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 		    bound_aggr_function->ToString());
 	}
 
-	return make_uniq<ListAggregatesBindData>(bound_function.return_type, std::move(bound_aggr_function));
+	return make_uniq<ListAggregatesBindData>(bound_function.GetReturnType(), std::move(bound_aggr_function));
 }
 
 template <bool IS_AGGR = false>
@@ -455,7 +455,7 @@ unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFuncti
 
 	if (is_parameter) {
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
-		bound_function.return_type = LogicalType::SQLNULL;
+		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return nullptr;
 	}
 
@@ -477,7 +477,7 @@ unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFuncti
 	// found a matching function, bind it as an aggregate
 	auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
-		bound_function.errors = best_function.errors;
+		bound_function.SetErrorMode(best_function.GetErrorMode());
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
 	}
 
@@ -502,8 +502,8 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	auto result =
 	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
 	                   ListAggregateFunction, ListAggregateBind, nullptr, nullptr, ListAggregatesInitLocalState);
-	BaseScalarFunction::SetReturnsError(result);
-	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	result.SetFallible();
+	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	result.varargs = LogicalType::ANY;
 	result.serialize = ListAggregatesBindData::SerializeFunction;
 	result.deserialize = ListAggregatesBindData::DeserializeFunction;

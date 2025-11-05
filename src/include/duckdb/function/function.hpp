@@ -175,6 +175,55 @@ public:
 	                              FunctionErrors errors = FunctionErrors::CANNOT_ERROR);
 	DUCKDB_API ~BaseScalarFunction() override;
 
+public:
+	void SetReturnType(LogicalType return_type_p) {
+		return_type = std::move(return_type_p);
+	}
+	const LogicalType &GetReturnType() const {
+		return return_type;
+	}
+	LogicalType &GetReturnType() {
+		return return_type;
+	}
+
+	FunctionStability GetStability() const {
+		return stability;
+	}
+	void SetStability(FunctionStability stability_p) {
+		stability = stability_p;
+	}
+
+	FunctionNullHandling GetNullHandling() const {
+		return null_handling;
+	}
+	void SetNullHandling(FunctionNullHandling null_handling_p) {
+		null_handling = null_handling_p;
+	}
+
+	FunctionErrors GetErrorMode() const {
+		return errors;
+	}
+	void SetErrorMode(FunctionErrors errors_p) {
+		errors = errors_p;
+	}
+
+	//! Set this functions error-mode as fallible (can throw runtime errors)
+	void SetFallible() {
+		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
+	//! Set this functions stability as volatile (can not be cached per row)
+	void SetVolatile() {
+		stability = FunctionStability::VOLATILE;
+	}
+
+	void SetCollationHandling(FunctionCollationHandling collation_handling_p) {
+		collation_handling = collation_handling_p;
+	}
+	FunctionCollationHandling GetCollationHandling() const {
+		return collation_handling;
+	}
+
+public:
 	//! Return type of the function
 	LogicalType return_type;
 	//! The stability of the function (see FunctionStability enum for more info)

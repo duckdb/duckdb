@@ -214,7 +214,7 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 		throw ParameterNotResolvedException();
 	}
 	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->return_type);
-	return make_uniq<VariableReturnBindData>(function.return_type);
+	return make_uniq<VariableReturnBindData>(function.GetReturnType());
 }
 
 } // namespace
