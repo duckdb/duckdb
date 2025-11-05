@@ -549,6 +549,9 @@ public:
 		if (!MatchReservedIdentifier(state)) {
 			return nullptr;
 		}
+		if (IsQuoted(token_text)) {
+			token_text = token_text.substr(1, token_text.size() - 2);
+		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}
 
