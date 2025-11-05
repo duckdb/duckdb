@@ -464,7 +464,8 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 	chunk.Initialize(context.client, types);
 
 	// Initialize local output collection
-	auto local_column_data = make_uniq<BatchedDataCollection>(context.client, types, true);
+	auto local_column_data =
+	    make_uniq<BatchedDataCollection>(context.client, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 
 	while (true) {
 		// Check for interrupts since this could be a long-running task

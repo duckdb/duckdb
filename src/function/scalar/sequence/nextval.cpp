@@ -141,12 +141,12 @@ ScalarFunction NextvalFun::GetFunction() {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
 	next_val.bind_extended = NextValBind;
-	next_val.stability = FunctionStability::VOLATILE;
 	next_val.serialize = Serialize;
 	next_val.deserialize = Deserialize;
 	next_val.get_modified_databases = NextValModifiedDatabases;
 	next_val.init_local_state = NextValLocalFunction;
-	BaseScalarFunction::SetReturnsError(next_val);
+	next_val.SetVolatile();
+	next_val.SetFallible();
 	return next_val;
 }
 
@@ -154,11 +154,11 @@ ScalarFunction CurrvalFun::GetFunction() {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
 	curr_val.bind_extended = NextValBind;
-	curr_val.stability = FunctionStability::VOLATILE;
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;
 	curr_val.init_local_state = NextValLocalFunction;
-	BaseScalarFunction::SetReturnsError(curr_val);
+	curr_val.SetVolatile();
+	curr_val.SetFallible();
 	return curr_val;
 }
 

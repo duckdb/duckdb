@@ -32,6 +32,7 @@
 #include "duckdb/common/http_util.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -87,6 +88,7 @@ DatabaseInstance::~DatabaseInstance() {
 	log_manager.reset();
 
 	external_file_cache.reset();
+	result_set_manager.reset();
 
 	buffer_manager.reset();
 
@@ -287,6 +289,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager->Initialize();
 
 	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
+	result_set_manager = make_uniq<ResultSetManager>(*this);
 
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
@@ -380,6 +383,10 @@ FileSystem &DatabaseInstance::GetFileSystem() {
 
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 	return *external_file_cache;
+}
+
+ResultSetManager &DatabaseInstance::GetResultSetManager() {
+	return *result_set_manager;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {

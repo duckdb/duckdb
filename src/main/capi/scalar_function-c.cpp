@@ -150,7 +150,7 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	if (!function_info.success) {
 		throw InvalidInputException(function_info.error);
 	}
-	if (all_const && (input.size() == 1 || function.function.stability != FunctionStability::VOLATILE)) {
+	if (all_const && (input.size() == 1 || function.function.GetStability() != FunctionStability::VOLATILE)) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
@@ -200,7 +200,7 @@ void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function
 		return;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	scalar_function.null_handling = duckdb::FunctionNullHandling::SPECIAL_HANDLING;
+	scalar_function.SetNullHandling(duckdb::FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 void duckdb_scalar_function_set_volatile(duckdb_scalar_function function) {
@@ -208,7 +208,7 @@ void duckdb_scalar_function_set_volatile(duckdb_scalar_function function) {
 		return;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	scalar_function.stability = duckdb::FunctionStability::VOLATILE;
+	scalar_function.SetVolatile();
 }
 
 void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckdb_logical_type type) {
@@ -226,7 +226,7 @@ void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duc
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.return_type = *logical_type;
+	scalar_function.SetReturnType(*logical_type);
 }
 
 void *duckdb_scalar_function_get_extra_info(duckdb_function_info info) {
@@ -392,8 +392,8 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		if (scalar_function.name.empty() || !info.function) {
 			return DuckDBError;
 		}
-		if (duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::INVALID) ||
-		    duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::ANY)) {
+		if (duckdb::TypeVisitor::Contains(scalar_function.GetReturnType(), duckdb::LogicalTypeId::INVALID) ||
+		    duckdb::TypeVisitor::Contains(scalar_function.GetReturnType(), duckdb::LogicalTypeId::ANY)) {
 			return DuckDBError;
 		}
 		for (const auto &argument : scalar_function.arguments) {

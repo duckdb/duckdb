@@ -52,9 +52,9 @@ unique_ptr<FunctionData> ParseLogMessageBind(ClientContext &context, ScalarFunct
 	if (!lookup->is_structured) {
 		// Unstructured types we simply wrap in a struct with a single field called message
 		child_list_t<LogicalType> children = {{"message", LogicalType::VARCHAR}};
-		bound_function.return_type = LogicalType::STRUCT(children);
+		bound_function.SetReturnType(LogicalType::STRUCT(children));
 	} else {
-		bound_function.return_type = lookup->type;
+		bound_function.SetReturnType(lookup->type);
 	}
 
 	return make_uniq<ParseLogMessageData>(*lookup);
