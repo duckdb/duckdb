@@ -341,19 +341,22 @@ void BlockAllocator::FreeInternal() const {
 		return;
 	}
 
-	uint32_t to_free_buffer[MAXIMUM_FREE_COUNT];
+	unsafe_vector<uint32_t> to_free_buffer;
 	do {
-		const auto count = to_free->q.try_dequeue_bulk(to_free_buffer, MAXIMUM_FREE_COUNT);
+		auto count = to_free->q.size_approx() * 2;
+		to_free_buffer.resize(count);
+		count = to_free->q.try_dequeue_bulk(to_free_buffer.begin(), count);
 		if (count == 0) {
 			return;
 		}
+		to_free_buffer.resize(count);
 
 		// Sort so we can coalesce free calls
-		std::sort(to_free_buffer, to_free_buffer + count);
+		std::sort(to_free_buffer.begin(), to_free_buffer.end());
 
 		// Coalesce and free
 		uint32_t block_id_start = to_free_buffer[0];
-		for (idx_t i = 1; i < count; i++) {
+		for (idx_t i = 1; i < to_free_buffer.size(); i++) {
 			const auto &previous_block_id = to_free_buffer[i - 1];
 			const auto &current_block_id = to_free_buffer[i];
 			if (previous_block_id == current_block_id - 1) {
@@ -368,10 +371,10 @@ void BlockAllocator::FreeInternal() const {
 		}
 
 		// Don't forget the last one
-		FreeContiguousBlocks(block_id_start, to_free_buffer[count - 1]);
+		FreeContiguousBlocks(block_id_start, to_free_buffer.back());
 
 		// Make freed blocks available to allocate again
-		touched->q.enqueue_bulk(to_free_buffer, count);
+		touched->q.enqueue_bulk(to_free_buffer.begin(), to_free_buffer.size());
 	} while (to_free->q.size_approx() >= TO_FREE_SIZE_THRESHOLD);
 }
 
