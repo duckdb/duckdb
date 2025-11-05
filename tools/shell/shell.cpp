@@ -85,6 +85,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
@@ -151,6 +152,7 @@
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/client_config.hpp"
 
 using namespace duckdb_shell;
 
@@ -1699,6 +1701,10 @@ SuccessState ShellState::ExecuteQuery(const string &query) {
 	return SuccessState::SUCCESS;
 }
 
+unique_ptr<duckdb::ProgressBarDisplay> CreateProgressBar() {
+	return make_uniq<ShellProgressBarDisplay>();
+}
+
 void ShellState::OpenDB(ShellOpenFlags flags) {
 	if (!db) {
 		try {
@@ -1714,6 +1720,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 				exit(1);
 			}
 		}
+		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
+		client_config.display_create_func = CreateProgressBar;
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
@@ -2199,8 +2207,8 @@ bool ShellState::ImportData(const vector<string> &args) {
 	return true;
 }
 
-ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql, string &result_value) {
-	auto &con = *conn;
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql,
+                                                              string &result_value) {
 	auto result = con.Query(sql);
 	if (result->HasError()) {
 		// store error in the result
@@ -2228,6 +2236,10 @@ ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql,
 	}
 	result_value = value.ToString();
 	return ExecuteSQLSingleValueResult::SUCCESS;
+}
+
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql, string &result_value) {
+	return ExecuteSQLSingleValue(*conn, sql, result_value);
 }
 
 bool ShellState::OpenDatabase(const vector<string> &args) {
@@ -3268,6 +3280,17 @@ void ShellState::Initialize() {
 	default_prompt =
 	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
+	vector<string> default_components;
+	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
+	default_components.push_back(
+	    "{align:right}{min_size:18}{hide_if_contains:0 bytes}Written: {setting:bytes_written}");
+	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Read: {setting:bytes_read}");
+	default_components.push_back("{align:right}{min_size:17}Memory: {setting:memory_usage}");
+	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Swap: {setting:swap_usage}");
+	progress_bar = make_uniq<ShellProgressBar>();
+	for (auto &component : default_components) {
+		progress_bar->AddComponent(component);
+	}
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
