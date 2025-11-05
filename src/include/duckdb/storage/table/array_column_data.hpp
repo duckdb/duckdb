@@ -29,8 +29,8 @@ public:
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
-	void InitializeScan(ColumnScanState &state, bool initialize_scan) override;
-	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_scan) override;
+	void InitializeScan(ColumnScanState &state) override;
+	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;

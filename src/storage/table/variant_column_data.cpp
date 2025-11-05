@@ -25,7 +25,7 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
 }
 
 idx_t VariantColumnData::SubColumnsSize() const {
-	return is_shredded ? 2 : 1;
+	return sub_columns.size();
 }
 
 void VariantColumnData::ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded) {
@@ -71,37 +71,34 @@ void VariantColumnData::InitializePrefetch(PrefetchState &prefetch_state, Column
 	}
 }
 
-void VariantColumnData::InitializeScan(ColumnScanState &state, bool initialize_segment) {
+void VariantColumnData::InitializeScan(ColumnScanState &state) {
 	CreateScanStates(state);
 	state.row_index = 0;
 	state.current = nullptr;
 
 	// initialize the validity segment
-	validity.InitializeScan(state.child_states[0], initialize_segment);
+	validity.InitializeScan(state.child_states[0]);
 
 	// initialize the sub-columns
 	for (idx_t i = 0; i < SubColumnsSize(); i++) {
-		if (!state.scan_child_column[i]) {
-			continue;
-		}
-		sub_columns[i]->InitializeScan(state.child_states[i + 1], initialize_segment);
+		sub_columns[i]->InitializeScan(state.child_states[i + 1]);
 	}
 }
 
-void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_segment) {
+void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	CreateScanStates(state);
 	state.row_index = row_idx;
 	state.current = nullptr;
 
 	// initialize the validity segment
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx, initialize_segment);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// initialize the sub-columns
 	for (idx_t i = 0; i < SubColumnsSize(); i++) {
 		if (!state.scan_child_column[i]) {
 			continue;
 		}
-		sub_columns[i]->InitializeScanWithOffset(state.child_states[i + 1], row_idx, initialize_segment);
+		sub_columns[i]->InitializeScanWithOffset(state.child_states[i + 1], row_idx);
 	}
 }
 
@@ -139,32 +136,19 @@ idx_t VariantColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &stat
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		sub_columns[0]->ScanCommitted(vector_index, state.child_states[1], *child_vectors[0], allow_updates,
 		                              target_count);
-		sub_columns[1]->ScanCommitted(vector_index, state.child_states[2], *child_vectors[1], allow_updates,
-		                              target_count);
-		auto scan_count =
-		    validity.ScanCommitted(vector_index, state.child_states[0], intermediate, allow_updates, target_count);
+		auto scan_count = sub_columns[1]->ScanCommitted(vector_index, state.child_states[2], *child_vectors[1],
+		                                                allow_updates, target_count);
 
 		VariantColumnData::UnshredVariantData(intermediate, result, target_count);
 		return scan_count;
 	}
-	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
-	sub_columns[0]->ScanCommitted(vector_index, state.child_states[1], result, allow_updates, target_count);
+	auto scan_count =
+	    sub_columns[0]->ScanCommitted(vector_index, state.child_states[1], result, allow_updates, target_count);
 	return scan_count;
 }
 
 idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
-	auto &child_entries = StructVector::GetEntries(result);
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
-		auto &target_vector = *child_entries[i];
-		if (!state.scan_child_column[i]) {
-			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
-			continue;
-		}
-		sub_columns[i]->ScanCount(state.child_states[i + 1], target_vector, count, result_offset);
-	}
+	auto scan_count = sub_columns[0]->ScanCount(state.child_states[1], result, count, result_offset);
 	return scan_count;
 }
 
@@ -335,13 +319,6 @@ public:
 	}
 };
 
-void VariantColumnData::CheckpointScan(optional_ptr<ColumnSegment> segment, ColumnScanState &state,
-                                       idx_t row_group_start, idx_t count, Vector &scan_vector) {
-	auto &sub_column = sub_columns[0];
-	auto &child_state = state.child_states[1];
-	sub_column->CheckpointScan(child_state.current, child_state, row_group_start, count, scan_vector);
-}
-
 unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(RowGroup &row_group,
                                                                            PartialBlockManager &partial_block_manager) {
 	return make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
@@ -379,9 +356,8 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	shredded->InitializeAppend(shredded_append_state);
 
 	ColumnScanState scan_state;
-	scan_state.scan_child_column.resize(2, true);
 
-	InitializeScan(scan_state, true);
+	InitializeScan(scan_state);
 	//! Scan + transform + append
 	idx_t total_count = count.load();
 
@@ -414,32 +390,32 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 
-	if (!HasChanges()) {
-		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
-		}
+	//! Scan the existing column data to determine the shredded type
+	ColumnScanState scan_state;
+	InitializeScan(scan_state);
+	Vector intermediate_data(LogicalType::VARIANT(), STANDARD_VECTOR_SIZE);
+	ScanCommitted(0, scan_state, intermediate_data, false, row_group.count);
+
+	auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
+	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
+	auto &type_entries = StructType::GetChildTypes(shredded_type);
+	if (type_entries.size() == 2) {
+		//! STRUCT(unshredded VARIANT, shredded <...>)
+		auto shredded_data = WriteShreddedData(row_group, shredded_type);
+		D_ASSERT(shredded_data.size() == 2);
+		auto &unshredded = shredded_data[0];
+		auto &shredded = shredded_data[1];
+
+		//! Now checkpoint the shredded data
+		checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
+		checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
+
+		//! Replace the old data with the new
+		ReplaceColumns(std::move(unshredded), std::move(shredded));
 	} else {
-		auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
-		D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
-		auto &type_entries = StructType::GetChildTypes(shredded_type);
-		if (type_entries.size() == 2) {
-			//! STRUCT(unshredded VARIANT, shredded <...>)
-			auto shredded_data = WriteShreddedData(row_group, shredded_type);
-			D_ASSERT(shredded_data.size() == 2);
-			auto &unshredded = shredded_data[0];
-			auto &shredded = shredded_data[1];
-
-			//! Now checkpoint the shredded data
-			checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
-			checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
-
-			//! Replace the old data with the new
-			ReplaceColumns(std::move(unshredded), std::move(shredded));
-		} else {
-			D_ASSERT(type_entries.size() == 1);
-			//! STRUCT(unshredded VARIANT)
-			checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
-		}
+		D_ASSERT(type_entries.size() == 1);
+		//! STRUCT(unshredded VARIANT)
+		checkpoint_state->child_states.push_back(sub_columns[0]->Checkpoint(row_group, checkpoint_info));
 	}
 
 	return std::move(checkpoint_state);

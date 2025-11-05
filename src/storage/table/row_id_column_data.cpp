@@ -17,11 +17,11 @@ FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, Tabl
 void RowIdColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 }
 
-void RowIdColumnData::InitializeScan(ColumnScanState &state, bool initialize_segment) {
-	InitializeScanWithOffset(state, start, initialize_segment);
+void RowIdColumnData::InitializeScan(ColumnScanState &state) {
+	InitializeScanWithOffset(state, start);
 }
 
-void RowIdColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_segment) {
+void RowIdColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	state.current = nullptr;
 	state.segment_tree = nullptr;
 	state.row_index = row_idx;
@@ -29,9 +29,6 @@ void RowIdColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	state.initialized = true;
 	state.scan_state.reset();
 	state.last_offset = 0;
-	if (initialize_segment) {
-		state.current->InitializeScan(state);
-	}
 }
 
 idx_t RowIdColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -165,8 +162,8 @@ unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(RowGroup &row_grou
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 
-void RowIdColumnData::CheckpointScan(optional_ptr<ColumnSegment> segment, ColumnScanState &state, idx_t row_group_start,
-                                     idx_t count, Vector &scan_vector) {
+void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+                                     Vector &scan_vector) {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 

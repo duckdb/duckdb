@@ -39,20 +39,20 @@ void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, Colum
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 }
 
-void StandardColumnData::InitializeScan(ColumnScanState &state, bool initialize_segment) {
-	ColumnData::InitializeScan(state, initialize_segment);
+void StandardColumnData::InitializeScan(ColumnScanState &state) {
+	ColumnData::InitializeScan(state);
 
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 1);
-	validity.InitializeScan(state.child_states[0], initialize_segment);
+	validity.InitializeScan(state.child_states[0]);
 }
 
-void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_segment) {
-	ColumnData::InitializeScanWithOffset(state, row_idx, initialize_segment);
+void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+	ColumnData::InitializeScanWithOffset(state, row_idx);
 
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 1);
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx, initialize_segment);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 }
 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -269,9 +269,8 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	return base_state;
 }
 
-void StandardColumnData::CheckpointScan(optional_ptr<ColumnSegment> segment, ColumnScanState &state,
-                                        idx_t row_group_start, idx_t count, Vector &scan_vector) {
-	D_ASSERT(segment);
+void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start,
+                                        idx_t count, Vector &scan_vector) {
 	ColumnData::CheckpointScan(segment, state, row_group_start, count, scan_vector);
 
 	idx_t offset_in_row_group = state.row_index - row_group_start;

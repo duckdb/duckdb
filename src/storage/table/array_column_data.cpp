@@ -37,25 +37,25 @@ void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnSc
 	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * array_size);
 }
 
-void ArrayColumnData::InitializeScan(ColumnScanState &state, bool initialize_scan) {
+void ArrayColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
 
 	state.row_index = 0;
 	state.current = nullptr;
 
-	validity.InitializeScan(state.child_states[0], initialize_scan);
+	validity.InitializeScan(state.child_states[0]);
 
 	// initialize the child scan
-	child_column->InitializeScan(state.child_states[1], initialize_scan);
+	child_column->InitializeScan(state.child_states[1]);
 }
 
-void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_scan) {
+void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	D_ASSERT(state.child_states.size() == 2);
 
 	if (row_idx == 0) {
 		// Trivial case, no offset
-		InitializeScan(state, initialize_scan);
+		InitializeScan(state);
 		return;
 	}
 
@@ -63,7 +63,7 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	state.current = nullptr;
 
 	// initialize the validity segment
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx, initialize_scan);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	auto array_size = ArrayType::GetSize(type);
 	auto child_count = (row_idx - start) * array_size;
@@ -71,7 +71,7 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	D_ASSERT(child_count <= child_column->GetMaxEntry());
 	if (child_count < child_column->GetMaxEntry()) {
 		const auto child_offset = start + child_count;
-		child_column->InitializeScanWithOffset(state.child_states[1], child_offset, initialize_scan);
+		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
 }
 

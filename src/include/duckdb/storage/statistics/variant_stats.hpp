@@ -83,8 +83,6 @@ public:
 private:
 	static VariantStatsData &GetDataUnsafe(BaseStatistics &stats);
 	static const VariantStatsData &GetDataUnsafe(const BaseStatistics &stats);
-	//! Determine optimal shredding schema based on collected stats
-	// LogicalType GetOptimalShreddedType(double shredding_threshold = 0.8) const;
 };
 
 } // namespace duckdb

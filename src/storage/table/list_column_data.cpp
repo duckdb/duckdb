@@ -43,15 +43,15 @@ void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnSca
 	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * rows_per_list);
 }
 
-void ListColumnData::InitializeScan(ColumnScanState &state, bool initialize_scan) {
+void ListColumnData::InitializeScan(ColumnScanState &state) {
 	ColumnData::InitializeScan(state);
 
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
-	validity.InitializeScan(state.child_states[0], initialize_scan);
+	validity.InitializeScan(state.child_states[0]);
 
 	// initialize the child scan
-	child_column->InitializeScan(state.child_states[1], initialize_scan);
+	child_column->InitializeScan(state.child_states[1]);
 }
 
 uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
@@ -64,22 +64,22 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	return FlatVector::GetData<uint64_t>(result)[0];
 }
 
-void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_scan) {
+void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	if (row_idx == 0) {
-		InitializeScan(state, initialize_scan);
+		InitializeScan(state);
 		return;
 	}
-	ColumnData::InitializeScanWithOffset(state, row_idx, initialize_scan);
+	ColumnData::InitializeScanWithOffset(state, row_idx);
 
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx, initialize_scan);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
 	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset, initialize_scan);
+		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
 	}
 	state.last_offset = child_offset;
 }

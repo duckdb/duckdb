@@ -110,7 +110,7 @@ idx_t ColumnData::GetMaxEntry() {
 	return count;
 }
 
-void ColumnData::InitializeScan(ColumnScanState &state, bool initialize_segment) {
+void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = data.GetRootSegment();
 	state.segment_tree = &data;
 	state.row_index = state.current ? state.current->start : 0;
@@ -118,12 +118,9 @@ void ColumnData::InitializeScan(ColumnScanState &state, bool initialize_segment)
 	state.initialized = false;
 	state.scan_state.reset();
 	state.last_offset = 0;
-	if (initialize_segment) {
-		state.current->InitializeScan(state);
-	}
 }
 
-void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, bool initialize_segment) {
+void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	state.current = data.GetSegment(row_idx);
 	state.segment_tree = &data;
 	state.row_index = row_idx;
@@ -131,9 +128,6 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx,
 	state.initialized = false;
 	state.scan_state.reset();
 	state.last_offset = 0;
-	if (initialize_segment) {
-		state.current->InitializeScan(state);
-	}
 }
 
 ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
@@ -660,10 +654,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &ro
 	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-void ColumnData::CheckpointScan(optional_ptr<ColumnSegment> segment_p, ColumnScanState &state, idx_t row_group_start,
-                                idx_t count, Vector &scan_vector) {
-	D_ASSERT(segment_p);
-	auto &segment = *segment_p;
+void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+                                Vector &scan_vector) {
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
