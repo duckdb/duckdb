@@ -8,6 +8,8 @@ on:
         type: string
       skip_tests:
         type: string
+      run_all:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -16,6 +18,8 @@ on:
         type: string
       skip_tests:
         type: string
+      run_all:
+        type: string
   push:
     branches-ignore:
       - 'main'
@@ -23,6 +27,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -45,6 +50,8 @@ jobs:
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
+      CMAKE_CXX_FLAGS: '-DDEBUG'
+      FORCE_ASSERT: 1
 
     steps:
     - uses: actions/checkout@v4
@@ -60,7 +67,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Install ninja
       shell: bash
@@ -68,7 +75,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: GEN=ninja make debug
+      run: GEN=ninja make release
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -80,7 +87,7 @@ jobs:
     - name: Test
       if: ${{ inputs.skip_tests != 'true' }}
       shell: bash
-      run: make unittestci
+      run: make unittest_release
 
     - name: Amalgamation
       if: ${{ inputs.skip_tests != 'true' }}
@@ -121,7 +128,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Install pytest
         run: |
@@ -142,24 +149,50 @@ jobs:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.OSX_CODESIGN_P12_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.OSX_CODESIGN_KEYCHAIN_PASSWORD }}
+          TEAM_ID : ${{ secrets.OSX_NOTARIZE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.OSX_NOTARIZE_APPLE_ID }}
+          PASSWORD: ${{ secrets.OSX_NOTARIZE_PASSWORD }}
         run: |
           if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             . scripts/osx_import_codesign_certificate.sh
-
-            codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/duckdb
-            codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/src/libduckdb*.dylib
+            
+            echo -e '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n  <key>com.apple.security.cs.disable-library-validation</key>\n  <true/>\n</dict>\n</plist>' > entitlements.plist
+            codesign --options runtime --entitlements entitlements.plist --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/duckdb
+            codesign --options runtime --entitlements entitlements.plist --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/src/libduckdb*.dylib
+          
+            zip -j notarize.zip build/release/duckdb build/release/src/libduckdb.dylib 
+            export XCRUN_RESPONSE=$(xcrun notarytool submit --progress --apple-id "$APPLE_ID" --password "$PASSWORD" --team-id "$TEAM_ID" --wait -f json notarize.zip)
+            rm notarize.zip
+            if [[ $(./build/release/duckdb -csv -noheader -c "SELECT (getenv('XCRUN_RESPONSE')::JSON)->>'status'") != "Accepted" ]] ; then 
+              echo "Notarization failed!"
+              echo $XCRUN_RESPONSE
+              exit 1
+            fi
           fi
 
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
           python scripts/amalgamation.py
+          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+
+          mkdir build/release_arm64 build/release_amd64
+          lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
+          lipo -extract x86_64 -output build/release_amd64/duckdb build/release/duckdb
+
           zip -j duckdb_cli-osx-universal.zip build/release/duckdb
-          zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip
+          zip -j duckdb_cli-osx-arm64.zip build/release_arm64/duckdb
+          zip -j duckdb_cli-osx-amd64.zip build/release_amd64/duckdb
+
+          gzip -9 -k -n -c build/release/duckdb > duckdb_cli-osx-universal.gz
+          gzip -9 -k -n -c build/release_arm64/duckdb > duckdb_cli-osx-arm64.gz
+          gzip -9 -k -n -c build/release_amd64/duckdb > duckdb_cli-osx-amd64.gz
+
+          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz duckdb_cli-osx-arm64.zip duckdb_cli-osx-arm64.gz duckdb_cli-osx-amd64.zip duckdb_cli-osx-amd64.gz
 
       - uses: actions/upload-artifact@v4
         with:
@@ -185,138 +218,3 @@ jobs:
         run: |
           (cd examples/embedded-c; make)
           (cd examples/embedded-c++; make)
-  
-  xcode-extensions:
-    # Builds extensions for osx_arm64 and osx_amd64
-    name: OSX Extensions Release
-    runs-on: macos-14
-    needs: xcode-debug
-    strategy:
-      matrix:
-        label: [ 'x86_64', 'arm64' ]
-        include:
-          - label: x86_64
-            osx_arch: x86_64
-            duckdb_arch: osx_amd64
-            vcpkg_triplet: x64-osx
-            run_autoload_tests: 0
-          - label: arm64
-            osx_arch: arm64
-            duckdb_arch: osx_arm64
-            vcpkg_triplet: arm64-osx
-            run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-
-    env:
-      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
-      GEN: ninja
-      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install Ninja
-        run: brew install ninja
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}-${{ matrix.label }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-      - name: Install Rust cross compile dependency
-        if: ${{ matrix.osx_arch == 'x86_64'}}
-        run: |
-          rustup target add x86_64-apple-darwin
-
-      - uses: ./.github/actions/build_extensions
-        with:
-          treat_warn_as_error: 0
-          run_tests: 0
-          osx_arch: ${{ matrix.osx_arch }}
-          vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
-          duckdb_arch: ${{ matrix.duckdb_arch }}
-          build_in_tree_extensions: 1
-          build_out_of_tree_extensions: 1
-          run_autoload_tests: ${{ matrix.run_autoload_tests }}
-          ninja: 1
-
-      - name: Test statically linked extensions
-        if: ${{ matrix.osx_arch == 'arm64' && inputs.skip_tests != 'true' }}
-        shell: bash
-        run: |
-          python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: duckdb-extensions-${{ matrix.duckdb_arch }}
-          path: |
-            build/release/extension/*/*.duckdb_extension
-
-      - name: Rebuild DuckDB without any extensions linked, but with same extension config
-        if: ${{ matrix.osx_arch == 'arm64' }}
-        shell: bash
-        env:
-          EXTENSION_TESTS_ONLY: 1
-          ENABLE_EXTENSION_AUTOLOADING: 1
-          ENABLE_EXTENSION_AUTOINSTALL: 1
-        run: |
-          rm -rf build/release
-          make
-
-      # Run autoload unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
-      - name: Run tests with auto loading
-        if: ${{ matrix.osx_arch == 'arm64' && inputs.skip_tests != 'true' }}
-        shell: bash
-        env:
-          LOCAL_EXTENSION_REPO: ${{ github.workspace }}
-        run: |
-          python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
-          python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
-          python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
-
-  upload-osx-extensions:
-    name: Upload OSX Extensions
-    needs: xcode-extensions
-    uses: ./.github/workflows/_sign_deploy_extensions.yml
-    secrets: inherit
-    strategy:
-      matrix:
-        duckdb_arch: [ 'osx_amd64', 'osx_arm64' ]
-    with:
-      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
-      duckdb_arch: ${{ matrix.duckdb_arch }}
-      duckdb_sha: ${{ github.sha }}
-
-  test-uploaded-extensions:
-    name: Test uploaded OSX Extensions
-    needs: upload-osx-extensions
-    ### This needs to be reworked, currently some info are missing
-    if: false
-    runs-on: macos-14
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Execute test
-      shell: bash
-      env:
-          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-          AWS_DEFAULT_REGION: us-east-1
-      run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            ./scripts/extension-upload-test.sh
-          fi

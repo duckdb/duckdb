@@ -16,7 +16,8 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/set_columns.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,8 @@ struct DialectOptions {
 };
 
 struct CSVReaderOptions {
-	CSVReaderOptions() {};
+	CSVReaderOptions() {
+	}
 	CSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string> &multi_byte_delimiter);
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
@@ -63,6 +65,9 @@ struct CSVReaderOptions {
 	bool allow_quoted_nulls = true;
 	char comment = '\0';
 
+	//! Thousands separator option (to be able to accept "100,000.220" as a double or decimal.
+	char thousands_separator = '\0';
+
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
 	//===--------------------------------------------------------------------===//
@@ -74,7 +79,7 @@ struct CSVReaderOptions {
 	vector<string> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
-	//! Types considered as candidates for auto-detection ordered by descending specificity (~ from high to low)
+	//! Types considered as candidates for auto-detection ordered by ascending specificity (~ from low to high)
 	vector<LogicalType> auto_type_candidates = {
 	    LogicalType::VARCHAR,      LogicalType::DOUBLE,    LogicalType::BIGINT,
 	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, LogicalType::DATE,
@@ -99,6 +104,10 @@ struct CSVReaderOptions {
 	//! Result size of sniffing phases
 	static constexpr idx_t sniff_size = 2048;
 
+	//! In case this is a glob or list of multiple files, how many shall be used to sniff.
+	//! -1 means all
+	int64_t files_to_sniff = 10;
+
 	//! Number of sample chunks used in auto-detection
 	idx_t sample_size_chunks = 20480 / sniff_size;
 	//! Consider all columns to be of type varchar
@@ -107,8 +116,6 @@ struct CSVReaderOptions {
 	bool auto_detect = true;
 	//! The file path of the CSV file to read
 	string file_path;
-	//! Multi-file reader options
-	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
 	CSVOption<idx_t> buffer_size_option = CSVBuffer::ROWS_PER_BUFFER * max_line_size_default;
 	//! Decimal separator when reading as numeric
@@ -120,8 +127,11 @@ struct CSVReaderOptions {
 
 	//! By default, our encoding is always UTF-8
 	string encoding = "utf-8";
-	//! User defined parameters for the csv function concatenated on a string
-	string user_defined_parameters;
+	//! User defined parameters
+	map<string, string> user_defined_parameters;
+
+	//! Returns a list of user-defined parameters in string format
+	string GetUserDefinedParameters() const;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
@@ -139,9 +149,6 @@ struct CSVReaderOptions {
 	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 	//! If this reader is a multifile reader
 	bool multi_file_reader = false;
-
-	void Serialize(Serializer &serializer) const;
-	static CSVReaderOptions Deserialize(Deserializer &deserializer);
 
 	void SetCompression(const string &compression);
 
@@ -170,8 +177,8 @@ struct CSVReaderOptions {
 	bool GetRFC4180() const;
 	void SetRFC4180(bool rfc4180);
 
-	char GetSingleByteDelimiter() const;
-	string GetMultiByteDelimiter() const;
+	CSVOption<char> GetSingleByteDelimiter() const;
+	CSVOption<string> GetMultiByteDelimiter() const;
 
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
@@ -184,11 +191,12 @@ struct CSVReaderOptions {
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 	void ToNamedParameters(named_parameter_map_t &out) const;
-	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context);
+	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context, MultiFileOptions &file_options);
+	void ParseOption(ClientContext &context, const string &key, const Value &val);
 	//! Verify options are not conflicting
-	void Verify();
+	void Verify(MultiFileOptions &file_options);
 
-	string ToString(const string &current_file_path) const;
+	string ToString(const String &current_file_path) const;
 	//! If the type for column with idx i was manually set
 	bool WasTypeManuallySet(idx_t i) const;
 

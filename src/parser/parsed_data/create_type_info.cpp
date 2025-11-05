@@ -26,13 +26,7 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 }
 
 string CreateTypeInfo::ToString() const {
-	string result = "";
-	result += "CREATE";
-	if (temporary) {
-		// These are created by PIVOT
-		throw NotImplementedException("CREATE TEMPORARY TYPE can't be parsed currently");
-	}
-	result += " TYPE ";
+	string result = GetCreatePrefix("TYPE");
 	result += QualifierToString(temporary ? "" : catalog, schema, name);
 	if (type.id() == LogicalTypeId::ENUM) {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
@@ -61,6 +55,7 @@ string CreateTypeInfo::ToString() const {
 		result += " AS ";
 		result += type.ToString();
 	}
+	result += ";";
 	return result;
 }
 

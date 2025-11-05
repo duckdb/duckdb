@@ -4,8 +4,10 @@
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/geometry_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/map_functions.hpp"
+#include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/sequence_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -14,36 +16,38 @@
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
+
 namespace duckdb {
 
 // Scalar Function
-#define DUCKDB_SCALAR_FUNCTION_BASE(_PARAM, _NAME)                                                                     \
-	{ _NAME, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::GetFunction, nullptr, nullptr, nullptr }
-#define DUCKDB_SCALAR_FUNCTION(_PARAM)       DUCKDB_SCALAR_FUNCTION_BASE(_PARAM, _PARAM::Name)
-#define DUCKDB_SCALAR_FUNCTION_ALIAS(_PARAM) DUCKDB_SCALAR_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name)
+#define DUCKDB_SCALAR_FUNCTION_BASE(_PARAM, _NAME, _ALIAS_OF)                                                                     \
+	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, _PARAM::GetFunction, nullptr, nullptr, nullptr }
+#define DUCKDB_SCALAR_FUNCTION(_PARAM)       DUCKDB_SCALAR_FUNCTION_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_SCALAR_FUNCTION_ALIAS(_PARAM) DUCKDB_SCALAR_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Scalar Function Set
-#define DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM, _NAME)                                                                 \
-	{ _NAME, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, nullptr, _PARAM::GetFunctions, nullptr, nullptr }
-#define DUCKDB_SCALAR_FUNCTION_SET(_PARAM)       DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM, _PARAM::Name)
-#define DUCKDB_SCALAR_FUNCTION_SET_ALIAS(_PARAM) DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name)
+#define DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM, _NAME, _ALIAS_OF)                                                                 \
+	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr, _PARAM::GetFunctions, nullptr, nullptr }
+#define DUCKDB_SCALAR_FUNCTION_SET(_PARAM)       DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_SCALAR_FUNCTION_SET_ALIAS(_PARAM) DUCKDB_SCALAR_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Aggregate Function
-#define DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM, _NAME)                                                                  \
-	{ _NAME, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, nullptr, nullptr, _PARAM::GetFunction, nullptr }
-#define DUCKDB_AGGREGATE_FUNCTION(_PARAM)       DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM, _PARAM::Name)
-#define DUCKDB_AGGREGATE_FUNCTION_ALIAS(_PARAM) DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name)
+#define DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM, _NAME, _ALIAS_OF)                                                                  \
+	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr, nullptr, _PARAM::GetFunction, nullptr }
+#define DUCKDB_AGGREGATE_FUNCTION(_PARAM)       DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_AGGREGATE_FUNCTION_ALIAS(_PARAM) DUCKDB_AGGREGATE_FUNCTION_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 // Aggregate Function Set
-#define DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM, _NAME)                                                              \
-	{ _NAME, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, nullptr, nullptr, nullptr, _PARAM::GetFunctions }
-#define DUCKDB_AGGREGATE_FUNCTION_SET(_PARAM)       DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM, _PARAM::Name)
-#define DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(_PARAM) DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name)
+#define DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM, _NAME, _ALIAS_OF)                                                              \
+	{ _NAME, _ALIAS_OF, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::Categories, nullptr, nullptr, nullptr, _PARAM::GetFunctions }
+#define DUCKDB_AGGREGATE_FUNCTION_SET(_PARAM)       DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM, _PARAM::Name, _PARAM::Name)
+#define DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(_PARAM) DUCKDB_AGGREGATE_FUNCTION_SET_BASE(_PARAM::ALIAS, _PARAM::Name, _PARAM::ALIAS::Name)
 #define FINAL_FUNCTION                                                                                                 \
-	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
+	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 // this list is generated by scripts/generate_functions.py
 static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(NotLikeFun),
 	DUCKDB_SCALAR_FUNCTION(NotILikeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorModuloFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StIntersectsExtentFunAlias),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorMultiplyFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorAddFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorSubtractFun),
@@ -55,6 +59,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUtinyintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringHugeintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUbigintFun),
+	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUhugeintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUintegerFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUsmallintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUtinyintFun),
@@ -83,6 +88,8 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayWhereFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayZipFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitLengthFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(CharLengthFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(CharacterLengthFun),
 	DUCKDB_SCALAR_FUNCTION(CombineFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatWsFun),
@@ -91,6 +98,9 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_AGGREGATE_FUNCTION_SET(CountFun),
 	DUCKDB_AGGREGATE_FUNCTION(CountStarFun),
 	DUCKDB_SCALAR_FUNCTION(CreateSortKeyFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentConnectionId),
+	DUCKDB_SCALAR_FUNCTION(CurrentQueryId),
+	DUCKDB_SCALAR_FUNCTION(CurrentTransactionId),
 	DUCKDB_SCALAR_FUNCTION(CurrvalFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(DivideFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(EndsWithFun),
@@ -130,6 +140,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(NotIlikeEscapeFun),
 	DUCKDB_SCALAR_FUNCTION(NotLikeEscapeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OctetLengthFun),
+	DUCKDB_SCALAR_FUNCTION(ParseLogMessage),
 	DUCKDB_SCALAR_FUNCTION(PrefixFun),
 	DUCKDB_SCALAR_FUNCTION(RegexpEscapeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpExtractFun),
@@ -138,10 +149,17 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpMatchesFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpReplaceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpSplitToArrayFun),
+	DUCKDB_SCALAR_FUNCTION(RemapStructFun),
 	DUCKDB_SCALAR_FUNCTION(RowFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SHA1Fun),
 	DUCKDB_SCALAR_FUNCTION_SET(SHA256Fun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(SplitFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StAsbinaryFun),
+	DUCKDB_SCALAR_FUNCTION(StAstextFun),
+	DUCKDB_SCALAR_FUNCTION(StAswkbFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StAswktFun),
+	DUCKDB_SCALAR_FUNCTION(StGeomfromwkbFun),
+	DUCKDB_SCALAR_FUNCTION(StIntersectsExtentFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(StrSplitFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(StrSplitRegexFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrfTimeFun),
@@ -152,9 +170,13 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(StrlenFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION(StructConcatFun),
+	DUCKDB_SCALAR_FUNCTION(StructContainsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StructExtractFun),
-	DUCKDB_SCALAR_FUNCTION_SET(StructExtractAtFun),
+	DUCKDB_SCALAR_FUNCTION(StructExtractAtFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StructHasFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StructIndexofFun),
 	DUCKDB_SCALAR_FUNCTION(StructPackFun),
+	DUCKDB_SCALAR_FUNCTION(StructPositionFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(SubstrFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringGraphemeFun),
@@ -163,6 +185,9 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
 	DUCKDB_SCALAR_FUNCTION(UpperFun),
+	DUCKDB_SCALAR_FUNCTION_SET(VariantExtractFun),
+	DUCKDB_SCALAR_FUNCTION(VariantNormalizeFun),
+	DUCKDB_SCALAR_FUNCTION(VariantTypeofFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WriteLogFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatOperatorFun),
 	DUCKDB_SCALAR_FUNCTION(LikeFun),

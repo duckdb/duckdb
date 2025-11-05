@@ -50,7 +50,6 @@ public:
 	DUCKDB_API ~Connection();
 
 	shared_ptr<ClientContext> context;
-	warning_callback_t warning_cb;
 
 public:
 	//! Returns query profiling information for the current query
@@ -61,6 +60,9 @@ public:
 
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();
+
+	//! Get query progress of current query
+	DUCKDB_API double GetQueryProgress();
 
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
@@ -78,6 +80,7 @@ public:
 	//! one active StreamQueryResult per Connection object. Calling SendQuery() will invalidate any previously existing
 	//! StreamQueryResult.
 	DUCKDB_API unique_ptr<QueryResult> SendQuery(const string &query);
+	DUCKDB_API unique_ptr<QueryResult> SendQuery(unique_ptr<SQLStatement> statement);
 	//! Issues a query to the database and materializes the result (if necessary). Always returns a
 	//! MaterializedQueryResult.
 	DUCKDB_API unique_ptr<MaterializedQueryResult> Query(const string &query);
@@ -135,6 +138,8 @@ public:
 	//! Returns a relation that produces a table from this connection
 	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
 	DUCKDB_API shared_ptr<Relation> Table(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> Table(const string &catalog_name, const string &schema_name,
+	                                      const string &table_name);
 	//! Returns a relation that produces a view from this connection
 	DUCKDB_API shared_ptr<Relation> View(const string &tname);
 	DUCKDB_API shared_ptr<Relation> View(const string &schema_name, const string &table_name);
@@ -173,8 +178,10 @@ public:
 	DUCKDB_API bool IsAutoCommit();
 	DUCKDB_API bool HasActiveTransaction();
 
-	//! Fetch a list of table names that are required for a given query
-	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
+	//! Fetch the set of tables names of the query.
+	//! Returns the fully qualified, escaped table names, if qualified is set to true,
+	//! else returns the not qualified, not escaped table names.
+	DUCKDB_API unordered_set<string> GetTableNames(const string &query, const bool qualified = false);
 
 	// NOLINTBEGIN
 	template <typename TR, typename... ARGS>
@@ -243,6 +250,10 @@ public:
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 	// NOLINTEND
+
+protected:
+	//! Identified used to uniquely identify connections to the database.
+	connection_t connection_id;
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(const string &query, vector<Value> &values);

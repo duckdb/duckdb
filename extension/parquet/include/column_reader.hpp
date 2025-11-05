@@ -21,16 +21,15 @@
 #include "decoder/delta_length_byte_array_decoder.hpp"
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "parquet_column_schema.hpp"
-#ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
-#endif
 
 namespace duckdb {
 class ParquetReader;
+struct TableFilterState;
 
 using duckdb_apache::thrift::protocol::TProtocol;
 
@@ -71,10 +70,10 @@ public:
 	virtual void Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
 	                    const SelectionVector &sel, idx_t approved_tuple_count);
 	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                    const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count,
-	                    bool is_first_filter);
-	static void ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
-	                        idx_t &approved_tuple_count);
+	                    const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
+	                    idx_t &approved_tuple_count, bool is_first_filter);
+	static void ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
+	                        SelectionVector &sel, idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
 
 	ParquetReader &Reader();
@@ -174,7 +173,8 @@ protected:
 		return false;
 	}
 	void DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                  const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count);
+	                  const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
+	                  idx_t &approved_tuple_count);
 	void DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
 	                  const SelectionVector &sel, idx_t approved_tuple_count);
 
@@ -183,10 +183,12 @@ private:
 	bool PageIsFilteredOut(PageHeader &page_hdr);
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
-	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr);
+	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
+	                      optional_ptr<TableFilterState> filter_state = nullptr);
 	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result);
-	//! Prepare a read of up to "max_read" rows and read the defines/repeats. Returns how many rows are available.
-	void PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
+	//! Prepare a read of up to "max_read" rows and read the defines/repeats.
+	//! Returns whether all values are valid (i.e., not NULL)
+	bool PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
 	void ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, idx_t result_offset);
 
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
@@ -289,8 +291,7 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void AllocateCompressed(idx_t size);
-	void PrepareRead(optional_ptr<const TableFilter> filter);
+	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
@@ -304,8 +305,6 @@ private:
 	idx_t chunk_read_offset;
 
 	shared_ptr<ResizeableBuffer> block;
-
-	ResizeableBuffer compressed_buffer;
 
 	ColumnEncoding encoding = ColumnEncoding::INVALID;
 	unique_ptr<RleBpDecoder> defined_decoder;

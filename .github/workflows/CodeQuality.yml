@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       explicit_checks:
+        description: 'Pass which checks to run or remain empty for default checks'
         type: string
   repository_dispatch:
   push:
@@ -12,19 +13,25 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'
       - '!.github/workflows/CodeQuality.yml'
-
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
+  merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/lcov_exclude'
       - '!.github/workflows/CodeQuality.yml'
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -34,10 +41,18 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
+
   format-check:
     name: Format Check
-    runs-on: ubuntu-20.04
-
+    runs-on: ubuntu-22.04
+    needs: check-draft
     env:
       CC: gcc-10
       CXX: g++-10
@@ -50,7 +65,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black cxxheaderparser pcpp
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
 
       - name: List Installed Packages
         shell: bash
@@ -73,7 +88,7 @@ jobs:
   enum-check:
     name: C Enum Integrity Check
     needs: format-check
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     env:
       CC: gcc-10
@@ -121,7 +136,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Download clang-tidy-cache
         if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}

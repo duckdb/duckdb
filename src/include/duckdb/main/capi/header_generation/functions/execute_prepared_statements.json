@@ -1,6 +1,7 @@
 {
     "group": "execute_prepared_statements",
     "deprecated": false,
+    "description": "Functions to execute a prepared statement.",
     "entries": [
         {
             "name": "duckdb_execute_prepared",

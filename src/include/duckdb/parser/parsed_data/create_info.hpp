@@ -49,7 +49,7 @@ public:
 	//! User provided comment
 	Value comment;
 	//! Key-value tags with additional metadata
-	unordered_map<string, string> tags;
+	InsertionOrderPreservingMap<string> tags;
 
 public:
 	void Serialize(Serializer &serializer) const override;
@@ -60,6 +60,8 @@ public:
 	DUCKDB_API void CopyProperties(CreateInfo &other) const;
 	//! Generates an alter statement from the create statement - used for OnCreateConflict::ALTER_ON_CONFLICT
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
+	//! Returns a string like "CREATE (OR REPLACE) (TEMPORARY) <entry> (IF NOT EXISTS) " for TABLE/VIEW/TYPE/MACRO
+	DUCKDB_API string GetCreatePrefix(const string &entry) const;
 
 	virtual string ToString() const {
 		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",

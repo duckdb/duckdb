@@ -1,0 +1,22 @@
+# name: test/sql/join/inner/not_between_is_null.test
+# description: Test INNER JOIN with NOT BETWEEN and IS NULL conditions
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1(c0 INT);
+CREATE TABLE t2(c0 INT);
+
+statement ok
+INSERT INTO t1(c0) VALUES (-18), (NULL);
+
+statement ok
+INSERT INTO t2(c0) VALUES (NULL);
+
+query II
+SELECT * FROM t1 INNER JOIN t2 ON ((t1.c0 NOT BETWEEN t2.c0 AND t2.c0) IS NULL);
+----
+-18	NULL
+NULL	NULL

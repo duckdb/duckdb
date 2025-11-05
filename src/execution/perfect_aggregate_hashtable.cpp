@@ -22,8 +22,8 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	total_groups = (uint64_t)1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
 	grouping_columns = group_types_p.size();
-	layout.Initialize(std::move(aggregate_objects_p));
-	tuple_size = layout.GetRowWidth();
+	layout_ptr->Initialize(std::move(aggregate_objects_p));
+	tuple_size = layout_ptr->GetRowWidth();
 
 	// allocate and null initialize the data
 	owned_data = make_unsafe_uniq_array_uninitialized<data_t>(tuple_size * total_groups);
@@ -40,11 +40,12 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 		address_data[init_count] = uintptr_t(data) + (tuple_size * i);
 		init_count++;
 		if (init_count == STANDARD_VECTOR_SIZE) {
-			RowOperations::InitializeStates(layout, addresses, *FlatVector::IncrementalSelectionVector(), init_count);
+			RowOperations::InitializeStates(*layout_ptr, addresses, *FlatVector::IncrementalSelectionVector(),
+			                                init_count);
 			init_count = 0;
 		}
 	}
-	RowOperations::InitializeStates(layout, addresses, *FlatVector::IncrementalSelectionVector(), init_count);
+	RowOperations::InitializeStates(*layout_ptr, addresses, *FlatVector::IncrementalSelectionVector(), init_count);
 }
 
 PerfectAggregateHashTable::~PerfectAggregateHashTable() {
@@ -142,7 +143,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
-	auto &aggregates = layout.GetAggregates();
+	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperationsState row_state(*aggregate_allocator);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx];
@@ -182,14 +183,14 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 			target_addresses_ptr[combine_count] = target_ptr;
 			combine_count++;
 			if (combine_count == STANDARD_VECTOR_SIZE) {
-				RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
+				RowOperations::CombineStates(row_state, *layout_ptr, source_addresses, target_addresses, combine_count);
 				combine_count = 0;
 			}
 		}
 		source_ptr += tuple_size;
 		target_ptr += tuple_size;
 	}
-	RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
+	RowOperations::CombineStates(row_state, *layout_ptr, source_addresses, target_addresses, combine_count);
 
 	// FIXME: after moving the arena allocator, we currently have to ensure that the pointer is not nullptr, because the
 	// FIXME: Destroy()-function of the hash table expects an allocator in some cases (e.g., for sorted aggregates)
@@ -282,13 +283,13 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	// then construct the payloads
 	result.SetCardinality(entry_count);
 	RowOperationsState row_state(*aggregate_allocator);
-	RowOperations::FinalizeStates(row_state, layout, addresses, result, grouping_columns);
+	RowOperations::FinalizeStates(row_state, *layout_ptr, addresses, result, grouping_columns);
 }
 
 void PerfectAggregateHashTable::Destroy() {
 	// check if there is any destructor to call
 	bool has_destructor = false;
-	for (auto &aggr : layout.GetAggregates()) {
+	for (auto &aggr : layout_ptr->GetAggregates()) {
 		if (aggr.function.destructor) {
 			has_destructor = true;
 		}
@@ -307,12 +308,12 @@ void PerfectAggregateHashTable::Destroy() {
 	for (idx_t i = 0; i < total_groups; i++) {
 		data_pointers[count++] = payload_ptr;
 		if (count == STANDARD_VECTOR_SIZE) {
-			RowOperations::DestroyStates(row_state, layout, addresses, count);
+			RowOperations::DestroyStates(row_state, *layout_ptr, addresses, count);
 			count = 0;
 		}
 		payload_ptr += tuple_size;
 	}
-	RowOperations::DestroyStates(row_state, layout, addresses, count);
+	RowOperations::DestroyStates(row_state, *layout_ptr, addresses, count);
 }
 
 } // namespace duckdb

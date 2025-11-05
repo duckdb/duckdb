@@ -1,0 +1,20 @@
+# name: test/sql/attach/attach_expr.test
+# description: Test ATTACH with expressions in the parameter list
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET VARIABLE db_type='DUCKDB'
+
+statement ok
+ATTACH ':memory:' AS db1 (TYPE getvariable('db_type'))
+
+statement ok
+SET VARIABLE db_type='UNKNOWN_TYPE'
+
+statement error
+ATTACH ':memory:' AS db2 (TYPE getvariable('db_type'))
+----
+unknown_type

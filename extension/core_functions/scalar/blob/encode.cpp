@@ -4,7 +4,9 @@
 
 namespace duckdb {
 
-static void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+namespace {
+
+void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// encode is essentially a nop cast from varchar to blob
 	// we only need to reinterpret the data using the blob type
 	result.Reinterpret(args.data[0]);
@@ -23,11 +25,13 @@ struct BlobDecodeOperator {
 	}
 };
 
-static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	UnaryExecutor::Execute<string_t, string_t, BlobDecodeOperator>(args.data[0], result, args.size());
 	StringVector::AddHeapReference(result, args.data[0]);
 }
+
+} // namespace
 
 ScalarFunction EncodeFun::GetFunction() {
 	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, EncodeFunction);

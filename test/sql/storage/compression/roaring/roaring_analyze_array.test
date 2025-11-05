@@ -6,10 +6,7 @@ require block_size 262144
 
 require noforcestorage
 
-statement ok
-SET storage_compatibility_version='v1.2.0'
-
-load __TEST_DIR__/test_roaring.db
+load __TEST_DIR__/test_roaring.db readwrite v1.2.0
 
 statement ok
 set logging_level='info';
@@ -42,7 +39,7 @@ set enable_logging=false;
 query I
 SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
 where
-	message.starts_with('FinalAnalyze') and
+	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
 	message.contains('test_uncompressed') and
 	message.contains('VALIDITY') and
 	message.contains('COMPRESSION_UNCOMPRESSED');
@@ -78,7 +75,7 @@ set enable_logging=false;
 query I
 SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
 where
-	message.starts_with('FinalAnalyze') and
+	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
 	message.contains('test_roaring') and
 	message.contains('VALIDITY') and
 	message.contains('COMPRESSION_ROARING');

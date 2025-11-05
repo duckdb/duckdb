@@ -14,29 +14,26 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSimple &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ALTER:
-		return make_uniq<PhysicalAlter>(unique_ptr_cast<ParseInfo, AlterInfo>(std::move(op.info)),
-		                                op.estimated_cardinality);
+		return Make<PhysicalAlter>(unique_ptr_cast<ParseInfo, AlterInfo>(std::move(op.info)), op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_DROP:
-		return make_uniq<PhysicalDrop>(unique_ptr_cast<ParseInfo, DropInfo>(std::move(op.info)),
-		                               op.estimated_cardinality);
+		return Make<PhysicalDrop>(unique_ptr_cast<ParseInfo, DropInfo>(std::move(op.info)), op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		return make_uniq<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(std::move(op.info)),
-		                                      op.estimated_cardinality);
+		return Make<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(std::move(op.info)),
+		                                 op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_LOAD:
-		return make_uniq<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(std::move(op.info)),
-		                               op.estimated_cardinality);
+		return Make<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(std::move(op.info)), op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_ATTACH:
-		return make_uniq<PhysicalAttach>(unique_ptr_cast<ParseInfo, AttachInfo>(std::move(op.info)),
-		                                 op.estimated_cardinality);
+		return Make<PhysicalAttach>(unique_ptr_cast<ParseInfo, AttachInfo>(std::move(op.info)),
+		                            op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_DETACH:
-		return make_uniq<PhysicalDetach>(unique_ptr_cast<ParseInfo, DetachInfo>(std::move(op.info)),
-		                                 op.estimated_cardinality);
+		return Make<PhysicalDetach>(unique_ptr_cast<ParseInfo, DetachInfo>(std::move(op.info)),
+		                            op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
-		return make_uniq<PhysicalUpdateExtensions>(unique_ptr_cast<ParseInfo, UpdateExtensionsInfo>(std::move(op.info)),
-		                                           op.estimated_cardinality);
+		return Make<PhysicalUpdateExtensions>(unique_ptr_cast<ParseInfo, UpdateExtensionsInfo>(std::move(op.info)),
+		                                      op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}

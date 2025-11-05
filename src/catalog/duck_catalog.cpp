@@ -9,6 +9,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/function/function_list.hpp"
+#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
 	info.internal = true;
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	CreateSchema(data, info);
 
 	if (load_builtin) {
@@ -123,13 +125,15 @@ CatalogSet &DuckCatalog::GetSchemaCatalogSet() {
 	return *schemas;
 }
 
-optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
-                                                        OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+optional_ptr<SchemaCatalogEntry> DuckCatalog::LookupSchema(CatalogTransaction transaction,
+                                                           const EntryLookupInfo &schema_lookup,
+                                                           OnEntryNotFound if_not_found) {
+	auto &schema_name = schema_lookup.GetEntryName();
 	D_ASSERT(!schema_name.empty());
 	auto entry = schemas->GetEntry(transaction, schema_name);
 	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException(error_context, "Schema with name %s does not exist!", schema_name);
+			throw CatalogException(schema_lookup.GetErrorContext(), "Schema with name %s does not exist!", schema_name);
 		}
 		return nullptr;
 	}
@@ -156,6 +160,14 @@ string DuckCatalog::GetDBPath() {
 	return db.GetStorageManager().GetDBPath();
 }
 
+bool DuckCatalog::IsEncrypted() const {
+	return IsSystemCatalog() ? false : db.GetStorageManager().IsEncrypted();
+}
+
+string DuckCatalog::GetEncryptionCipher() const {
+	return IsSystemCatalog() ? string() : EncryptionTypes::CipherToString(db.GetStorageManager().GetCipher());
+}
+
 void DuckCatalog::Verify() {
 #ifdef DEBUG
 	Catalog::Verify();
@@ -168,6 +180,25 @@ optional_idx DuckCatalog::GetCatalogVersion(ClientContext &context) {
 	auto transaction = GetCatalogTransaction(context);
 	D_ASSERT(transaction.transaction);
 	return transaction_manager.GetCatalogVersion(*transaction.transaction);
+}
+
+//===--------------------------------------------------------------------===//
+// Encryption
+//===--------------------------------------------------------------------===//
+void DuckCatalog::SetEncryptionKeyId(const string &key_id) {
+	encryption_key_id = key_id;
+}
+
+string &DuckCatalog::GetEncryptionKeyId() {
+	return encryption_key_id;
+}
+
+void DuckCatalog::SetIsEncrypted() {
+	is_encrypted = true;
+}
+
+bool DuckCatalog::GetIsEncrypted() {
+	return is_encrypted;
 }
 
 } // namespace duckdb

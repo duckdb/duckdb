@@ -14,9 +14,11 @@
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
+class ParsedExpression;
 
 class QueryErrorContext {
 public:
+	QueryErrorContext(const ParsedExpression &expr); // NOLINT: allow implicit conversion from expression
 	explicit QueryErrorContext(optional_idx query_location_p = optional_idx()) : query_location(query_location_p) {
 	}
 

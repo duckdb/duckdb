@@ -5,6 +5,7 @@
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -19,19 +20,32 @@ CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_er
 }
 
 void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
-	std::ostringstream error;
-	if (PrintLineNumber(csv_error)) {
-		error << "CSV Error on Line: " << GetLineInternal(csv_error.error_info) << '\n';
-		if (!csv_error.csv_row.empty()) {
-			error << "Original Line: " << csv_error.csv_row << '\n';
+	auto error_to_throw = csv_error;
+	idx_t error_to_throw_row = GetLineInternal(error_to_throw.error_info);
+	if (PrintLineNumber(error_to_throw) && !errors.empty()) {
+		// We stored a previous error here, we pick the one that happens the earliest to throw
+		for (const auto &error : errors) {
+			if (CanGetLine(error.GetBoundaryIndex())) {
+				idx_t cur_error_to_throw = GetLineInternal(error.error_info);
+				if (cur_error_to_throw < error_to_throw_row) {
+					error_to_throw = error;
+					error_to_throw_row = cur_error_to_throw;
+				}
+			}
 		}
 	}
-	if (csv_error.full_error_message.empty()) {
-		error << csv_error.error_message;
-	} else {
-		error << csv_error.full_error_message;
+	std::ostringstream error;
+	if (PrintLineNumber(error_to_throw)) {
+		error << "CSV Error on Line: " << error_to_throw_row << '\n';
+		if (!error_to_throw.csv_row.empty()) {
+			error << "Original Line: " << error_to_throw.csv_row << '\n';
+		}
 	}
-
+	if (error_to_throw.full_error_message.empty()) {
+		error << error_to_throw.error_message;
+	} else {
+		error << error_to_throw.full_error_message;
+	}
 	switch (csv_error.type) {
 	case CAST_ERROR:
 		throw ConversionException(error.str());
@@ -46,7 +60,7 @@ void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 
 void CSVErrorHandler::Error(const CSVError &csv_error, bool force_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if ((ignore_errors && !force_error) || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex()))) {
+	if (!force_error && (ignore_errors || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex())))) {
 		// We store this error, we can't throw it now, or we are ignoring it
 		errors.push_back(csv_error);
 		return;
@@ -65,6 +79,18 @@ void CSVErrorHandler::ErrorIfNeeded() {
 	if (CanGetLine(errors[0].error_info.boundary_idx)) {
 		ThrowError(errors[0]);
 	}
+}
+
+void CSVErrorHandler::ErrorIfAny() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (ignore_errors || errors.empty()) {
+		// Nothing to error
+		return;
+	}
+	if (!CanGetLine(errors[0].error_info.boundary_idx)) {
+		throw InternalException("Failed to get error information for boundary index");
+	}
+	ThrowError(errors[0]);
 }
 
 void CSVErrorHandler::ErrorIfTypeExists(CSVErrorType error_type) {
@@ -106,6 +132,16 @@ bool CSVErrorHandler::HasError(const CSVErrorType error_type) {
 	return false;
 }
 
+CSVError CSVErrorHandler::GetFirstError(CSVErrorType error_type) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	for (const auto &er : errors) {
+		if (er.type == error_type) {
+			return er;
+		}
+	}
+	throw InternalException("CSVErrorHandler::GetFirstError was called without having an appropriate error type");
+}
+
 idx_t CSVErrorHandler::GetSize() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	return errors.size();
@@ -119,7 +155,7 @@ bool IsCSVErrorAcceptedReject(CSVErrorType type) {
 	case CSVErrorType::TOO_FEW_COLUMNS:
 	case CSVErrorType::MAXIMUM_LINE_SIZE:
 	case CSVErrorType::UNTERMINATED_QUOTES:
-	case CSVErrorType::INVALID_UNICODE:
+	case CSVErrorType::INVALID_ENCODING:
 		return true;
 	default:
 		return false;
@@ -137,8 +173,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 		return "LINE SIZE OVER MAXIMUM";
 	case CSVErrorType::UNTERMINATED_QUOTES:
 		return "UNQUOTED VALUE";
-	case CSVErrorType::INVALID_UNICODE:
-		return "INVALID UNICODE";
+	case CSVErrorType::INVALID_ENCODING:
+		return "INVALID ENCODING";
 	case CSVErrorType::INVALID_STATE:
 		return "INVALID STATE";
 	default:
@@ -147,8 +183,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 }
 
 void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const idx_t file_idx, const idx_t scan_idx,
-                                       const CSVFileScan &file, CSVRejectsTable &rejects, const ReadCSVData &bind_data,
-                                       const idx_t limit) {
+                                       const CSVFileScan &file, CSVRejectsTable &rejects,
+                                       const MultiFileBindData &bind_data, const idx_t limit) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	// We first insert the file into the file scans table
 	for (auto &error : file.error_handler->errors) {
@@ -194,15 +230,15 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 				errors_appender.Append(Value());
 				break;
 			case CSVErrorType::TOO_FEW_COLUMNS:
-				if (col_idx + 1 < bind_data.return_names.size()) {
-					errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
+				if (col_idx + 1 < bind_data.names.size()) {
+					errors_appender.Append(string_t(bind_data.names[col_idx + 1]));
 				} else {
 					errors_appender.Append(Value());
 				}
 				break;
 			default:
-				if (col_idx < bind_data.return_names.size()) {
-					errors_appender.Append(string_t(bind_data.return_names[col_idx]));
+				if (col_idx < bind_data.names.size()) {
+					errors_appender.Append(string_t(bind_data.names[col_idx]));
 				} else {
 					errors_appender.Append(Value());
 				}
@@ -239,13 +275,17 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, LinesPerBoundary
 
 CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, string csv_row_p,
                    LinesPerBoundary error_info_p, idx_t row_byte_position, optional_idx byte_position_p,
-                   const CSVReaderOptions &reader_options, const string &fixes, const string &current_path)
+                   const CSVReaderOptions &reader_options, const string &fixes, const String &current_path)
     : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), csv_row(std::move(csv_row_p)),
       error_info(error_info_p), row_byte_position(row_byte_position), byte_position(byte_position_p) {
 	// What were the options
 	std::ostringstream error;
 	if (reader_options.ignore_errors.GetValue()) {
 		RemoveNewLine(error_message);
+	}
+	// Let's cap the csv row to 10k bytes. For performance reasons.
+	if (csv_row.size() > 10000) {
+		csv_row.erase(csv_row.begin() + 10000, csv_row.end());
 	}
 	error << error_message << '\n';
 	error << fixes << '\n';
@@ -279,7 +319,7 @@ void CSVError::RemoveNewLine(string &error) {
 
 CSVError CSVError::CastError(const CSVReaderOptions &options, const string &column_name, string &cast_error,
                              idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
-                             optional_idx byte_position, LogicalTypeId type, const string &current_path) {
+                             optional_idx byte_position, LogicalTypeId type, const String &current_path) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when converting column \"" << column_name << "\". ";
@@ -290,10 +330,10 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, const string &colu
 	if (!options.WasTypeManuallySet(column_idx)) {
 		how_to_fix_it << "This type was auto-detected from the CSV file." << '\n';
 		how_to_fix_it << "Possible solutions:" << '\n';
-		how_to_fix_it << "* Override the type for this column manually by setting the type explicitly, e.g. types={'"
+		how_to_fix_it << "* Override the type for this column manually by setting the type explicitly, e.g., types={'"
 		              << column_name << "': 'VARCHAR'}" << '\n';
 		how_to_fix_it
-		    << "* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g. "
+		    << "* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g., "
 		       "sample_size=-1"
 		    << '\n';
 		how_to_fix_it << "* Use a COPY statement to automatically derive types from an existing table." << '\n';
@@ -303,13 +343,14 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, const string &colu
 		       "correctly parse this column."
 		    << '\n';
 	}
+	how_to_fix_it << "* Check whether the null string value is set correctly (e.g., nullstr = 'N/A')" << '\n';
 
 	return CSVError(error.str(), CAST_ERROR, column_idx, csv_row, error_info, row_byte_position, byte_position, options,
 	                how_to_fix_it.str(), current_path);
 }
 
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, LinesPerBoundary error_info, string &csv_row,
-                                 idx_t byte_position, const string &current_path) {
+                                 idx_t byte_position, const String &current_path) {
 	std::ostringstream error;
 	error << "Maximum line size of " << options.maximum_line_size.GetValue() << " bytes exceeded. ";
 	error << "Actual Size:" << csv_row.size() << " bytes." << '\n';
@@ -324,7 +365,7 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, LinesPerBounda
 
 CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
                                 string &csv_row, idx_t row_byte_position, optional_idx byte_position,
-                                const string &current_path) {
+                                const String &current_path) {
 	std::ostringstream error;
 	error << "The CSV Parser state machine reached an invalid state.\nThis can happen when is not possible to parse "
 	         "your CSV File with the given options, or the CSV File is not RFC 4180 compliant ";
@@ -396,24 +437,41 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 	return CSVError(error.str(), SNIFFING, {});
 }
 
-CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space) {
+CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space, idx_t max_columns_found,
+                                 SetColumns &set_columns, bool type_detection) {
 	std::ostringstream error;
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
 	// 2. What's the error
-	error << "It was not possible to automatically detect the CSV Parsing dialect/types" << '\n';
+	error << "It was not possible to automatically detect the CSV parsing ";
+	if (type_detection) {
+		error << "types" << '\n';
+	} else {
+		error << "dialect" << '\n';
+	}
 
 	// 2. What was the search space?
 	error << "The search space used was:" << '\n';
 	error << search_space;
+	error << "Encoding: " << options.encoding << '\n';
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
+	// 3.0 Inform the user about the strict_mode
 	// 3.1 Inform the reader of the dialect
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "
 		         "the CSV standard."
 		      << '\n';
 	}
+	if (options.columns_set) {
+		// If columns are set, suggest to either unset it or validate that it matches the schema
+		error << "* Columns are set as: \"" << set_columns.ToString() << "\", and they contain: " << set_columns.Size()
+		      << " columns. It does not match the number of columns found by the sniffer: " << max_columns_found << "."
+		      << " Verify the columns parameter is correctly set." << '\n';
+	}
+	// 3.0.1 Inform the user about encoding
+	error << "* Make sure you are using the correct file encoding. If not, set it (e.g., encoding = 'utf-16')." << '\n';
+	// 3.1 Inform the reader of the dialect
 	// delimiter
 	if (!options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		error << "* Set delimiter (e.g., delim=\',\')" << '\n';
@@ -463,7 +521,7 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 }
 
 CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,
-                                   const string &current_path) {
+                                   const String &current_path) {
 	std::ostringstream error;
 	error << " The parallel scanner does not support null_padding in conjunction with quoted new lines. Please "
 	         "disable the parallel csv reader with parallel=false"
@@ -475,7 +533,7 @@ CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoun
 
 CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
                                            LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
-                                           optional_idx byte_position, const string &current_path) {
+                                           optional_idx byte_position, const String &current_path) {
 	std::ostringstream error;
 	error << "Value with unterminated quote found." << '\n';
 	std::ostringstream how_to_fix_it;
@@ -493,7 +551,7 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 
 CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, idx_t actual_columns,
                                               LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
-                                              optional_idx byte_position, const string &current_path) {
+                                              optional_idx byte_position, const String &current_path) {
 	std::ostringstream error;
 	// We don't have a fix for this
 	std::ostringstream how_to_fix_it;
@@ -523,14 +581,18 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 
 CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
                                string &csv_row, idx_t row_byte_position, optional_idx byte_position,
-                               const string &current_path) {
+                               const String &current_path) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
-	error << "Invalid unicode (byte sequence mismatch) detected." << '\n';
+	error << "Invalid unicode (byte sequence mismatch) detected. This file is not " << options.encoding << " encoded."
+	      << '\n';
 	std::ostringstream how_to_fix_it;
+	how_to_fix_it
+	    << "Possible Solution: Set the correct encoding, if available, to read this CSV File (e.g., encoding='UTF-16')"
+	    << '\n';
 	how_to_fix_it << "Possible Solution: Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
-	return CSVError(error.str(), INVALID_UNICODE, current_column, csv_row, error_info, row_byte_position, byte_position,
-	                options, how_to_fix_it.str(), current_path);
+	return CSVError(error.str(), INVALID_ENCODING, current_column, csv_row, error_info, row_byte_position,
+	                byte_position, options, how_to_fix_it.str(), current_path);
 }
 
 bool CSVErrorHandler::PrintLineNumber(const CSVError &error) const {
@@ -544,7 +606,7 @@ bool CSVErrorHandler::PrintLineNumber(const CSVError &error) const {
 	case TOO_MANY_COLUMNS:
 	case MAXIMUM_LINE_SIZE:
 	case NULLPADDED_QUOTED_NEW_VALUE:
-	case INVALID_UNICODE:
+	case INVALID_ENCODING:
 		return true;
 	default:
 		return false;

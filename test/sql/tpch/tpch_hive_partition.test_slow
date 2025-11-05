@@ -50,3 +50,16 @@ ORDER BY ALL
 ----
 2996217	114642100492.01	F
 3004998	114935210409.19	O
+
+statement ok
+SET parquet_metadata_cache=true
+
+query I
+select count(*) from lineitem
+----
+6001215
+
+query I
+select count(*) from lineitem
+----
+6001215

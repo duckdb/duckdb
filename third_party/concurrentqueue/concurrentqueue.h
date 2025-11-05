@@ -1254,6 +1254,23 @@ public:
 		return size;
 	}
 	
+
+	// Returns the number of producers currently associated with the queue.
+	size_t size_producers_approx() const
+	{
+		size_t size = 0;
+		for (auto ptr = producerListTail.load(std::memory_order_acquire); ptr != nullptr; ptr = ptr->next_prod()) {
+			size += 1;
+		}
+		return size;
+	}
+
+	// Returns the number of elements currently in the queue for a specific producer.
+	size_t size_producer_approx(producer_token_t const& producer) const
+	{
+		return static_cast<ExplicitProducer*>(producer.producer)->size_approx();
+	}
+
 	
 	// Returns true if the underlying atomic variables used by
 	// the queue are lock-free (they should be on most platforms).

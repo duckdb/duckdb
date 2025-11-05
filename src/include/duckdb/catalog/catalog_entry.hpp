@@ -57,7 +57,7 @@ public:
 	//! (optional) comment on this entry
 	Value comment;
 	//! (optional) extra data associated with this entry
-	unordered_map<string, string> tags;
+	InsertionOrderPreservingMap<string> tags;
 
 private:
 	//! Child entry
@@ -70,6 +70,7 @@ public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info);
 	virtual void UndoAlter(ClientContext &context, AlterInfo &info);
 	virtual void Rollback(CatalogEntry &prev_entry);
+	virtual void OnDrop();
 
 	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const;
 

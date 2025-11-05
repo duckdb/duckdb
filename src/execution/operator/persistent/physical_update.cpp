@@ -15,16 +15,16 @@
 
 namespace duckdb {
 
-PhysicalUpdate::PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
-                               vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
+PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
+                               DataTable &table, vector<PhysicalIndex> columns,
+                               vector<unique_ptr<Expression>> expressions,
                                vector<unique_ptr<Expression>> bound_defaults,
                                vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality,
                                bool return_chunk)
-    : PhysicalOperator(PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality), tableref(tableref),
-      table(table), columns(std::move(columns)), expressions(std::move(expressions)),
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality),
+      tableref(tableref), table(table), columns(std::move(columns)), expressions(std::move(expressions)),
       bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints)),
       return_chunk(return_chunk), index_update(false) {
-
 	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
 	auto index_columns = indexes.GetRequiredColumns();
 
@@ -55,7 +55,7 @@ public:
 	}
 
 	mutex lock;
-	idx_t updated_count;
+	atomic<idx_t> updated_count;
 	unordered_set<row_t> updated_rows;
 	ColumnDataCollection return_collection;
 };
@@ -66,7 +66,6 @@ public:
 	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
 	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
-
 		// Initialize the update chunk.
 		auto &allocator = Allocator::Get(context);
 		vector<LogicalType> update_types;
@@ -127,7 +126,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		update_chunk.data[i].Reference(chunk.data[binding.index]);
 	}
 
-	lock_guard<mutex> glock(g_state.lock);
 	auto &row_ids = chunk.data[chunk.ColumnCount() - 1];
 	DataChunk &mock_chunk = l_state.mock_chunk;
 
@@ -143,6 +141,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		table.Update(update_state, context.client, row_ids, columns, update_chunk);
 
 		if (return_chunk) {
+			lock_guard<mutex> glock(g_state.lock);
 			g_state.return_collection.Append(mock_chunk);
 		}
 		g_state.updated_count += chunk.size();
@@ -158,10 +157,11 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	idx_t update_count = 0;
 	auto row_id_data = FlatVector::GetData<row_t>(row_ids);
 
+	lock_guard<mutex> glock(g_state.lock);
 	for (idx_t i = 0; i < update_chunk.size(); i++) {
 		auto row_id = row_id_data[i];
-		if (g_state.updated_rows.find(row_id) == g_state.updated_rows.end()) {
-			g_state.updated_rows.insert(row_id);
+		const auto is_new = g_state.updated_rows.insert(row_id).second;
+		if (is_new) {
 			sel.set_index(update_count++, i);
 		}
 	}
@@ -248,7 +248,7 @@ SourceResultType PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &c
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.updated_count)));
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.updated_count.load())));
 		return SourceResultType::FINISHED;
 	}
 

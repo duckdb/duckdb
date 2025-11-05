@@ -1,5 +1,3 @@
-#define DUCKDB_EXTENSION_MAIN
-
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
@@ -7,11 +5,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-current.hpp"
 #include "include/icu-dateadd.hpp"
@@ -27,11 +22,10 @@
 #include "include/icu_extension.hpp"
 #include "unicode/calendar.h"
 #include "unicode/coll.h"
-#include "unicode/errorcode.h"
-#include "unicode/sortkey.h"
 #include "unicode/stringpiece.h"
 #include "unicode/timezone.h"
 #include "unicode/ucol.h"
+#include "icu-helpers.hpp"
 
 #include <cassert>
 
@@ -210,41 +204,129 @@ static ScalarFunction GetICUCollateFunction(const string &collation, const strin
 	return result;
 }
 
-static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
-	auto str = StringValue::Get(parameter);
-	icu::StringPiece utf8(str);
-	const auto uid = icu::UnicodeString::fromUTF8(utf8);
+unique_ptr<icu::TimeZone> GetKnownTimeZone(const string &tz_str) {
+	icu::StringPiece tz_name_utf8(tz_str);
+	const auto uid = icu::UnicodeString::fromUTF8(tz_name_utf8);
 	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
 	if (*tz != icu::TimeZone::getUnknown()) {
-		return;
+		return tz;
 	}
 
-	//	Try to be friendlier
-	//	Go through all the zone names and look for a case insensitive match
-	//	If we don't find one, make a suggestion
+	return nullptr;
+}
+
+static string NormalizeTimeZone(const string &tz_str) {
+	if (GetKnownTimeZone(tz_str)) {
+		return tz_str;
+	}
+
+	//	Map UTC±NN00 to Etc/UTC±N
+	do {
+		if (tz_str.size() <= 4) {
+			break;
+		}
+		if (tz_str.compare(0, 3, "UTC")) {
+			break;
+		}
+
+		idx_t pos = 3;
+		const auto sign = tz_str[pos++];
+		if (sign != '+' && sign != '-') {
+			break;
+		}
+
+		string mapped = "Etc/GMT";
+		mapped += sign;
+		const auto base_len = mapped.size();
+		for (; pos < tz_str.size(); ++pos) {
+			const auto digit = tz_str[pos];
+			//	We could get fancy here and count colons and their locations, but I doubt anyone cares.
+			if (digit == '0' || digit == ':') {
+				continue;
+			}
+			if (!StringUtil::CharacterIsDigit(digit)) {
+				break;
+			}
+			mapped += digit;
+		}
+		if (pos < tz_str.size()) {
+			break;
+		}
+		// If we didn't add anything, then make it +0
+		if (mapped.size() == base_len) {
+			mapped.back() = '+';
+			mapped += '0';
+		}
+		// Final sanity check
+		if (GetKnownTimeZone(mapped)) {
+			return mapped;
+		}
+	} while (false);
+
+	return tz_str;
+}
+
+unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
+	auto tz = GetKnownTimeZone(tz_str);
+	if (tz) {
+		return tz;
+	}
+
+	// Try to be friendlier
+	// Go through all the zone names and look for a case insensitive match
+	// If we don't find one, make a suggestion
+	// FIXME: this is very inefficient
 	UErrorCode status = U_ZERO_ERROR;
 	duckdb::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
 	duckdb::unique_ptr<icu::StringEnumeration> tzs(icu::TimeZone::createEnumeration());
-	vector<string> candidates;
 	for (;;) {
 		auto long_id = tzs->snext(status);
 		if (U_FAILURE(status) || !long_id) {
 			break;
 		}
-		std::string utf8;
-		long_id->toUTF8String(utf8);
-		if (StringUtil::CIEquals(utf8, str)) {
-			parameter = Value(utf8);
-			return;
+		std::string candidate_tz_name;
+		long_id->toUTF8String(candidate_tz_name);
+		if (StringUtil::CIEquals(candidate_tz_name, tz_str)) {
+			// case insensitive match - return this timezone instead
+			tz_str = candidate_tz_name;
+			icu::StringPiece utf8(tz_str);
+			const auto tz_unicode_str = icu::UnicodeString::fromUTF8(utf8);
+			duckdb::unique_ptr<icu::TimeZone> insensitive_tz(icu::TimeZone::createTimeZone(tz_unicode_str));
+			return insensitive_tz;
 		}
 
-		candidates.emplace_back(utf8);
+		candidates.emplace_back(candidate_tz_name);
 	}
+	return nullptr;
+}
 
+unique_ptr<icu::TimeZone> ICUHelpers::TryGetTimeZone(string &tz_str) {
+	vector<string> candidates;
+	return GetTimeZoneInternal(tz_str, candidates);
+}
+
+unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_message) {
+	vector<string> candidates;
+	auto tz = GetTimeZoneInternal(tz_str, candidates);
+	if (tz) {
+		return tz;
+	}
 	string candidate_str =
-	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, str), "Candidate time zones");
+	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, tz_str), "Candidate time zones");
+	if (error_message) {
+		duckdb::stringstream ss;
+		ss << "Unknown TimeZone '" << tz_str << "'!\n" << candidate_str;
+		*error_message = ss.str();
+		return nullptr;
+	}
+	throw NotImplementedException("Unknown TimeZone '%s'!\n%s", tz_str, candidate_str);
+}
 
-	throw NotImplementedException("Unknown TimeZone '%s'!\n%s", str, candidate_str);
+static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
+	auto tz_str = StringValue::Get(parameter);
+	tz_str = NormalizeTimeZone(tz_str);
+	ICUHelpers::GetTimeZone(tz_str);
+	parameter = Value(tz_str);
 }
 
 struct ICUCalendarData : public GlobalTableFunctionState {
@@ -335,9 +417,7 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 	throw NotImplementedException("Unknown Calendar '%s'!\n%s", name, candidate_str);
 }
 
-static void LoadInternal(DuckDB &ddb) {
-	auto &db = *ddb.instance;
-
+static void LoadInternal(ExtensionLoader &loader) {
 	// iterate over all the collations
 	int32_t count;
 	auto locales = icu::Collator::getAvailableLocales(count);
@@ -353,7 +433,7 @@ static void LoadInternal(DuckDB &ddb) {
 		collation = StringUtil::Lower(collation);
 
 		CreateCollationInfo info(collation, GetICUCollateFunction(collation, ""), false, false);
-		ExtensionUtil::RegisterCollation(db, info);
+		loader.RegisterCollation(info);
 	}
 
 	/**
@@ -368,32 +448,37 @@ static void LoadInternal(DuckDB &ddb) {
 	 */
 	CreateCollationInfo info("icu_noaccent", GetICUCollateFunction("noaccent", "und-u-ks-level1-kc-true"), false,
 	                         false);
-	ExtensionUtil::RegisterCollation(db, info);
+	loader.RegisterCollation(info);
 
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                        ICUCollateFunction, ICUSortKeyBind);
-	ExtensionUtil::RegisterFunction(db, sort_key);
+	loader.RegisterFunction(sort_key);
 
 	// Time Zones
-	auto &config = DBConfig::GetConfig(db);
+	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
 	icu::UnicodeString tz_id;
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
+	// If the environment TZ is invalid, look for some alternatives
+	tz_string = NormalizeTimeZone(tz_string);
+	if (!GetKnownTimeZone(tz_string)) {
+		tz_string = "UTC";
+	}
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
 	                          SetICUTimeZone);
 
-	RegisterICUCurrentFunctions(db);
-	RegisterICUDateAddFunctions(db);
-	RegisterICUDatePartFunctions(db);
-	RegisterICUDateSubFunctions(db);
-	RegisterICUDateTruncFunctions(db);
-	RegisterICUMakeDateFunctions(db);
-	RegisterICUTableRangeFunctions(db);
-	RegisterICUListRangeFunctions(db);
-	RegisterICUStrptimeFunctions(db);
-	RegisterICUTimeBucketFunctions(db);
-	RegisterICUTimeZoneFunctions(db);
+	RegisterICUCurrentFunctions(loader);
+	RegisterICUDateAddFunctions(loader);
+	RegisterICUDatePartFunctions(loader);
+	RegisterICUDateSubFunctions(loader);
+	RegisterICUDateTruncFunctions(loader);
+	RegisterICUMakeDateFunctions(loader);
+	RegisterICUTableRangeFunctions(loader);
+	RegisterICUListRangeFunctions(loader);
+	RegisterICUStrptimeFunctions(loader);
+	RegisterICUTimeBucketFunctions(loader);
+	RegisterICUTimeZoneFunctions(loader);
 
 	// Calendars
 	UErrorCode status = U_ZERO_ERROR;
@@ -402,11 +487,11 @@ static void LoadInternal(DuckDB &ddb) {
 	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
-	ExtensionUtil::RegisterFunction(db, cal_names);
+	loader.RegisterFunction(cal_names);
 }
 
-void IcuExtension::Load(DuckDB &ddb) {
-	LoadInternal(ddb);
+void IcuExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string IcuExtension::Name() {
@@ -425,16 +510,7 @@ std::string IcuExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) { // NOLINT
-	duckdb::DuckDB db_wrapper(db);
-	duckdb::LoadInternal(db_wrapper);
-}
-
-DUCKDB_EXTENSION_API const char *icu_version() { // NOLINT
-	return duckdb::DuckDB::LibraryVersion();
+DUCKDB_CPP_EXTENSION_ENTRY(icu, loader) { // NOLINT
+	duckdb::LoadInternal(loader);
 }
 }
-
-#ifndef DUCKDB_EXTENSION_MAIN
-#error DUCKDB_EXTENSION_MAIN not defined
-#endif

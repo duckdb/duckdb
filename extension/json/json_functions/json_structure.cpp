@@ -129,7 +129,7 @@ void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, const bo
 }
 
 void JSONStructureNode::RefineCandidateTypes(yyjson_val *vals[], const idx_t val_count, Vector &string_vector,
-                                             ArenaAllocator &allocator, DateFormatMap &date_format_map) {
+                                             ArenaAllocator &allocator, MutableDateFormatMap &date_format_map) {
 	if (descriptions.size() != 1) {
 		// We can't refine types if we have more than 1 description (yet), defaults to JSON type for now
 		return;
@@ -151,7 +151,7 @@ void JSONStructureNode::RefineCandidateTypes(yyjson_val *vals[], const idx_t val
 }
 
 void JSONStructureNode::RefineCandidateTypesArray(yyjson_val *vals[], const idx_t val_count, Vector &string_vector,
-                                                  ArenaAllocator &allocator, DateFormatMap &date_format_map) {
+                                                  ArenaAllocator &allocator, MutableDateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::LIST);
 	auto &desc = descriptions[0];
 	D_ASSERT(desc.children.size() == 1);
@@ -182,7 +182,7 @@ void JSONStructureNode::RefineCandidateTypesArray(yyjson_val *vals[], const idx_
 }
 
 void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], const idx_t val_count, Vector &string_vector,
-                                                   ArenaAllocator &allocator, DateFormatMap &date_format_map) {
+                                                   ArenaAllocator &allocator, MutableDateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = descriptions[0];
 
@@ -239,7 +239,7 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], const idx
 }
 
 void JSONStructureNode::RefineCandidateTypesString(yyjson_val *vals[], const idx_t val_count, Vector &string_vector,
-                                                   DateFormatMap &date_format_map) {
+                                                   MutableDateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 	if (descriptions[0].candidate_types.empty()) {
 		return;
@@ -250,7 +250,7 @@ void JSONStructureNode::RefineCandidateTypesString(yyjson_val *vals[], const idx
 }
 
 void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &string_vector,
-                                                DateFormatMap &date_format_map) {
+                                                MutableDateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 	auto &description = descriptions[0];
 	auto &candidate_types = description.candidate_types;
@@ -303,7 +303,7 @@ bool TryParse(Vector &string_vector, StrpTimeFormat &format, const idx_t count) 
 }
 
 bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector &string_vector,
-                                                  const Vector &result_vector, DateFormatMap &date_format_map) {
+                                                  const Vector &result_vector, MutableDateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 
 	const auto type = result_vector.GetType().id();

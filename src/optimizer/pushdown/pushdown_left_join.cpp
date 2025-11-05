@@ -6,6 +6,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -28,19 +30,17 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr, unordered_set<idx_t> &right_bindings) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-		if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
-			// bound colref belongs to RHS
-			// replace it with a constant NULL
-			return make_uniq<BoundConstantExpression>(Value(expr->return_type));
-		}
-		return expr;
-	}
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceColRefWithNull(std::move(child), right_bindings); });
-	return expr;
+static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> root_expr,
+                                                    unordered_set<idx_t> &right_bindings) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
+		    if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
+			    // bound colref belongs to RHS
+			    // replace it with a constant NULL
+			    expr = make_uniq<BoundConstantExpression>(Value(expr->return_type));
+		    }
+	    });
+	return root_expr;
 }
 
 static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewriter, Expression *expr,
@@ -78,6 +78,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<idx_t> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		op = PushFiltersIntoDelimJoin(std::move(op));
 		return FinishPushdown(std::move(op));
 	}
 	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
@@ -95,6 +96,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		}
 	}
 	// now check the set of filters
+	vector<unique_ptr<Filter>> remaining_filters;
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
@@ -124,9 +126,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 				for (auto &left_filter : left_pushdown.filters) {
 					filters.push_back(std::move(left_filter));
 				}
+				for (auto &filter : remaining_filters) {
+					filters.push_back(std::move(filter));
+				}
 				// now push down the inner join
 				return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 			}
+			// we should keep the filters which do not remove NULL values
+			remaining_filters.push_back(std::move(filters[i]));
+			filters.erase_at(i);
+			i--;
 		}
 	}
 	// finally we check the FilterCombiner to see if there are any predicates we can push into the RHS
@@ -183,6 +192,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 
 	if (rewrite_right) {
 		op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	}
+
+	for (auto &filter : remaining_filters) {
+		filters.push_back(std::move(filter));
 	}
 
 	return PushFinalFilters(std::move(op));

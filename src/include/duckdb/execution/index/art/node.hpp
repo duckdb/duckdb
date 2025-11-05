@@ -52,8 +52,10 @@ public:
 public:
 	//! Get a new pointer to a node and initialize it.
 	static void New(ART &art, Node &node, const NType type);
+	//! Free the node.
+	static void FreeNode(ART &art, Node &node);
 	//! Free the node and its children.
-	static void Free(ART &art, Node &node);
+	static void FreeTree(ART &art, Node &node);
 
 	//! Get a reference to the allocator.
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
@@ -84,35 +86,28 @@ public:
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child at byte.
-	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
+	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte, const bool unsafe = false) const;
 	//! Get the first immutable child greater than or equal to the byte.
 	const unsafe_optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
-	//! Get the first child greater than or equal to the byte.
-	unsafe_optional_ptr<Node> GetNextChildMutable(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.
-	bool HasByte(ART &art, uint8_t &byte) const;
+	bool HasByte(ART &art, const uint8_t byte) const;
 	//! Get the first byte greater than or equal to the byte.
 	bool GetNextByte(ART &art, uint8_t &byte) const;
 
-	//! Returns the string representation of the node, if only_verify is false.
-	//! Else, it traverses and verifies the node.
-	string VerifyAndToString(ART &art, const bool only_verify) const;
+	//! Traverses and verifies the node.
+	void Verify(ART &art) const;
 	//! Counts each node type.
 	void VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
 
 	//! Returns the node type for a count.
 	static NType GetNodeType(const idx_t count);
 
-	//! Initialize a merge by incrementing the buffer IDs of a node and its children.
-	void InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
-	//! Merge a node into this node.
-	bool Merge(ART &art, Node &other, const GateStatus status);
-
-	//! Vacuum all nodes exceeding their vacuum threshold.
-	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
-
 	//! Transform the node storage to deprecated storage.
-	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
+	static void TransformToDeprecated(ART &art, Node &node,
+	                                  unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator);
+
+	//! Returns the string representation of the node at indentation level.
+	string ToString(ART &art, idx_t indent_level, bool inside_gate = false, bool display_ascii = false) const;
 
 	//! Returns the node type.
 	inline NType GetType() const {
@@ -158,25 +153,6 @@ public:
 	}
 
 private:
-	bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status);
-	void MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte);
-	bool MergeNodes(ART &art, Node &other, const GateStatus status);
-	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const GateStatus status);
-	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t pos);
-	bool MergePrefixes(ART &art, Node &other, const GateStatus status);
-	bool MergeInternal(ART &art, Node &other, const GateStatus status);
-
-private:
-	template <class NODE>
-	static void InitMergeInternal(ART &art, NODE &n, const unsafe_vector<idx_t> &upper_bounds) {
-		NODE::Iterator(n, [&](Node &child) { child.InitMerge(art, upper_bounds); });
-	}
-
-	template <class NODE>
-	static void VacuumInternal(ART &art, NODE &n, const unordered_set<uint8_t> &indexes) {
-		NODE::Iterator(n, [&](Node &child) { child.Vacuum(art, indexes); });
-	}
-
 	template <class NODE>
 	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
 	                                          unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
@@ -184,10 +160,42 @@ private:
 			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, allocator); });
 		}
 	}
-
-	template <class NODE>
-	static void VerifyAllocationsInternal(ART &art, NODE &n, unordered_map<uint8_t, idx_t> &node_counts) {
-		NODE::Iterator(n, [&](const Node &child) { child.VerifyAllocations(art, node_counts); });
-	}
 };
+
+//! NodeChildren holds the extracted bytes of a node, and their respective children.
+//! The bytes and children are valid as long as the arena is valid,
+//! even if the original node has been freed.
+struct NodeChildren {
+	NodeChildren() = delete;
+	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};
+
+	array_ptr<uint8_t> bytes;
+	array_ptr<Node> children;
+};
+
+template <class T>
+class NodeHandle {
+public:
+	NodeHandle(ART &art, const Node node)
+	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
+		handle.MarkModified();
+	}
+
+	NodeHandle(const NodeHandle &) = delete;
+	NodeHandle &operator=(const NodeHandle &) = delete;
+
+	NodeHandle(NodeHandle &&other) noexcept : handle(std::move(other.handle)), n(handle.GetRef<T>()) {
+	}
+	NodeHandle &operator=(NodeHandle &&other) noexcept = delete;
+
+public:
+	T &Get() {
+		return n;
+	}
+
+private:
+	SegmentHandle handle;
+	T &n;
+};
+
 } // namespace duckdb

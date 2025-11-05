@@ -39,7 +39,6 @@ public:
 	static void Enable();
 	static void Disable();
 	static bool IsEnabled();
-	static const char *GetColorOption(const char *option);
 	static void SetHighlightingColor(HighlightingType type, const char *color);
 
 	static vector<highlightToken> Tokenize(char *buf, size_t len, bool is_dot_command, searchMatch *match);

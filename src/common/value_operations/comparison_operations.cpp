@@ -3,12 +3,16 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
+
+namespace {
 
 struct ValuePositionComparator {
 	// Return true if the positional Values definitely match.
@@ -63,36 +67,9 @@ inline bool ValuePositionComparator::Final<duckdb::NotEquals>(const Value &lhs, 
 	return ValueOperations::NotDistinctFrom(lhs, rhs);
 }
 
-// Non-strict inequalities must use strict comparisons for Definite
-template <>
-bool ValuePositionComparator::Definite<duckdb::LessThanEquals>(const Value &lhs, const Value &rhs) {
-	return !ValuePositionComparator::Definite<duckdb::GreaterThan>(lhs, rhs);
-}
-
 template <>
 bool ValuePositionComparator::Final<duckdb::GreaterThan>(const Value &lhs, const Value &rhs) {
 	return ValueOperations::DistinctGreaterThan(lhs, rhs);
-}
-
-template <>
-bool ValuePositionComparator::Final<duckdb::LessThanEquals>(const Value &lhs, const Value &rhs) {
-	return !ValuePositionComparator::Final<duckdb::GreaterThan>(lhs, rhs);
-}
-
-template <>
-bool ValuePositionComparator::Definite<duckdb::GreaterThanEquals>(const Value &lhs, const Value &rhs) {
-	return !ValuePositionComparator::Definite<duckdb::GreaterThan>(rhs, lhs);
-}
-
-template <>
-bool ValuePositionComparator::Final<duckdb::GreaterThanEquals>(const Value &lhs, const Value &rhs) {
-	return !ValuePositionComparator::Final<duckdb::GreaterThan>(rhs, lhs);
-}
-
-// Strict inequalities just use strict for both Definite and Final
-template <>
-bool ValuePositionComparator::Final<duckdb::LessThan>(const Value &lhs, const Value &rhs) {
-	return ValuePositionComparator::Final<duckdb::GreaterThan>(rhs, lhs);
 }
 
 template <class OP>
@@ -142,6 +119,24 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	case PhysicalType::VARCHAR:
 		return OP::Operation(StringValue::Get(left), StringValue::Get(right));
 	case PhysicalType::STRUCT: {
+		if (left_type.id() == LogicalTypeId::VARIANT) {
+			Vector left_vec(left.type());
+			Vector right_vec(right.type());
+			left_vec.Reference(left);
+			right_vec.Reference(right);
+
+			RecursiveUnifiedVectorFormat left_format;
+			RecursiveUnifiedVectorFormat right_format;
+			Vector::RecursiveToUnifiedFormat(left_vec, 1, left_format);
+			Vector::RecursiveToUnifiedFormat(right_vec, 1, right_format);
+
+			UnifiedVariantVectorData left_variant_data(left_format);
+			UnifiedVariantVectorData right_variant_data(right_format);
+
+			auto left_value = VariantUtils::ConvertVariantToValue(left_variant_data, 0, 0);
+			auto right_value = VariantUtils::ConvertVariantToValue(right_variant_data, 0, 0);
+			return TemplatedBooleanOperation<OP>(left_value, right_value);
+		}
 		auto &left_children = StructValue::GetChildren(left);
 		auto &right_children = StructValue::GetChildren(right);
 		// this should be enforced by the type
@@ -194,6 +189,8 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		throw InternalException("Unimplemented type for value comparison");
 	}
 }
+
+} // namespace
 
 bool ValueOperations::Equals(const Value &left, const Value &right) {
 	if (left.IsNull() || right.IsNull()) {

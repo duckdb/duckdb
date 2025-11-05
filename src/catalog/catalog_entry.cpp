@@ -48,7 +48,7 @@ unique_ptr<CreateInfo> CatalogEntry::GetInfo() const {
 }
 
 string CatalogEntry::ToSQL() const {
-	throw InternalException("Unsupported catalog type for ToSQL()");
+	throw InternalException({{"catalog_type", CatalogTypeToString(type)}}, "Unsupported catalog type for ToSQL()");
 }
 
 void CatalogEntry::SetChild(unique_ptr<CatalogEntry> child_p) {
@@ -110,6 +110,9 @@ void CatalogEntry::Verify(Catalog &catalog_p) {
 }
 
 void CatalogEntry::Rollback(CatalogEntry &prev_entry) {
+}
+
+void CatalogEntry::OnDrop() {
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)

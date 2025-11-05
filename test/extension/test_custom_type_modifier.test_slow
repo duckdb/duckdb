@@ -187,7 +187,7 @@ SELECT parameter_types from duckdb_functions() where function_name = 'minmax_ran
 query I
 SELECT parameter_types from duckdb_functions() where function_name = 'bounded_ascii';
 ----
-[BOUNDED(255)]
+['BOUNDED(255)']
 
 query I
 SELECT parameter_types from duckdb_functions() where function_name = 'bounded_add';

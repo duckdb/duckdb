@@ -89,7 +89,6 @@ private:
 };
 
 struct WindowBoundariesState {
-
 	static bool HasPrecedingRange(const BoundWindowExpression &wexpr);
 	static bool HasFollowingRange(const BoundWindowExpression &wexpr);
 	static WindowBoundsSet GetWindowBounds(const BoundWindowExpression &wexpr);
@@ -148,6 +147,10 @@ struct WindowBoundariesState {
 	idx_t valid_end = 0;
 
 	FrameBounds prev;
+
+	// Extra range cursor
+	optional_ptr<WindowCursor> range_lo;
+	unique_ptr<WindowCursor> range_hi;
 };
 
 } // namespace duckdb

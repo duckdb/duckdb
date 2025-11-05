@@ -14,6 +14,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/execution/physical_table_scan_enum.hpp"
 
 namespace duckdb {
 
@@ -24,9 +25,10 @@ public:
 
 public:
 	//! Table scan that immediately projects out filter columns that are unused in the remainder of the query plan
-	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
-	                  vector<LogicalType> returned_types, vector<ColumnIndex> column_ids, vector<idx_t> projection_ids,
-	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality,
+	PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function,
+	                  unique_ptr<FunctionData> bind_data, vector<LogicalType> returned_types,
+	                  vector<ColumnIndex> column_ids, vector<idx_t> projection_ids, vector<string> names,
+	                  unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality,
 	                  ExtraOperatorInfo extra_info, vector<Value> parameters, virtual_column_map_t virtual_columns);
 
 	//! The table function
@@ -76,6 +78,9 @@ public:
 	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+
+	InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
+	                                                      LocalSourceState &lstate) const override;
 };
 
 } // namespace duckdb

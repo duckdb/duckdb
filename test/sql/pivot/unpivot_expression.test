@@ -44,21 +44,22 @@ statement error
 unpivot (select 42 as col1, 'woot' as col2)
     on (col1 + (SELECT col1))::VARCHAR, col2;
 ----
-UNPIVOT list cannot contain subqueries
+<REGEX>:.*Binder Error.*UNPIVOT list cannot contain subqueries.*
 
 statement error
 unpivot (select 42 as col1, 'woot' as col2)
     on random(), col2;
 ----
-UNPIVOT clause must contain exactly one column
+<REGEX>:.*Binder Error.*UNPIVOT clause must contain exactly one column.*
 
 statement error
 unpivot (select 42 as col1, 'woot' as col2)
     on col1 + col2;
 ----
-UNPIVOT clause must contain exactly one column
+<REGEX>:.*Binder Error.*UNPIVOT clause must contain exactly one column.*
 
 statement error
 unpivot (select 42 as col1, 'woot' as col2)
     on t.col1::VARCHAR, col2;
 ----
+<REGEX>:.*Binder Error.*not found.*

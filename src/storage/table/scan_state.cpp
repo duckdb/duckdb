@@ -16,15 +16,19 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 TableScanState::~TableScanState() {
 }
 
-void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<TableFilterSet> table_filters,
+void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<ClientContext> context,
+                                optional_ptr<TableFilterSet> table_filters,
                                 optional_ptr<SampleOptions> table_sampling) {
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {
-		filters.Initialize(*table_filters, column_ids);
+		filters.Initialize(*context, *table_filters, column_ids);
 	}
 	if (table_sampling) {
 		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
 		sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
+		if (table_sampling->seed.IsValid()) {
+			table_state.random.SetSeed(table_sampling->seed.GetIndex());
+		}
 	}
 }
 
@@ -44,18 +48,20 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 	return sampling_info;
 }
 
-ScanFilter::ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
+ScanFilter::ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
     : scan_column_index(index), table_column_index(column_ids[index].GetPrimaryIndex()), filter(filter),
       always_true(false) {
+	filter_state = TableFilterState::Initialize(context, filter);
 }
 
-void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageIndex> &column_ids) {
+void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
+                                const vector<StorageIndex> &column_ids) {
 	D_ASSERT(!filters.filters.empty());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
 	filter_list.reserve(filters.filters.size());
 	for (auto &entry : filters.filters) {
-		filter_list.emplace_back(entry.first, column_ids, *entry.second);
+		filter_list.emplace_back(context, entry.first, column_ids, *entry.second);
 	}
 	column_has_filter.reserve(column_ids.size());
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
@@ -96,9 +102,68 @@ void ScanFilterInfo::CheckAllFilters() {
 
 void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
 	auto &filter = filter_list[filter_idx];
+	if (filter.always_true) {
+		return;
+	}
 	filter.always_true = true;
 	column_has_filter[filter.scan_column_index] = false;
 	always_true_filters++;
+}
+
+RowGroupReorderer::RowGroupReorderer(const RowGroupOrderOptions &options)
+    : column_idx(options.column_idx), order_by(options.order_by), order_type(options.order_type),
+      column_type(options.column_type), offset(0), initialized(false) {
+}
+
+optional_ptr<RowGroup> RowGroupReorderer::GetNextRowGroup(optional_ptr<RowGroup> row_group) {
+	D_ASSERT(ordered_row_groups[offset] == row_group);
+	if (offset >= ordered_row_groups.size() - 1) {
+		return nullptr;
+	}
+	return ordered_row_groups[++offset];
+}
+
+Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by,
+                                      OrderByColumnType column_type) {
+	switch (order_by) {
+	case OrderByStatistics::MIN:
+		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Min(stats) : StringStats::Min(stats);
+	case OrderByStatistics::MAX:
+		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Max(stats) : StringStats::Max(stats);
+	}
+	return Value();
+}
+
+optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
+	if (initialized) {
+		return ordered_row_groups.empty() ? nullptr : ordered_row_groups[0];
+	}
+
+	initialized = true;
+
+	multimap<Value, const reference<RowGroup>> row_group_map;
+	for (auto &row_group : row_groups.Segments()) {
+		auto stats = row_group.GetStatistics(column_idx);
+		Value comparison_value = RetrieveStat(*stats, order_by, column_type);
+		row_group_map.emplace(comparison_value, row_group);
+	}
+
+	if (row_group_map.empty()) {
+		return nullptr;
+	}
+
+	ordered_row_groups.reserve(row_group_map.size());
+	if (order_type == RowGroupOrderType::ASC) {
+		for (auto &row_group : row_group_map) {
+			ordered_row_groups.emplace_back(row_group.second);
+		}
+	} else {
+		for (auto it = row_group_map.rbegin(); it != row_group_map.rend(); ++it) {
+			ordered_row_groups.emplace_back(it->second);
+		}
+	}
+
+	return ordered_row_groups[0];
 }
 
 optional_ptr<AdaptiveFilter> ScanFilterInfo::GetAdaptiveFilter() {
@@ -165,9 +230,43 @@ ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
 }
 
+optional_ptr<RowGroup> ParallelCollectionScanState::GetRootSegment(RowGroupSegmentTree &row_groups) const {
+	if (reorderer) {
+		return reorderer->GetRootSegment(row_groups);
+	}
+	return row_groups.GetRootSegment();
+}
+
+optional_ptr<RowGroup> ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups,
+                                                                    optional_ptr<RowGroup> row_group) const {
+	if (reorderer) {
+		return reorderer->GetNextRowGroup(row_group);
+	}
+	return row_groups.GetNextSegment(row_group.get());
+}
+
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
       valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
+}
+
+optional_ptr<RowGroup> CollectionScanState::GetNextRowGroup(optional_ptr<RowGroup> row_group) const {
+	if (reorderer) {
+		return reorderer->GetNextRowGroup(row_group);
+	}
+	return row_groups->GetNextSegment(row_group.get());
+}
+
+optional_ptr<RowGroup> CollectionScanState::GetNextRowGroup(SegmentLock &l, optional_ptr<RowGroup> row_group) const {
+	D_ASSERT(!reorderer);
+	return row_groups->GetNextSegment(l, row_group.get());
+}
+
+optional_ptr<RowGroup> CollectionScanState::GetRootSegment() const {
+	if (reorderer) {
+		return reorderer->GetRootSegment(*row_groups);
+	}
+	return row_groups->GetRootSegment();
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
@@ -180,7 +279,7 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 			return false;
 		} else {
 			do {
-				row_group = row_groups->GetNextSegment(row_group);
+				row_group = GetNextRowGroup(row_group).get();
 				if (row_group) {
 					if (row_group->start >= max_row) {
 						row_group = nullptr;
@@ -204,7 +303,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 		if (result.size() > 0) {
 			return true;
 		} else {
-			row_group = row_groups->GetNextSegment(l, row_group);
+			row_group = GetNextRowGroup(l, row_group).get();
 			if (row_group) {
 				row_group->InitializeScan(*this);
 			}
@@ -218,11 +317,11 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 		row_group->ScanCommitted(*this, result, type);
 		if (result.size() > 0) {
 			return true;
-		} else {
-			row_group = row_groups->GetNextSegment(row_group);
-			if (row_group) {
-				row_group->InitializeScan(*this);
-			}
+		}
+
+		row_group = GetNextRowGroup(row_group).get();
+		if (row_group) {
+			row_group->InitializeScan(*this);
 		}
 	}
 	return false;

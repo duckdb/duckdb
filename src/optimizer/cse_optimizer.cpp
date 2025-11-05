@@ -2,7 +2,6 @@
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -31,6 +30,8 @@ struct CSEReplacementState {
 	vector<unique_ptr<Expression>> expressions;
 	//! Cached expressions that are kept around so the expression_map always contains valid expressions
 	vector<unique_ptr<Expression>> cached_expressions;
+	//! Short circuit argument tracking
+	bool short_circuited = false;
 };
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
@@ -51,9 +52,6 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
-	// skip conjunctions and case, since short-circuiting might be incorrectly disabled otherwise
-	case ExpressionClass::BOUND_CONJUNCTION:
-	case ExpressionClass::BOUND_CASE:
 		return;
 	default:
 		break;
@@ -63,14 +61,35 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 		auto node = state.expression_count.find(expr);
 		if (node == state.expression_count.end()) {
 			// first time we encounter this expression, insert this node with [count = 1]
-			state.expression_count[expr] = CSENode();
+			// but only if it is not an interior argument of a short circuit sensitive expression.
+			if (!state.short_circuited) {
+				state.expression_count[expr] = CSENode();
+			}
 		} else {
 			// we encountered this expression before, increment the occurrence count
 			node->second.count++;
 		}
 	}
-	// recursively count the children
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
+
+	// If we have a function that uses short circuiting, then we can only extract CSEs from the leftmost
+	// side of the argument tree (child_no == 0)
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_CONJUNCTION:
+	case ExpressionClass::BOUND_CASE: {
+		// Save the short circuit reference
+		const auto save_short_circuit = state.short_circuited;
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+			CountExpressions(child, state);
+			state.short_circuited = true;
+		});
+		state.short_circuited = save_short_circuit;
+		break;
+	}
+	default:
+		// recursively count the children
+		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
+		break;
+	}
 }
 
 void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> &expr_ptr, CSEReplacementState &state) {
@@ -93,9 +112,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		return;
 	}
 	// check if this child is eligible for CSE elimination
-	bool can_cse = expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION &&
-	               expr.GetExpressionClass() != ExpressionClass::BOUND_CASE;
-	if (can_cse && state.expression_count.find(expr) != state.expression_count.end()) {
+	if (state.expression_count.find(expr) != state.expression_count.end()) {
 		auto &node = state.expression_count[expr];
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection

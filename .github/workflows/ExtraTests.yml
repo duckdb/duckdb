@@ -12,7 +12,7 @@ env:
 jobs:
  regression-test-all:
   name: All Regression Tests
-  runs-on: ubuntu-20.04
+  runs-on: ubuntu-22.04
   env:
     CC: gcc-10
     CXX: g++-10
@@ -38,7 +38,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build Last Release
       shell: bash

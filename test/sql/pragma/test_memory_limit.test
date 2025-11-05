@@ -125,6 +125,7 @@ PRAGMA memory_limit
 statement error
 PRAGMA memory_limit()
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 PRAGMA memory_limit(1, 2)

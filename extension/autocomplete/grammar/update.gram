@@ -1,6 +1,0 @@
-UpdateStatement <- WithClause? 'UPDATE'i UpdateTarget 'SET'i UpdateSetClause FromClause? WhereClause? ReturningClause?
-
-UpdateTarget <- BaseTableName UpdateAlias?
-UpdateAlias <- 'AS'i Identifier
-UpdateSetClause <- List(UpdateSetElement)
-UpdateSetElement <- ColumnName '=' Expression

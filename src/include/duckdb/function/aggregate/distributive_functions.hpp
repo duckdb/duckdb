@@ -20,6 +20,7 @@ struct CountStarFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -27,8 +28,9 @@ struct CountStarFun {
 struct CountFun {
 	static constexpr const char *Name = "count";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns the number of non-null values in arg.";
+	static constexpr const char *Description = "Returns the number of non-NULL values in arg.";
 	static constexpr const char *Example = "count(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -36,8 +38,9 @@ struct CountFun {
 struct FirstFun {
 	static constexpr const char *Name = "first";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns the first value (null or non-null) from arg. This function is affected by ordering.";
+	static constexpr const char *Description = "Returns the first value (NULL or non-NULL) from arg. This function is affected by ordering.";
 	static constexpr const char *Example = "first(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -53,6 +56,7 @@ struct LastFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns the last value of a column. This function is affected by ordering.";
 	static constexpr const char *Example = "last(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -60,8 +64,9 @@ struct LastFun {
 struct AnyValueFun {
 	static constexpr const char *Name = "any_value";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns the first non-null value from arg. This function is affected by ordering.";
+	static constexpr const char *Description = "Returns the first non-NULL value from arg. This function is affected by ordering.";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -71,6 +76,7 @@ struct MinFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns the minimum value present in arg.";
 	static constexpr const char *Example = "min(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -80,6 +86,7 @@ struct MaxFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns the maximum value present in arg.";
 	static constexpr const char *Example = "max(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };

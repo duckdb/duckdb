@@ -2,9 +2,6 @@
 # description: Test the list_bit_or aggregate function
 # group: [aggregates]
 
-require skip_reload
-
-
 # bit_or on a sequence
 statement ok
 CREATE SEQUENCE seq;
@@ -48,3 +45,4 @@ NULL	1	NULL
 statement error
 SELECT list_bit_or()
 ----
+<REGEX>:.*Binder Error.*does not support the supplied arguments.*

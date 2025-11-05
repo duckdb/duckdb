@@ -20,18 +20,20 @@
 #include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
-class ColumnSegment;
+
+class BaseStatistics;
 class BlockManager;
 class ColumnData;
+class ColumnSegment;
 class DatabaseInstance;
-class Transaction;
-class BaseStatistics;
-class UpdateSegment;
 class TableFilter;
+class Transaction;
+class UpdateSegment;
+struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;
-struct ColumnAppendState;
 struct PrefetchState;
+struct TableFilterState;
 
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
@@ -57,7 +59,7 @@ public:
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
 	                                                        const LogicalType &type, const idx_t start,
-	                                                        const idx_t segment_size, const idx_t block_size);
+	                                                        const idx_t segment_size, BlockManager &block_manager);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
@@ -68,12 +70,13 @@ public:
 	void Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel, idx_t sel_count);
 	//! Scan one vector while applying a filter to the vector, returning only the matching elements
 	void Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel, idx_t &sel_count,
-	            const TableFilter &filter);
+	            const TableFilter &filter, TableFilterState &filter_state);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
 	static idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-	                             const TableFilter &filter, idx_t scan_count, idx_t &approved_tuple_count);
+	                             const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
+	                             idx_t &approved_tuple_count);
 
 	//! Skip a scan forward to the row_index specified in the scan state
 	void Skip(ColumnScanState &state);
@@ -95,12 +98,13 @@ public:
 	//! Revert an append made to this segment
 	void RevertAppend(idx_t start_row);
 
-	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
+	//! Convert a transient in-memory segment to a persistent segment backed by an on-disk block.
 	//! Only used during checkpointing.
-	void ConvertToPersistent(optional_ptr<BlockManager> block_manager, block_id_t block_id);
+	void ConvertToPersistent(QueryContext context, optional_ptr<BlockManager> block_manager, const block_id_t block_id);
 	//! Updates pointers to refer to the given block and offset. This is only used
 	//! when sharing a block among segments. This is invoked only AFTER the block is written.
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
+	void SetBlock(shared_ptr<BlockHandle> block, uint32_t offset);
 	//! Gets a data pointer from a persistent column segment
 	DataPointer GetDataPointer();
 

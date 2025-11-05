@@ -1,0 +1,62 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow
+# description: Test SYSTEM_PEAK_BUFFER_MEMORY and SYSTEM_PEAK_TEMP_DIR_SIZE metrics.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+SET memory_limit = '0.7gb';
+
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT hash(range) i FROM range(100_000_000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+# should both be non-zero, and sum up to ~1 GB
+query III
+SELECT
+    system_peak_buffer_memory != 0,
+    system_peak_temp_dir_size != 0,
+    round((system_peak_buffer_memory + system_peak_temp_dir_size) / 1e9),
+FROM metrics_output;
+----
+true	true	1.0
+
+# disabling should omit them from output
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MEMORY": "false", "SYSTEM_PEAK_TEMP_DIR_SIZE": "false"}';
+
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT hash(range) i FROM range(100_000_000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+statement error
+SELECT system_peak_buffer_memory FROM metrics_output;
+----
+Binder Error
+
+statement error
+SELECT system_peak_temp_dir_size FROM metrics_output;
+----
+Binder Error

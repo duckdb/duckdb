@@ -1,0 +1,30 @@
+# name: test/sql/merge/merge_into_error.test
+# description: Test MERGE INTO with error in condition
+# group: [merge]
+
+statement ok
+CREATE TABLE Stock(item_id int, balance int);
+
+statement ok
+CREATE TABLE Buys(item_id int, volume int);
+
+statement ok
+INSERT INTO Buys VALUES (42, 100);
+
+query I
+MERGE INTO Stock USING Buys USING (item_id)
+WHEN NOT MATCHED AND true THEN INSERT
+WHEN NOT MATCHED AND error('this should not be executed') THEN INSERT
+WHEN NOT MATCHED THEN ERROR
+----
+1
+
+query I
+SELECT COUNT(*) FROM Stock
+----
+1
+
+query II
+FROM Stock
+----
+42	100

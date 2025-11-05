@@ -13,7 +13,8 @@ string TableRef::BaseToString(string result) const {
 	return BaseToString(std::move(result), column_name_alias);
 }
 
-string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
+string TableRef::AliasToString(const vector<string> &column_name_alias) const {
+	string result;
 	if (!alias.empty()) {
 		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
 	}
@@ -28,6 +29,11 @@ string TableRef::BaseToString(string result, const vector<string> &column_name_a
 		}
 		result += ")";
 	}
+	return result;
+}
+
+string TableRef::SampleToString() const {
+	string result;
 	if (sample) {
 		result += " TABLESAMPLE " + EnumUtil::ToString(sample->method);
 		result += "(" + sample->sample_size.ToString() + " " + string(sample->is_percentage ? "PERCENT" : "ROWS") + ")";
@@ -35,7 +41,12 @@ string TableRef::BaseToString(string result, const vector<string> &column_name_a
 			result += "REPEATABLE (" + to_string(sample->seed.GetIndex()) + ")";
 		}
 	}
+	return result;
+}
 
+string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
+	result += AliasToString(column_name_alias);
+	result += SampleToString();
 	return result;
 }
 

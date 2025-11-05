@@ -12,9 +12,11 @@
 
 namespace duckdb {
 
+namespace {
+
 template <class T>
-static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
-                          idx_t target_offset, idx_t copy_count) {
+void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
+                   idx_t target_offset, idx_t copy_count) {
 	auto ldata = FlatVector::GetData<T>(source);
 	auto tdata = FlatVector::GetData<T>(target);
 	for (idx_t i = 0; i < copy_count; i++) {
@@ -22,6 +24,7 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 		tdata[target_offset + i] = ldata[source_idx];
 	}
 }
+} // namespace
 
 static const ValidityMask &ExtractValidityMask(const Vector &v) {
 	switch (v.GetVectorType()) {
@@ -36,7 +39,6 @@ static const ValidityMask &ExtractValidityMask(const Vector &v) {
 
 void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
                             idx_t source_offset, idx_t target_offset, idx_t copy_count) {
-
 	SelectionVector owned_sel;
 	const SelectionVector *sel = &sel_p;
 

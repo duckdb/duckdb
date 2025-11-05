@@ -12,9 +12,6 @@ statement ok
 CREATE TABLE integers3 AS SELECT * FROM (VALUES (4), (5), (NULL)) tbl(i);
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 # union all

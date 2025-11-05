@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE final(s_store_name1 VARCHAR, s_store_id1 VARCHAR, d_week_seq1 INTEGER, "sun_sales1 / sun_sales2" DOUBLE, "mon_sales1 / mon_sales2" DOUBLE, "tue_sales1 / tue_sales2" DOUBLE, "wed_sales1 / wed_sales2" DOUBLE, "thu_sales1 / thu_sales2" DOUBLE, "fri_sales1 / fri_sales2" DOUBLE, "sat_sales1 / sat_sales2" DOUBLE);
 
 statement ok
-COPY final FROM 'data/csv/tpcds_59.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+COPY final FROM '{DATA_DIR}/csv/tpcds_59.csv' (FORMAT CSV, DELIMITER '|', HEADER);
 
 query IIIIIIIIII
 SELECT *

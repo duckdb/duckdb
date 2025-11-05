@@ -51,9 +51,9 @@ RETURN_TYPE RadixBitsSwitch(const idx_t radix_bits, ARGS &&... args) {
 	case 10:
 		return OP::template Operation<10>(std::forward<ARGS>(args)...);
 	case 11:
-		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+		return OP::template Operation<11>(std::forward<ARGS>(args)...);
 	case 12:
-		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+		return OP::template Operation<12>(std::forward<ARGS>(args)...);
 	default:
 		throw InternalException(
 		    "radix_bits higher than RadixPartitioning::MAX_RADIX_BITS encountered in RadixBitsSwitch");
@@ -83,16 +83,34 @@ idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, cons
 
 struct ComputePartitionIndicesFunctor {
 	template <idx_t radix_bits>
-	static void Operation(Vector &hashes, Vector &partition_indices, const SelectionVector &append_sel,
-	                      const idx_t append_count) {
+	static void Operation(Vector &hashes, Vector &partition_indices, const idx_t original_count,
+	                      const SelectionVector &append_sel, const idx_t append_count) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-		if (append_sel.IsSet()) {
-			auto hashes_sliced = Vector(hashes, append_sel, append_count);
-			UnaryExecutor::Execute<hash_t, hash_t>(hashes_sliced, partition_indices, append_count,
-			                                       [&](hash_t hash) { return CONSTANTS::ApplyMask(hash); });
-		} else {
+		if (!append_sel.IsSet() || hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			UnaryExecutor::Execute<hash_t, hash_t>(hashes, partition_indices, append_count,
 			                                       [&](hash_t hash) { return CONSTANTS::ApplyMask(hash); });
+		} else {
+			// We could just slice the "hashes" vector and use the UnaryExecutor
+			// But slicing a dictionary vector causes SelectionData to be allocated
+			// Instead, we just directly compute the partition indices using the selection vectors
+			UnifiedVectorFormat format;
+			hashes.ToUnifiedFormat(original_count, format);
+			const auto source_data = UnifiedVectorFormat::GetData<hash_t>(format);
+			const auto &source_sel = *format.sel;
+
+			const auto target = FlatVector::GetData<hash_t>(partition_indices);
+
+			if (source_sel.IsSet()) {
+				for (idx_t i = 0; i < append_count; i++) {
+					const auto source_idx = source_sel.get_index(append_sel[i]);
+					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
+				}
+			} else {
+				for (idx_t i = 0; i < append_count; i++) {
+					const auto source_idx = append_sel[i];
+					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
+				}
+			}
 		}
 	}
 };
@@ -143,24 +161,20 @@ void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAp
 	D_ASSERT(partitions.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	D_ASSERT(state.partition_buffers.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, input.data[hash_col_idx], state.partition_indices,
-	                                                      *FlatVector::IncrementalSelectionVector(), input.size());
+	                                                      input.size(), *FlatVector::IncrementalSelectionVector(),
+	                                                      input.size());
 }
 
 //===--------------------------------------------------------------------===//
 // Tuple Data Partitioning
 //===--------------------------------------------------------------------===//
-RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manager, const TupleDataLayout &layout_p,
-                                                     const idx_t radix_bits_p, const idx_t hash_col_idx_p)
-    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_p.Copy()), radix_bits(radix_bits_p),
+RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manager,
+                                                     shared_ptr<TupleDataLayout> layout_ptr, const idx_t radix_bits_p,
+                                                     const idx_t hash_col_idx_p)
+    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_ptr), radix_bits(radix_bits_p),
       hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
-	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	allocators->allocators.reserve(num_partitions);
-	for (idx_t i = 0; i < num_partitions; i++) {
-		CreateAllocator();
-	}
-	D_ASSERT(allocators->allocators.size() == num_partitions);
 	Initialize();
 }
 
@@ -186,8 +200,8 @@ void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDa
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_pin_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		state.partition_pin_states.emplace_back(make_unsafe_uniq<TupleDataPinState>());
-		partitions[i]->InitializeAppend(*state.partition_pin_states[i], properties);
+		state.partition_pin_states.emplace_back();
+		partitions[i]->InitializeAppend(state.partition_pin_states[i], properties);
 	}
 
 	// Init single chunk state
@@ -207,15 +221,18 @@ void RadixPartitionedTupleData::ComputePartitionIndices(PartitionedTupleDataAppe
                                                         const SelectionVector &append_sel, const idx_t append_count) {
 	D_ASSERT(partitions.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, input.data[hash_col_idx], state.partition_indices,
-	                                                      append_sel, append_count);
+	                                                      input.size(), append_sel, append_count);
 }
 
-void RadixPartitionedTupleData::ComputePartitionIndices(Vector &row_locations, idx_t count,
-                                                        Vector &partition_indices) const {
-	Vector intermediate(LogicalType::HASH);
+void RadixPartitionedTupleData::ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices,
+                                                        unique_ptr<Vector> &utility_vector) const {
+	if (!utility_vector) {
+		utility_vector = make_uniq<Vector>(LogicalType::HASH);
+	}
+	Vector &intermediate = *utility_vector;
 	partitions[0]->Gather(row_locations, *FlatVector::IncrementalSelectionVector(), count, hash_col_idx, intermediate,
 	                      *FlatVector::IncrementalSelectionVector(), nullptr);
-	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, intermediate, partition_indices,
+	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, intermediate, partition_indices, count,
 	                                                      *FlatVector::IncrementalSelectionVector(), count);
 }
 
@@ -240,7 +257,7 @@ void RadixPartitionedTupleData::RepartitionFinalizeStates(PartitionedTupleData &
 	auto &partitions = new_partitioned_data.GetPartitions();
 	for (idx_t partition_index = from_idx; partition_index < to_idx; partition_index++) {
 		auto &partition = *partitions[partition_index];
-		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+		auto &partition_pin_state = state.partition_pin_states[partition_index];
 		partition.FinalizePinState(partition_pin_state);
 	}
 }

@@ -1,10 +1,6 @@
 # name: test/sql/types/nested/map/test_map_contains.test
 # group: [map]
 
-statement ok
-PRAGMA enable_verification;
-
-
 query I
 SELECT map_contains_entry(map([1,2,3],[4,5,6]), 2, 5) AS res;
 ----

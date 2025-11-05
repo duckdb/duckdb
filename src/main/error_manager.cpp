@@ -2,6 +2,8 @@
 #include "duckdb/main/config.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/exception/list.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/string.hpp"
 
 namespace duckdb {
 
@@ -16,7 +18,7 @@ static const DefaultError internal_errors[] = {
      "are disabled by configuration (allow_unsigned_extensions)"},
     {ErrorType::INVALIDATED_TRANSACTION, "Current transaction is aborted (please ROLLBACK)"},
     {ErrorType::INVALIDATED_DATABASE, "Failed: database has been invalidated because of a previous fatal error. The "
-                                      "database must be restarted prior to being used again.\nOriginal error: \"%s\""},
+                                      "database must be restarted prior to being used again.\n"},
     {ErrorType::INVALID, nullptr}};
 
 string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<ExceptionFormatValue> &values) {
@@ -25,17 +27,30 @@ string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<Excep
 	}
 	auto entry = custom_errors.find(error_type);
 	string error;
-	if (entry == custom_errors.end()) {
-		// error was not overwritten
-		error = internal_errors[int(error_type)].error;
-	} else {
-		// error was overwritten
+	if (entry != custom_errors.end()) {
+		// Error was overwritten.
 		error = entry->second;
+		return ExceptionFormatValue::Format(error, values);
 	}
+
+	// Error was not overwritten.
+	error = internal_errors[int(error_type)].error;
+
+	if (error_type != ErrorType::INVALIDATED_DATABASE) {
+		return ExceptionFormatValue::Format(error, values);
+	}
+
+	for (const auto &val : values) {
+		if (StringUtil::Contains(val.str_val, error)) {
+			error = "%s";
+			return ExceptionFormatValue::Format(error, values);
+		}
+	}
+	error += "Original error: \"%s\"";
 	return ExceptionFormatValue::Format(error, values);
 }
 
-InvalidInputException ErrorManager::InvalidUnicodeError(const string &input, const string &context) {
+InvalidInputException ErrorManager::InvalidUnicodeError(const String &input, const string &context) {
 	UnicodeInvalidReason reason;
 	size_t pos;
 	auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(input.c_str()), input.size(), &reason, &pos);

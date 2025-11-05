@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "icu-helpers.hpp"
 #include "unicode/ucal.h"
 
 namespace duckdb {
@@ -15,7 +16,6 @@ ICUDateFunc::BindData::BindData(const BindData &other)
 
 ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_setting_p)
     : tz_setting(tz_setting_p), cal_setting(cal_setting_p) {
-
 	InitCalendar();
 }
 
@@ -59,7 +59,7 @@ void ICUDateFunc::BindData::InitCalendar() {
 
 bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<const BindData>();
-	return *calendar == *other.calendar;
+	return calendar->isEquivalentTo(*other.calendar);
 }
 
 unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() const {
@@ -71,13 +71,22 @@ unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunctio
 	return make_uniq<BindData>(context);
 }
 
-void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
-	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString())));
-	if (*tz == icu::TimeZone::getUnknown()) {
-		delete tz;
-		throw NotImplementedException("Unknown TimeZone '%s'", tz_id.GetString());
+bool ICUDateFunc::TrySetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
+	string tz_str = tz_id.GetString();
+	auto tz = ICUHelpers::TryGetTimeZone(tz_str);
+	if (!tz) {
+		return false;
 	}
-	calendar->adoptTimeZone(tz);
+	calendar->adoptTimeZone(tz.release());
+	return true;
+}
+
+void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id, string *error_message) {
+	string tz_str = tz_id.GetString();
+	auto tz = ICUHelpers::GetTimeZone(tz_str, error_message);
+	if (tz) {
+		calendar->adoptTimeZone(tz.release());
+	}
 }
 
 timestamp_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros) {

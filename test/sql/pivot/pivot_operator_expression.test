@@ -1,0 +1,38 @@
+# name: test/sql/pivot/pivot_operator_expression.test
+# description: Test expressions in pivot syntax
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+# pivot using an enum
+statement ok
+CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);
+
+statement ok
+INSERT INTO monthly_sales VALUES
+    (1, 10000, '1-JAN'),
+    (1, 400, '1-JAN'),
+    (2, 4500, '1-JAN'),
+    (2, 35000, '1-JAN'),
+    (1, 5000, '2-FEB'),
+    (1, 3000, '2-FEB'),
+    (2, 200, '2-FEB'),
+    (2, 90500, '2-FEB'),
+    (2, 2500, '3-MAR'),
+    (2, 9500, '3-MAR'),
+    (1, 8000, '4-APR'),
+    (1, 10000, '4-APR'),
+    (2, 800, '4-APR'),
+    (2, 4500, '4-APR');
+
+query IIIII rowsort
+PIVOT monthly_sales ON MONTH USING COALESCE(SUM(AMOUNT), 0)
+----
+1	10400	8000	0	18000
+2	39500	90700	12000	5300
+
+query I
+SELECT mode(column_type) FROM (DESCRIBE PIVOT monthly_sales ON MONTH USING SUM(AMOUNT)::INTEGER)
+----
+INTEGER

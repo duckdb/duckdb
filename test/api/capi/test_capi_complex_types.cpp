@@ -396,6 +396,13 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 	}
 
 	{
+		auto val = duckdb_create_time_ns({1});
+		auto result = duckdb_get_time_ns(val);
+		REQUIRE(result.nanos == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
 		auto val = duckdb_create_timestamp({1});
 		REQUIRE(duckdb_get_timestamp(nullptr).micros == 0);
 		auto result = duckdb_get_timestamp(val);
@@ -533,6 +540,15 @@ TEST_CASE("Binding values", "[capi]") {
 	auto value = duckdb_create_int64(42);
 	auto struct_value = duckdb_create_struct_value(struct_type, &value);
 	duckdb_destroy_logical_type(&struct_type);
+
+	// Fail with out-of-bounds.
+	duckdb_prepared_statement prepared_fail;
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT ?, ?", &prepared_fail) == DuckDBSuccess);
+	auto state = duckdb_bind_value(prepared_fail, 3, struct_value);
+	REQUIRE(state == DuckDBError);
+	auto error_msg = duckdb_prepare_error(prepared_fail);
+	REQUIRE(StringUtil::Contains(string(error_msg), "Can not bind to parameter number"));
+	duckdb_destroy_prepare(&prepared_fail);
 
 	duckdb::vector<duckdb_value> list_values {value};
 	auto list_value = duckdb_create_list_value(member_type, list_values.data(), member_count);
@@ -756,4 +772,303 @@ TEST_CASE("Array value construction") {
 		duckdb_destroy_value(&val);
 	}
 	duckdb_destroy_value(&array_value);
+}
+
+TEST_CASE("Map value construction (happy path)", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto key_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto value_type = duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE);
+	auto map_type = duckdb_create_map_type(key_type, value_type);
+
+	int32_t keys[] {100, 200, 300};
+	double values[] {1.2, 3.4, 5.6};
+	idx_t entry_count = 3;
+
+	duckdb::vector<duckdb_value> key_vals;
+	duckdb::vector<duckdb_value> value_vals;
+	for (idx_t i = 0; i < entry_count; ++i) {
+		key_vals.push_back(duckdb_create_int32(keys[i]));
+		value_vals.push_back(duckdb_create_double(values[i]));
+	}
+
+	auto map_value = duckdb_create_map_value(map_type, key_vals.data(), value_vals.data(), entry_count);
+	REQUIRE(map_value);
+	REQUIRE(duckdb_get_map_size(map_value) == entry_count);
+	for (idx_t i = 0; i < entry_count; ++i) {
+		auto key_val = duckdb_get_map_key(map_value, i);
+		REQUIRE(duckdb_get_int32(key_val) == keys[i]);
+		duckdb_destroy_value(&key_val);
+		auto value_val = duckdb_get_map_value(map_value, i);
+		REQUIRE(duckdb_get_double(value_val) == values[i]);
+		duckdb_destroy_value(&value_val);
+	}
+
+	duckdb_prepared_statement prepared;
+	REQUIRE(duckdb_prepare(tester.connection, "select ?", &prepared) == DuckDBSuccess);
+
+	duckdb_bind_value(prepared, 1, map_value);
+
+	auto result = tester.QueryPrepared(prepared);
+	REQUIRE(result->ChunkCount() == 1);
+	auto capi_chunk = result->FetchChunk(0);
+	REQUIRE(capi_chunk);
+	auto chunk = capi_chunk->GetChunk();
+	REQUIRE(chunk);
+	auto row_count = duckdb_data_chunk_get_size(chunk);
+	REQUIRE(row_count == 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+	REQUIRE(vector);
+	auto logical_type = duckdb_vector_get_column_type(vector);
+	REQUIRE(logical_type);
+	REQUIRE(duckdb_get_type_id(logical_type) == duckdb_type::DUCKDB_TYPE_MAP);
+	duckdb_destroy_logical_type(&logical_type);
+
+	auto list_entry_data = (uint64_t *)duckdb_vector_get_data(vector);
+	REQUIRE(list_entry_data);
+	REQUIRE(list_entry_data[0] == 0);           // offset
+	REQUIRE(list_entry_data[1] == entry_count); // length
+	REQUIRE(duckdb_list_vector_get_size(vector) == entry_count);
+	auto list_child = duckdb_list_vector_get_child(vector);
+	REQUIRE(list_child);
+	auto keys_vector = duckdb_struct_vector_get_child(list_child, 0);
+	REQUIRE(keys_vector);
+	auto values_vector = duckdb_struct_vector_get_child(list_child, 1);
+	REQUIRE(values_vector);
+	auto keys_data = (int32_t *)duckdb_vector_get_data(keys_vector);
+	REQUIRE(keys_data);
+	auto values_data = (double *)duckdb_vector_get_data(values_vector);
+	REQUIRE(values_data);
+	for (idx_t i = 0; i < entry_count; ++i) {
+		REQUIRE(keys_data[i] == keys[i]);
+		REQUIRE(values_data[i] == values[i]);
+	}
+
+	duckdb_destroy_prepare(&prepared);
+	duckdb_destroy_value(&map_value);
+	for (idx_t i = 0; i < entry_count; ++i) {
+		duckdb_destroy_value(&key_vals[i]);
+		duckdb_destroy_value(&value_vals[i]);
+	}
+	duckdb_destroy_logical_type(&map_type);
+	duckdb_destroy_logical_type(&value_type);
+	duckdb_destroy_logical_type(&key_type);
+}
+
+TEST_CASE("Map value construction (null map type)", "[capi]") {
+	duckdb::vector<duckdb_value> key_vals;
+	duckdb::vector<duckdb_value> value_vals;
+	auto map_value = duckdb_create_map_value(nullptr, key_vals.data(), value_vals.data(), 0);
+	REQUIRE(map_value == nullptr);
+}
+
+TEST_CASE("Map value construction (null keys array)", "[capi]") {
+	auto key_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto value_type = duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE);
+	auto map_type = duckdb_create_map_type(key_type, value_type);
+	duckdb::vector<duckdb_value> value_vals;
+	auto map_value = duckdb_create_map_value(map_type, nullptr, value_vals.data(), 0);
+	REQUIRE(map_value == nullptr);
+	duckdb_destroy_logical_type(&map_type);
+	duckdb_destroy_logical_type(&value_type);
+	duckdb_destroy_logical_type(&key_type);
+}
+
+TEST_CASE("Map value construction (null values array)", "[capi]") {
+	auto key_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto value_type = duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE);
+	auto map_type = duckdb_create_map_type(key_type, value_type);
+	duckdb::vector<duckdb_value> key_vals;
+	auto map_value = duckdb_create_map_value(map_type, key_vals.data(), nullptr, 0);
+	REQUIRE(map_value == nullptr);
+	duckdb_destroy_logical_type(&map_type);
+	duckdb_destroy_logical_type(&value_type);
+	duckdb_destroy_logical_type(&key_type);
+}
+
+TEST_CASE("Map value construction (invalid map type)", "[capi]") {
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	duckdb::vector<duckdb_value> key_vals;
+	duckdb::vector<duckdb_value> value_vals;
+	auto map_value = duckdb_create_map_value(int_type, key_vals.data(), value_vals.data(), 0);
+	REQUIRE(map_value == nullptr);
+	duckdb_destroy_logical_type(&int_type);
+}
+
+TEST_CASE("Map value construction (invalid key array value types)", "[capi]") {
+	auto key_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto value_type = duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE);
+	auto map_type = duckdb_create_map_type(key_type, value_type);
+
+	const char *keys[] {"a", "b", "c"}; // invalid type
+	double values[] {1.2, 3.4, 5.6};
+	idx_t entry_count = 3;
+
+	duckdb::vector<duckdb_value> key_vals;
+	duckdb::vector<duckdb_value> value_vals;
+	for (idx_t i = 0; i < entry_count; ++i) {
+		key_vals.push_back(duckdb_create_varchar(keys[i]));
+		value_vals.push_back(duckdb_create_double(values[i]));
+	}
+
+	auto map_value = duckdb_create_map_value(map_type, key_vals.data(), value_vals.data(), entry_count);
+	REQUIRE(map_value == nullptr);
+
+	for (idx_t i = 0; i < entry_count; ++i) {
+		duckdb_destroy_value(&key_vals[i]);
+		duckdb_destroy_value(&value_vals[i]);
+	}
+	duckdb_destroy_logical_type(&map_type);
+	duckdb_destroy_logical_type(&value_type);
+	duckdb_destroy_logical_type(&key_type);
+}
+
+TEST_CASE("Map value construction (invalid value array value types)", "[capi]") {
+	auto key_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto value_type = duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE);
+	auto map_type = duckdb_create_map_type(key_type, value_type);
+
+	int32_t keys[] {100, 200, 300};
+	const char *values[] {"a", "b", "c"}; // invalid type
+	idx_t entry_count = 3;
+
+	duckdb::vector<duckdb_value> key_vals;
+	duckdb::vector<duckdb_value> value_vals;
+	for (idx_t i = 0; i < entry_count; ++i) {
+		key_vals.push_back(duckdb_create_int32(keys[i]));
+		value_vals.push_back(duckdb_create_varchar(values[i]));
+	}
+
+	auto map_value = duckdb_create_map_value(map_type, key_vals.data(), value_vals.data(), entry_count);
+	REQUIRE(map_value == nullptr);
+
+	for (idx_t i = 0; i < entry_count; ++i) {
+		duckdb_destroy_value(&key_vals[i]);
+		duckdb_destroy_value(&value_vals[i]);
+	}
+	duckdb_destroy_logical_type(&map_type);
+	duckdb_destroy_logical_type(&value_type);
+	duckdb_destroy_logical_type(&key_type);
+}
+
+TEST_CASE("Union value construction (happy path)", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+
+	duckdb::vector<duckdb_logical_type> member_types {varchar_type, int_type};
+	duckdb::vector<const char *> member_names {"str", "int"};
+	idx_t member_count = 2;
+
+	auto union_type = duckdb_create_union_type(member_types.data(), member_names.data(), member_count);
+
+	idx_t tag_index = 1;
+	int32_t int32 = 42;
+	auto int32_value = duckdb_create_int32(int32);
+
+	auto union_value = duckdb_create_union_value(union_type, tag_index, int32_value);
+	REQUIRE(union_value);
+
+	duckdb_prepared_statement prepared;
+	REQUIRE(duckdb_prepare(tester.connection, "select ?", &prepared) == DuckDBSuccess);
+
+	duckdb_bind_value(prepared, 1, union_value);
+
+	auto result = tester.QueryPrepared(prepared);
+	REQUIRE(result->ChunkCount() == 1);
+	auto capi_chunk = result->FetchChunk(0);
+	REQUIRE(capi_chunk);
+	auto chunk = capi_chunk->GetChunk();
+	REQUIRE(chunk);
+	auto row_count = duckdb_data_chunk_get_size(chunk);
+	REQUIRE(row_count == 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+	REQUIRE(vector);
+	auto logical_type = duckdb_vector_get_column_type(vector);
+	REQUIRE(logical_type);
+	REQUIRE(duckdb_get_type_id(logical_type) == duckdb_type::DUCKDB_TYPE_UNION);
+	duckdb_destroy_logical_type(&logical_type);
+
+	auto tags_vector = duckdb_struct_vector_get_child(vector, 0);
+	REQUIRE(tags_vector);
+	auto tags_data = (uint8_t *)duckdb_vector_get_data(tags_vector);
+	REQUIRE(tags_data);
+	REQUIRE(tags_data[0] == tag_index);
+	auto value_vector = duckdb_struct_vector_get_child(vector, tag_index + 1);
+	REQUIRE(value_vector);
+	auto value_data = (int32_t *)duckdb_vector_get_data(value_vector);
+	REQUIRE(value_data);
+	REQUIRE(value_data[0] == int32);
+
+	duckdb_destroy_prepare(&prepared);
+	duckdb_destroy_value(&union_value);
+	duckdb_destroy_value(&int32_value);
+	duckdb_destroy_logical_type(&union_type);
+	duckdb_destroy_logical_type(&int_type);
+	duckdb_destroy_logical_type(&varchar_type);
+}
+
+TEST_CASE("Union value construction (null union type)", "[capi]") {
+	auto value = duckdb_create_int32(42);
+	auto union_value = duckdb_create_union_value(nullptr, 1, value);
+	REQUIRE(union_value == nullptr);
+	duckdb_destroy_value(&value);
+}
+
+TEST_CASE("Union value construction (null value pointer)", "[capi]") {
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	duckdb_logical_type member_types[] {varchar_type, int_type};
+	const char *member_names[] {"str", "int"};
+	idx_t member_count = 2;
+	auto union_type = duckdb_create_union_type(member_types, member_names, member_count);
+	auto union_value = duckdb_create_union_value(union_type, 1, nullptr);
+	REQUIRE(union_value == nullptr);
+	duckdb_destroy_logical_type(&union_type);
+	duckdb_destroy_logical_type(&int_type);
+	duckdb_destroy_logical_type(&varchar_type);
+}
+
+TEST_CASE("Union value construction (invalid union type)", "[capi]") {
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto value = duckdb_create_int32(42);
+	auto union_value = duckdb_create_union_value(varchar_type, 1, value);
+	REQUIRE(union_value == nullptr);
+	duckdb_destroy_value(&value);
+	duckdb_destroy_logical_type(&varchar_type);
+}
+
+TEST_CASE("Union value construction (invalid tag index)", "[capi]") {
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	duckdb_logical_type member_types[] {varchar_type, int_type};
+	const char *member_names[] {"str", "int"};
+	idx_t member_count = 2;
+	auto union_type = duckdb_create_union_type(member_types, member_names, member_count);
+	auto value = duckdb_create_int32(42);
+	auto union_value = duckdb_create_union_value(union_type, 2, value);
+	REQUIRE(union_value == nullptr);
+	duckdb_destroy_value(&value);
+	duckdb_destroy_logical_type(&union_type);
+	duckdb_destroy_logical_type(&int_type);
+	duckdb_destroy_logical_type(&varchar_type);
+}
+
+TEST_CASE("Union value construction (invalid value type)", "[capi]") {
+	auto varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	duckdb_logical_type member_types[] {varchar_type, int_type};
+	const char *member_names[] {"str", "int"};
+	idx_t member_count = 2;
+	auto union_type = duckdb_create_union_type(member_types, member_names, member_count);
+	auto value = duckdb_create_double(1.2);
+	auto union_value = duckdb_create_union_value(union_type, 1, value);
+	REQUIRE(union_value == nullptr);
+	duckdb_destroy_value(&value);
+	duckdb_destroy_logical_type(&union_type);
+	duckdb_destroy_logical_type(&int_type);
+	duckdb_destroy_logical_type(&varchar_type);
 }

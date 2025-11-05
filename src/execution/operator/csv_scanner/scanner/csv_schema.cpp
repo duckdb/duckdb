@@ -76,8 +76,8 @@ void CSVSchema::MergeSchemas(CSVSchema &other, bool null_padding) {
 	}
 }
 
-CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read_p,
-                     const bool empty_p)
+CSVSchema::CSVSchema(const vector<string> &names, const vector<LogicalType> &types, const string &file_path,
+                     idx_t rows_read_p, const bool empty_p)
     : rows_read(rows_read_p), empty(empty_p) {
 	Initialize(names, types, file_path);
 }
@@ -90,8 +90,8 @@ void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	for (idx_t i = 0; i < names.size(); i++) {
 		// Populate our little schema
-		auto name = names.at(i);
-		auto type = types.at(i);
+		const auto &name = names.at(i);
+		const auto &type = types.at(i);
 		columns.push_back({name, type});
 		name_idx_map[names[i]] = i;
 	}
@@ -111,6 +111,14 @@ vector<LogicalType> CSVSchema::GetTypes() const {
 		types.push_back(column.type);
 	}
 	return types;
+}
+
+void CSVSchema::ReplaceNullWithVarchar() {
+	for (auto &column : columns) {
+		if (column.type.id() == LogicalTypeId::SQLNULL) {
+			column.type = LogicalType::VARCHAR;
+		}
+	}
 }
 
 bool CSVSchema::Empty() const {
@@ -207,7 +215,12 @@ bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_resul
 	}
 
 	// Lets suggest some potential fixes
-	error << "Potential Fix: Since your schema has a mismatch, consider setting union_by_name=true.";
+	error << "Potential Fixes "
+	      << "\n";
+	error << "* Consider setting union_by_name=true."
+	      << "\n";
+	error << "* Consider setting files_to_sniff to a higher value (e.g., files_to_sniff = -1)"
+	      << "\n";
 	if (!match) {
 		error_message = error.str();
 	}

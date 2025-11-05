@@ -7,6 +7,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/original/std/sstream.hpp"
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -14,7 +15,6 @@
 #include <cctype>
 #include <iomanip>
 #include <memory>
-#include <sstream>
 #include <stdarg.h>
 #include <string.h>
 #include <stack>
@@ -27,7 +27,7 @@ namespace duckdb {
 
 string StringUtil::GenerateRandomName(idx_t length) {
 	RandomEngine engine;
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	for (idx_t i = 0; i < length; i++) {
 		ss << "0123456789abcdef"[engine.NextRandomInteger(0, 15)];
 	}
@@ -105,7 +105,7 @@ string StringUtil::Repeat(const string &str, idx_t n) {
 namespace string_util_internal {
 
 inline void SkipSpaces(const string &str, idx_t &index) {
-	while (index < str.size() && std::isspace(str[index])) {
+	while (index < str.size() && StringUtil::CharacterIsSpace(str[index])) {
 		index++;
 	}
 }
@@ -136,7 +136,9 @@ inline string TakePossiblyQuotedItem(const string &str, idx_t &index, char delim
 		ConsumeLetter(str, index, quote);
 	} else {
 		TakeWhile(
-		    str, index, [delimiter, quote](char c) { return c != delimiter && c != quote && !std::isspace(c); }, entry);
+		    str, index,
+		    [delimiter, quote](char c) { return c != delimiter && c != quote && !StringUtil::CharacterIsSpace(c); },
+		    entry);
 	}
 
 	return entry;
@@ -285,9 +287,13 @@ bool StringUtil::IsUpper(const string &str) {
 
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
 uint64_t StringUtil::CIHash(const string &str) {
+	return StringUtil::CIHash(str.c_str(), str.size());
+}
+
+uint64_t StringUtil::CIHash(const char *str, idx_t size) {
 	uint32_t hash = 0;
-	for (auto c : str) {
-		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(c)));
+	for (idx_t i = 0; i < size; i++) {
+		hash += static_cast<uint32_t>(StringUtil::CharacterToLower(static_cast<char>(str[i])));
 		hash += hash << 10;
 		hash ^= hash >> 6;
 	}
@@ -297,17 +303,21 @@ uint64_t StringUtil::CIHash(const string &str) {
 	return hash;
 }
 
-bool StringUtil::CIEquals(const string &l1, const string &l2) {
-	if (l1.size() != l2.size()) {
+bool StringUtil::CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size) {
+	if (l1_size != l2_size) {
 		return false;
 	}
 	const auto charmap = ASCII_TO_LOWER_MAP;
-	for (idx_t c = 0; c < l1.size(); c++) {
+	for (idx_t c = 0; c < l1_size; c++) {
 		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
 		}
 	}
 	return true;
+}
+
+bool StringUtil::CIEquals(const string &l1, const string &l2) {
+	return CIEquals(l1.c_str(), l1.size(), l2.c_str(), l2.size());
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
@@ -338,7 +348,7 @@ idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
 }
 
 vector<string> StringUtil::Split(const string &str, char delimiter) {
-	std::stringstream ss(str);
+	duckdb::stringstream ss(str);
 	vector<string> lines;
 	string temp;
 	while (getline(ss, temp, delimiter)) {
@@ -390,7 +400,10 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_
 		return vector<string>();
 	}
 	sort(scores.begin(), scores.end(), [](const pair<string, double> &a, const pair<string, double> &b) -> bool {
-		return a.second > b.second || (a.second == b.second && a.first.size() < b.first.size());
+		if (a.second != b.second) {
+			return a.second > b.second;
+		}
+		return StringUtil::CILessThan(a.first, b.first);
 	});
 	vector<string> result;
 	result.push_back(scores[0].first);
@@ -532,46 +545,83 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
-unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
-	unordered_map<string, string> result;
+static unique_ptr<ComplexJSON> ParseJSON(const string &json, yyjson_doc *doc, yyjson_val *root, bool ignore_errors) {
+	auto result = make_uniq<ComplexJSON>();
+	switch (yyjson_get_tag(root)) {
+	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE: {
+		size_t idx, max;
+		yyjson_val *val;
+		yyjson_arr_foreach(root, idx, max, val) {
+			result->AddArrayElement(ParseJSON(json, doc, val, ignore_errors));
+		}
+		return result;
+	}
+	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE: {
+		size_t idx, max;
+		yyjson_val *key, *value;
+		yyjson_obj_foreach(root, idx, max, key, value) {
+			const auto key_val = yyjson_get_str(key);
+			const auto key_len = yyjson_get_len(key);
+			result->AddObjectEntry(string(key_val, key_len), ParseJSON(json, doc, value, ignore_errors));
+		}
+		return result;
+	}
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE: {
+		// Since this is a string, we can directly add the value
+		const auto value_val = yyjson_get_str(root);
+		const auto value_len = yyjson_get_len(root);
+		return make_uniq<ComplexJSON>(string(value_val, value_len));
+	}
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
+	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE: {
+		// boolean values
+		const bool bool_val = yyjson_get_bool(root);
+		return make_uniq<ComplexJSON>(bool_val ? "true" : "false");
+	}
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
+		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_uint(root)));
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
+		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_sint(root)));
+	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
+		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_real(root)));
+	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
+		return make_uniq<ComplexJSON>("null");
+	default:
+		yyjson_doc_free(doc);
+		throw SerializationException("Failed to parse JSON string: %s", json);
+	}
+}
+
+unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore_errors) {
+	auto result = make_uniq<ComplexJSON>(json);
 	if (json.empty()) {
 		return result;
 	}
 	yyjson_read_flag flags = YYJSON_READ_ALLOW_INVALID_UNICODE;
 	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), flags);
 	if (!doc) {
+		if (ignore_errors) {
+			return result;
+		}
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
 	yyjson_val *root = yyjson_doc_get_root(doc);
 	if (!root || yyjson_get_type(root) != YYJSON_TYPE_OBJ) {
 		yyjson_doc_free(doc);
+		if (ignore_errors) {
+			return result;
+		}
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
-	yyjson_obj_iter iter;
-	yyjson_obj_iter_init(root, &iter);
-	yyjson_val *key, *value;
-	while ((key = yyjson_obj_iter_next(&iter))) {
-		value = yyjson_obj_iter_get_val(key);
-		if (yyjson_get_type(value) != YYJSON_TYPE_STR) {
-			yyjson_doc_free(doc);
-			throw SerializationException("Failed to parse JSON string: %s", json);
-		}
-		auto key_val = yyjson_get_str(key);
-		auto key_len = yyjson_get_len(key);
-		auto value_val = yyjson_get_str(value);
-		auto value_len = yyjson_get_len(value);
-		result.emplace(string(key_val, key_len), string(value_val, value_len));
-	}
+
+	result = ParseJSON(json, doc, root, ignore_errors);
 	yyjson_doc_free(doc);
 	return result;
 }
 
-string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
-	for (auto &entry : map) {
-		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
-		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
-		yyjson_mut_obj_add(root, key, value);
-	}
+string WriteJsonToString(yyjson_mut_doc *doc) {
 	yyjson_write_err err;
 	size_t len;
 	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
@@ -590,12 +640,88 @@ string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_do
 	// Return the result
 	return result;
 }
+
+string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
+	for (auto &entry : map) {
+		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
+		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
+		yyjson_mut_obj_add(root, key, value);
+	}
+	return WriteJsonToString(doc);
+}
 string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
 	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
 	yyjson_mut_val *root = yyjson_mut_obj(doc);
 	yyjson_mut_doc_set_root(doc, root);
 
 	return ToJsonMapInternal(map, doc, root);
+}
+
+string ComplexJSON::GetValue(const string &key) const {
+	if (type == ComplexJSONType::OBJECT) {
+		if (obj_value.find(key) != obj_value.end()) {
+			return GetValueRecursive(*obj_value.at(key));
+		}
+	}
+	// Object either doesn't exist or this is just a string
+	return "";
+}
+
+string ComplexJSON::GetValue(const idx_t &index) const {
+	if (type == ComplexJSONType::ARRAY) {
+		if (index >= arr_value.size()) {
+			return "";
+		}
+		return GetValueRecursive(*arr_value[index]);
+	}
+	return "";
+}
+
+string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
+	if (child.type == ComplexJSONType::OBJECT) {
+		// We have to construct the nested json
+		yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+		yyjson_mut_val *root = yyjson_mut_obj(doc);
+		yyjson_mut_doc_set_root(doc, root);
+		for (const auto &object : child.obj_value) {
+			auto key = yyjson_mut_strncpy(doc, object.first.c_str(), object.first.size());
+			auto value_str = GetValueRecursive(*object.second);
+			auto value = yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+			yyjson_mut_obj_add(root, key, value);
+		}
+		return WriteJsonToString(doc);
+	} else if (child.type == ComplexJSONType::ARRAY) {
+		yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+		yyjson_mut_val *root = yyjson_mut_arr(doc);
+		yyjson_mut_doc_set_root(doc, root);
+		for (const auto &elem : child.arr_value) {
+			auto value_str = GetValueRecursive(*elem);
+			auto value = yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+			yyjson_mut_arr_append(root, value);
+		}
+		return WriteJsonToString(doc);
+	} else {
+		// simple string we can just write
+		return child.str_value;
+	}
+}
+string StringUtil::ToComplexJSONMap(const ComplexJSON &complex_json) {
+	return ComplexJSON::GetValueRecursive(complex_json);
+}
+
+string StringUtil::ValidateJSON(const char *data, const idx_t &len) {
+	// Same flags as in JSON extension
+	static constexpr auto READ_FLAG =
+	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;
+	yyjson_read_err error;
+	yyjson_doc *doc = yyjson_read_opts((char *)data, len, READ_FLAG, nullptr, &error); // NOLINT: for yyjson
+	if (error.code != YYJSON_READ_SUCCESS) {
+		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. Input: \"%s\"", error.pos, error.msg,
+		                          string(data, len));
+	}
+
+	yyjson_doc_free(doc);
+	return string();
 }
 
 string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
@@ -615,7 +741,6 @@ string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
 }
 
 string StringUtil::GetFileName(const string &file_path) {
-
 	idx_t pos = file_path.find_last_of("/\\");
 	if (pos == string::npos) {
 		return file_path;
@@ -772,6 +897,13 @@ void StringUtil::URLDecodeBuffer(const char *input, idx_t input_size, char *outp
 	if (!Utf8Proc::IsValid(output_start, NumericCast<idx_t>(output - output_start))) {
 		throw InvalidInputException("Failed to decode string \"%s\" using URL decoding - decoded value is invalid UTF8",
 		                            string(input, input_size));
+	}
+}
+
+void StringUtil::SkipBOM(const char *buffer_ptr, const idx_t &buffer_size, idx_t &buffer_pos) {
+	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' && buffer_ptr[2] == '\xBF' &&
+	    buffer_pos == 0) {
+		buffer_pos = 3;
 	}
 }
 

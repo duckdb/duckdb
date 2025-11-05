@@ -7,6 +7,9 @@ WindowAggregateStates::WindowAggregateStates(const AggregateObject &aggr)
 }
 
 void WindowAggregateStates::Initialize(idx_t count) {
+	// Don't leak - every Initialize must be matched with a Destroy
+	D_ASSERT(states.empty());
+
 	states.resize(count * state_size);
 	auto state_ptr = states.data();
 

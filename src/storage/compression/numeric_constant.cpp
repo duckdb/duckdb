@@ -4,13 +4,14 @@
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-unique_ptr<SegmentScanState> ConstantInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ConstantInitScan(const QueryContext &context, ColumnSegment &segment) {
 	return nullptr;
 }
 
@@ -92,7 +93,7 @@ void ConstantFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 //===--------------------------------------------------------------------===//
 void ConstantSelectValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                             const SelectionVector &sel, idx_t sel_count) {
-	ConstantScanFunctionValidity(segment, state, vector_count, result);
+	ConstantScanFunctionValidity(segment, state, sel_count, result);
 }
 
 template <class T>
@@ -104,7 +105,8 @@ void ConstantSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
-void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &filters_valid_values) {
+void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool &filters_nulls,
+                       bool &filters_valid_values, TableFilterState &filter_state) {
 	filters_nulls = false;
 	filters_valid_values = false;
 
@@ -113,11 +115,14 @@ void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &fil
 		break;
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
+		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
 		filters_nulls = true;
 		filters_valid_values = true;
-		for (auto &child_filter : conjunction_or.child_filters) {
+		for (idx_t child_idx = 0; child_idx < conjunction_or.child_filters.size(); child_idx++) {
+			auto &child_filter = *conjunction_or.child_filters[child_idx];
+			auto &child_state = *state.child_states[child_idx];
 			bool child_filters_nulls, child_filters_valid_values;
-			FiltersNullValues(*child_filter, child_filters_nulls, child_filters_valid_values);
+			FiltersNullValues(type, child_filter, child_filters_nulls, child_filters_valid_values, child_state);
 			filters_nulls = filters_nulls && child_filters_nulls;
 			filters_valid_values = filters_valid_values && child_filters_valid_values;
 		}
@@ -125,11 +130,14 @@ void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &fil
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
+		auto &state = filter_state.Cast<ConjunctionAndFilterState>();
 		filters_nulls = false;
 		filters_valid_values = false;
-		for (auto &child_filter : conjunction_and.child_filters) {
+		for (idx_t child_idx = 0; child_idx < conjunction_and.child_filters.size(); child_idx++) {
+			auto &child_filter = *conjunction_and.child_filters[child_idx];
+			auto &child_state = *state.child_states[child_idx];
 			bool child_filters_nulls, child_filters_valid_values;
-			FiltersNullValues(*child_filter, child_filters_nulls, child_filters_valid_values);
+			FiltersNullValues(type, child_filter, child_filters_nulls, child_filters_valid_values, child_state);
 			filters_nulls = filters_nulls || child_filters_nulls;
 			filters_valid_values = filters_valid_values || child_filters_valid_values;
 		}
@@ -144,16 +152,25 @@ void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &fil
 	case TableFilterType::IS_NOT_NULL:
 		filters_nulls = true;
 		break;
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		auto &state = filter_state.Cast<ExpressionFilterState>();
+		Value val(type);
+		filters_nulls = expr_filter.EvaluateWithConstant(state.executor, val);
+		filters_valid_values = false;
+		break;
+	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection in validity select");
 	}
 }
 
 void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                            SelectionVector &sel, idx_t &sel_count, const TableFilter &filter) {
+                            SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
+                            TableFilterState &filter_state) {
 	// check what effect the filter has on NULL values
 	bool filters_nulls, filters_valid_values;
-	FiltersNullValues(filter, filters_nulls, filters_valid_values);
+	FiltersNullValues(result.GetType(), filter, filters_nulls, filters_valid_values, filter_state);
 
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
@@ -246,7 +263,7 @@ bool ConstantFun::TypeIsSupported(const PhysicalType physical_type) {
 	case PhysicalType::DOUBLE:
 		return true;
 	default:
-		throw InternalException("Unsupported type for constant function");
+		return false;
 	}
 }
 

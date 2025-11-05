@@ -178,7 +178,7 @@ SELECT DISTINCT * FROM structs ORDER BY ALL
 NULL	{'x': 13, 'y': Somateria mollissima}
 1	{'x': 1, 'y': a}
 2	{'x': NULL, 'y': NULL}
-3	{'x': 0, 'y': }
+3	{'x': 0, 'y': ''}
 4	{'x': 2, 'y': c}
 5	{'x': 9, 'y': i}
 
@@ -188,7 +188,7 @@ SELECT pk, p FROM structs ORDER BY pk;
 NULL	{'x': 13, 'y': Somateria mollissima}
 1	{'x': 1, 'y': a}
 2	{'x': NULL, 'y': NULL}
-3	{'x': 0, 'y': }
+3	{'x': 0, 'y': ''}
 4	{'x': 2, 'y': c}
 5	{'x': 9, 'y': i}
 
@@ -197,7 +197,7 @@ SELECT fk, pk, p FROM integers, structs WHERE fk = pk ORDER BY ALL
 ----
 1	1	{'x': 1, 'y': a}
 2	2	{'x': NULL, 'y': NULL}
-3	3	{'x': 0, 'y': }
+3	3	{'x': 0, 'y': ''}
 5	5	{'x': 9, 'y': i}
 
 query III
@@ -206,7 +206,7 @@ SELECT fk, pk, p FROM integers LEFT OUTER JOIN structs ON integers.fk=structs.pk
 NULL	NULL	NULL
 1	1	{'x': 1, 'y': a}
 2	2	{'x': NULL, 'y': NULL}
-3	3	{'x': 0, 'y': }
+3	3	{'x': 0, 'y': ''}
 5	5	{'x': 9, 'y': i}
 
 query III
@@ -216,7 +216,7 @@ WHERE pk < 5 AND fk > 1
 ORDER BY ALL
 ----
 2	2	{'x': NULL, 'y': NULL}
-3	3	{'x': 0, 'y': }
+3	3	{'x': 0, 'y': ''}
 
 query III
 SELECT fk, pk, p FROM structs RIGHT OUTER JOIN integers ON integers.fk=structs.pk ORDER BY ALL
@@ -224,7 +224,7 @@ SELECT fk, pk, p FROM structs RIGHT OUTER JOIN integers ON integers.fk=structs.p
 NULL	NULL	NULL
 1	1	{'x': 1, 'y': a}
 2	2	{'x': NULL, 'y': NULL}
-3	3	{'x': 0, 'y': }
+3	3	{'x': 0, 'y': ''}
 5	5	{'x': 9, 'y': i}
 
 
@@ -236,7 +236,7 @@ NULL	NULL	{'x': 13, 'y': Somateria mollissima}
 NULL	4	{'x': 2, 'y': c}
 1	1	{'x': 1, 'y': a}
 2	2	{'x': NULL, 'y': NULL}
-3	3	{'x': 0, 'y': }
+3	3	{'x': 0, 'y': ''}
 5	5	{'x': 9, 'y': i}
 
 # Payload is STRUCT<x: LIST<INTEGER>, y: LIST<VARCHAR> >

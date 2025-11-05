@@ -13,12 +13,13 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
-static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &probe,
-                                                     unique_ptr<PhysicalOperator> &build, ClientContext &context) {
-
+optional_ptr<PhysicalOperator>
+PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe, PhysicalOperator &build) {
 	// Plan a inverse nested loop join, then aggregate the values to choose the optimal match for each probe row.
 	// Use a row number primary key to handle duplicate probe values.
 	// aggregate the fields to produce at most one match per probe row,
@@ -26,7 +27,7 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 	//
 	//		 ∏ * \ pk
 	//		 |
-	//		 Γ pk;first(P),arg_xxx(B,inequality)
+	//		 Γ pk;first(P),arg_xxx_null(B,inequality)
 	//		 |
 	//		 ∏ *,inequality
 	//		 |
@@ -41,6 +42,10 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 	join_op.types = op.children[1]->types;
 	const auto &probe_types = op.children[0]->types;
 	join_op.types.insert(join_op.types.end(), probe_types.begin(), probe_types.end());
+
+	// Project pk
+	LogicalType pk_type = LogicalType::BIGINT;
+	join_op.types.emplace_back(pk_type);
 
 	//	Fill in the projection maps to simplify the code below
 	//	Since NLJ doesn't support projection, but ASOF does,
@@ -59,9 +64,25 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 		}
 	}
 
-	// Project pk
-	LogicalType pk_type = LogicalType::BIGINT;
-	join_op.types.emplace_back(pk_type);
+	// Remap predicate column references.
+	if (op.predicate) {
+		vector<idx_t> swap_projection_map;
+		const auto rhs_width = op.children[1]->types.size();
+		for (const auto &l : join_op.right_projection_map) {
+			swap_projection_map.emplace_back(l + rhs_width);
+		}
+		for (const auto &r : join_op.left_projection_map) {
+			swap_projection_map.emplace_back(r);
+		}
+		join_op.predicate = op.predicate->Copy();
+		ExpressionIterator::EnumerateExpression(join_op.predicate, [&](Expression &child) {
+			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+				auto &col_idx = child.Cast<BoundReferenceExpression>().index;
+				const auto new_idx = swap_projection_map[col_idx];
+				col_idx = new_idx;
+			}
+		});
+	}
 
 	auto binder = Binder::CreateBinder(context);
 	FunctionBinder function_binder(*binder);
@@ -82,16 +103,21 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 		case ExpressionType::COMPARE_GREATERTHAN:
 			D_ASSERT(asof_idx == op.conditions.size());
 			asof_idx = i;
-			arg_min_max = "arg_max";
+			arg_min_max = "arg_max_null";
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_LESSTHAN:
 			D_ASSERT(asof_idx == op.conditions.size());
 			asof_idx = i;
-			arg_min_max = "arg_min";
+			arg_min_max = "arg_min_null";
+			break;
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
 			break;
 		default:
-			break;
+			//	Unsupported NLJ comparison
+			return nullptr;
 		}
 	}
 
@@ -115,9 +141,9 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 		return nullptr;
 	}
 
-	QueryErrorContext error_context;
-	auto arg_min_max_func = binder->GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, SYSTEM_CATALOG, DEFAULT_SCHEMA,
-	                                                arg_min_max, OnEntryNotFound::RETURN_NULL, error_context);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, arg_min_max);
+	auto arg_min_max_func =
+	    binder->GetCatalogEntry(SYSTEM_CATALOG, DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
 	//	Can't find the arg_min/max aggregate we need, so give up before we break anything.
 	if (!arg_min_max_func || arg_min_max_func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		return nullptr;
@@ -194,19 +220,19 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 	pk->alias = "row_number";
 	window_select.emplace_back(std::move(pk));
 
-	auto window_types = probe->types;
+	auto window_types = probe.GetTypes();
 	window_types.emplace_back(pk_type);
 
-	idx_t probe_cardinality = op.children[0]->EstimateCardinality(context);
-	auto window = make_uniq<PhysicalStreamingWindow>(window_types, std::move(window_select), probe_cardinality);
-	window->children.emplace_back(std::move(probe));
+	const auto probe_cardinality = op.EstimateCardinality(context);
+	auto &window = Make<PhysicalStreamingWindow>(window_types, std::move(window_select), probe_cardinality);
+	window.children.emplace_back(probe);
 
-	auto join = make_uniq<PhysicalNestedLoopJoin>(join_op, std::move(build), std::move(window),
-	                                              std::move(join_op.conditions), join_op.join_type, probe_cardinality);
+	auto &join = Make<PhysicalNestedLoopJoin>(join_op, build, window, std::move(join_op.conditions), join_op.join_type,
+	                                          probe_cardinality);
 
 	// Plan a projection of the compare column
-	auto comp = make_uniq<PhysicalProjection>(std::move(comp_types), std::move(comp_list), probe_cardinality);
-	comp->children.emplace_back(std::move(join));
+	auto &comp_proj = Make<PhysicalProjection>(std::move(comp_types), std::move(comp_list), probe_cardinality);
+	comp_proj.children.emplace_back(join);
 
 	// Plan an aggregation on the output of the join, grouping by key;
 	// TODO: Can we make it perfect?
@@ -214,33 +240,32 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 	vector<unique_ptr<Expression>> groups;
 	auto pk_ref = make_uniq<BoundReferenceExpression>(pk_type, join_op.types.size() - 1);
 	groups.emplace_back(std::move(pk_ref));
-	auto aggr = make_uniq<PhysicalHashAggregate>(context, aggr_types, std::move(aggregates), std::move(groups),
-	                                             probe_cardinality);
-	aggr->children.emplace_back(std::move(comp));
+
+	auto &aggr =
+	    Make<PhysicalHashAggregate>(context, aggr_types, std::move(aggregates), std::move(groups), probe_cardinality);
+	aggr.children.emplace_back(comp_proj);
 
 	// Project away primary/grouping key
 	// The aggregates were generated in the output order of the original ASOF,
 	// so we just have to shift away the pk
 	vector<unique_ptr<Expression>> project_list;
-	for (column_t i = 1; i < aggr->types.size(); ++i) {
-		auto col_ref = make_uniq<BoundReferenceExpression>(aggr->types[i], i);
+	for (column_t i = 1; i < aggr.GetTypes().size(); ++i) {
+		auto col_ref = make_uniq<BoundReferenceExpression>(aggr.GetTypes()[i], i);
 		project_list.emplace_back(std::move(col_ref));
 	}
 
-	auto proj = make_uniq<PhysicalProjection>(op.types, std::move(project_list), probe_cardinality);
-	proj->children.emplace_back(std::move(aggr));
-
-	return std::move(proj);
+	auto &proj = Make<PhysicalProjection>(op.types, std::move(project_list), probe_cardinality);
+	proj.children.emplace_back(aggr);
+	return proj;
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
+PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
-	auto left = CreatePlan(*op.children[0]);
-	auto right = CreatePlan(*op.children[1]);
-	D_ASSERT(left && right);
+	auto &left = CreatePlan(*op.children[0]);
+	auto &right = CreatePlan(*op.children[1]);
 
 	//	Validate
 	vector<idx_t> equi_indexes;
@@ -265,21 +290,24 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparis
 	}
 	D_ASSERT(asof_idx < op.conditions.size());
 
-	auto &config = ClientConfig::GetConfig(context);
-	if (!config.force_asof_iejoin) {
-		if (op.children[0]->has_estimated_cardinality && lhs_cardinality <= config.asof_loop_join_threshold) {
-			auto result = PlanAsOfLoopJoin(op, left, right, context);
+	// If there is a non-comparison predicate, we have to use NLJ.
+	const bool has_predicate = op.predicate.get();
+	const bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
+	if (!force_asof_join || has_predicate) {
+		const idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
+		if (has_predicate || (op.children[0]->has_estimated_cardinality && lhs_cardinality < asof_join_threshold)) {
+			auto result = PlanAsOfLoopJoin(op, left, right);
 			if (result) {
-				return result;
+				return *result;
 			}
 		}
-		return make_uniq<PhysicalAsOfJoin>(op, std::move(left), std::move(right));
+		return Make<PhysicalAsOfJoin>(op, left, right);
 	}
 
 	//	Strip extra column from rhs projections
 	auto &right_projection_map = op.right_projection_map;
 	if (right_projection_map.empty()) {
-		const auto right_count = right->types.size();
+		const auto right_count = right.GetTypes().size();
 		right_projection_map.reserve(right_count);
 		for (column_t i = 0; i < right_count; ++i) {
 			right_projection_map.emplace_back(i);
@@ -322,8 +350,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparis
 	auto &window_types = op.children[1]->types;
 	window_types.emplace_back(asof_type);
 
-	auto window = make_uniq<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);
-	window->children.emplace_back(std::move(right));
+	auto &window = Make<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);
+	window.children.emplace_back(right);
 
 	// IEJoin(left, window, conditions || asof_comp ~op asof_end)
 	JoinCondition asof_upper;
@@ -347,9 +375,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparis
 	}
 
 	op.conditions.emplace_back(std::move(asof_upper));
-
-	return make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions), op.join_type,
-	                                 lhs_cardinality);
+	return Make<PhysicalIEJoin>(op, left, window, std::move(op.conditions), op.join_type, lhs_cardinality);
 }
 
 } // namespace duckdb

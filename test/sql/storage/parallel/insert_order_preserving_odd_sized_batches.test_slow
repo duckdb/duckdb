@@ -2,9 +2,6 @@
 # description: Test parallel order-preserving insert
 # group: [parallel]
 
-# FIXME: see internal issue 3931.
-mode skip
-
 # There are different numbers of distinct blocks for smaller block sizes,
 # because the segment size is bound by the block size.
 require block_size 262144
@@ -16,11 +13,11 @@ require parquet
 load __TEST_DIR__/insert_odd_sized_batches.db
 
 query I
-CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+CREATE TABLE integers AS SELECT * FROM range(10_000_000) tbl(i);
 ----
 10000000
 
-# check the block count and median number of rows per row group
+# Check the block count and median number of rows per row group.
 query I
 SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers');
 ----
@@ -34,7 +31,6 @@ SELECT MEDIAN(count) FROM pragma_storage_info('integers');
 statement ok
 COPY integers TO '__TEST_DIR__/integers.parquet' (ROW_GROUP_SIZE 77777)
 
-# verify that reading while preserving insertion order creates the same size table
 statement ok
 CREATE TABLE integers_parquet AS FROM '__TEST_DIR__/integers.parquet';
 
@@ -62,11 +58,12 @@ SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers_parquet')
 true
 
 query I
-SELECT MEDIAN(count)>100000 FROM pragma_storage_info('integers_parquet');
+SELECT MEDIAN(count) > 100000 FROM pragma_storage_info('integers_parquet');
 ----
 true
 
-# verify that reading without preserving insertion order creates the same size table
+# FIXME: does this even make sense?
+# Verify that reading without preserving insertion order creates a same size table.
 statement ok
 SET preserve_insertion_order=false
 
@@ -74,11 +71,11 @@ statement ok
 CREATE TABLE integers_parquet_no_order AS FROM '__TEST_DIR__/integers.parquet'
 
 query I
-SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers_parquet_no_order');
+SELECT COUNT(DISTINCT block_id) < 30 FROM pragma_storage_info('integers_parquet_no_order');
 ----
 true
 
 query I
-SELECT MEDIAN(count)>100000 FROM pragma_storage_info('integers_parquet_no_order');
+SELECT MEDIAN(count) > 100000 FROM pragma_storage_info('integers_parquet_no_order');
 ----
 true

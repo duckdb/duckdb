@@ -51,61 +51,26 @@ static void MapValuesFunction(DataChunk &args, ExpressionState &state, Vector &r
 	MapKeyValueFunction(args, state, result, MapVector::GetValues);
 }
 
-static unique_ptr<FunctionData> MapKeyValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments,
-                                                const LogicalType &(*type_func)(const LogicalType &)) {
-	if (arguments.size() != 1) {
-		throw InvalidInputException("Too many arguments provided, only expecting a single map");
-	}
-	auto &map = arguments[0]->return_type;
-
-	if (map.id() == LogicalTypeId::UNKNOWN) {
-		// Prepared statement
-		bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
-		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
-		return nullptr;
-	}
-
-	if (map.id() == LogicalTypeId::SQLNULL) {
-		// Input is NULL, output is NULL[]
-		bound_function.return_type = LogicalType::LIST(LogicalTypeId::SQLNULL);
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
-	}
-
-	if (map.id() != LogicalTypeId::MAP) {
-		throw InvalidInputException("The provided argument is not a map");
-	}
-
-	auto &type = type_func(map);
-
-	bound_function.return_type = LogicalType::LIST(type);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
-}
-
-static unique_ptr<FunctionData> MapKeysBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
-	return MapKeyValueBind(context, bound_function, arguments, MapType::KeyType);
-}
-
-static unique_ptr<FunctionData> MapValuesBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
-	return MapKeyValueBind(context, bound_function, arguments, MapType::ValueType);
-}
-
 ScalarFunction MapKeysFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction function({}, LogicalTypeId::LIST, MapKeysFunction, MapKeysBind);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
+
+	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(key_type), MapKeysFunction);
 	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+
 	BaseScalarFunction::SetReturnsError(function);
-	function.varargs = LogicalType::ANY;
 	return function;
 }
 
 ScalarFunction MapValuesFun::GetFunction() {
-	ScalarFunction function({}, LogicalTypeId::LIST, MapValuesFunction, MapValuesBind);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
+
+	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(val_type), MapValuesFunction);
 	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+
 	BaseScalarFunction::SetReturnsError(function);
-	function.varargs = LogicalType::ANY;
 	return function;
 }
 

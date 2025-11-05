@@ -1,8 +1,6 @@
 # name: test/sql/storage/temp_directory/max_swap_space_inmemory.test
 # group: [temp_directory]
 
-require noforcestorage
-
 require skip_reload
 
 # In in-memory mode, the 'temp_directory' defaults to '.tmp'

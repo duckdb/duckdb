@@ -153,3 +153,7 @@ PRAGMA tpcds(${i})
 
 endloop
 
+query II
+explain select * from (pivot store_sales on ss_store_sk in (1,2,4,7,8,10) using sum(ss_ext_list_price) group by ss_item_sk) where ss_item_sk<100;
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters.*

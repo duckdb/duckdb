@@ -2,16 +2,14 @@
 # description: ${DESCRIPTION}
 # group: [sf1]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Q${QUERY_NUMBER_PADDED}
 group tpch
-subgroup sf1
-
-require tpch
-
-cache tpch_sf1.duckdb
-
-load benchmark/tpch/sf1/load.sql
+subgroup sf${sf}
 
 run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
 
-result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv
+result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv sf=1
+
+result extension/tpch/dbgen/answers/sf100/q${QUERY_NUMBER_PADDED}.csv sf=100

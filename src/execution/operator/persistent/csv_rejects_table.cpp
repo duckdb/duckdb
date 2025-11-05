@@ -38,10 +38,10 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	    "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(rejects_scan) + "_" + StringUtil::Upper(rejects_error);
 	auto &cache = ObjectCache::GetObjectCache(context);
 	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto rejects_scan_exist = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, DEFAULT_SCHEMA, rejects_scan,
-	                                           OnEntryNotFound::RETURN_NULL) != nullptr;
-	auto rejects_error_exist = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, DEFAULT_SCHEMA, rejects_error,
-	                                            OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto rejects_scan_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_scan,
+	                                                              OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto rejects_error_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_error,
+	                                                               OnEntryNotFound::RETURN_NULL) != nullptr;
 	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(key)) {
 		std::ostringstream error;
 		if (rejects_scan_exist) {
@@ -70,7 +70,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	order_errors.SetValue(2, "TOO MANY COLUMNS");
 	order_errors.SetValue(3, "UNQUOTED VALUE");
 	order_errors.SetValue(4, "LINE SIZE OVER MAXIMUM");
-	order_errors.SetValue(5, "INVALID UNICODE");
+	order_errors.SetValue(5, "INVALID ENCODING");
 	order_errors.SetValue(6, "INVALID STATE");
 
 	LogicalType enum_type = LogicalType::ENUM(enum_name, order_errors, number_of_accepted_errors);

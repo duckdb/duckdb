@@ -13,8 +13,9 @@
 
 namespace duckdb {
 
-struct TimeBucket {
+namespace {
 
+struct TimeBucket {
 	// Use 2000-01-03 00:00:00 (Monday) as origin when bucket_width is days, hours, ... for TimescaleDB compatibility
 	// There are 10959 days between 1970-01-01 and 2000-01-03
 	constexpr static const int64_t DEFAULT_ORIGIN_MICROS = 10959 * Interval::MICROS_PER_DAY;
@@ -226,7 +227,7 @@ struct TimeBucket {
 };
 
 template <typename T>
-static void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 
 	auto &bucket_width_arg = args.data[0];
@@ -265,7 +266,7 @@ static void TimeBucketFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 template <typename T>
-static void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3);
 
 	auto &bucket_width_arg = args.data[0];
@@ -307,7 +308,7 @@ static void TimeBucketOffsetFunction(DataChunk &args, ExpressionState &state, Ve
 }
 
 template <typename T>
-static void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3);
 
 	auto &bucket_width_arg = args.data[0];
@@ -349,6 +350,8 @@ static void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Ve
 		    TimeBucket::OriginTernaryOperator::Operation<interval_t, T, T, T>);
 	}
 }
+
+} // namespace
 
 ScalarFunctionSet TimeBucketFun::GetFunctions() {
 	ScalarFunctionSet time_bucket;

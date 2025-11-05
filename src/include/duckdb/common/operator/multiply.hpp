@@ -32,6 +32,10 @@ template <>
 interval_t MultiplyOperator::Operation(interval_t left, int64_t right);
 template <>
 interval_t MultiplyOperator::Operation(int64_t left, interval_t right);
+template <>
+interval_t MultiplyOperator::Operation(interval_t left, double right);
+template <>
+interval_t MultiplyOperator::Operation(double left, interval_t right);
 
 struct TryMultiplyOperator {
 	template <class TA, class TB, class TR>
@@ -61,6 +65,9 @@ template <>
 DUCKDB_API bool TryMultiplyOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
 template <>
 DUCKDB_API bool TryMultiplyOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
+
+template <>
+bool TryMultiplyOperator::Operation(interval_t left, double right, interval_t &result);
 
 struct MultiplyOperatorOverflowCheck {
 	template <class TA, class TB, class TR>

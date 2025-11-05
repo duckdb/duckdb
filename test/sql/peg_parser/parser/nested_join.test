@@ -1,0 +1,8 @@
+# name: test/sql/peg_parser/parser/nested_join.test
+# description: Test nested joins in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$from tenk1 join tenk1 join int8_tbl on 1 = 1 on 1 = 1;$TEST_PEG_PARSER$);

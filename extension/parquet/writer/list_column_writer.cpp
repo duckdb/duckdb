@@ -4,26 +4,26 @@ namespace duckdb {
 
 unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
 	auto result = make_uniq<ListColumnWriterState>(row_group, row_group.columns.size());
-	result->child_state = child_writer->InitializeWriteState(row_group);
+	result->child_state = GetChildWriter().InitializeWriteState(row_group);
 	return std::move(result);
 }
 
 bool ListColumnWriter::HasAnalyze() {
-	return child_writer->HasAnalyze();
+	return GetChildWriter().HasAnalyze();
 }
 void ListColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	auto &list_child = ListVector::GetEntry(vector);
 	auto list_count = ListVector::GetListSize(vector);
-	child_writer->Analyze(*state.child_state, &state_p, list_child, list_count);
+	GetChildWriter().Analyze(*state.child_state, &state_p, list_child, list_count);
 }
 
 void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	child_writer->FinalizeAnalyze(*state.child_state);
+	GetChildWriter().FinalizeAnalyze(*state.child_state);
 }
 
-idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
+static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
 	// returns a consecutive child list that fully flattens and repeats all required elements
 	auto &validity = FlatVector::Validity(list);
 	auto list_entries = FlatVector::GetData<list_entry_t>(list);
@@ -57,7 +57,8 @@ idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t 
 	return total_length;
 }
 
-void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count,
+                               bool vector_can_span_multiple_pages) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
@@ -76,7 +77,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 			continue;
 		}
 		auto first_repeat_level =
-		    parent && !parent->repetition_levels.empty() ? parent->repetition_levels[parent_index] : max_repeat;
+		    parent && !parent->repetition_levels.empty() ? parent->repetition_levels[parent_index] : MaxRepeat();
 		if (parent && parent->definition_levels[parent_index] != PARQUET_DEFINE_VALID) {
 			state.definition_levels.push_back(parent->definition_levels[parent_index]);
 			state.repetition_levels.push_back(first_repeat_level);
@@ -84,7 +85,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 		} else if (validity.RowIsValid(vector_index)) {
 			// push the repetition levels
 			if (list_data[vector_index].length == 0) {
-				state.definition_levels.push_back(max_define);
+				state.definition_levels.push_back(MaxDefine());
 				state.is_empty.push_back(true);
 			} else {
 				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
@@ -92,7 +93,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 			}
 			state.repetition_levels.push_back(first_repeat_level);
 			for (idx_t k = 1; k < list_data[vector_index].length; k++) {
-				state.repetition_levels.push_back(max_repeat + 1);
+				state.repetition_levels.push_back(MaxRepeat() + 1);
 				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
 				state.is_empty.push_back(false);
 			}
@@ -100,7 +101,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 			if (!can_have_nulls) {
 				throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 			}
-			state.definition_levels.push_back(max_define - 1);
+			state.definition_levels.push_back(MaxDefine() - 1);
 			state.repetition_levels.push_back(first_repeat_level);
 			state.is_empty.push_back(true);
 		}
@@ -111,12 +112,14 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
-	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length);
+	// The elements of a single list should not span multiple Parquet pages
+	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
+	GetChildWriter().Prepare(*state.child_state, &state_p, child_list, child_length, false);
 }
 
 void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	child_writer->BeginWrite(*state.child_state);
+	GetChildWriter().BeginWrite(*state.child_state);
 }
 
 void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
@@ -125,12 +128,17 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
-	child_writer->Write(*state.child_state, child_list, child_length);
+	GetChildWriter().Write(*state.child_state, child_list, child_length);
 }
 
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	child_writer->FinalizeWrite(*state.child_state);
+	GetChildWriter().FinalizeWrite(*state.child_state);
+}
+
+ColumnWriter &ListColumnWriter::GetChildWriter() {
+	D_ASSERT(child_writers.size() == 1);
+	return *child_writers[0];
 }
 
 } // namespace duckdb

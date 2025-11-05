@@ -10,15 +10,15 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
 	D_ASSERT(op.children.size() == 1);
-	unique_ptr<PhysicalOperator> plan = CreatePlan(*op.children[0]);
+	reference<PhysicalOperator> plan = CreatePlan(*op.children[0]);
 	if (!op.expressions.empty()) {
-		D_ASSERT(plan->types.size() > 0);
+		D_ASSERT(!plan.get().GetTypes().empty());
 		// create a filter if there is anything to filter
-		auto filter = make_uniq<PhysicalFilter>(plan->types, std::move(op.expressions), op.estimated_cardinality);
-		filter->children.push_back(std::move(plan));
-		plan = std::move(filter);
+		auto &filter = Make<PhysicalFilter>(plan.get().GetTypes(), std::move(op.expressions), op.estimated_cardinality);
+		filter.children.push_back(plan);
+		plan = filter;
 	}
 	if (op.HasProjectionMap()) {
 		// there is a projection map, generate a physical projection
@@ -26,9 +26,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op
 		for (idx_t i = 0; i < op.projection_map.size(); i++) {
 			select_list.push_back(make_uniq<BoundReferenceExpression>(op.types[i], op.projection_map[i]));
 		}
-		auto proj = make_uniq<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
-		proj->children.push_back(std::move(plan));
-		plan = std::move(proj);
+		auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
+		proj.children.push_back(plan);
+		plan = proj;
 	}
 	return plan;
 }

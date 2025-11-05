@@ -9,10 +9,9 @@
 #pragma once
 
 #include "duckdb/logging/logging.hpp"
+#include "duckdb/logging/log_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
-
-#include <functional>
 
 namespace duckdb {
 class TableDescription;
@@ -24,34 +23,33 @@ class ThreadContext;
 class FileOpener;
 class LogStorage;
 class ExecutionContext;
+struct FileHandle;
 
-//! Logger Macro's are preferred method of calling logger
-#define DUCKDB_LOG(SOURCE, TYPE, LEVEL, ...)                                                                           \
+//! Internal
+#define DUCKDB_LOG_INTERNAL(SOURCE, TYPE, LEVEL, ...)                                                                  \
 	{                                                                                                                  \
-		auto &logger = Logger::Get(SOURCE);                                                                            \
-		if (logger.ShouldLog(TYPE, LEVEL)) {                                                                           \
-			logger.WriteLog(TYPE, LEVEL, __VA_ARGS__);                                                                 \
+		auto &logger_ref_ = Logger::Get(SOURCE);                                                                       \
+		if (logger_ref_.ShouldLog(TYPE, LEVEL)) {                                                                      \
+			logger_ref_.WriteLog(TYPE, LEVEL, __VA_ARGS__);                                                            \
 		}                                                                                                              \
 	}
 
-//! Use below macros to write to logger.
-// Parameters:
-//		SOURCE: the context to fetch the logger from, e.g. the ClientContext, or the DatabaseInstance, see Logger::Get
-//		TYPE  : a string describing the type of this log entry. Preferred format: `<duckdb/extension name>(.<sometype>)
-//				e.g. `duckdb.Extensions.ExtensionAutoloaded`, `my_extension` or `my_extension.some_type`
-//		PARAMS: Either a string-like type such as `const char *`, `string` or `string_t` or a format string plus the
-// 			string parameters
-//
-// Examples:
-//		DUCKDB_LOG_TRACE(client_context, "duckdb", "Something happened");
-//		DUCKDB_LOG_INFO(database_instance, "duckdb", CallFunctionThatReturnsString());
-//
-#define DUCKDB_LOG_TRACE(SOURCE, TYPE, ...) DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_TRACE, __VA_ARGS__)
-#define DUCKDB_LOG_DEBUG(SOURCE, TYPE, ...) DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_DEBUG, __VA_ARGS__)
-#define DUCKDB_LOG_INFO(SOURCE, TYPE, ...)  DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_INFO, __VA_ARGS__)
-#define DUCKDB_LOG_WARN(SOURCE, TYPE, ...)  DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_WARN, __VA_ARGS__)
-#define DUCKDB_LOG_ERROR(SOURCE, TYPE, ...) DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_ERROR, __VA_ARGS__)
-#define DUCKDB_LOG_FATAL(SOURCE, TYPE, ...) DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_FATAL, __VA_ARGS__)
+//! Default Loggers
+#define DUCKDB_LOG_TRACE(SOURCE, ...)                                                                                  \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_TRACE, __VA_ARGS__)
+#define DUCKDB_LOG_DEBUG(SOURCE, ...)                                                                                  \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_DEBUG, __VA_ARGS__)
+#define DUCKDB_LOG_INFO(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_INFO, __VA_ARGS__)
+#define DUCKDB_LOG_WARN(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_WARN, __VA_ARGS__)
+#define DUCKDB_LOG_ERROR(SOURCE, ...)                                                                                  \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_ERROR, __VA_ARGS__)
+#define DUCKDB_LOG_FATAL(SOURCE, ...)                                                                                  \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_FATAL, __VA_ARGS__)
+
+//! LogType based loggers
+#define DUCKDB_LOG(SOURCE, LOG_TYPE_CLASS, ...)                                                                        \
+	DUCKDB_LOG_INTERNAL(SOURCE, LOG_TYPE_CLASS::NAME, LOG_TYPE_CLASS::LEVEL,                                           \
+	                    LOG_TYPE_CLASS::ConstructLogMessage(__VA_ARGS__))
 
 //! Main logging interface
 class Logger {
@@ -86,6 +84,7 @@ public:
 	DUCKDB_API static Logger &Get(const ClientContext &client_context);
 	DUCKDB_API static Logger &Get(const FileOpener &opener);
 	DUCKDB_API static Logger &Get(const DatabaseInstance &db);
+	DUCKDB_API static Logger &Get(const shared_ptr<Logger> &logger);
 
 	template <class T>
 	static void Flush(T &log_context_source) {

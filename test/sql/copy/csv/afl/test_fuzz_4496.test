@@ -1,0 +1,21 @@
+# name: test/sql/copy/csv/afl/test_fuzz_4496.test
+# description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
+# group: [afl]
+
+require json
+
+
+loop i 0 2
+
+statement maybe
+FROM read_csv('{DATA_DIR}/csv/afl/4496/crashes/case_0.csv', auto_detect=false, buffer_size=42, columns={'json': 'JSON'}, delim=NULL, rejects_limit=658694493994253607, store_rejects=true);
+----
+
+statement maybe
+FROM read_csv('{DATA_DIR}/csv/afl/4496/crashes/case_1.csv', auto_detect=false, buffer_size=42, columns={'json': 'JSON'}, delim=NULL, rejects_limit=658694493994253607, store_rejects=true);
+----
+
+statement ok
+PRAGMA enable_verification
+
+endloop

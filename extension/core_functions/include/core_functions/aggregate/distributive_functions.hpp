@@ -20,6 +20,7 @@ struct ApproxCountDistinctFun {
 	static constexpr const char *Parameters = "any";
 	static constexpr const char *Description = "Computes the approximate count of distinct elements using HyperLogLog.";
 	static constexpr const char *Example = "approx_count_distinct(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -28,7 +29,8 @@ struct ArgMinFun {
 	static constexpr const char *Name = "arg_min";
 	static constexpr const char *Parameters = "arg,val";
 	static constexpr const char *Description = "Finds the row with the minimum val. Calculates the non-NULL arg expression at that row.";
-	static constexpr const char *Example = "arg_min(A,B)";
+	static constexpr const char *Example = "arg_min(A, B)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -49,7 +51,18 @@ struct ArgMinNullFun {
 	static constexpr const char *Name = "arg_min_null";
 	static constexpr const char *Parameters = "arg,val";
 	static constexpr const char *Description = "Finds the row with the minimum val. Calculates the arg expression at that row.";
-	static constexpr const char *Example = "arg_min_null(A,B)";
+	static constexpr const char *Example = "arg_min_null(A, B)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
+struct ArgMinNullsLastFun {
+	static constexpr const char *Name = "arg_min_nulls_last";
+	static constexpr const char *Parameters = "arg,val,N";
+	static constexpr const char *Description = "Finds the rows with N minimum vals, including nulls. Calculates the arg expression at that row.";
+	static constexpr const char *Example = "arg_min_null_val(A, B, N)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -58,7 +71,8 @@ struct ArgMaxFun {
 	static constexpr const char *Name = "arg_max";
 	static constexpr const char *Parameters = "arg,val";
 	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the non-NULL arg expression at that row.";
-	static constexpr const char *Example = "arg_max(A,B)";
+	static constexpr const char *Example = "arg_max(A, B)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -79,7 +93,18 @@ struct ArgMaxNullFun {
 	static constexpr const char *Name = "arg_max_null";
 	static constexpr const char *Parameters = "arg,val";
 	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the arg expression at that row.";
-	static constexpr const char *Example = "arg_max_null(A,B)";
+	static constexpr const char *Example = "arg_max_null(A, B)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
+struct ArgMaxNullsLastFun {
+	static constexpr const char *Name = "arg_max_nulls_last";
+	static constexpr const char *Parameters = "arg,val,N";
+	static constexpr const char *Description = "Finds the rows with N maximum vals, including nulls. Calculates the arg expression at that row.";
+	static constexpr const char *Example = "arg_min_null_val(A, B, N)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -89,6 +114,7 @@ struct BitAndFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns the bitwise AND of all bits in a given expression.";
 	static constexpr const char *Example = "bit_and(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -98,6 +124,7 @@ struct BitOrFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns the bitwise OR of all bits in a given expression.";
 	static constexpr const char *Example = "bit_or(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -107,6 +134,7 @@ struct BitXorFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns the bitwise XOR of all bits in a given expression.";
 	static constexpr const char *Example = "bit_xor(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -116,6 +144,7 @@ struct BitstringAggFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns a bitstring with bits set for each distinct value.";
 	static constexpr const char *Example = "bitstring_agg(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -125,6 +154,7 @@ struct BoolAndFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns TRUE if every input value is TRUE, otherwise FALSE.";
 	static constexpr const char *Example = "bool_and(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -134,6 +164,7 @@ struct BoolOrFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Returns TRUE if any input value is TRUE, otherwise FALSE.";
 	static constexpr const char *Example = "bool_or(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -143,6 +174,7 @@ struct CountIfFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Counts the total number of TRUE values for a boolean column";
 	static constexpr const char *Example = "count_if(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -158,6 +190,7 @@ struct EntropyFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the log-2 entropy of count input-values.";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -167,6 +200,7 @@ struct KahanSumFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Calculates the sum using a more accurate floating point summation (Kahan Sum).";
 	static constexpr const char *Example = "kahan_sum(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -188,6 +222,7 @@ struct KurtosisFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the excess kurtosis (Fisher’s definition) of all input values, with a bias correction according to the sample size";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -197,6 +232,7 @@ struct KurtosisPopFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the excess kurtosis (Fisher’s definition) of all input values, without bias correction";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -206,6 +242,7 @@ struct ProductFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Calculates the product of all tuples in arg.";
 	static constexpr const char *Example = "product(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -215,6 +252,7 @@ struct SkewnessFun {
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the skewness of all input values.";
 	static constexpr const char *Example = "skewness(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -224,6 +262,7 @@ struct StringAggFun {
 	static constexpr const char *Parameters = "str,arg";
 	static constexpr const char *Description = "Concatenates the column string values with an optional separator.";
 	static constexpr const char *Example = "string_agg(A, '-')";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -245,6 +284,7 @@ struct SumFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Calculates the sum value for all tuples in arg.";
 	static constexpr const char *Example = "sum(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
@@ -254,6 +294,7 @@ struct SumNoOverflowFun {
 	static constexpr const char *Parameters = "arg";
 	static constexpr const char *Description = "Internal only. Calculates the sum value for all tuples in arg without overflow checks.";
 	static constexpr const char *Example = "sum_no_overflow(A)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };

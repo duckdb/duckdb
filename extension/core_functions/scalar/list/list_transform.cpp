@@ -7,7 +7,6 @@ namespace duckdb {
 
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
-
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
@@ -22,8 +21,9 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }
 
-static LogicalType ListTransformBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-	return LambdaFunctions::BindBinaryLambda(parameter_idx, list_child_type);
+static LogicalType ListTransformBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
+                                           const idx_t parameter_idx) {
+	return LambdaFunctions::BindBinaryChildren(function_child_types, parameter_idx);
 }
 
 ScalarFunction ListTransformFun::GetFunction() {

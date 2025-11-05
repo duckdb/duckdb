@@ -16,9 +16,9 @@
 
 namespace duckdb {
 
-PhysicalCopyDatabase::PhysicalCopyDatabase(vector<LogicalType> types, idx_t estimated_cardinality,
-                                           unique_ptr<CopyDatabaseInfo> info_p)
-    : PhysicalOperator(PhysicalOperatorType::COPY_DATABASE, std::move(types), estimated_cardinality),
+PhysicalCopyDatabase::PhysicalCopyDatabase(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                           idx_t estimated_cardinality, unique_ptr<CopyDatabaseInfo> info_p)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::COPY_DATABASE, std::move(types), estimated_cardinality),
       info(std::move(info_p)) {
 }
 
@@ -73,19 +73,20 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 		catalog.CreateIndex(context.client, create_info->Cast<CreateIndexInfo>());
 
 		auto &create_index_info = create_info->Cast<CreateIndexInfo>();
-		auto &catalog_table = catalog.GetEntry(context.client, CatalogType::TABLE_ENTRY, create_index_info.schema,
-		                                       create_index_info.table);
-		auto &table_entry = catalog_table.Cast<TableCatalogEntry>();
+		auto &table_entry =
+		    catalog.GetEntry<TableCatalogEntry>(context.client, create_index_info.schema, create_index_info.table);
 		auto &data_table = table_entry.GetStorage();
 
 		IndexStorageInfo storage_info(create_index_info.index_name);
 		storage_info.options.emplace("v1_0_0_storage", false);
 		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), storage_info,
 		                                             data_table.GetTableIOManager(), catalog.GetAttached());
-
 		data_table.AddIndex(std::move(unbound_index));
+
+		// We add unbound indexes, so we immediately bind them.
+		// Otherwise, WAL serialization fails due to unbound indexes.
 		auto &data_table_info = *data_table.GetDataTableInfo();
-		data_table_info.GetIndexes().InitializeIndexes(context.client, data_table_info);
+		data_table_info.BindIndexes(context.client);
 	}
 
 	return SourceResultType::FINISHED;

@@ -1,6 +1,0 @@
-AttachStatement <- 'ATTACH'i IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
-
-Database <- 'DATABASE'i
-DatabasePath <- StringLiteral
-AttachAlias <- 'AS'i Identifier
-AttachOptions <- Parens(GenericCopyOptionList)

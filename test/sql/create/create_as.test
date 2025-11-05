@@ -60,11 +60,12 @@ SELECT * FROM tbl1;
 statement error
 CREATE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
 ----
+Parser Error: syntax error at or near "IF"
 
 statement error
 CREATE OR REPLACE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
 ----
-
+Parser Error: syntax error at or near "IF"
 
 ### CREATE TABLE t(col1, col2) AS SELECT ... 
 statement ok
@@ -115,3 +116,20 @@ statement error
 CREATE TABLE tbl7(col1, col2) AS SELECT 5;
 ----
 Binder Error: Target table has more colum names than query result.
+
+# WITH NO DATA / WITH DATA
+statement ok
+CREATE TABLE tbl8 AS SELECT 42 WITH NO DATA
+
+query I
+SELECT COUNT(*) FROM tbl8;
+----
+0
+
+statement ok
+CREATE TABLE tbl9 AS SELECT 42 WITH DATA
+
+query I
+SELECT COUNT(*) FROM tbl9;
+----
+1

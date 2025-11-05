@@ -35,21 +35,17 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	return true;
 }
 
-void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
-	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		// Here you have a filter on a single column in a table. Return a binding for the column
-		// being filtered on so the filter estimator knows what HLL count to pull
-		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
-		// map the base table index to the relation index used by the JoinOrderOptimizer
-		D_ASSERT(relation_manager.relation_mapping.find(colref.binding.table_index) !=
-		         relation_manager.relation_mapping.end());
-		binding =
-		    ColumnBinding(relation_manager.relation_mapping[colref.binding.table_index], colref.binding.column_index);
-	}
-	// TODO: handle inequality filters with functions.
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
+void QueryGraphManager::GetColumnBinding(Expression &root_expr, ColumnBinding &binding) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    root_expr, [&](const BoundColumnRefExpression &colref) {
+		    D_ASSERT(colref.depth == 0);
+		    D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		    // map the base table index to the relation index used by the JoinOrderOptimizer
+		    D_ASSERT(relation_manager.relation_mapping.find(colref.binding.table_index) !=
+		             relation_manager.relation_mapping.end());
+		    binding = ColumnBinding(relation_manager.relation_mapping[colref.binding.table_index],
+		                            colref.binding.column_index);
+	    });
 }
 
 const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() const {
@@ -247,7 +243,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	}
 	auto &node = dp_entry->second;
 	if (!dp_entry->second->is_leaf) {
-
 		// generate the left and right children
 		auto left = GenerateJoins(extracted_relations, node->left_set);
 		auto right = GenerateJoins(extracted_relations, node->right_set);
@@ -265,7 +260,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					break;
 				}
 			}
-
 			auto join = make_uniq<LogicalComparisonJoin>(chosen_filter->join_type);
 			// Here we optimize build side probe side. Our build side is the right side
 			// So the right plans should have lower cardinalities.
@@ -288,8 +282,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
 				// If the left and right set are inverted AND it is a semi or anti join
 				// swap left and right children back.
+
 				if (invert && (f->join_type == JoinType::SEMI || f->join_type == JoinType::ANTI)) {
-					std::swap(left, right);
+					std::swap(join->children[0], join->children[1]);
 					invert = false;
 				}
 

@@ -16,7 +16,7 @@ class WindowIndexTree;
 
 class WindowIndexTreeLocalState : public WindowMergeSortTreeLocalState {
 public:
-	explicit WindowIndexTreeLocalState(WindowIndexTree &index_tree);
+	WindowIndexTreeLocalState(ExecutionContext &context, WindowIndexTree &index_tree);
 
 	//! Process sorted leaf data
 	void BuildLeaves() override;
@@ -33,10 +33,11 @@ public:
 	                const idx_t count);
 	~WindowIndexTree() override = default;
 
-	unique_ptr<WindowAggregatorState> GetLocalState() override;
+	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context) override;
 
 	//! Find the Nth index in the set of subframes
-	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
+	//! Returns {nth index, 0} or {nth offset, overflow}
+	pair<idx_t, idx_t> SelectNth(const SubFrames &frames, idx_t n) const;
 };
 
 } // namespace duckdb

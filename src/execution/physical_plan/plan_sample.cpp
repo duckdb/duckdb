@@ -7,36 +7,35 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 	D_ASSERT(op.children.size() == 1);
 
-	auto plan = CreatePlan(*op.children[0]);
-
-	unique_ptr<PhysicalOperator> sample;
+	auto &plan = CreatePlan(*op.children[0]);
 	if (!op.sample_options->seed.IsValid()) {
 		auto &random_engine = RandomEngine::Get(context);
 		op.sample_options->SetSeed(random_engine.NextRandomInteger());
 	}
+
 	switch (op.sample_options->method) {
-	case SampleMethod::RESERVOIR_SAMPLE:
-		sample = make_uniq<PhysicalReservoirSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
-		break;
+	case SampleMethod::RESERVOIR_SAMPLE: {
+		auto &sample = Make<PhysicalReservoirSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
+		sample.children.push_back(plan);
+		return sample;
+	}
 	case SampleMethod::SYSTEM_SAMPLE:
-	case SampleMethod::BERNOULLI_SAMPLE:
+	case SampleMethod::BERNOULLI_SAMPLE: {
 		if (!op.sample_options->is_percentage) {
 			throw ParserException("Sample method %s cannot be used with a discrete sample count, either switch to "
 			                      "reservoir sampling or use a sample_size",
 			                      EnumUtil::ToString(op.sample_options->method));
 		}
-		sample = make_uniq<PhysicalStreamingSample>(
-		    op.types, op.sample_options->method, op.sample_options->sample_size.GetValue<double>(),
-		    static_cast<int64_t>(op.sample_options->seed.GetIndex()), op.estimated_cardinality);
-		break;
+		auto &sample = Make<PhysicalStreamingSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
+		sample.children.push_back(plan);
+		return sample;
+	}
 	default:
 		throw InternalException("Unimplemented sample method");
 	}
-	sample->children.push_back(std::move(plan));
-	return sample;
 }
 
 } // namespace duckdb

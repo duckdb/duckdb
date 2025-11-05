@@ -7,6 +7,7 @@
 #include "miniz_wrapper.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -53,10 +54,10 @@ namespace duckdb {
 
  */
 
-static idx_t GZipConsumeString(FileHandle &input) {
+static idx_t GZipConsumeString(QueryContext context, FileHandle &input) {
 	idx_t size = 1; // terminator
 	char buffer[1];
-	while (input.Read(buffer, 1) == 1) {
+	while (input.Read(context, buffer, 1) == 1) {
 		if (buffer[0] == '\0') {
 			break;
 		}
@@ -75,7 +76,7 @@ struct MiniZStreamWrapper : public StreamWrapper {
 	idx_t total_size;
 
 public:
-	void Initialize(CompressedFile &file, bool write) override;
+	void Initialize(QueryContext context, CompressedFile &file, bool write) override;
 
 	bool Read(StreamData &stream_data) override;
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
@@ -96,7 +97,7 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 	}
 }
 
-void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
+void MiniZStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
 	Close();
 	this->file = &file;
 	mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
@@ -119,20 +120,20 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		}
 	} else {
 		idx_t data_start = GZIP_HEADER_MINSIZE;
-		auto read_count = file.child_handle->Read(gzip_hdr, GZIP_HEADER_MINSIZE);
-		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, NumericCast<idx_t>(read_count));
+		auto read_count = file.child_handle->Read(context, gzip_hdr, GZIP_HEADER_MINSIZE);
+		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, NumericCast<idx_t>(read_count), &file);
 		// Skip over the extra field if necessary
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 			uint8_t gzip_xlen[2];
 			file.child_handle->Seek(data_start);
-			file.child_handle->Read(gzip_xlen, 2);
+			file.child_handle->Read(context, gzip_xlen, 2);
 			auto xlen = NumericCast<idx_t>((uint8_t)gzip_xlen[0] | (uint8_t)gzip_xlen[1] << 8);
 			data_start += xlen + 2;
 		}
 		// Skip over the file name if necessary
 		if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 			file.child_handle->Seek(data_start);
-			data_start += GZipConsumeString(*file.child_handle);
+			data_start += GZipConsumeString(context, *file.child_handle);
 		}
 		file.child_handle->Seek(data_start);
 		// stream is now set to beginning of payload data
@@ -157,7 +158,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		auto body_ptr = sd.in_buff_start + GZIP_FOOTER_SIZE;
 		uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
 		memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
-		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
+		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE, nullptr);
 		body_ptr += GZIP_HEADER_MINSIZE;
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 			auto xlen = NumericCast<idx_t>((uint8_t)*body_ptr | (uint8_t) * (body_ptr + 1) << 8);
@@ -296,9 +297,9 @@ void MiniZStreamWrapper::Close() {
 
 class GZipFile : public CompressedFile {
 public:
-	GZipFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
+	GZipFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(gzip_fs, std::move(child_handle_p), path) {
-		Initialize(write);
+		Initialize(context, write);
 	}
 	FileCompressionType GetFileCompressionType() override {
 		return FileCompressionType::GZIP;
@@ -306,19 +307,22 @@ public:
 	GZipFileSystem gzip_fs;
 };
 
-void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count) {
+void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count, optional_ptr<CompressedFile> source_file) {
+	// include the filename in the error message if known
+	string file_info = source_file ? ": " + source_file->path : "";
+
 	// check for incorrectly formatted files
 	if (read_count != GZIP_HEADER_MINSIZE) {
-		throw IOException("Input is not a GZIP stream");
+		throw IOException("Input is not a GZIP stream" + file_info);
 	}
 	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
-		throw IOException("Input is not a GZIP stream");
+		throw IOException("Input is not a GZIP stream" + file_info);
 	}
 	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
-		throw IOException("Unsupported GZIP compression method");
+		throw IOException("Unsupported GZIP compression method" + file_info);
 	}
 	if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
-		throw IOException("Unsupported GZIP archive");
+		throw IOException("Unsupported GZIP archive" + file_info);
 	}
 }
 
@@ -360,7 +364,7 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 	}
 	memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
 	body_ptr += GZIP_HEADER_MINSIZE;
-	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
+	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE, nullptr);
 
 	if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 		throw IOException("Extra field in a GZIP stream unsupported");
@@ -404,9 +408,10 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 	return decompressed;
 }
 
-unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
+unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+                                                          bool write) {
 	auto path = handle->path;
-	return make_uniq<GZipFile>(std::move(handle), path, write);
+	return make_uniq<GZipFile>(context, std::move(handle), path, write);
 }
 
 unique_ptr<StreamWrapper> GZipFileSystem::CreateStream() {

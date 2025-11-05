@@ -31,7 +31,6 @@ namespace duckdb {
 
 template <class CHIMP_TYPE, bool EMPTY>
 struct Chimp128CompressionState {
-
 	Chimp128CompressionState() : ring_buffer(), previous_leading_zeros(NumericLimits<uint8_t>::Maximum()) {
 		previous_value = 0;
 	}
@@ -104,7 +103,6 @@ public:
 	}
 
 	static void CompressValue(CHIMP_TYPE in, State &state) {
-
 		auto key = state.ring_buffer.Key(in);
 		CHIMP_TYPE xor_result;
 		uint8_t previous_index;

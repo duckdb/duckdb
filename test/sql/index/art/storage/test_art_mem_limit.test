@@ -8,10 +8,10 @@ statement ok
 SET threads=1;
 
 statement ok
-SET memory_limit = '5MB';
+SET memory_limit = '10MB';
 
 statement ok
-CREATE TABLE tbl AS SELECT range AS id FROM range(100000);
+CREATE TABLE tbl AS SELECT range AS id FROM range(200000);
 
 statement ok
 CREATE INDEX idx ON tbl(id);

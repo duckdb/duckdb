@@ -1,4 +1,3 @@
-#include "duckdb/execution/expression_executor.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -6,6 +5,8 @@
 #include "core_functions/aggregate/quantile_state.hpp"
 
 namespace duckdb {
+
+namespace {
 
 struct FrameSet {
 	inline explicit FrameSet(const SubFrames &frames_p) : frames(frames_p) {
@@ -56,7 +57,6 @@ struct QuantileReuseUpdater {
 };
 
 void ReuseIndexes(idx_t *index, const SubFrames &currs, const SubFrames &prevs) {
-
 	//  Copy overlapping indices by scanning the previous set and copying down into holes.
 	//	We copy instead of leaving gaps in case there are fewer values in the current frame.
 	FrameSet prev_set(prevs);
@@ -182,7 +182,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &q = bind_data.quantiles[0];
-		Interpolator<false> interp(q, state.v.size(), false);
+		QuantileInterpolator<false> interp(q, state.v.size(), false);
 		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(state.v.data(), finalize_data.result);
 
 		MadAccessor<INPUT_TYPE, T, MEDIAN_TYPE> accessor(med);
@@ -237,7 +237,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		ReuseIndexes(index2, frames, prevs);
 		std::partition(index2, index2 + window_state.count, included);
 
-		Interpolator<false> interp(quantile, n, false);
+		QuantileInterpolator<false> interp(quantile, n, false);
 
 		// Compute mad from the second index
 		using ID = QuantileIndirect<INPUT_TYPE>;
@@ -327,6 +327,8 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return BindMAD(context, function, arguments);
 }
+
+} // namespace
 
 AggregateFunctionSet MadFun::GetFunctions() {
 	AggregateFunctionSet mad("mad");

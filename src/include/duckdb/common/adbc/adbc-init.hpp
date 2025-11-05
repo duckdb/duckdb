@@ -30,7 +30,7 @@ extern "C" {
 typedef uint8_t AdbcStatusCode;
 
 //! We gotta leak the symbols of the init function
-DUCKDB_API AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error);
+DUCKDB_C_API AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *error);
 
 #ifdef __cplusplus
 }

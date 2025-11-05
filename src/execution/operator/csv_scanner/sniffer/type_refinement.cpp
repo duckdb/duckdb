@@ -2,7 +2,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 
 namespace duckdb {
-bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
+bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) const {
 	auto &sniffing_state_machine = best_candidate->GetStateMachine();
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type, size);
@@ -45,7 +45,7 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 
 void CSVSniffer::RefineTypes() {
 	auto &sniffing_state_machine = best_candidate->GetStateMachine();
-	// if data types were provided, exit here if number of columns does not match
+	// if data types were provided, exit here if the number of columns does not match
 	detected_types.assign(sniffing_state_machine.dialect_options.num_cols, LogicalType::VARCHAR);
 	if (sniffing_state_machine.options.all_varchar) {
 		// return all types varchar
@@ -59,10 +59,6 @@ void CSVSniffer::RefineTypes() {
 			detected_types.clear();
 			for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
 				LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
-				if (best_sql_types_candidates_per_column_idx[column_idx].size() ==
-				    sniffing_state_machine.options.auto_type_candidates.size()) {
-					d_type = LogicalType::VARCHAR;
-				}
 				detected_types.push_back(d_type);
 			}
 			return;
@@ -98,7 +94,8 @@ void CSVSniffer::RefineTypes() {
 		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
 		if (best_sql_types_candidates_per_column_idx[column_idx].size() ==
 		        best_candidate->GetStateMachine().options.auto_type_candidates.size() &&
-		    default_null_to_varchar) {
+		    default_null_to_varchar && !best_candidate->FinishedFile()) {
+			// We only default SQLNull to Varchar if we haven't finished the file yet.
 			d_type = LogicalType::VARCHAR;
 		}
 		detected_types.push_back(d_type);

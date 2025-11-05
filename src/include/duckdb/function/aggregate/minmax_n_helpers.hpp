@@ -102,20 +102,23 @@ class UnaryAggregateHeap {
 public:
 	UnaryAggregateHeap() = default;
 
-	explicit UnaryAggregateHeap(idx_t capacity_p) : capacity(capacity_p) {
-		heap.reserve(capacity);
+	UnaryAggregateHeap(ArenaAllocator &allocator, idx_t capacity_p) {
+		Initialize(allocator, capacity_p);
 	}
 
-	void Initialize(const idx_t capacity_p) {
+	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
 		capacity = capacity_p;
-		heap.reserve(capacity);
+		auto ptr = allocator.AllocateAligned(capacity * sizeof(HeapEntry<T>));
+		memset(ptr, 0, capacity * sizeof(HeapEntry<T>));
+		heap = reinterpret_cast<HeapEntry<T> *>(ptr);
+		size = 0;
 	}
 
 	bool IsEmpty() const {
-		return heap.empty();
+		return size == 0;
 	}
 	idx_t Size() const {
-		return heap.size();
+		return size;
 	}
 	idx_t Capacity() const {
 		return capacity;
@@ -125,29 +128,28 @@ public:
 		D_ASSERT(capacity != 0); // must be initialized
 
 		// If the heap is not full, insert the value into a new slot
-		if (heap.size() < capacity) {
-			heap.emplace_back();
-			heap.back().Assign(allocator, value);
-			std::push_heap(heap.begin(), heap.end(), Compare);
+		if (size < capacity) {
+			heap[size++].Assign(allocator, value);
+			std::push_heap(heap, heap + size, Compare);
 		}
 		// If the heap is full, check if the value is greater than the smallest value in the heap
 		// If it is, assign the new value to the slot and re-heapify
-		else if (T_COMPARATOR::Operation(value, heap.front().value)) {
-			std::pop_heap(heap.begin(), heap.end(), Compare);
-			heap.back().Assign(allocator, value);
-			std::push_heap(heap.begin(), heap.end(), Compare);
+		else if (T_COMPARATOR::Operation(value, heap[0].value)) {
+			std::pop_heap(heap, heap + size, Compare);
+			heap[size - 1].Assign(allocator, value);
+			std::push_heap(heap, heap + size, Compare);
 		}
-		D_ASSERT(std::is_heap(heap.begin(), heap.end(), Compare));
+		D_ASSERT(std::is_heap(heap, heap + size, Compare));
 	}
 
 	void Insert(ArenaAllocator &allocator, const UnaryAggregateHeap &other) {
-		for (auto &slot : other.heap) {
-			Insert(allocator, slot.value);
+		for (idx_t slot = 0; slot < other.Size(); slot++) {
+			Insert(allocator, other.heap[slot].value);
 		}
 	}
 
-	vector<HeapEntry<T>> &SortAndGetHeap() {
-		std::sort_heap(heap.begin(), heap.end(), Compare);
+	HeapEntry<T> *SortAndGetHeap() {
+		std::sort_heap(heap, heap + size, Compare);
 		return heap;
 	}
 
@@ -160,8 +162,9 @@ private:
 		return T_COMPARATOR::Operation(left.value, right.value);
 	}
 
-	vector<HeapEntry<T>> heap;
 	idx_t capacity;
+	HeapEntry<T> *heap;
+	idx_t size;
 };
 
 template <class K, class V, class K_COMPARATOR>
@@ -171,20 +174,23 @@ class BinaryAggregateHeap {
 public:
 	BinaryAggregateHeap() = default;
 
-	explicit BinaryAggregateHeap(idx_t capacity_p) : capacity(capacity_p) {
-		heap.reserve(capacity);
+	BinaryAggregateHeap(ArenaAllocator &allocator, idx_t capacity_p) {
+		Initialize(allocator, capacity_p);
 	}
 
-	void Initialize(const idx_t capacity_p) {
+	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
 		capacity = capacity_p;
-		heap.reserve(capacity);
+		auto ptr = allocator.AllocateAligned(capacity * sizeof(STORAGE_TYPE));
+		memset(ptr, 0, capacity * sizeof(STORAGE_TYPE));
+		heap = reinterpret_cast<STORAGE_TYPE *>(ptr);
+		size = 0;
 	}
 
 	bool IsEmpty() const {
-		return heap.empty();
+		return size == 0;
 	}
 	idx_t Size() const {
-		return heap.size();
+		return size;
 	}
 	idx_t Capacity() const {
 		return capacity;
@@ -194,31 +200,31 @@ public:
 		D_ASSERT(capacity != 0); // must be initialized
 
 		// If the heap is not full, insert the value into a new slot
-		if (heap.size() < capacity) {
-			heap.emplace_back();
-			heap.back().first.Assign(allocator, key);
-			heap.back().second.Assign(allocator, value);
-			std::push_heap(heap.begin(), heap.end(), Compare);
+		if (size < capacity) {
+			heap[size].first.Assign(allocator, key);
+			heap[size].second.Assign(allocator, value);
+			size++;
+			std::push_heap(heap, heap + size, Compare);
 		}
 		// If the heap is full, check if the value is greater than the smallest value in the heap
 		// If it is, assign the new value to the slot and re-heapify
-		else if (K_COMPARATOR::Operation(key, heap.front().first.value)) {
-			std::pop_heap(heap.begin(), heap.end(), Compare);
-			heap.back().first.Assign(allocator, key);
-			heap.back().second.Assign(allocator, value);
-			std::push_heap(heap.begin(), heap.end(), Compare);
+		else if (K_COMPARATOR::Operation(key, heap[0].first.value)) {
+			std::pop_heap(heap, heap + size, Compare);
+			heap[size - 1].first.Assign(allocator, key);
+			heap[size - 1].second.Assign(allocator, value);
+			std::push_heap(heap, heap + size, Compare);
 		}
-		D_ASSERT(std::is_heap(heap.begin(), heap.end(), Compare));
+		D_ASSERT(std::is_heap(heap, heap + size, Compare));
 	}
 
 	void Insert(ArenaAllocator &allocator, const BinaryAggregateHeap &other) {
-		for (auto &slot : other.heap) {
-			Insert(allocator, slot.first.value, slot.second.value);
+		for (idx_t slot = 0; slot < other.Size(); slot++) {
+			Insert(allocator, other.heap[slot].first.value, other.heap[slot].second.value);
 		}
 	}
 
-	vector<STORAGE_TYPE> &SortAndGetHeap() {
-		std::sort_heap(heap.begin(), heap.end(), Compare);
+	STORAGE_TYPE *SortAndGetHeap() {
+		std::sort_heap(heap, heap + size, Compare);
 		return heap;
 	}
 
@@ -231,8 +237,33 @@ private:
 		return K_COMPARATOR::Operation(left.first.value, right.first.value);
 	}
 
-	vector<STORAGE_TYPE> heap;
 	idx_t capacity;
+	STORAGE_TYPE *heap;
+	idx_t size;
+};
+
+enum class ArgMinMaxNullHandling { IGNORE_ANY_NULL, HANDLE_ARG_NULL, HANDLE_ANY_NULL };
+
+struct ArgMinMaxFunctionData : FunctionData {
+	explicit ArgMinMaxFunctionData(ArgMinMaxNullHandling null_handling_p = ArgMinMaxNullHandling::IGNORE_ANY_NULL,
+	                               bool nulls_last_p = true)
+	    : null_handling(null_handling_p), nulls_last(nulls_last_p) {
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto copy = make_uniq<ArgMinMaxFunctionData>();
+		copy->null_handling = null_handling;
+		copy->nulls_last = nulls_last;
+		return std::move(copy);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<ArgMinMaxFunctionData>();
+		return other.null_handling == null_handling && other.nulls_last == nulls_last;
+	}
+
+	ArgMinMaxNullHandling null_handling;
+	bool nulls_last;
 };
 
 //------------------------------------------------------------------------------
@@ -247,7 +278,7 @@ struct MinMaxFixedValue {
 		return UnifiedVectorFormat::GetData<T>(format)[idx];
 	}
 
-	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
 		FlatVector::GetData<T>(vector)[idx] = value;
 	}
 
@@ -256,7 +287,8 @@ struct MinMaxFixedValue {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format) {
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format,
+	                        const bool nulls_last) {
 		input.ToUnifiedFormat(count, format);
 	}
 };
@@ -269,7 +301,7 @@ struct MinMaxStringValue {
 		return UnifiedVectorFormat::GetData<string_t>(format)[idx];
 	}
 
-	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
 		FlatVector::GetData<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
 	}
 
@@ -278,7 +310,8 @@ struct MinMaxStringValue {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format) {
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format,
+	                        const bool nulls_last) {
 		input.ToUnifiedFormat(count, format);
 	}
 };
@@ -292,8 +325,9 @@ struct MinMaxFallbackValue {
 		return UnifiedVectorFormat::GetData<string_t>(format)[idx];
 	}
 
-	static void Assign(Vector &vector, const idx_t idx, const TYPE &value) {
-		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
+		auto order_by_null_type = nulls_last ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
 		CreateSortKeyHelpers::DecodeSortKey(value, vector, idx, modifiers);
 	}
 
@@ -301,11 +335,58 @@ struct MinMaxFallbackValue {
 		return Vector(LogicalTypeId::BLOB);
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format) {
-		const OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
+	                        const bool nulls_last) {
+		auto order_by_null_type = nulls_last ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		const OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
 		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers, count);
 		input.Flatten(count);
 		extra_state.ToUnifiedFormat(count, format);
+	}
+};
+
+template <class T, bool NULLS_LAST>
+struct ValueOrNull {
+	T value;
+	bool is_valid;
+
+	bool operator==(const ValueOrNull &other) const {
+		return is_valid == other.is_valid && value == other.value;
+	}
+
+	bool operator>(const ValueOrNull &other) const {
+		if (is_valid && other.is_valid) {
+			return value > other.value;
+		}
+		if (!is_valid && !other.is_valid) {
+			return false;
+		}
+
+		return is_valid ^ NULLS_LAST;
+	}
+};
+
+template <class T, bool NULLS_LAST>
+struct MinMaxFixedValueOrNull {
+	using TYPE = ValueOrNull<T, NULLS_LAST>;
+	using EXTRA_STATE = bool;
+
+	static TYPE Create(const UnifiedVectorFormat &format, const idx_t idx) {
+		return TYPE {UnifiedVectorFormat::GetData<T>(format)[idx], format.validity.RowIsValid(idx)};
+	}
+
+	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
+		FlatVector::Validity(vector).Set(idx, value.is_valid);
+		FlatVector::GetData<T>(vector)[idx] = value.value;
+	}
+
+	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+		return false;
+	}
+
+	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
+	                        const bool nulls_last) {
+		input.ToUnifiedFormat(count, format);
 	}
 };
 
@@ -326,7 +407,7 @@ struct MinMaxNOperation {
 		}
 
 		if (!target.is_initialized) {
-			target.Initialize(source.heap.Capacity());
+			target.Initialize(aggr_input.allocator, source.heap.Capacity());
 		} else if (source.heap.Capacity() != target.heap.Capacity()) {
 			throw InvalidInputException("Mismatched n values in min/max/arg_min/arg_max");
 		}
@@ -336,7 +417,11 @@ struct MinMaxNOperation {
 	}
 
 	template <class STATE>
-	static void Finalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
+	static void Finalize(Vector &state_vector, AggregateInputData &input_data, Vector &result, idx_t count,
+	                     idx_t offset) {
+		// We only expect bind data from arg_max, otherwise nulls last is the default
+		const bool nulls_last =
+		    input_data.bind_data ? input_data.bind_data->Cast<ArgMinMaxFunctionData>().nulls_last : true;
 
 		UnifiedVectorFormat state_format;
 		state_vector.ToUnifiedFormat(count, state_format);
@@ -377,10 +462,10 @@ struct MinMaxNOperation {
 			list_entry.length = state.heap.Size();
 
 			// Turn the heap into a sorted list, invalidating the heap property
-			auto &heap = state.heap.SortAndGetHeap();
+			auto heap = state.heap.SortAndGetHeap();
 
-			for (const auto &slot : heap) {
-				STATE::VAL_TYPE::Assign(child_data, current_offset++, state.heap.GetValue(slot));
+			for (idx_t slot = 0; slot < state.heap.Size(); slot++) {
+				STATE::VAL_TYPE::Assign(child_data, current_offset++, state.heap.GetValue(heap[slot]), nulls_last);
 			}
 		}
 

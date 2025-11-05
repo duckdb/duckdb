@@ -60,16 +60,15 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	TableDescription table_description(table_info.catalog, table_info.schema, table_info.name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("can only add an index to a base table");
 	}
-	auto plan = CreatePlan(*bound_table);
-	auto &get = plan->Cast<LogicalGet>();
+	auto &get = bound_table.plan->Cast<LogicalGet>();
 	get.names = column_list.GetColumnNames();
 
 	auto alter_table_info = unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info));
-	result.plan = table.catalog.BindAlterAddIndex(*this, table, std::move(plan), std::move(create_index_info),
-	                                              std::move(alter_table_info));
+	result.plan = table.catalog.BindAlterAddIndex(*this, table, std::move(bound_table.plan),
+	                                              std::move(create_index_info), std::move(alter_table_info));
 	return std::move(result);
 }
 
@@ -77,6 +76,16 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+
+	// Special handling for ALTER DATABASE - doesn't use schema binding
+	if (stmt.info->type == AlterType::ALTER_DATABASE) {
+		auto &properties = GetStatementProperties();
+		properties.return_type = StatementReturnType::NOTHING;
+		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context);
+		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
+		return result;
+	}
+
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 
 	optional_ptr<CatalogEntry> entry;
@@ -87,8 +96,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
-		entry = entry_retriever.GetEntry(stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
-		                                 stmt.info->name, stmt.info->if_not_found);
+		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->name);
+		entry = entry_retriever.GetEntry(stmt.info->catalog, stmt.info->schema, lookup_info, stmt.info->if_not_found);
 	}
 
 	auto &properties = GetStatementProperties();

@@ -15,4 +15,4 @@ INSERT INTO integers VALUES (2, 12)
 statement error
 SELECT * FROM integers WHERE SUM(a)>10
 ----
-
+<REGEX>:.*Binder Error.*cannot contain aggregates.*

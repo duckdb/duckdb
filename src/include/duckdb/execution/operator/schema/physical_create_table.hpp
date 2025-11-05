@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_TABLE;
 
 public:
-	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
-	                    idx_t estimated_cardinality);
+	PhysicalCreateTable(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
+	                    unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality);
 
 	//! Schema to insert to
 	SchemaCatalogEntry &schema;

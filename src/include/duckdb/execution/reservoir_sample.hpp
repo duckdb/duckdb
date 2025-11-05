@@ -88,7 +88,6 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
 
-	static double GetMinWeightFromTuplesSeen(idx_t rows_seen_total);
 	// static unordered_map<idx_t, double> tuples_to_min_weight_map;
 	// Blocking sample is a virtual class. It should be allowed to see the weights and
 	// of tuples in the sample. The blocking sample can then easily maintain statisitcal properties
@@ -201,7 +200,8 @@ public:
 	void ConvertToReservoirSample();
 
 	//! Get the capactiy of the data chunk reserved for storing samples
-	idx_t GetReservoirChunkCapacity() const;
+	template <typename T>
+	T GetReservoirChunkCapacity() const;
 
 	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
 	//! future sampling values

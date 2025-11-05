@@ -1,0 +1,37 @@
+# name: test/sql/delete/cleanup_delete_on_conflict.test
+# description: Verify that partial deletes are cleaned up on conflicts
+# group: [delete]
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+statement ok
+INSERT INTO tbl FROM range(1000) t(i);
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok con1
+BEGIN
+
+statement ok con2
+BEGIN
+
+statement ok con1
+DELETE FROM tbl WHERE i BETWEEN 200 AND 300
+
+statement error con2
+DELETE FROM tbl WHERE i <= 500
+----
+Conflict on tuple deletion
+
+statement ok con1
+COMMIT
+
+statement ok con2
+ROLLBACK
+
+query I
+DELETE FROM tbl WHERE i <= 500
+----
+400

@@ -82,27 +82,27 @@ select histogram(name) from names;
 query I
 SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_S));
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 query I
 SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_MS));
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 query I
 SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_NS));
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 query I
 SELECT histogram(CAST('15:05:42' AS TIME));
 ----
-{15:05:42=1}
+{'15:05:42'=1}
 
 query I
 SELECT histogram(CAST('15:05:42+00' AS TIME WITH TIME ZONE));
 ----
-{15:05:42+00=1}
+{'15:05:42+00'=1}
 
 query I
 SELECT histogram(CAST('2022-01-02' AS DATE));

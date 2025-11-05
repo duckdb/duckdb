@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/rle/rle_bool.test
+# description: Test RLE with booleans
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle_bool.db
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+# simple RLE with few values
+statement ok
+CREATE TABLE test (a BOOLEAN);
+
+statement ok
+INSERT INTO test select false from range(2048);
+
+statement ok
+INSERT INTO test select true from range(2048);
+
+query I
+SELECT COUNT(*) FROM test WHERE a=false
+----
+2048
+
+query I
+SELECT COUNT(*) FROM test WHERE a=false
+----
+2048

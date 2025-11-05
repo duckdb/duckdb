@@ -1,0 +1,13 @@
+{
+	"description": "Run with verify-vector 'variant_vector'.",
+	"on_init": "PRAGMA debug_verify_vector = 'variant_vector';",
+	"skip_compiled": "true",
+	"skip_tests": [
+		{
+			"reason": "Runs with memory constraints",
+			"paths": [
+				"test/parquet/constant_dictionary_vector_parquet.test"
+			]
+		}
+	]
+}

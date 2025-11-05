@@ -184,7 +184,7 @@ struct ValidityAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager());
 	return make_uniq<ValidityAnalyzeState>(info);
 }
 
@@ -207,7 +207,7 @@ struct ValidityScanState : public SegmentScanState {
 	block_id_t block_id;
 };
 
-unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
@@ -286,6 +286,13 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 			// we need them to be set to 1
 			// otherwise the subsequent bitwise & will modify values outside of the range of values we want to alter
 			input_mask |= ValidityUncompressed::UPPER_MASKS[shift_amount];
+
+			if (pos == 0) {
+				// We also need to set the lower bits, which are to the left of the relevant bits (x), to 1
+				// These are the bits that are "behind" this scan window, and should not affect this scan
+				auto non_relevant_mask = ValidityUncompressed::LOWER_MASKS[result_idx];
+				input_mask |= non_relevant_mask;
+			}
 
 			// after this, we move to the next input_entry
 			offset = ValidityMask::BITS_PER_VALUE - input_idx;
@@ -401,10 +408,6 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		// dictionary encoding handles the validity itself
-		return;
-	}
 	result.Flatten(scan_count);
 
 	auto start = segment.GetRelativeIndex(state.row_index);

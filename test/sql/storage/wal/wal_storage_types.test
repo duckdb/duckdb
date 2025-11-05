@@ -149,3 +149,4 @@ CREATE TABLE aliens (
     current_mood mood
 );
 ----
+<REGEX>:.*Catalog Error.*does not exist.*

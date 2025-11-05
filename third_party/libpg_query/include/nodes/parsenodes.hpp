@@ -319,7 +319,6 @@ typedef struct PGAStar {
 	PGList *replace_list; /* optional: REPLACE list */
 	PGList *rename_list;  /* optional: RENAME list */
 	bool columns;         /* whether or not this is a columns list */
-	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;
 } PGAStar;
 
@@ -1096,6 +1095,7 @@ typedef struct PGCommonTableExpr {
 	int location;     /* token location, or -1 if unknown */
 	/* These fields are set during parse analysis: */
 	bool cterecursive;        /* is this CTE actually recursive? */
+	PGList *recursive_keys;
 	int cterefcount;          /* number of RTEs referencing this CTE
 								 * (excluding internal self-references) */
 	PGList *ctecolnames;      /* list of output column names */
@@ -1487,7 +1487,9 @@ typedef enum PGAlterTableType {
 	PG_AT_DetachPartition,           /* DETACH PARTITION */
 	PG_AT_AddIdentity,               /* ADD IDENTITY */
 	PG_AT_SetIdentity,               /* SET identity column options */
-	AT_DropIdentity                  /* DROP IDENTITY */
+	AT_DropIdentity,                 /* DROP IDENTITY */
+	PG_AT_SetPartitionedBy,          /* SET PARTITIONED BY */
+	PG_AT_SetSortedBy                /* SET SORTED BY */
 } PGAlterTableType;
 
 typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
@@ -1496,8 +1498,8 @@ typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
 	PGAlterTableType subtype; /* Type of table alteration to apply */
 	char *name;               /* column, constraint, or trigger to act on,
 								 * or tablespace */
-	PGNode *def;              /* definition of new column, index,
-								 * constraint, or parent table */
+	PGNode *def;              /* definition of new column, index, * constraint, or parent table */
+	PGList *def_list;         /* e.g. expression list for partitioned by */
 	PGDropBehavior behavior;  /* RESTRICT or CASCADE for DROP cases */
 	bool missing_ok;          /* skip error if missing? */
 } PGAlterTableCmd;
@@ -1533,7 +1535,7 @@ typedef struct PGCopyStmt {
 								 * for all columns */
 	bool is_from;         /* TO or FROM */
 	bool is_program;      /* is 'filename' a program to popen? */
-	char *filename;       /* filename, or NULL for STDIN/STDOUT */
+	PGNode *filename;     /* filename */
 	PGList *options;      /* PGList of PGDefElem nodes */
 } PGCopyStmt;
 
@@ -1832,6 +1834,7 @@ typedef struct PGRenameStmt {
 	PGNode *object;            /* in case it's some other object */
 	char *subname;             /* name of contained object (column, rule,
 								 * trigger, etc) */
+	PGList *name_list;         /* names of contained object (e.g. qualified column) */
 	char *newname;             /* the new name */
 	PGDropBehavior behavior;   /* RESTRICT or CASCADE behavior */
 	bool missing_ok;           /* skip error if missing? */
@@ -2083,6 +2086,18 @@ typedef struct PGCopyDatabaseStmt {
 	const char *copy_database_flag;
 } PGCopyDatabaseStmt;
 
+typedef enum PGAlterDatabaseType {
+	PG_ALTER_DATABASE_RENAME
+} PGAlterDatabaseType;
+
+typedef struct PGAlterDatabaseStmt {
+	PGNodeTag type;
+	const char *dbname;
+	const char *new_name;
+	PGAlterDatabaseType alter_type;
+	bool missing_ok;
+} PGAlterDatabaseStmt;
+
 /* ----------------------
  *		Interval Constant
  * ----------------------
@@ -2126,15 +2141,27 @@ typedef struct PGLimitPercent {
 } PGLimitPercent;
 
 /* ----------------------
- *		Lambda Function (or Arrow Operator)
+ *		Lambda Function
  * ----------------------
  */
 typedef struct PGLambdaFunction {
 	PGNodeTag type;
-	PGNode *lhs;                 /* parameter expression */
+	PGList *lhs;                 /* parameter list */
 	PGNode *rhs;                 /* lambda expression */
 	int location;                /* token location, or -1 if unknown */
 } PGLambdaFunction;
+
+/* ----------------------
+ *		Single Arrow Function
+ * ----------------------
+ */
+
+typedef struct PGSingleArrowFunction {
+	PGNodeTag type;
+	PGNode *lhs;
+	PGNode *rhs;
+	int location;                /* token location, or -1 if unknown */
+} PGSingleArrowFunction;
 
 /* ----------------------
  *		Positional Reference
@@ -2161,6 +2188,7 @@ typedef struct PGCreateTypeStmt
 	PGList	   *vals;			/* enum values (list of Value strings) */
 	PGTypeName *ofType;			/* original type of alias name */
     PGNode *query;
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTypeStmt;
 
 /* ----------------------
@@ -2239,5 +2267,60 @@ typedef struct PGCommentOnStmt {
 	PGNode *value;				/* the comment: a string or NULL*/
 	PGNode *column_expr;
 } PGCommentOnStmt;
+
+/* ----------------------
+ *		Merge Into Statement
+ * ----------------------
+ */
+
+typedef struct PGMergeIntoStmt {
+	PGNodeTag type;
+	PGRangeVar *targetTable;     /* relation to merge into */
+	PGNode *source;              /* source table or query */
+	PGNode *joinCondition;       /* qualifications */
+	PGList *usingClause;         /* optional using clause for more tables */
+	PGList *matchActions;        /* list of match actions */
+	PGWithClause *withClause;    /* WITH clause */
+	PGList *returningList;       /* return-values list (of PGTargetEntry) */
+} PGMergeIntoStmt;
+
+typedef enum {
+	MERGE_ACTION_WHEN_MATCHED,		 			/* WHEN MATCHED */
+	MERGE_ACTION_WHEN_NOT_MATCHED_BY_TARGET,  	/* WHEN NOT MATCHED [BY TARGET] */
+	MERGE_ACTION_WHEN_NOT_MATCHED_BY_SOURCE,    /* WHEN NOT MATCHED BY SOURCE */
+} PGMergeAction;
+
+typedef enum {
+	MERGE_ACTION_TYPE_UPDATE,		/* DO UPDATE SET */
+	MERGE_ACTION_TYPE_DELETE,		/* DELETE */
+	MERGE_ACTION_TYPE_INSERT,		/* INSERT */
+	MERGE_ACTION_TYPE_DO_NOTHING,	/* DO NOTHING */
+	MERGE_ACTION_TYPE_ERROR     	/* ABORT */
+} PGMergeActionType;
+
+typedef struct PGMatchAction {
+	PGNodeTag type;
+	PGMergeAction when;                      /* WHEN MATCHED or WHEN NOT MATCHED */
+	PGNode *andClause;                       /* AND condition, if any */
+	PGMergeActionType actionType;            /* UPDATE, DELETE, etc */
+	PGList *updateTargets;                   /* the target list for UPDATE */
+	PGInsertColumnOrder insert_column_order; /* BY NAME or BY POSITION */
+	PGList *insertCols;                      /* optional: names of the target columns for insert */
+	PGList *insertValues;                    /* values for insert */
+	PGNode *errorMessage;                    /* Expression to generate the error message, if any */
+	bool defaultValues;                      /* DEFAULT VALUES */
+} PGMatchAction;
+
+/* ----------------------
+ *		Function Parameter
+ * ----------------------
+ */
+
+typedef struct PGFunctionParameter {
+	PGNodeTag type;
+	char *name;                   /* name of parameter */
+	PGTypeName *typeName;         /* type of parameter (optional) */
+	PGExpr *defaultValue;		  /* default value of parameter (optional) */
+} PGFunctionParameter;
 
 }

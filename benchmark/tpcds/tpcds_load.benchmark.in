@@ -1,0 +1,14 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [tpch]
+
+argument sf 1
+
+require tpcds
+
+storage persistent
+
+cache tpcds_sf${sf}.duckdb
+
+load
+CALL dsdgen(sf=${sf});

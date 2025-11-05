@@ -1,0 +1,30 @@
+# name: test/optimizer/joins/test_logical_get_with_unnest.test
+# description: Test unnest as logical Get. Make sure relation manager has all column bindings
+# group: [joins]
+
+require json
+
+statement ok
+CREATE TABLE foo AS
+SELECT
+  ['1', '2'] AS "number",
+  '{}' AS "my_json",
+  42 AS "forty_two",
+  'foo' AS "bar",
+  'bar' AS "baz"
+  FROM
+range(50);
+
+statement ok
+SELECT
+  *
+FROM
+foo AS cc,
+UNNEST(cc.number) AS t2
+CROSS JOIN LATERAL
+(
+SELECT
+  x.value AS whizz
+FROM
+  json_each(cc.my_json) AS x
+) AS col3;

@@ -28,51 +28,14 @@ static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(count);
 }
 
-static LogicalType CreateReturnType(const LogicalType &map) {
-	auto &key_type = MapType::KeyType(map);
-	auto &value_type = MapType::ValueType(map);
-
-	child_list_t<LogicalType> child_types;
-	child_types.push_back(make_pair("key", key_type));
-	child_types.push_back(make_pair("value", value_type));
-
-	auto row_type = LogicalType::STRUCT(child_types);
-	return LogicalType::LIST(row_type);
-}
-
-static unique_ptr<FunctionData> MapEntriesBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-	if (arguments.size() != 1) {
-		throw InvalidInputException("Too many arguments provided, only expecting a single map");
-	}
-	auto &map = arguments[0]->return_type;
-
-	if (map.id() == LogicalTypeId::UNKNOWN) {
-		// Prepared statement
-		bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
-		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
-		return nullptr;
-	}
-
-	if (map.id() == LogicalTypeId::SQLNULL) {
-		// Input is NULL, output is STRUCT(NULL, NULL)[]
-		auto map_type = LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
-		bound_function.return_type = CreateReturnType(map_type);
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
-	}
-
-	if (map.id() != LogicalTypeId::MAP) {
-		throw InvalidInputException("The provided argument is not a map");
-	}
-	bound_function.return_type = CreateReturnType(map);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
-}
-
 ScalarFunction MapEntriesFun::GetFunction() {
-	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun({}, LogicalTypeId::LIST, MapEntriesFunction, MapEntriesBind);
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
+	auto map_type = LogicalType::MAP(key_type, val_type);
+	auto row_type = LogicalType::STRUCT({{"key", key_type}, {"value", val_type}});
+
+	ScalarFunction fun({map_type}, LogicalType::LIST(row_type), MapEntriesFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.varargs = LogicalType::ANY;
 	return fun;
 }
 

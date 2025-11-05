@@ -38,8 +38,8 @@ public:
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
-	void Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
-	            Vector &base_data);
+	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update, row_t *ids,
+	            idx_t count, Vector &base_data);
 	void FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
 	void RollbackUpdate(UpdateInfo &info);
@@ -67,9 +67,10 @@ private:
 
 public:
 	typedef void (*initialize_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-	                                             Vector &update, const SelectionVector &sel);
+	                                             UnifiedVectorFormat &update, const SelectionVector &sel);
 	typedef void (*merge_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-	                                        Vector &update, row_t *ids, idx_t count, const SelectionVector &sel);
+	                                        UnifiedVectorFormat &update, row_t *ids, idx_t count,
+	                                        const SelectionVector &sel);
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
 	                                        Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo &info, Vector &result);
@@ -78,8 +79,10 @@ public:
 	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
 	                                     idx_t row_idx, Vector &result, idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
-	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update,
-	                                              idx_t count, SelectionVector &sel);
+	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
+	                                              UnifiedVectorFormat &update, idx_t count, SelectionVector &sel);
+	typedef idx_t (*get_effective_updates_t)(UnifiedVectorFormat &update_format, row_t *ids, idx_t count,
+	                                         SelectionVector &sel, Vector &base_data, idx_t id_offset);
 
 private:
 	initialize_update_function_t initialize_update_function;
@@ -90,9 +93,10 @@ private:
 	fetch_row_function_t fetch_row_function;
 	rollback_update_function_t rollback_update_function;
 	statistics_update_function_t statistics_update_function;
+	get_effective_updates_t get_effective_updates;
 
 private:
-	UndoBufferPointer GetUpdateNode(idx_t vector_idx) const;
+	UndoBufferPointer GetUpdateNode(StorageLockKey &lock, idx_t vector_idx) const;
 	void InitializeUpdateInfo(idx_t vector_idx);
 	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count, idx_t vector_index,
 	                          idx_t vector_offset);

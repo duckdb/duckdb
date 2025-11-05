@@ -17,7 +17,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
                                          OperatorSourceInput &input) const {
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
-	AttachOptions options(info, config.options.access_mode);
+	// construct the options
+	AttachOptions options(info->options, config.options.access_mode);
 
 	// get the name and path of the database
 	auto &name = info->name;
@@ -35,11 +36,10 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
 	    info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
-		auto existing_db = db_manager.GetDatabase(context.client, name);
+		auto existing_db = db_manager.GetDatabase(name);
 		if (existing_db) {
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
-
 				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
 				auto existing_mode_str = EnumUtil::ToString(existing_mode);
 				auto attached_mode = EnumUtil::ToString(options.access_mode);
@@ -50,10 +50,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 			}
 			if (info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-				// same path, name and type, DB does not need replacing
-				auto const db_type = options.db_type.empty() ? "duckdb" : options.db_type;
-				if (existing_db->GetCatalog().GetDBPath() == path &&
-				    existing_db->GetCatalog().GetCatalogType() == db_type) {
+				// allow custom catalogs to override this behavior
+				if (!existing_db->GetCatalog().HasConflictingAttachOptions(path, options)) {
 					return SourceResultType::FINISHED;
 				}
 			} else {
@@ -62,30 +60,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		}
 	}
 
-	string extension = "";
-	if (FileSystem::IsRemoteFile(path, extension)) {
-		if (!ExtensionHelper::TryAutoLoadExtension(context.client, extension)) {
-			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", path,
-			                                extension);
-		}
-		if (options.access_mode == AccessMode::AUTOMATIC) {
-			// Attaching of remote files gets bumped to READ_ONLY
-			// This is due to the fact that on most (all?) remote files writes to DB are not available
-			// and having this raised later is not super helpful
-			options.access_mode = AccessMode::READ_ONLY;
-		}
-	}
-
-	// Get the database type and attach the database.
-	db_manager.GetDatabaseType(context.client, *info, config, options);
-	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
-
-	//! Initialize the database.
-	const auto storage_options = info->GetStorageOptions();
-	attached_db->Initialize(storage_options);
-	if (!options.default_table.name.empty()) {
-		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
-	}
+	db_manager.AttachDatabase(context.client, *info, options);
 	return SourceResultType::FINISHED;
 }
 

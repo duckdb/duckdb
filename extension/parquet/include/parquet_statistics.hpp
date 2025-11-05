@@ -9,9 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#endif
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 
@@ -25,9 +23,8 @@ struct ParquetColumnSchema;
 class ResizeableBuffer;
 
 struct ParquetStatisticsUtils {
-
 	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ParquetColumnSchema &reader,
-	                                                            const vector<ColumnChunk> &columns);
+	                                                            const vector<ColumnChunk> &columns, bool can_have_nan);
 
 	static Value ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele, const std::string &stats);
 
@@ -35,6 +32,9 @@ struct ParquetStatisticsUtils {
 
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
 	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator);
+
+	static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
+	                                                     const duckdb_parquet::Statistics &parquet_stats);
 
 private:
 	static Value ConvertValueInternal(const LogicalType &type, const ParquetColumnSchema &schema_ele,

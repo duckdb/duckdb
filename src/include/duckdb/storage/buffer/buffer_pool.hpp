@@ -54,7 +54,7 @@ public:
 
 	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 
-	idx_t GetUsedMemory() const;
+	idx_t GetUsedMemory(bool flush = true) const;
 
 	idx_t GetMaxMemory() const;
 
@@ -91,12 +91,14 @@ protected:
 	//! Increments the dead nodes for the queue with specified type
 	void IncrementDeadNodes(const BlockHandle &handle);
 
+	//! How many eviction queue types we have (BLOCK and EXTERNAL_FILE go into same queue)
+	static constexpr idx_t EVICTION_QUEUE_TYPES = FILE_BUFFER_TYPE_COUNT - 1;
 	//! How many eviction queues we have for the different FileBufferTypes
-	static constexpr idx_t BLOCK_QUEUE_SIZE = 1;
+	static constexpr idx_t BLOCK_AND_EXTERNAL_FILE_QUEUE_SIZE = 1;
 	static constexpr idx_t MANAGED_BUFFER_QUEUE_SIZE = 6;
 	static constexpr idx_t TINY_BUFFER_QUEUE_SIZE = 1;
 	//! Mapping and priority order for the eviction queues
-	const array<idx_t, FILE_BUFFER_TYPE_COUNT> eviction_queue_sizes;
+	const array<idx_t, EVICTION_QUEUE_TYPES> eviction_queue_sizes;
 
 protected:
 	enum class MemoryUsageCaches {

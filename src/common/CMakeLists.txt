@@ -6,6 +6,7 @@ add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)
 add_subdirectory(exception)
+add_subdirectory(multi_file)
 add_subdirectory(operator)
 add_subdirectory(progress_bar)
 add_subdirectory(tree_renderer)
@@ -33,9 +34,13 @@ add_library_unity(
   bind_helpers.cpp
   box_renderer.cpp
   cgroups.cpp
+  csv_writer.cpp
+  complex_json.cpp
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
+  encryption_functions.cpp
+  encryption_key_manager.cpp
   encryption_state.cpp
   exception.cpp
   exception_format_value.cpp
@@ -46,11 +51,8 @@ add_library_unity(
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
-  http_util.cpp
   pipe_file_system.cpp
   local_file_system.cpp
-  multi_file_list.cpp
-  multi_file_reader.cpp
   error_data.cpp
   opener_file_system.cpp
   printer.cpp
@@ -64,6 +66,7 @@ add_library_unity(
   render_tree.cpp
   tree_renderer.cpp
   types.cpp
+  bignum.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

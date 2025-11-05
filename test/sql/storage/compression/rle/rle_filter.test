@@ -20,6 +20,11 @@ SELECT * FROM tbl WHERE id = 5040 AND rle_val=100
 5040	100	NULL
 
 query III
+SELECT * FROM tbl WHERE id = 5040 AND substr(rle_val::VARCHAR, 1, 3)='100'
+----
+5040	100	NULL
+
+query III
 SELECT * FROM tbl WHERE id >= 5020 AND rle_val=100
 ----
 5020	100	100

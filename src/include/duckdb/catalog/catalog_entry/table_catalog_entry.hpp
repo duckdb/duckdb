@@ -25,8 +25,11 @@ namespace duckdb {
 class DataTable;
 
 struct RenameColumnInfo;
+struct RenameFieldInfo;
 struct AddColumnInfo;
+struct AddFieldInfo;
 struct RemoveColumnInfo;
+struct RemoveFieldInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;
@@ -38,6 +41,7 @@ struct BoundCreateTableInfo;
 
 class TableFunction;
 struct FunctionData;
+struct EntryLookupInfo;
 
 class Binder;
 struct ColumnSegmentInfo;
@@ -94,6 +98,8 @@ public:
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
+	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+	                                      const EntryLookupInfo &lookup_info);
 
 	virtual bool IsDuckTable() const {
 		return false;
@@ -105,7 +111,7 @@ public:
 	static string ColumnNamesToSQL(const ColumnList &columns);
 
 	//! Returns a list of segment information for this table, if exists
-	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo();
+	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
@@ -120,6 +126,8 @@ public:
 
 	//! Returns the virtual columns for this table
 	virtual virtual_column_map_t GetVirtualColumns() const;
+
+	virtual vector<column_t> GetRowIdColumns() const;
 
 protected:
 	//! A list of columns that are part of this table

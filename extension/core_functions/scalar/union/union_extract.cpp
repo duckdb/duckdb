@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct UnionExtractBindData : public FunctionData {
 	UnionExtractBindData(string key, idx_t index, LogicalType type)
 	    : key(std::move(key)), index(index), type(std::move(type)) {
@@ -25,7 +27,7 @@ public:
 	}
 };
 
-static void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<UnionExtractBindData>();
 
@@ -39,8 +41,8 @@ static void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                          vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
@@ -98,6 +100,8 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 	bound_function.return_type = return_type;
 	return make_uniq<UnionExtractBindData>(key, key_index, return_type);
 }
+
+} // namespace
 
 ScalarFunction UnionExtractFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function

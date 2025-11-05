@@ -1,0 +1,45 @@
+# name: test/parquet/parquet_stats_function.test
+# description: Test stats(col) function on Parquet files
+# group: [parquet]
+
+require parquet
+
+# we can derive whether all values in a parquet column are NULL
+statement ok
+copy (select null i) to '__TEST_DIR__/all_null.parquet'
+
+# "Has No Null" is "false", meaning there are no non-NULL values
+query I
+select stats(i) from '__TEST_DIR__/all_null.parquet'
+----
+[Min: NULL, Max: NULL][Has Null: true, Has No Null: false]
+
+# create 0-9 with no NULL
+statement ok
+copy (select range i from range(10)) to '__TEST_DIR__/parquet_stats_function1.parquet'
+
+query I
+select stats(i) from read_parquet('__TEST_DIR__/parquet_stats_function1.parquet', union_by_name=true) limit 1
+----
+[Min: 0, Max: 9][Has Null: false, Has No Null: true]
+
+# create 100-109 with NULL
+statement ok
+copy (select range i from range(100, 110) union all select null i) to '__TEST_DIR__/parquet_stats_function2.parquet'
+
+query I
+select stats(i) from read_parquet('__TEST_DIR__/parquet_stats_function2.parquet', union_by_name=true) limit 1
+----
+[Min: 100, Max: 109][Has Null: true, Has No Null: true]
+
+# query combined WITHOUT union_by_name (should give back no stats)
+query I
+select stats(i) from read_parquet('__TEST_DIR__/parquet_stats_function*.parquet', union_by_name=false) limit 1
+----
+[Min: NULL, Max: NULL][Has Null: true, Has No Null: true]
+
+# now query combined WITH union_by_name (should give back stats)
+query I
+select stats(i) from read_parquet('__TEST_DIR__/parquet_stats_function*.parquet', union_by_name=true) limit 1
+----
+[Min: 0, Max: 109][Has Null: true, Has No Null: true]

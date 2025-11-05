@@ -1,0 +1,19 @@
+{
+  "info": {
+    "balls_per_over": 6,
+    "city": "Cape Town",
+    "dates": ["2025-08-03"],
+    "event": {
+      "name": "Pakistan Men tour of South Africa",
+      "match_number": 3
+    },
+    "outcome": {
+      "winner": "South Africa",
+      "by": {
+        "runs": 28
+      }
+    },
+    "overs": 20,
+    "player_of_match": ["Q de Kock"]
+  }
+}

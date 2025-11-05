@@ -28,17 +28,20 @@ set(ICU_EXTENSION_FILES
     icu-timezone.cpp)
 
 build_static_extension(icu ${ICU_EXTENSION_FILES})
-link_threads(icu_extension)
+link_threads(icu_extension "")
 if(NOT WITH_INTERNAL_ICU)
   find_package(
     ICU
-    COMPONENTS i18n uc
+    COMPONENTS i18n uc data
     REQUIRED)
-  target_link_libraries(icu_extension ICU::i18n ICU::uc)
+  target_link_libraries(icu_extension ICU::i18n ICU::uc ICU::data)
 endif()
 disable_target_warnings(icu_extension)
 set(PARAMETERS "-no-warnings")
 build_loadable_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
+if(NOT WITH_INTERNAL_ICU)
+  target_link_libraries(icu_loadable_extension ICU::i18n ICU::uc ICU::data)
+endif()
 install(
   TARGETS icu_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

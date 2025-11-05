@@ -7,12 +7,14 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/logging/log_type.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/windows_util.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -59,6 +61,8 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -329,6 +333,17 @@ string FileSystem::ExtractBaseName(const string &path) {
 	return vec[0];
 }
 
+string FileSystem::ExtractExtension(const string &path) {
+	if (path.empty()) {
+		return string();
+	}
+	auto vec = StringUtil::Split(ExtractName(path), ".");
+	if (vec.size() < 2) {
+		return string();
+	}
+	return vec.back();
+}
+
 string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
@@ -366,17 +381,42 @@ string FileSystem::ExpandPath(const string &path) {
 }
 
 // LCOV_EXCL_START
+unique_ptr<FileHandle> FileSystem::OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
+                                                    optional_ptr<FileOpener> opener) {
+	throw NotImplementedException("%s: OpenFileExtended is not implemented!", GetName());
+}
+
+bool FileSystem::ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+                                   optional_ptr<FileOpener> opener) {
+	throw NotImplementedException("%s: ListFilesExtended is not implemented!", GetName());
+}
+
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+	if (SupportsOpenFileExtended()) {
+		return OpenFileExtended(OpenFileInfo(path), flags, opener);
+	}
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
+}
+
+unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, FileOpenFlags flags,
+                                            optional_ptr<FileOpener> opener) {
+	if (SupportsOpenFileExtended()) {
+		return OpenFileExtended(file, flags, opener);
+	} else {
+		return OpenFile(file.path, flags, opener);
+	}
+}
+
+bool FileSystem::SupportsOpenFileExtended() const {
+	return false;
+}
+
+bool FileSystem::SupportsListFilesExtended() const {
+	return false;
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
-}
-
-bool FileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
-	// This is not a required method. Derived FileSystems may optionally override/implement.
-	return false;
 }
 
 void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -391,12 +431,22 @@ int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	throw NotImplementedException("%s: Write is not implemented!", GetName());
 }
 
+bool FileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	// This is not a required method. Derived FileSystems may optionally override/implement.
+	return false;
+}
+
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	throw NotImplementedException("%s: GetFileSize is not implemented!", GetName());
 }
 
-time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
+timestamp_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
+}
+
+string FileSystem::GetVersionTag(FileHandle &handle) {
+	// Used to check cache invalidation for httpfs files with an ETag in CachingFileSystem
+	return "";
 }
 
 FileType FileSystem::GetFileType(FileHandle &handle) {
@@ -415,13 +465,89 @@ void FileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpene
 	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
+void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<FileOpener> opener) {
+	// To avoid hitting directories we have no permission for when using allowed_directories + enable_external_access,
+	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent
+	// dir that is not in the allowed_directories list
+
+	auto sep = PathSeparator(path);
+	vector<string> dirs_to_create;
+
+	string current_prefix = path;
+
+	StringUtil::RTrim(current_prefix, sep);
+
+	// Strip directories from the path until we hit a directory that exists
+	while (!current_prefix.empty() && !DirectoryExists(current_prefix)) {
+		auto found = current_prefix.find_last_of(sep);
+
+		// Push back the root dir
+		if (found == string::npos || found == 0) {
+			dirs_to_create.push_back(current_prefix);
+			current_prefix = "";
+			break;
+		}
+
+		// Add the directory to the directories to be created
+		dirs_to_create.push_back(current_prefix.substr(found, current_prefix.size() - found));
+
+		// Update the current prefix to remove the current dir
+		current_prefix = current_prefix.substr(0, found);
+	}
+
+	// Create the directories one by one
+	for (vector<string>::reverse_iterator riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
+		current_prefix += *riter;
+		CreateDirectory(current_prefix);
+	}
+}
+
 void FileSystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
+bool FileSystem::IsDirectory(const OpenFileInfo &info) {
+	if (!info.extended_info) {
+		return false;
+	}
+	auto entry = info.extended_info->options.find("type");
+	if (entry == info.extended_info->options.end()) {
+		return false;
+	}
+	return StringValue::Get(entry->second) == "directory";
+}
+
 bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                            FileOpener *opener) {
+	if (SupportsListFilesExtended()) {
+		return ListFilesExtended(
+		    directory,
+		    [&](const OpenFileInfo &info) {
+			    bool is_dir = IsDirectory(info);
+			    callback(info.path, is_dir);
+		    },
+		    opener);
+	}
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
+}
+
+bool FileSystem::ListFiles(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
+                           optional_ptr<FileOpener> opener) {
+	if (SupportsListFilesExtended()) {
+		return ListFilesExtended(directory, callback, opener);
+	} else {
+		return ListFiles(
+		    directory,
+		    [&](const string &path, bool is_dir) {
+			    OpenFileInfo info(path);
+			    if (is_dir) {
+				    info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+				    info.extended_info->options["type"] = "directory";
+			    }
+			    callback(info);
+		    },
+		    opener.get());
+	}
 }
 
 void FileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
@@ -438,6 +564,14 @@ bool FileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener)
 
 void FileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
+}
+
+bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+	if (FileExists(filename, opener)) {
+		RemoveFile(filename, opener);
+		return true;
+	}
+	return false;
 }
 
 void FileSystem::FileSync(FileHandle &handle) {
@@ -458,7 +592,7 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
-vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
@@ -474,8 +608,16 @@ void FileSystem::UnregisterSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
 }
 
+unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't extract a sub system on a non-virtual file system", GetName());
+}
+
 void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
+}
+
+bool FileSystem::SubSystemIsDisabled(const string &name) {
+	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
 }
 
 vector<string> FileSystem::ListSubSystems() {
@@ -486,40 +628,24 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-static string LookupExtensionForPattern(const string &pattern) {
-	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
-		if (StringUtil::StartsWith(pattern, entry.name)) {
-			return entry.extension;
-		}
-	}
-	return "";
-}
-
-vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
-		string required_extension = LookupExtensionForPattern(pattern);
-		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
-			auto &dbconfig = DBConfig::GetConfig(context);
-			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
-			    !dbconfig.options.autoload_known_extensions) {
-				auto error_message =
-				    "File " + pattern + " requires the extension " + required_extension + " to be loaded";
-				error_message =
-				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
-				throw MissingExtensionException(error_message);
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
+			// if we have no glob in the pattern and we have an extension, we try to glob
+			if (!HasGlob(pattern)) {
+				if (input.extension.empty()) {
+					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
+				}
+				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
+				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
+				if (!result.empty()) {
+					// we found files by globbing the target as if it was a directory - return them
+					return result;
+				}
 			}
-			// an extension is required to read this file, but it is not loaded - try to load it
-			ExtensionHelper::AutoLoadExtension(context, required_extension);
-			// success! glob again
-			// check the extension is loaded just in case to prevent an infinite loop here
-			if (!context.db->ExtensionIsLoaded(required_extension)) {
-				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
-				                        required_extension);
-			}
-			return GlobFiles(pattern, context, options);
 		}
-		if (options == FileGlobOptions::DISALLOW_EMPTY) {
+		if (input.behavior == FileGlobOptions::FALLBACK_GLOB || input.behavior == FileGlobOptions::DISALLOW_EMPTY) {
 			throw IOException("No files found that match the pattern \"%s\"", pattern);
 		}
 	}
@@ -546,7 +672,7 @@ bool FileSystem::IsManuallySet() {
 	return false;
 }
 
-unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
+unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
@@ -566,6 +692,14 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
+int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_READ, nr_bytes);
+	}
+
+	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+}
+
 bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
 	return file_system.Trim(*this, offset_bytes, length_bytes);
 }
@@ -578,7 +712,19 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
-void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
+void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_READ, nr_bytes);
+	}
+
+	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
+}
+
+void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_WRITTEN, nr_bytes);
+	}
+
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
@@ -620,6 +766,20 @@ string FileHandle::ReadLine() {
 	}
 }
 
+string FileHandle::ReadLine(QueryContext context) {
+	string result;
+	char buffer[1];
+	while (true) {
+		auto tuples_read = UnsafeNumericCast<idx_t>(Read(context, buffer, 1));
+		if (tuples_read == 0 || buffer[0] == '\n') {
+			return result;
+		}
+		if (buffer[0] != '\r') {
+			result += buffer[0];
+		}
+	}
+}
+
 bool FileHandle::OnDiskFile() {
 	return file_system.OnDiskFile(*this);
 }
@@ -638,6 +798,23 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+void FileHandle::TryAddLogger(FileOpener &opener) {
+	if (flags.DisableLogging()) {
+		return;
+	}
+
+	auto context = opener.TryGetClientContext();
+	if (context && Logger::Get(*context).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = context->logger;
+		return;
+	}
+
+	auto database = opener.TryGetDatabase();
+	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = database->GetLogManager().GlobalLoggerReference();
+	}
 }
 
 idx_t FileHandle::GetProgress() {

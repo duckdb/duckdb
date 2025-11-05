@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ConstantOrNullBindData : public FunctionData {
 	explicit ConstantOrNullBindData(Value val) : value(std::move(val)) {
 	}
@@ -42,7 +44,10 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		case VectorType::CONSTANT_VECTOR: {
 			if (ConstantVector::IsNull(args.data[idx])) {
 				// input is constant null, return constant null
-				result.Reference(info.value);
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
+				auto &result_mask = ConstantVector::Validity(result);
+				auto &input_mask = ConstantVector::Validity(args.data[idx]);
+				result_mask.Initialize(input_mask);
 				ConstantVector::SetNull(result, true);
 				return;
 			}
@@ -66,20 +71,6 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
-	return make_uniq<ConstantOrNullBindData>(std::move(value));
-}
-
-bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
-	if (expr.function.name != "constant_or_null") {
-		return false;
-	}
-	D_ASSERT(expr.bind_info);
-	auto &bind_data = expr.bind_info->Cast<ConstantOrNullBindData>();
-	D_ASSERT(bind_data.value.type() == val.type());
-	return bind_data.value == val;
-}
-
 unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->HasParameter()) {
@@ -92,6 +83,22 @@ unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFuncti
 	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 	bound_function.return_type = arguments[0]->return_type;
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
+}
+
+} // namespace
+
+unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
+	return make_uniq<ConstantOrNullBindData>(std::move(value));
+}
+
+bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
+	if (expr.function.name != "constant_or_null") {
+		return false;
+	}
+	D_ASSERT(expr.bind_info);
+	auto &bind_data = expr.bind_info->Cast<ConstantOrNullBindData>();
+	D_ASSERT(bind_data.value.type() == val.type());
+	return bind_data.value == val;
 }
 
 ScalarFunction ConstantOrNullFun::GetFunction() {

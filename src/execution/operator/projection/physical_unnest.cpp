@@ -13,7 +13,6 @@ class UnnestOperatorState : public OperatorState {
 public:
 	UnnestOperatorState(ClientContext &context, const vector<unique_ptr<Expression>> &select_list)
 	    : current_row(0), list_position(0), first_fetch(true), input_sel(STANDARD_VECTOR_SIZE), executor(context) {
-
 		// for each UNNEST in the select_list, we add the child expression to the expression executor
 		// and set the return type in the list_data chunk, which will contain the evaluated expression results
 		vector<LogicalType> list_data_types;
@@ -62,9 +61,11 @@ void UnnestOperatorState::Reset() {
 	first_fetch = true;
 }
 
-PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-                               idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
+PhysicalUnnest::PhysicalUnnest(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
+                               PhysicalOperatorType type)
+    : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
+      select_list(std::move(select_list)) {
 	D_ASSERT(!this->select_list.empty());
 }
 
@@ -137,7 +138,6 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
                                                    OperatorState &state_p,
                                                    const vector<unique_ptr<Expression>> &select_list,
                                                    bool include_input) {
-
 	auto &state = state_p.Cast<UnnestOperatorState>();
 
 	do {
@@ -186,7 +186,8 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 						list_offset = list_entry.offset;
 					}
 					// unnest any entries we can
-					idx_t unnest_length = MinValue<idx_t>(list_length - state.list_position, current_row_length);
+					idx_t unnest_length = MinValue<idx_t>(
+					    list_length - MinValue<idx_t>(list_length, state.list_position), current_row_length);
 					auto &unnest_sel = state.unnest_sels[col_idx];
 					for (idx_t r = 0; r < unnest_length; r++) {
 						unnest_sel.set_index(result_length + r, list_offset + state.list_position + r);
@@ -228,14 +229,12 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			col_offset = input.ColumnCount();
 		}
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
-			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL) {
-				// UNNEST(NULL)
-				chunk.SetCardinality(0);
-				break;
-			}
 			auto &list_vector = state.list_data.data[col_idx];
 			auto &result_vector = chunk.data[col_offset + col_idx];
-			if (ListVector::GetListSize(list_vector) == 0) {
+			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL ||
+			    ListType::GetChildType(state.list_data.data[col_idx].GetType()) == LogicalType::SQLNULL ||
+			    ListVector::GetListSize(list_vector) == 0) {
+				// UNNEST(NULL) or UNNEST([])
 				// we cannot slice empty lists - but if our child list is empty we can only return NULL anyway
 				result_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result_vector, true);

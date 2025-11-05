@@ -1,6 +1,6 @@
 #include "include/icu-dateadd.hpp"
 
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -8,26 +8,38 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-datefunc.hpp"
+#include "icu-helpers.hpp"
 
 namespace duckdb {
 
+static duckdb::unique_ptr<FunctionData> ICUBindIntervalMonths(ClientContext &context, ScalarFunction &bound_function,
+                                                              vector<duckdb::unique_ptr<Expression>> &arguments) {
+	auto result = ICUDateFunc::Bind(context, bound_function, arguments);
+	auto &info = result->Cast<ICUDateFunc::BindData>();
+	TZCalendar calendar(*info.calendar, info.cal_setting);
+	if (!calendar.SupportsIntervals()) {
+		throw NotImplementedException("INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.");
+	}
+	return std::move(result);
+}
+
 struct ICUCalendarAdd {
 	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+	static inline TR Operation(TA left, TB right, TZCalendar &calendar_p) {
 		throw InternalException("Unimplemented type for ICUCalendarAdd");
 	}
 };
 
 struct ICUCalendarSub : public ICUDateFunc {
 	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+	static inline TR Operation(TA left, TB right, TZCalendar &calendar_p) {
 		throw InternalException("Unimplemented type for ICUCalendarSub");
 	}
 };
 
 struct ICUCalendarAge : public ICUDateFunc {
 	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+	static inline TR Operation(TA left, TB right, TZCalendar &calendar_p) {
 		throw InternalException("Unimplemented type for ICUCalendarAge");
 	}
 };
@@ -53,10 +65,11 @@ static inline void CalendarAddHour(icu::Calendar *calendar, int64_t interval_hou
 }
 
 template <>
-timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
+timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval, TZCalendar &calendar_p) {
 	if (!Timestamp::IsFinite(timestamp)) {
 		return timestamp;
 	}
+	auto calendar = calendar_p.GetICUCalendar();
 
 	int64_t millis = timestamp.value / Interval::MICROS_PER_MSEC;
 	int64_t micros = timestamp.value % Interval::MICROS_PER_MSEC;
@@ -120,25 +133,26 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 }
 
 template <>
-timestamp_t ICUCalendarAdd::Operation(interval_t interval, timestamp_t timestamp, icu::Calendar *calendar) {
+timestamp_t ICUCalendarAdd::Operation(interval_t interval, timestamp_t timestamp, TZCalendar &calendar) {
 	return Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
 }
 
 template <>
-timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
+timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval, TZCalendar &calendar) {
 	const interval_t negated {-interval.months, -interval.days, -interval.micros};
 	return ICUCalendarAdd::template Operation<timestamp_t, interval_t, timestamp_t>(timestamp, negated, calendar);
 }
 
 template <>
-interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
+interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_date, TZCalendar &calendar_p) {
 	if (!Timestamp::IsFinite(end_date) || !Timestamp::IsFinite(start_date)) {
 		throw InvalidInputException("Cannot subtract infinite timestamps");
 	}
 	if (start_date > end_date) {
-		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
+		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar_p);
 		return {-negated.months, -negated.days, -negated.micros};
 	}
+	auto calendar = calendar_p.GetICUCalendar();
 
 	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
 	auto end_micros = (uint64_t)(end_date.value % Interval::MICROS_PER_MSEC);
@@ -166,9 +180,16 @@ interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_dat
 }
 
 template <>
-interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
+interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_date, TZCalendar &calendar_p) {
+	auto calendar = calendar_p.GetICUCalendar();
+	if (calendar_p.IsGregorian()) {
+		auto start_data = ICUHelpers::GetComponents(timestamp_tz_t(start_date.value), calendar);
+		auto end_data = ICUHelpers::GetComponents(timestamp_tz_t(end_date.value), calendar);
+		return Interval::GetAge(end_data, start_data, start_date > end_date);
+	}
+	// fallback for non-gregorian calendars, since Interval::GetAge does not handle
 	if (start_date > end_date) {
-		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
+		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar_p);
 		return {-negated.months, -negated.days, -negated.micros};
 	}
 
@@ -198,27 +219,26 @@ interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_dat
 }
 
 struct ICUDateAdd : public ICUDateFunc {
-
 	template <typename TA, typename TR, typename OP>
 	static void ExecuteUnary(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 1);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
-		CalendarPtr calendar(info.calendar->clone());
+		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		//	Subtract argument from current_date (at midnight)
-		const auto end_date = CurrentMidnight(calendar.get(), state);
+		const auto end_date = CurrentMidnight(calendar.GetICUCalendar(), state);
 
 		UnaryExecutor::Execute<TA, TR>(args.data[0], result, args.size(), [&](TA start_date) {
-			return OP::template Operation<timestamp_t, TA, TR>(end_date, start_date, calendar.get());
+			return OP::template Operation<timestamp_t, TA, TR>(end_date, start_date, calendar);
 		});
 	}
 
 	template <typename TA, typename TR, typename OP>
 	inline static ScalarFunction GetUnaryDateFunction(const LogicalTypeId &left_type,
 	                                                  const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type}, result_type, ExecuteUnary<TA, TR, OP>, Bind);
+		return ScalarFunction({left_type}, result_type, ExecuteUnary<TA, TR, OP>, ICUBindIntervalMonths);
 	}
 
 	template <typename TA, typename TB, typename TR, typename OP>
@@ -227,17 +247,18 @@ struct ICUDateAdd : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
-		CalendarPtr calendar(info.calendar->clone());
+		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, args.size(), [&](TA left, TB right) {
-			return OP::template Operation<TA, TB, TR>(left, right, calendar.get());
+			return OP::template Operation<TA, TB, TR>(left, right, calendar);
 		});
 	}
 
 	template <typename TA, typename TB, typename TR, typename OP>
 	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
 	                                                   const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>, Bind);
+		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>,
+		                      ICUBindIntervalMonths);
 	}
 
 	template <typename TA, typename TB, typename OP>
@@ -245,14 +266,14 @@ struct ICUDateAdd : public ICUDateFunc {
 		return GetBinaryDateFunction<TA, TB, timestamp_t, OP>(left_type, right_type, LogicalType::TIMESTAMP_TZ);
 	}
 
-	static void AddDateAddOperators(const string &name, DatabaseInstance &db) {
+	static void AddDateAddOperators(const string &name, ExtensionLoader &loader) {
 		//	temporal + interval
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
 		                                                                            LogicalType::INTERVAL));
 		set.AddFunction(GetDateAddFunction<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
 		                                                                            LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 
 	template <typename TA, typename OP>
@@ -265,7 +286,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		return GetBinaryDateFunction<TA, TB, interval_t, OP>(left_type, right_type, LogicalType::INTERVAL);
 	}
 
-	static void AddDateSubOperators(const string &name, DatabaseInstance &db) {
+	static void AddDateSubOperators(const string &name, ExtensionLoader &loader) {
 		//	temporal - interval
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
@@ -274,35 +295,35 @@ struct ICUDateAdd : public ICUDateFunc {
 		//	temporal - temporal
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 
-	static void AddDateAgeFunctions(const string &name, DatabaseInstance &db) {
+	static void AddDateAgeFunctions(const string &name, ExtensionLoader &loader) {
 		//	age(temporal, temporal)
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetUnaryAgeFunction<timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 };
 
-timestamp_t ICUDateFunc::Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
+timestamp_t ICUDateFunc::Add(TZCalendar &calendar, timestamp_t timestamp, interval_t interval) {
 	return ICUCalendarAdd::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
 }
 
-timestamp_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
+timestamp_t ICUDateFunc::Sub(TZCalendar &calendar, timestamp_t timestamp, interval_t interval) {
 	return ICUCalendarSub::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
 }
 
-interval_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t end_date, timestamp_t start_date) {
+interval_t ICUDateFunc::Sub(TZCalendar &calendar, timestamp_t end_date, timestamp_t start_date) {
 	return ICUCalendarSub::Operation<timestamp_t, timestamp_t, interval_t>(end_date, start_date, calendar);
 }
 
-void RegisterICUDateAddFunctions(DatabaseInstance &db) {
-	ICUDateAdd::AddDateAddOperators("+", db);
-	ICUDateAdd::AddDateSubOperators("-", db);
-	ICUDateAdd::AddDateAgeFunctions("age", db);
+void RegisterICUDateAddFunctions(ExtensionLoader &loader) {
+	ICUDateAdd::AddDateAddOperators("+", loader);
+	ICUDateAdd::AddDateSubOperators("-", loader);
+	ICUDateAdd::AddDateAgeFunctions("age", loader);
 }
 
 } // namespace duckdb

@@ -455,7 +455,8 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 
 	if (type != CatalogType::SCHEMA_ENTRY && lookup_result.result) {
 		auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
-		lookup_result = schema_entry.GetEntryDetailed(transaction, type, name);
+		EntryLookupInfo lookup_info(type, name);
+		lookup_result = schema_entry.LookupEntryDetailed(transaction, lookup_info);
 	}
 
 	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {

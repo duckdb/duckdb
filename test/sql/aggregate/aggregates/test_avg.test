@@ -2,8 +2,6 @@
 # description: Test AVG operator
 # group: [aggregates]
 
-require skip_reload
-
 # scalar average
 query RR
 SELECT AVG(3), AVG(NULL)
@@ -154,3 +152,28 @@ SELECT AVG(ts::TIME)
 FROM times
 ----
 11:57:30
+
+# TIMETZ - just average the normalised times
+statement ok
+CREATE TABLE timetzs (ttz TIMETZ);
+
+statement ok
+INSERT INTO timetzs VALUES
+	(NULL),
+	('00:00:00+1559'),
+	('00:00:00+1558'),
+	('02:30:00'),
+	('02:30:00+04'),
+	('02:30:00+04:30'),
+	('02:30:00+04:30:45'),
+	('16:15:03.123456'),
+	('02:30:00+1200'),
+	('02:30:00-1200'),
+	('24:00:00-1558'),
+	('24:00:00-1559'),
+;
+
+query I
+SELECT AVG(ttz) FROM timetzs;
+----
+14:44:56.193041+00

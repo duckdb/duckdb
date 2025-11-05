@@ -127,7 +127,6 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 		}
 		// Otherwise, fall thorugh and continue on normally
 	}
-
 	auto result = make_uniq<BoundFunctionExpression>(std::move(function_return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));
 	result->is_operator = is_operator;

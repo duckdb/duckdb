@@ -56,7 +56,11 @@ public:
 	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
-
+	//! Add an unnest relation which can come from a logical unnest or a logical get which has an unnest function
+	void AddUnnestRelation(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
+	                       optional_ptr<LogicalOperator> parent, RelationStats &child_stats,
+	                       optional_ptr<LogicalOperator> limit_op,
+	                       vector<reference<LogicalOperator>> &datasource_filters);
 	void AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
 	                                  const RelationStats &stats, LogicalOperatorType op_type);
 	vector<unique_ptr<SingleJoinRelation>> GetRelations();

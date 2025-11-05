@@ -1,0 +1,79 @@
+# name: test/sql/alter/struct/add_col_struct.test
+# description: Test ALTER TABLE ADD COLUMN: add column to a struct
+# group: [struct]
+
+statement ok
+CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER))
+
+statement ok
+INSERT INTO test VALUES (ROW(1, 1)), (ROW(2, 2))
+
+# add a column to a struct
+statement ok
+ALTER TABLE test ADD COLUMN s.k INTEGER
+
+query I
+SELECT * FROM test
+----
+{'i': 1, 'j': 1, 'k': NULL}
+{'i': 2, 'j': 2, 'k': NULL}
+
+# defaults
+statement ok
+ALTER TABLE test ADD COLUMN s.l INTEGER DEFAULT 42
+
+query I
+SELECT * FROM test
+----
+{'i': 1, 'j': 1, 'k': NULL, 'l': 42}
+{'i': 2, 'j': 2, 'k': NULL, 'l': 42}
+
+# this is transactional
+statement ok
+BEGIN
+
+statement ok
+ALTER TABLE test ADD COLUMN s.m INTEGER DEFAULT 42
+
+query I
+SELECT * FROM test
+----
+{'i': 1, 'j': 1, 'k': NULL, 'l': 42, 'm': 42}
+{'i': 2, 'j': 2, 'k': NULL, 'l': 42, 'm': 42}
+
+statement ok
+ROLLBACK
+
+query I
+SELECT * FROM test
+----
+{'i': 1, 'j': 1, 'k': NULL, 'l': 42}
+{'i': 2, 'j': 2, 'k': NULL, 'l': 42}
+
+# already exists
+statement error
+ALTER TABLE test ADD COLUMN s.i VARCHAR
+----
+field already exists in struct s
+
+# this just gets ignored
+statement ok
+ALTER TABLE test ADD COLUMN IF NOT EXISTS s.i VARCHAR
+
+query I
+SELECT * FROM test
+----
+{'i': 1, 'j': 1, 'k': NULL, 'l': 42}
+{'i': 2, 'j': 2, 'k': NULL, 'l': 42}
+
+# not a struct
+statement error
+ALTER TABLE test ADD COLUMN s.i.a INTEGER
+----
+Binder Error: Column 'i' is not a nested type, ADD COLUMN can only be used on nested types
+
+# nested column does not exist
+statement error
+ALTER TABLE test ADD COLUMN s.x.a INTEGER
+----
+does not exist

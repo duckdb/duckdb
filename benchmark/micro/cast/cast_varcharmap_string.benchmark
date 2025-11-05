@@ -1,0 +1,18 @@
+# name: benchmark/micro/cast/cast_varcharmap_string.benchmark
+# description: Cast map values to string
+# group: [cast]
+
+name Cast MAP<VARCHAR,VARCHAR> -> VARCHAR
+group cast
+
+load
+CREATE TABLE maps AS SELECT MAP(
+    ['simple', 'needs space', 'has,comma', 'null', 'has:colon', 'quoted'],
+    ['red', '  needs quotes  ', 'no,escape needed', NULL, 'null', 'contains''quote']
+) m FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(CAST(m AS VARCHAR)) FROM maps;
+
+result I
+{simple=red, needs space='  needs quotes  ', 'has,comma'='no,escape needed', 'null'=NULL, 'has:colon'='null', quoted='contains\'quote'}

@@ -30,7 +30,6 @@ namespace duckdb {
 
 template <class T>
 struct AlpRDCompressionState : public CompressionState {
-
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
@@ -104,7 +103,7 @@ public:
 		auto &type = checkpoint_data.GetType();
 
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockSize());
+		                                                                info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);

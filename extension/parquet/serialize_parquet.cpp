@@ -7,7 +7,8 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_crypto.hpp"
-#include "parquet_writer.hpp"
+#include "parquet_field_id.hpp"
+#include "parquet_shredding.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,16 @@ void ChildFieldIDs::Serialize(Serializer &serializer) const {
 ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
 	ChildFieldIDs result;
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", result.ids.operator*());
+	return result;
+}
+
+void ChildShreddingTypes::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<ShreddingType>>(100, "types", types.operator*());
+}
+
+ChildShreddingTypes ChildShreddingTypes::Deserialize(Deserializer &deserializer) {
+	ChildShreddingTypes result;
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<ShreddingType>>(100, "types", result.types.operator*());
 	return result;
 }
 
@@ -59,31 +70,47 @@ void ParquetEncryptionConfig::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig(deserializer.Get<ClientContext &>()));
+	auto result = duckdb::shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig());
 	deserializer.ReadPropertyWithDefault<string>(100, "footer_key", result->footer_key);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, string>>(101, "column_keys", result->column_keys);
 	return result;
 }
 
-void ParquetOptions::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<bool>(100, "binary_as_string", binary_as_string);
-	serializer.WritePropertyWithDefault<bool>(101, "file_row_number", file_row_number);
-	serializer.WriteProperty<MultiFileReaderOptions>(102, "file_options", file_options);
-	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
-	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
-	serializer.WritePropertyWithDefault<bool>(105, "debug_use_openssl", debug_use_openssl, true);
-	serializer.WritePropertyWithDefault<idx_t>(106, "explicit_cardinality", explicit_cardinality, 0);
+void ParquetOptionsSerialization::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<bool>(100, "binary_as_string", parquet_options.binary_as_string);
+	serializer.WritePropertyWithDefault<bool>(101, "file_row_number", parquet_options.file_row_number);
+	serializer.WriteProperty<MultiFileOptions>(102, "file_options", file_options);
+	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", parquet_options.schema);
+	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", parquet_options.encryption_config, nullptr);
+	serializer.WritePropertyWithDefault<bool>(105, "debug_use_openssl", parquet_options.debug_use_openssl, true);
+	serializer.WritePropertyWithDefault<idx_t>(106, "explicit_cardinality", parquet_options.explicit_cardinality, 0);
+	serializer.WritePropertyWithDefault<bool>(107, "can_have_nan", parquet_options.can_have_nan, false);
 }
 
-ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
-	ParquetOptions result;
-	deserializer.ReadPropertyWithDefault<bool>(100, "binary_as_string", result.binary_as_string);
-	deserializer.ReadPropertyWithDefault<bool>(101, "file_row_number", result.file_row_number);
-	deserializer.ReadProperty<MultiFileReaderOptions>(102, "file_options", result.file_options);
-	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.schema);
-	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.encryption_config, nullptr);
-	deserializer.ReadPropertyWithExplicitDefault<bool>(105, "debug_use_openssl", result.debug_use_openssl, true);
-	deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "explicit_cardinality", result.explicit_cardinality, 0);
+ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserializer &deserializer) {
+	ParquetOptionsSerialization result;
+	deserializer.ReadPropertyWithDefault<bool>(100, "binary_as_string", result.parquet_options.binary_as_string);
+	deserializer.ReadPropertyWithDefault<bool>(101, "file_row_number", result.parquet_options.file_row_number);
+	deserializer.ReadProperty<MultiFileOptions>(102, "file_options", result.file_options);
+	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.parquet_options.schema);
+	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.parquet_options.encryption_config, nullptr);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(105, "debug_use_openssl", result.parquet_options.debug_use_openssl, true);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "explicit_cardinality", result.parquet_options.explicit_cardinality, 0);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(107, "can_have_nan", result.parquet_options.can_have_nan, false);
+	return result;
+}
+
+void ShreddingType::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<bool>(100, "set", set);
+	serializer.WriteProperty<LogicalType>(101, "type", type);
+	serializer.WriteProperty<ChildShreddingTypes>(102, "children", children);
+}
+
+ShreddingType ShreddingType::Deserialize(Deserializer &deserializer) {
+	ShreddingType result;
+	deserializer.ReadPropertyWithDefault<bool>(100, "set", result.set);
+	deserializer.ReadProperty<LogicalType>(101, "type", result.type);
+	deserializer.ReadProperty<ChildShreddingTypes>(102, "children", result.children);
 	return result;
 }
 

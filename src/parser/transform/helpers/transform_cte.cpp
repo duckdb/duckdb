@@ -11,13 +11,28 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	result->aliases = aliases;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+
+	for (auto &key : result->key_targets) {
+		result->key_targets.push_back(key->Copy());
+	}
+
 	result->materialized = materialized;
 	return result;
 }
 
+CommonTableExpressionInfo::~CommonTableExpressionInfo() {
+}
+
+CTEMaterialize CommonTableExpressionInfo::GetMaterializedForSerialization(Serializer &serializer) const {
+	if (serializer.ShouldSerialize(7)) {
+		return materialized;
+	}
+	return CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+}
+
 void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	for (auto &cte_entry : stored_cte_map) {
-		for (auto &entry : cte_entry->map) {
+		for (auto &entry : cte_entry.get().map) {
 			auto found_entry = cte_map.map.find(entry.first);
 			if (found_entry != cte_map.map.end()) {
 				// entry already present - use top-most entry
@@ -32,7 +47,7 @@ void Transformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 }
 
 void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map) {
-	stored_cte_map.push_back(&cte_map);
+	stored_cte_map.push_back(cte_map);
 
 	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause.ctes);
@@ -40,6 +55,13 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto info = make_uniq<CommonTableExpressionInfo>();
 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
+		if (cte.recursive_keys) {
+			auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
+			if (key_target) {
+				TransformExpressionList(*cte.recursive_keys, info->key_targets);
+			}
+		}
+
 		if (cte.aliascolnames) {
 			for (auto node = cte.aliascolnames->head; node != nullptr; node = node->next) {
 				auto value = PGPointerCast<duckdb_libpgquery::PGValue>(node->data.ptr_value);
@@ -61,7 +83,7 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		}
 		// we need a query
 		if (!cte.ctequery || cte.ctequery->type != duckdb_libpgquery::T_PGSelectStmt) {
-			throw NotImplementedException("A CTE needs a SELECT");
+			throw ParserException("A CTE needs a SELECT");
 		}
 
 		// CTE transformation can either result in inlining for non recursive CTEs, or in recursive CTE bindings
@@ -116,6 +138,9 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.left = TransformSelectNode(*stmt.larg);
 		result.right = TransformSelectNode(*stmt.rarg);
 		result.aliases = info.aliases;
+		for (auto &key : info.key_targets) {
+			result.key_targets.emplace_back(key->Copy());
+		}
 		break;
 	}
 	case duckdb_libpgquery::PG_SETOP_EXCEPT:

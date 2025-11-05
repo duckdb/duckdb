@@ -1,8 +1,6 @@
 # name: test/geoparquet/mixed.test
 # group: [geoparquet]
 
-require spatial
-
 require parquet
 
 #------------------------------------------------------------------------------
@@ -49,4 +47,13 @@ query I
 SELECT (decode(value)) as col
 FROM parquet_kv_metadata('__TEST_DIR__/t1.parquet');
 ----
-{"version":"1.1.0","primary_column":"geom","columns":{"geom":{"encoding":"WKB","geometry_types":["Point","LineString","Polygon","MultiPoint","MultiLineString","MultiPolygon","GeometryCollection","Point Z"],"bbox":[0.0,0.0,3.0,3.0]}}}
+{"version":"1.0.0","primary_column":"geom","columns":{"geom":{"encoding":"WKB","geometry_types":["Point","LineString","Polygon","MultiPoint","MultiLineString","MultiPolygon","GeometryCollection","Point Z"],"bbox":[0.0,0.0,1.0,3.0,3.0,1.0]}}}
+
+
+#------------------------------------------------------------------------------
+# Write with RETURN_STATS
+#------------------------------------------------------------------------------
+query IIIIII
+COPY (SELECT * FROM t1) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet', RETURN_STATS);
+----
+<REGEX>:.*t1.parquet	8	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"col"'={column_size_bytes=\d+, max=8, min=1, null_count=0}, '"geom"'={bbox_xmax=3.0, bbox_xmin=0.0, bbox_ymax=3.0, bbox_ymin=0.0, bbox_zmax=1.0, bbox_zmin=1.0, column_size_bytes=\d+, geo_types='\[point, linestring, polygon, multipoint, multilinestring, multipolygon, geometrycollection, point_z\]', null_count=0}}	NULL

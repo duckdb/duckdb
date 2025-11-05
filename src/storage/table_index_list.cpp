@@ -12,41 +12,56 @@
 
 namespace duckdb {
 
+IndexEntry::IndexEntry(unique_ptr<Index> index_p) : index(std::move(index_p)) {
+	if (index->IsBound()) {
+		bind_state = IndexBindState::BOUND;
+	} else {
+		bind_state = IndexBindState::UNBOUND;
+	}
+}
+
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
-	lock_guard<mutex> lock(indexes_lock);
-	indexes.push_back(std::move(index));
+	lock_guard<mutex> lock(index_entries_lock);
+	auto index_entry = make_uniq<IndexEntry>(std::move(index));
+	index_entries.push_back(std::move(index_entry));
+	if (!index_entries.back()->index->IsBound()) {
+		unbound_count++;
+	}
 }
 
 void TableIndexList::RemoveIndex(const string &name) {
-	lock_guard<mutex> lock(indexes_lock);
-
-	for (idx_t i = 0; i < indexes.size(); i++) {
-		auto &index = indexes[i];
-		if (index->GetIndexName() == name) {
-			indexes.erase_at(i);
-			break;
+	lock_guard<mutex> lock(index_entries_lock);
+	for (idx_t i = 0; i < index_entries.size(); i++) {
+		auto &index = *index_entries[i]->index;
+		if (index.GetIndexName() == name) {
+			if (!index.IsBound()) {
+				unbound_count--;
+			}
+			index_entries.erase_at(i);
+			return;
 		}
 	}
 }
 
 void TableIndexList::CommitDrop(const string &name) {
-	lock_guard<mutex> lock(indexes_lock);
-
-	for (auto &index : indexes) {
-		if (index->GetIndexName() == name) {
-			index->CommitDrop();
+	lock_guard<mutex> lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		if (index.GetIndexName() == name) {
+			index.CommitDrop();
+			return;
 		}
 	}
 }
 
 bool TableIndexList::NameIsUnique(const string &name) {
-	lock_guard<mutex> lock(indexes_lock);
-
 	// Only covers PK, FK, and UNIQUE indexes.
-	for (const auto &index : indexes) {
-		if (index->IsPrimary() || index->IsForeign() || index->IsUnique()) {
-			if (index->GetIndexName() == name) {
+	lock_guard<mutex> lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		if (index.IsPrimary() || index.IsForeign() || index.IsUnique()) {
+			if (index.GetIndexName() == name) {
 				return false;
 			}
 		}
@@ -55,35 +70,32 @@ bool TableIndexList::NameIsUnique(const string &name) {
 }
 
 optional_ptr<BoundIndex> TableIndexList::Find(const string &name) {
-	for (auto &index : indexes) {
-		if (index->GetIndexName() == name) {
-			return index->Cast<BoundIndex>();
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		if (index.GetIndexName() == name) {
+			if (!index.IsBound()) {
+				throw InternalException("cannot return an unbound index in TableIndexList::Find");
+			}
+			return index.Cast<BoundIndex>();
 		}
 	}
 	return nullptr;
 }
 
-void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info, const char *index_type) {
-	// Fast path: do we have any unbound indexes?
-	bool needs_binding = false;
+void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type) {
 	{
-		lock_guard<mutex> lock(indexes_lock);
-		for (auto &index : indexes) {
-			if (!index->IsBound() && (index_type == nullptr || index->GetIndexType() == index_type)) {
-				needs_binding = true;
-				break;
-			}
+		// Early-out, if we have no unbound indexes.
+		lock_guard<mutex> lock(index_entries_lock);
+		if (unbound_count == 0) {
+			return;
 		}
-	}
-	if (!needs_binding) {
-		return;
 	}
 
 	// Get the table from the catalog, so we can add it to the binder.
 	auto &catalog = table_info.GetDB().GetCatalog();
 	auto schema = table_info.GetSchemaName();
 	auto table_name = table_info.GetTableName();
-	auto &table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema, table_name);
+	auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
 	auto &table = table_entry.Cast<DuckTableEntry>();
 
 	vector<LogicalType> column_types;
@@ -93,39 +105,62 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 		column_names.push_back(col.Name());
 	}
 
-	lock_guard<mutex> lock(indexes_lock);
-	for (auto &index : indexes) {
-		if (!index->IsBound() && (index_type == nullptr || index->GetIndexType() == index_type)) {
-			// Create a binder to bind this index.
-			auto binder = Binder::CreateBinder(context);
-
-			// Add the table to the binder.
-			vector<ColumnIndex> dummy_column_ids;
-			binder->bind_context.AddBaseTable(0, string(), column_names, column_types, dummy_column_ids, table);
-
-			// Create an IndexBinder to bind the index
-			IndexBinder idx_binder(*binder, context);
-
-			// Replace the unbound index with a bound index.
-			auto bound_idx = idx_binder.BindIndex(index->Cast<UnboundIndex>());
-			index = std::move(bound_idx);
+	unique_lock<mutex> lock(index_entries_lock);
+	// Busy-spin trying to bind all indexes.
+	while (true) {
+		optional_ptr<IndexEntry> index_entry;
+		for (auto &entry : index_entries) {
+			auto &index = *entry->index;
+			if (!index.IsBound() && (index_type == nullptr || index.GetIndexType() == index_type)) {
+				index_entry = entry.get();
+				break;
+			}
 		}
+		if (!index_entry) {
+			// We bound all indexes.
+			D_ASSERT(unbound_count == 0);
+			break;
+		}
+		if (index_entry->bind_state == IndexBindState::BINDING) {
+			// Another thread is binding the index.
+			// Lock and unlock the index entries so that the other thread can commit its changes.
+			lock.unlock();
+			lock.lock();
+			continue;
+
+		} else if (index_entry->bind_state == IndexBindState::UNBOUND) {
+			// We are the thread that'll bind the index.
+			index_entry->bind_state = IndexBindState::BINDING;
+			lock.unlock();
+
+		} else {
+			throw InternalException("index entry bind state cannot be BOUND here");
+		}
+
+		// Create a binder to bind this index.
+		auto binder = Binder::CreateBinder(context);
+
+		// Add the table to the binder.
+		vector<ColumnIndex> dummy_column_ids;
+		binder->bind_context.AddBaseTable(0, string(), column_names, column_types, dummy_column_ids, table);
+
+		// Create an IndexBinder to bind the index
+		IndexBinder idx_binder(*binder, context);
+
+		// Apply any outstanding appends and replace the unbound index with a bound index.
+		auto &unbound_index = index_entry->index->Cast<UnboundIndex>();
+		auto bound_idx = idx_binder.BindIndex(unbound_index);
+		if (unbound_index.HasBufferedAppends()) {
+			bound_idx->ApplyBufferedAppends(column_types, unbound_index.GetBufferedAppends(),
+			                                unbound_index.GetMappedColumnIds());
+		}
+
+		// Commit the bound index to the index entry.
+		lock.lock();
+		index_entry->bind_state = IndexBindState::BOUND;
+		index_entry->index = std::move(bound_idx);
+		unbound_count--;
 	}
-}
-
-bool TableIndexList::Empty() {
-	lock_guard<mutex> lock(indexes_lock);
-	return indexes.empty();
-}
-
-idx_t TableIndexList::Count() {
-	lock_guard<mutex> lock(indexes_lock);
-	return indexes.size();
-}
-
-void TableIndexList::Move(TableIndexList &other) {
-	D_ASSERT(indexes.empty());
-	indexes = std::move(other.indexes);
 }
 
 bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type) {
@@ -154,9 +189,10 @@ bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, Forei
 
 optional_ptr<Index> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
                                                         const ForeignKeyType fk_type) {
-	for (auto &index_elem : indexes) {
-		if (IsForeignKeyIndex(fk_keys, *index_elem, fk_type)) {
-			return index_elem;
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
+			return index;
 		}
 	}
 	return nullptr;
@@ -164,7 +200,7 @@ optional_ptr<Index> TableIndexList::FindForeignKeyIndex(const vector<PhysicalInd
 
 void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
                                       DataChunk &chunk, ConflictManager &conflict_manager) {
-	auto fk_type = conflict_manager.LookupType() == VerifyExistenceType::APPEND_FK
+	auto fk_type = conflict_manager.GetVerifyExistenceType() == VerifyExistenceType::APPEND_FK
 	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
 	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
@@ -182,31 +218,59 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 }
 
 unordered_set<column_t> TableIndexList::GetRequiredColumns() {
-	lock_guard<mutex> lock(indexes_lock);
+	lock_guard<mutex> lock(index_entries_lock);
 	unordered_set<column_t> column_ids;
-	for (auto &index : indexes) {
-		for (auto col_id : index->GetColumnIds()) {
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		for (auto col_id : index.GetColumnIds()) {
 			column_ids.insert(col_id);
 		}
 	}
 	return column_ids;
 }
 
-vector<IndexStorageInfo> TableIndexList::GetStorageInfos(const case_insensitive_map_t<Value> &options) {
+vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context,
+                                                         const case_insensitive_map_t<Value> &options) {
 	vector<IndexStorageInfo> infos;
-	for (auto &index : indexes) {
-		if (index->IsBound()) {
-			auto info = index->Cast<BoundIndex>().GetStorageInfo(options, false);
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		if (index.IsBound()) {
+			auto info = index.Cast<BoundIndex>().SerializeToDisk(context, options);
 			D_ASSERT(info.IsValid() && !info.name.empty());
 			infos.push_back(info);
 			continue;
 		}
 
-		auto info = index->Cast<UnboundIndex>().GetStorageInfo();
+		auto info = index.Cast<UnboundIndex>().GetStorageInfo();
 		D_ASSERT(!info.name.empty());
 		infos.push_back(info);
 	}
 	return infos;
+}
+
+void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
+                                          vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info) {
+	// table_chunk contains all table columns.
+	// We only reference the index columns in the index chunk.
+	auto &index_list = data_table_info.GetIndexes();
+	auto indexed_columns = index_list.GetRequiredColumns();
+
+	vector<LogicalType> index_types;
+	for (auto &col : indexed_columns) {
+		index_types.push_back(table_types[col]);
+		mapped_column_ids.emplace_back(col);
+	}
+
+	index_chunk.InitializeEmpty(index_types);
+}
+
+void TableIndexList::ReferenceIndexChunk(DataChunk &table_chunk, DataChunk &index_chunk,
+                                         vector<StorageIndex> &mapped_column_ids) {
+	for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
+		auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+		index_chunk.data[i].Reference(table_chunk.data[col_id]);
+	}
+	index_chunk.SetCardinality(table_chunk);
 }
 
 } // namespace duckdb

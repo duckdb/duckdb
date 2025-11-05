@@ -14,7 +14,7 @@
 namespace duckdb {
 //! Basic CSV Column Info
 struct CSVColumnInfo {
-	CSVColumnInfo(string &name_p, LogicalType &type_p) : name(name_p), type(type_p) {
+	CSVColumnInfo(const string &name_p, const LogicalType &type_p) : name(name_p), type(type_p) {
 	}
 	string name;
 	LogicalType type;
@@ -25,7 +25,7 @@ struct CSVSchema {
 	explicit CSVSchema(const bool empty = false) : empty(empty) {
 	}
 
-	CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read,
+	CSVSchema(const vector<string> &names, const vector<LogicalType> &types, const string &file_path, idx_t rows_read,
 	          const bool empty = false);
 
 	//! Initializes the schema based on names and types
@@ -58,6 +58,9 @@ struct CSVSchema {
 
 	//! Get a vector with types
 	vector<LogicalType> GetTypes() const;
+
+	//! Replace any SQLNull types with Varchar
+	void ReplaceNullWithVarchar();
 
 private:
 	//! If a type can be cast to another

@@ -5,7 +5,9 @@
 
 namespace duckdb {
 
-static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+namespace {
+
+void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto array_type = result.GetType();
 
 	D_ASSERT(array_type.id() == LogicalTypeId::ARRAY);
@@ -42,8 +44,8 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFunction &bound_function,
+                                        vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.empty()) {
 		throw InvalidInputException("array_value requires at least one argument");
 	}
@@ -74,6 +76,8 @@ unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStati
 	}
 	return list_stats.ToUnique();
 }
+
+} // namespace
 
 ScalarFunction ArrayValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function

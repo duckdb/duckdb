@@ -157,6 +157,13 @@ string Blob::ToBlob(string_t str, CastParameters &parameters) {
 }
 
 // base64 functions are adapted from https://gist.github.com/tomykaira/f0fd86b6c73063283afe550bc5d77594
+string Blob::ToBase64(string_t blob) {
+	auto base64_size = Blob::ToBase64Size(blob);
+	auto data = make_uniq_array<char>(base64_size);
+	Blob::ToBase64(blob, data.get());
+	return string(data.get(), base64_size);
+}
+
 idx_t Blob::ToBase64Size(string_t blob) {
 	// every 4 characters in base64 encode 3 bytes, plus (potential) padding at the end
 	auto input_size = blob.GetSize();
@@ -205,6 +212,13 @@ static constexpr int BASE64_DECODING_TABLE[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+
+string Blob::FromBase64(string_t blob) {
+	auto decoded_size = Blob::FromBase64Size(blob);
+	auto data = make_uniq_array<data_t>(decoded_size);
+	Blob::FromBase64(blob, data.get(), decoded_size);
+	return string(char_ptr_cast(data.get()), decoded_size);
+}
 
 idx_t Blob::FromBase64Size(string_t str) {
 	auto input_data = str.GetData();

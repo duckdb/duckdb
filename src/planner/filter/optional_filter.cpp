@@ -8,11 +8,11 @@ OptionalFilter::OptionalFilter(unique_ptr<TableFilter> filter)
     : TableFilter(TableFilterType::OPTIONAL_FILTER), child_filter(std::move(filter)) {
 }
 
-FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) const {
 	return child_filter->CheckStatistics(stats);
 }
 
-string OptionalFilter::ToString(const string &column_name) {
+string OptionalFilter::ToString(const string &column_name) const {
 	return string("optional: ") + child_filter->ToString(column_name);
 }
 

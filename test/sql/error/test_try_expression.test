@@ -140,3 +140,11 @@ with cte(x) as (
 select TRY(2 + avg(x)) from cte
 ----
 aggregates are not allowed inside the TRY expression
+
+# The values below are literals, which do not have a PhysicalType, caused a crash before fixing duckdb-internal/issues/5047
+
+statement ok
+select TRY('hello');
+
+statement ok
+select TRY(123);

@@ -1,6 +1,8 @@
 # Script that takes src/include/duckdb/common/enums/optimizer_type.hpp, extracts the optimizer types
 # and adds them to the metrics types.
 # Then it creates a new file src/include/duckdb/common/enums/metric_type.hpp with the new metrics types as enums.
+# and generates both test/sql/pragma/profiling/test_default_profiling_settings.test
+# and test/sql/pragma/profiling/test_custom_profiling_optimizer.test
 
 import re
 import os
@@ -12,31 +14,51 @@ metrics_cpp_file = os.path.join("..", "src", "common", "enums", "metric_type.cpp
 optimizer_file = os.path.join("..", "src", "include", "duckdb", "common", "enums", "optimizer_type.hpp")
 
 metrics = [
-    "QUERY_NAME",
+    "ATTACH_LOAD_STORAGE_LATENCY",
+    "ATTACH_REPLAY_WAL_LATENCY",
     "BLOCKED_THREAD_TIME",
+    "CHECKPOINT_LATENCY",
+    "COMMIT_WRITE_WAL_LATENCY",
     "CPU_TIME",
-    "EXTRA_INFO",
     "CUMULATIVE_CARDINALITY",
-    "OPERATOR_TYPE",
-    "OPERATOR_CARDINALITY",
     "CUMULATIVE_ROWS_SCANNED",
+    "EXTRA_INFO",
+    "LATENCY",
+    "OPERATOR_CARDINALITY",
+    "OPERATOR_NAME",
     "OPERATOR_ROWS_SCANNED",
     "OPERATOR_TIMING",
+    "OPERATOR_TYPE",
+    "QUERY_NAME",
     "RESULT_SET_SIZE",
-    "LATENCY",
     "ROWS_RETURNED",
-    "OPERATOR_NAME",
+    "SYSTEM_PEAK_BUFFER_MEMORY",
+    "SYSTEM_PEAK_TEMP_DIR_SIZE",
+    "TOTAL_BYTES_READ",
+    "TOTAL_BYTES_WRITTEN",
+    "WAITING_TO_ATTACH_LATENCY",
+    "WAL_REPLAY_ENTRY_COUNT",
 ]
 
 phase_timing_metrics = [
     "ALL_OPTIMIZERS",
     "CUMULATIVE_OPTIMIZER_TIMING",
-    "PLANNER",
-    "PLANNER_BINDING",
     "PHYSICAL_PLANNER",
     "PHYSICAL_PLANNER_COLUMN_BINDING",
-    "PHYSICAL_PLANNER_RESOLVE_TYPES",
     "PHYSICAL_PLANNER_CREATE_PLAN",
+    "PHYSICAL_PLANNER_RESOLVE_TYPES",
+    "PLANNER",
+    "PLANNER_BINDING",
+]
+
+query_global_metrics = [
+    "ATTACH_LOAD_STORAGE_LATENCY",
+    "ATTACH_REPLAY_WAL_LATENCY",
+    "BLOCKED_THREAD_TIME",
+    "CHECKPOINT_LATENCY",
+    "SYSTEM_PEAK_BUFFER_MEMORY",
+    "SYSTEM_PEAK_TEMP_DIR_SIZE",
+    "WAITING_TO_ATTACH_LATENCY",
 ]
 
 optimizer_types = []
@@ -94,6 +116,7 @@ get_optimizer_metric_by_type_fun = 'GetOptimizerMetricByType(OptimizerType type)
 get_optimizer_type_by_metric_fun = 'GetOptimizerTypeByMetric(MetricsType type)'
 is_optimizer_metric_fun = 'IsOptimizerMetric(MetricsType type)'
 is_phase_timing_metric_fun = 'IsPhaseTimingMetric(MetricsType type)'
+is_query_global_metric_fun = 'IsQueryGlobalMetric(MetricsType type)'
 
 metrics_class = 'MetricsUtils'
 
@@ -134,6 +157,7 @@ with open(metrics_header_file, "w") as f:
     f.write(f'    static OptimizerType {get_optimizer_type_by_metric_fun};\n\n')
     f.write(f'    static bool {is_optimizer_metric_fun};\n')
     f.write(f'    static bool {is_phase_timing_metric_fun};\n')
+    f.write(f'    static bool {is_query_global_metric_fun};\n')
     f.write('};\n\n')
 
     f.write("} // namespace duckdb\n")
@@ -204,4 +228,174 @@ with open(metrics_cpp_file, "w") as f:
     f.write('    };\n')
     f.write('}\n\n')
 
+    f.write(f'bool {metrics_class}::{is_query_global_metric_fun} {{\n')
+    f.write('    switch(type) {\n')
+    for metric in query_global_metrics:
+        f.write(f"        case MetricsType::{metric}:\n")
+
+    f.write('            return true;\n')
+    f.write('        default:\n')
+    f.write('            return false;\n')
+    f.write('    };\n')
+    f.write('}\n\n')
+
     f.write("} // namespace duckdb\n")
+
+# Generate the test files
+test_names = ["test_default_profiling_settings", "test_custom_profiling_optimizer"]
+
+test_descriptions = ["default", "custom optimizer"]
+
+test_files = [os.path.join("..", "test", "sql", "pragma", "profiling", f"{name}.test") for name in test_names]
+
+
+def write_statement(f, statement_type, statement):
+    f.write(f"statement {statement_type}\n")
+    f.write(statement + "\n\n")
+
+
+def write_query(f, options, query):
+    f.write(f"query {options}\n")
+    f.write(query + "\n")
+    f.write("----\n")
+
+
+def write_default_query(f):
+    query = "SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();"
+    write_statement(f, "ok", query)
+    write_statement(f, "ok", "PRAGMA disable_profiling;")
+
+
+def write_get_custom_profiling_settings(f):
+    query = """
+SELECT unnest(res) FROM (
+    SELECT current_setting('custom_profiling_settings') AS raw_setting,
+    raw_setting.trim('{}') AS setting,
+    string_split(setting, ', ') AS res
+) ORDER BY ALL;
+            """.strip()
+    write_query(f, "I", query)
+
+
+def write_custom_profiling_optimizer(f):
+    write_statement(f, "ok", "PRAGMA custom_profiling_settings='{\"ALL_OPTIMIZERS\": \"true\"}';")
+
+    write_default_query(f)
+
+    query = """
+SELECT * FROM (
+    SELECT unnest(res) str FROM (
+        SELECT current_setting('custom_profiling_settings') as raw_setting,
+        raw_setting.trim('{}') AS setting,
+        string_split(setting, ', ') AS res
+    )
+) WHERE '"true"' NOT in str
+ORDER BY ALL \
+            """.strip()
+    write_query(f, "I", query)
+    f.write("\n")
+
+    write_statement(f, "ok", "PRAGMA custom_profiling_settings='{}'")
+    write_default_query(f)
+
+    write_get_custom_profiling_settings(f)
+    f.write("(empty)\n\n")
+
+    write_statement(f, "ok", "PRAGMA custom_profiling_settings='{\"OPTIMIZER_JOIN_ORDER\": \"true\"}'")
+    write_default_query(f)
+
+    write_get_custom_profiling_settings(f)
+    f.write("\"OPTIMIZER_JOIN_ORDER\": \"true\"\n\n")
+
+    write_statement(
+        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+    )
+
+    query = """
+SELECT
+    CASE WHEN optimizer_join_order > 0 THEN 'true'
+     ELSE 'false' END
+FROM metrics_output;
+            """.strip()
+    write_query(f, "I", query)
+    f.write("true\n\n")
+
+    write_statement(f, "ok", "SET disabled_optimizers = 'JOIN_ORDER';")
+    write_statement(f, "ok", "PRAGMA custom_profiling_settings='{\"OPTIMIZER_JOIN_ORDER\": \"true\"}'")
+    write_default_query(f)
+
+    write_get_custom_profiling_settings(f)
+    f.write("(empty)\n\n")
+
+    write_statement(f, "ok", "PRAGMA custom_profiling_settings='{\"CUMULATIVE_OPTIMIZER_TIMING\": \"true\"}';")
+    write_default_query(f)
+
+    write_statement(
+        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+    )
+
+    query = """
+SELECT
+    CASE WHEN cumulative_optimizer_timing > 0 THEN 'true'
+    ELSE 'false' END
+FROM metrics_output;
+        """.strip()
+    write_query(f, "I", query)
+    f.write("true\n\n")
+
+    f.write("# All phase timings must be collected when using detailed profiling mode.\n\n")
+
+    write_statement(f, "ok", "RESET custom_profiling_settings;")
+    write_statement(f, "ok", "SET profiling_mode = 'detailed';")
+    write_default_query(f)
+
+    query = """
+SELECT * FROM (
+    SELECT unnest(res) str FROM (
+        SELECT current_setting('custom_profiling_settings') AS raw_setting,
+        raw_setting.trim('{}') AS setting,
+        string_split(setting, ', ') AS res
+    )
+)
+WHERE '"true"' NOT IN str
+ORDER BY ALL
+            """.strip()
+    write_query(f, "I", query)
+    f.write("\n")
+
+    write_statement(f, "ok", "RESET custom_profiling_settings;")
+    write_statement(f, "ok", "SET profiling_mode = 'standard';")
+
+
+# Create the test files
+for test_file, name, description in zip(test_files, test_names, test_descriptions):
+    with open(test_file, "w") as f:
+        display_name = test_file.replace("../", "")
+        f.write(f"# name: {display_name}\n")
+        f.write(f"# description: Test {description} profiling settings.\n")
+        f.write("# group: [profiling]\n\n")
+        f.write("# This file is automatically generated by scripts/generate_metric_enums.py\n")
+        f.write("# Do not edit this file manually, your changes will be overwritten\n\n")
+
+        f.write("require json\n\n")
+
+        write_statement(f, "ok", "PRAGMA enable_verification;")
+        write_statement(f, "ok", "PRAGMA enable_profiling = 'json';")
+        write_statement(f, "ok", "PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';")
+
+        if name == "test_custom_profiling_optimizer":
+            write_custom_profiling_optimizer(f)
+
+        write_default_query(f)
+
+        write_get_custom_profiling_settings(f)
+        metrics.sort()
+
+        for metric in metrics:
+            f.write(f'"{metric}": "true"\n')
+        f.write("\n")
+
+        write_statement(
+            f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+        )
+        write_statement(f, "ok", "SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;")

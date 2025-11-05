@@ -5,13 +5,11 @@
 statement ok
 CREATE TABLE strings(i STRING)
 
-statement error
-INSERT INTO strings VALUES ('â‚(')
-----
+statement ok
+INSERT INTO strings VALUES ('ï¿½(')
 
-statement error
-SELECT * FROM strings WHERE i = 'â‚('
-----
+statement ok
+SELECT * FROM strings WHERE i = 'ï¿½('
 
 # Test insert with too few or too many cols
 statement ok
@@ -24,21 +22,25 @@ INSERT INTO a VALUES (1, 2)
 statement error
 INSERT INTO a VALUES (1)
 ----
+<REGEX>:.*Binder Error.*table a has 2 columns.*
 
 statement error
 INSERT INTO a VALUES (1,2,3)
 ----
+<REGEX>:.*Binder Error.*table a has 2 columns.*
 
 statement error
 INSERT INTO a VALUES (1,2),(3)
 ----
+<REGEX>:.*Parser Error.*must all be the same length.*
 
 statement error
 INSERT INTO a VALUES (1,2),(3,4,5)
 ----
+<REGEX>:.*Parser Error.*must all be the same length.*
 
 # also with queries
 statement error
 INSERT INTO a SELECT 42
 ----
-
+<REGEX>:.*Binder Error.*table a has 2 columns.*

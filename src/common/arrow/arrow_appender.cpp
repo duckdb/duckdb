@@ -144,6 +144,9 @@ static void InitializeAppenderForType(ArrowAppendData &append_data) {
 static void InitializeFunctionPointers(ArrowAppendData &append_data, const LogicalType &type) {
 	// handle special logical types
 	switch (type.id()) {
+	case LogicalTypeId::SQLNULL:
+		InitializeAppenderForType<ArrowNullData>(append_data);
+		break;
 	case LogicalTypeId::BOOLEAN:
 		InitializeAppenderForType<ArrowBoolData>(append_data);
 		break;
@@ -212,13 +215,25 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int16_t>>(append_data);
+			if (append_data.options.arrow_output_version > ArrowFormatVersion::V1_4) {
+				InitializeAppenderForType<ArrowScalarData<int32_t, int16_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int16_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT32:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int32_t>>(append_data);
+			if (append_data.options.arrow_output_version > ArrowFormatVersion::V1_4) {
+				InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int32_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT64:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int64_t>>(append_data);
+			if (append_data.options.arrow_output_version > ArrowFormatVersion::V1_4) {
+				InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int64_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT128:
 			InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
@@ -228,7 +243,11 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
-		if (append_data.options.produce_arrow_string_view) {
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::BIGNUM:
+		if ((append_data.options.produce_arrow_string_view || type.id() != LogicalTypeId::VARCHAR) &&
+		    append_data.options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 			InitializeAppenderForType<ArrowVarcharToStringViewData>(append_data);
 		} else {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -238,25 +257,16 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 			}
 		}
 		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
-		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			InitializeAppenderForType<ArrowVarcharData<>>(append_data);
-		} else {
-			InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, int32_t>>(append_data);
-		}
-		break;
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			InitializeAppenderForType<ArrowEnumData<int8_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint8_t>>(append_data);
 			break;
 		case PhysicalType::UINT16:
-			InitializeAppenderForType<ArrowEnumData<int16_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint16_t>>(append_data);
 			break;
 		case PhysicalType::UINT32:
-			InitializeAppenderForType<ArrowEnumData<int32_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint32_t>>(append_data);
 			break;
 		default:
 			throw InternalException("Unsupported internal enum type");
@@ -275,7 +285,8 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowFixedSizeListData>(append_data);
 		break;
 	case LogicalTypeId::LIST: {
-		if (append_data.options.arrow_use_list_view) {
+		if (append_data.options.arrow_use_list_view &&
+		    append_data.options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				InitializeAppenderForType<ArrowListViewData<>>(append_data);
 			} else {

@@ -14,7 +14,7 @@ SetVariableStatement::SetVariableStatement(string name_p, unique_ptr<ParsedExpre
 }
 
 SetVariableStatement::SetVariableStatement(const SetVariableStatement &other)
-    : SetVariableStatement(other.name, other.value->Copy(), other.scope) {
+    : SetStatement(other), value(other.value->Copy()) {
 }
 
 unique_ptr<SQLStatement> SetVariableStatement::Copy() const {

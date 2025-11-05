@@ -13,7 +13,7 @@ PRAGMA enable_verification
 # Case insensitivity
 foreach datatype TIMESTAMP TIMESTAMPTZ DATE
 
-foreach str infinity Infinity INFINITY inFinIty
+foreach str infinity Infinity INFINITY inFinIty inf
 
 # PG displays numeric infinities in Titlecase but temporal infinities in lowercase
 query II
@@ -55,6 +55,21 @@ SELECT * FROM specials;
 infinity	infinity	infinity
 -infinity	-infinity	-infinity
 1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01
+
+statement ok
+CREATE TABLE abbreviations (ts TIMESTAMP, tstz TIMESTAMPTZ, dt DATE);
+
+statement ok
+INSERT INTO abbreviations VALUES
+	('inf'::TIMESTAMP, 'inf'::TIMESTAMPTZ, 'inf'::DATE),
+	('-inf'::TIMESTAMP, '-inf'::TIMESTAMPTZ, '-inf'::DATE),
+;
+
+query III
+SELECT * FROM abbreviations;
+----
+infinity	infinity	infinity
+-infinity	-infinity	-infinity
 
 #
 # Comparisons
@@ -179,7 +194,7 @@ query III
 SELECT HISTOGRAM(ts), HISTOGRAM(tstz), HISTOGRAM(dt)
 FROM specials;
 ----
-{-infinity=1, 1970-01-01 00:00:00=1, infinity=1}	{-infinity=1, 1970-01-01 00:00:00+00=1, infinity=1}	{-infinity=1, 1970-01-01=1, infinity=1}
+{-infinity=1, '1970-01-01 00:00:00'=1, infinity=1}	{-infinity=1, '1970-01-01 00:00:00+00'=1, infinity=1}	{-infinity=1, 1970-01-01=1, infinity=1}
 
 query III
 SELECT QUANTILE_DISC(ts, 0.32), QUANTILE_DISC(tstz, 0.32), QUANTILE_DISC(dt, 0.32)
@@ -191,7 +206,7 @@ query III
 SELECT QUANTILE_DISC(ts, [0.0, 0.5, 1.0]), QUANTILE_DISC(tstz, [0.0, 0.5, 1.0]), QUANTILE_DISC(dt, [0.0, 0.5, 1.0])
 FROM specials;
 ----
-[-infinity, 1970-01-01 00:00:00, infinity]	[-infinity, 1970-01-01 00:00:00+00, infinity]	[-infinity, 1970-01-01, infinity]
+[-infinity, '1970-01-01 00:00:00', infinity]	[-infinity, '1970-01-01 00:00:00+00', infinity]	[-infinity, 1970-01-01, infinity]
 
 query III
 SELECT QUANTILE_CONT(ts, 0.25), QUANTILE_CONT(tstz, 0.25), QUANTILE_CONT(dt, 0.25)
@@ -203,10 +218,7 @@ query III
 SELECT QUANTILE_CONT(ts, [0.25, 0.5, 0.75]), QUANTILE_CONT(tstz, [0.25, 0.5, 0.75]), QUANTILE_CONT(dt, [0.25, 0.5, 0.75])
 FROM specials;
 ----
-[144170-06-28 (BC) 09:59:32.612096, 1970-01-01 00:00:00, 148108-07-06 14:00:27.387904]
-[144170-06-28 (BC) 09:59:32.612096+00, 1970-01-01 00:00:00+00, 148108-07-06 14:00:27.387904+00]
-[144170-06-28 (BC) 09:59:32.612096, 1970-01-01 00:00:00, 148108-07-06 14:00:27.387904]
-
+['144170-06-28 (BC) 09:59:32.612096', '1970-01-01 00:00:00', '148108-07-06 14:00:27.387904']	['144170-06-28 (BC) 09:59:32.612096+00', '1970-01-01 00:00:00+00', '148108-07-06 14:00:27.387904+00']	['144170-06-28 (BC) 09:59:32.612096', '1970-01-01 00:00:00', '148108-07-06 14:00:27.387904']
 
 query III
 SELECT MAD(ts), MAD(tstz), MAD(dt)

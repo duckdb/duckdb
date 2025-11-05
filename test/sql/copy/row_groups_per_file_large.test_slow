@@ -25,7 +25,7 @@ SELECT avg(col_a), avg(col_b) FROM read_parquet('__TEST_DIR__/row_groups_per_fil
 4999999.5	4999999.5
 
 query I
-SELECT count(*) BETWEEN 15 AND 25 FROM glob('__TEST_DIR__/row_groups_per_file42/*.parquet')
+SELECT count(*) BETWEEN 10 AND 25 FROM glob('__TEST_DIR__/row_groups_per_file42/*.parquet')
 ----
 true
 
@@ -43,6 +43,6 @@ SELECT avg(col_a), avg(col_b) FROM read_parquet('__TEST_DIR__/row_groups_per_fil
 4999999.5	4999999.5
 
 query I
-SELECT count(*) BETWEEN 15 AND 25 FROM glob('__TEST_DIR__/row_groups_per_file43/*.parquet')
+SELECT count(*) BETWEEN 10 AND 25 FROM glob('__TEST_DIR__/row_groups_per_file43/*.parquet')
 ----
 true

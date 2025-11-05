@@ -2,10 +2,6 @@
 # description: Test optimistic write with drop column in transaction-local storage
 # group: [optimistic_write]
 
-# FIXME: for smaller block sizes (16KB) the database size does not stabilize in the loop, instead,
-# FIXME: it grows very slowly (only investigated up to 40 iterations)
-require block_size 262144
-
 load __TEST_DIR__/optimistic_write_drop.db
 
 statement ok
@@ -15,7 +11,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-INSERT INTO test SELECT i, i+1, i+2 FROM range(1000000) tbl(i)
+INSERT INTO test SELECT i, i + 1, i + 2 FROM range(1000000) tbl(i)
 
 statement ok
 ALTER TABLE test DROP COLUMN c
@@ -52,12 +48,12 @@ SELECT SUM(a), SUM(b) FROM test
 ----
 499999500000	500000500000
 
+# Ensure that we reclaim space correctly.
+
 require skip_reload
 
-# ensure the drop column does not result in leaking blocks
-
-# for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
-# therefore, we need to compare to a range of total block counts
+# For smaller block sizes (16KB) the total blocks alternate between a few values in the loop.
+# Therefore, we compare to a range of total block counts.
 statement ok
 CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
 
@@ -73,7 +69,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-INSERT INTO test SELECT i, i+1, i+2 FROM range(1000000) tbl(i)
+INSERT INTO test SELECT i, i + 1, i + 2 FROM range(1000000) tbl(i)
 
 statement ok
 ALTER TABLE test DROP COLUMN c
@@ -86,8 +82,8 @@ SELECT SUM(a), SUM(b) FROM test
 ----
 499999500000	500000500000
 
-# ensure that the total blocks don't exceed the total blocks after the first iteration
-# by more than 1.2
+# Ensure that the total blocks don't exceed the total blocks after the first iteration
+# by more than 1.2.
 
 query I
 SELECT CASE WHEN ${i} = 0 THEN True
@@ -97,7 +93,7 @@ FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
 1
 
-# adjust total_blocks_tbl once to the count after the first iteration
+# Adjust total_blocks_tbl once to the count after the first iteration.
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (

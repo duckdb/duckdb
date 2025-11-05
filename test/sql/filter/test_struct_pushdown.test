@@ -44,11 +44,11 @@ SELECT * FROM test_structs WHERE i.A < 2;
 ----
 {'a': 1, 'b': true}
 
-# This should not produce a filter pushdown
+# This can also produce a filter pushdown
 query II
 EXPLAIN SELECT * FROM test_structs WHERE i.a IS NULL;
 ----
-physical_plan	<!REGEX>:.*Filters:.*
+physical_plan	<REGEX>:.*Filters:.*
 
 query I
 SELECT * FROM test_structs WHERE i.a IS NULL;
@@ -59,7 +59,7 @@ NULL
 query II
 EXPLAIN SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL;
 ----
-physical_plan	<!REGEX>:.*Filters:.*
+physical_plan	<REGEX>:.*Filters:.*
 
 query I
 SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL ORDER BY 1 DESC NULLS FIRST;
@@ -175,7 +175,7 @@ SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.a < 2;
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.b = true or i.a IS NULL;
 ----
-physical_plan	<!REGEX>:.*Filters:.*
+physical_plan	<REGEX>:.*Filters:.*
 
 query I
 SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.b = true or i.a IS NULL ORDER BY ALL;

@@ -24,6 +24,7 @@ enum class SQLLogicTokenType {
 	SQLLOGIC_HALT,
 	SQLLOGIC_MODE,
 	SQLLOGIC_SET,
+	SQLLOGIC_RESET,
 	SQLLOGIC_LOOP,
 	SQLLOGIC_FOREACH,
 	SQLLOGIC_CONCURRENT_LOOP,
@@ -31,11 +32,13 @@ enum class SQLLogicTokenType {
 	SQLLOGIC_ENDLOOP,
 	SQLLOGIC_REQUIRE,
 	SQLLOGIC_REQUIRE_ENV,
+	SQLLOGIC_TEST_ENV,
 	SQLLOGIC_LOAD,
 	SQLLOGIC_RESTART,
 	SQLLOGIC_RECONNECT,
 	SQLLOGIC_SLEEP,
-	SQLLOGIC_UNZIP
+	SQLLOGIC_UNZIP,
+	SQLLOGIC_TAGS
 };
 
 class SQLLogicToken {
@@ -59,6 +62,7 @@ public:
 public:
 	static bool EmptyOrComment(const string &line);
 	static bool IsSingleLineStatement(SQLLogicToken &token);
+	static bool IsTestCommand(SQLLogicTokenType &type);
 
 	//! Does the next line contain a comment, empty line, or is the end of the file
 	bool NextLineEmptyOrComment();

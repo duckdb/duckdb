@@ -8,17 +8,14 @@
 
 namespace duckdb {
 
-void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
-	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		auto &col_names = col_ref.column_names;
-		if (col_names.size() > 1) {
-			col_names = vector<string> {col_names.back()};
-		}
-	} else {
-		ParsedExpressionIterator::EnumerateChildren(
-		    *expr, [](unique_ptr<ParsedExpression> &child) { RemoveOrderQualificationRecursive(child); });
-	}
+void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
+	    *root_expr, [&](ColumnRefExpression &col_ref) {
+		    auto &col_names = col_ref.column_names;
+		    if (col_names.size() > 1) {
+			    col_names = vector<string> {col_names.back()};
+		    }
+	    });
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink &root) {
@@ -27,7 +24,6 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	subquery_expr->subquery = TransformSelectStmt(*root.subselect);
 	SetQueryLocation(*subquery_expr, root.location);
 	D_ASSERT(subquery_expr->subquery);
-	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());
 
 	switch (root.subLinkType) {
 	case duckdb_libpgquery::PG_EXISTS_SUBLINK: {
@@ -107,6 +103,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 			}
 		}
 		// transform constants (e.g. ORDER BY 1) into positional references (ORDER BY #1)
+		idx_t array_idx = 0;
 		if (aggr->order_bys) {
 			for (auto &order : aggr->order_bys->orders) {
 				if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
@@ -120,8 +117,10 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 					}
 				} else if (sub_select) {
 					// if we have a SELECT we can push the ORDER BY clause into the SELECT list and reference it
+					auto alias = "__array_internal_idx_" + to_string(++array_idx);
+					order.expression->alias = alias;
 					sub_select->select_list.push_back(std::move(order.expression));
-					order.expression = make_uniq<PositionalReferenceExpression>(sub_select->select_list.size() - 1);
+					order.expression = make_uniq<ColumnRefExpression>(alias);
 				} else {
 					// otherwise we remove order qualifications
 					RemoveOrderQualificationRecursive(order.expression);

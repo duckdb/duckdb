@@ -10,7 +10,7 @@ FROM
      AND ws_web_page_sk = web_page.wp_web_page_sk
      AND time_dim.t_hour BETWEEN 8 AND 8+1
      AND household_demographics.hd_dep_count = 6
-     AND web_page.wp_char_count BETWEEN 5000 AND 5200) AT,
+     AND web_page.wp_char_count BETWEEN 5000 AND 5200) at_,
   (SELECT count(*) pmc
    FROM web_sales,
         household_demographics,

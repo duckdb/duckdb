@@ -4,7 +4,7 @@
 
 name ZSTD Scan
 group zstd
-storage persistent
+storage persistent v1.2.0
 
 load
 DROP TABLE IF EXISTS zstd_strings;
@@ -12,6 +12,11 @@ PRAGMA force_compression='zstd';
 set variable my_string = (list_reduce([chr(((i % 26) + ord('a'))::INTEGER) for i in range(8000)], (x, y) -> concat(x, y)));
 create table zstd_strings as select getvariable('my_string') as data from range(2_500_000) tbl(i);
 checkpoint;
+
+assert I
+select DISTINCT compression from pragma_storage_info('zstd_strings') where segment_type in ('VARCHAR')
+----
+ZSTD
 
 run
 select avg(strlen(data)) from zstd_strings;

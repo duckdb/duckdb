@@ -118,7 +118,8 @@ struct MergeSortTree {
 
 	void Build();
 
-	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
+	//	{nth index, remainder}
+	pair<idx_t, idx_t> SelectNth(const SubFrames &frames, idx_t n) const;
 
 	inline ElementType NthElement(idx_t i) const {
 		return tree.front().first[i];
@@ -436,10 +437,10 @@ void MergeSortTree<E, O, CMP, F, C>::BuildRun(idx_t level_idx, idx_t run_idx) {
 }
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
-idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n) const {
+pair<idx_t, idx_t> MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n) const {
 	// Handle special case of a one-element tree
 	if (tree.size() < 2) {
-		return 0;
+		return {0, 0};
 	}
 
 	// 	The first level contains a single run,
@@ -566,14 +567,13 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 		}
 	}
 
-	return result;
+	return {result, n};
 }
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 template <typename L>
 void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, const idx_t upper, const E needle,
                                                          L aggregate) const {
-
 	if (lower >= upper) {
 		return;
 	}

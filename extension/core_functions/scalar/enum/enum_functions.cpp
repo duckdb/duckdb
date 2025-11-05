@@ -71,8 +71,8 @@ static void CheckEnumParameter(const Expression &expr) {
 	}
 }
 
-unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction &bound_function,
-                                          vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
 	CheckEnumParameter(*arguments[0]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
@@ -80,8 +80,8 @@ unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction
 	return nullptr;
 }
 
-unique_ptr<FunctionData> BindEnumCodeFunction(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumCodeFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                     vector<unique_ptr<Expression>> &arguments) {
 	CheckEnumParameter(*arguments[0]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
@@ -108,8 +108,8 @@ unique_ptr<FunctionData> BindEnumCodeFunction(ClientContext &context, ScalarFunc
 	return nullptr;
 }
 
-unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                              vector<unique_ptr<Expression>> &arguments) {
 	CheckEnumParameter(*arguments[0]);
 	CheckEnumParameter(*arguments[1]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM && arguments[0]->return_type != LogicalType::SQLNULL) {

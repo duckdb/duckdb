@@ -34,7 +34,7 @@ bool ConstantFilter::Compare(const Value &value) const {
 	}
 }
 
-FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) const {
 	if (!stats.CanHaveNoNull()) {
 		// no non-null values are possible: always false
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -54,10 +54,16 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = NumericStats::CheckZonemap(stats, comparison_type, array_ptr<Value>(&constant, 1));
+		result = NumericStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));
 		break;
 	case PhysicalType::VARCHAR:
-		result = StringStats::CheckZonemap(stats, comparison_type, array_ptr<Value>(&constant, 1));
+		switch (stats.GetStatsType()) {
+		case StatisticsType::STRING_STATS:
+			result = StringStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));
+			break;
+		default:
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -72,7 +78,7 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	return result;
 }
 
-string ConstantFilter::ToString(const string &column_name) {
+string ConstantFilter::ToString(const string &column_name) const {
 	return column_name + ExpressionTypeToOperator(comparison_type) + constant.ToSQLString();
 }
 

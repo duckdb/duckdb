@@ -42,13 +42,15 @@ bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal, const uint8_t
 // Iterator
 //===--------------------------------------------------------------------===//
 
-bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vector<row_t> &row_ids, const bool equal) {
+bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t> &row_ids, const bool equal) {
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.
-		if (!upper_bound.Empty() && status == GateStatus::GATE_NOT_SET) {
-			if (current_key.GreaterThan(upper_bound, equal, nested_depth)) {
-				return true;
+		if (!upper_bound.Empty()) {
+			if (status == GateStatus::GATE_NOT_SET || entered_nested_leaf) {
+				if (current_key.GreaterThan(upper_bound, equal, nested_depth)) {
+					return true;
+				}
 			}
 		}
 
@@ -57,7 +59,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 			if (row_ids.size() + 1 > max_count) {
 				return false;
 			}
-			row_ids.push_back(last_leaf.GetRowId());
+			row_ids.insert(last_leaf.GetRowId());
 			break;
 		case NType::LEAF:
 			if (!Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, max_count)) {
@@ -74,7 +76,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 				}
 				row_id[ROW_ID_SIZE - 1] = byte;
 				ARTKey key(&row_id[0], ROW_ID_SIZE);
-				row_ids.push_back(key.GetRowId());
+				row_ids.insert(key.GetRowId());
 				if (byte == NumericLimits<uint8_t>::Maximum()) {
 					break;
 				}
@@ -86,6 +88,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, unsafe_vec
 			throw InternalException("Invalid leaf type for index scan.");
 		}
 
+		entered_nested_leaf = false;
 		has_next = Next();
 	} while (has_next);
 	return true;
@@ -104,6 +107,7 @@ void Iterator::FindMinimum(const Node &node) {
 	if (node.GetGateStatus() == GateStatus::GATE_SET) {
 		D_ASSERT(status == GateStatus::GATE_NOT_SET);
 		status = GateStatus::GATE_SET;
+		entered_nested_leaf = true;
 		nested_depth = 0;
 	}
 

@@ -19,6 +19,14 @@ struct PrimitiveCastOperator {
 	static TGT Operation(SRC input) {
 		return TGT(input);
 	}
+	template <class SRC, class TGT>
+	static constexpr idx_t WriteSize(const TGT &input) {
+		return sizeof(TGT);
+	}
+	template <class SRC, class TGT>
+	static void WriteToStream(const TGT &input, WriteStream &ser) {
+		ser.WriteData(const_data_ptr_cast(&input), sizeof(TGT));
+	}
 };
 
 template <class SRC, class TGT = SRC, class OP = PrimitiveCastOperator>
@@ -37,32 +45,33 @@ private:
 
 public:
 	static constexpr uint32_t MAXIMUM_POSSIBLE_SIZE = INVALID_INDEX - 1;
+	static constexpr idx_t INITIAL_TARGET_CAPACITY = 1048576;
 
 	//! PrimitiveDictionary is a fixed-size linear probing hash table for primitive types
 	//! It is used to dictionary-encode data in, e.g., Parquet files
-	PrimitiveDictionary(Allocator &allocator, idx_t maximum_size_p, idx_t target_capacity_p)
-	    : maximum_size(maximum_size_p), size(0), capacity(NextPowerOfTwo(maximum_size * LOAD_FACTOR)),
-	      capacity_mask(capacity - 1), target_capacity(target_capacity_p),
+	PrimitiveDictionary(Allocator &allocator_p, idx_t maximum_size_p, idx_t maximum_target_capacity_p)
+	    : allocator(allocator_p), maximum_size(maximum_size_p), size(0),
+	      capacity(NextPowerOfTwo(maximum_size * LOAD_FACTOR)), capacity_mask(capacity - 1),
+	      maximum_target_capacity(maximum_target_capacity_p),
 	      allocated_dictionary(allocator.Allocate(capacity * sizeof(primitive_dictionary_entry_t))),
-	      allocated_target(
-	          allocator.Allocate(std::is_same<TGT, string_t>::value ? target_capacity : capacity * sizeof(TGT))),
+	      allocated_target(allocator.Allocate(std::is_same<TGT, string_t>::value
+	                                              ? MinValue(INITIAL_TARGET_CAPACITY, maximum_target_capacity)
+	                                              : capacity * sizeof(TGT))),
 	      target_stream(allocated_target.get(), allocated_target.GetSize()),
 	      dictionary(reinterpret_cast<primitive_dictionary_entry_t *>(allocated_dictionary.get())), full(false) {
-		// Initialize empty
-		for (idx_t i = 0; i < capacity; i++) {
-			dictionary[i].index = INVALID_INDEX;
-		}
+		Clear();
 	}
 
 public:
 	//! Insert value into dictionary (if not full)
+	template <bool ADD_TO_TARGET = false>
 	void Insert(SRC value) {
 		if (full) {
 			return;
 		}
 		auto &entry = Lookup(value);
 		if (entry.IsEmpty()) {
-			if (size + 1 > maximum_size || !AddToTarget(value)) {
+			if (size + 1 > maximum_size || (ADD_TO_TARGET && !AddToTarget(value))) {
 				full = true;
 				return;
 			}
@@ -120,7 +129,18 @@ public:
 		return result;
 	}
 
-private:
+	void Reset() {
+		allocated_dictionary.Reset();
+		allocated_target.Reset();
+	}
+
+	void Clear() {
+		for (idx_t i = 0; i < capacity; i++) {
+			dictionary[i].index = INVALID_INDEX;
+		}
+		size = 0;
+		full = false;
+	}
 	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {
 		auto offset = Hash(value) & capacity_mask;
@@ -130,6 +150,7 @@ private:
 		return dictionary[offset];
 	}
 
+private:
 	//! Write a value to the target data (if source is not string)
 	template <typename S = SRC, typename std::enable_if<!std::is_same<S, string_t>::value, int>::type = 0>
 	bool AddToTarget(const SRC &src_value) {
@@ -145,8 +166,41 @@ private:
 	template <typename S = SRC, typename std::enable_if<std::is_same<S, string_t>::value, int>::type = 0>
 	bool AddToTarget(SRC &src_value) {
 		// If source is string, target must also be string
-		if (target_stream.GetPosition() + OP::template WriteSize<SRC, TGT>(src_value) > target_stream.GetCapacity()) {
-			return false; // Out of capacity
+		const auto required_size = target_stream.GetPosition() + OP::template WriteSize<SRC, TGT>(src_value);
+		if (required_size > allocated_target.GetSize()) {
+			// Out of capacity, allocate a new buffer
+			idx_t new_target_capacity = allocated_target.GetSize();
+			while (new_target_capacity < required_size) {
+				if (new_target_capacity == maximum_target_capacity) {
+					return false; // Maximum capacity isn't enough
+				}
+				// Double the size, or add the maximum increment
+				new_target_capacity += MinValue(new_target_capacity, MAXIMUM_TARGET_CAPACITY_INCREMENT);
+				// Bound by maximum capacity
+				new_target_capacity = MinValue(new_target_capacity, maximum_target_capacity);
+			}
+			auto new_allocated_target = allocator.Allocate(new_target_capacity);
+
+			// Copy over data and replace
+			const auto old_ptr = allocated_target.get();
+			const auto new_ptr = new_allocated_target.get();
+			memcpy(new_ptr, old_ptr, allocated_target.GetSize());
+			allocated_target = std::move(new_allocated_target);
+
+			// Also replace the stream
+			MemoryStream new_target_stream(allocated_target.get(), allocated_target.GetSize());
+			new_target_stream.SetPosition(target_stream.GetPosition());
+			target_stream = std::move(new_target_stream);
+
+			// Recompute string pointers from old to new buffer
+			for (idx_t i = 0; i < capacity; i++) {
+				auto &entry = dictionary[i];
+				if (entry.IsEmpty() || entry.value.IsInlined()) {
+					continue;
+				}
+				entry.value.SetPointer(
+				    char_ptr_cast(new_ptr + (const_data_ptr_cast(entry.value.GetPointer()) - old_ptr)));
+			}
 		}
 
 		const auto ptr = target_stream.GetData() + target_stream.GetPosition() + sizeof(uint32_t);
@@ -160,6 +214,8 @@ private:
 	}
 
 private:
+	Allocator &allocator;
+
 	//! Maximum size and current size
 	const idx_t maximum_size;
 	idx_t size;
@@ -169,7 +225,8 @@ private:
 	const idx_t capacity_mask;
 
 	//! Capacity of target encoded data
-	const idx_t target_capacity;
+	const idx_t maximum_target_capacity;
+	static constexpr idx_t MAXIMUM_TARGET_CAPACITY_INCREMENT = 33554432ULL;
 
 	//! Allocated regions for dictionary/target
 	AllocatedData allocated_dictionary;

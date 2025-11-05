@@ -7,6 +7,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -19,6 +20,9 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 		auto kv_info = make_uniq<CommonTableExpressionInfo>();
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
+		}
+		for (auto &al : kv.second->key_targets) {
+			kv_info->key_targets.push_back(al->Copy());
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;
@@ -61,6 +65,16 @@ string CommonTableExpressionMap::ToString() const {
 				result += KeywordHelper::WriteOptionallyQuoted(cte.aliases[k]);
 			}
 			result += ")";
+		}
+		if (!cte.key_targets.empty()) {
+			result += " USING KEY (";
+			for (idx_t k = 0; k < cte.key_targets.size(); k++) {
+				if (k > 0) {
+					result += ", ";
+				}
+				result += cte.key_targets[k]->ToString();
+			}
+			result += ") ";
 		}
 		if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			result += " AS MATERIALIZED (";
@@ -143,6 +157,9 @@ bool QueryNode::Equals(const QueryNode *other) const {
 		if (entry.second->aliases != other->cte_map.map.at(entry.first)->aliases) {
 			return false;
 		}
+		if (!ParsedExpression::ListEquals(entry.second->key_targets, other_entry->second->key_targets)) {
+			return false;
+		}
 		if (!entry.second->query->Equals(*other->cte_map.map.at(entry.first)->query)) {
 			return false;
 		}
@@ -158,6 +175,9 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		auto kv_info = make_uniq<CommonTableExpressionInfo>();
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
+		}
+		for (auto &key : kv.second->key_targets) {
+			kv_info->key_targets.push_back(key->Copy());
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
 		kv_info->materialized = kv.second->materialized;

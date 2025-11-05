@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_parallel
   OBJECT
+  async_result.cpp
   base_pipeline_event.cpp
   meta_pipeline.cpp
   executor_task.cpp
@@ -15,6 +16,7 @@ add_library_unity(
   pipeline_initialize_event.cpp
   pipeline_prepare_finish_event.cpp
   task_executor.cpp
+  task_notifier.cpp
   task_scheduler.cpp
   thread_context.cpp)
 set(ALL_OBJECT_FILES

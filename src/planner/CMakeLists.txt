@@ -22,8 +22,10 @@ add_library_unity(
   bind_context.cpp
   planner.cpp
   pragma_handler.cpp
+  logical_operator_deep_copy.cpp
   logical_operator_visitor.cpp
-  table_filter.cpp)
+  table_filter.cpp
+  table_filter_state.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner>
     PARENT_SCOPE)

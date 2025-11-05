@@ -24,6 +24,7 @@ struct QualifiedName {
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input);
+	static vector<string> ParseComponents(const string &input);
 	string ToString() const;
 };
 
@@ -37,6 +38,8 @@ struct QualifiedColumnName {
 	string schema;
 	string table;
 	string column;
+
+	static QualifiedColumnName Parse(string &input);
 
 	string ToString() const;
 

@@ -1,8 +1,5 @@
 name: Create or Label Mirror Issue
 on:
-  discussion:
-    types:
-      - labeled
   issues:
     types:
       - labeled

@@ -34,10 +34,10 @@ public:
 	           idx_t target_count) override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
 	                    idx_t target_count) override;
-	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) override;
 
 	void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	            SelectionVector &sel, idx_t &count, const TableFilter &filter) override;
+	            SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state) override;
 	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	            SelectionVector &sel, idx_t sel_count) override;
 
@@ -47,10 +47,10 @@ public:
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	              idx_t result_idx) override;
-	void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-	            idx_t update_count) override;
-	void UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-	                  row_t *row_ids, idx_t update_count, idx_t depth) override;
+	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	            row_t *row_ids, idx_t update_count) override;
+	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
 	void CommitDropColumn() override;
@@ -61,10 +61,11 @@ public:
 	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                    Vector &scan_vector) override;
 
-	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
-	                          vector<duckdb::ColumnSegmentInfo> &result) override;
+	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
+	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
 
 	bool IsPersistent() override;
+	bool HasAnyChanges() const override;
 	PersistentColumnData Serialize() override;
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 

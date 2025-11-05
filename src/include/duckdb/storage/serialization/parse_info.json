@@ -88,6 +88,23 @@
     ]
   },
   {
+    "class": "RenameFieldInfo",
+    "base": "AlterTableInfo",
+    "enum": "RENAME_FIELD",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_path",
+        "type": "vector<string>"
+      },
+      {
+        "id": 401,
+        "name": "new_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "RenameTableInfo",
     "base": "AlterTableInfo",
     "enum": "RENAME_TABLE",
@@ -118,6 +135,29 @@
     "constructor": ["new_column"]
   },
   {
+    "class": "AddFieldInfo",
+    "base": "AlterTableInfo",
+    "enum": "ADD_FIELD",
+    "members": [
+      {
+        "id": 400,
+        "name": "new_field",
+        "type": "ColumnDefinition"
+      },
+      {
+        "id": 401,
+        "name": "if_field_not_exists",
+        "type": "bool"
+      },
+      {
+        "id": 402,
+        "name": "column_path",
+        "type": "vector<string>"
+      }
+    ],
+    "constructor": ["new_field"]
+  },
+  {
     "class": "RemoveColumnInfo",
     "base": "AlterTableInfo",
     "enum": "REMOVE_COLUMN",
@@ -126,6 +166,28 @@
         "id": 400,
         "name": "removed_column",
         "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "if_column_exists",
+        "type": "bool"
+      },
+      {
+        "id": 402,
+        "name": "cascade",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "RemoveFieldInfo",
+    "base": "AlterTableInfo",
+    "enum": "REMOVE_FIELD",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_path",
+        "type": "vector<string>"
       },
       {
         "id": 401,
@@ -330,6 +392,34 @@
     ]
   },
   {
+    "class": "AlterDatabaseInfo",
+    "base": "AlterInfo",
+    "enum": "ALTER_DATABASE",
+    "class_type": "alter_database_type",
+    "includes": [
+      "duckdb/parser/parsed_data/alter_database_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 300,
+        "name": "alter_database_type",
+        "type": "AlterDatabaseType"
+      }
+    ]
+  },
+  {
+    "class": "RenameDatabaseInfo",
+    "base": "AlterDatabaseInfo",
+    "enum": "RENAME_DATABASE",
+    "members": [
+      {
+        "id": 400,
+        "name": "new_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "AttachInfo",
     "base": "ParseInfo",
     "enum": "ATTACH_INFO",
@@ -432,6 +522,11 @@
         "id": 208,
         "name": "select_statement",
         "type": "QueryNode*"
+      },
+      {
+        "id": 209,
+        "name": "is_format_auto_detected",
+        "type": "bool"
       }
     ]
   },
@@ -655,6 +750,30 @@
         "id": 400,
         "name": "constraint",
         "type": "unique_ptr<Constraint>"
+      }
+    ]
+  },
+  {
+    "class": "SetPartitionedByInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_PARTITIONED_BY",
+    "members": [
+      {
+        "id": 400,
+        "name": "partition_keys",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
+  },
+  {
+    "class": "SetSortedByInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_SORTED_BY",
+    "members": [
+      {
+        "id": 400,
+        "name": "orders",
+        "type": "vector<OrderByNode>"
       }
     ]
   }

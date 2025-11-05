@@ -18,7 +18,6 @@ BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstr
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
       index_constraint_type(index_constraint_type) {
-
 	for (auto &expr : unbound_expressions_p) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);
@@ -79,16 +78,32 @@ bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
 	return MergeIndexes(state, other_index);
 }
 
-string BoundIndex::VerifyAndToString(const bool only_verify) {
-	IndexLock state;
-	InitializeLock(state);
-	return VerifyAndToString(state, only_verify);
+void BoundIndex::Verify() {
+	IndexLock l;
+	InitializeLock(l);
+	Verify(l);
+}
+
+string BoundIndex::ToString(bool display_ascii) {
+	IndexLock l;
+	InitializeLock(l);
+	return ToString(l, display_ascii);
 }
 
 void BoundIndex::VerifyAllocations() {
-	IndexLock state;
-	InitializeLock(state);
-	return VerifyAllocations(state);
+	IndexLock l;
+	InitializeLock(l);
+	return VerifyAllocations(l);
+}
+
+void BoundIndex::VerifyBuffers(IndexLock &l) {
+	throw NotImplementedException("this implementation of VerifyBuffers does not exist");
+}
+
+void BoundIndex::VerifyBuffers() {
+	IndexLock l;
+	InitializeLock(l);
+	return VerifyBuffers(l);
 }
 
 void BoundIndex::Vacuum() {
@@ -107,14 +122,13 @@ void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 	executor.Execute(input, result);
 }
 
-unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> expr) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
-	}
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [this](unique_ptr<Expression> &expr) { expr = BindExpression(std::move(expr)); });
-	return expr;
+unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
+		    expr =
+		        make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
+	    });
+	return root_expr;
 }
 
 bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const {
@@ -126,8 +140,12 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
-IndexStorageInfo BoundIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
-	throw NotImplementedException("The implementation of this index serialization does not exist.");
+IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
+}
+
+IndexStorageInfo BoundIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
 }
 
 string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
@@ -139,6 +157,32 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 		error += input.GetValue(c, index).ToString();
 	}
 	return error;
+}
+
+void BoundIndex::ApplyBufferedAppends(const vector<LogicalType> &table_types, ColumnDataCollection &buffered_appends,
+                                      const vector<StorageIndex> &mapped_column_ids) {
+	IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+
+	ColumnDataScanState state;
+	buffered_appends.InitializeScan(state);
+
+	DataChunk scan_chunk;
+	buffered_appends.InitializeScanChunk(scan_chunk);
+	DataChunk table_chunk;
+	table_chunk.InitializeEmpty(table_types);
+
+	while (buffered_appends.Scan(state, scan_chunk)) {
+		for (idx_t i = 0; i < scan_chunk.ColumnCount() - 1; i++) {
+			auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+			table_chunk.data[col_id].Reference(scan_chunk.data[i]);
+		}
+		table_chunk.SetCardinality(scan_chunk.size());
+
+		auto error = Append(table_chunk, scan_chunk.data.back(), index_append_info);
+		if (error.HasError()) {
+			throw InternalException("error while applying buffered appends: " + error.Message());
+		}
+	}
 }
 
 } // namespace duckdb

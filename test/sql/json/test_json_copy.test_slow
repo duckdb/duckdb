@@ -1,21 +1,27 @@
 # name: test/sql/json/test_json_copy.test_slow
-# description: Test JSON COPY using TPC-H
+# description: Test JSON COPY
 # group: [json]
 
 require json
+
+require parquet
+
+require no_extension_autoloading "FIXME: Autoloading on zstd compression (parquet) not yet there"
 
 # test automatic detection even with .gz
 statement ok
 create table integers as select 42 i
 
 statement ok
-copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
+copy integers to '{TEMP_DIR}/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
 
 statement ok
 delete from integers
 
-statement ok
-copy integers from '__TEST_DIR__/integers.json.gz'
+query I
+copy integers from '{TEMP_DIR}/integers.json.gz'
+----
+1
 
 query T
 select i from integers
@@ -27,27 +33,27 @@ statement ok
 create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
 
 query I nosort q0
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 ----
 
 statement ok
 copy (
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
-) to '__TEST_DIR__/all_types.ndjson'
+) to '{TEMP_DIR}/all_types.ndjson'
 
 statement ok
 create table roundtrip as
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 limit 0
 
 statement ok
-copy roundtrip from '__TEST_DIR__/all_types.ndjson'
+copy roundtrip from '{TEMP_DIR}/all_types.ndjson'
 
 query I nosort q0
 select * from roundtrip
@@ -58,18 +64,29 @@ delete from roundtrip
 
 statement ok
 copy (
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
-) to '__TEST_DIR__/all_types.json' (array true)
+) to '{TEMP_DIR}/all_types.json' (array true)
 
 statement ok
-copy roundtrip from '__TEST_DIR__/all_types.json' (array true)
+copy roundtrip from '{TEMP_DIR}/all_types.json' (array true)
 
 query I nosort q0
 select * from roundtrip
 ----
 
+
+# test issue 18816
+statement ok
+copy (select 42 i)
+to '{TEMP_DIR}/json_batch'
+(format json, per_thread_output true, overwrite true);
+
+statement ok
+copy (select 42 i)
+to '{TEMP_DIR}/json_batch'
+(format json, per_thread_output true, append true);
 
 # test issue #6305
 statement ok
@@ -80,10 +97,10 @@ copy (
     (uuid(), 15),
     (uuid(), 5)
     v (order_id, revenue)
-) to '__TEST_DIR__/query.json' (format json)
+) to '{TEMP_DIR}/query.json' (format json)
 
 query II
-select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+select typeof(order_id), revenue from '{TEMP_DIR}/query.json'
 ----
 UUID	10
 UUID	10
@@ -99,10 +116,10 @@ copy (
     ({order_id: uuid(), revenue: 15}),
     ({order_id: uuid(), revenue: 5}),
     t (v)
-) to '__TEST_DIR__/query.json' (format json)
+) to '{TEMP_DIR}/query.json' (format json)
 
 query II
-select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+select typeof(order_id), revenue from '{TEMP_DIR}/query.json'
 ----
 UUID	10
 UUID	10
@@ -118,10 +135,10 @@ copy (
     (uuid(), 15),
     (uuid(), 5)
     v (order_id, revenue)
-) to '__TEST_DIR__/query.json' (format json)
+) to '{TEMP_DIR}/query.json' (format json)
 
 query II
-select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+select typeof(order_id), revenue from '{TEMP_DIR}/query.json'
 ----
 UUID	10
 UUID	10
@@ -137,10 +154,10 @@ copy (
     (uuid(), 15),
     (uuid(), 5)
     v (order_id, revenue)
-) to '__TEST_DIR__/query.json' (format json)
+) to '{TEMP_DIR}/query.json' (format json)
 
 query II
-select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+select typeof(order_id), revenue from '{TEMP_DIR}/query.json'
 ----
 UUID	11
 UUID	11
@@ -148,31 +165,32 @@ UUID	16
 UUID	6
 
 statement ok
-copy (select 42 as a, a + 1) to '__TEST_DIR__/out.json' (format json);
+copy (select 42 as a, a + 1) to '{TEMP_DIR}/out.json' (format json);
 
 query II
-select * from '__TEST_DIR__/out.json'
+select * from '{TEMP_DIR}/out.json'
 ----
 42	43
 
 statement ok
 create table conclusions (conclusion varchar)
 
-# this doesn't work because we assume NDJSON records
-statement error
-copy conclusions from 'data/json/top_level_array.json'
-----
-
-# but works if we tell it to auto-detect
+# works because we auto-detect by default
 statement ok
-copy conclusions from 'data/json/top_level_array.json' (AUTO_DETECT TRUE)
+copy conclusions from '{DATA_DIR}/json/top_level_array.json'
+
+# doesn't work if we disable auto-detection
+statement error
+copy conclusions from '{DATA_DIR}/json/top_level_array.json' (AUTO_DETECT FALSE)
+----
+Invalid Input Error
 
 statement ok
 delete from conclusions;
 
 # and also if we say it's an array
 statement ok
-copy conclusions from 'data/json/top_level_array.json' (ARRAY TRUE)
+copy conclusions from '{DATA_DIR}/json/top_level_array.json' (ARRAY TRUE)
 
 query I
 select * from conclusions
@@ -182,16 +200,16 @@ cancelled
 
 # same with ARRAY FALSE
 statement error
-copy conclusions from 'data/json/top_level_array.json' (ARRAY FALSE)
+copy conclusions from '{DATA_DIR}/json/top_level_array.json' (ARRAY FALSE)
 ----
 Invalid Input Error
 
 # we can also write JSON arrays instead of newline-delimited
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (ARRAY TRUE)
+copy (select range as i from range(10)) to '{TEMP_DIR}/my.json' (ARRAY TRUE)
 
 query T
-select * from read_json_auto('__TEST_DIR__/my.json', format='array')
+select * from read_json_auto('{TEMP_DIR}/my.json', format='array')
 ----
 0
 1
@@ -206,32 +224,32 @@ select * from read_json_auto('__TEST_DIR__/my.json', format='array')
 
 # compression stuff (cannot be empty)
 statement error
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
+copy (select range as i from range(10)) to '{TEMP_DIR}/my.json' (COMPRESSION)
 ----
-Binder Error
+Invalid Input Error
 
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
+copy (select range as i from range(10)) to '{TEMP_DIR}/my.json.gz' (COMPRESSION GZIP)
 
 statement ok
 create table my_range (i bigint)
 
 statement ok
-copy my_range from '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
+copy my_range from '{TEMP_DIR}/my.json.gz' (COMPRESSION GZIP)
 
 # we can auto-detect even though we have compressed
 statement ok
-select * from '__TEST_DIR__/my.json.gz'
+select * from '{TEMP_DIR}/my.json.gz'
 
 # works with zstd too, but we skip this test for now
 # it works in CLI, but not in unittest for some reason (ZSTD is not in VirtualFileSystem::compressed_fs)
 require parquet
 
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json.zst' (COMPRESSION ZSTD)
+copy (select range as i from range(10)) to '{TEMP_DIR}/my.json.zst' (COMPRESSION ZSTD)
 
 statement ok
-select * from '__TEST_DIR__/my.json.zst'
+select * from '{TEMP_DIR}/my.json.zst'
 
 query I
 select * from my_range

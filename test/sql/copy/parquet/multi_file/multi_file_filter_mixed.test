@@ -1,0 +1,69 @@
+# name: test/sql/copy/parquet/multi_file/multi_file_filter_mixed.test
+# description: Test multi file filters
+# group: [multi_file]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (FROM (VALUES ('f1', 42), ('f1', 8), ('f1', NULL)) t(f, i)) TO '__TEST_DIR__/multi_file_filter_f1.parquet'
+
+statement ok
+COPY (FROM (VALUES ('042', 'f2'), ('124', 'f2'), (NULL, 'f2')) t(i, f)) TO '__TEST_DIR__/multi_file_filter_f2.parquet'
+
+# the schema of the file depends on the first file read
+statement ok
+CREATE VIEW integer_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f1.parquet', '__TEST_DIR__/multi_file_filter_f2.parquet'])
+
+statement ok
+CREATE VIEW string_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f2.parquet', '__TEST_DIR__/multi_file_filter_f1.parquet'])
+
+# equality
+# casting to integer - this works (since '042' = 42)
+query II
+SELECT f, i
+FROM integer_file_first
+WHERE i='042'
+----
+f1	42
+f2	42
+
+# casting to string - we only get '042' now
+query II
+SELECT f, i
+FROM string_file_first
+WHERE i='042'
+----
+f2	042
+
+# greater than
+query II
+SELECT f, i
+FROM integer_file_first
+WHERE i>10
+ORDER BY ALL
+----
+f1	42
+f2	42
+f2	124
+
+# for strings, '8' is bigger than '10' (since '8' is bigger than '1')
+query II
+SELECT f, i
+FROM string_file_first
+WHERE i>'10'
+ORDER BY ALL
+----
+f1	42
+f1	8
+f2	124
+
+query II
+SELECT f, i
+FROM integer_file_first
+WHERE i IS NULL
+----
+f1	NULL
+f2	NULL

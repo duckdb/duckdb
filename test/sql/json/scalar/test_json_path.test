@@ -240,7 +240,7 @@ select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$..
 ----
 ["g", {"b":5}]
 
-query T
+query I
 with tbl as (
     select '[{"duck":42},{"duck":{"a":43,"b":null}}]' j
 )

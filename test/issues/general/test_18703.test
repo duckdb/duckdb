@@ -1,0 +1,29 @@
+# name: test/issues/general/test_18703.test
+# description: Issue 18703 - DuckDB Crash with Correlated Aggregation inside a WITH clause
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0 VALUES (1), (0), (NULL);
+
+statement ok
+CREATE TABLE t1(c0 BOOLEAN);
+
+statement ok
+INSERT INTO t1 VALUES (TRUE), (FALSE), (NULL);
+
+query I
+SELECT * FROM t0
+WHERE EXISTS (
+  SELECT 1
+  FROM t1
+  WHERE (WITH seq(i) AS (VALUES (1)) SELECT SUM(i) * t0.c0 FROM seq) IS NOT NULL
+) ORDER BY c0;
+----
+0
+1

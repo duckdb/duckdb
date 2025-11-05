@@ -16,7 +16,7 @@ statement ok
 SET TimeZone = 'America/Los_Angeles';
 
 query IIIII
-SELECT * FROM duckdb_settings() WHERE name = 'TimeZone';
+SELECT name, value, description, input_type, scope FROM duckdb_settings() WHERE name = 'TimeZone';
 ----
 TimeZone	America/Los_Angeles	The current time zone	VARCHAR	LOCAL
 
@@ -29,6 +29,18 @@ query I
 SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'America/Denver';
 ----
 2001-02-16 19:38:40-08
+
+# case insensitive
+query I
+SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'america/denver';
+----
+2001-02-16 19:38:40-08
+
+# recommendation
+statement error
+SELECT  '2001-02-16 20:38:40'::TIMESTAMP AT TIME ZONE 'America/Donver';
+----
+America/Denver
 
 query I
 SELECT '2001-02-16 20:38:40-05'::TIMESTAMPTZ AT TIME ZONE 'America/Denver';
@@ -103,6 +115,32 @@ select timezone('America/Phoenix', '12:15:37.123456-08'::TIMETZ);
 ----
 13:15:37.123456-07
 
+# Date => TIMESTAMPTZ
+query I
+SELECT '2020-01-01'::DATE::TIMESTAMPTZ AS dttz;
+----
+2020-01-01 00:00:00-08
+
+query I
+SELECT 'infinity'::DATE::TIMESTAMPTZ AS dttz;
+----
+infinity
+
+query I
+SELECT '-infinity'::DATE::TIMESTAMPTZ AS dttz;
+----
+-infinity
+
+statement error
+select '5877642-06-25 (BC)'::DATE::TIMESTAMPTZ AS dttz;
+----
+Invalid Input Error
+
+statement error
+select '5881580-07-10'::DATE::TIMESTAMPTZ AS dttz;
+----
+Invalid Input Error
+
 # Table
 statement ok
 CREATE TABLE attimezone (ts TIMESTAMP, tstz TIMESTAMPTZ, ttz TIMETZ, tz VARCHAR);
@@ -157,6 +195,57 @@ infinity	infinity	20:38:40-07
 infinity	infinity	20:15:37.123456+00
 NULL	NULL	NULL
 NULL	NULL	NULL
+
+#
+# Verify UTC±NNNN translation
+#
+foreach utc UTC-0800 UTC-08 UTC-8 UTC-08:00
+
+statement ok
+set TimeZone = '${utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT-8
+
+endloop
+
+foreach utc UTC+0500 UTC+05 UTC+5 UTC+05:00
+
+statement ok
+set TimeZone = '${utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT+5
+
+endloop
+
+foreach utc UTC-1400 UTC-14 UTC-14:00
+
+statement ok
+set TimeZone = '${utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT-14
+
+endloop
+
+foreach utc UTC-0 UTC-00 UTC-000 UTC-0000 UTC+0 UTC+00 UTC+000 UTC+0000
+
+statement ok
+set TimeZone = '${utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT+0
+
+endloop
 
 #
 # Verify local time functions are implemented.
@@ -283,6 +372,7 @@ America/Ciudad_Juarez	America/Ciudad_Juarez
 America/Coral_Harbour	EST
 America/Cordoba	America/Cordoba
 America/Costa_Rica	America/Costa_Rica
+America/Coyhaique	America/Coyhaique
 America/Creston	MST
 America/Cuiaba	America/Cuiaba
 America/Curacao	PRT
@@ -939,5 +1029,25 @@ query II
 select utc_offset, is_dst
 from pg_timezone_names() 
 where name = 'America/Asuncion'
+----
+-03:00:00	false
+
+# 2025b
+#  Chile's Aysén Region moves from -04/-03 to -03 year-round, joining
+#  Magallanes Region.  The region will not change its clocks on
+#  2025-04-05 at 24:00, diverging from America/Santiago and creating a
+#  new zone America/Coyhaique
+statement ok
+set timezone='America/Coyhaique';
+
+query I
+select '2025-04-05'::timestamptz;
+----
+2025-04-05 00:00:00-03
+
+query II
+select utc_offset, is_dst
+from pg_timezone_names() 
+where name = 'America/Coyhaique'
 ----
 -03:00:00	false

@@ -27,6 +27,8 @@ public:
 
 public:
 	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
+	void ReadData(QueryContext context, data_ptr_t buffer, uint64_t read_size) override;
+
 	//! Returns true if the reader has finished reading the entire file
 	bool Finished();
 

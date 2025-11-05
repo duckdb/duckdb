@@ -16,26 +16,28 @@ namespace duckdb {
 class DlbaEncoder {
 public:
 	DlbaEncoder(const idx_t total_value_count_p, const idx_t total_string_size_p)
-	    : dbp_encoder(total_value_count_p), total_string_size(total_string_size_p),
-	      buffer(Allocator::DefaultAllocator().Allocate(total_string_size + 1)),
-	      stream(make_unsafe_uniq<MemoryStream>(buffer.get(), buffer.GetSize())) {
+	    : dbp_encoder(total_value_count_p), total_string_size(total_string_size_p) {
 	}
 
 public:
-	void BeginWrite(WriteStream &writer, const string_t &first_value) {
-		dbp_encoder.BeginWrite(writer, UnsafeNumericCast<int64_t>(first_value.GetSize()));
-		stream->WriteData(const_data_ptr_cast(first_value.GetData()), first_value.GetSize());
+	template <class T>
+	void BeginWrite(Allocator &, WriteStream &, const T &) {
+		throw InternalException("DlbaEncoder should only be used with strings");
 	}
 
-	void WriteValue(WriteStream &writer, const string_t &value) {
-		dbp_encoder.WriteValue(writer, UnsafeNumericCast<int64_t>(value.GetSize()));
-		stream->WriteData(const_data_ptr_cast(value.GetData()), value.GetSize());
+	template <class T>
+	void WriteValue(WriteStream &, const T &) {
+		throw InternalException("DlbaEncoder should only be used with strings");
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		D_ASSERT(stream->GetPosition() == total_string_size);
 		dbp_encoder.FinishWrite(writer);
-		writer.WriteData(buffer.get(), total_string_size);
+		writer.WriteData(buffer.get(), stream->GetPosition());
+	}
+
+	template <class SRC>
+	static idx_t GetStringSize(const SRC &) {
+		return 0;
 	}
 
 private:
@@ -45,39 +47,23 @@ private:
 	unsafe_unique_ptr<MemoryStream> stream;
 };
 
-namespace dlba_encoder {
-
-template <class T>
-void BeginWrite(DlbaEncoder &encoder, WriteStream &writer, const T &first_value) {
-	throw InternalException("Can't write type to DELTA_LENGTH_BYTE_ARRAY column");
+template <>
+inline void DlbaEncoder::BeginWrite(Allocator &allocator, WriteStream &writer, const string_t &first_value) {
+	buffer = allocator.Allocate(total_string_size + 1);
+	stream = make_unsafe_uniq<MemoryStream>(buffer.get(), buffer.GetSize());
+	dbp_encoder.BeginWrite(writer, UnsafeNumericCast<int64_t>(first_value.GetSize()));
+	stream->WriteData(const_data_ptr_cast(first_value.GetData()), first_value.GetSize());
 }
 
 template <>
-void BeginWrite(DlbaEncoder &encoder, WriteStream &writer, const string_t &first_value) {
-	encoder.BeginWrite(writer, first_value);
-}
-
-template <class T>
-void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const T &value) {
-	throw InternalException("Can't write type to DELTA_LENGTH_BYTE_ARRAY column");
+inline void DlbaEncoder::WriteValue(WriteStream &writer, const string_t &value) {
+	dbp_encoder.WriteValue(writer, UnsafeNumericCast<int64_t>(value.GetSize()));
+	stream->WriteData(const_data_ptr_cast(value.GetData()), value.GetSize());
 }
 
 template <>
-void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const string_t &value) {
-	encoder.WriteValue(writer, value);
-}
-
-// helpers to get size from strings
-template <class SRC>
-static idx_t GetDlbaStringSize(const SRC &) {
-	return 0;
-}
-
-template <>
-idx_t GetDlbaStringSize(const string_t &src_value) {
+inline idx_t DlbaEncoder::GetStringSize(const string_t &src_value) {
 	return src_value.GetSize();
 }
-
-} // namespace dlba_encoder
 
 } // namespace duckdb

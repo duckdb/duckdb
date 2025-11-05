@@ -11,10 +11,22 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
+#include "duckdb/common/queue.hpp"
 
 namespace duckdb {
 class DuckTransaction;
 struct UndoBufferProperties;
+
+//! CleanupInfo collects transactions awaiting cleanup.
+//! This ensures we can clean up after releasing the transaction lock.
+struct DuckCleanupInfo {
+	//! All transactions in a cleanup info share the same lowest_start_time.
+	transaction_t lowest_start_time;
+	vector<unique_ptr<DuckTransaction>> transactions;
+
+	void Cleanup() noexcept;
+	bool ScheduleCleanup() noexcept;
+};
 
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
@@ -58,6 +70,7 @@ public:
 
 	void PushCatalogEntry(Transaction &transaction_p, CatalogEntry &entry, data_ptr_t extra_data = nullptr,
 	                      idx_t extra_data_size = 0);
+	void PushAttach(Transaction &transaction_p, AttachedDatabase &db);
 
 protected:
 	struct CheckpointDecision {
@@ -74,9 +87,9 @@ private:
 	//! Generates a new commit timestamp
 	transaction_t GetCommitTimestamp();
 	//! Remove the given transaction from the list of active transactions
-	void RemoveTransaction(DuckTransaction &transaction) noexcept;
+	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction) noexcept;
 	//! Remove the given transaction from the list of active transactions
-	void RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
+	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
 
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
@@ -97,8 +110,6 @@ private:
 	vector<unique_ptr<DuckTransaction>> active_transactions;
 	//! Set of recently committed transactions
 	vector<unique_ptr<DuckTransaction>> recently_committed_transactions;
-	//! Transactions awaiting GC
-	vector<unique_ptr<DuckTransaction>> old_transactions;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
 	//! The checkpoint lock
@@ -110,6 +121,15 @@ private:
 
 	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
 	idx_t last_committed_version = 0;
+
+	//! Only one cleanup can be active at any time.
+	mutex cleanup_lock;
+	//! Changes to the cleanup queue must be synchronized.
+	mutex cleanup_queue_lock;
+	//! Cleanups have to happen in-order.
+	//! E.g., if one transaction drops a table, and another creates a table,
+	//! inverting the cleanup order can result in catalog errors.
+	queue<unique_ptr<DuckCleanupInfo>> cleanup_queue;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {

@@ -1,0 +1,21 @@
+# name: test/sql/storage/update/dictionary_update_null.test
+# description: Test updating only the validity mask of a dictionary compressed column
+# group: [update]
+
+# load the DB from disk
+load __TEST_DIR__/dictionary_update_null.db
+
+statement ok
+SET force_compression='dictionary'
+
+statement ok
+CREATE OR REPLACE TABLE 'everflow_daily' AS SELECT case when i%10=0 THEN uuid()::VARCHAR ELSE 'N/A' END sub4 FROM range(10000) t(i)
+
+statement ok
+UPDATE everflow_daily SET sub4 = NULL WHERE sub4 = 'N/A';
+
+query I
+select count(*) from everflow_daily
+where sub4 = 'N/A'
+----
+0

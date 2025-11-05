@@ -1,10 +1,3 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/types/row_operations/row_aggregate.cpp
-//
-//
-//===----------------------------------------------------------------------===//
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
@@ -22,10 +15,14 @@ void RowOperations::InitializeStates(TupleDataLayout &layout, Vector &addresses,
 	auto aggr_idx = layout.ColumnCount();
 
 	for (const auto &aggr : layout.GetAggregates()) {
-		for (idx_t i = 0; i < count; ++i) {
-			auto row_idx = sel.get_index(i);
-			auto row = pointers[row_idx];
-			aggr.function.initialize(aggr.function, row + offsets[aggr_idx]);
+		if (sel.IsSet()) {
+			for (idx_t i = 0; i < count; ++i) {
+				aggr.function.initialize(aggr.function, pointers[sel.get_index_unsafe(i)] + offsets[aggr_idx]);
+			}
+		} else {
+			for (idx_t i = 0; i < count; ++i) {
+				aggr.function.initialize(aggr.function, pointers[i] + offsets[aggr_idx]);
+			}
 		}
 		++aggr_idx;
 	}
@@ -102,7 +99,10 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,
                                    DataChunk &result, idx_t aggr_idx) {
 	// Copy the addresses
-	Vector addresses_copy(LogicalType::POINTER);
+	if (!state.addresses) {
+		state.addresses = make_uniq<Vector>(LogicalType::POINTER);
+	}
+	auto &addresses_copy = *state.addresses;
 	VectorOperations::Copy(addresses, addresses_copy, result.size(), 0, 0);
 
 	//	Move to the first aggregate state

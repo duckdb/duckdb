@@ -15,6 +15,7 @@ namespace duckdb {
 struct JSONStructureDescription;
 struct DateFormatMap;
 struct StrpTimeFormat;
+class MutableDateFormatMap;
 
 struct JSONStructureNode {
 public:
@@ -34,18 +35,18 @@ public:
 	bool ContainsVarchar() const;
 	void InitializeCandidateTypes(idx_t max_depth, bool convert_strings_to_integers, idx_t depth = 0);
 	void RefineCandidateTypes(yyjson_val *vals[], idx_t val_count, Vector &string_vector, ArenaAllocator &allocator,
-	                          DateFormatMap &date_format_map);
+	                          MutableDateFormatMap &date_format_map);
 
 private:
 	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                               ArenaAllocator &allocator, DateFormatMap &date_format_map);
+	                               ArenaAllocator &allocator, MutableDateFormatMap &date_format_map);
 	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                                ArenaAllocator &allocator, DateFormatMap &date_format_map);
+	                                ArenaAllocator &allocator, MutableDateFormatMap &date_format_map);
 	void RefineCandidateTypesString(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                                DateFormatMap &date_format_map);
-	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, DateFormatMap &date_format_map);
+	                                MutableDateFormatMap &date_format_map);
+	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, MutableDateFormatMap &date_format_map);
 	bool EliminateCandidateFormats(idx_t vec_count, Vector &string_vector, const Vector &result_vector,
-	                               DateFormatMap &date_format_map);
+	                               MutableDateFormatMap &date_format_map);
 
 public:
 	unique_ptr<string> key;

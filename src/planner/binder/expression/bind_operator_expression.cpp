@@ -78,8 +78,9 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 	case ExpressionType::OPERATOR_COALESCE: {
 		return ResolveCoalesceType(op, children);
 	}
-	case ExpressionType::OPERATOR_TRY:
-		return ExpressionBinder::GetExpressionReturnType(*children[0]);
+	case ExpressionType::OPERATOR_TRY: {
+		return children[0]->return_type;
+	}
 	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
 	default:
@@ -118,6 +119,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// all children bound successfully
 	string function_name;
 	switch (op.GetExpressionType()) {
+	case ExpressionType::OPERATOR_UNPACK:
+		return BindResult("UNPACK not allowed here, should have been resolved earlier");
 	case ExpressionType::ARRAY_EXTRACT: {
 		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
@@ -128,11 +131,28 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			function_name = "json_extract";
 			// Make sure we only extract array elements, not fields, by adding the $[] syntax
 			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
+			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+			    !i_exp->Cast<BoundConstantExpression>().value.IsNull()) {
+				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
+				if (const_exp.value.TryCastAs(context, LogicalType::UINTEGER)) {
+					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
+					auto index = UIntegerValue::Get(const_exp.value);
+					const_exp.value = StringUtil::Format("$[%lld]", index);
+					const_exp.return_type = LogicalType::VARCHAR;
+				} else if (const_exp.return_type.id() == LogicalType::VARCHAR) {
+					// Field extraction
+					const_exp.value = StringUtil::Format("$.\"%s\"", const_exp.value.ToString());
+					const_exp.return_type = LogicalType::VARCHAR;
+				}
+			}
+		} else if (b_exp_type.id() == LogicalTypeId::VARIANT && op.children.size() == 2) {
+			function_name = "variant_extract";
+			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.value.IsNull()) {
-					const_exp.value = StringUtil::Format("$[%s]", const_exp.value.ToString());
-					const_exp.return_type = LogicalType::VARCHAR;
+				if (!const_exp.value.IsNull() && const_exp.return_type.IsNumeric()) {
+					const_exp.value = const_exp.value.DefaultCastAs(LogicalType::UINTEGER, true);
+					const_exp.return_type = LogicalType::UINTEGER;
 				}
 			}
 		} else {
@@ -155,7 +175,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
-		    !extract_expr_type.IsJSONType()) {
+		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT) {
 			return BindResult(StringUtil::Format(
 			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
 			    name_exp->ToString(), extract_exp->ToString()));
@@ -164,6 +184,16 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			function_name = "union_extract";
 		} else if (extract_expr_type.id() == LogicalTypeId::MAP) {
 			function_name = "map_extract_value";
+		} else if (extract_expr_type.id() == LogicalTypeId::VARIANT) {
+			function_name = "variant_extract";
+			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
+			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
+				if (!const_exp.value.IsNull()) {
+					const_exp.value = StringUtil::Format("%s", const_exp.value.ToString());
+					const_exp.return_type = LogicalType::VARCHAR;
+				}
+			}
 		} else if (extract_expr_type.IsJSONType()) {
 			function_name = "json_extract";
 			// Make sure we only extract fields, not array elements, by adding $. syntax

@@ -6,10 +6,21 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
+	// Early-out, if the index already exists.
+	auto &schema = op.table.schema;
+	auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, op.info->index_name);
+	if (entry) {
+		if (op.info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+			throw CatalogException("Index with name \"%s\" already exists!", op.info->index_name);
+		}
+		return Make<PhysicalDummyScan>(op.types, op.estimated_cardinality);
+	}
+
 	// Ensure that all expressions contain valid scalar functions.
 	// E.g., get_current_timestamp(), random(), and sequence values cannot be index keys.
 	for (idx_t i = 0; i < op.unbound_expressions.size(); i++) {
@@ -36,9 +47,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	// Generate a physical plan for the parallel index creation.
 	// TABLE SCAN - PROJECTION - (optional) NOT NULL FILTER - (optional) ORDER BY - CREATE INDEX
 	D_ASSERT(op.children.size() == 1);
-	auto table_scan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlan(*op.children[0]);
 
-	PlanIndexInput input(context, op, table_scan);
+	PlanIndexInput input(context, op, *this, plan);
 	return index_type->create_plan(input);
 }
 

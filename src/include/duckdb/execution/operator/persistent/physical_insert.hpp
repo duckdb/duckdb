@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/optimistic_data_writer.hpp"
 
 namespace duckdb {
 
@@ -30,8 +31,6 @@ public:
 	mutex lock;
 	DuckTableEntry &table;
 	idx_t insert_count;
-	bool initialized;
-	LocalAppendState append_state;
 	ColumnDataCollection return_collection;
 };
 
@@ -39,7 +38,6 @@ class InsertLocalState : public LocalSinkState {
 public:
 public:
 	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-	                 const vector<unique_ptr<Expression>> &bound_defaults,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 
 public:
@@ -47,14 +45,12 @@ public:
 	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &table_ref, ClientContext &context);
 
 public:
-	//! The chunk that ends up getting inserted
-	DataChunk insert_chunk;
 	//! The chunk containing the tuples that become an update (if DO UPDATE)
 	DataChunk update_chunk;
-	ExpressionExecutor default_executor;
 	TableAppendState local_append_state;
-	unique_ptr<RowGroupCollection> local_collection;
-	optional_ptr<OptimisticDataWriter> writer;
+	//! An index to the optimistic row group collection vector of the local table storage for this transaction.
+	PhysicalIndex collection_index;
+	unique_ptr<OptimisticDataWriter> optimistic_writer;
 	// Rows that have been updated by a DO UPDATE conflict
 	unordered_set<row_t> updated_rows;
 	idx_t update_count = 0;
@@ -73,25 +69,21 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map,
-	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<BoundConstraint>> bound_constraints,
+	PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &table,
+	               vector<unique_ptr<BoundConstraint>> bound_constraints,
 	               vector<unique_ptr<Expression>> set_expressions, vector<PhysicalIndex> set_columns,
 	               vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk, bool parallel,
 	               OnConflictAction action_type, unique_ptr<Expression> on_conflict_condition,
 	               unique_ptr<Expression> do_update_condition, unordered_set<column_t> on_conflict_filter,
 	               vector<column_t> columns_to_fetch, bool update_is_del_and_insert);
 	//! CREATE TABLE AS
-	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
-	               idx_t estimated_cardinality, bool parallel);
+	PhysicalInsert(PhysicalPlan &physical_plan, LogicalOperator &op, SchemaCatalogEntry &schema,
+	               unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality, bool parallel);
 
-	//! The map from insert column index to table column index
-	physical_index_vector_t<idx_t> column_index_map;
 	//! The table to insert into
 	optional_ptr<TableCatalogEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
-	//! The default expressions of the columns for which no value is provided
-	vector<unique_ptr<Expression>> bound_defaults;
 	//! The bound constraints for the table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! If the returning statement is present, return the whole chunk
@@ -158,11 +150,7 @@ public:
 	}
 
 public:
-	static void GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types,
-	                          vector<unique_ptr<Expression>> &bound_defaults);
-	static void ResolveDefaults(const TableCatalogEntry &table, DataChunk &chunk,
-	                            const physical_index_vector_t<idx_t> &column_index_map,
-	                            ExpressionExecutor &defaults_executor, DataChunk &result);
+	static void GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types);
 
 protected:
 	void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
@@ -171,7 +159,7 @@ protected:
 	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
 	                       DataChunk &result) const;
 	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
-	                         InsertLocalState &lstate) const;
+	                         InsertLocalState &lstate, DataChunk &insert_chunk) const;
 };
 
 } // namespace duckdb

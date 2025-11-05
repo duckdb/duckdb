@@ -55,6 +55,8 @@ ScalarFunctionSet BitStringFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // get_bit
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct GetBitOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB n) {
@@ -66,6 +68,7 @@ struct GetBitOperator {
 	}
 };
 
+} // namespace
 ScalarFunction GetBitFun::GetFunction() {
 	ScalarFunction func({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::INTEGER,
 	                    ScalarFunction::BinaryFunction<string_t, int32_t, int32_t, GetBitOperator>);
@@ -104,6 +107,8 @@ ScalarFunction SetBitFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // bit_position
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct BitPositionOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA substring, TB input) {
@@ -113,6 +118,8 @@ struct BitPositionOperator {
 		return UnsafeNumericCast<TR>(Bit::BitPosition(substring, input));
 	}
 };
+
+} // namespace
 
 ScalarFunction BitPositionFun::GetFunction() {
 	return ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::INTEGER,

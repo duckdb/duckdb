@@ -85,7 +85,6 @@ void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(LogicalOperat
 
 void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
                                                   const std::function<void(unique_ptr<Expression> *child)> &callback) {
-
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		auto &get = op.Cast<LogicalExpressionGet>();
@@ -122,19 +121,43 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
+
+		for (auto &target : rec.key_targets) {
+			callback(&target);
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
 		auto &insert = op.Cast<LogicalInsert>();
-		if (insert.on_conflict_condition) {
-			callback(&insert.on_conflict_condition);
+		if (insert.on_conflict_info.on_conflict_condition) {
+			callback(&insert.on_conflict_info.on_conflict_condition);
 		}
-		if (insert.do_update_condition) {
-			callback(&insert.do_update_condition);
+		if (insert.on_conflict_info.do_update_condition) {
+			callback(&insert.on_conflict_info.do_update_condition);
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
+		auto &join = op.Cast<LogicalDependentJoin>();
+		for (auto &expr : join.duplicate_eliminated_columns) {
+			callback(&expr);
+		}
+		for (auto &cond : join.conditions) {
+			callback(&cond.left);
+			callback(&cond.right);
+		}
+		for (auto &expr : join.arbitrary_expressions) {
+			callback(&expr);
+		}
+		for (auto &expr : join.expression_children) {
+			callback(&expr);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		for (auto &expr : join.duplicate_eliminated_columns) {
@@ -143,6 +166,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &cond : join.conditions) {
 			callback(&cond.left);
 			callback(&cond.right);
+		}
+		if (join.predicate) {
+			callback(&join.predicate);
 		}
 		break;
 	}
@@ -165,6 +191,20 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		auto &aggr = op.Cast<LogicalAggregate>();
 		for (auto &group : aggr.groups) {
 			callback(&group);
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
+		auto &merge_into = op.Cast<LogicalMergeInto>();
+		for (auto &entry : merge_into.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					callback(&action->condition);
+				}
+				for (auto &expr : action->expressions) {
+					callback(&expr);
+				}
+			}
 		}
 		break;
 	}

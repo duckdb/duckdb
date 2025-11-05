@@ -11,10 +11,9 @@
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
 #include <vector>
-#include "duckdb_shell_wrapper.h"
 #include <string>
-#include "sqlite3.h"
 #include "duckdb/common/string_util.hpp"
+#include "shell_state.hpp"
 #ifdef __MVS__
 #include <strings.h>
 #include <sys/time.h>
@@ -37,17 +36,6 @@ static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 int linenoiseHistoryAdd(const char *line);
 
 /* ============================== Completion ================================ */
-
-/* Free a list of completion option populated by linenoiseAddCompletion(). */
-static void freeCompletions(linenoiseCompletions *lc) {
-	size_t i;
-	for (i = 0; i < lc->len; i++) {
-		free(lc->cvec[i]);
-	}
-	if (lc->cvec != nullptr) {
-		free(lc->cvec);
-	}
-}
 
 /* Register a callback function to be called for tab-completion. */
 void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
@@ -74,28 +62,53 @@ linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
 	return freeHintsCallback;
 }
 
+CompletionType Linenoise::GetCompletionType(const char *type) {
+	if (StringUtil::Equals(type, "keyword")) {
+		return CompletionType::KEYWORD;
+	}
+	if (StringUtil::Equals(type, "catalog")) {
+		return CompletionType::CATALOG_NAME;
+	}
+	if (StringUtil::Equals(type, "schema")) {
+		return CompletionType::SCHEMA_NAME;
+	}
+	if (StringUtil::Equals(type, "table")) {
+		return CompletionType::TABLE_NAME;
+	}
+	if (StringUtil::Equals(type, "column")) {
+		return CompletionType::COLUMN_NAME;
+	}
+	if (StringUtil::Equals(type, "type")) {
+		return CompletionType::TYPE_NAME;
+	}
+	if (StringUtil::Equals(type, "file_name")) {
+		return CompletionType::FILE_NAME;
+	}
+	if (StringUtil::Equals(type, "directory")) {
+		return CompletionType::DIRECTORY_NAME;
+	}
+	if (StringUtil::Equals(type, "scalar_function")) {
+		return CompletionType::SCALAR_FUNCTION;
+	}
+	if (StringUtil::Equals(type, "table_function")) {
+		return CompletionType::TABLE_FUNCTION;
+	}
+	if (StringUtil::Equals(type, "setting")) {
+		return CompletionType::SETTING_NAME;
+	}
+	return CompletionType::UNKNOWN;
+}
+
 TabCompletion Linenoise::TabComplete() const {
 	TabCompletion result;
 	if (!completionCallback) {
 		return result;
 	}
-	linenoiseCompletions lc;
-	lc.cvec = nullptr;
-	lc.len = 0;
 	// complete based on the cursor position
 	auto prev_char = buf[pos];
 	buf[pos] = '\0';
-	completionCallback(buf, &lc);
+	completionCallback(buf, reinterpret_cast<linenoiseCompletions *>(&result));
 	buf[pos] = prev_char;
-	result.completions.reserve(lc.len);
-	for (idx_t i = 0; i < lc.len; i++) {
-		Completion c;
-		c.completion = lc.cvec[i];
-		c.cursor_pos = c.completion.size();
-		c.completion += buf + pos;
-		result.completions.emplace_back(std::move(c));
-	}
-	freeCompletions(&lc);
 	return result;
 }
 /* This is an helper function for linenoiseEdit() and is called when the
@@ -108,23 +121,26 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 	int nread, nwritten;
 	char c = 0;
 
-	auto completion_list = TabComplete();
+	completion_list = TabComplete();
 	auto &completions = completion_list.completions;
+	// we only start rendering completion suggestions once we start tabbing through them
+	render_completion_suggestion = false;
 	if (completions.empty()) {
 		Terminal::Beep();
 	} else {
 		bool stop = false;
 		bool accept_completion = false;
-		idx_t i = 0;
+		completion_idx = 0;
 
 		while (!stop) {
+			HandleTerminalResize();
 			/* Show completion or original buffer */
-			if (i < completions.size()) {
+			if (completion_idx < completions.size()) {
 				Linenoise saved = *this;
 
-				len = completions[i].completion.size();
-				pos = completions[i].cursor_pos;
-				buf = (char *)completions[i].completion.c_str();
+				len = completions[completion_idx].completion.size();
+				pos = completions[completion_idx].cursor_pos;
+				buf = (char *)completions[completion_idx].completion.c_str();
 				RefreshLine();
 				len = saved.len;
 				pos = saved.pos;
@@ -135,27 +151,32 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 
 			nread = read(ifd, &c, 1);
 			if (nread <= 0) {
+				// no longer completing - clear list of completions
+				completion_list.completions.clear();
 				return -1;
 			}
 
 			Linenoise::Log("\nComplete Character %d\n", (int)c);
 			switch (c) {
 			case TAB: /* tab */
-				i = (i + 1) % completions.size();
+				completion_idx = (completion_idx + 1) % completions.size();
+				render_completion_suggestion = true;
 				break;
 			case ESC: { /* escape */
 				auto escape = Terminal::ReadEscapeSequence(ifd);
 				switch (escape) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
-					if (i == 0) {
+					if (completion_idx == 0) {
 						// pressing shift-tab at the first completion cancels completion
 						RefreshLine();
 						current_sequence = escape;
+						c = ENTER;
 						stop = true;
 					} else {
-						i--;
+						completion_idx--;
 					}
+					render_completion_suggestion = true;
 					break;
 				case EscapeSequence::ESCAPE:
 					/* Re-show original buffer */
@@ -176,17 +197,43 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				stop = true;
 				break;
 			}
-			if (stop && accept_completion && i < completions.size()) {
+			if (stop && accept_completion && completion_idx < completions.size()) {
 				/* Update buffer and return */
-				if (i < completions.size()) {
-					nwritten = snprintf(buf, buflen, "%s", completions[i].completion.c_str());
-					pos = completions[i].cursor_pos;
+				if (completion_idx < completions.size()) {
+					nwritten = snprintf(buf, buflen, "%s", completions[completion_idx].completion.c_str());
+					pos = completions[completion_idx].cursor_pos;
 					len = nwritten;
 				}
 			}
 		}
 	}
+	// no longer completing - clear list of completions
+	completion_list.completions.clear();
+	if (c == ENTER) {
+		return 0;
+	}
 	return c; /* Return last read character */
+}
+
+bool Linenoise::HandleANSIEscape(const char *buf, size_t len, size_t &cpos) {
+	// --- Handle ANSI escape sequences ---
+	if (buf[cpos] != '\033') {
+		// not an escape sequence
+		return false;
+	}
+	cpos++;
+	if (cpos < len && buf[cpos] == '[') { // CSI sequence
+		cpos++;
+		while (cpos < len && !(buf[cpos] >= '@' && buf[cpos] <= '~')) {
+			cpos++;
+		}
+		if (cpos < len)
+			cpos++; // skip final letter
+	} else {
+		// standalone ESC
+		cpos++;
+	}
+	return true;
 }
 
 size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
@@ -195,7 +242,29 @@ size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
 	size_t render_width = 0;
 	int sz;
 	while (cpos < len) {
-		if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
+		// --- 1. Handle newline ---
+		if (buf[cpos] == '\n') {
+			render_width = 0; // reset width for new line
+			cpos++;
+			continue;
+		}
+
+		// --- 2. Handle tab (optional, usually 8-space tab stops) ---
+		if (buf[cpos] == '\t') {
+			render_width += 8 - (render_width % 8);
+			cpos++;
+			continue;
+		}
+
+		// --- 3. Handle ANSI escape sequences ---
+		if (HandleANSIEscape(buf, len, cpos)) {
+			continue;
+		}
+
+		// --- 4. Handle UTF-8 grapheme clusters ---
+		int codepoint = duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz);
+		if (codepoint < 0) {
+			// invalid byte, treat as width 1
 			cpos++;
 			render_width++;
 			continue;
@@ -234,105 +303,6 @@ int Linenoise::GetRenderPosition(const char *buf, size_t len, int max_width, int
 	}
 }
 
-int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error) {
-	if (strcmp(azArg[0], "highlight") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Highlighting::Disable();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Highlighting::Enable();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .highlight [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "render_errors") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Linenoise::DisableErrorRendering();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Linenoise::EnableErrorRendering();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .render_errors [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "render_completion") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Linenoise::DisableCompletionRendering();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Linenoise::EnableCompletionRendering();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .render_completion [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "keyword") == 0 || strcmp(azArg[0], "constant") == 0 ||
-	           strcmp(azArg[0], "comment") == 0 || strcmp(azArg[0], "error") == 0 || strcmp(azArg[0], "cont") == 0 ||
-	           strcmp(azArg[0], "cont_sel") == 0) {
-		if (nArg == 2) {
-			const char *option = Highlighting::GetColorOption(azArg[1]);
-			if (option) {
-				HighlightingType type;
-				if (strcmp(azArg[0], "keyword") == 0) {
-					type = HighlightingType::KEYWORD;
-				} else if (strcmp(azArg[0], "constant") == 0) {
-					type = HighlightingType::CONSTANT;
-				} else if (strcmp(azArg[0], "comment") == 0) {
-					type = HighlightingType::COMMENT;
-				} else if (strcmp(azArg[0], "error") == 0) {
-					type = HighlightingType::ERROR;
-				} else if (strcmp(azArg[0], "cont") == 0) {
-					type = HighlightingType::CONTINUATION;
-				} else {
-					type = HighlightingType::CONTINUATION_SELECTED;
-				}
-				Highlighting::SetHighlightingColor(type, option);
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .[keyword|constant|comment|error|cont|cont_sel] "
-		             "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
-		             "brightblue|brightmagenta|brightcyan|brightwhite]";
-		return 1;
-	} else if (strcmp(azArg[0], "keywordcode") == 0 || strcmp(azArg[0], "constantcode") == 0 ||
-	           strcmp(azArg[0], "commentcode") == 0 || strcmp(azArg[0], "errorcode") == 0 ||
-	           strcmp(azArg[0], "contcode") == 0 || strcmp(azArg[0], "cont_selcode") == 0) {
-		if (nArg == 2) {
-			HighlightingType type;
-			if (strcmp(azArg[0], "keywordcode") == 0) {
-				type = HighlightingType::KEYWORD;
-			} else if (strcmp(azArg[0], "constantcode") == 0) {
-				type = HighlightingType::CONSTANT;
-			} else if (strcmp(azArg[0], "commentcode") == 0) {
-				type = HighlightingType::COMMENT;
-			} else if (strcmp(azArg[0], "errorcode") == 0) {
-				type = HighlightingType::ERROR;
-			} else if (strcmp(azArg[0], "contcode") == 0) {
-				type = HighlightingType::CONTINUATION;
-			} else {
-				type = HighlightingType::CONTINUATION_SELECTED;
-			}
-			Highlighting::SetHighlightingColor(type, azArg[1]);
-			return 1;
-		}
-		*out_error =
-		    "Expected usage: .[keywordcode|constantcode|commentcode|errorcode|contcode|cont_selcode] [terminal_code]";
-		return 1;
-	} else if (strcmp(azArg[0], "multiline") == 0) {
-		linenoiseSetMultiLine(1);
-		return 1;
-	} else if (strcmp(azArg[0], "singleline") == 0) {
-		linenoiseSetMultiLine(0);
-		return 1;
-	}
-	return 0;
-}
-
 bool Linenoise::IsNewline(char c) {
 	return c == '\r' || c == '\n';
 }
@@ -346,6 +316,9 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 		if (buf[cpos - 1] == '\r' && cpos < len && buf[cpos] == '\n') {
 			cpos++;
 		}
+		return;
+	}
+	if (HandleANSIEscape(buf, len, cpos)) {
 		return;
 	}
 	int sz;
@@ -365,15 +338,15 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 	cols += char_render_width;
 }
 
-void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const {
-	int plen = GetPromptWidth();
+void Linenoise::PositionToColAndRow(int prompt_len, const char *render_buf, idx_t render_len, size_t target_pos,
+                                    int &out_row, int &out_col, int &rows, int &cols) const {
 	out_row = -1;
 	out_col = 0;
 	rows = 1;
-	cols = plen;
+	cols = prompt_len;
 	size_t cpos = 0;
-	while (cpos < len) {
-		if (cols >= ws.ws_col && !IsNewline(buf[cpos])) {
+	while (cpos < render_len) {
+		if (cols >= ws.ws_col && !IsNewline(render_buf[cpos])) {
 			// exceeded width - move to next line
 			rows++;
 			cols = 0;
@@ -382,12 +355,17 @@ void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_co
 			out_row = rows;
 			out_col = cols;
 		}
-		NextPosition(buf, len, cpos, rows, cols, plen);
+		NextPosition(render_buf, render_len, cpos, rows, cols, prompt_len);
 	}
-	if (target_pos == len) {
+	if (target_pos == render_len) {
 		out_row = rows;
 		out_col = cols;
 	}
+}
+
+void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const {
+	int plen = GetPromptWidth();
+	PositionToColAndRow(plen, buf, len, target_pos, out_row, out_col, rows, cols);
 }
 
 size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
@@ -575,7 +553,7 @@ void Linenoise::EditMoveEnd() {
 
 /* Move cursor to the start of the line. */
 void Linenoise::EditMoveStartOfLine() {
-	while (pos > 0 && buf[pos] != '\n') {
+	while (pos > 0 && buf[pos - 1] != '\n') {
 		pos--;
 	}
 	RefreshLine();
@@ -1016,7 +994,7 @@ char Linenoise::Search(char c) {
 
 bool Linenoise::AllWhitespace(const char *z) {
 	for (; *z; z++) {
-		if (isspace((unsigned char)z[0]))
+		if (StringUtil::CharacterIsSpace((unsigned char)z[0]))
 			continue;
 		if (*z == '/' && z[1] == '*') {
 			z += 2;
@@ -1060,10 +1038,45 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	continuation_markers = true;
 	insert = false;
 	search_index = 0;
+	completion_idx = 0;
+	rendered_completion_lines = 0;
+	render_completion_suggestion = false;
 
 	/* Buffer starts empty. */
 	buf[0] = '\0';
 	buflen--; /* Make sure there is always space for the nulterm */
+}
+
+void Linenoise::HandleTerminalResize() {
+	if (!Terminal::IsMultiline()) {
+		return;
+	}
+	TerminalSize new_size = Terminal::GetTerminalSize();
+	if (new_size.ws_col == ws.ws_col && new_size.ws_row == ws.ws_row) {
+		return;
+	}
+	// terminal resize! re-compute max lines
+	ws = new_size;
+	int rows, cols;
+	int cursor_row, cursor_col;
+	PositionToColAndRow(pos, cursor_row, cursor_col, rows, cols);
+	old_cursor_rows = cursor_row;
+	maxrows = rows;
+
+	if (rendered_completion_lines > 0) {
+		// if we have rendered completions - figure out how many rows this takes up post-resize
+		string completion_text;
+		for (idx_t i = 0; i < completion_list.completions.size(); i++) {
+			if (i > 0) {
+				completion_text += " ";
+			}
+			auto &completion = completion_list.completions[i];
+			auto &rendered_text = completion.original_completion;
+			completion_text += rendered_text;
+		}
+		PositionToColAndRow(0, completion_text.c_str(), completion_text.size(), 0, cursor_row, cursor_col, rows, cols);
+		rendered_completion_lines = rows;
+	}
 }
 
 /* This function is the core of the line editing capability of linenoise.
@@ -1094,17 +1107,8 @@ int Linenoise::Edit() {
 		has_more_data = Terminal::HasMoreData(ifd);
 		render = true;
 		insert = false;
-		if (Terminal::IsMultiline() && !has_more_data) {
-			TerminalSize new_size = Terminal::GetTerminalSize();
-			if (new_size.ws_col != ws.ws_col || new_size.ws_row != ws.ws_row) {
-				// terminal resize! re-compute max lines
-				ws = new_size;
-				int rows, cols;
-				int cursor_row, cursor_col;
-				PositionToColAndRow(pos, cursor_row, cursor_col, rows, cols);
-				old_cursor_rows = cursor_row;
-				maxrows = rows;
-			}
+		if (!has_more_data) {
+			HandleTerminalResize();
 		}
 
 		if (search) {
@@ -1136,6 +1140,7 @@ int Linenoise::Edit() {
 			}
 			/* Read next character when 0 */
 			if (c == 0) {
+				RefreshLine();
 				continue;
 			}
 		}
@@ -1177,7 +1182,7 @@ int Linenoise::Edit() {
 			if (Terminal::IsMultiline() && len > 0) {
 				// check if this forms a complete SQL statement or not
 				buf[len] = '\0';
-				if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
+				if (buf[0] != '.' && !AllWhitespace(buf) && !duckdb_shell::ShellState::SQLIsComplete(buf)) {
 					// not a complete SQL statement yet! continuation
 					pos = len;
 					if (c != CTRL_G) {
@@ -1382,10 +1387,10 @@ int Linenoise::Edit() {
 			RefreshLine();
 			break;
 		case CTRL_A: /* Ctrl+a, go to the start of the line */
-			EditMoveHome();
+			EditMoveStartOfLine();
 			break;
 		case CTRL_E: /* ctrl+e, go to the end of the line */
-			EditMoveEnd();
+			EditMoveEndOfLine();
 			break;
 		case CTRL_L: /* ctrl+l, clear screen */
 			linenoiseClearScreen();

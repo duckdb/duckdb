@@ -16,6 +16,13 @@ ARTKey::ARTKey(ArenaAllocator &allocator, idx_t len) : len(len) {
 	data = allocator.Allocate(len);
 }
 
+void ARTKey::VerifyKeyLength(const idx_t max_len) const {
+	if (len > max_len) {
+		throw InvalidInputException("key size of %d bytes exceeds the maximum size of %d bytes for this ART", len,
+		                            max_len);
+	}
+}
+
 template <>
 ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value) {
 	auto string_data = const_data_ptr_cast(value.GetData());
@@ -29,22 +36,22 @@ ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value) {
 		}
 	}
 
-	idx_t len = string_len + escape_count + 1;
-	auto data = allocator.Allocate(len);
+	idx_t key_len = string_len + escape_count + 1;
+	auto key_data = allocator.Allocate(key_len);
 
 	// Copy over the data and add escapes.
 	idx_t pos = 0;
 	for (idx_t i = 0; i < string_len; i++) {
 		if (string_data[i] <= 1) {
 			// Add escape.
-			data[pos++] = '\01';
+			key_data[pos++] = '\01';
 		}
-		data[pos++] = string_data[i];
+		key_data[pos++] = string_data[i];
 	}
 
 	// End with a null-terminator.
-	data[pos] = '\0';
-	return ARTKey(data, len);
+	key_data[pos] = '\0';
+	return ARTKey(key_data, key_len);
 }
 
 template <>
@@ -154,29 +161,6 @@ idx_t ARTKey::GetMismatchPos(const ARTKey &other, const idx_t start) const {
 		}
 	}
 	return DConstants::INVALID_INDEX;
-}
-
-//===--------------------------------------------------------------------===//
-// ARTKeySection
-//===--------------------------------------------------------------------===//
-
-ARTKeySection::ARTKeySection(idx_t start, idx_t end, idx_t depth, data_t byte)
-    : start(start), end(end), depth(depth), key_byte(byte) {
-}
-
-ARTKeySection::ARTKeySection(idx_t start, idx_t end, const unsafe_vector<ARTKey> &keys, const ARTKeySection &section)
-    : start(start), end(end), depth(section.depth + 1), key_byte(keys[end].data[section.depth]) {
-}
-
-void ARTKeySection::GetChildSections(unsafe_vector<ARTKeySection> &sections, const unsafe_vector<ARTKey> &keys) {
-	auto child_idx = start;
-	for (idx_t i = start + 1; i <= end; i++) {
-		if (keys[i - 1].data[depth] != keys[i].data[depth]) {
-			sections.emplace_back(child_idx, i - 1, keys, *this);
-			child_idx = i;
-		}
-	}
-	sections.emplace_back(child_idx, end, keys, *this);
 }
 
 } // namespace duckdb

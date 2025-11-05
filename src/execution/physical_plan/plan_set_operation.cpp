@@ -31,27 +31,31 @@ static JoinCondition CreateNotDistinctComparison(const LogicalType &type, idx_t 
 	return cond;
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
-	D_ASSERT(op.children.size() == 2);
-
-	unique_ptr<PhysicalOperator> result;
-
-	auto left = CreatePlan(*op.children[0]);
-	auto right = CreatePlan(*op.children[1]);
-
-	if (left->GetTypes() != right->GetTypes()) {
-		throw InvalidInputException("Type mismatch for SET OPERATION");
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
+	ArenaLinkedList<reference<PhysicalOperator>> children(physical_plan->ArenaRef());
+	for (auto &child : op.children) {
+		children.push_back(CreatePlan(*child));
+	}
+	for (idx_t i = 1; i < children.size(); i++) {
+		if (children[i].get().GetTypes() != children[0].get().GetTypes()) {
+			throw InvalidInputException("Type mismatch for SET OPERATION");
+		}
 	}
 
+	optional_ptr<PhysicalOperator> result;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
-		result = make_uniq<PhysicalUnion>(op.types, std::move(left), std::move(right), op.estimated_cardinality,
-		                                  op.allow_out_of_order);
+		result = Make<PhysicalUnion>(op.types, std::move(children), op.estimated_cardinality, op.allow_out_of_order);
 		break;
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
-		auto &types = left->GetTypes();
+		if (children.size() != 2) {
+			throw InternalException("EXCEPT / INTERSECT must have exactly two children");
+		}
+		auto &left = children[0];
+		auto &right = children[1];
+		auto &types = left.get().GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
 		for (idx_t i = 0; i < types.size(); i++) {
@@ -63,15 +67,17 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 			vector<LogicalType> window_types = types;
 			window_types.push_back(LogicalType::BIGINT);
 
-			auto window_left = make_uniq<PhysicalWindow>(window_types, CreatePartitionedRowNumExpression(types),
-			                                             left->estimated_cardinality);
-			window_left->children.push_back(std::move(left));
-			left = std::move(window_left);
+			auto select_list = CreatePartitionedRowNumExpression(types);
+			auto &left_window =
+			    Make<PhysicalWindow>(window_types, std::move(select_list), left.get().estimated_cardinality);
+			left_window.children.push_back(left);
+			left = left_window;
 
-			auto window_right = make_uniq<PhysicalWindow>(window_types, CreatePartitionedRowNumExpression(types),
-			                                              right->estimated_cardinality);
-			window_right->children.push_back(std::move(right));
-			right = std::move(window_right);
+			select_list = CreatePartitionedRowNumExpression(types);
+			auto &right_window =
+			    Make<PhysicalWindow>(window_types, std::move(select_list), right.get().estimated_cardinality);
+			right_window.children.push_back(right);
+			right = right_window;
 
 			// add window expression result to join condition
 			conditions.push_back(CreateNotDistinctComparison(LogicalType::BIGINT, types.size()));
@@ -83,19 +89,17 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		// INTERSECT is SEMI join
 
 		JoinType join_type = op.type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-		result = make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(conditions), join_type,
-		                                     op.estimated_cardinality);
+		result = Make<PhysicalHashJoin>(op, left, right, std::move(conditions), join_type, op.estimated_cardinality);
 
 		// For EXCEPT ALL / INTERSECT ALL we need to remove the row number column again
 		if (op.setop_all) {
-			vector<unique_ptr<Expression>> projection_select_list;
+			vector<unique_ptr<Expression>> select_list;
 			for (idx_t i = 0; i < types.size(); i++) {
-				projection_select_list.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+				select_list.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
 			}
-			auto projection =
-			    make_uniq<PhysicalProjection>(types, std::move(projection_select_list), op.estimated_cardinality);
-			projection->children.push_back(std::move(result));
-			result = std::move(projection);
+			auto &proj = Make<PhysicalProjection>(types, std::move(select_list), op.estimated_cardinality);
+			proj.children.push_back(*result);
+			result = proj;
 		}
 		break;
 	}
@@ -110,14 +114,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		for (idx_t i = 0; i < types.size(); i++) {
 			groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
 		}
-		auto groupby = make_uniq<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
-		                                                result->estimated_cardinality);
-		groupby->children.push_back(std::move(result));
-		result = std::move(groupby);
+		auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
+		                                             result->estimated_cardinality);
+		group_by.children.push_back(*result);
+		result = group_by;
 	}
 
 	D_ASSERT(result);
-	return (result);
+	return *result;
 }
 
 } // namespace duckdb

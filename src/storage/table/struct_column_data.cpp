@@ -19,6 +19,9 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	if (type.id() != LogicalTypeId::UNION && StructType::IsUnnamed(type)) {
 		throw InvalidInputException("A table cannot be created from an unnamed struct");
 	}
+	if (type.id() == LogicalTypeId::VARIANT) {
+		throw NotImplementedException("A table cannot be created from a VARIANT column yet");
+	}
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
 	for (auto &child_type : child_types) {
@@ -119,7 +122,7 @@ idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state
 	return scan_count;
 }
 
-idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -130,7 +133,7 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 			ConstantVector::SetNull(target_vector, true);
 			continue;
 		}
-		sub_columns[i]->ScanCount(state.child_states[i + 1], target_vector, count);
+		sub_columns[i]->ScanCount(state.child_states[i + 1], target_vector, count, result_offset);
 	}
 	return scan_count;
 }
@@ -204,17 +207,18 @@ idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resu
 	return scan_count;
 }
 
-void StructColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                              idx_t update_count) {
-	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
+void StructColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                              Vector &update_vector, row_t *row_ids, idx_t update_count) {
+	validity.Update(transaction, data_table, column_index, update_vector, row_ids, update_count);
 	auto &child_entries = StructVector::GetEntries(update_vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Update(transaction, column_index, *child_entries[i], row_ids, update_count);
+		sub_columns[i]->Update(transaction, data_table, column_index, *child_entries[i], row_ids, update_count);
 	}
 }
 
-void StructColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                    Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void StructColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+                                    const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                                    idx_t update_count, idx_t depth) {
 	// we can never DIRECTLY update a struct column
 	if (depth >= column_path.size()) {
 		throw InternalException("Attempting to directly update a struct column - this should not be possible");
@@ -222,13 +226,13 @@ void StructColumnData::UpdateColumn(TransactionData transaction, const vector<co
 	auto update_column = column_path[depth];
 	if (update_column == 0) {
 		// update the validity column
-		validity.UpdateColumn(transaction, column_path, update_vector, row_ids, update_count, depth + 1);
+		validity.UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1);
 	} else {
 		if (update_column > sub_columns.size()) {
 			throw InternalException("Update column_path out of range");
 		}
-		sub_columns[update_column - 1]->UpdateColumn(transaction, column_path, update_vector, row_ids, update_count,
-		                                             depth + 1);
+		sub_columns[update_column - 1]->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids,
+		                                             update_count, depth + 1);
 	}
 }
 
@@ -308,7 +312,8 @@ unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGro
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group,
                                                                ColumnCheckpointInfo &checkpoint_info) {
-	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
 		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, checkpoint_info));
@@ -326,6 +331,18 @@ bool StructColumnData::IsPersistent() {
 		}
 	}
 	return true;
+}
+
+bool StructColumnData::HasAnyChanges() const {
+	if (validity.HasAnyChanges()) {
+		return true;
+	}
+	for (auto &child_col : sub_columns) {
+		if (child_col->HasAnyChanges()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 PersistentColumnData StructColumnData::Serialize() {
@@ -346,13 +363,13 @@ void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseS
 	this->count = validity.count.load();
 }
 
-void StructColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
-                                            vector<duckdb::ColumnSegmentInfo> &result) {
+void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+                                            vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetColumnSegmentInfo(row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	}
 }
 

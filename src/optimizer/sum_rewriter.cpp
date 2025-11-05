@@ -167,6 +167,9 @@ void SumRewriterOptimizer::RewriteSums(unique_ptr<LogicalOperator> &op) {
 
 	// push the projection to replace the aggregate
 	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
+	if (op->has_estimated_cardinality) {
+		proj->SetEstimatedCardinality(op->estimated_cardinality);
+	}
 	proj->children.push_back(std::move(op));
 	op = std::move(proj);
 }

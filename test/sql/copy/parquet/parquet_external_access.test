@@ -6,45 +6,53 @@ require parquet
 
 # we cannot read parquet files
 statement ok
-CREATE TABLE lineitem AS SELECT * FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+CREATE TABLE lineitem AS SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
 
 statement ok
 SET enable_external_access=false;
 
 # we cannot read parquet files
 statement error
-SELECT * FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # or their metadata
 statement error
-SELECT * FROM parquet_metadata('data/parquet-testing/arrow/lineitem-arrow.parquet')
+SELECT * FROM parquet_metadata('{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet')
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 statement error
-SELECT * FROM parquet_schema('data/parquet-testing/arrow/lineitem-arrow.parquet')
+SELECT * FROM parquet_schema('{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet')
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # also not in a list
 statement error
-SELECT * FROM parquet_scan(['data/parquet-testing/arrow/lineitem-arrow.parquet', 'data/parquet-testing/arrow/lineitem-arrow.parquet'])
+SELECT * FROM parquet_scan(['{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet', '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'])
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # neither can we glob
 statement error
-SELECT * FROM glob('data/parquet-testing/arrow/lineitem-arrow.parquet')
+SELECT * FROM glob('{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet')
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # or copy to/from...
 statement error
-COPY lineitem FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+COPY lineitem FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 statement error
-COPY lineitem TO '__TEST_DIR__/lineitem.parquet'
+COPY lineitem TO '{TEMP_DIR}/lineitem.parquet'
 ----
+<REGEX>:.*Permission Error: Cannot access file.*
 
 # we also can't just enable external access again
 statement error
 SET enable_external_access=true;
 ----
+<REGEX>:.*Invalid Input Error: Cannot change.*while database is running.*

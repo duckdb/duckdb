@@ -39,7 +39,7 @@ main_header_files = [
     os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'memory_stream.hpp'),
     os.path.join(include_dir, 'duckdb', 'main', 'appender.hpp'),
     os.path.join(include_dir, 'duckdb', 'main', 'client_context.hpp'),
-    os.path.join(include_dir, 'duckdb', 'main', 'extension_util.hpp'),
+    os.path.join(include_dir, 'duckdb', 'main', 'extension', 'extension_loader.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'function.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'table_function.hpp'),
     os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_table_function_info.hpp'),
@@ -76,7 +76,7 @@ if '--extended' in sys.argv:
             "duckdb/planner/filter/null_filter.hpp",
             "duckdb/common/arrow/arrow_wrapper.hpp",
             "duckdb/common/hive_partitioning.hpp",
-            "duckdb/common/union_by_name.hpp",
+            "duckdb/common/multi_file/union_by_name.hpp",
             "duckdb/planner/operator/logical_get.hpp",
             "duckdb/common/compressed_file_system.hpp",
         ]
@@ -270,6 +270,21 @@ def git_commit_hash():
     return hash
 
 
+######
+# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
+# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+# - CMakeLists.txt
+# - scripts/amalgamation.py
+# - scripts/package_build.py
+######
+MAIN_BRANCH_VERSIONING = True
+if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
+    MAIN_BRANCH_VERSIONING = False
+if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
+    MAIN_BRANCH_VERSIONING = True
+
+
 def git_dev_version():
     try:
         long_version = package_build.get_git_describe()
@@ -280,7 +295,13 @@ def git_dev_version():
             return "v" + '.'.join(version_splits)
         else:
             # not on a tag: increment the version by one and add a -devX suffix
-            version_splits[2] = str(int(version_splits[2]) + 1)
+            # this needs to keep in sync with changes to CMakeLists.txt
+            if MAIN_BRANCH_VERSIONING == True:
+                # increment minor version
+                version_splits[1] = str(int(version_splits[1]) + 1)
+            else:
+                # increment patch version
+                version_splits[2] = str(int(version_splits[2]) + 1)
             return "v" + '.'.join(version_splits) + "-dev" + dev_version
     except:
         return "v0.0.0"

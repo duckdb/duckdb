@@ -39,13 +39,12 @@ public:
 
 class PhysicalArrowCollector : public PhysicalResultCollector {
 public:
-	PhysicalArrowCollector(PreparedStatementData &data, bool parallel, idx_t batch_size)
-	    : PhysicalResultCollector(data), record_batch_size(batch_size), parallel(parallel) {
+	PhysicalArrowCollector(PhysicalPlan &physical_plan, PreparedStatementData &data, bool parallel, idx_t batch_size)
+	    : PhysicalResultCollector(physical_plan, data), record_batch_size(batch_size), parallel(parallel) {
 	}
 
 public:
-	static unique_ptr<PhysicalResultCollector> Create(ClientContext &context, PreparedStatementData &data,
-	                                                  idx_t batch_size);
+	static PhysicalOperator &Create(ClientContext &context, PreparedStatementData &data, idx_t batch_size);
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;

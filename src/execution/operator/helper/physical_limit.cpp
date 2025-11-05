@@ -8,9 +8,11 @@
 
 namespace duckdb {
 
-PhysicalLimit::PhysicalLimit(vector<LogicalType> types, BoundLimitNode limit_val_p, BoundLimitNode offset_val_p,
-                             idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::LIMIT, std::move(types), estimated_cardinality),
+constexpr const idx_t PhysicalLimit::MAX_LIMIT_VALUE;
+
+PhysicalLimit::PhysicalLimit(PhysicalPlan &physical_plan, vector<LogicalType> types, BoundLimitNode limit_val_p,
+                             BoundLimitNode offset_val_p, idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::LIMIT, std::move(types), estimated_cardinality),
       limit_val(std::move(limit_val_p)), offset_val(std::move(offset_val_p)) {
 }
 
@@ -108,7 +110,6 @@ bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, o
 }
 
 SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
-
 	D_ASSERT(chunk.size() > 0);
 	auto &state = input.local_state.Cast<LimitLocalState>();
 	auto &limit = state.limit;

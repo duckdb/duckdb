@@ -19,6 +19,8 @@
 
 namespace duckdb {
 
+constexpr const char *TableCatalogEntry::Name;
+
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
@@ -38,7 +40,13 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exis
 		if (if_exists) {
 			return entry;
 		}
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
+		vector<string> column_names;
+		for (auto &col : columns.Logical()) {
+			column_names.push_back(col.Name());
+		}
+		auto candidates = StringUtil::CandidatesErrorMessage(column_names, column_name, "Did you mean");
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"\n%s", name, column_name,
+		                      candidates);
 	}
 	return entry;
 }
@@ -79,7 +87,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 }
 
 string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints) {
-	std::stringstream ss;
+	duckdb::stringstream ss;
 
 	ss << "(";
 
@@ -185,7 +193,7 @@ string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
 		return "";
 	}
 
-	std::stringstream ss;
+	duckdb::stringstream ss;
 	ss << "(";
 
 	for (auto &column : columns.Logical()) {
@@ -201,6 +209,11 @@ string TableCatalogEntry::ColumnNamesToSQL(const ColumnList &columns) {
 string TableCatalogEntry::ToSQL() const {
 	auto create_info = GetInfo();
 	return create_info->ToString();
+}
+
+TableFunction TableCatalogEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+                                                 const EntryLookupInfo &lookup_info) {
+	return GetScanFunction(context, bind_data);
 }
 
 const ColumnList &TableCatalogEntry::GetColumns() const {
@@ -221,8 +234,8 @@ DataTable &TableCatalogEntry::GetStorage() {
 }
 // LCOV_EXCL_STOP
 
-static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
-                             physical_index_set_t &bound_columns) {
+void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
+                                     LogicalUpdate &update, physical_index_set_t &bound_columns) {
 	if (bound_columns.size() <= 1) {
 		return;
 	}
@@ -236,26 +249,26 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 		}
 	}
 	if (found_column_count > 0 && found_column_count != bound_columns.size()) {
-		// columns in this CHECK constraint were referenced, but not all were part of the UPDATE
+		// columns that were required are not all part of the UPDATE
 		// add them to the scan and update set
-		for (auto &check_column_id : bound_columns) {
-			if (found_columns.find(check_column_id) != found_columns.end()) {
+		for (auto &physical_id : bound_columns) {
+			if (found_columns.find(physical_id) != found_columns.end()) {
 				// column is already projected
 				continue;
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
-			auto &column = table.GetColumns().GetColumn(check_column_id);
+			auto &column = table.GetColumns().GetColumn(physical_id);
 			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(get.table_index, get.GetColumnIds().size())));
-			get.AddColumnId(check_column_id.index);
-			update.columns.push_back(check_column_id);
+			get.AddColumnId(column.Logical().index);
+			update.columns.push_back(physical_id);
 		}
 	}
 }
 
-vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo() {
+vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(const QueryContext &context) {
 	return {};
 }
 
@@ -271,7 +284,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = constraint->Cast<BoundCheckConstraint>();
 			// check constraint! check if we need to add any extra columns to the UPDATE clause
-			BindExtraColumns(*this, get, proj, update, check.bound_columns);
+			LogicalUpdate::BindExtraColumns(*this, get, proj, update, check.bound_columns);
 		}
 	}
 	if (update.return_chunk) {
@@ -279,7 +292,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 		for (auto &column : GetColumns().Physical()) {
 			all_columns.insert(column.Physical());
 		}
-		BindExtraColumns(*this, get, proj, update, all_columns);
+		LogicalUpdate::BindExtraColumns(*this, get, proj, update, all_columns);
 	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
@@ -294,7 +307,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 				break;
 			}
 		}
-	};
+	}
 
 	// we also convert any updates on LIST columns into delete + insert
 	for (auto &col_index : update.columns) {
@@ -312,7 +325,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 		for (auto &column : GetColumns().Physical()) {
 			all_columns.insert(column.Physical());
 		}
-		BindExtraColumns(*this, get, proj, update, all_columns);
+		LogicalUpdate::BindExtraColumns(*this, get, proj, update, all_columns);
 	}
 }
 
@@ -336,6 +349,12 @@ virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {
 	virtual_column_map_t virtual_columns;
 	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
 	return virtual_columns;
+}
+
+vector<column_t> TableCatalogEntry::GetRowIdColumns() const {
+	vector<column_t> result;
+	result.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	return result;
 }
 
 } // namespace duckdb

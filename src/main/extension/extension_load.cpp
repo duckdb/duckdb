@@ -7,6 +7,8 @@
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
@@ -71,15 +73,11 @@ struct ExtensionAccess {
 	static void SetError(duckdb_extension_info info, const char *error) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
-		if (error) {
-			load_state.has_error = true;
-			load_state.error_data = ErrorData(error);
-		} else {
-			load_state.has_error = true;
-			load_state.error_data = ErrorData(
-			    ExceptionType::UNKNOWN_TYPE,
-			    "Extension has indicated an error occured during initialization, but did not set an error message.");
-		}
+		load_state.has_error = true;
+		load_state.error_data =
+		    error ? ErrorData(error)
+		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occured during "
+		                                                   "initialization, but did not set an error message.");
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
@@ -92,9 +90,11 @@ struct ExtensionAccess {
 			load_state.database_data->database = make_shared_ptr<DuckDB>(load_state.db);
 			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
 		} catch (std::exception &ex) {
+			load_state.has_error = true;
 			load_state.error_data = ErrorData(ex);
 			return nullptr;
 		} catch (...) {
+			load_state.has_error = true;
 			load_state.error_data =
 			    ErrorData(ExceptionType::UNKNOWN_TYPE, "Unknown error in GetDatabase when trying to load extension!");
 			return nullptr;
@@ -125,8 +125,9 @@ struct ExtensionAccess {
 			load_state.has_error = true;
 			load_state.error_data =
 			    ErrorData(ExceptionType::UNKNOWN_TYPE,
-			              StringUtil::Format("Unknown ABI Type '%s' found when loading extension '%s'",
-			                                 load_state.init_result.abi_type, load_state.init_result.filename));
+			              StringUtil::Format("Unknown ABI Type of value '%d' found when loading extension '%s'",
+			                                 static_cast<uint8_t>(load_state.init_result.abi_type),
+			                                 load_state.init_result.filename));
 			return nullptr;
 		}
 
@@ -140,11 +141,9 @@ struct ExtensionAccess {
 //===--------------------------------------------------------------------===//
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 // The C++ init function
-typedef void (*ext_init_fun_t)(DatabaseInstance &);
+typedef void (*ext_init_fun_t)(ExtensionLoader &);
 // The C init function
 typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
-typedef const char *(*ext_version_fun_t)(void);
-typedef bool (*ext_is_storage_t)(void);
 
 template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
@@ -406,7 +405,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		if (!signature_valid) {
 			throw IOException(db.config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
-	} else if (!db.config.options.allow_extensions_metadata_mismatch) {
+	} else if (!DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(db)) {
 		if (!metadata_mismatch_error.empty()) {
 			// Unsigned extensions AND configuration allowing n, loading allowed, mainly for
 			// debugging purposes
@@ -518,9 +517,22 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
-	if (db.ExtensionIsLoaded(extension)) {
+	auto &manager = ExtensionManager::Get(db);
+	auto info = manager.BeginLoad(extension);
+	if (!info) {
 		return;
 	}
+	try {
+		LoadExternalExtensionInternal(db, fs, extension, *info);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		info->LoadFail(error);
+		throw;
+	}
+}
+
+void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
+                                                    ExtensionActiveLoad &info) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -528,7 +540,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
-		auto init_fun_name = extension_init_result.filebase + "_init";
+		auto init_fun_name = extension_init_result.filebase + "_duckdb_cpp_init";
 		ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
 		                                                                 extension_init_result.filename);
 		if (!init_fun) {
@@ -537,7 +549,9 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		}
 
 		try {
-			(*init_fun)(db);
+			ExtensionLoader loader(info);
+			(*init_fun)(loader);
+			loader.FinalizeLoad();
 		} catch (std::exception &e) {
 			ErrorData error(e);
 			throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
@@ -546,7 +560,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 
@@ -586,11 +600,12 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 
-	throw IOException("Unknown ABI type '%s' for extension '%s'", extension_init_result.abi_type, extension);
+	throw IOException("Unknown ABI type of value '%s' for extension '%s'",
+	                  static_cast<uint8_t>(extension_init_result.abi_type), extension);
 #endif
 }
 
