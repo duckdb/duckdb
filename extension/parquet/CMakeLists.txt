@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.5...3.29)
 
 project(ParquetExtension)
 
+add_third_party(mbedtls)
+add_third_party(zstd)
+
 include_directories(
   include ../../third_party/lz4 ../../third_party/parquet
   ../../third_party/thrift ../../third_party/snappy

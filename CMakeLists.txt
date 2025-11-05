@@ -763,6 +763,11 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+
+function(add_third_party NAME)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/${NAME} ${CMAKE_BINARY_DIR}/third_party/${NAME})
+endfunction()
+
 # this depends on disable_target_warnings so the order matters
 include(extension/extension_build_tools.cmake)
 
@@ -811,9 +816,6 @@ if(NOT CLANG_TIDY)
       AND ${BUILD_BENCHMARKS})
       add_subdirectory(benchmark)
     endif()
-  endif()
-  if (NOT EXTENSION_CONFIG_BUILD)
-    add_subdirectory(third_party)
   endif()
 endif()
 

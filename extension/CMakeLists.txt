@@ -9,6 +9,8 @@
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
 
+add_library(dummy_static_extension_loader dummy_static_extension_loader.cpp)
+
 add_extension_definitions()
 
 configure_file(

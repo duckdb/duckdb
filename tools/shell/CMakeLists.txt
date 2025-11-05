@@ -1,3 +1,5 @@
+add_third_party(utf8proc)
+
 include_directories(include)
 if(NOT WIN32)
   add_subdirectory(linenoise)

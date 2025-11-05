@@ -1,5 +1,14 @@
 add_definitions(-DDUCKDB)
 
+add_third_party(fsst)
+add_third_party(fmt)
+add_third_party(libpg_query)
+add_third_party(re2)
+add_third_party(miniz)
+add_third_party(hyperloglog)
+add_third_party(fastpforlib)
+add_third_party(yyjson)
+
 if(${DISABLE_THREADS})
   add_definitions(-DDUCKDB_NO_THREADS)
 endif()
