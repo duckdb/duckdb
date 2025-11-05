@@ -390,12 +390,6 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 
-	//! Scan the existing column data to determine the shredded type
-	ColumnScanState scan_state;
-	InitializeScan(scan_state);
-	Vector intermediate_data(LogicalType::VARIANT(), STANDARD_VECTOR_SIZE);
-	ScanCommitted(0, scan_state, intermediate_data, false, row_group.count);
-
 	auto shredded_type = VariantStats::GetShreddedType(stats->statistics);
 	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
 	auto &type_entries = StructType::GetChildTypes(shredded_type);
