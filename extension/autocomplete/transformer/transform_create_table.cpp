@@ -320,4 +320,13 @@ vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &tran
 	return result;
 }
 
+string PEGTransformerFactory::TransformTypeFuncName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->type == ParseResultType::IDENTIFIER) {
+		return choice_pr->Cast<IdentifierParseResult>().identifier;
+	}
+	return transformer.Transform<string>(choice_pr);
+}
+
 } // namespace duckdb

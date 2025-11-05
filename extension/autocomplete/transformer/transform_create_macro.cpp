@@ -7,14 +7,18 @@ namespace duckdb {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	throw NotImplementedException("TransformCreateMacroStmt");
-
 	auto result = make_uniq<CreateStatement>();
-	// TODO(Dtenwolde) Figure out when it should be table macro entry
 	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	if (qualified_name.schema.empty()) {
+		info->schema = qualified_name.catalog;
+	} else {
+		info->catalog = qualified_name.catalog;
+		info->schema = qualified_name.schema;
+	}
+	info->name = qualified_name.name;
 	auto macro_definition_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(3));
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;

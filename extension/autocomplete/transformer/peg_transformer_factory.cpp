@@ -47,6 +47,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	Printer::Print(result->ToString());
 	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
 }
 
@@ -226,6 +227,7 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformColLabelOrString);
 	REGISTER_TRANSFORM(TransformColId);
 	REGISTER_TRANSFORM(TransformColumnIdList);
+	REGISTER_TRANSFORM(TransformTypeFuncName);
 	REGISTER_TRANSFORM(TransformIdentifier);
 	REGISTER_TRANSFORM(TransformDottedIdentifier);
 	REGISTER_TRANSFORM(TransformColumnDefinition);
