@@ -33,12 +33,10 @@ public:
 	PrefixHandle(PrefixHandle &&other) noexcept;
 	PrefixHandle &operator=(PrefixHandle &&other) noexcept;
 
-public:
-	uint8_t GetCount(const ART &art) const;
-	Node GetChild() const;
-	void SetChild(const Node child);
-	void SetCount(const ART &art, const uint8_t count);
+	data_ptr_t data;
+	Node *ptr;
 
+public:
 	static inline uint8_t Count(const ART &art) {
 		return art.prefix_count;
 	}
@@ -51,8 +49,6 @@ private:
 
 private:
 	unique_ptr<SegmentHandle> segment_handle;
-	data_ptr_t data;
-	Node *ptr;
 };
 
 } // namespace duckdb

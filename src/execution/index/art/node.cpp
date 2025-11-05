@@ -372,7 +372,6 @@ void Node::TransformToDeprecated(ART &art, Node &node,
 	switch (type) {
 	case NType::PREFIX:
 		return PrefixHandle::TransformToDeprecated(art, node, deprecated_prefix_allocator);
-		// return Prefix::TransformToDeprecated(art, node, deprecated_prefix_allocator);
 	case NType::LEAF_INLINED:
 		return;
 	case NType::LEAF:
