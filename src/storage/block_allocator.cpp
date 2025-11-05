@@ -24,10 +24,8 @@ static data_ptr_t AllocateVirtualMemory(const idx_t size) {
 #endif
 
 #if defined(_WIN32)
-	// Disable on Windows until we do more testing there
-	return nullptr;
 	// This returns nullptr on failure
-	// return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
+	return data_ptr_t(VirtualAlloc(nullptr, size, MEM_RESERVE, PAGE_NOACCESS));
 #else
 	const auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	return ptr == MAP_FAILED ? nullptr : data_ptr_cast(ptr);
@@ -53,6 +51,7 @@ static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 #elif defined(__APPLE__)
 	// Nothing to do here
 #else
+	// Pre-fault the memory
 	for (idx_t i = 0; i < size; i += 4096) {
 		pointer[i] = 0;
 	}
