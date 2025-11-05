@@ -131,7 +131,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 			const idx_t h_entry = hash_fmt.sel->get_index(h_idx);
 			if (!hash_fmt.validity.RowIsValid(h_entry)) {
 				continue;
-}
+			}
 			const auto &key = hash_keys[h_entry];
 			set.insert(key);
 			if (use_l_for_hash) {
@@ -147,12 +147,12 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 			const idx_t it_entry = iter_fmt.sel->get_index(it_idx);
 			if (!iter_fmt.validity.RowIsValid(it_entry)) {
 				continue;
-}
+			}
 
 			const auto &key = iter_keys[it_entry];
 			if (set.find(key) == set.end() || result_set.find(key) != result_set.end()) {
 				continue;
-}
+			}
 			result_set.insert(key);
 
 			const idx_t emit_left_idx = use_l_for_hash ? key_to_index_map[key] : it_idx;
