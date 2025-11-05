@@ -39,6 +39,19 @@ static void WriteShreddedDecimal(UnifiedVariantVectorData &variant, Vector &resu
 	}
 }
 
+static bool IsVariantStringType(VariantLogicalType type_id) {
+	switch (type_id) {
+	case VariantLogicalType::GEOMETRY:
+	case VariantLogicalType::BITSTRING:
+	case VariantLogicalType::BLOB:
+	case VariantLogicalType::VARCHAR:
+	case VariantLogicalType::BIGNUM:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                 const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                 idx_t count) {
@@ -47,8 +60,7 @@ static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &resul
 		auto row = sel[i];
 		auto result_row = result_sel[i];
 		auto value_index = value_index_sel[i];
-		D_ASSERT(variant.RowIsValid(row) && (variant.GetTypeId(row, value_index) == VariantLogicalType::VARCHAR ||
-		                                     variant.GetTypeId(row, value_index) == VariantLogicalType::BLOB));
+		D_ASSERT(variant.RowIsValid(row) && IsVariantStringType(variant.GetTypeId(row, value_index)));
 
 		auto string_data = VariantUtils::DecodeStringData(variant, row, value_index);
 		result_data[result_row] = StringVector::AddStringOrBlob(result, string_data);
@@ -91,10 +103,14 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::UUID: {
 		const auto physical_type = type.InternalType();
 		WriteShreddedPrimitive(variant, result, sel, value_index_sel, result_sel, count, GetTypeIdSize(physical_type));
@@ -122,6 +138,8 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIGNUM:
+	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::BIT:
 	case LogicalTypeId::VARCHAR: {
 		WriteShreddedString(variant, result, sel, value_index_sel, result_sel, count);
 		break;

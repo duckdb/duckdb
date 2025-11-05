@@ -161,8 +161,20 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 			data_offset += sizeof(dtime_t);
 			break;
 		}
+		case LogicalTypeId::TIME_NS: {
+			data_offset += sizeof(dtime_ns_t);
+			break;
+		}
+		case LogicalTypeId::TIME_TZ: {
+			data_offset += sizeof(dtime_tz_t);
+			break;
+		}
 		case LogicalTypeId::TIMESTAMP_NS: {
 			data_offset += sizeof(timestamp_ns_t);
+			break;
+		}
+		case LogicalTypeId::INTERVAL: {
+			data_offset += sizeof(interval_t);
 			break;
 		}
 		case LogicalTypeId::UUID: {
@@ -199,6 +211,8 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 		}
 		case LogicalTypeId::BLOB:
 		case LogicalTypeId::BIGNUM:
+		case LogicalTypeId::BIT:
+		case LogicalTypeId::GEOMETRY:
 		case LogicalTypeId::VARCHAR: {
 			auto string_data = primitive.GetValueUnsafe<string_t>();
 			data_offset += GetVarintSize(string_data.GetSize());
@@ -442,11 +456,32 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 			data_offset += sizeof(dtime_t);
 			break;
 		}
+		case LogicalTypeId::TIME_NS: {
+			result.type_ids_data[values_list_offset + values_offset] =
+			    static_cast<uint8_t>(VariantLogicalType::TIME_NANOS);
+			Store(primitive.GetValueUnsafe<dtime_ns_t>(), blob_data + data_offset);
+			data_offset += sizeof(dtime_ns_t);
+			break;
+		}
+		case LogicalTypeId::TIME_TZ: {
+			result.type_ids_data[values_list_offset + values_offset] =
+			    static_cast<uint8_t>(VariantLogicalType::TIME_MICROS_TZ);
+			Store(primitive.GetValueUnsafe<dtime_tz_t>(), blob_data + data_offset);
+			data_offset += sizeof(dtime_tz_t);
+			break;
+		}
 		case LogicalTypeId::TIMESTAMP_NS: {
 			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_NANOS);
 			Store(primitive.GetValueUnsafe<timestamp_ns_t>(), blob_data + data_offset);
 			data_offset += sizeof(timestamp_ns_t);
+			break;
+		}
+		case LogicalTypeId::INTERVAL: {
+			result.type_ids_data[values_list_offset + values_offset] =
+			    static_cast<uint8_t>(VariantLogicalType::INTERVAL);
+			Store(primitive.GetValueUnsafe<interval_t>(), blob_data + data_offset);
+			data_offset += sizeof(interval_t);
 			break;
 		}
 		case LogicalTypeId::UUID: {
@@ -492,6 +527,8 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 		}
 		case LogicalTypeId::BLOB:
 		case LogicalTypeId::BIGNUM:
+		case LogicalTypeId::BIT:
+		case LogicalTypeId::GEOMETRY:
 		case LogicalTypeId::VARCHAR: {
 			if (type_id == LogicalTypeId::BLOB) {
 				result.type_ids_data[values_list_offset + values_offset] =
@@ -499,6 +536,12 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 			} else if (type_id == LogicalTypeId::BIGNUM) {
 				result.type_ids_data[values_list_offset + values_offset] =
 				    static_cast<uint8_t>(VariantLogicalType::BIGNUM);
+			} else if (type_id == LogicalTypeId::BIT) {
+				result.type_ids_data[values_list_offset + values_offset] =
+				    static_cast<uint8_t>(VariantLogicalType::BITSTRING);
+			} else if (type_id == LogicalTypeId::GEOMETRY) {
+				result.type_ids_data[values_list_offset + values_offset] =
+				    static_cast<uint8_t>(VariantLogicalType::GEOMETRY);
 			} else {
 				result.type_ids_data[values_list_offset + values_offset] =
 				    static_cast<uint8_t>(VariantLogicalType::VARCHAR);

@@ -53,6 +53,8 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::DATE};
 	case LogicalTypeId::TIME:
 		return {VariantLogicalType::TIME_MICROS};
+	case LogicalTypeId::TIME_TZ:
+		return {VariantLogicalType::TIME_MICROS_TZ};
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
 	case LogicalTypeId::TIMESTAMP:
@@ -71,6 +73,14 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::UUID};
 	case LogicalTypeId::BIGNUM:
 		return {VariantLogicalType::BIGNUM};
+	case LogicalTypeId::TIME_NS:
+		return {VariantLogicalType::TIME_NANOS};
+	case LogicalTypeId::INTERVAL:
+		return {VariantLogicalType::INTERVAL};
+	case LogicalTypeId::BIT:
+		return {VariantLogicalType::BITSTRING};
+	case LogicalTypeId::GEOMETRY:
+		return {VariantLogicalType::GEOMETRY};
 	default:
 		throw BinderException("Type '%s' can't be translated to a VARIANT type", type.ToString());
 	}
