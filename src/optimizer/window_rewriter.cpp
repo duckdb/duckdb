@@ -9,7 +9,7 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 	// FIXME Not the most elegant way
 	if (op.type == LogicalOperatorType::LOGICAL_JOIN || op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 	    op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN ||
-	    op.type == LogicalOperatorType::LOGICAL_JOIN) {
+	    op.type == LogicalOperatorType::LOGICAL_JOIN && !op.children.empty()) {
 		auto &join_op = op.Cast<LogicalJoin>();
 		auto *child = join_op.children[0].get();
 		while (child) {
