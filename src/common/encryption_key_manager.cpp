@@ -126,10 +126,8 @@ void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr
 
 	KeyDerivationFunctionSHA256(reinterpret_cast<const_data_ptr_t>(decoded_key.data()), decoded_key.size(), salt,
 	                            derived_key);
-
-	// wipe the original and decoded key
-	std::fill(user_key.begin(), user_key.end(), 0);
-	std::fill(decoded_key.begin(), decoded_key.end(), 0);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(data_ptr_cast(&user_key[0]), user_key.size());
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(data_ptr_cast(&decoded_key[0]), decoded_key.size());
 	user_key.clear();
 	decoded_key.clear();
 }
