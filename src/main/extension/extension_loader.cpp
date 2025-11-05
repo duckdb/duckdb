@@ -231,4 +231,8 @@ void ExtensionLoader::RegisterCastFunction(const LogicalType &source, const Logi
 	casts.RegisterCastFunction(source, target, std::move(function), implicit_cast_cost);
 }
 
+void ExtensionLoader::RegisterKeyword(const string &keyword, const KeywordCategory &category) const {
+	db.GetKeywordManager().RegisterKeyword(keyword, category);
+}
+
 } // namespace duckdb

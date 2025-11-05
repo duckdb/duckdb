@@ -563,7 +563,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
-	MatchState state(tokens, suggestions, parse_allocator);
+	auto &db_instance = DatabaseInstance::GetDatabase(context);
+	MatchState state(tokens, suggestions, parse_allocator, db_instance.GetKeywordManager());
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
@@ -727,6 +728,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	names.emplace_back("success");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	auto &db_instance = DatabaseInstance::GetDatabase(context);
+
 	const auto sql = StringValue::Get(input.inputs[0]);
 
 	vector<MatcherToken> root_tokens;
@@ -746,8 +749,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		}
 		vector<MatcherSuggestion> suggestions;
 		ParseResultAllocator parse_allocator;
-		MatchState state(tokens, suggestions, parse_allocator);
-
+		MatchState state(tokens, suggestions, parse_allocator, db_instance.GetKeywordManager());
 		MatcherAllocator allocator;
 		auto &matcher = Matcher::RootMatcher(allocator);
 		auto match_result = matcher.Match(state);
@@ -775,11 +777,21 @@ void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 class PEGParserExtension : public ParserExtension {
 public:
-	PEGParserExtension() {
+	PEGParserExtension(ParserKeywordManager &keyword_manager) {
 		parser_override = PEGParser;
+		parser_info = make_shared_ptr<PEGParserInfo>(keyword_manager);
 	}
 
+	struct PEGParserInfo : ParserExtensionInfo {
+		explicit PEGParserInfo(reference<ParserKeywordManager> keyword_manager_p)
+		    : ParserExtensionInfo(), keyword_manager(keyword_manager_p) {};
+		~PEGParserInfo() override = default;
+
+		reference<ParserKeywordManager> keyword_manager;
+	};
+
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
+		auto peg_parser_info = dynamic_cast<PEGParserInfo *>(info);
 		vector<MatcherToken> root_tokens;
 		string clean_sql;
 
@@ -794,7 +806,8 @@ public:
 					continue;
 				}
 				auto &transformer = PEGTransformerFactory::GetInstance();
-				auto statement = transformer.Transform(tokenized_statement, "Statement");
+				auto statement =
+				    transformer.Transform(tokenized_statement, peg_parser_info->keyword_manager, "Statement");
 				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
 					statement->stmt_length =
@@ -821,13 +834,16 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
+	AutocompleteExtension::RegisterKeywords(loader);
 
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	config.parser_extensions.push_back(PEGParserExtension());
+	auto &keyword_manager = loader.GetDatabaseInstance().GetKeywordManager();
+	config.parser_extensions.push_back(PEGParserExtension(keyword_manager));
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
+	RegisterKeywords(loader);
 }
 
 std::string AutocompleteExtension::Name() {

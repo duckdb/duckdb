@@ -57,6 +57,7 @@ public:
 	DUCKDB_API ExtensionManager &GetExtensionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API LogManager &GetLogManager() const;
+	DUCKDB_API ParserKeywordManager &GetKeywordManager() const;
 
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
 
@@ -92,6 +93,7 @@ private:
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	unique_ptr<LogManager> log_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
+	unique_ptr<ParserKeywordManager> keyword_manager;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
 };

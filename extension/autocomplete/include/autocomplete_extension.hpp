@@ -17,6 +17,7 @@ public:
 	void Load(ExtensionLoader &loader) override;
 	std::string Name() override;
 	std::string Version() const override;
+	static void RegisterKeywords(ExtensionLoader &loader);
 };
 
 } // namespace duckdb
