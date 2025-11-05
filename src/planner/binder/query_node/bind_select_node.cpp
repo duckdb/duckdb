@@ -141,12 +141,27 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				}
 			}
 			order_binder.SetQueryComponent("DISTINCT ON");
+			auto &order_binders = order_binder.GetBinders();
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
-				auto expr = BindOrderExpression(order_binder, std::move(distinct_on_target));
-				if (!expr) {
-					continue;
+				vector<unique_ptr<ParsedExpression>> target_list;
+				order_binders[0].get().ExpandStarExpression(std::move(distinct_on_target), target_list);
+				for (auto &target : target_list) {
+					auto expr = BindOrderExpression(order_binder, std::move(target));
+					if (!expr) {
+						continue;
+					}
+					// Skip duplicates
+					bool duplicate = false;
+					for (auto &existing : bound_distinct->target_distincts) {
+						if (expr->Equals(*existing)) {
+							duplicate = true;
+							break;
+						}
+					}
+					if (!duplicate) {
+						bound_distinct->target_distincts.push_back(std::move(expr));
+					}
 				}
-				bound_distinct->target_distincts.push_back(std::move(expr));
 			}
 			order_binder.SetQueryComponent();
 
@@ -154,7 +169,6 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-
 			auto &order = mod->Cast<OrderModifier>();
 			auto bound_order = make_uniq<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
@@ -468,7 +482,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		unbound_groups.resize(group_expressions.size());
 		GroupBinder group_binder(*this, context, statement, result.group_index, bind_state, info.alias_map);
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
-
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
 			// the reason we want the unbound copy is because we want to figure out whether an expression

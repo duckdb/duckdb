@@ -52,8 +52,9 @@ public:
 	virtual ~WriteAheadLog();
 
 public:
-	//! Replay and initialize the WAL
-	static unique_ptr<WriteAheadLog> Replay(FileSystem &fs, AttachedDatabase &database, const string &wal_path);
+	//! Replay and initialize the WAL, QueryContext is passed for metric collection purposes only!!
+	static unique_ptr<WriteAheadLog> Replay(QueryContext context, FileSystem &fs, AttachedDatabase &database,
+	                                        const string &wal_path);
 
 	AttachedDatabase &GetDatabase();
 
@@ -121,7 +122,9 @@ public:
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
-	static unique_ptr<WriteAheadLog> ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle);
+	//! Internally replay all WAL entries. QueryContext is passed for metric collection purposes only!!
+	static unique_ptr<WriteAheadLog> ReplayInternal(QueryContext context, AttachedDatabase &database,
+	                                                unique_ptr<FileHandle> handle);
 
 protected:
 	AttachedDatabase &database;

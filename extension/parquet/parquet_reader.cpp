@@ -5,7 +5,7 @@
 #include "column_reader.hpp"
 #include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -226,9 +226,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 			}
 			return LogicalType::TIME;
 		} else if (s_ele.logicalType.__isset.GEOMETRY) {
-			return LogicalType::BLOB;
+			// TODO: Set CRS too
+			return LogicalType::GEOMETRY();
 		} else if (s_ele.logicalType.__isset.GEOGRAPHY) {
-			return LogicalType::BLOB;
+			return LogicalType::GEOMETRY();
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -406,8 +407,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
                                                               const vector<ColumnIndex> &indexes,
                                                               const ParquetColumnSchema &schema) {
 	switch (schema.schema_type) {
-	case ParquetColumnSchemaType::GEOMETRY:
-		return GeoParquetFileMetadata::CreateColumnReader(*this, schema, context);
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
 		return make_uniq<RowNumberColumnReader>(*this, schema);
 	case ParquetColumnSchemaType::COLUMN: {
@@ -567,7 +566,6 @@ static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnS
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
-
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	if (next_schema_idx >= file_meta_data->schema.size()) {
@@ -593,9 +591,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
 		// geoarrow types, although geometry columns, are structs and have children and are handled below.
 		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name) && s_ele.num_children == 0) {
-			auto root_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
-			return ParquetColumnSchema(std::move(root_schema), GeoParquetFileMetadata::GeometryType(),
-			                           ParquetColumnSchemaType::GEOMETRY);
+			auto geom_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
+			// overwrite the derived type with GEOMETRY
+			geom_schema.type = LogicalType::GEOMETRY();
+			return geom_schema;
 		}
 	}
 
@@ -706,13 +705,6 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			                                next_file_idx);
 			list_schema.children.push_back(std::move(result));
 			return list_schema;
-		}
-
-		// Convert to geometry type if possible
-		if (s_ele.__isset.logicalType && (s_ele.logicalType.__isset.GEOMETRY || s_ele.logicalType.__isset.GEOGRAPHY) &&
-		    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
-			return ParquetColumnSchema(std::move(result), GeoParquetFileMetadata::GeometryType(),
-			                           ParquetColumnSchemaType::GEOMETRY);
 		}
 
 		return result;
@@ -1054,7 +1046,6 @@ uint64_t ParquetReader::GetGroupSpan(ParquetReaderScanState &state) {
 	idx_t max_offset = NumericLimits<idx_t>::Minimum();
 
 	for (auto &column_chunk : group.columns) {
-
 		// Set the min offset
 		idx_t current_min_offset = NumericLimits<idx_t>::Maximum();
 		if (column_chunk.meta_data.__isset.dictionary_page_offset) {
@@ -1261,15 +1252,6 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
-	while (ScanInternal(context, state, result)) {
-		if (result.size() > 0) {
-			break;
-		}
-		result.Reset();
-	}
-}
-
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
 	GetPartitionStats(*GetFileMetadata(), result);
 }
@@ -1287,9 +1269,10 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 	}
 }
 
-bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+	result.Reset();
 	if (state.finished) {
-		return false;
+		return SourceResultType::FINISHED;
 	}
 
 	// see if we have to switch to the next row group in the parquet file
@@ -1303,7 +1286,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
-			return false;
+			return SourceResultType::FINISHED;
 		}
 
 		// TODO: only need this if we have a deletion vector?
@@ -1375,7 +1358,8 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				}
 			}
 		}
-		return true;
+		result.Reset();
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
@@ -1383,7 +1367,8 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 	if (scan_count == 0) {
 		state.finished = true;
-		return false; // end of last group, we are done
+		// end of last group, we are done
+		return SourceResultType::FINISHED;
 	}
 
 	auto &deletion_filter = state.root_reader->Reader().deletion_filter;
@@ -1469,7 +1454,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
-	return true;
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

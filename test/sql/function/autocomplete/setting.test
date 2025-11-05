@@ -9,29 +9,29 @@ require icu
 require no_extension_autoloading "FIXME: ICU is not autoloaded on 'Set timez'"
 
 query II
-FROM sql_auto_complete('SET e_directory') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SET e_directory') LIMIT 1;
 ----
 home_directory	4
 
 query II
-from sql_auto_complete('SET timez') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SET timez') LIMIT 1;
 ----
 TimeZone	4
 
 query II
-FROM sql_auto_complete('SET memory') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SET memory') LIMIT 1;
 ----
 memory_limit	4
 
 # main keywords
 query II
-FROM sql_auto_complete('set thr') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('set thr') LIMIT 1;
 ----
 threads	4
 
 # main keywords
 query II
-FROM sql_auto_complete('set allowe') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('set allowed_p') LIMIT 1;
 ----
 allowed_paths	4
 

@@ -8,16 +8,16 @@ require vector_size 2048
 ## Files created via `duckdb file_name -c "CHECKPOINT;"
 
 statement ok
-ATTACH 'data/storage/empty64.db' (READ_ONLY);
+ATTACH '{DATA_DIR}/storage/empty64.db' (READ_ONLY);
 
 statement ok
-ATTACH 'data/storage/empty65.db' (READ_ONLY);
+ATTACH '{DATA_DIR}/storage/empty65.db' (READ_ONLY);
 
 statement ok
-ATTACH 'data/storage/empty66.db' (READ_ONLY);
+ATTACH '{DATA_DIR}/storage/empty66.db' (READ_ONLY);
 
 # statement error
-# ATTACH 'data/storage/empty67.db' (READ_ONLY);
+# ATTACH '{DATA_DIR}/storage/empty67.db' (READ_ONLY);
 # ----
 # IO Error: Trying to read a database file with version number 67, but we can only read versions between 64 and 66.
 

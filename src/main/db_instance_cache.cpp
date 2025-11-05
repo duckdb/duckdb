@@ -139,7 +139,6 @@ shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, 
                                                         const std::function<void(DuckDB &)> &on_create) {
 	unique_lock<mutex> lock(cache_lock, std::defer_lock);
 	if (cache_instance) {
-
 		// While we do not own the lock, we cannot definitively say that the database instance does not exist.
 		while (!lock.owns_lock()) {
 			// The problem is, that we have to unlock the mutex in GetInstanceInternal, so we can non-blockingly wait

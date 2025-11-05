@@ -398,7 +398,7 @@ unique_ptr<FunctionData> ApproxTopKBind(ClientContext &context, AggregateFunctio
 		function.update = ApproxTopKUpdate<string_t, HistogramStringFunctor>;
 		function.finalize = ApproxTopKFinalize<HistogramStringFunctor>;
 	}
-	function.return_type = LogicalType::LIST(arguments[0]->return_type);
+	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
 	return nullptr;
 }
 

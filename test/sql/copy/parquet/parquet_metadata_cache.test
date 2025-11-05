@@ -9,12 +9,12 @@ SET parquet_metadata_cache=true;
 
 # test the cached file
 query II
-select * from parquet_scan('data/parquet-testing/cache/cache1.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/cache/cache1.parquet')
 ----
 1	hello
 
 query II
-select * from parquet_scan('data/parquet-testing/cache/cache1.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/cache/cache1.parquet')
 ----
 1	hello
 
@@ -24,24 +24,24 @@ require vector_size 64
 # copy cache1.parquet to cached.parquet
 statement ok
 COPY (
-	SELECT * FROM parquet_scan('data/parquet-testing/cache/cache1.parquet')
+	SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/cache/cache1.parquet')
 	)
-TO '__TEST_DIR__/cached.parquet' (FORMAT 'parquet')
+TO '{TEMP_DIR}/cached.parquet' (FORMAT 'parquet')
 
 query II
-select * from parquet_scan('__TEST_DIR__/cached.parquet')
+select * from parquet_scan('{TEMP_DIR}/cached.parquet')
 ----
 1	hello
 
 # copy cache2.parquet to cached.parquet
 statement ok
 COPY (
-	SELECT * FROM parquet_scan('data/parquet-testing/cache/cache2.parquet')
+	SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/cache/cache2.parquet')
 	)
-TO '__TEST_DIR__/cached.parquet' (FORMAT 'parquet')
+TO '{TEMP_DIR}/cached.parquet' (FORMAT 'parquet')
 
 query II
-select * from parquet_scan('__TEST_DIR__/cached.parquet')
+select * from parquet_scan('{TEMP_DIR}/cached.parquet')
 ----
 0	10
 1	20
@@ -50,17 +50,17 @@ select * from parquet_scan('__TEST_DIR__/cached.parquet')
 
 # test two files with the same name on different directories
 query II
-select * from parquet_scan('data/parquet-testing/glob/t1.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/glob/t1.parquet')
 ----
 1	a
 
 query II
-select * from parquet_scan('data/parquet-testing/glob2/t1.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/glob2/t1.parquet')
 ----
 3	c
 
 # test using *
 query I
-select count(*) from parquet_scan('data/parquet-testing/glob/*.parquet')
+select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*.parquet')
 ----
 2

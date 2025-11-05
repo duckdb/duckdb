@@ -303,7 +303,6 @@ vector<string> DatabaseManager::GetAttachedDatabasePaths() {
 
 void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
                                       AttachOptions &options) {
-
 	// Test if the database is a DuckDB database file.
 	if (StringUtil::CIEquals(options.db_type, "duckdb")) {
 		options.db_type = "";

@@ -6,225 +6,225 @@ require autocomplete
 
 # main keywords
 query II
-FROM sql_auto_complete('SEL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SEL') LIMIT 1;
 ----
 SELECT 	0
 
 query II
-FROM sql_auto_complete('WI') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('WI') LIMIT 1;
 ----
 WITH 	0
 
 query II
-FROM sql_auto_complete('SELECT * FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FR') LIMIT 1;
 ----
 FROM 	9
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl WH') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl WH') LIMIT 1;
 ----
 WHERE 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl A') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl AN') LIMIT 1;
 ----
-AS 	18
+ANTI 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl OR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl OR') LIMIT 1;
 ----
 ORDER 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl ORDER B') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl ORDER B') LIMIT 1;
 ----
 BY 	24
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl ORDER BY AL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl ORDER BY AL') LIMIT 1;
 ----
 ALL 	27
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl GR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl GR') LIMIT 1;
 ----
 GROUP 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl GROUP B') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl GROUP B') LIMIT 1;
 ----
 BY 	24
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl GROUP BY AL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl GROUP BY AL') LIMIT 1;
 ----
 ALL 	27
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl GROUP BY ALL HAV') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl GROUP BY ALL HAV') LIMIT 1;
 ----
 HAVING 	31
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl LIM') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl LIM') LIMIT 1;
 ----
 LIMIT 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl LIMIT 5 OF') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl LIMIT 5 OF') LIMIT 1;
 ----
 OFFSET 	26
 
 # joins
 query II
-FROM sql_auto_complete('SELECT * FROM tbl INN') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl INN') LIMIT 1;
 ----
 INNER 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl INNER JO') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl INNER JO') LIMIT 1;
 ----
 JOIN 	24
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl JOIN tbl2 USING (i) WH') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl JOIN tbl2 USING (i) WH') LIMIT 1;
 ----
 WHERE 	38
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl LEF') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl LEF') LIMIT 1;
 ----
 LEFT 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl LEFT OUT') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl LEFT OUT') LIMIT 1;
 ----
 OUTER 	23
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl NAT') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl NAT') LIMIT 1;
 ----
 NATURAL 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl NATURAL FU') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl NATURAL FU') LIMIT 1;
 ----
 FULL 	26
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl NATURAL FULL OUT') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl NATURAL FULL OUT') LIMIT 1;
 ----
 OUTER 	31
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl POS') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl POS') LIMIT 1;
 ----
 POSITIONAL 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl NATURAL JOIN tbl2 WH') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl NATURAL JOIN tbl2 WH') LIMIT 1;
 ----
 WHERE 	36
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl NATURAL JOIN tbl2 NAT') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl NATURAL JOIN tbl2 NAT') LIMIT 1;
 ----
 NATURAL 	36
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl JOIN tbl2 US') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl JOIN tbl2 US') LIMIT 1;
 ----
 USING 	28
 
 # cross product
 query II
-FROM sql_auto_complete('SELECT * FROM tbl, tbl2 WH') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl, tbl2 WH') LIMIT 1;
 ----
 WHERE 	24
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl, tbl2 LEFT OUT') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl, tbl2 LEFT OUT') LIMIT 1;
 ----
 OUTER 	29
 
 # from first
 query II
-FROM sql_auto_complete('FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('FR') LIMIT 1;
 ----
 FROM 	0
 
 query II
-FROM sql_auto_complete('FROM tbl SEL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('FROM tbl SEL') LIMIT 1;
 ----
 SELECT 	9
 
 query II
-FROM sql_auto_complete('FROM tbl OR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('FROM tbl OR') LIMIT 1;
 ----
 ORDER 	9
 
 # set ops
 query II
-FROM sql_auto_complete('SELECT * FROM tbl UN') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl UN') LIMIT 1;
 ----
 UNION 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl UNION AL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl UNION AL') LIMIT 1;
 ----
 ALL 	24
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl EX') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl EX') LIMIT 1;
 ----
 EXCEPT 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl INT') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl INT') LIMIT 1;
 ----
 INTERSECT 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl UNION ALL SEL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl UNION ALL SEL') LIMIT 1;
 ----
 SELECT 	28
 
 # qualify
 query II
-FROM sql_auto_complete('SELECT * FROM tbl QUAL') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl QUAL') LIMIT 1;
 ----
 QUALIFY 	18
 
 query II
-FROM sql_auto_complete('SELECT * FROM tbl QUALIFY row_number() OVER () ORD') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM tbl QUALIFY row_number() OVER () ORD') LIMIT 1;
 ----
 ORDER 	47
 
 # operators with quotes
 query II
-FROM sql_auto_complete('SELECT col=''world'' FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT col=''world'' FR') LIMIT 1;
 ----
 FROM 	19
 
 query II
-FROM sql_auto_complete('SELECT col="quoted col2" FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT col="quoted col2" FR') LIMIT 1;
 ----
 FROM 	25
 
 query II
-FROM sql_auto_complete('SELECT "quoted col1"="quoted col2" + "quoted col3" FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT "quoted col1"="quoted col2" + "quoted col3" FR') LIMIT 1;
 ----
 FROM 	51
 
 # quoted identifiers
 query II
-FROM sql_auto_complete('SELECT ''ORDER'' "WHERE" FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT ''ORDER'' "WHERE" FR') LIMIT 1;
 ----
 FROM 	23
 
 # escaped quoted identifiers
 query II
-FROM sql_auto_complete('SELECT ''OR''''DER'' "WHE""RE" FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT ''OR''''DER'' "WHE""RE" FR') LIMIT 1;
 ----
 FROM 	27
 
@@ -232,17 +232,17 @@ statement ok
 CREATE TABLE my_table(my_column INTEGER);
 
 query II
-SELECT * FROM sql_auto_complete('SELECT my_') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT my_') LIMIT 1;
 ----
 my_column	7
 
 query II
-SELECT * FROM sql_auto_complete('UP') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('UP') LIMIT 1;
 ----
 UPDATE 	0
 
 query II
-SELECT * FROM sql_auto_complete('UPDATE my_table SET m') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('UPDATE my_table SET m') LIMIT 1;
 ----
 my_column	20
 
@@ -250,6 +250,6 @@ statement ok
 CREATE TABLE MyTable(MyColumn Varchar);
 
 query II
-SELECT * FROM sql_auto_complete('SELECT My') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT My') LIMIT 1;
 ----
 MyColumn	7

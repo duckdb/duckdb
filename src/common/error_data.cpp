@@ -24,7 +24,6 @@ ErrorData::ErrorData(ExceptionType type, const string &message)
 
 ErrorData::ErrorData(const string &message)
     : initialized(true), type(ExceptionType::INVALID), raw_message(string()), final_message(string()) {
-
 	// parse the constructed JSON
 	if (message.empty() || message[0] != '{') {
 		// not JSON! Use the message as a raw Exception message and leave type as uninitialized

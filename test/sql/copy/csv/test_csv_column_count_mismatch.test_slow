@@ -7,14 +7,14 @@ pragma enable_verification;
 
 # We can read with auto just fine
 statement ok
-select * from read_csv_auto('data/csv/people.csv');
+select * from read_csv_auto('{DATA_DIR}/csv/people.csv');
 
 # Specifying columns, but not specifying the right amount throws an error
 statement error
-select * from read_csv_auto('data/csv/people.csv', columns={'a': 'VARCHAR'}, auto_detect = false, strict_mode=True)
+select * from read_csv_auto('{DATA_DIR}/csv/people.csv', columns={'a': 'VARCHAR'}, auto_detect = false, strict_mode=True)
 ----
 Expected Number of Columns: 1 Found: 2
 
 # When we do specify the right amount of columns, everything works
 statement ok
-select * from read_csv_auto('data/csv/people.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'})
+select * from read_csv_auto('{DATA_DIR}/csv/people.csv', columns={'a': 'VARCHAR', 'b': 'VARCHAR'})

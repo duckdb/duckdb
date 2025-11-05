@@ -185,7 +185,6 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
-
 	// grab the aggregate type and bind the aggregate again
 
 	// the aggregate name and types are in the logical type of the aggregate state, make sure its sane
@@ -241,15 +240,16 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 		}
 	}
 
-	if (bound_aggr.return_type != state_type.return_type || bound_aggr.arguments != state_type.bound_argument_types) {
+	if (bound_aggr.GetReturnType() != state_type.return_type ||
+	    bound_aggr.arguments != state_type.bound_argument_types) {
 		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}
 
 	if (bound_function.name == "finalize") {
-		bound_function.return_type = bound_aggr.return_type;
+		bound_function.SetReturnType(bound_aggr.GetReturnType());
 	} else {
 		D_ASSERT(bound_function.name == "combine");
-		bound_function.return_type = arg_return_type;
+		bound_function.SetReturnType(arg_return_type);
 	}
 
 	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.state_size(bound_aggr));
@@ -304,14 +304,14 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.state_size);
 	D_ASSERT(bound_function.finalize);
 
-	D_ASSERT(child_aggregate->function.return_type.id() != LogicalTypeId::INVALID);
+	D_ASSERT(child_aggregate->function.GetReturnType().id() != LogicalTypeId::INVALID);
 #ifdef DEBUG
 	for (auto &arg_type : child_aggregate->function.arguments) {
 		D_ASSERT(arg_type.id() != LogicalTypeId::INVALID);
 	}
 #endif
 	auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
-	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.return_type,
+	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.GetReturnType(),
 	                             child_aggregate->function.arguments);
 	auto return_type = LogicalType::AGGREGATE_STATE(std::move(state_type));
 
@@ -321,7 +321,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                      bound_function.combine, ExportAggregateFinalize, bound_function.simple_update,
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
 	                      /* can't propagate statistics */ nullptr, nullptr);
-	export_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	export_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	export_function.serialize = ExportStateAggregateSerialize;
 	export_function.deserialize = ExportStateAggregateDeserialize;
 
@@ -347,7 +347,7 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 ScalarFunction FinalizeFun::GetFunction() {
 	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
 	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
-	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	result.serialize = ExportStateScalarSerialize;
 	result.deserialize = ExportStateScalarDeserialize;
 	return result;
@@ -357,7 +357,7 @@ ScalarFunction CombineFun::GetFunction() {
 	auto result =
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
 	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
-	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	result.serialize = ExportStateScalarSerialize;
 	result.deserialize = ExportStateScalarDeserialize;
 	return result;
