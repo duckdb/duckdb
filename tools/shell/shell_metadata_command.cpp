@@ -708,6 +708,9 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 	}
 	if (args[1] == "on") {
 		state.pager_mode = PagerMode::PAGER_ON;
+		if (state.pager_command.empty()) {
+			state.pager_command = state.GetSystemPager();
+		}
 	} else if (args[1] == "off") {
 		state.pager_mode = PagerMode::PAGER_OFF;
 	} else {

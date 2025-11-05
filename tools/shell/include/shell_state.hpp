@@ -328,6 +328,7 @@ public:
 	}
 	void ResetOutput();
 	bool ShouldUsePager(duckdb::QueryResult &result);
+	string GetSystemPager();
 	unique_ptr<PagerState> SetupPager();
 	static void StartPagerDisplay();
 	static void FinishPagerDisplay();

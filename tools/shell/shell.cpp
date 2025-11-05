@@ -1857,7 +1857,7 @@ FILE *ShellState::OpenOutputFile(const char *zFile, int bTextMode) {
 	return f;
 }
 
-string GetSystemPager() {
+string ShellState::GetSystemPager() {
 	const char *duckdb_pager = getenv("DUCKDB_PAGER");
 
 	// Try DUCKDB_PAGER first (highest priority for env vars)
