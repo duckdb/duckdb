@@ -61,16 +61,20 @@ public:
 	}
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
 		if (!MatchKeyword(state)) {
 			return nullptr;
 		}
-		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(keyword));
+		auto result = state.allocator.Allocate(make_uniq<KeywordParseResult>(token_text));
 		result->name = name;
 		return result;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
-		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateType::KEYWORD);
+		AutoCompleteCandidate candidate(keyword, SuggestionState::SUGGEST_KEYWORD, score_bonus, CandidateType::KEYWORD);
 		candidate.extra_char = extra_char;
 		state.AddSuggestion(MatcherSuggestion(std::move(candidate)));
 		return SuggestionType::MANDATORY;
@@ -384,6 +388,13 @@ public:
 	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
 	}
 
+	bool IsQuoted(const string &text) const {
+		if (text.front() == '"' && text.back() == '"') {
+			return true;
+		}
+		return false;
+	}
+
 	bool IsIdentifier(const string &text) const {
 		if (text.empty()) {
 			return false;
@@ -391,7 +402,7 @@ public:
 		if (text.front() == '\'' && text.back() == '\'' && SupportsStringLiteral()) {
 			return true;
 		}
-		if (text.front() == '"' && text.back() == '"') {
+		if (IsQuoted(text)) {
 			return true;
 		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
@@ -411,6 +422,9 @@ public:
 		auto &token_text = state.tokens[state.token_index].text;
 		if (!MatchIdentifier(state)) {
 			return nullptr;
+		}
+		if (IsQuoted(token_text)) {
+			token_text = token_text.substr(1, token_text.size() - 2);
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}
@@ -555,6 +569,7 @@ public:
 
 public:
 	explicit StringLiteralMatcher() : Matcher(TYPE) {
+		name = "StringLiteral";
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -605,6 +620,7 @@ public:
 
 public:
 	explicit NumberLiteralMatcher() : Matcher(TYPE) {
+		name = "NumberLiteral";
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -642,7 +658,17 @@ private:
 		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
+		bool scientific_notation = false;
 		for (idx_t i = 1; i < token_text.size(); i++) {
+			if (BaseTokenizer::CharacterIsScientific(token_text[i])) {
+				if (scientific_notation) {
+					throw ParserException("Already found scientific notation");
+				}
+				scientific_notation = true;
+			}
+			if (scientific_notation && (token_text[i] == '+' || token_text[i] == '-')) {
+				continue;
+			}
 			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
 				return false;
 			}
@@ -715,6 +741,61 @@ private:
 	}
 };
 
+class ArithmeticOperatorMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
+
+public:
+	explicit ArithmeticOperatorMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		if (!MatchArithmeticOperator(state)) {
+			return MatchResultType::FAIL;
+		}
+		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!MatchArithmeticOperator(state)) {
+			return nullptr;
+		}
+		Printer::Print("Found arithmetic operator!!!");
+		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "ARITHMETICOPERATOR";
+	}
+
+private:
+	static bool MatchArithmeticOperator(MatchState &state) {
+		auto &token_text = state.tokens[state.token_index].text;
+		for (auto &c : token_text) {
+			switch (c) {
+			case '*':
+			case '/':
+			case '+':
+			case '-':
+			case '%':
+				break;
+			default:
+				return false;
+			}
+		}
+		state.token_index++;
+		return true;
+	}
+};
+
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	auto &result = *matcher;
 	matchers.push_back(std::move(matcher));
@@ -755,10 +836,12 @@ private:
 	Matcher &StringLiteral() const;
 	Matcher &NumberLiteral() const;
 	Matcher &Operator() const;
+	Matcher &ArithmeticOperator() const;
 	Matcher &ScalarFunctionName() const;
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
 	Matcher &SettingName() const;
+	Matcher &CopyOptionName() const;
 	Matcher &ReservedSchemaName() const;
 	Matcher &ReservedTableName() const;
 	Matcher &ReservedColumnName() const;
@@ -863,6 +946,10 @@ Matcher &MatcherFactory::SettingName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME));
 }
 
+Matcher &MatcherFactory::CopyOptionName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
+}
+
 Matcher &MatcherFactory::NumberLiteral() const {
 	return allocator.Allocate(make_uniq<NumberLiteralMatcher>());
 }
@@ -873,6 +960,10 @@ Matcher &MatcherFactory::StringLiteral() const {
 
 Matcher &MatcherFactory::Operator() const {
 	return allocator.Allocate(make_uniq<OperatorMatcher>());
+}
+
+Matcher &MatcherFactory::ArithmeticOperator() const {
+	return allocator.Allocate(make_uniq<ArithmeticOperatorMatcher>());
 }
 
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
@@ -1142,9 +1233,11 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
+	AddRuleOverride("CopyOptionName", CopyOptionName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
+	// AddRuleOverride("ArithmeticOperatorLiteral", ArithmeticOperator());
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);

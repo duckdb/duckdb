@@ -36,7 +36,6 @@ void AddVariadicNumbersTogether(duckdb_function_info, duckdb_data_chunk input, d
 
 	// execution
 	for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
-
 		// validity check
 		auto invalid = false;
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
@@ -264,7 +263,6 @@ TEST_CASE("Test Scalar Functions - variadic number of input parameters", "[capi]
 }
 
 void CountNULLValues(duckdb_function_info, duckdb_data_chunk input, duckdb_vector output) {
-
 	// Get the total number of rows and columns in this chunk.
 	auto input_size = duckdb_data_chunk_get_size(input);
 	auto column_count = duckdb_data_chunk_get_column_count(input);

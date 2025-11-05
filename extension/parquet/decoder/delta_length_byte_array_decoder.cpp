@@ -34,13 +34,21 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
                                        Vector &result, idx_t result_offset) {
 	if (defines) {
-		ReadInternal<true>(block_ref, defines, read_count, result, result_offset);
+		if (reader.Type().IsJSONType()) {
+			ReadInternal<true, true>(block_ref, defines, read_count, result, result_offset);
+		} else {
+			ReadInternal<true, false>(block_ref, defines, read_count, result, result_offset);
+		}
 	} else {
-		ReadInternal<false>(block_ref, defines, read_count, result, result_offset);
+		if (reader.Type().IsJSONType()) {
+			ReadInternal<false, true>(block_ref, defines, read_count, result, result_offset);
+		} else {
+			ReadInternal<false, false>(block_ref, defines, read_count, result, result_offset);
+		}
 	}
 }
 
-template <bool HAS_DEFINES>
+template <bool HAS_DEFINES, bool VALIDATE_INDIVIDUAL_STRINGS>
 void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *const defines,
                                                const idx_t read_count, Vector &result, const idx_t result_offset) {
 	auto &block = *block_ref;
@@ -57,6 +65,8 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			    length_idx + read_count, byte_array_count);
 		}
 	}
+
+	const auto &string_column_reader = reader.Cast<StringColumnReader>();
 
 	const auto start_ptr = block.ptr;
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
@@ -75,11 +85,15 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 		}
 		const auto &str_len = length_data[length_idx++];
 		result_data[result_idx] = string_t(char_ptr_cast(block.ptr), str_len);
+		if (VALIDATE_INDIVIDUAL_STRINGS) {
+			string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+		}
 		block.unsafe_inc(str_len);
 	}
 
-	// Verify that the strings we read are valid UTF-8
-	reader.Cast<StringColumnReader>().VerifyString(char_ptr_cast(start_ptr), block.ptr - start_ptr);
+	if (!VALIDATE_INDIVIDUAL_STRINGS) {
+		string_column_reader.VerifyString(char_ptr_cast(start_ptr), NumericCast<uint32_t>(block.ptr - start_ptr));
+	}
 
 	StringColumnReader::ReferenceBlock(result, block_ref);
 }

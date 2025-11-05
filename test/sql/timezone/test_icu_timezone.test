@@ -197,6 +197,57 @@ NULL	NULL	NULL
 NULL	NULL	NULL
 
 #
+# Verify UTC±NNNN translation
+#
+foreach utc UTC-0800 UTC-08 UTC-8 UTC-08:00
+
+statement ok
+set TimeZone = '${utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT-8
+
+endloop
+
+foreach utc UTC+0500 UTC+05 UTC+5 UTC+05:00
+
+statement ok
+set TimeZone = '${utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT+5
+
+endloop
+
+foreach utc UTC-1400 UTC-14 UTC-14:00
+
+statement ok
+set TimeZone = '${utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT-14
+
+endloop
+
+foreach utc UTC-0 UTC-00 UTC-000 UTC-0000 UTC+0 UTC+00 UTC+000 UTC+0000
+
+statement ok
+set TimeZone = '${utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT+0
+
+endloop
+
+#
 # Verify local time functions are implemented.
 #
 statement ok

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/windows.hpp"
 
 namespace duckdb {
 
@@ -53,7 +54,7 @@ enum class EscapeSequence {
 	DOWN,
 	RIGHT,
 	LEFT,
-	DELETE,
+	DELETE_KEY,
 	SHIFT_TAB,
 	ESCAPE,
 	ALT_A,
@@ -88,6 +89,22 @@ enum class EscapeSequence {
 	ALT_BACKSLASH,
 };
 
+struct KeyPress {
+	KeyPress() {
+	}
+	KeyPress(KEY_ACTION action)
+	    : // NOLINT: allow implicit conversion from action
+	      action(action) {
+	}
+	KeyPress(EscapeSequence sequence)
+	    : // NOLINT: allow implicit conversion from escape sequence
+	      action(ESC), sequence(sequence) {
+	}
+
+	KEY_ACTION action = KEY_NULL;
+	EscapeSequence sequence = EscapeSequence::INVALID;
+};
+
 struct TerminalSize {
 	int ws_col = 0;
 	int ws_row = 0;
@@ -112,6 +129,10 @@ public:
 	static int EditRaw(char *buf, size_t buflen, const char *prompt);
 
 	static EscapeSequence ReadEscapeSequence(int ifd);
+
+#if defined(_WIN32) || defined(WIN32)
+	static HANDLE GetConsoleInput();
+#endif
 
 private:
 	static TerminalSize TryMeasureTerminalSize();

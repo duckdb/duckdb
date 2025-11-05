@@ -73,8 +73,22 @@ public:
 		}
 	}
 
-	vector<int> ToWKBList() const {
-		vector<int> result;
+	void Clear() {
+		for (idx_t i = 0; i < VERT_TYPES; i++) {
+			sets[i] = 0;
+		}
+	}
+
+	void AddWKBType(int32_t wkb_type) {
+		const auto vert_idx = static_cast<uint8_t>((wkb_type / 1000) % 10);
+		const auto geom_idx = static_cast<uint8_t>(wkb_type % 1000);
+		D_ASSERT(vert_idx < VERT_TYPES);
+		D_ASSERT(geom_idx < PART_TYPES);
+		sets[vert_idx] |= (1 << geom_idx);
+	}
+
+	vector<int32_t> ToWKBList() const {
+		vector<int32_t> result;
 		for (uint8_t vert_idx = 0; vert_idx < VERT_TYPES; vert_idx++) {
 			for (uint8_t geom_idx = 1; geom_idx < PART_TYPES; geom_idx++) {
 				if (sets[vert_idx] & (1 << geom_idx)) {
@@ -91,7 +105,6 @@ public:
 };
 
 struct GeometryStatsData {
-
 	GeometryTypeSet types;
 	GeometryExtent extent;
 
@@ -111,7 +124,6 @@ struct GeometryStatsData {
 	}
 
 	void Update(const string_t &geom_blob) {
-
 		// Parse type
 		const auto type_info = Geometry::GetType(geom_blob);
 		types.Add(type_info.first, type_info.second);
@@ -135,6 +147,15 @@ struct GeometryStats {
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+
+	//! Check if a spatial predicate check with a constant could possibly be satisfied by rows given the statistics
+	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats,
+	                                                     const unique_ptr<Expression> &expr);
+
+	DUCKDB_API static GeometryExtent &GetExtent(BaseStatistics &stats);
+	DUCKDB_API static const GeometryExtent &GetExtent(const BaseStatistics &stats);
+	DUCKDB_API static GeometryTypeSet &GetTypes(BaseStatistics &stats);
+	DUCKDB_API static const GeometryTypeSet &GetTypes(const BaseStatistics &stats);
 
 private:
 	static GeometryStatsData &GetDataUnsafe(BaseStatistics &stats);

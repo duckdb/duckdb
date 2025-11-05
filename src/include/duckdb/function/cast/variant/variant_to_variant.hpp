@@ -246,7 +246,6 @@ template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalResultData &result_data, idx_t count,
                              optional_ptr<const SelectionVector> selvec,
                              optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-
 	auto keys_offset_data = OffsetData::GetKeys(result_data.offsets);
 	auto children_offset_data = OffsetData::GetChildren(result_data.offsets);
 	auto values_offset_data = OffsetData::GetValues(result_data.offsets);

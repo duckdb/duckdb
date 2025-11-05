@@ -12,13 +12,13 @@ PRAGMA enable_verification
 foreach csv_name greek_utf8.csv imdb_movie_info_escaped.csv lineitem_sample.csv ncvoter.csv nfc_normalization.csv ontime_sample.csv voter.tsv web_page.csv
 
 statement ok
-CREATE TABLE csv_data AS SELECT * FROM 'data/csv/real/${csv_name}';
+CREATE TABLE csv_data AS SELECT * FROM '{DATA_DIR}/csv/real/${csv_name}';
 
 statement ok
-COPY csv_data TO '__TEST_DIR__/${csv_name}.zst' (COMPRESSION ZSTD, HEADER 0);
+COPY csv_data TO '{TEMP_DIR}/${csv_name}.zst' (COMPRESSION ZSTD, HEADER 0);
 
 statement ok
-CREATE TABLE csv_data_zst AS SELECT * FROM '__TEST_DIR__/${csv_name}.zst';
+CREATE TABLE csv_data_zst AS SELECT * FROM '{TEMP_DIR}/${csv_name}.zst';
 
 query I
 SELECT COUNT(*) FROM (SELECT * FROM csv_data EXCEPT SELECT * FROM csv_data_zst)

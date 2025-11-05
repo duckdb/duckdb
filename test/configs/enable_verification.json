@@ -179,7 +179,8 @@
         "test/sql/catalog/comment_on_pg_description.test",
         "test/sql/collate/test_collate_between.test",
         "test/sql/index/create_index_options.test",
-        "test/sql/pragma/test_show_tables.test"
+        "test/sql/pragma/test_show_tables.test",
+        "test/sql/peg_parser/transformer/use_statement.test"
       ]
     },
     {
