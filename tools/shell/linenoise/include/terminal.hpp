@@ -130,9 +130,8 @@ public:
 
 	static EscapeSequence ReadEscapeSequence(int ifd);
 
-
 #if defined(_WIN32) || defined(WIN32)
-    static HANDLE GetConsoleInput();
+	static HANDLE GetConsoleInput();
 #endif
 
 private:

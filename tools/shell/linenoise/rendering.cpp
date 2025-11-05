@@ -47,10 +47,10 @@ struct AppendBuffer {
 	}
 
 	void Write(int fd) {
-        if (!Linenoise::Write(fd, buffer.c_str(), buffer.size())) {
+		if (!Linenoise::Write(fd, buffer.c_str(), buffer.size())) {
 			/* Can't recover from write error. */
 			Linenoise::Log("%s", "Failed to write buffer\n");
-        }
+		}
 	}
 
 private:

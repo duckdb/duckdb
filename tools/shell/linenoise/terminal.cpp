@@ -40,7 +40,7 @@ static void linenoiseAtExit(void) {
 
 #if defined(_WIN32) || defined(WIN32)
 HANDLE Terminal::GetConsoleInput() {
-    return console_in;
+	return console_in;
 }
 #endif
 
@@ -124,9 +124,9 @@ int Terminal::EnableRawMode() {
 void Terminal::DisableRawMode() {
 #if defined(_WIN32) || defined(WIN32)
 	if (console_in) {
-        // restore old mode
-	    SetConsoleMode(console_in, old_mode);
-        console_in = nullptr;
+		// restore old mode
+		SetConsoleMode(console_in, old_mode);
+		console_in = nullptr;
 	}
 #else
 	int fd = STDIN_FILENO;

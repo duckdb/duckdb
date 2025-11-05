@@ -1096,206 +1096,210 @@ void Linenoise::HandleTerminalResize() {
 
 #if defined(_WIN32) || defined(WIN32)
 struct KeyPressEntry {
-    KeyPressEntry(KeyPress key_press) : is_unicode(false), key_press(key_press) {}
-    KeyPressEntry(WCHAR w, bool control_pressed, bool alt_pressed) : is_unicode(true), control_pressed(control_pressed), alt_pressed(alt_pressed) {
-        unicode += w;
-    }
+	KeyPressEntry(KeyPress key_press) : is_unicode(false), key_press(key_press) {
+	}
+	KeyPressEntry(WCHAR w, bool control_pressed, bool alt_pressed)
+	    : is_unicode(true), control_pressed(control_pressed), alt_pressed(alt_pressed) {
+		unicode += w;
+	}
 
-    bool is_unicode = false;
-    KeyPress key_press;
-    std::wstring unicode;
-    bool control_pressed = false;
-    bool alt_pressed = false;
+	bool is_unicode = false;
+	KeyPress key_press;
+	std::wstring unicode;
+	bool control_pressed = false;
+	bool alt_pressed = false;
 };
 #endif
 
 bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 #if defined(_WIN32) || defined(WIN32)
-    if (!remaining_presses.empty()) {
-        // there are still characters left to consume
-        key_press = remaining_presses.back();
-        remaining_presses.pop_back();
-            Linenoise::Log("Consumed 1 press, leaving %d presses to be processed", int(remaining_presses.size()));
-        has_more_data = !remaining_presses.empty();
-        return true;
-    }
-  INPUT_RECORD rec;
-  DWORD count;
-  has_more_data = false;
-  vector<KeyPressEntry> key_presses;
-  do {
-    key_press.action = KEY_NULL;
-    key_press.sequence = EscapeSequence::INVALID;
-    if (!key_presses.empty()) {
-        // we already have output that we can emit
-        // check if there is more input to process
-        // if there are no events anymore, then just break and return our current set of input
-        DWORD event_count = 0;
-        if (!GetNumberOfConsoleInputEvents(Terminal::GetConsoleInput(), &event_count)) {
-            break;
-        }
-        if (event_count == 0) {
-            break;
-        }
-    }
-    if (!ReadConsoleInputW(Terminal::GetConsoleInput(), &rec, 1, &count)) {
-        return false;
-    }
-    if (rec.EventType == WINDOW_BUFFER_SIZE_EVENT) {
-        // resizing buffer - handle resize and continue processing
-		HandleTerminalResize();
-        continue;
-    }
-    if (rec.EventType != KEY_EVENT) {
-        // not a key press - continue
-      continue;
-    }
-    auto &key_event = rec.Event.KeyEvent;
-    if (!key_event.bKeyDown) {
-        // releasing a key - ignore
-        continue;
-    }
-    bool control_pressed = false;
-    bool alt_pressed = false;
-    Linenoise::Log("Unicode character %d, ascii character %d, control state %d", key_event.uChar.UnicodeChar, key_event.uChar.AsciiChar, key_event.dwControlKeyState);
+	if (!remaining_presses.empty()) {
+		// there are still characters left to consume
+		key_press = remaining_presses.back();
+		remaining_presses.pop_back();
+		Linenoise::Log("Consumed 1 press, leaving %d presses to be processed", int(remaining_presses.size()));
+		has_more_data = !remaining_presses.empty();
+		return true;
+	}
+	INPUT_RECORD rec;
+	DWORD count;
+	has_more_data = false;
+	vector<KeyPressEntry> key_presses;
+	do {
+		key_press.action = KEY_NULL;
+		key_press.sequence = EscapeSequence::INVALID;
+		if (!key_presses.empty()) {
+			// we already have output that we can emit
+			// check if there is more input to process
+			// if there are no events anymore, then just break and return our current set of input
+			DWORD event_count = 0;
+			if (!GetNumberOfConsoleInputEvents(Terminal::GetConsoleInput(), &event_count)) {
+				break;
+			}
+			if (event_count == 0) {
+				break;
+			}
+		}
+		if (!ReadConsoleInputW(Terminal::GetConsoleInput(), &rec, 1, &count)) {
+			return false;
+		}
+		if (rec.EventType == WINDOW_BUFFER_SIZE_EVENT) {
+			// resizing buffer - handle resize and continue processing
+			HandleTerminalResize();
+			continue;
+		}
+		if (rec.EventType != KEY_EVENT) {
+			// not a key press - continue
+			continue;
+		}
+		auto &key_event = rec.Event.KeyEvent;
+		if (!key_event.bKeyDown) {
+			// releasing a key - ignore
+			continue;
+		}
+		bool control_pressed = false;
+		bool alt_pressed = false;
+		Linenoise::Log("Unicode character %d, ascii character %d, control state %d", key_event.uChar.UnicodeChar,
+		               key_event.uChar.AsciiChar, key_event.dwControlKeyState);
 
-    if (key_event.dwControlKeyState &
-        (RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED)) {
-      control_pressed = true;
-    }
-    if (key_event.dwControlKeyState &
-        (RIGHT_ALT_PRESSED | LEFT_ALT_PRESSED)) {
-      alt_pressed = true;
-    }
-    if (key_event.uChar.UnicodeChar == 0) {
-      switch (key_event.wVirtualKeyCode) {
-        case VK_LEFT:
-            key_press.action = ESC;
-            if (control_pressed) {
-                key_press.sequence = EscapeSequence::CTRL_MOVE_BACKWARDS;
-            } else if (alt_pressed) {
-                key_press.sequence = EscapeSequence::ALT_LEFT_ARROW;
-            } else {
-                key_press.sequence = EscapeSequence::LEFT;
-            }
-            break;
-        case VK_RIGHT:
-            key_press.action = ESC;
-            if (control_pressed) {
-                key_press.sequence = EscapeSequence::CTRL_MOVE_FORWARDS;
-            } else if (alt_pressed) {
-                key_press.sequence = EscapeSequence::ALT_RIGHT_ARROW;
-            } else {
-                key_press.sequence = EscapeSequence::RIGHT;
-            }
-            break;
-        case VK_UP:
-            key_press.action = ESC;
-            key_press.sequence = EscapeSequence::UP;
-            break;
-        case VK_DOWN:
-            key_press.action = ESC;
-            key_press.sequence = EscapeSequence::DOWN;
-            break;
-        case VK_DELETE:
-            key_press.action = ESC;
-            key_press.sequence = EscapeSequence::DELETE_KEY;
-            break;
-        case VK_HOME:
-            key_press.action = ESC;
-            key_press.sequence = EscapeSequence::HOME;
-            break;
-        case VK_END:
-            key_press.action = ESC;
-            key_press.sequence = EscapeSequence::END;
-            break;
-        case VK_PRIOR:
-            key_press.action = CTRL_A;
-            break;
-        case VK_NEXT:
-            key_press.action = CTRL_E;
-            break;
-        default:
-          continue;  // in raw mode, ReadConsoleInput shows shift, ctrl ...
-      }              //  ... ignore them
-      if (key_press.action != KEY_NULL) {
-          // add the key press to the list of key presses
-          key_presses.emplace_back(key_press);
-      }
-    } else {
-        // we got a character - push it to the stack
-        // in this phase we gather all unicode characters together as much as possible
-        // because of surrogate pairs we might need to convert characters together in groups, rather than individually
-        auto wc = key_event.uChar.UnicodeChar;
-        if (key_presses.empty() || !key_presses.back().is_unicode || key_presses.back().control_pressed != control_pressed || key_presses.back().alt_pressed != alt_pressed) {
-            key_presses.emplace_back(wc, control_pressed, alt_pressed);
-        } else {
-            key_presses.back().unicode += wc;
-        }
-    }
-  } while(true);
-  if (key_presses.empty()) {
-      return false;
-  }
-  // we have key actions - turn them into KeyPress objects
-  // first invert the list
-  std::reverse(key_presses.begin(), key_presses.end());
-  // now process the key presses
-  for(auto &key_action : key_presses) {
-      if (!key_action.is_unicode) {
-          // standard key press - just add it
-          remaining_presses.push_back(key_action.key_press);
-          continue;
-      }
-      auto allocate_size = key_action.unicode.size() * 10;
-      auto data = unique_ptr<char[]>(new char[allocate_size]);
-      // unicode - need to convert
-      char utf8[20] = {0};
-      int len = WideCharToMultiByte(
-            CP_UTF8,           // Target code page (UTF-8)
-            0,                 // Flags
-            key_action.unicode.c_str(),               // Input UTF-16 string
-           key_action.unicode.size(),                 // One wchar_t
-            data.get(),              // Output buffer
-            allocate_size,      // Output buffer size
-            NULL, NULL
-      );
-      // process the characters in REVERSE order and add the key presses
-      for(int i = len - 1; i >= 0; i--) {
-          char c = data[i];
-          key_press.sequence = EscapeSequence::INVALID;
-          if (c > 0 && c <= BACKSPACE) {
-            // ascii character
-            if (key_action.alt_pressed && !key_action.control_pressed) {
-                // support ALT codes
-                if (c >= 'a' && c <= 'z') {
-                    key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'a'));
-                } else if (c >= 'A' && c <= 'Z') {
-                    key_press.sequence = static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'A'));
-                } else if (c == BACKSPACE) {
-                    key_press.sequence = EscapeSequence::ALT_BACKSPACE;
-                } else if (c == '\\') {
-                    key_press.sequence = EscapeSequence::ALT_BACKSLASH;
-                }
-            }
-            if (key_press.sequence != EscapeSequence::INVALID) {
-                key_press.action = ESC;
-            } else {
-                key_press.action = (KEY_ACTION) c;
-            }
-            // add the key press to the list of key presses
-          } else {
-                key_press.action = (KEY_ACTION) c;
-          }
-          remaining_presses.push_back(key_press);
-      }
-  }
+		if (key_event.dwControlKeyState & (RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED)) {
+			control_pressed = true;
+		}
+		if (key_event.dwControlKeyState & (RIGHT_ALT_PRESSED | LEFT_ALT_PRESSED)) {
+			alt_pressed = true;
+		}
+		if (key_event.uChar.UnicodeChar == 0) {
+			switch (key_event.wVirtualKeyCode) {
+			case VK_LEFT:
+				key_press.action = ESC;
+				if (control_pressed) {
+					key_press.sequence = EscapeSequence::CTRL_MOVE_BACKWARDS;
+				} else if (alt_pressed) {
+					key_press.sequence = EscapeSequence::ALT_LEFT_ARROW;
+				} else {
+					key_press.sequence = EscapeSequence::LEFT;
+				}
+				break;
+			case VK_RIGHT:
+				key_press.action = ESC;
+				if (control_pressed) {
+					key_press.sequence = EscapeSequence::CTRL_MOVE_FORWARDS;
+				} else if (alt_pressed) {
+					key_press.sequence = EscapeSequence::ALT_RIGHT_ARROW;
+				} else {
+					key_press.sequence = EscapeSequence::RIGHT;
+				}
+				break;
+			case VK_UP:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::UP;
+				break;
+			case VK_DOWN:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::DOWN;
+				break;
+			case VK_DELETE:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::DELETE_KEY;
+				break;
+			case VK_HOME:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::HOME;
+				break;
+			case VK_END:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::END;
+				break;
+			case VK_PRIOR:
+				key_press.action = CTRL_A;
+				break;
+			case VK_NEXT:
+				key_press.action = CTRL_E;
+				break;
+			default:
+				continue; // in raw mode, ReadConsoleInput shows shift, ctrl ...
+			}             //  ... ignore them
+			if (key_press.action != KEY_NULL) {
+				// add the key press to the list of key presses
+				key_presses.emplace_back(key_press);
+			}
+		} else {
+			// we got a character - push it to the stack
+			// in this phase we gather all unicode characters together as much as possible
+			// because of surrogate pairs we might need to convert characters together in groups, rather than
+			// individually
+			auto wc = key_event.uChar.UnicodeChar;
+			if (key_presses.empty() || !key_presses.back().is_unicode ||
+			    key_presses.back().control_pressed != control_pressed ||
+			    key_presses.back().alt_pressed != alt_pressed) {
+				key_presses.emplace_back(wc, control_pressed, alt_pressed);
+			} else {
+				key_presses.back().unicode += wc;
+			}
+		}
+	} while (true);
+	if (key_presses.empty()) {
+		return false;
+	}
+	// we have key actions - turn them into KeyPress objects
+	// first invert the list
+	std::reverse(key_presses.begin(), key_presses.end());
+	// now process the key presses
+	for (auto &key_action : key_presses) {
+		if (!key_action.is_unicode) {
+			// standard key press - just add it
+			remaining_presses.push_back(key_action.key_press);
+			continue;
+		}
+		auto allocate_size = key_action.unicode.size() * 10;
+		auto data = unique_ptr<char[]>(new char[allocate_size]);
+		// unicode - need to convert
+		char utf8[20] = {0};
+		int len = WideCharToMultiByte(CP_UTF8,                    // Target code page (UTF-8)
+		                              0,                          // Flags
+		                              key_action.unicode.c_str(), // Input UTF-16 string
+		                              key_action.unicode.size(),  // One wchar_t
+		                              data.get(),                 // Output buffer
+		                              allocate_size,              // Output buffer size
+		                              NULL, NULL);
+		// process the characters in REVERSE order and add the key presses
+		for (int i = len - 1; i >= 0; i--) {
+			char c = data[i];
+			key_press.sequence = EscapeSequence::INVALID;
+			if (c > 0 && c <= BACKSPACE) {
+				// ascii character
+				if (key_action.alt_pressed && !key_action.control_pressed) {
+					// support ALT codes
+					if (c >= 'a' && c <= 'z') {
+						key_press.sequence =
+						    static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'a'));
+					} else if (c >= 'A' && c <= 'Z') {
+						key_press.sequence =
+						    static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'A'));
+					} else if (c == BACKSPACE) {
+						key_press.sequence = EscapeSequence::ALT_BACKSPACE;
+					} else if (c == '\\') {
+						key_press.sequence = EscapeSequence::ALT_BACKSLASH;
+					}
+				}
+				if (key_press.sequence != EscapeSequence::INVALID) {
+					key_press.action = ESC;
+				} else {
+					key_press.action = (KEY_ACTION)c;
+				}
+				// add the key press to the list of key presses
+			} else {
+				key_press.action = (KEY_ACTION)c;
+			}
+			remaining_presses.push_back(key_press);
+		}
+	}
 
-  // emit the first key press on the stack
-  key_press = remaining_presses.back();
-  remaining_presses.pop_back();
-  has_more_data = !remaining_presses.empty();
-  return true;
+	// emit the first key press on the stack
+	key_press = remaining_presses.back();
+	remaining_presses.pop_back();
+	has_more_data = !remaining_presses.empty();
+	return true;
 
 #else
 	char c;
@@ -1320,18 +1324,18 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 
 bool Linenoise::Write(int fd, const char *data, idx_t size) {
 #if defined(_WIN32) || defined(WIN32)
-    // convert to character encoding in Windows shell
-    auto unicode_text = duckdb_shell::ShellState::Win32Utf8ToUnicode(data);
-    auto out_handle = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (!WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL)) {
-        return false;
-    }
+	// convert to character encoding in Windows shell
+	auto unicode_text = duckdb_shell::ShellState::Win32Utf8ToUnicode(data);
+	auto out_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (!WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL)) {
+		return false;
+	}
 #else
-    if (write(fd, data, size) == -1) {
-        return false;
-    }
+	if (write(fd, data, size) == -1) {
+		return false;
+	}
 #endif
-    return true;
+	return true;
 }
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
@@ -1346,9 +1350,9 @@ int Linenoise::Edit() {
 	 * initially is just an empty string. */
 	History::Add("");
 
-    if (!Write(ofd, prompt, plen)) {
-        return -1;
-    }
+	if (!Write(ofd, prompt, plen)) {
+		return -1;
+	}
 	while (true) {
 		KeyPress key_press;
 		if (!TryGetKeyPress(ifd, key_press)) {
@@ -1661,13 +1665,13 @@ int Linenoise::Edit() {
 void Linenoise::LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values) {
 	static FILE *lndebug_fp = NULL;
 	if (!lndebug_fp) {
-        string path;
+		string path;
 #if defined(_WIN32) || defined(WIN32)
-        path = GetTemporaryDirectory() + "\\lndebug.txt";
+		path = GetTemporaryDirectory() + "\\lndebug.txt";
 #else
-        path = "/tmp/lndebug.txt";
+		path = "/tmp/lndebug.txt";
 #endif
-        lndebug_fp = fopen(path.c_str(), "a");
+		lndebug_fp = fopen(path.c_str(), "a");
 	}
 	auto log_message = Exception::ConstructMessageRecursive(msg, values);
 	fprintf(lndebug_fp, "%s", log_message.c_str());
@@ -1765,24 +1769,24 @@ string Linenoise::GetTemporaryDirectory() {
 	if (!tmpdir) {
 		tmpdir = "/tmp";
 	}
-    return tmpdir;
+	return tmpdir;
 #else
-    static constexpr const idx_t MAX_PATH_LENGTH = 261;
+	static constexpr const idx_t MAX_PATH_LENGTH = 261;
 	char tmpdir[MAX_PATH_LENGTH];
 	int ret;
 
-    // FIXME: use GetTempPathW
+	// FIXME: use GetTempPathW
 	ret = GetTempPath(MAX_PATH_LENGTH, tmpdir);
 	if (ret == 0 || ret > MAX_PATH_LENGTH) {
 		Log("cannot locate temporary directory: %s", !ret ? strerror(errno) : "");
 		return false;
 	}
-    return tmpdir;
+	return tmpdir;
 #endif
 }
 
 bool Linenoise::EditBufferWithEditor(const char *editor) {
-    auto tmpdir = GetTemporaryDirectory();
+	auto tmpdir = GetTemporaryDirectory();
 	string temporary_file_name;
 #ifndef WIN32
 	temporary_file_name = tmpdir + "/duckdb.edit." + std::to_string(getpid()) + ".sql";

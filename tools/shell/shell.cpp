@@ -413,11 +413,11 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 		} else {
 			utf8_data = buffer;
 		}
-        // convert from utf8 to utf16
-        auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
-        auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE  : STD_ERROR_HANDLE);
-        // use WriteConsoleW to write the unicode codepoints to the console
-        WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
+		// convert from utf8 to utf16
+		auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
+		auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+		// use WriteConsoleW to write the unicode codepoints to the console
+		WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
 	} else {
 		vfprintf(out, zFormat, ap);
 	}

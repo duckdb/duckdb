@@ -30,11 +30,11 @@ static std::wstring winUtf8ToUnicode(const string &zText) {
 		return std::wstring();
 	}
 
-    std::wstring result(nChar, (WCHAR) 0);
+	std::wstring result(nChar, (WCHAR)0);
 	auto zWideText = (LPWSTR)result.data();
 	auto conversion_result = MultiByteToWideChar(CP_UTF8, 0, zText.c_str(), zText.size(), zWideText, nChar);
 	if (nChar != conversion_result) {
-        return std::wstring();
+		return std::wstring();
 	}
 	return result;
 }
@@ -44,17 +44,16 @@ static std::wstring winUtf8ToUnicode(const string &zText) {
 **
 */
 static string winUnicodeToUtf8(const std::wstring &zWideText) {
-
 	int nByte = WideCharToMultiByte(CP_UTF8, 0, zWideText.c_str(), zWideText.size(), 0, 0, 0, 0);
 	if (nByte == 0) {
-        return string();
+		return string();
 	}
 	string result(nByte, '\0');
 	auto zText = (LPSTR)result.data();
 	auto conversion_result = WideCharToMultiByte(CP_UTF8, 0, zWideText.c_str(), zWideText.size(), zText, nByte, 0, 0);
-    if (conversion_result != nByte) {
-        return string();
-    }
+	if (conversion_result != nByte) {
+		return string();
+	}
 	return result;
 }
 
@@ -70,7 +69,7 @@ static std::wstring winMbcsToUnicode(const string &zText, bool useAnsi) {
 	if (nChar == 0) {
 		return std::wstring();
 	}
-    std::wstring result(nChar, (WCHAR) 0);
+	std::wstring result(nChar, (WCHAR)0);
 	auto zMbcsText = (LPWSTR)result.data();
 	nChar = MultiByteToWideChar(codepage, 0, zText.c_str(), zText.size(), zMbcsText, nChar);
 	if (nChar == 0) {
@@ -91,9 +90,10 @@ static string winUnicodeToMbcs(const std::wstring &zWideText, bool useAnsi) {
 	if (nChar == 0) {
 		return string();
 	}
-    string result(nChar, '\0');
+	string result(nChar, '\0');
 	auto zMbcsText = (LPSTR)result.data();
-	auto conversion_result = WideCharToMultiByte(codepage, 0, zWideText.c_str(), zWideText.size(), zMbcsText, nChar, 0, 0);
+	auto conversion_result =
+	    WideCharToMultiByte(codepage, 0, zWideText.c_str(), zWideText.size(), zMbcsText, nChar, 0, 0);
 	if (nChar != conversion_result) {
 		return string();
 	}
