@@ -843,15 +843,14 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				// for non-equalities, the range must be half-open
 				// e.g., for lhs < rhs we can only use lhs <= max
 
-				const bool can_use_bloom_filter = CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable);
-
+				const bool use_bloom_filter = CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable);
 				switch (cmp) {
 				case ExpressionType::COMPARE_EQUAL:
 				case ExpressionType::COMPARE_GREATERTHAN:
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					if (can_use_bloom_filter) {
+					if (use_bloom_filter) {
 						auto optional_greater_equals = make_uniq<OptionalFilter>(std::move(greater_equals));
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
 					} else {
@@ -868,7 +867,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-					if (can_use_bloom_filter) {
+					if (use_bloom_filter) {
 						auto optional_less_equals = make_uniq<OptionalFilter>(std::move(less_equals));
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
 					} else {
@@ -880,7 +879,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					break;
 				}
 
-				if (ht && can_use_bloom_filter) {
+				if (ht && use_bloom_filter) {
 					PushBloomFilter(info, *ht, op, filter_col_idx);
 				}
 			}
