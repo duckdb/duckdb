@@ -1452,7 +1452,10 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// for row-wise rendering we can use streaming results
 		result = con.SendQuery(std::move(statement));
 	} else {
-		result = con.Query(std::move(statement));
+		duckdb::QueryParameters parameters;
+		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
+		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
+		result = con.SendQuery(std::move(statement), parameters);
 	}
 	auto &res = *result;
 	if (res.HasError()) {
