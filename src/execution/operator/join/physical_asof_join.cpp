@@ -314,13 +314,15 @@ AsOfPayloadScanner::AsOfPayloadScanner(const SortedRun &sorted_run, const Hashed
 class AsOfHashGroup {
 public:
 	using HashGroupPtr = unique_ptr<SortedRun>;
+	using ChunkRow = HashedSort::ChunkRow;
 
 	template <typename T>
 	static T BinValue(T n, T val) {
 		return ((n + (val - 1)) / val);
 	}
 
-	AsOfHashGroup(const PhysicalAsOfJoin &op, const idx_t left_count, const idx_t right_count, const idx_t hash_group);
+	AsOfHashGroup(const PhysicalAsOfJoin &op, const ChunkRow &left_stats, const ChunkRow &right_stats,
+	              const idx_t hash_group);
 
 	//! Is this a right join (do we have a RIGHT stage?)
 	inline bool IsRightOuter() const {
@@ -338,13 +340,13 @@ public:
 	}
 
 	//! The number of left chunks
-	idx_t LeftChunks() const {
-		return BinValue<idx_t>(left_count, STANDARD_VECTOR_SIZE);
+	inline idx_t LeftChunks() const {
+		return left_stats.chunks;
 	}
 
-	//! The number of left chunks
-	idx_t RightChunks() const {
-		return BinValue<idx_t>(right_count, STANDARD_VECTOR_SIZE);
+	//! The number of right chunks
+	inline idx_t RightChunks() const {
+		return right_stats.chunks;
 	}
 
 	// Set up the task parameters
@@ -366,10 +368,10 @@ public:
 	const PhysicalAsOfJoin &op;
 	//! The group number
 	const idx_t group_idx;
-	//! The number of left chunks
-	const idx_t left_count;
-	//! The number of right rows
-	const idx_t right_count;
+	//! The number of left chunks/rows
+	const ChunkRow left_stats;
+	//! The number of right chunks/rows
+	const ChunkRow right_stats;
 	//! The left hash partition data
 	HashGroupPtr left_group;
 	//! The right hash partition data
@@ -394,12 +396,12 @@ public:
 	std::atomic<idx_t> right_completed;
 };
 
-AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, const idx_t left_count, const idx_t right_count,
+AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, const ChunkRow &left_stats, const ChunkRow &right_stats,
                              const idx_t hash_group)
-    : op(op), group_idx(hash_group), left_count(left_count), right_count(right_count),
+    : op(op), group_idx(hash_group), left_stats(left_stats), right_stats(right_stats),
       right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), materialized(0), left_completed(0),
       right_completed(0) {
-	right_outer.Initialize(right_count);
+	right_outer.Initialize(right_stats.count);
 };
 
 idx_t AsOfHashGroup::InitTasks(idx_t per_thread_p) {
@@ -611,29 +613,31 @@ AsOfGlobalSourceState::AsOfGlobalSourceState(ClientContext &client, const Physic
 	//	 Take ownership of the hash groups
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 
-	vector<HashedSort::ChunkRows> child_counts(2);
-	for (idx_t child = 0; child < child_counts.size(); ++child) {
+	using ChunkRow = HashedSort::ChunkRow;
+	using ChunkRows = HashedSort::ChunkRows;
+	vector<ChunkRows> child_groups(2);
+	for (idx_t child = 0; child < child_groups.size(); ++child) {
 		auto &hashed_sort = *gsink.hashed_sorts[child];
 		auto &hashed_sink = *gsink.hashed_sinks[child];
 		auto hashed_source = hashed_sort.GetGlobalSourceState(client, hashed_sink);
-		child_counts[child] = hashed_sort.GetHashGroups(*hashed_source);
+		child_groups[child] = hashed_sort.GetHashGroups(*hashed_source);
 		hashed_sources.emplace_back(std::move(hashed_source));
 	}
 
 	//	Pivot into AsOfHashGroups
-	auto &lhs_counts = child_counts[0];
-	auto &rhs_counts = child_counts[1];
-	const auto group_count = MaxValue<idx_t>(lhs_counts.size(), rhs_counts.size());
+	auto &lhs_groups = child_groups[0];
+	auto &rhs_groups = child_groups[1];
+	const auto group_count = MaxValue<idx_t>(lhs_groups.size(), rhs_groups.size());
 	for (idx_t group_idx = 0; group_idx < group_count; ++group_idx) {
-		idx_t lhs_count = 0;
-		if (group_idx < lhs_counts.size()) {
-			lhs_count = lhs_counts[group_idx].count;
+		ChunkRow lhs_stats;
+		if (group_idx < lhs_groups.size()) {
+			lhs_stats = lhs_groups[group_idx];
 		}
-		idx_t rhs_count = 0;
-		if (group_idx < rhs_counts.size()) {
-			rhs_count = rhs_counts[group_idx].count;
+		ChunkRow rhs_stats;
+		if (group_idx < rhs_groups.size()) {
+			rhs_stats = rhs_groups[group_idx];
 		}
-		auto asof_group = make_uniq<AsOfHashGroup>(op, lhs_count, rhs_count, group_idx);
+		auto asof_group = make_uniq<AsOfHashGroup>(op, lhs_stats, rhs_stats, group_idx);
 		asof_groups.emplace_back(std::move(asof_group));
 	}
 
