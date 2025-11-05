@@ -682,6 +682,41 @@ MetadataResult SetReadLineVersion(ShellState &state, const vector<string> &args)
 	return MetadataResult::PRINT_USAGE;
 }
 
+MetadataResult SetPager(ShellState &state, const vector<string> &args) {
+	if (args.size() == 1) {
+		// Show current pager status
+		string mode_str;
+		switch (state.pager_mode) {
+		case PagerMode::PAGER_OFF:
+			mode_str = "off";
+			break;
+		case PagerMode::PAGER_ON:
+			mode_str = "on";
+			break;
+		case PagerMode::PAGER_AUTOMATIC:
+			mode_str = "automatic";
+			break;
+		}
+		state.PrintF("Pager mode: %s\n", mode_str);
+		if (state.pager_mode == PagerMode::PAGER_ON || !state.pager_command.empty()) {
+			state.PrintF("Pager command: %s\n", state.pager_command);
+		}
+		return MetadataResult::SUCCESS;
+	}
+	if (args.size() != 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args[1] == "on") {
+		state.pager_mode = PagerMode::PAGER_ON;
+	} else if (args[1] == "off") {
+		state.pager_mode = PagerMode::PAGER_OFF;
+	} else {
+		state.pager_mode = PagerMode::PAGER_ON;
+		state.pager_command = args[1];
+	}
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
@@ -771,6 +806,8 @@ static const MetadataCommand metadata_commands[] = {
     {"output", 0, SetOutput, "?FILE?", "Send output to FILE or stdout if FILE is omitted", 0,
      "If FILE begins with '|' then open as a pipe\n\t--bom\tPut a UTF8 byte-order mark at the beginning\n\t-e\tSend "
      "output to the system text editor\n\t-x\tSend output as CSV to a spreadsheet (same as \".excel\")"},
+    {"pager", 0, SetPager, "on|off|<cmd>", "Control pager usage for output", 0,
+     "Note: Set DUCKDB_PAGER or PAGER environment variable or <cmd> to configure default pager"},
     {"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3, ""},
     {"progress_bar", 0, ConfigureProgressBar, "OPTIONS", "Configure the progress bar display", 0,
      "OPTIONS:\n\t--add [COMPONENT]\tAdd a component to the progress bar\n\t--clear\tClear all components"},

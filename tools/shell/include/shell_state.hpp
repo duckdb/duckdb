@@ -45,6 +45,7 @@ using duckdb::InvalidInputException;
 using duckdb::to_string;
 struct Prompt;
 struct ShellProgressBar;
+struct PagerState;
 
 using idx_t = uint64_t;
 
@@ -93,6 +94,7 @@ enum class SuccessState { SUCCESS, FAILURE };
 enum class OptionType { DEFAULT, ON, OFF };
 enum class StartupText { ALL, VERSION, NONE };
 enum class ReadLineVersion { LINENOISE, FALLBACK };
+enum class PagerMode { PAGER_AUTOMATIC, PAGER_ON, PAGER_OFF };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
@@ -230,6 +232,13 @@ public:
 	ReadLineVersion rl_version = ReadLineVersion::FALLBACK;
 #endif
 
+	//! Whether or not to run the pager
+	PagerMode pager_mode = PagerMode::PAGER_AUTOMATIC;
+	//! The command to run when running the pager
+	string pager_command;
+	// only show a pager when this count is exceeded
+	idx_t pager_min_rows = 50;
+
 #if defined(_WIN32) || defined(WIN32)
 	bool win_utf8_mode = false;
 #endif
@@ -318,7 +327,10 @@ public:
 		shellFlgs &= ~static_cast<uint32_t>(flag);
 	}
 	void ResetOutput();
-	bool SetupPager();
+	bool ShouldUsePager(duckdb::QueryResult &result);
+	unique_ptr<PagerState> SetupPager();
+	static void StartPagerDisplay();
+	static void FinishPagerDisplay();
 	void ClearTempFile();
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(const string &zLine);
