@@ -114,7 +114,7 @@ private:
 	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
 	                                          unsafe_arena_vector<BufferHandle> &pinned_row_handles,
 	                                          buffer_handle_map_t &handles, const ContinuousIdSet &block_ids,
-	                                          unsafe_arena_vector<unsafe_arena_ptr<TupleDataBlock>> &blocks,
+	                                          unsafe_arena_vector<TupleDataBlock> &blocks,
 	                                          TupleDataPinProperties properties);
 	//! Create a row/heap block, extend the pinned handles in the segment accordingly
 	void CreateRowBlock(TupleDataSegment &segment);
@@ -139,9 +139,9 @@ private:
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows
-	unsafe_arena_vector<unsafe_arena_ptr<TupleDataBlock>> row_blocks;
+	unsafe_arena_vector<TupleDataBlock> row_blocks;
 	//! Blocks storing the variable-size data of the fixed-size rows (e.g., string, list)
-	unsafe_arena_vector<unsafe_arena_ptr<TupleDataBlock>> heap_blocks;
+	unsafe_arena_vector<TupleDataBlock> heap_blocks;
 };
 
 } // namespace duckdb
