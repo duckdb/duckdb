@@ -1096,17 +1096,32 @@ void Linenoise::HandleTerminalResize() {
 
 bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 #if defined(_WIN32) || defined(WIN32)
-    if (!remaining_characters.empty()) {
+    if (!remaining_presses.empty()) {
         // there are still characters left to consume
-        key_press.action = (KEY_ACTION) remaining_characters[0];
-        remaining_characters = remaining_characters.substr(1);
-            Linenoise::Log("Consumed 1 byte, leaving %d bytes to be processed", int(remaining_characters.size()));
+        key_press = remaining_presses.back();
+        remaining_presses.pop_back();
+            Linenoise::Log("Consumed 1 press, leaving %d presses to be processed", int(remaining_presses.size()));
+        has_more_data = !remaining_presses.empty();
         return true;
     }
   INPUT_RECORD rec;
   DWORD count;
   has_more_data = false;
-  while (true) {
+  do {
+    key_press.action = KEY_NULL;
+    key_press.sequence = EscapeSequence::INVALID;
+    if (!remaining_presses.empty()) {
+        // we already have output that we can emit
+        // check if there is more input to process
+        // if there are no events anymore, then just break and return our current set of input
+        DWORD event_count = 0;
+        if (!GetNumberOfConsoleInputEvents(Terminal::GetConsoleInput(), &event_count)) {
+            break;
+        }
+        if (event_count == 0) {
+            break;
+        }
+    }
     if (!ReadConsoleInputW(Terminal::GetConsoleInput(), &rec, 1, &count)) {
         return false;
     }
@@ -1128,12 +1143,6 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
     bool alt_pressed = false;
     Linenoise::Log("Unicode character %d, ascii character %d, control state %d", key_event.uChar.UnicodeChar, key_event.uChar.AsciiChar, key_event.dwControlKeyState);
 
-    if ((key_event.dwControlKeyState &
-         (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) ==
-        (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) {
-      key_event.dwControlKeyState &=
-          ~(LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED);
-    }
     if (key_event.dwControlKeyState &
         (RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED)) {
       control_pressed = true;
@@ -1153,7 +1162,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
             } else {
                 key_press.sequence = EscapeSequence::LEFT;
             }
-            return true;
+            break;
         case VK_RIGHT:
             key_press.action = ESC;
             if (control_pressed) {
@@ -1163,36 +1172,40 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
             } else {
                 key_press.sequence = EscapeSequence::RIGHT;
             }
-            return true;
+            break;
         case VK_UP:
             key_press.action = ESC;
             key_press.sequence = EscapeSequence::UP;
-            return true;
+            break;
         case VK_DOWN:
             key_press.action = ESC;
             key_press.sequence = EscapeSequence::DOWN;
-            return true;
+            break;
         case VK_DELETE:
             key_press.action = ESC;
             key_press.sequence = EscapeSequence::DELETE_KEY;
-            return true;
+            break;
         case VK_HOME:
             key_press.action = ESC;
             key_press.sequence = EscapeSequence::HOME;
-            return true;
+            break;
         case VK_END:
             key_press.action = ESC;
             key_press.sequence = EscapeSequence::END;
-            return true;
+            break;
         case VK_PRIOR:
             key_press.action = CTRL_A;
-            return true;
+            break;
         case VK_NEXT:
             key_press.action = CTRL_E;
-            return true;
+            break;
         default:
           continue;  // in raw mode, ReadConsoleInput shows shift, ctrl ...
       }              //  ... ignore them
+      if (key_press.action != KEY_NULL) {
+          // add the key press to the list of key presses
+          remaining_presses.push_back(key_press);
+      }
     } else {
         // we got a character - handle it
         // we need to convert from unicode to UTF8 first
@@ -1226,25 +1239,28 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
                 key_press.action = ESC;
             } else {
                 key_press.action = (KEY_ACTION) c;
-                if (c == TAB) {
-                    // if we encounter a tab character this might be part of copy-pasting
-                    // if it is, we want to just emit a tab literal instead of auto-completing at this location
-                    // set "has_more_data" based on whether there are more events waiting to detect this scenario
-                    DWORD event_count = 0;
-                    GetNumberOfConsoleInputEvents(Terminal::GetConsoleInput(), &event_count);
-                    has_more_data = event_count > 0;
-                }
             }
-            return true;
+            // add the key press to the list of key presses
+            remaining_presses.push_back(key_press);
+        } else {
+            // unicode character - these can consist of multiple bytes
+            // return the first byte and buffer the remaining bytes
+            for(idx_t i = 0; i < len; i++) {
+                key_press.sequence = EscapeSequence::INVALID;
+                key_press.action = (KEY_ACTION) utf8[i];
+                remaining_presses.push_back(key_press);
+            }
         }
-        // unicode character - these can consist of multiple bytes
-        // return the first byte and buffer the remaining bytes
-        remaining_characters = string(utf8, len);
-        key_press.action = (KEY_ACTION) remaining_characters[0];
-        remaining_characters = remaining_characters.substr(1);
-        return true;
     }
+  } while(true);
+  if (remaining_presses.empty()) {
+      return false;
   }
+  // invert the list of remaining presses
+  std::reverse(remaining_presses.begin(), remaining_presses.end());
+  key_press = remaining_presses.back();
+  remaining_presses.pop_back();
+  has_more_data = !remaining_presses.empty();
   return true;
 
 #else
