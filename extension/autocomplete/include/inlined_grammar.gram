@@ -879,7 +879,7 @@ GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete
 PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'
 
-CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList?
+CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?
 
 WithList <- 'WITH' Parens(List(RelOption)) / Oids
 Oids <- ('WITH' / 'WITHOUT') 'OIDS'
@@ -1416,7 +1416,7 @@ MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarM
 
 MacroParameters <- List(MacroParameter)
 MacroParameter <- NamedParameter / SimpleParameter
-SimpleParameter <- TypeFuncName
+SimpleParameter <- TypeFuncName Type?
 
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatementInternal

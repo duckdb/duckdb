@@ -6,7 +6,7 @@ MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarM
 
 MacroParameters <- List(MacroParameter)
 MacroParameter <- NamedParameter / SimpleParameter
-SimpleParameter <- TypeFuncName
+SimpleParameter <- TypeFuncName Type?
 
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatementInternal
