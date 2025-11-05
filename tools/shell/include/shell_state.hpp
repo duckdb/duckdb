@@ -94,6 +94,15 @@ enum class StartupText { ALL, VERSION, NONE };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
+enum class ExecuteSQLSingleValueResult {
+	SUCCESS,
+	EXECUTION_ERROR,
+	EMPTY_RESULT,
+	MULTIPLE_ROWS,
+	MULTIPLE_COLUMNS,
+	NULL_RESULT
+};
+
 typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
 
 struct CommandLineOption {
@@ -281,7 +290,6 @@ public:
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
-	string EvaluateSQL(const string &sql);
 	SuccessState ExecuteSQL(const string &zSql);
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
@@ -333,6 +341,8 @@ public:
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE
 	SuccessState ExecuteQuery(const string &query);
+	//! Execute a SQL query and extracts a single string value
+	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(const string &sql, string &result);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
 	SuccessState RenderQuery(RowRenderer &renderer, const string &query);

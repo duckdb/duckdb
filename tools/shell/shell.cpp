@@ -566,7 +566,6 @@ int ShellState::RunInitialCommand(const char *sql, bool bail) {
 		}
 	} else {
 		string zErrMsg;
-		OpenDB();
 		BEGIN_TIMER;
 		auto res = ExecuteSQL(sql);
 		END_TIMER;
@@ -2162,7 +2161,6 @@ bool ShellState::ImportData(const vector<string> &args) {
 	}
 	seenInterrupt = 0;
 	// check if the table exists
-	OpenDB();
 	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
 	if (needCommit) {
@@ -2201,41 +2199,35 @@ bool ShellState::ImportData(const vector<string> &args) {
 	return true;
 }
 
-string ShellState::EvaluateSQL(const string &sql) {
-	if (!db) {
-		OpenDB();
-	}
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql, string &result_value) {
 	auto &con = *conn;
 	auto result = con.Query(sql);
 	if (result->HasError()) {
-		return EVAL_SQL_ERROR;
+		// store error in the result
+		result_value = result->GetError();
+		return ExecuteSQLSingleValueResult::EXECUTION_ERROR;
 	}
 	auto is_query = result->properties.return_type == duckdb::StatementReturnType::QUERY_RESULT;
-	if (is_query == false) {
-		return EVAL_SQL_NOT_A_QUERY;
+	if (!is_query) {
+		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
 	}
 	auto &collection = result->Collection();
 	if (collection.Count() == 0) {
-		return EVAL_SQL_NO_RESULT;
+		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
 	}
 	if (collection.Count() > 1) {
-		return EVAL_SQL_TOO_MANY_ROWS;
+		return ExecuteSQLSingleValueResult::MULTIPLE_ROWS;
 	}
 	if (collection.ColumnCount() != 1) {
-		return EVAL_SQL_TOO_MANY_COLUMNS;
+		return ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS;
 	}
 
 	auto value = collection.GetRows().GetValue(0, 0);
 	if (value.IsNull()) {
-		return EVAL_SQL_NULL;
+		return ExecuteSQLSingleValueResult::NULL_RESULT;
 	}
-
-	auto str = value.ToString();
-	if (str.empty()) {
-		return EVAL_SQL_EMPTY;
-	}
-
-	return str;
+	result_value = value.ToString();
+	return ExecuteSQLSingleValueResult::SUCCESS;
 }
 
 bool ShellState::OpenDatabase(const vector<string> &args) {
@@ -2267,30 +2259,28 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 				Print(PrintOutput::STDERR, "Error: missing SQL query after --sql\n");
 				return false;
 			}
-			const char *query = args[++iName].c_str();
+			auto &query = args[++iName];
 
-			auto val = EvaluateSQL(query);
-			if (val == EVAL_SQL_ERROR) {
-				PrintF(PrintOutput::STDERR, "Error: failed to evaluate --sql query: '%s'\n", query);
+			string val;
+			auto exec_result = ExecuteSQLSingleValue(query, val);
+			switch (exec_result) {
+			case ExecuteSQLSingleValueResult::EXECUTION_ERROR:
+				PrintF(PrintOutput::STDERR, "Error: failed to evaluate --sql query '%s': %s\n", query, val);
 				return false;
-			} else if (val == EVAL_SQL_NOT_A_QUERY) {
-				PrintF(PrintOutput::STDERR, "Error: the --sql argument, '%s', is not a valid query\n");
+			case ExecuteSQLSingleValueResult::EMPTY_RESULT:
+				Print(PrintOutput::STDERR, "Error: --sql query returned no rows, expected single value\n");
 				return false;
-			} else if (val == EVAL_SQL_TOO_MANY_ROWS) {
+			case ExecuteSQLSingleValueResult::MULTIPLE_ROWS:
 				Print(PrintOutput::STDERR, "Error: --sql query returned multiple rows, expected single value\n");
 				return false;
-			} else if (val == EVAL_SQL_TOO_MANY_COLUMNS) {
+			case ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS:
 				Print(PrintOutput::STDERR, "Error: --sql query returned multiple columns, expected single value\n");
 				return false;
-			} else if (val == EVAL_SQL_NULL) {
+			case ExecuteSQLSingleValueResult::NULL_RESULT:
 				Print(PrintOutput::STDERR, "Error: --sql query returned a null value\n");
 				return false;
-			} else if (val == EVAL_SQL_NO_RESULT) {
-				Print(PrintOutput::STDERR, "Error: --sql query returned no value\n");
-				return false;
-			} else if (val == EVAL_SQL_EMPTY) {
-				Print(PrintOutput::STDERR, "Error: --sql query returned an empty string\n");
-				return false;
+			default:
+				break;
 			}
 			zNewFilename = val;
 			has_sql = true;
@@ -2478,8 +2468,6 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 	bool bDebug = 0;
 	SuccessState rc = SuccessState::SUCCESS;
 
-	OpenDB();
-
 	RenderMode mode = RenderMode::SEMI;
 	for (idx_t ii = 1; ii < args.size(); ii++) {
 		if (optionMatch(args[ii], "indent")) {
@@ -2552,7 +2540,6 @@ void ShellState::ShowConfiguration() {
 
 MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
 	string s;
-	OpenDB();
 
 	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
@@ -3016,7 +3003,6 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	string zErrMsg;
 
-	OpenDB();
 #ifndef SHELL_USE_LOCAL_GETLINE
 	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
 		shell_add_history(zSql);
@@ -3243,9 +3229,6 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 		unique_ptr<duckdb::DuckDB> localDB;
 		unique_ptr<duckdb::Connection> localCon;
 
-		if (!state.conn) {
-			state.OpenDB();
-		}
 		auto &con = *state.conn;
 		auto result = con.Query(zSql);
 		for (auto &row : *result) {
@@ -3415,14 +3398,8 @@ int wmain(int argc, wchar_t **wargv) {
 	}
 	data.out = stdout;
 
-	/* Go ahead and open the database file if it already exists.  If the
-	** file does not exist, delay opening it.  This prevents empty database
-	** files from being created if a user mistypes the database name argument
-	** to the sqlite command-line tool.
-	*/
-	if (access(data.zDbFilename.c_str(), 0) == 0) {
-		data.OpenDB();
-	}
+	// Open the database file
+	data.OpenDB();
 
 	/* Process the initialization file if there is one.  If no -init option
 	** is given on the command line, look for a file named ~/.sqliterc and
@@ -3460,7 +3437,6 @@ int wmain(int argc, wchar_t **wargv) {
 					return rc == 2 ? 0 : rc;
 				}
 			} else {
-				data.OpenDB();
 				auto success = data.ExecuteSQL(cmd.c_str());
 				if (success != SuccessState::SUCCESS) {
 					return rc != 0 ? rc : 1;

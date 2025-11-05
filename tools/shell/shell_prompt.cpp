@@ -1,6 +1,8 @@
 #include "shell_prompt.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb_shell {
 
@@ -183,13 +185,9 @@ void Prompt::ParsePrompt(const string &prompt) {
 }
 
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
-	if (!state.conn) {
-		return component.literal == "current_schema" ? "main" : "memory";
-	}
 	auto &con = *state.conn;
 	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(*con.context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
-	;
 	if (component.literal == "current_database") {
 		return current_db;
 	}
@@ -249,6 +247,26 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 	return truncated_text;
 }
 
+string Prompt::ExecuteSQL(ShellState &state, const string &query) {
+	string query_result;
+	auto exec_result = state.ExecuteSQLSingleValue(query, query_result);
+	switch (exec_result) {
+	case ExecuteSQLSingleValueResult::SUCCESS:
+		return query_result;
+	case ExecuteSQLSingleValueResult::EMPTY_RESULT:
+		return "#EMPTY#";
+	case ExecuteSQLSingleValueResult::MULTIPLE_ROWS:
+		return "#MULTIPLE_ROWS#";
+	case ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS:
+		return "#MULTIPLE_COLUMNS#";
+	case ExecuteSQLSingleValueResult::NULL_RESULT:
+		return "#NULL#";
+	case ExecuteSQLSingleValueResult::EXECUTION_ERROR:
+	default:
+		return "#ERROR";
+	}
+}
+
 string Prompt::GeneratePrompt(ShellState &state) {
 	string prompt;
 	idx_t length = 0;
@@ -258,8 +276,8 @@ string Prompt::GeneratePrompt(ShellState &state) {
 			prompt += HandleText(state, component.literal, length);
 			break;
 		case PromptComponentType::SQL: {
-			auto query_result = state.EvaluateSQL(component.literal);
-			prompt += HandleText(state, query_result, length);
+			auto result = ExecuteSQL(state, component.literal);
+			prompt += HandleText(state, result, length);
 			break;
 		}
 		case PromptComponentType::SET_COLOR:
@@ -291,7 +309,7 @@ void Prompt::PrintPrompt(ShellState &state, PrintOutput output) {
 			highlight.PrintText(HandleText(state, component.literal, length), output, color, intensity);
 			break;
 		case PromptComponentType::SQL: {
-			auto result = state.EvaluateSQL(component.literal);
+			auto result = ExecuteSQL(state, component.literal);
 			highlight.PrintText(HandleText(state, result, length), output, color, intensity);
 			break;
 		}
