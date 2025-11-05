@@ -1,6 +1,7 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 #include "shell_prompt.hpp"
+#include "shell_progress_bar.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -107,8 +108,6 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 			zLike = StringUtil::Format("name LIKE %s ESCAPE '\\'", SQLString(args[i]));
 		}
 	}
-
-	state.OpenDB();
 
 	/* When playing back a "dump", the content might appear in an order
 	** which causes immediate foreign key constraints to be violated.
@@ -293,6 +292,26 @@ MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
 	}
 	if (args.size() >= 4) {
 		ShellState::SetPrompt(state.continuePromptSelected, args[3]);
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ConfigureProgressBar(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2 || args.size() > 3) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args[1] == "--clear") {
+		if (args.size() != 2) {
+			return MetadataResult::PRINT_USAGE;
+		}
+		state.progress_bar->ClearComponents();
+	} else if (args[1] == "--add") {
+		if (args.size() != 3) {
+			return MetadataResult::PRINT_USAGE;
+		}
+		state.progress_bar->AddComponent(args[2]);
+	} else {
+		return MetadataResult::PRINT_USAGE;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -737,6 +756,8 @@ static const MetadataCommand metadata_commands[] = {
      "If FILE begins with '|' then open as a pipe\n\t--bom\tPut a UTF8 byte-order mark at the beginning\n\t-e\tSend "
      "output to the system text editor\n\t-x\tSend output as CSV to a spreadsheet (same as \".excel\")"},
     {"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3, ""},
+    {"progress_bar", 0, ConfigureProgressBar, "OPTIONS", "Configure the progress bar display", 0,
+     "OPTIONS:\n\t--add [COMPONENT]\tAdd a component to the progress bar\n\t--clear\tClear all components"},
     {"prompt", 0, SetPrompt, "MAIN CONTINUE", "Replace the standard prompts", 0, ""},
 
     {"quit", 0, QuitProcess, "", "Exit this program", 0, ""},

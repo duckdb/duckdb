@@ -38,7 +38,7 @@ struct StartsWithOperator {
 ScalarFunction StartsWithOperatorFun::GetFunction() {
 	ScalarFunction starts_with({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                           ScalarFunction::BinaryFunction<string_t, string_t, bool, StartsWithOperator>);
-	starts_with.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	starts_with.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return starts_with;
 }
 

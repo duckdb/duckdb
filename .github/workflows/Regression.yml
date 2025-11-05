@@ -260,7 +260,7 @@ jobs:
           # Regenerate test/sql/storage_version.db with older version -> read with newer version (already performed as part of test.slow)
           cd duckdb
           python3 ../scripts/generate_storage_version.py
-          ../build/release/duckdb duckdb/test/sql/storage_version/storage_version.db
+          ../build/release/duckdb test/sql/storage_version/storage_version.db
           cd ..
 
       - name: Regression Compatibility Test (testing storage version has been bumped)

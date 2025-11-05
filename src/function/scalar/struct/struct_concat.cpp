@@ -79,7 +79,7 @@ static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarF
 		throw InvalidInputException("struct_concat: Cannot mix named and unnamed STRUCTs");
 	}
 
-	bound_function.return_type = LogicalType::STRUCT(combined_children);
+	bound_function.SetReturnType(LogicalType::STRUCT(combined_children));
 	return nullptr;
 }
 
@@ -107,7 +107,7 @@ ScalarFunction StructConcatFun::GetFunction() {
 	ScalarFunction fun("struct_concat", {}, LogicalTypeId::STRUCT, StructConcatFunction, StructConcatBind, nullptr,
 	                   StructConcatStats);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
