@@ -1271,17 +1271,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				for (auto &block : all_written_blocks) {
 					oss << block << ", ";
 				}
-				oss << std::endl;
+				oss << "\n";
 				oss << "Quick read: ";
 				for (auto &block : all_quick_read_blocks) {
 					oss << block << ", ";
 				}
-				oss << std::endl;
+				oss << "\n";
 				oss << "Full read: ";
 				for (auto &block : all_full_read_blocks) {
 					oss << block << ", ";
 				}
-				oss << std::endl;
+				oss << "\n";
 
 				throw InternalException("Reloading blocks just written does not yield same blocks: " + oss.str());
 			}
