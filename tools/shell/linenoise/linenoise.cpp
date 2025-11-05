@@ -1254,7 +1254,6 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 		auto allocate_size = key_action.unicode.size() * 10;
 		auto data = unique_ptr<char[]>(new char[allocate_size]);
 		// unicode - need to convert
-		char utf8[20] = {0};
 		int len = WideCharToMultiByte(CP_UTF8,                    // Target code page (UTF-8)
 		                              0,                          // Flags
 		                              key_action.unicode.c_str(), // Input UTF-16 string
