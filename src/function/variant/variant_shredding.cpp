@@ -81,12 +81,19 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::UUID: {
 		const auto physical_type = type.InternalType();
@@ -114,6 +121,7 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 		break;
 	}
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::VARCHAR: {
 		WriteShreddedString(variant, result, sel, value_index_sel, result_sel, count);
 		break;

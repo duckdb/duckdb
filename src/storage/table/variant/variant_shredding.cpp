@@ -31,6 +31,18 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::INT32};
 	case LogicalTypeId::BIGINT:
 		return {VariantLogicalType::INT64};
+	case LogicalTypeId::HUGEINT:
+		return {VariantLogicalType::INT128};
+	case LogicalTypeId::UTINYINT:
+		return {VariantLogicalType::UINT8};
+	case LogicalTypeId::USMALLINT:
+		return {VariantLogicalType::UINT16};
+	case LogicalTypeId::UINTEGER:
+		return {VariantLogicalType::UINT32};
+	case LogicalTypeId::UBIGINT:
+		return {VariantLogicalType::UINT64};
+	case LogicalTypeId::UHUGEINT:
+		return {VariantLogicalType::UINT128};
 	case LogicalTypeId::FLOAT:
 		return {VariantLogicalType::FLOAT};
 	case LogicalTypeId::DOUBLE:
@@ -45,6 +57,10 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
 	case LogicalTypeId::TIMESTAMP:
 		return {VariantLogicalType::TIMESTAMP_MICROS};
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return {VariantLogicalType::TIMESTAMP_SEC};
+	case LogicalTypeId::TIMESTAMP_MS:
+		return {VariantLogicalType::TIMESTAMP_MILIS};
 	case LogicalTypeId::TIMESTAMP_NS:
 		return {VariantLogicalType::TIMESTAMP_NANOS};
 	case LogicalTypeId::BLOB:
@@ -53,6 +69,8 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::VARCHAR};
 	case LogicalTypeId::UUID:
 		return {VariantLogicalType::UUID};
+	case LogicalTypeId::BIGNUM:
+		return {VariantLogicalType::BIGNUM};
 	default:
 		throw BinderException("Type '%s' can't be translated to a VARIANT type", type.ToString());
 	}
