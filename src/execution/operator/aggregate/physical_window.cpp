@@ -94,7 +94,7 @@ public:
 		lock_guard<mutex> prepare_guard(lock);
 		switch (stage.load()) {
 		case WindowGroupStage::MATERIALIZE:
-			if (materialized == blocks) {
+			if (materialized == blocks && rows.get()) {
 				stage = WindowGroupStage::MASK;
 				return true;
 			}
@@ -707,16 +707,20 @@ void WindowLocalSourceState::Materialize(ExecutionContext &context, InterruptSta
 	OperatorSourceInput source {*gsource.hashed_source, *unused, interrupt};
 	auto &gsink = gsource.gsink;
 	auto &hashed_sort = *gsink.global_partition;
-	if (hashed_sort.MaterializeColumnData(context, task_local.group_idx, source) == SourceResultType::FINISHED) {
-		auto column_data = hashed_sort.GetColumnData(task_local.group_idx, source);
-		if (column_data) {
-			window_hash_group->rows = std::move(column_data);
-		}
-	}
+	hashed_sort.MaterializeColumnData(context, task_local.group_idx, source);
 
 	//	Mark this range as done
 	window_hash_group->materialized += (task->end_idx - task->begin_idx);
 	task->begin_idx = task->end_idx;
+
+	// 	There is no good place to read the column data,
+	//	and if we do it twice we can split the results.
+	if (window_hash_group->materialized >= window_hash_group->blocks) {
+		lock_guard<mutex> prepare_guard(window_hash_group->lock);
+		if (!window_hash_group->rows) {
+			window_hash_group->rows = hashed_sort.GetColumnData(task_local.group_idx, source);
+		}
+	}
 }
 
 void WindowLocalSourceState::Mask(ExecutionContext &context, InterruptState &interrupt) {
