@@ -47,6 +47,13 @@ static idx_t CalculateMaxResultLength(idx_t row_count, const UnifiedVectorFormat
 static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto row_count = args.size();
 
+	// Handle NULL return type case
+	if (result.GetType() == LogicalType::SQLNULL) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+
 	auto &l_vec = args.data[0];
 	auto &r_vec = args.data[1];
 
@@ -224,13 +231,19 @@ static unique_ptr<FunctionData> ListIntersectBind(ClientContext &context, Scalar
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
 
+	// Handle NULL case
+	if (arguments[0]->return_type == LogicalType::SQLNULL) {
+		bound_function.return_type = LogicalType::SQLNULL;
+		return make_uniq<ListIntersectBindData>(LogicalType::SQLNULL);
+	}
+
 	// Store the original left child type before any type coercion happens
 	// This allows us to preserve the left list's element type in the result
 	auto original_left_child_type = ListType::GetChildType(arguments[0]->return_type);
-
+	
 	// Set the return type to preserve the left list's element type
 	bound_function.return_type = LogicalType::LIST(original_left_child_type);
-
+	
 	return make_uniq<ListIntersectBindData>(original_left_child_type);
 }
 
