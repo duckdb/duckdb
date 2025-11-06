@@ -77,10 +77,15 @@ duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_context context, 
 	}
 
 	auto &context_ref = *reinterpret_cast<duckdb::CClientContextWrapper *>(context);
-	auto &catalog = duckdb::Catalog::GetCatalog(context_ref.context, name);
+	auto catalog_ptr = duckdb::Catalog::GetCatalogEntry(context_ref.context, name);
 
-	auto catalog_ptr = new duckdb::CCatalogWrapper(catalog, catalog.GetCatalogType());
-	return reinterpret_cast<duckdb_catalog>(catalog_ptr);
+	if (!catalog_ptr) {
+		return nullptr;
+	}
+
+	auto &catalog_ref = *catalog_ptr;
+	auto catalog_wrapper = new duckdb::CCatalogWrapper(catalog_ref, catalog_ref.GetCatalogType());
+	return reinterpret_cast<duckdb_catalog>(catalog_wrapper);
 }
 
 void duckdb_destroy_catalog(duckdb_catalog *catalog) {
@@ -92,7 +97,7 @@ void duckdb_destroy_catalog(duckdb_catalog *catalog) {
 	*catalog = nullptr;
 }
 
-const char *duckdb_catalog_get_type(duckdb_catalog catalog) {
+const char *duckdb_catalog_get_type_name(duckdb_catalog catalog) {
 	if (!catalog) {
 		return nullptr;
 	}
@@ -128,7 +133,6 @@ duckdb_catalog_entry_type duckdb_catalog_entry_get_type(duckdb_catalog_entry ent
 		return DUCKDB_CATALOG_ENTRY_TYPE_INVALID;
 	}
 
-	// TODO!
 	auto &entry_ref = *reinterpret_cast<duckdb::CatalogEntry *>(entry);
 	return duckdb::CatalogTypeToC(entry_ref.type);
 }

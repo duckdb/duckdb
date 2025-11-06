@@ -866,10 +866,14 @@ typedef struct _duckdb_file_handle {
 // Catalog Interface
 //===--------------------------------------------------------------------===//
 
+//! A handle to a database catalog.
+//! Must be destroyed with `duckdb_destroy_catalog`.
 typedef struct _duckdb_catalog {
 	void *internal_ptr;
 } * duckdb_catalog;
 
+//! A handle to a catalog entry (e.g., table, view, index, etc.).
+//! Must be destroyed with `duckdb_destroy_catalog_entry`.
 typedef struct _duckdb_catalog_entry {
 	void *internal_ptr;
 } * duckdb_catalog_entry;
@@ -5999,11 +6003,14 @@ DUCKDB_C_API duckdb_logical_type duckdb_table_function_bind_get_result_column_ty
 // Catalog Interface
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-// Functions to access catalog entries
+// Functions to interact with database catalogs and catalog entries.
+// You will most likely not need this API for typical usage of DuckDB as SQL is the preferred way to interact with the
+// database, but this interface can be useful for advanced extensions that need to inspect the state of the catalog from
+// inside a running query.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
-Retrieve a database catalog instance by name
+Retrieve a database catalog instance by name.
 
 * @param context The client context.
 * @param catalog_name The name of the catalog.
@@ -6020,7 +6027,7 @@ The returned string is owned by the catalog and remains valid until the catalog 
 * @param catalog The catalog.
 * @return The type name of the catalog.
 */
-DUCKDB_C_API const char *duckdb_catalog_get_type(duckdb_catalog catalog);
+DUCKDB_C_API const char *duckdb_catalog_get_type_name(duckdb_catalog catalog);
 
 /*!
 Retrieve a catalog entry from the given catalog by type, schema name and entry name.

@@ -3,7 +3,7 @@
   "description": "New functions for interacting with catalog entries",
   "entries": [
     "duckdb_client_context_get_catalog",
-    "duckdb_catalog_get_type",
+    "duckdb_catalog_get_type_name",
     "duckdb_catalog_get_entry",
     "duckdb_destroy_catalog",
 

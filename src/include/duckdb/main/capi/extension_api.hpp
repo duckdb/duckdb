@@ -491,7 +491,7 @@ typedef struct {
 	// New functions for interacting with catalog entries
 
 	duckdb_catalog (*duckdb_client_context_get_catalog)(duckdb_client_context context, const char *catalog_name);
-	const char *(*duckdb_catalog_get_type)(duckdb_catalog catalog);
+	const char *(*duckdb_catalog_get_type_name)(duckdb_catalog catalog);
 	duckdb_catalog_entry (*duckdb_catalog_get_entry)(duckdb_catalog catalog, duckdb_client_context context,
 	                                                 duckdb_catalog_entry_type entry_type, const char *schema_name,
 	                                                 const char *entry_name);
@@ -1076,7 +1076,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_data_chunk_from_arrow = duckdb_data_chunk_from_arrow;
 	result.duckdb_destroy_arrow_converted_schema = duckdb_destroy_arrow_converted_schema;
 	result.duckdb_client_context_get_catalog = duckdb_client_context_get_catalog;
-	result.duckdb_catalog_get_type = duckdb_catalog_get_type;
+	result.duckdb_catalog_get_type_name = duckdb_catalog_get_type_name;
 	result.duckdb_catalog_get_entry = duckdb_catalog_get_entry;
 	result.duckdb_destroy_catalog = duckdb_destroy_catalog;
 	result.duckdb_catalog_entry_get_type = duckdb_catalog_entry_get_type;

@@ -564,7 +564,7 @@ typedef struct {
 // New functions for interacting with catalog entries
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_catalog (*duckdb_client_context_get_catalog)(duckdb_client_context context, const char *catalog_name);
-	const char *(*duckdb_catalog_get_type)(duckdb_catalog catalog);
+	const char *(*duckdb_catalog_get_type_name)(duckdb_catalog catalog);
 	duckdb_catalog_entry (*duckdb_catalog_get_entry)(duckdb_catalog catalog, duckdb_client_context context,
 	                                                 duckdb_catalog_entry_type entry_type, const char *schema_name,
 	                                                 const char *entry_name);
@@ -1189,7 +1189,7 @@ typedef struct {
 
 // Version unstable_new_catalog_interface
 #define duckdb_client_context_get_catalog duckdb_ext_api.duckdb_client_context_get_catalog
-#define duckdb_catalog_get_type           duckdb_ext_api.duckdb_catalog_get_type
+#define duckdb_catalog_get_type_name      duckdb_ext_api.duckdb_catalog_get_type_name
 #define duckdb_catalog_get_entry          duckdb_ext_api.duckdb_catalog_get_entry
 #define duckdb_destroy_catalog            duckdb_ext_api.duckdb_destroy_catalog
 #define duckdb_catalog_entry_get_type     duckdb_ext_api.duckdb_catalog_entry_get_type

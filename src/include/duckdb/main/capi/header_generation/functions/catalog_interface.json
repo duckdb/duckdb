@@ -1,7 +1,7 @@
 {
   "group": "catalog_interface",
   "deprecated": false,
-  "description": "Functions to interact with database catalogs and catalog entries.",
+  "description": "Functions to interact with database catalogs and catalog entries.\n//You will most likely not need this API for typical usage of DuckDB as SQL is the preferred way to interact with the database, but this interface can be useful for advanced extensions that need to inspect the state of the catalog from inside a running query.",
   "entries": [
     {
       "name": "duckdb_client_context_get_catalog",
@@ -17,7 +17,7 @@
         }
       ],
       "comment": {
-        "description": "Retrieve a database catalog instance by name\n\n",
+        "description": "Retrieve a database catalog instance by name.\n\n",
         "param_comments": {
           "context": "The client context.",
           "catalog_name": "The name of the catalog."
@@ -26,7 +26,7 @@
       }
     },
     {
-      "name": "duckdb_catalog_get_type",
+      "name": "duckdb_catalog_get_type_name",
       "return_type": "const char*",
       "params": [
         {
@@ -35,7 +35,7 @@
         }
       ],
       "comment": {
-        "description": "Retrieve the \"type name\" of the given catalog. \nE.g. for a DuckDB database, this returns 'duckdb'.\nThe returned string is owned by the catalog and remains valid until the catalog is destroyed.\n\n",
+        "description": "Retrieve the \"type name\" of the given catalog.\nE.g. for a DuckDB database, this returns 'duckdb'.\nThe returned string is owned by the catalog and remains valid until the catalog is destroyed.\n\n",
         "param_comments": {
           "catalog": "The catalog."
         },
