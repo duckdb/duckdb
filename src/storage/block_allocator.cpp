@@ -292,7 +292,7 @@ data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
 }
 
 data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
-	if (!IsActive() || IsEnabled() || size != block_size) {
+	if (!IsActive() || !IsEnabled() || size != block_size) {
 		return allocator.AllocateData(size);
 	}
 	return GetBlockAllocatorThreadLocalState(*this).Allocate();
