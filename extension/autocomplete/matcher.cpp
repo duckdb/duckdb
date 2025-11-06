@@ -1141,6 +1141,22 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				list_matcher.matchers.push_back(replaced_matcher);
 				break;
 			}
+			case '+': {
+				// Similar to '*' except it's not optional and just repeat (match at least once)
+				auto &last_matcher = list.GetLastRootMatcher().matcher;
+				if (last_matcher.Type() != MatcherType::LIST) {
+					throw InternalException("Repeat expected a list matcher");
+				}
+				auto &list_matcher = last_matcher.Cast<ListMatcher>();
+				if (list_matcher.matchers.empty()) {
+					throw InternalException("Repeat rule found as first token");
+				}
+				auto &final_matcher = list_matcher.matchers.back();
+				final_matcher = Repeat(final_matcher.get());
+				list_matcher.matchers.pop_back();
+				list_matcher.matchers.push_back(final_matcher);
+				break;
+			}
 			case '/': {
 				// OR operator - this signifies a choice between the last rule and the next rule
 				auto &last_root_matcher = list.GetLastRootMatcher().matcher;
