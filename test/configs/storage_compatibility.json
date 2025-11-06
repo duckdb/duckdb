@@ -56,7 +56,13 @@
         "test/geoparquet/roundtrip.test",
         "test/geoparquet/unsupported.test",
         "test/geoparquet/versions.text",
-        "test/sql/types/variant/variant_distinct.test"
+        "test/sql/types/variant/variant_distinct.test",
+        "test/sql/function/variant/variant_typeof.test",
+        "test/sql/storage/types/variant/big_table.test",
+        "test/sql/storage/types/variant/test_all_types_single_table.test",
+        "test/sql/storage/types/variant/test_all_types_variant.test",
+        "test/sql/storage/types/variant/test_all_types.test",
+        "test/sql/types/variant/tpch_test.test"
       ]
     }
   ]
