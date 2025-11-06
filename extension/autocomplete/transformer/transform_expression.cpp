@@ -586,7 +586,9 @@ PEGTransformerFactory::TransformMultiplicativeExpression(PEGTransformer &transfo
 		factor_children.push_back(std::move(expr));
 		factor_children.push_back(
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
-		expr = make_uniq<FunctionExpression>(factor, std::move(factor_children));
+		auto func_expr = make_uniq<FunctionExpression>(std::move(factor), std::move(factor_children));
+		func_expr->is_operator = true;
+		expr = std::move(func_expr);
 	}
 	return expr;
 }
