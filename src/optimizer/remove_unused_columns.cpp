@@ -25,12 +25,14 @@ namespace duckdb {
 
 void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
-	if (colrefs != column_references.end()) {
-		for (auto &colref_p : colrefs->second.bindings) {
-			auto &colref = colref_p.get();
-			D_ASSERT(colref.binding == current_binding);
-			colref.binding = new_binding;
-		}
+	if (colrefs == column_references.end()) {
+		return;
+	}
+
+	for (auto &colref_p : colrefs->second.bindings) {
+		auto &colref = colref_p.get();
+		D_ASSERT(colref.binding == current_binding);
+		colref.binding = new_binding;
 	}
 }
 
@@ -287,6 +289,16 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 }
 
+static idx_t GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t filter_idx) {
+	auto it = std::find_if(column_ids.begin(), column_ids.end(), [&filter_idx](const ColumnIndex &column_index) {
+		return column_index.GetPrimaryIndex() == filter_idx;
+	});
+	if (it == column_ids.end()) {
+		throw InternalException("Could not find column index for table filter");
+	}
+	return static_cast<idx_t>(std::distance(column_ids.begin(), it));
+}
+
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	if (everything_referenced) {
 		return;
@@ -295,11 +307,11 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		return;
 	}
 
-	auto final_column_ids = get.GetColumnIds();
+	auto old_column_ids = get.GetColumnIds();
 
 	// Create "selection vector" of all column ids
 	vector<idx_t> proj_sel;
-	for (idx_t col_idx = 0; col_idx < final_column_ids.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < old_column_ids.size(); col_idx++) {
 		proj_sel.push_back(col_idx);
 	}
 	// Create a copy that we can use to match ids later
@@ -307,24 +319,15 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	// Clear unused ids, exclude filter columns that are projected out immediately
 	ClearUnusedExpressions(proj_sel, get.table_index, false);
 
+	//! NOTE: This vector is required to keep the referenced Expressions alive
 	vector<unique_ptr<Expression>> filter_expressions;
 	// for every table filter, push a column binding into the column references map to prevent the column from
 	// being projected out
 	for (auto &filter : get.table_filters.filters) {
-		optional_idx index;
-		for (idx_t i = 0; i < final_column_ids.size(); i++) {
-			if (final_column_ids[i].GetPrimaryIndex() == filter.first) {
-				index = i;
-				break;
-			}
-		}
-		if (!index.IsValid()) {
-			throw InternalException("Could not find column index for table filter");
-		}
-
+		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter.first);
 		auto column_type = get.GetColumnType(ColumnIndex(filter.first));
 
-		ColumnBinding filter_binding(get.table_index, index.GetIndex());
+		ColumnBinding filter_binding(get.table_index, index);
 		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 		auto filter_expr = filter.second->ToExpression(*column_ref);
 		if (filter_expr->IsScalar()) {
@@ -338,23 +341,23 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	ClearUnusedExpressions(col_sel, get.table_index);
 
 	// Now set the column ids in the LogicalGet using the "selection vector"
-	vector<ColumnIndex> column_ids;
-	column_ids.reserve(col_sel.size());
+	vector<ColumnIndex> new_column_ids;
+	new_column_ids.reserve(col_sel.size());
 	for (auto col_sel_idx : col_sel) {
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
-		ColumnIndex new_index(final_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
-		column_ids.emplace_back(new_index);
+		ColumnIndex new_index(old_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
+		new_column_ids.emplace_back(new_index);
 	}
-	if (column_ids.empty()) {
+	if (new_column_ids.empty()) {
 		// this generally means we are only interested in whether or not anything exists in the table (e.g.
 		// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 		// need to read any of the columns
-		column_ids.emplace_back(get.GetAnyColumn());
+		new_column_ids.emplace_back(get.GetAnyColumn());
 	}
-	get.SetColumnIds(std::move(column_ids));
+	get.SetColumnIds(std::move(new_column_ids));
 
 	if (!get.function.filter_prune) {
 		return;
