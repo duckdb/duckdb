@@ -358,7 +358,7 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(ClientContext &context, Sc
 	child_list_t<LogicalType> struct_children;
 	regexp_util::ParseGroupNameList(context, bound_function.name, *arguments[2], constant_string, options, true,
 	                                group_names, struct_children);
-	bound_function.return_type = LogicalType::LIST(LogicalType::STRUCT(struct_children));
+	bound_function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
 	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(constant_string), constant_pattern,
 	                                                 std::move(group_names));
 }

@@ -24,7 +24,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
-	bound_function.return_type = arguments[0]->return_type;
+	bound_function.SetReturnType(arguments[0]->return_type);
 	auto has_index = bound_lambda_expr.parameter_count == 2;
 	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }
@@ -38,7 +38,7 @@ ScalarFunction ListFilterFun::GetFunction() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
 	                   LambdaFunctions::ListFilterFunction, ListFilterBind, nullptr, nullptr);
 
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
 	fun.bind_lambda = ListFilterBindLambda;

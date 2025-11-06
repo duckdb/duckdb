@@ -125,7 +125,7 @@ public:
 	                        aggregate_destructor_t destructor = nullptr) {
 		AggregateFunction aggr_function(name, arguments, return_type, state_size, initialize, update, combine, finalize,
 		                                simple_update, bind, destructor);
-		aggr_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+		aggr_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 		return aggr_function;
 	}
 
