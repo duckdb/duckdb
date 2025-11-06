@@ -16,6 +16,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 #include <cstring>
 
@@ -412,6 +413,17 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
                                      idx_t &approved_tuple_count) {
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER: {
+		return scan_count;
+	}
+	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
+		auto &sel_opt_filter = filter.Cast<SelectivityOptionalFilter>();
+		if (sel_opt_filter.IsActive()) {
+			auto &child_filter = *sel_opt_filter.child_filter;
+			idx_t approved_before = approved_tuple_count;
+			FilterSelection(sel, vector, vdata, child_filter, filter_state, scan_count, approved_tuple_count);
+			sel_opt_filter.UpdateStats(approved_tuple_count, approved_before);
+			return approved_tuple_count;
+		}
 		return scan_count;
 	}
 	case TableFilterType::CONJUNCTION_OR: {

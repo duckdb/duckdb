@@ -34,7 +34,9 @@ enum class TableFilterType : uint8_t {
 	IN_FILTER = 7,           // col IN (C1, C2, C3, ...)
 	DYNAMIC_FILTER = 8,      // dynamic filters can be updated at run-time
 	EXPRESSION_FILTER = 9,   // an arbitrary expression
-	BLOOM_FILTER = 10        // a probabilistic filter that can test whether a value is in a set of other value
+	BLOOM_FILTER = 10,       // a probabilistic filter that can test whether a value is in a set of other value
+	SELECTIVITY_OPTIONAL_FILTER =
+	    11 // the same as optional filter, but will be used for filtering rows if very filtering
 };
 
 //! TableFilter represents a filter pushed down into the table scan.

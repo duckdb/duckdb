@@ -10,11 +10,6 @@ static constexpr idx_t LOG_SECTOR_SIZE = 6;             // a sector is 64 bits, 
 static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positions
 static constexpr idx_t N_BITS = 4;                      // the number of bits to set per hash
 
-// number of vectors to check before deciding on selectivity
-static constexpr idx_t SELECTIVITY_N_VECTORS_TO_CHECK = 20;
-// if the selectivity is higher than this, we disable the BF
-static constexpr double SELECTIVITY_THRESHOLD = 0.25;
-
 void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
@@ -28,7 +23,7 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	bf = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 	std::fill_n(bf, num_sectors, 0);
 
-	status.store(BloomFilterStatus::ACTIVE);
+	initialized = true;
 }
 
 inline uint64_t GetMask(const hash_t hash) {
@@ -56,7 +51,6 @@ void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
 idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, const idx_t count) const {
 	D_ASSERT(hashes_v.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(hashes_v.GetType() == LogicalType::HASH);
-	D_ASSERT(this->status.load() == BloomFilterStatus::ACTIVE);
 
 	const auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
 	idx_t found_count = 0;
@@ -68,6 +62,7 @@ idx_t BloomFilter::LookupHashes(const Vector &hashes_v, SelectionVector &result_
 }
 
 inline void BloomFilter::InsertOne(const hash_t hash) const {
+	D_ASSERT(initialized);
 	const uint64_t bf_offset = hash & bitmask;
 	const uint64_t mask = GetMask(hash);
 	std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&bf[bf_offset]);
@@ -76,6 +71,7 @@ inline void BloomFilter::InsertOne(const hash_t hash) const {
 }
 
 inline bool BloomFilter::LookupOne(const uint64_t hash) const {
+	D_ASSERT(initialized);
 	const uint64_t bf_offset = hash & bitmask;
 	const uint64_t mask = GetMask(hash);
 
@@ -83,8 +79,8 @@ inline bool BloomFilter::LookupOne(const uint64_t hash) const {
 }
 
 string BFTableFilter::ToString(const string &column_name) const {
-	const auto active_string = EnumUtil::ToString(filter.GetStatus().load());
-	return column_name + " IN BF(" + key_column_name + ") [" + active_string + "]";
+
+	return column_name + " IN BF(" + key_column_name + ")";
 }
 
 void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, const idx_t approved_count,
@@ -99,9 +95,6 @@ void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, con
 
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
                             BFTableFilterState &state) const {
-	if (!this->filter.IsActive()) {
-		return approved_tuple_count;
-	}
 
 	if (state.current_capacity < approved_tuple_count) {
 		state.hashes_v.Initialize(false, approved_tuple_count);
@@ -119,17 +112,6 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 	} else {
 		state.hashes_v.Flatten(approved_tuple_count);
 		found_count = this->filter.LookupHashes(state.hashes_v, state.bf_sel, approved_tuple_count);
-	}
-
-	// add the runtime statistics to stop using the bf if not selective
-	auto &stats = this->filter.GetSelectivityStats();
-	if (stats.vectors_processed.load() < SELECTIVITY_N_VECTORS_TO_CHECK) {
-		stats.Update(found_count, approved_tuple_count);
-		if (stats.vectors_processed.load() >= SELECTIVITY_N_VECTORS_TO_CHECK) {
-			if (stats.GetSelectivity() >= SELECTIVITY_THRESHOLD) {
-				this->filter.Pause();
-			}
-		}
 	}
 
 	// all the elements have been found, we don't need to translate anything
@@ -157,10 +139,7 @@ bool BFTableFilter::FilterValue(const Value &value) const {
 }
 
 FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (this->filter.IsActive()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 bool BFTableFilter::Equals(const TableFilter &other) const {

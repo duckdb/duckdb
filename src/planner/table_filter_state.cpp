@@ -2,9 +2,11 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
+class SelectivityOptionalFilter;
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) : executor(context) {
 	executor.AddExpression(expression);
@@ -12,6 +14,11 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
 	switch (filter.filter_type) {
+	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
+		auto &sel_opt_filter = filter.Cast<SelectivityOptionalFilter>();
+		auto &child_filter = sel_opt_filter.child_filter;
+		return Initialize(context, *child_filter);
+	}
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bf = filter.Cast<BFTableFilter>();
 		return make_uniq<BFTableFilterState>(bf.GetKeyType());

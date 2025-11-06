@@ -88,8 +88,6 @@ enum class BlockIteratorStateType : int8_t;
 
 enum class BlockState : uint8_t;
 
-enum class BloomFilterStatus : uint8_t;
-
 enum class CAPIResultSetType : uint8_t;
 
 enum class CSVState : uint8_t;
@@ -348,6 +346,8 @@ enum class SecretPersistType : uint8_t;
 
 enum class SecretSerializationType : uint8_t;
 
+enum class SelectivityOptionalFilterStatus : uint8_t;
+
 enum class SequenceInfo : uint8_t;
 
 enum class SetOperationType : uint8_t;
@@ -538,9 +538,6 @@ const char* EnumUtil::ToChars<BlockIteratorStateType>(BlockIteratorStateType val
 
 template<>
 const char* EnumUtil::ToChars<BlockState>(BlockState value);
-
-template<>
-const char* EnumUtil::ToChars<BloomFilterStatus>(BloomFilterStatus value);
 
 template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
@@ -930,6 +927,9 @@ template<>
 const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
 
 template<>
+const char* EnumUtil::ToChars<SelectivityOptionalFilterStatus>(SelectivityOptionalFilterStatus value);
+
+template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
 
 template<>
@@ -1172,9 +1172,6 @@ BlockIteratorStateType EnumUtil::FromString<BlockIteratorStateType>(const char *
 
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value);
-
-template<>
-BloomFilterStatus EnumUtil::FromString<BloomFilterStatus>(const char *value);
 
 template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
@@ -1562,6 +1559,9 @@ SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
 
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
+
+template<>
+SelectivityOptionalFilterStatus EnumUtil::FromString<SelectivityOptionalFilterStatus>(const char *value);
 
 template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);

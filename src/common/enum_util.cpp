@@ -160,7 +160,7 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
-#include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
@@ -726,25 +726,6 @@ const char* EnumUtil::ToChars<BlockState>(BlockState value) {
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value) {
 	return static_cast<BlockState>(StringUtil::StringToEnum(GetBlockStateValues(), 2, "BlockState", value));
-}
-
-const StringUtil::EnumStringLiteral *GetBloomFilterStatusValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(BloomFilterStatus::UNINITALIZED), "UNINITALIZED" },
-		{ static_cast<uint32_t>(BloomFilterStatus::ACTIVE), "ACTIVE" },
-		{ static_cast<uint32_t>(BloomFilterStatus::PAUSED), "PAUSED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<BloomFilterStatus>(BloomFilterStatus value) {
-	return StringUtil::EnumToString(GetBloomFilterStatusValues(), 3, "BloomFilterStatus", static_cast<uint32_t>(value));
-}
-
-template<>
-BloomFilterStatus EnumUtil::FromString<BloomFilterStatus>(const char *value) {
-	return static_cast<BloomFilterStatus>(StringUtil::StringToEnum(GetBloomFilterStatusValues(), 3, "BloomFilterStatus", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCAPIResultSetTypeValues() {
@@ -3897,6 +3878,25 @@ SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char
 	return static_cast<SecretSerializationType>(StringUtil::StringToEnum(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetSelectivityOptionalFilterStatusValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SelectivityOptionalFilterStatus::ACTIVE), "ACTIVE" },
+		{ static_cast<uint32_t>(SelectivityOptionalFilterStatus::PAUSED_DUE_TO_ZONE_MAP_STATS), "PAUSED_DUE_TO_ZONE_MAP_STATS" },
+		{ static_cast<uint32_t>(SelectivityOptionalFilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY), "PAUSED_DUE_TO_HIGH_SELECTIVITY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SelectivityOptionalFilterStatus>(SelectivityOptionalFilterStatus value) {
+	return StringUtil::EnumToString(GetSelectivityOptionalFilterStatusValues(), 3, "SelectivityOptionalFilterStatus", static_cast<uint32_t>(value));
+}
+
+template<>
+SelectivityOptionalFilterStatus EnumUtil::FromString<SelectivityOptionalFilterStatus>(const char *value) {
+	return static_cast<SelectivityOptionalFilterStatus>(StringUtil::StringToEnum(GetSelectivityOptionalFilterStatusValues(), 3, "SelectivityOptionalFilterStatus", value));
+}
+
 const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SequenceInfo::SEQ_START), "SEQ_START" },
@@ -4436,19 +4436,20 @@ const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 		{ static_cast<uint32_t>(TableFilterType::IN_FILTER), "IN_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::DYNAMIC_FILTER), "DYNAMIC_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::BLOOM_FILTER), "BLOOM_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::BLOOM_FILTER), "BLOOM_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::SELECTIVITY_OPTIONAL_FILTER), "SELECTIVITY_OPTIONAL_FILTER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
-	return StringUtil::EnumToString(GetTableFilterTypeValues(), 11, "TableFilterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableFilterTypeValues(), 12, "TableFilterType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
-	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 11, "TableFilterType", value));
+	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 12, "TableFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {

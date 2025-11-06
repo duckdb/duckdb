@@ -20,6 +20,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
@@ -786,7 +787,9 @@ void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &inf
 	const auto key_type = ht.conditions[0].left->return_type;
 	auto bf_filter = make_uniq<BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
 	ht.SetBuildBloomFilter(true);
-	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bf_filter));
+
+	auto opt_bf_filter = make_uniq<SelectivityOptionalFilter>(std::move(bf_filter), 0.25, 20);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_bf_filter));
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalState &gstate) const {
@@ -850,8 +853,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					if (use_bloom_filter) {
-						auto optional_greater_equals = make_uniq<OptionalFilter>(std::move(greater_equals));
+					if (true) {
+						auto optional_greater_equals =
+						    make_uniq<SelectivityOptionalFilter>(std::move(greater_equals), 0.5, 20);
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
 					} else {
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
@@ -867,8 +871,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-					if (use_bloom_filter) {
-						auto optional_less_equals = make_uniq<OptionalFilter>(std::move(less_equals));
+					if (true) {
+						auto optional_less_equals =
+						    make_uniq<SelectivityOptionalFilter>(std::move(less_equals), 0.5, 20);
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
 					} else {
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));

@@ -17,74 +17,32 @@
 
 namespace duckdb {
 
-enum class BloomFilterStatus : uint8_t {
-	UNINITALIZED, // not initialized and cannot be populated or probed
-	ACTIVE,       // ready and in use
-	PAUSED        // ready to use but not in use currently, e.g., not selective enough
-};
-
 class BloomFilter {
 
 public:
-	struct SelectivityStats {
-		atomic<idx_t> tuples_accepted;
-		atomic<idx_t> tuples_processed;
-		atomic<idx_t> vectors_processed;
-
-		SelectivityStats() : tuples_accepted(0), tuples_processed(0), vectors_processed(0) {
-		}
-
-		void Update(const idx_t accepted, const idx_t processed) {
-			tuples_accepted += accepted;
-			tuples_processed += processed;
-			vectors_processed += 1;
-		}
-
-		double GetSelectivity() const {
-			const idx_t processed = tuples_processed.load();
-			if (processed == 0) {
-				return 1.0;
-			}
-			return static_cast<double>(tuples_accepted.load()) / static_cast<double>(processed);
-		}
-	};
-
 	BloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t number_of_rows);
 
 	void InsertHashes(const Vector &hashes_v, idx_t count) const;
-
 	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
 
-	SelectivityStats &GetSelectivityStats() {
-		return selectivity_data;
-	}
-
-	atomic<BloomFilterStatus> &GetStatus() {
-		return status;
-	}
-
-	void Pause() {
-		status.store(BloomFilterStatus::PAUSED);
-	}
-
-	bool IsActive() const {
-		return status.load() == BloomFilterStatus::ACTIVE;
-	}
 	void InsertOne(hash_t hash) const;
 	bool LookupOne(hash_t hash) const;
 
+	bool IsInitialized() const {
+		return initialized;
+	}
+
 private:
-	SelectivityStats selectivity_data;
-	atomic<BloomFilterStatus> status {BloomFilterStatus::UNINITALIZED};
 	idx_t num_sectors;
 	uint64_t bitmask; // num_sectors - 1 -> used to get the sector offset
 
+	bool initialized = false;
 	AllocatedData buf_;
 	uint64_t *bf;
 };
 
-class BFTableFilter : public TableFilter {
+class BFTableFilter final : public TableFilter {
 
 private:
 	BloomFilter &filter;
