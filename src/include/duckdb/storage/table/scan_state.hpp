@@ -204,14 +204,6 @@ private:
 	idx_t offset;
 	bool initialized;
 	vector<optional_ptr<RowGroup>> ordered_row_groups;
-
-private:
-	void SetRowGroupVectorWithLimit(
-	    const multimap<Value, pair<unique_ptr<BaseStatistics>, reference<RowGroup>>> &row_group_map);
-	bool AddRowGroupWithLimit(const Value &order_by_value, BaseStatistics &row_group_stats,
-	                          reference<RowGroup> current_row_group, const Value &previous_order_by,
-	                          reference<BaseStatistics> &last_row_group_stats, idx_t &qualifying_tuples,
-	                          idx_t &seen_tuples, OrderByStatistics stat_type);
 };
 
 class CollectionScanState {

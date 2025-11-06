@@ -12,6 +12,11 @@ namespace duckdb {
 
 namespace {
 
+struct RowGroupMapEntry {
+	reference<RowGroup> row_group;
+	unique_ptr<BaseStatistics> stats;
+};
+
 bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics order) {
 	return (order == OrderByStatistics::MAX && v1 < v2) || (order == OrderByStatistics::MIN && v1 > v2);
 }
@@ -26,13 +31,13 @@ void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_gr
 	idx_t qualify_later = 0;
 
 	auto last_unresolved_row_group = it;
-	idx_t last_unresolved_row_group_sum = last_unresolved_row_group->second.second.get().count;
+	idx_t last_unresolved_row_group_sum = last_unresolved_row_group->second.row_group.get().count;
 	auto last_unresolved_boundary =
-	    RowGroupReorderer::RetrieveStat(*last_unresolved_row_group->second.first, opposite_stat_type, column_type);
+	    RowGroupReorderer::RetrieveStat(*last_unresolved_row_group->second.stats, opposite_stat_type, column_type);
 
 	for (; it != end; ++it) {
 		auto &current_key = it->first;
-		auto &row_group = it->second.second;
+		auto &row_group = it->second.row_group;
 
 		while (last_unresolved_row_group != it) {
 			if (!CompareValues(current_key, last_unresolved_boundary, stat_type)) {
@@ -51,8 +56,8 @@ void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_gr
 			// Row groups do not overlap: we can guarantee that the tuples qualify
 			qualifying_tuples = last_unresolved_row_group_sum;
 			++last_unresolved_row_group;
-			last_unresolved_row_group_sum += last_unresolved_row_group->second.second.get().count;
-			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(*last_unresolved_row_group->second.first,
+			last_unresolved_row_group_sum += last_unresolved_row_group->second.row_group.get().count;
+			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(*last_unresolved_row_group->second.stats,
 			                                                           opposite_stat_type, column_type);
 		}
 		if (qualifying_tuples >= row_limit) {
@@ -188,8 +193,9 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 	return Value();
 }
 
-void RowGroupReorderer::SetRowGroupVectorWithLimit(
-    const multimap<Value, pair<unique_ptr<BaseStatistics>, reference<RowGroup>>> &row_group_map) {
+void SetRowGroupVectorWithLimit(const multimap<Value, RowGroupMapEntry> &row_group_map, const optional_idx row_limit,
+                                const RowGroupOrderType order_type, const OrderByColumnType column_type,
+                                vector<optional_ptr<RowGroup>> &ordered_row_groups) {
 	D_ASSERT(row_limit.IsValid());
 
 	const auto stat_type = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
@@ -207,32 +213,6 @@ void RowGroupReorderer::SetRowGroupVectorWithLimit(
 	}
 }
 
-bool RowGroupReorderer::AddRowGroupWithLimit(const Value &order_by_value, BaseStatistics &row_group_stats,
-                                             reference<RowGroup> current_row_group, const Value &previous_order_by,
-                                             reference<BaseStatistics> &last_row_group_stats, idx_t &qualifying_tuples,
-                                             idx_t &seen_tuples, OrderByStatistics stat_type) {
-	auto new_row_group_boundary = RetrieveStat(row_group_stats, stat_type, column_type);
-	if ((stat_type == OrderByStatistics::MAX && new_row_group_boundary < order_by_value) ||
-	    (stat_type == OrderByStatistics::MIN && new_row_group_boundary > order_by_value)) {
-		// Row groups do not overlap: we can guarantee that the tuples up until now qualify
-		last_row_group_stats = row_group_stats;
-		qualifying_tuples = seen_tuples;
-	} else {
-		if (!previous_order_by.IsNull() && order_by_value != previous_order_by) {
-			// Only if the opposite boundaries are inequal, we can guarantee to have >= 1 distinct qualifying rows.
-			// We need distinctness as there may be secondary orders that qualify rows in later row groups.
-			qualifying_tuples++;
-		}
-	}
-	if (qualifying_tuples >= row_limit.GetIndex()) {
-		return true;
-	}
-
-	seen_tuples += current_row_group.get().count;
-	ordered_row_groups.emplace_back(current_row_group);
-	return false;
-}
-
 optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
 	if (initialized) {
 		return ordered_row_groups.empty() ? nullptr : ordered_row_groups[0];
@@ -240,12 +220,12 @@ optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &ro
 
 	initialized = true;
 
-	multimap<Value, pair<unique_ptr<BaseStatistics>, reference<RowGroup>>> row_group_map;
+	multimap<Value, RowGroupMapEntry> row_group_map;
 	for (auto &row_group : row_groups.Segments()) {
 		auto stats = row_group.GetStatistics(column_idx);
 		Value comparison_value = RetrieveStat(*stats, order_by, column_type);
-		row_group_map.emplace(std::piecewise_construct, std::forward_as_tuple(comparison_value),
-		                      std::forward_as_tuple(std::move(stats), row_group));
+		auto entry = RowGroupMapEntry {row_group, std::move(stats)};
+		row_group_map.emplace(comparison_value, std::move(entry));
 	}
 
 	if (row_group_map.empty()) {
@@ -253,16 +233,16 @@ optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &ro
 	}
 
 	if (row_limit.IsValid()) {
-		SetRowGroupVectorWithLimit(row_group_map);
+		SetRowGroupVectorWithLimit(row_group_map, row_limit, order_type, column_type, ordered_row_groups);
 	} else {
 		ordered_row_groups.reserve(row_group_map.size());
 		if (order_type == RowGroupOrderType::ASC) {
 			for (auto &row_group : row_group_map) {
-				ordered_row_groups.emplace_back(row_group.second.second);
+				ordered_row_groups.emplace_back(row_group.second.row_group);
 			}
 		} else {
 			for (auto it = row_group_map.rbegin(); it != row_group_map.rend(); ++it) {
-				ordered_row_groups.emplace_back(it->second.second);
+				ordered_row_groups.emplace_back(it->second.row_group);
 			}
 		}
 	}
