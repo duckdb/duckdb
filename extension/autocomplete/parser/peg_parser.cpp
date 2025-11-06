@@ -116,7 +116,8 @@ void PEGParser::ParseRules(const char *grammar) {
 				rule.tokens.push_back(token);
 				c++;
 				if (grammar[c] == 'i') {
-					throw InternalException("Failed to parse grammar - unexpected \"i\" found in grammar near rule %s", rule_name.GetString());
+					throw InternalException("Failed to parse grammar - unexpected \"i\" found in grammar near rule %s",
+					                        rule_name.GetString());
 				}
 			} else if (StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
 				// alphanumeric character - this is a rule reference

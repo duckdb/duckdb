@@ -45,7 +45,7 @@ unique_ptr<MacroFunction> PEGTransformerFactory::TransformMacroDefinition(PEGTra
 				Value default_value;
 				if (!ConstructConstantFromExpression(*parameter.expression, default_value)) {
 					throw ParserException("Invalid default value for parameter '%s': %s", parameter.name,
-										  parameter.expression->ToString());
+					                      parameter.expression->ToString());
 				}
 				auto default_expr = make_uniq<ConstantExpression>(std::move(default_value));
 				default_expr->SetAlias(parameter.name);
@@ -80,8 +80,8 @@ PEGTransformerFactory::TransformScalarMacroDefinition(PEGTransformer &transforme
 	return result;
 }
 
-vector<MacroParameter>
-PEGTransformerFactory::TransformMacroParameters(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<MacroParameter> PEGTransformerFactory::TransformMacroParameters(PEGTransformer &transformer,
+                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto parameter_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
 	vector<MacroParameter> parameters;
@@ -92,7 +92,7 @@ PEGTransformerFactory::TransformMacroParameters(PEGTransformer &transformer, opt
 }
 
 MacroParameter PEGTransformerFactory::TransformMacroParameter(PEGTransformer &transformer,
-                                                                            optional_ptr<ParseResult> parse_result) {
+                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	MacroParameter result;
@@ -107,7 +107,7 @@ MacroParameter PEGTransformerFactory::TransformMacroParameter(PEGTransformer &tr
 }
 
 MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &transformer,
-                                                                             optional_ptr<ParseResult> parse_result) {
+                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto parameter = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	MacroParameter result;

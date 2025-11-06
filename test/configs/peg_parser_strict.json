@@ -55,7 +55,10 @@
         "test/sql/function/list/lambdas/incorrect.test",
         "test/sql/function/list/lambdas/lambdas_and_macros.test",
         "test/sql/function/list/lambdas/expression_iterator_cases.test",
-        "test/sql/export/export_macros.test"
+        "test/sql/export/export_macros.test",
+        "test/sql/catalog/function/test_recursive_macro.test",
+        "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
+        "test/sql/catalog/function/test_macro_default_arg_with_dependencies.test"
       ]
     },
     {

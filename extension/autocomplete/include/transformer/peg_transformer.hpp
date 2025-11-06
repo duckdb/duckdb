@@ -381,11 +381,9 @@ private:
 	static unique_ptr<MacroFunction> TransformScalarMacroDefinition(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static vector<MacroParameter> TransformMacroParameters(PEGTransformer &transformer,
-	                                                                     optional_ptr<ParseResult> parse_result);
-	static MacroParameter TransformMacroParameter(PEGTransformer &transformer,
-	                                                            optional_ptr<ParseResult> parse_result);
-	static MacroParameter TransformSimpleParameter(PEGTransformer &transformer,
-	                                                             optional_ptr<ParseResult> parse_result);
+	                                                       optional_ptr<ParseResult> parse_result);
+	static MacroParameter TransformMacroParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static MacroParameter TransformSimpleParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_schema.gram
 	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer,
@@ -460,14 +458,17 @@ private:
 
 	// create_type.gram
 	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer,
-																		 optional_ptr<ParseResult> parse_result);
-	static unique_ptr<CreateTypeInfo> TransformCreateType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<SelectStatement> TransformEnumSelectType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static LogicalType TransformEnumStringLiteralList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	                                                           optional_ptr<ParseResult> parse_result);
+	static unique_ptr<CreateTypeInfo> TransformCreateType(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformEnumSelectType(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
+	static LogicalType TransformEnumStringLiteralList(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
 
 	// create_view.gram
 	static unique_ptr<CreateStatement> TransformCreateViewStmt(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result);
+	                                                           optional_ptr<ParseResult> parse_result);
 
 	// deallocate.gram
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
@@ -682,12 +683,14 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformPositionExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformCastExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCastExpression(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
 	static bool TransformCastOrTryCast(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformCaseExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformCaseElse(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCaseExpression(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCaseElse(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
 	static CaseCheck TransformCaseWhenThen(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,

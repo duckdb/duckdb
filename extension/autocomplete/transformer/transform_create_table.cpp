@@ -15,7 +15,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateStatement(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool replace = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto result = transformer.Transform<unique_ptr<CreateStatement>>(list_pr.Child<ListParseResult>(3));
-	auto& conflict_policy = result->info->on_conflict;
+	auto &conflict_policy = result->info->on_conflict;
 	if (replace) {
 		if (conflict_policy == OnCreateConflict::IGNORE_ON_CONFLICT) {
 			throw ParserException("Cannot specify both OR REPLACE and IF NOT EXISTS within single create statement");
@@ -320,7 +320,8 @@ vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &tran
 	return result;
 }
 
-string PEGTransformerFactory::TransformTypeFuncName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformTypeFuncName(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	if (choice_pr->type == ParseResultType::IDENTIFIER) {
