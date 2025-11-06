@@ -743,7 +743,7 @@ private:
 	// select.gram
 	static unique_ptr<ParsedExpression> TransformFunctionArgument(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformNamedParameter(PEGTransformer &transformer,
+	static MacroParameter TransformNamedParameter(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformTableFunctionArguments(PEGTransformer &transformer,
 	                                                                            optional_ptr<ParseResult> parse_result);

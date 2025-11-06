@@ -95,15 +95,7 @@ MacroParameter PEGTransformerFactory::TransformMacroParameter(PEGTransformer &tr
                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
-	MacroParameter result;
-	if (choice_pr->name == "NamedParameter") {
-		result.expression = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
-		result.name = result.expression->alias;
-		result.type = LogicalType::UNKNOWN;
-	} else {
-		result = transformer.Transform<MacroParameter>(choice_pr);
-	}
-	return result;
+	return transformer.Transform<MacroParameter>(choice_pr);
 }
 
 MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &transformer,

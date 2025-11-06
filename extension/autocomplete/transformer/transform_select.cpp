@@ -13,15 +13,22 @@ namespace duckdb {
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->name == "NamedParameter") {
+		auto parameter = transformer.Transform<MacroParameter>(choice_pr);
+		return std::move(parameter.expression);
+	}
+	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer,
+MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
-	result->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
-	return result;
+	MacroParameter parameter;
+	parameter.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
+	parameter.name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	transformer.TransformOptional<LogicalType>(list_pr, 1, parameter.type);
+	return parameter;
 }
 
 vector<unique_ptr<ParsedExpression>>
