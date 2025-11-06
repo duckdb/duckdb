@@ -31,8 +31,6 @@
 %type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
 %type <range>	OptTempTableName
 %type <into>	into_clause
-%type <node>	using_key_el
-%type <list> 	using_key_list_opt_comma using_key_list
 
 %type <lockstrength>	for_locking_strength
 %type <node>	for_locking_item

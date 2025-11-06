@@ -80,7 +80,13 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// Bind user-defined aggregates
 	for (idx_t payload_idx = 0; payload_idx < statement.payload_aggregates.size(); payload_idx++) {
 		auto &expr = statement.payload_aggregates[payload_idx];
-		D_ASSERT(expr->type == ExpressionType::FUNCTION);
+
+		if(expr->type != ExpressionType::FUNCTION) {
+			throw BinderException(expr->GetQueryLocation(),
+			                      "'%s' can't be used in the USING KEY clause.\n"
+			                      "It has to be either a column name as a key or a direct call to an aggregate function.", expr->ToString());
+		}
+
 		auto &func_expr = expr->Cast<FunctionExpression>();
 
 		if (func_expr.filter) {
@@ -98,9 +104,18 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			                      "DISTINCT is not yet supported for aggregates in USING KEY");
 		}
 
-		// Look up the aggregate function in the catalog
-		auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-		    context, DEFAULT_SCHEMA, func_expr.function_name);
+		QueryErrorContext error_context(expr->GetQueryLocation());
+
+		EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.function_name, error_context);
+		auto entry = GetCatalogEntry(func_expr.catalog, DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+
+		if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+			throw BinderException(expr->GetQueryLocation(),
+			                      "'%s' can't be used in the USING KEY clause.\n"
+			                      "It has to be either a column name as a key or a direct call to an aggregate function.", expr->ToString());
+		}
+		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
+
 		vector<LogicalType> aggregation_input_types;
 		vector<unique_ptr<Expression>> bound_children;
 		// Bind the children of the aggregate function
@@ -125,7 +140,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			payload_aggregate_dest_map[payload_idx] = make_uniq<BoundColumnRefExpression>(
 			    result.types[aggregate_idx], ColumnBinding(setop_index, aggregate_idx));
 		} else {
-			if (bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+			if (bound_children.size() == 0 || bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 				// No alias and no way to infer target column through first argument
 				throw BinderException(expr->GetQueryLocation(),
 				                      "In USING KEY, an aggregate must either have a column reference or an alias.");
@@ -154,7 +169,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		if (key_references.find(aggregate_idx) != key_references.end()) {
 			throw BinderException(func_expr.GetQueryLocation(),
 			                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
-			                      " Try using an alias for the aggregation.",
+			                      "Try using an alias for the aggregation.",
 			                      result.names[aggregate_idx]);
 		}
 

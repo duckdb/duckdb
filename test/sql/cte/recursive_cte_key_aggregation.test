@@ -435,3 +435,73 @@ WITH RECURSIVE tbl(key, iter, k, v, v2) USING KEY (key, kurtosis(k) AS k, kurtos
 ) SELECT k, v, v2 FROM tbl;
 ----
 11.000000	-1.961428	-1.445120
+
+# Use of non-aggregate function in USING KEY
+statement error
+WITH RECURSIVE tbl (a,b) USING KEY (a, b+1) AS (
+	SELECT 1, 1
+   		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*can't be used in the USING KEY clause.*
+
+# Use of other subexpressions in USING KEY
+statement error
+WITH RECURSIVE tbl (a,b) USING KEY (a, avg(b) :: INT) AS (
+	SELECT 1, 1
+   		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*can't be used in the USING KEY clause.*
+
+# Use of window function in USING KEY not allowed
+statement error
+WITH RECURSIVE tbl (a,b) USING KEY (a, sum(b) OVER ()) AS (
+	SELECT 1, 1
+   		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*can't be used in the USING KEY clause.*
+
+# star expression
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a, avg(*)) AS (
+	SELECT 1, 1
+  		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*USING KEY, an aggregate must either have a column reference.*
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a, avg(*) AS b) AS (
+  	SELECT 1, 1
+  		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*No function matches the given name and argument types.*
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a, avg(* :: Int) AS b) AS (
+  	SELECT 1, 1
+  		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*STAR expression is not supported here.*
