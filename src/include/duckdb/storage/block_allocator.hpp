@@ -42,7 +42,7 @@ public:
 	//! Flush outstanding allocations
 	bool SupportsFlush() const;
 	void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const;
-	void FlushAll() const;
+	void FlushAll(optional_idx extra_memory = optional_idx()) const;
 
 private:
 	bool IsActive() const;
@@ -56,6 +56,9 @@ private:
 	data_ptr_t GetPointer(uint32_t block_id) const;
 
 	void VerifyBlockID(uint32_t block_id) const;
+
+	void FreeInternal(idx_t extra_memory) const;
+	void FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) const;
 
 private:
 	//! Identifier

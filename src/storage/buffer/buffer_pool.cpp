@@ -335,7 +335,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-			block_allocator.FlushAll();
+			block_allocator.FlushAll(extra_memory);
 		}
 		return {true, std::move(r)};
 	}
@@ -364,7 +364,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	if (!found) {
 		r.Resize(0);
 	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		block_allocator.FlushAll();
+		block_allocator.FlushAll(extra_memory);
 	}
 
 	return {found, std::move(r)};

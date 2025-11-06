@@ -61,6 +61,20 @@ static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 	}
 }
 
+static void OnDeallocation(const data_ptr_t pointer, const idx_t size) {
+	bool success;
+#if defined(_WIN32)
+	success = VirtualFree(pointer, size, MEM_DECOMMIT);
+#elif defined(__APPLE__)
+	success = madvise(pointer, size, MADV_FREE_REUSABLE) == 0;
+#else
+	success = madvise(pointer, size, MADV_DONTNEED) == 0;
+#endif
+	if (!success) {
+		throw InternalException("OnDeallocation failed");
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // BlockAllocatorThreadLocalState
 //===--------------------------------------------------------------------===//
@@ -110,6 +124,7 @@ public:
 		}
 
 		// Upon reaching the threshold, we return a local batch to global
+		std::sort(touched.begin(), touched.end());
 		block_allocator->touched->q.enqueue_bulk(touched.end() - BATCH_SIZE, BATCH_SIZE);
 		touched.resize(touched.size() - BATCH_SIZE);
 	}
@@ -156,6 +171,7 @@ private:
 		local.resize(BATCH_SIZE);
 		const auto size = global.q.try_dequeue_bulk(local.begin(), BATCH_SIZE);
 		local.resize(size);
+		std::sort(local.begin(), local.end());
 		return !local.empty();
 	}
 
@@ -318,10 +334,56 @@ void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t thresh
 	}
 }
 
-void BlockAllocator::FlushAll() const {
+void BlockAllocator::FlushAll(const optional_idx extra_memory) const {
+	if (extra_memory.IsValid()) {
+		FreeInternal(extra_memory.GetIndex());
+	}
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
 	}
+}
+
+void BlockAllocator::FreeInternal(const idx_t extra_memory) const {
+	auto count = DivBlockSize(extra_memory);
+	unsafe_vector<uint32_t> to_free_buffer;
+	to_free_buffer.resize(count);
+	count = touched->q.try_dequeue_bulk(to_free_buffer.begin(), count);
+	if (count == 0) {
+		return;
+	}
+	to_free_buffer.resize(count);
+
+	// Sort so we can coalesce madvise calls
+	std::sort(to_free_buffer.begin(), to_free_buffer.end());
+
+	// Coalesce and free
+	uint32_t block_id_start = to_free_buffer[0];
+	for (idx_t i = 1; i < to_free_buffer.size(); i++) {
+		const auto &previous_block_id = to_free_buffer[i - 1];
+		const auto &current_block_id = to_free_buffer[i];
+		if (previous_block_id == current_block_id - 1) {
+			continue; // Current is contiguous with previous block
+		}
+
+		// Previous block is the last contiguous block starting from block_id_start, free them in one go
+		FreeContiguousBlocks(block_id_start, previous_block_id);
+
+		// Continue coalescing from the current
+		block_id_start = current_block_id;
+	}
+
+	// Don't forget the last one
+	FreeContiguousBlocks(block_id_start, to_free_buffer.back());
+
+	// Make freed blocks available to allocate again
+	untouched->q.enqueue_bulk(to_free_buffer.begin(), to_free_buffer.size());
+}
+
+void BlockAllocator::FreeContiguousBlocks(const uint32_t block_id_start, const uint32_t block_id_end_including) const {
+	const auto pointer = GetPointer(block_id_start);
+	const auto num_blocks = block_id_end_including - block_id_start + 1;
+	const auto size = num_blocks * block_size;
+	OnDeallocation(pointer, size);
 }
 
 } // namespace duckdb
