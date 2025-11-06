@@ -140,4 +140,15 @@ def test_pager_multiple_queries(shell):
     result.check_stdout('2')
     result.check_stdout('3')
 
+def test_pager_small_data(shell):
+    """Test pager with a small data set"""
+    test = (
+        ShellTest(shell)
+            .statement(".pager 'unknown_cmd'")
+            .statement(".mode csv")
+            .statement('FROM range(10)')
+    )
+    result = test.run()
+    result.check_stdout('9')
+
 # fmt: on

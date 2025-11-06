@@ -116,6 +116,9 @@ unique_ptr<DataChunk> QueryResult::FetchRaw() {
 		stored_chunks.pop_back();
 		return result;
 	}
+	if (result_exhausted) {
+		return nullptr;
+	}
 	return FetchInternal();
 }
 
@@ -133,6 +136,7 @@ bool QueryResult::MoreRowsThan(idx_t row_count) {
 		auto chunk = FetchInternal();
 		if (!chunk) {
 			// exhausted result
+			result_exhausted = true;
 			break;
 		}
 		result_row_count += chunk->size();

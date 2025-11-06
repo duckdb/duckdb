@@ -208,6 +208,7 @@ public:
 
 protected:
 	vector<unique_ptr<DataChunk>> stored_chunks;
+	bool result_exhausted = false;
 
 protected:
 	DUCKDB_API string HeaderToString();
