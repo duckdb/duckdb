@@ -8,10 +8,6 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &input = args.data[0];
 	const idx_t count = args.size();
 
-	if (input.GetType().id() != LogicalTypeId::STRUCT) {
-		throw InvalidInputException("struct_keys() expects a STRUCT argument");
-	}
-
 	auto keys = StructVector::GetKeys(input);
 	const idx_t key_count = keys.size();
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
