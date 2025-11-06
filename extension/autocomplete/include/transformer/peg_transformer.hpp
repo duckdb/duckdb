@@ -148,6 +148,7 @@ public:
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
+	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
 
 	// Registration methods
 	void RegisterAlter();
@@ -681,6 +682,12 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformPositionExpression(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCastExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static bool TransformCastOrTryCast(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCaseExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformCaseElse(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static CaseCheck TransformCaseWhenThen(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,

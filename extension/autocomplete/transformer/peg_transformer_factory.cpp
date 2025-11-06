@@ -4,6 +4,8 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
 
@@ -382,6 +384,11 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformNullIfExpression);
 	REGISTER_TRANSFORM(TransformRowExpression);
 	REGISTER_TRANSFORM(TransformPositionExpression);
+	REGISTER_TRANSFORM(TransformCastExpression);
+	REGISTER_TRANSFORM(TransformCastOrTryCast);
+	REGISTER_TRANSFORM(TransformCaseExpression);
+	REGISTER_TRANSFORM(TransformCaseElse);
+	REGISTER_TRANSFORM(TransformCaseWhenThen);
 }
 
 void PEGTransformerFactory::RegisterImport() {
@@ -736,6 +743,92 @@ LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_
 		return LogicalType::DOUBLE;
 	default:
 		throw InternalException("Unsupported interval post-fix");
+	}
+}
+
+bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
+	// We have to construct it like this because we don't have the ClientContext for binding/executing the expr here
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::FUNCTION: {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.function_name == "struct_pack") {
+			unordered_set<string> unique_names;
+			child_list_t<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				if (!unique_names.insert(child->GetAlias()).second) {
+					throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
+				}
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(child->GetAlias(), std::move(child_value));
+			}
+			value = Value::STRUCT(std::move(values));
+			return true;
+		} else if (function.function_name == "list_value") {
+			vector<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(std::move(child_value));
+			}
+
+			// figure out child type
+			LogicalType child_type(LogicalTypeId::SQLNULL);
+			for (auto &child_value : values) {
+				child_type = LogicalType::ForceMaxLogicalType(child_type, child_value.type());
+			}
+
+			// finally create the list
+			value = Value::LIST(child_type, values);
+			return true;
+		} else if (function.function_name == "map") {
+			Value keys;
+			if (!ConstructConstantFromExpression(*function.children[0], keys)) {
+				return false;
+			}
+
+			Value values;
+			if (!ConstructConstantFromExpression(*function.children[1], values)) {
+				return false;
+			}
+
+			vector<Value> keys_unpacked = ListValue::GetChildren(keys);
+			vector<Value> values_unpacked = ListValue::GetChildren(values);
+
+			value = Value::MAP(ListType::GetChildType(keys.type()), ListType::GetChildType(values.type()),
+			                   keys_unpacked, values_unpacked);
+			return true;
+		} else {
+			return false;
+		}
+	}
+	case ExpressionType::VALUE_CONSTANT: {
+		auto &constant = expr.Cast<ConstantExpression>();
+		value = constant.value;
+		return true;
+	}
+	case ExpressionType::OPERATOR_CAST: {
+		auto &cast = expr.Cast<CastExpression>();
+		Value dummy_value;
+		if (!ConstructConstantFromExpression(*cast.child, dummy_value)) {
+			return false;
+		}
+
+		string error_message;
+		if (!dummy_value.DefaultTryCastAs(cast.cast_type, value, &error_message)) {
+			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
+			                          EnumUtil::ToString(cast.cast_type.id()));
+		}
+		return true;
+	}
+	default:
+		return false;
 	}
 }
 

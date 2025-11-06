@@ -42,8 +42,16 @@ unique_ptr<MacroFunction> PEGTransformerFactory::TransformMacroDefinition(PEGTra
 		auto parameters = transformer.Transform<vector<MacroParameter>>(parameters_pr.optional_result);
 		for (auto &parameter : parameters) {
 			if (!parameter.name.empty()) {
+				Value default_value;
+				if (!ConstructConstantFromExpression(*parameter.expression, default_value)) {
+					throw ParserException("Invalid default value for parameter '%s': %s", parameter.name,
+										  parameter.expression->ToString());
+				}
+				auto default_expr = make_uniq<ConstantExpression>(std::move(default_value));
+				default_expr->SetAlias(parameter.name);
+				macro_function->default_parameters[parameter.name] = std::move(default_expr);
 				macro_function->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));
-				macro_function->default_parameters.insert(parameter.name, std::move(parameter.expression));
+				macro_function->default_parameters.insert(parameter.name, std::move(default_expr));
 			} else {
 				macro_function->parameters.push_back(std::move(parameter.expression));
 			}
