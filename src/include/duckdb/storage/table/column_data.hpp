@@ -262,6 +262,7 @@ private:
 };
 
 struct PersistentColumnData {
+public:
 	explicit PersistentColumnData(const LogicalType &logical_type);
 	PersistentColumnData(const LogicalType &logical_type, vector<DataPointer> pointers);
 	// disable copy constructors
@@ -272,17 +273,21 @@ struct PersistentColumnData {
 	PersistentColumnData &operator=(PersistentColumnData &&) = default;
 	~PersistentColumnData();
 
-	LogicalType logical_type;
-	PhysicalType physical_type;
-	vector<DataPointer> pointers;
-	vector<PersistentColumnData> child_columns;
-	bool has_updates = false;
-
+public:
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
 	bool HasUpdates() const;
+	void SetVariantShreddedType(const LogicalType &shredded_type);
+
+public:
+	PhysicalType physical_type;
+	LogicalTypeId logical_type_id;
+	vector<DataPointer> pointers;
+	vector<PersistentColumnData> child_columns;
+	bool has_updates = false;
+	LogicalType variant_shredded_type;
 };
 
 struct PersistentRowGroupData {
