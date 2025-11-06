@@ -267,16 +267,12 @@ void Relation::Insert(const string &catalog_name, const string &schema_name, con
 }
 
 void Relation::Insert(const vector<vector<Value>> &values) {
-	vector<string> column_names;
-	auto rel = make_shared_ptr<ValueRelation>(context->GetContext(), values, std::move(column_names), "values");
-	rel->Insert(GetAlias());
+	throw InvalidInputException("INSERT with values can only be used on base tables!");
 }
 
 void Relation::Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions) {
-	vector<string> column_names;
-	auto rel = make_shared_ptr<ValueRelation>(context->GetContext(), std::move(expressions), std::move(column_names),
-	                                          "values");
-	rel->Insert(GetAlias());
+	(void)std::move(expressions);
+	throw InvalidInputException("INSERT with expressions can only be used on base tables!");
 }
 
 shared_ptr<Relation> Relation::CreateRel(const string &schema_name, const string &table_name, bool temporary,
