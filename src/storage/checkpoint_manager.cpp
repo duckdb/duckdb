@@ -225,7 +225,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 			if (entry.type == CatalogType::TABLE_ENTRY) {
 				auto &table = entry.Cast<DuckTableEntry>();
 				auto &storage = table.GetStorage();
-				auto segment_info = storage.GetColumnSegmentInfo();
+				auto segment_info = storage.GetColumnSegmentInfo(context);
 				for (auto &segment : segment_info) {
 					verify_block_usage_count[segment.block_id]++;
 					if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
