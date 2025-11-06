@@ -508,10 +508,13 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 	auto other_operator_repeat = other_operator_opt.optional_result->Cast<RepeatParseResult>();
 	for (auto &other_operator_expr : other_operator_repeat.children) {
 		auto &inner_list_pr = other_operator_expr->Cast<ListParseResult>();
-		auto other_operator = transformer.Transform<ExpressionType>(inner_list_pr.Child<ListParseResult>(0));
+		auto other_operator = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
 		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
-		if (other_operator == ExpressionType::LAMBDA) {
-			expr = make_uniq<LambdaExpression>(std::move(expr), std::move(right_expr));
+		if (other_operator == "||" || other_operator == "^@") {
+			vector<unique_ptr<ParsedExpression>> children_function;
+			children_function.push_back(std::move(expr));
+			children_function.push_back(std::move(right_expr));
+			expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
 		} else {
 			expr = make_uniq<ComparisonExpression>(other_operator, std::move(expr), std::move(right_expr));
 		}
@@ -519,10 +522,16 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 	return expr;
 }
 
-ExpressionType PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer,
+string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer,
                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<ExpressionType>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+string PEGTransformerFactory::TransformStringOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
 // BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*

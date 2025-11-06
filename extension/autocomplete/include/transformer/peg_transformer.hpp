@@ -562,7 +562,8 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
-	static ExpressionType TransformOtherOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformOtherOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformStringOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static ExpressionType TransformLambdaOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBitwiseExpression(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);

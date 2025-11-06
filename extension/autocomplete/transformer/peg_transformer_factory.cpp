@@ -318,6 +318,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformComparisonOperator);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
 	REGISTER_TRANSFORM(TransformOtherOperator);
+	REGISTER_TRANSFORM(TransformStringOperator);
 	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformBitwiseExpression);
 	REGISTER_TRANSFORM(TransformAdditiveExpression);
