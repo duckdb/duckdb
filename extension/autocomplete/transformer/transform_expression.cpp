@@ -555,7 +555,9 @@ PEGTransformerFactory::TransformAdditiveExpression(PEGTransformer &transformer,
 		term_children.push_back(std::move(expr));
 		term_children.push_back(
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
-		expr = make_uniq<FunctionExpression>(term, std::move(term_children));
+		auto func_expr = make_uniq<FunctionExpression>(std::move(term), std::move(term_children));
+		func_expr->is_operator = true;
+		expr = std::move(func_expr);
 	}
 	return expr;
 }
@@ -563,10 +565,7 @@ PEGTransformerFactory::TransformAdditiveExpression(PEGTransformer &transformer,
 string PEGTransformerFactory::TransformTerm(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
-	if (choice_pr->Cast<KeywordParseResult>().keyword == "+") {
-		return "add";
-	}
-	return "subtract";
+	return choice_pr->Cast<KeywordParseResult>().keyword;
 }
 
 // MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*

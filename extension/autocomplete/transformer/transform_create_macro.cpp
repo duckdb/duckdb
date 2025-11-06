@@ -41,8 +41,13 @@ unique_ptr<MacroFunction> PEGTransformerFactory::TransformMacroDefinition(PEGTra
 	if (parameters_pr.HasResult()) {
 		auto parameters = transformer.Transform<vector<MacroParameter>>(parameters_pr.optional_result);
 		for (auto &parameter : parameters) {
+			if (!parameter.name.empty()) {
+				macro_function->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));
+				macro_function->default_parameters.insert(parameter.name, std::move(parameter.expression));
+			} else {
+				macro_function->parameters.push_back(std::move(parameter.expression));
+			}
 			macro_function->types.push_back(parameter.type);
-			macro_function->parameters.push_back(std::move(parameter.expression));
 		}
 	}
 
@@ -85,6 +90,7 @@ MacroParameter PEGTransformerFactory::TransformMacroParameter(PEGTransformer &tr
 	MacroParameter result;
 	if (choice_pr->name == "NamedParameter") {
 		result.expression = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
+		result.name = result.expression->alias;
 		result.type = LogicalType::UNKNOWN;
 	} else {
 		result = transformer.Transform<MacroParameter>(choice_pr);
