@@ -69,8 +69,6 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGT
 		info->columns = std::move(column_list.columns);
 		info->constraints = std::move(column_list.constraints);
 	}
-	// TODO(dtenwolde) Figure out how to deal with commit action
-	auto commit_action = list_pr.Child<OptionalParseResult>(4).HasResult();
 
 	result->info = std::move(info);
 	return result;

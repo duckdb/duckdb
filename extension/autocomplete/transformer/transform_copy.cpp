@@ -30,7 +30,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransform
 	}
 	info->select_statement = std::move(select_statement->node);
 	result->info = std::move(info);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyFromDatabase(PEGTransformer &transformer,
@@ -109,7 +109,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 	}
 
 	result->info = std::move(info);
-	return result;
+	return std::move(result);
 }
 
 bool PEGTransformerFactory::TransformFromOrTo(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {

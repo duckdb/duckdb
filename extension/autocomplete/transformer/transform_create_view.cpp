@@ -8,7 +8,6 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	throw NotImplementedException("TransformCreateViewStmt");
 	// TODO(Dtenwolde) handle recursive views
-	auto recursive = list_pr.Child<OptionalParseResult>(0).HasResult();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(3));
 	auto insert_column_list_pr = list_pr.Child<OptionalParseResult>(4);

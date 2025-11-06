@@ -50,7 +50,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIndexElement(PEGTra
 
 case_insensitive_map_t<Value> PEGTransformerFactory::TransformWithList(PEGTransformer &transformer,
                                                                        optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
 	throw NotImplementedException("Rule 'WithList' has not been implemented yet");
 }
 

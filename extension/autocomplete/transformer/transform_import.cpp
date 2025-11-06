@@ -10,7 +10,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(PEGTran
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = "import_database";
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(name)));
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb

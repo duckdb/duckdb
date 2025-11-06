@@ -77,7 +77,7 @@ PEGTransformerFactory::TransformScalarMacroDefinition(PEGTransformer &transforme
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<ScalarMacroFunction>();
 	result->expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
-	return result;
+	return std::move(result);
 }
 
 vector<MacroParameter> PEGTransformerFactory::TransformMacroParameters(PEGTransformer &transformer,

@@ -67,7 +67,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaFunction(PEGTrans
 			}
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 vector<unique_ptr<ParsedExpression>>

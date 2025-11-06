@@ -1208,7 +1208,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 		new_case.then_expr = std::move(case_expr.then_expr);
 		result->case_checks.push_back(std::move(new_case));
 	}
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseElse(PEGTransformer &transformer,
