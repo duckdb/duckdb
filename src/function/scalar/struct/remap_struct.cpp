@@ -621,7 +621,7 @@ unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFunction 
 	bound_function.arguments[1] = arguments[1]->return_type;
 	bound_function.arguments[2] = arguments[2]->return_type;
 	bound_function.arguments[3] = arguments[3]->return_type;
-	bound_function.return_type = arguments[1]->return_type;
+	bound_function.SetReturnType(arguments[1]->return_type);
 
 	return make_uniq<RemapStructBindData>(std::move(remap));
 }
@@ -632,7 +632,7 @@ ScalarFunction RemapStructFun::GetFunction() {
 	ScalarFunction remap("remap_struct",
 	                     {LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalTypeId::ANY},
 	                     LogicalTypeId::ANY, RemapStructFunction, RemapStructBind);
-	remap.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	remap.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return remap;
 }
 

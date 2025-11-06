@@ -52,13 +52,20 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
-	SinkFinalizeType MaterializeHashGroups(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
-	                                       OperatorSinkFinalizeInput &finalize) const;
-	vector<HashGroupPtr> &GetHashGroups(GlobalSourceState &global_state) const;
+	SourceResultType MaterializeColumnData(ExecutionContext &context, idx_t hash_bin,
+	                                       OperatorSourceInput &source) const;
+	HashGroupPtr GetColumnData(idx_t hash_bin, OperatorSourceInput &source) const;
 
-	SinkFinalizeType MaterializeSortedRuns(Pipeline &pipeline, Event &event, const PhysicalOperator &op,
-	                                       OperatorSinkFinalizeInput &finalize) const;
-	vector<SortedRunPtr> &GetSortedRuns(GlobalSourceState &global_state) const;
+	SourceResultType MaterializeSortedRun(ExecutionContext &context, idx_t hash_bin, OperatorSourceInput &source) const;
+	SortedRunPtr GetSortedRun(ClientContext &client, idx_t hash_bin, OperatorSourceInput &source) const;
+
+	// The chunk and row counts of the hash groups.
+	struct ChunkRow {
+		idx_t chunks = 0;
+		idx_t count = 0;
+	};
+	using ChunkRows = vector<ChunkRow>;
+	const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const;
 
 public:
 	ClientContext &client;

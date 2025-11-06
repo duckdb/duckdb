@@ -92,6 +92,7 @@ enum class ShellOpenFlags { EXIT_ON_FAILURE, KEEP_ALIVE_ON_FAILURE };
 enum class SuccessState { SUCCESS, FAILURE };
 enum class OptionType { DEFAULT, ON, OFF };
 enum class StartupText { ALL, VERSION, NONE };
+enum class ReadLineVersion { LINENOISE, FALLBACK };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
@@ -223,6 +224,12 @@ public:
 	//! Progress bar used to render the components that are displayed when query status / progress is rendered
 	unique_ptr<ShellProgressBar> progress_bar;
 
+#ifdef HAVE_LINENOISE
+	ReadLineVersion rl_version = ReadLineVersion::LINENOISE;
+#else
+	ReadLineVersion rl_version = ReadLineVersion::FALLBACK;
+#endif
+
 #if defined(_WIN32) || defined(WIN32)
 	bool win_utf8_mode = false;
 #endif
@@ -316,6 +323,12 @@ public:
 	int DoMetaCommand(const string &zLine);
 	idx_t PrintHelp(const char *zPattern);
 
+	void ShellAddHistory(const char *line);
+	int ShellLoadHistory(const char *path);
+	int ShellSaveHistory(const char *path);
+	int ShellSetHistoryMaxLength(idx_t max_length);
+	char *OneInputLine(FILE *in, char *zPrior, int isContinuation);
+
 	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();
 	bool ProcessDuckDBRC(const char *file);
@@ -332,10 +345,10 @@ public:
 	static void Sleep(idx_t ms);
 	void PrintUsage();
 #if defined(_WIN32) || defined(WIN32)
-	static unique_ptr<uint8_t[]> Win32Utf8ToUnicode(const char *zText);
-	static string Win32UnicodeToUtf8(void *zWideText);
-	static string Win32MbcsToUtf8(const char *zText, bool useAnsi);
-	static unique_ptr<uint8_t[]> Win32Utf8ToMbcs(const char *zText, bool useAnsi);
+	static std::wstring Win32Utf8ToUnicode(const string &zText);
+	static string Win32UnicodeToUtf8(const std::wstring &zWideText);
+	static string Win32MbcsToUtf8(const string &zText, bool useAnsi);
+	static string Win32Utf8ToMbcs(const string &zText, bool useAnsi);
 #endif
 	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
 	optional_ptr<const MetadataCommand> FindMetadataCommand(const string &option, string &error_msg) const;

@@ -248,7 +248,7 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
 	for (auto &func : array_length.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return (array_length);
 }

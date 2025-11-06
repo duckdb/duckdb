@@ -224,6 +224,12 @@
       "paths": [
         "test/sql/pragma/profiling/test_profiling_fs.test"
       ]
+    },
+    {
+      "reason": "Verification query results are not buffer managed",
+      "paths": [
+        "test/sql/outofcore/buffer_managed_query_result.test_slow"
+      ]
     }
   ]
 }
