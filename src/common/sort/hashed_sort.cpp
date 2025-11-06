@@ -562,16 +562,19 @@ void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, Oper
 
 		auto sort_local = sort->GetLocalSinkState(context);
 		OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
+		idx_t combined = 0;
 		while (hash_group.Scan(partition, local_scan, chunk)) {
 			sort->Sink(context, chunk, sink);
-			hash_group.count += chunk.size();
+			combined += chunk.size();
 		}
 
 		OperatorSinkCombineInput combine {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
 		sort->Combine(context, combine);
+		hash_group.count += combined;
 
-		//	Whoever finishes last can Finalize?
-		if (hash_group.count == partition.Count()) {
+		//	Whoever finishes last can Finalize
+		lock_guard<mutex> finalize_guard(hash_group.scan_lock);
+		if (hash_group.count == partition.Count() && !hash_group.sort_source) {
 			OperatorSinkFinalizeInput lfinalize {*hash_group.sort_global, finalize.interrupt_state};
 			sort->Finalize(context.client, lfinalize);
 			hash_group.sort_source = sort->GetGlobalSourceState(client, *hash_group.sort_global);
@@ -817,6 +820,7 @@ HashedSort::SortedRunPtr HashedSort::GetSortedRun(ClientContext &client, idx_t h
 
 	auto result = sort.GetSortedRun(sort_global);
 	if (!result) {
+		D_ASSERT(hash_group.count == 0);
 		result = make_uniq<SortedRun>(client, sort, false);
 	}
 
