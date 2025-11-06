@@ -384,6 +384,9 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformLambdaExpression);
 	REGISTER_TRANSFORM(TransformNullIfExpression);
 	REGISTER_TRANSFORM(TransformRowExpression);
+	REGISTER_TRANSFORM(TransformTrimExpression);
+	REGISTER_TRANSFORM(TransformTrimDirection);
+	REGISTER_TRANSFORM(TransformTrimSource);
 	REGISTER_TRANSFORM(TransformPositionExpression);
 	REGISTER_TRANSFORM(TransformCastExpression);
 	REGISTER_TRANSFORM(TransformCastOrTryCast);
@@ -629,6 +632,10 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<ExpressionType>("OperatorGreaterThan", ExpressionType::COMPARE_GREATERTHAN);
 	RegisterEnum<ExpressionType>("OperatorLessThanEquals", ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	RegisterEnum<ExpressionType>("OperatorGreaterThanEquals", ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+
+	RegisterEnum<string>("TrimBoth", "trim");
+	RegisterEnum<string>("TrimLeading", "ltrim");
+	RegisterEnum<string>("TrimTrailing", "rtrim");
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {

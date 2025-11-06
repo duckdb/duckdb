@@ -201,5 +201,8 @@ RowExpression <- 'ROW' Parens(List(Expression))
 SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
 SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
-TrimDirection <- 'BOTH' / 'LEADING' / 'TRAILING'
+TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
+TrimBoth <- 'BOTH'
+TrimLeading <- 'LEADING'
+TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'
