@@ -86,12 +86,6 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_star
 	if (row_id_is_loaded) {
 		row_id_column_data->SetStart(new_start);
 	}
-	if (!HasUnloadedDeletes()) {
-		auto vinfo = GetVersionInfo();
-		if (vinfo) {
-			vinfo->SetStart(new_start);
-		}
-	}
 }
 
 RowGroup::~RowGroup() {
@@ -716,7 +710,7 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 	}
 	// deletes are not loaded - reload
 	auto root_delete = deletes_pointers[0];
-	auto loaded_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
+	auto loaded_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager());
 	SetVersionInfo(std::move(loaded_info));
 	deletes_is_loaded = true;
 	return version_info;
@@ -732,7 +726,7 @@ shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
 	lock_guard<mutex> lock(row_group_lock);
 	if (!owned_version_info) {
 		auto &buffer_manager = GetBlockManager().GetBufferManager();
-		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager, start);
+		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager);
 		SetVersionInfo(std::move(new_info));
 	}
 	return owned_version_info;
