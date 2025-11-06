@@ -41,11 +41,15 @@ unique_ptr<Expression> SelectivityOptionalFilter::ToExpression(const Expression 
 void SelectivityOptionalFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", child_filter);
+	serializer.WritePropertyWithDefault<float>(201, "selectivity_threshold", selectivity_threshold);
+	serializer.WritePropertyWithDefault<idx_t>(202, "n_vectors_to_check", n_vectors_to_check);
 }
 
 unique_ptr<TableFilter> SelectivityOptionalFilter::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SelectivityOptionalFilter>(new SelectivityOptionalFilter(nullptr, 0.5f, 100));
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", result->child_filter);
+	deserializer.ReadPropertyWithDefault<float>(201, "selectivity_threshold", result->selectivity_threshold);
+	deserializer.ReadPropertyWithDefault<idx_t>(202, "n_vectors_to_check", result->n_vectors_to_check);
 	return std::move(result);
 }
 

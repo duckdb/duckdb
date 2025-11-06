@@ -788,7 +788,8 @@ void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &inf
 	auto bf_filter = make_uniq<BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
 	ht.SetBuildBloomFilter(true);
 
-	auto opt_bf_filter = make_uniq<SelectivityOptionalFilter>(std::move(bf_filter), 0.25, 20);
+	auto opt_bf_filter =
+	    make_uniq<SelectivityOptionalFilter>(std::move(bf_filter), SELECTIVITY_BF_THRESHOLD, SELECTIVITY_BF_CHECK_N);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_bf_filter));
 }
 
@@ -854,8 +855,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
 					if (true) {
-						auto optional_greater_equals =
-						    make_uniq<SelectivityOptionalFilter>(std::move(greater_equals), 0.75, 40);
+						auto optional_greater_equals = make_uniq<SelectivityOptionalFilter>(
+						    std::move(greater_equals), SELECTIVITY_MIN_MAX_THRESHOLD, SELECTIVITY_MIN_MAX_CHECK_N);
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
 					} else {
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
@@ -872,8 +873,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
 					if (true) {
-						auto optional_less_equals =
-						    make_uniq<SelectivityOptionalFilter>(std::move(less_equals), 0.75, 40);
+						auto optional_less_equals = make_uniq<SelectivityOptionalFilter>(
+						    std::move(less_equals), SELECTIVITY_MIN_MAX_THRESHOLD, SELECTIVITY_MIN_MAX_CHECK_N);
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
 					} else {
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));

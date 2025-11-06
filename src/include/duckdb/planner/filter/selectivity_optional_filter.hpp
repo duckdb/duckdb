@@ -11,6 +11,13 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
+
+constexpr float SELECTIVITY_MIN_MAX_THRESHOLD = 0.75f;
+constexpr idx_t SELECTIVITY_MIN_MAX_CHECK_N = 50;
+
+constexpr float SELECTIVITY_BF_THRESHOLD = 0.25f;
+constexpr idx_t SELECTIVITY_BF_CHECK_N = 50;
+
 enum class SelectivityOptionalFilterStatus : uint8_t {
 	ACTIVE, // ready and in use
 	PAUSED_DUE_TO_ZONE_MAP_STATS,

@@ -24,6 +24,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -396,6 +397,13 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 	}
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &optional_filter = filter.Cast<OptionalFilter>();
+		if (!optional_filter.child_filter) {
+			return true; // No child filters, always OK
+		}
+		return ExtractComparisonsAndInFilters(*optional_filter.child_filter, comparisons, in_filters);
+	}
+	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
+		auto &optional_filter = filter.Cast<SelectivityOptionalFilter>();
 		if (!optional_filter.child_filter) {
 			return true; // No child filters, always OK
 		}
