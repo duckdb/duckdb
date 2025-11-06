@@ -666,6 +666,22 @@ MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetReadLineVersion(ShellState &state, const vector<string> &args) {
+	if (args[1] == "linenoise") {
+#ifdef HAVE_LINENOISE
+		state.rl_version = ReadLineVersion::LINENOISE;
+		return MetadataResult::SUCCESS;
+#else
+		state.Print("linenoise is not available in this build");
+		return MetadataResult::FAIL;
+#endif
+	} else if (args[1] == "fallback") {
+		state.rl_version = ReadLineVersion::FALLBACK;
+		return MetadataResult::SUCCESS;
+	}
+	return MetadataResult::PRINT_USAGE;
+}
+
 static const MetadataCommand metadata_commands[] = {
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
@@ -762,6 +778,8 @@ static const MetadataCommand metadata_commands[] = {
 
     {"quit", 0, QuitProcess, "", "Exit this program", 0, ""},
     {"read", 2, ReadFromFile, "FILE", "Read input from FILE", 3, ""},
+    {"read_line_version", 2, SetReadLineVersion, "linenoise|fallback",
+     "Sets the library used for processing interactive input", 0, ""},
 #ifdef HAVE_LINENOISE
     {"render_completion", 2, ToggleCompletionRendering, "on|off",
      "Toggle displaying of completion prompts in the shell on/off", 0, ""},

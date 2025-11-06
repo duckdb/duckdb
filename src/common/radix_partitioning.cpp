@@ -98,6 +98,7 @@ struct ComputePartitionIndicesFunctor {
 			const auto source_data = UnifiedVectorFormat::GetData<hash_t>(format);
 			const auto &source_sel = *format.sel;
 
+			partition_indices.SetVectorType(VectorType::FLAT_VECTOR);
 			const auto target = FlatVector::GetData<hash_t>(partition_indices);
 
 			if (source_sel.IsSet()) {

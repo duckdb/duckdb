@@ -176,15 +176,21 @@ int History::SetMaxLength(idx_t len) {
 }
 
 int History::Save(const char *filename) {
+#if !defined(_WIN32) && !defined(WIN32)
 	mode_t old_umask = umask(S_IXUSR | S_IRWXG | S_IRWXO);
+#endif
 	FILE *fp;
 
 	fp = fopen(filename, "w");
+#if !defined(_WIN32) && !defined(WIN32)
 	umask(old_umask);
+#endif
 	if (fp == nullptr) {
 		return -1;
 	}
+#if !defined(_WIN32) && !defined(WIN32)
 	chmod(filename, S_IRUSR | S_IWUSR);
+#endif
 	for (idx_t j = 0; j < history_len; j++) {
 		fprintf(fp, "%s\n", history[j]);
 	}

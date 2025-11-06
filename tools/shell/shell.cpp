@@ -112,39 +112,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#if HAVE_READLINE
-#include <readline/readline.h>
-#include <readline/history.h>
-#endif
-
-#if HAVE_EDITLINE
-#include <editline/readline.h>
-#endif
-
-#if HAVE_EDITLINE || HAVE_READLINE
-
-#define shell_add_history(X)    add_history(X)
-#define shell_read_history(X)   read_history(X)
-#define shell_write_history(X)  write_history(X)
-#define shell_stifle_history(X) stifle_history(X)
-#define shell_readline(X)       readline(X)
-
-#elif HAVE_LINENOISE
-
+#ifdef HAVE_LINENOISE
 #include "linenoise.h"
-#define shell_add_history(X)    linenoiseHistoryAdd(X)
-#define shell_read_history(X)   linenoiseHistoryLoad(X)
-#define shell_write_history(X)  linenoiseHistorySave(X)
-#define shell_stifle_history(X) linenoiseHistorySetMaxLen(X)
-#define shell_readline(X)       linenoise(X)
-
-#else
-
-#define shell_read_history(X)
-#define shell_write_history(X)
-#define shell_stifle_history(X)
-
-#define SHELL_USE_LOCAL_GETLINE 1
 #endif
 
 #include "duckdb.hpp"
@@ -404,23 +373,20 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 	if (state.stdout_is_console && (out == stdout || out == stderr)) {
 		char buffer[2048];
 		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
-		const char *z1;
+		const char *utf8_data;
 		unique_ptr<char[]> zbuf;
 		if (required_characters > 2048) {
 			zbuf = unique_ptr<char[]>(new char[required_characters + 1]);
 			vsnprintf(zbuf.get(), required_characters + 1, zFormat, ap);
-			z1 = zbuf.get();
+			utf8_data = zbuf.get();
 		} else {
-			z1 = buffer;
+			utf8_data = buffer;
 		}
-		if (state.win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
-			// we can write UTF8 directly
-			fputs(z1, out);
-		} else {
-			// fallback to writing old style windows unicode
-			auto z2 = ShellState::Win32Utf8ToMbcs(z1, false);
-			fputs((const char *)z2.get(), out);
-		}
+		// convert from utf8 to utf16
+		auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
+		auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+		// use WriteConsoleW to write the unicode codepoints to the console
+		WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
 	} else {
 		vfprintf(out, zFormat, ap);
 	}
@@ -674,34 +640,36 @@ static char *local_getline(char *zLine, FILE *in) {
 ** be freed by the caller or else passed back into this routine via the
 ** zPrior argument for reuse.
 */
-static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
-	char *zResult;
-	if (in != 0) {
-		zResult = local_getline(zPrior, in);
-	} else {
-		auto &state = ShellState::Get();
-#if SHELL_USE_LOCAL_GETLINE
+char *ShellState::OneInputLine(FILE *in, char *zPrior, int isContinuation) {
+	if (in) {
+		// use local_getline when reading from a file
+		// don't print prompt in this scenario
+		return local_getline(zPrior, in);
+	}
+
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		// use linenoise
+		string prompt_str;
+		const char *prompt_text;
 		if (!isContinuation) {
-			state.main_prompt->PrintPrompt(state, PrintOutput::STDOUT);
+			prompt_str = main_prompt->GeneratePrompt(*this);
+			prompt_text = prompt_str.c_str();
 		} else {
-			state.Print(state.continuePrompt);
-		}
-		fflush(stdout);
-		zResult = local_getline(zPrior, stdin);
-#else
-		string main_prompt;
-		const char *zPrompt;
-		if (!isContinuation) {
-			main_prompt = state.main_prompt->GeneratePrompt(state);
-			zPrompt = main_prompt.c_str();
-		} else {
-			zPrompt = state.continuePrompt;
+			prompt_text = continuePrompt;
 		}
 		free(zPrior);
-		zResult = shell_readline(zPrompt);
-#endif
+		return linenoise(prompt_text);
 	}
-	return zResult;
+#endif
+	// using local_getline to read from stdin - print the prompt
+	if (!isContinuation) {
+		main_prompt->PrintPrompt(*this, PrintOutput::STDOUT);
+	} else {
+		Print(continuePrompt);
+	}
+	fflush(stdout);
+	return local_getline(zPrior, stdin);
 }
 
 /*
@@ -1942,7 +1910,7 @@ int shellDeleteFile(const char *zFilename) {
 	int rc;
 #ifdef _WIN32
 	auto z = ShellState::Win32Utf8ToUnicode(zFilename);
-	rc = _wunlink((wchar_t *)z.get());
+	rc = _wunlink(z.c_str());
 #else
 	rc = unlink(zFilename);
 #endif
@@ -2687,7 +2655,7 @@ SuccessState ShellState::ChangeDirectory(const string &path) {
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
 	auto z = ShellState::Win32Utf8ToUnicode(path.c_str());
-	rc = !SetCurrentDirectoryW((wchar_t *)z.get());
+	rc = !SetCurrentDirectoryW(z.c_str());
 #else
 	rc = chdir(path.c_str());
 #endif
@@ -3012,17 +2980,49 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 	return state == SQLParseState::SEMICOLON;
 }
 
+void ShellState::ShellAddHistory(const char *history) {
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		linenoiseHistoryAdd(history);
+	}
+#endif
+}
+
+int ShellState::ShellLoadHistory(const char *path) {
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		return linenoiseHistoryLoad(path);
+	}
+#endif
+	return 0;
+}
+
+int ShellState::ShellSaveHistory(const char *path) {
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		return linenoiseHistorySave(path);
+	}
+#endif
+	return 0;
+}
+
+int ShellState::ShellSetHistoryMaxLength(idx_t max_length) {
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		return linenoiseHistorySetMaxLen(static_cast<int>(max_length));
+	}
+#endif
+	return 0;
+}
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
 int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	string zErrMsg;
 
-#ifndef SHELL_USE_LOCAL_GETLINE
 	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
-		shell_add_history(zSql);
+		ShellAddHistory(zSql);
 	}
-#endif
 	BEGIN_TIMER;
 	auto success = ExecuteSQL(zSql);
 	END_TIMER;
@@ -3057,7 +3057,7 @@ int ShellState::ProcessInput(InputMode mode) {
 	lineno = 0;
 	while (errCnt == 0 || !bail_on_error || (!in && stdin_is_interactive)) {
 		fflush(out);
-		zLine = one_input_line(in, zLine, nSql > 0);
+		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
 			/* End of input */
 			if (!in && stdin_is_interactive) {
@@ -3107,11 +3107,9 @@ int ShellState::ProcessInput(InputMode mode) {
 				printf("%s\n", zLine);
 			}
 			if (zLine[0] == '.') {
-#ifndef SHELL_USE_LOCAL_GETLINE
 				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3') {
-					shell_add_history(zLine);
+					ShellAddHistory(zLine);
 				}
-#endif
 				rc = DoMetaCommand(zLine);
 				if (rc == 2) { /* exit requested */
 					break;
@@ -3297,7 +3295,9 @@ void ShellState::Initialize() {
 	strcpy(continuePrompt, "· ");
 	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
-	linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+	}
 #endif
 }
 
@@ -3497,18 +3497,18 @@ int wmain(int argc, wchar_t **wargv) {
 				zHistory = zHome.c_str();
 			}
 			if (zHistory) {
-				shell_read_history(zHistory);
+				data.ShellLoadHistory(zHistory);
 			}
-#if HAVE_READLINE || HAVE_EDITLINE
-			rl_attempted_completion_function = readline_completion;
-#elif HAVE_LINENOISE
-			linenoiseSetCompletionCallback(linenoise_completion);
+#ifdef HAVE_LINENOISE
+			if (data.rl_version == ReadLineVersion::LINENOISE) {
+				linenoiseSetCompletionCallback(linenoise_completion);
+			}
 #endif
 			data.in = 0;
 			rc = data.ProcessInput(InputMode::STANDARD);
 			if (zHistory) {
-				shell_stifle_history(2000);
-				shell_write_history(zHistory);
+				data.ShellSetHistoryMaxLength(2000);
+				data.ShellSaveHistory(zHistory);
 			}
 		} else {
 			data.in = stdin;
