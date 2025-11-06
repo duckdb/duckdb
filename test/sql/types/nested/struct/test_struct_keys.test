@@ -50,3 +50,14 @@ SELECT struct_keys(col) FROM filtered_struct WHERE idx % 2 != 0 ORDER BY idx;
 ----
 [a, b]
 NULL
+
+# Error cases: non-STRUCT inputs should fail
+statement error
+select struct_keys(42);
+----
+struct_keys() expects a STRUCT argument
+
+statement error
+select struct_keys(['a', 'b']);
+----
+struct_keys() expects a STRUCT argument
