@@ -175,13 +175,13 @@ public:
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		auto node = make_uniq<SegmentNode<T>>();
-		if (!nodes.empty()) {
-			nodes.back()->next = node.get();
-		}
 		node->row_start = segment->start;
 		node->node = std::move(segment);
 		node->index = nodes.size();
 		node->next = nullptr;
+		if (!nodes.empty()) {
+			nodes.back()->next = node.get();
+		}
 		nodes.push_back(std::move(node));
 	}
 	void AppendSegment(unique_ptr<T> segment) {
