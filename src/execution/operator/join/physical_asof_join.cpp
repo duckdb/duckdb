@@ -403,8 +403,8 @@ public:
 AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, const ChunkRow &left_stats, const ChunkRow &right_stats,
                              const idx_t hash_group)
     : op(op), group_idx(hash_group), left_stats(left_stats), right_stats(right_stats),
-      right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), sorted(0), materialized(0), gotten(0),
-      left_completed(0), right_completed(0) {
+      right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), sorted(0), materialized(0),
+      gotten(0), left_completed(0), right_completed(0) {
 	right_outer.Initialize(right_stats.count);
 };
 
