@@ -564,7 +564,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"RenameList <- 'RENAME' (Parens(List(RenameEntry)) / RenameEntry)\n"
 	"RenameEntry <- ColumnReference 'AS' Identifier\n"
 	"SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference\n"
-	"CaseExpression <- 'CASE' Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'\n"
+	"CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'\n"
 	"CaseWhenThen <- 'WHEN' Expression 'THEN' Expression\n"
 	"CaseElse <- 'ELSE' Expression\n"
 	"TypeLiteral <- ColId StringLiteral\n"
