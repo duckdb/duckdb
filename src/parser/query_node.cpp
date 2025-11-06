@@ -76,17 +76,8 @@ string CommonTableExpressionMap::ToString() const {
 					result += ", ";
 				}
 				result += cte.key_targets[k]->ToString();
-			}
-			if (!cte.payload_aggregates.empty()) {
-				result += " , ";
-				for (idx_t k = 0; k < cte.payload_aggregates.size(); k++) {
-					if (k > 0) {
-						result += ", ";
-					}
-					result += cte.payload_aggregates[k]->ToString();
-					if (cte.payload_aggregates[k]->HasAlias()) {
-						result += StringUtil::Format(" AS %s", SQLIdentifier(cte.payload_aggregates[k]->GetAlias()));
-					}
+				if (cte.key_targets[k]->HasAlias()) {
+					result += StringUtil::Format(" AS %s", SQLIdentifier(cte.key_targets[k]->GetAlias()));
 				}
 			}
 			result += ") ";

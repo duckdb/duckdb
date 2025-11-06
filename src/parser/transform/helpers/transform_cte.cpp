@@ -63,11 +63,7 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		if (cte.using_key_list) {
 			for (auto key_ele = cte.using_key_list->head; key_ele != nullptr; key_ele = key_ele->next) {
 				auto expr_ele = TransformExpression(*PGPointerCast<duckdb_libpgquery::PGNode>(key_ele->data.ptr_value));
-				if (expr_ele->type == ExpressionType::COLUMN_REF) {
-					info->key_targets.push_back(std::move(expr_ele));
-				} else {
-					info->payload_aggregates.push_back(std::move(expr_ele));
-				}
+				info->key_targets.push_back(std::move(expr_ele));
 			}
 		}
 
@@ -149,9 +145,6 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.aliases = info.aliases;
 		for (auto &key : info.key_targets) {
 			result.key_targets.emplace_back(key->Copy());
-		}
-		for (auto &agg : info.payload_aggregates) {
-			result.payload_aggregates.emplace_back(agg->Copy());
 		}
 		break;
 	}

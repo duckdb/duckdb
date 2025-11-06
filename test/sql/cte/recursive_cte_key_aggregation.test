@@ -505,3 +505,25 @@ WITH RECURSIVE tbl(a, b) USING KEY (a, avg(* :: Int) AS b) AS (
 TABLE tbl;
 ----
 <REGEX>:.*STAR expression is not supported here.*
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a AS b, sum(b) AS b) AS (
+	SELECT 1, 1
+  		UNION
+  	SELECT a, b + 1
+  	FROM tbl
+  	WHERE b < 5)
+TABLE tbl;
+----
+<REGEX>:.*only direct calls to an aggregate function can have an alias.*
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a AS b, max(b)) AS (
+	SELECT 1, 5
+		UNION
+	SELECT a, b - 1
+	FROM tbl
+	WHERE b > 0)
+TABLE tbl;
+----
+<REGEX>:.*only direct calls to an aggregate function can have an alias.*

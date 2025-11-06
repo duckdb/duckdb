@@ -32,9 +32,6 @@ bool RecursiveCTENode::Equals(const QueryNode *other_p) const {
 	if (!ParsedExpression::ListEquals(key_targets, other.key_targets)) {
 		return false;
 	}
-	if (!ParsedExpression::ListEquals(payload_aggregates, other.payload_aggregates)) {
-		return false;
-	}
 
 	if (!left->Equals(other.left.get())) {
 		return false;
@@ -55,10 +52,6 @@ unique_ptr<QueryNode> RecursiveCTENode::Copy() const {
 
 	for (auto &key : key_targets) {
 		result->key_targets.push_back(key->Copy());
-	}
-
-	for (auto &agg : payload_aggregates) {
-		result->payload_aggregates.push_back(agg->Copy());
 	}
 
 	this->CopyProperties(*result);

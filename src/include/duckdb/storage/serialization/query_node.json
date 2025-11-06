@@ -155,11 +155,6 @@
         "id": 205,
         "name": "key_targets",
         "type": "vector<ParsedExpression*>"
-      },
-      {
-        "id": 206,
-        "name": "payload_aggregates",
-        "type": "vector<ParsedExpression*>"
       }
     ]
   },

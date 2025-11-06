@@ -71,7 +71,6 @@ void RecursiveCTENode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(203, "right", right);
 	serializer.WritePropertyWithDefault<vector<string>>(204, "aliases", aliases);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "key_targets", key_targets);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(206, "payload_aggregates", payload_aggregates);
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) {
@@ -82,7 +81,6 @@ unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(203, "right", result->right);
 	deserializer.ReadPropertyWithDefault<vector<string>>(204, "aliases", result->aliases);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "key_targets", result->key_targets);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(206, "payload_aggregates", result->payload_aggregates);
 	return std::move(result);
 }
 

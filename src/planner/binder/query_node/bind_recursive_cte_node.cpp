@@ -58,125 +58,129 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// Temporary copy of return types that we can modify without having a conflict with binding the aggregates
 	vector<LogicalType> return_types = result.types;
 
-	if (statement.key_targets.empty() && !statement.payload_aggregates.empty()) {
+	// Bind specified keys to the referenced column
+	for (idx_t expr_idx = 0; expr_idx < statement.key_targets.size(); expr_idx++) {
+		auto &expr = statement.key_targets[expr_idx];
+
+		if(expr->type == ExpressionType::COLUMN_REF) {
+
+			if (expr->HasAlias()) {
+				throw BinderException(expr->GetQueryLocation(),
+				                      "In USING KEY, only direct calls to an aggregate function can have an alias.");
+			}
+
+			auto bound_expr = expression_binder.Bind(expr);
+			auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
+
+			idx_t column_index = bound_ref.binding.column_index;
+			if (key_references.find(column_index) != key_references.end()) {
+				continue;
+			}
+
+			key_references.insert(column_index);
+			key_targets.push_back(std::move(bound_expr));
+		} else if (expr->type == ExpressionType::FUNCTION) {
+
+			auto &func_expr = expr->Cast<FunctionExpression>();
+
+			if (func_expr.filter) {
+				throw BinderException(func_expr.filter->GetQueryLocation(),
+				                      "FILTER clause is not yet supported for aggregates in USING KEY");
+			}
+
+			if (!func_expr.order_bys->orders.empty()) {
+				throw BinderException(func_expr.GetQueryLocation(),
+				                      "ORDER BY clause is not yet supported for aggregates in USING KEY");
+			}
+
+			if (func_expr.distinct) {
+				throw BinderException(func_expr.GetQueryLocation(),
+				                      "DISTINCT is not yet supported for aggregates in USING KEY");
+			}
+
+			QueryErrorContext error_context(expr->GetQueryLocation());
+
+			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.function_name, error_context);
+			auto entry = GetCatalogEntry(func_expr.catalog, DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+
+			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+				throw BinderException(expr->GetQueryLocation(),
+				                      "'%s' can't be used in the USING KEY clause.\n"
+				                      "It has to be either a column name as a key or a direct call to an aggregate function.", expr->ToString());
+			}
+			auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
+
+			vector<LogicalType> aggregation_input_types;
+			vector<unique_ptr<Expression>> bound_children;
+			// Bind the children of the aggregate function
+			for (auto &child : func_expr.children) {
+				auto bound_child = expression_binder.Bind(child);
+				aggregation_input_types.push_back(bound_child->return_type);
+				bound_children.push_back(std::move(bound_child));
+			}
+
+			idx_t aggregate_idx;
+			// If user provided an alias, prioritize that.
+			// Otherwise, we try to infer the target column from the first argument
+			if (func_expr.HasAlias()) {
+				auto names_iter = find(result.names.begin(), result.names.end(), func_expr.GetAlias());
+				if (names_iter == result.names.end()) {
+					throw BinderException(expr->GetQueryLocation(),
+					                      "Could not find column with name '%s' to bind aggregate to.",
+					                      func_expr.GetAlias());
+				}
+				aggregate_idx = NumericCast<idx_t>(std::distance(result.names.begin(), names_iter));
+				// Create a new bound column reference for the target column
+				payload_aggregate_dest_map[expr_idx - key_targets.size()] = make_uniq<BoundColumnRefExpression>(
+				    result.types[aggregate_idx], ColumnBinding(setop_index, aggregate_idx));
+			} else {
+				if (bound_children.size() == 0 || bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+					// No alias and no way to infer target column through first argument
+					throw BinderException(expr->GetQueryLocation(),
+					                      "In USING KEY, an aggregate must either have a column reference or an alias.");
+				}
+				aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
+			}
+
+			// Find the best matching aggregate function
+			auto best_function_idx =
+			    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
+			if (!best_function_idx.IsValid()) {
+				throw BinderException("No matching aggregate function\n%s", error.Message());
+			}
+			// Found a matching function, bind it as an aggregate
+			auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+			auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
+			                                                       nullptr, AggregateType::NON_DISTINCT);
+
+			if (payload_references.find(aggregate_idx) != payload_references.end()) {
+				throw BinderException(func_expr.GetQueryLocation(),
+				                      "Column '%s' referenced multiple times in USING KEY clause.\n"
+				                      "Try using an alias for one of the aggregates.",
+				                      result.names[aggregate_idx]);
+			}
+
+			if (key_references.find(aggregate_idx) != key_references.end()) {
+				throw BinderException(func_expr.GetQueryLocation(),
+				                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
+				                      "Try using an alias for the aggregation.",
+				                      result.names[aggregate_idx]);
+			}
+
+			return_types[aggregate_idx] = aggregate->return_type;
+			payload_aggregates.push_back(std::move(aggregate));
+			payload_references.insert(aggregate_idx);
+		} else {
+			throw BinderException(expr->GetQueryLocation(),
+			                      "'%s' can't be used in the USING KEY clause.\n"
+			                      "It has to be either a column name as a key or a direct call to an aggregate function.", expr->ToString());
+		}
+	}
+
+	if (key_targets.empty() && !payload_aggregates.empty()) {
 		throw BinderException("USING KEY clause requires at least one key column.");
 	}
 
-	// Bind specified keys to the referenced column
-	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
-		auto bound_expr = expression_binder.Bind(expr);
-		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
-		auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
-
-		idx_t column_index = bound_ref.binding.column_index;
-		if (key_references.find(column_index) != key_references.end()) {
-			continue;
-		}
-
-		key_references.insert(column_index);
-		key_targets.push_back(std::move(bound_expr));
-	}
-
-	// Bind user-defined aggregates
-	for (idx_t payload_idx = 0; payload_idx < statement.payload_aggregates.size(); payload_idx++) {
-		auto &expr = statement.payload_aggregates[payload_idx];
-
-		if(expr->type != ExpressionType::FUNCTION) {
-			throw BinderException(expr->GetQueryLocation(),
-			                      "'%s' can't be used in the USING KEY clause.\n"
-			                      "It has to be either a column name as a key or a direct call to an aggregate function.", expr->ToString());
-		}
-
-		auto &func_expr = expr->Cast<FunctionExpression>();
-
-		if (func_expr.filter) {
-			throw BinderException(func_expr.filter->GetQueryLocation(),
-			                      "FILTER clause is not yet supported for aggregates in USING KEY");
-		}
-
-		if (!func_expr.order_bys->orders.empty()) {
-			throw BinderException(func_expr.GetQueryLocation(),
-			                      "ORDER BY clause is not yet supported for aggregates in USING KEY");
-		}
-
-		if (func_expr.distinct) {
-			throw BinderException(func_expr.GetQueryLocation(),
-			                      "DISTINCT is not yet supported for aggregates in USING KEY");
-		}
-
-		QueryErrorContext error_context(expr->GetQueryLocation());
-
-		EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.function_name, error_context);
-		auto entry = GetCatalogEntry(func_expr.catalog, DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
-
-		if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-			throw BinderException(expr->GetQueryLocation(),
-			                      "'%s' can't be used in the USING KEY clause.\n"
-			                      "It has to be either a column name as a key or a direct call to an aggregate function.", expr->ToString());
-		}
-		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
-
-		vector<LogicalType> aggregation_input_types;
-		vector<unique_ptr<Expression>> bound_children;
-		// Bind the children of the aggregate function
-		for (auto &child : func_expr.children) {
-			auto bound_child = expression_binder.Bind(child);
-			aggregation_input_types.push_back(bound_child->return_type);
-			bound_children.push_back(std::move(bound_child));
-		}
-
-		idx_t aggregate_idx;
-		// If user provided an alias, prioritize that.
-		// Otherwise, we try to infer the target column from the first argument
-		if (func_expr.HasAlias()) {
-			auto names_iter = find(result.names.begin(), result.names.end(), func_expr.GetAlias());
-			if (names_iter == result.names.end()) {
-				throw BinderException(expr->GetQueryLocation(),
-				                      "Could not find column with name '%s' to bind aggregate to.",
-				                      func_expr.GetAlias());
-			}
-			aggregate_idx = NumericCast<idx_t>(std::distance(result.names.begin(), names_iter));
-			// Create a new bound column reference for the target column
-			payload_aggregate_dest_map[payload_idx] = make_uniq<BoundColumnRefExpression>(
-			    result.types[aggregate_idx], ColumnBinding(setop_index, aggregate_idx));
-		} else {
-			if (bound_children.size() == 0 || bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
-				// No alias and no way to infer target column through first argument
-				throw BinderException(expr->GetQueryLocation(),
-				                      "In USING KEY, an aggregate must either have a column reference or an alias.");
-			}
-			aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
-		}
-
-		// Find the best matching aggregate function
-		auto best_function_idx =
-		    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
-		if (!best_function_idx.IsValid()) {
-			throw BinderException("No matching aggregate function\n%s", error.Message());
-		}
-		// Found a matching function, bind it as an aggregate
-		auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
-		auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
-		                                                       nullptr, AggregateType::NON_DISTINCT);
-
-		if (payload_references.find(aggregate_idx) != payload_references.end()) {
-			throw BinderException(func_expr.GetQueryLocation(),
-			                      "Column '%s' referenced multiple times in USING KEY clause.\n"
-			                      "Try using an alias for one of the aggregates.",
-			                      result.names[aggregate_idx]);
-		}
-
-		if (key_references.find(aggregate_idx) != key_references.end()) {
-			throw BinderException(func_expr.GetQueryLocation(),
-			                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
-			                      "Try using an alias for the aggregation.",
-			                      result.names[aggregate_idx]);
-		}
-
-		return_types[aggregate_idx] = aggregate->return_type;
-		payload_aggregates.push_back(std::move(aggregate));
-		payload_references.insert(aggregate_idx);
-	}
 
 	// Now that we have finished binding all aggregates, we can update the operator types
 	result.types = std::move(return_types);
@@ -207,7 +211,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// Add bindings of left side to temporary CTE bindings context
 	BindingAlias cte_alias(statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, internal_types);
-	if (!statement.key_targets.empty()) {
+	if (!key_targets.empty()) {
 		BindingAlias recurring_alias("recurring", statement.ctename);
 		right_binder->bind_context.AddCTEBinding(setop_index, std::move(recurring_alias), result.names, result.types);
 	}
