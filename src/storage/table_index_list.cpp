@@ -147,11 +147,17 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		// Create an IndexBinder to bind the index
 		IndexBinder idx_binder(*binder, context);
 
-		// Apply any outstanding appends and replace the unbound index with a bound index.
+		// Apply any outstanding buffered replays and replace the unbound index with a bound index.
 		auto &unbound_index = index_entry->index->Cast<UnboundIndex>();
 		auto bound_idx = idx_binder.BindIndex(unbound_index);
-		if (unbound_index.HasBufferedAppends()) {
-			bound_idx->ApplyBufferedAppends(column_types, unbound_index.GetBufferedAppends(),
+		if (unbound_index.HasBufferedReplays()) {
+			// For replaying buffered index operations, we only want the physical column types (skip over
+			// generated column types).
+			vector<LogicalType> physical_column_types;
+			for (auto &col : table.GetColumns().Physical()) {
+				physical_column_types.push_back(col.Type());
+			}
+			bound_idx->ApplyBufferedReplays(physical_column_types, unbound_index.GetBufferedReplays(),
 			                                unbound_index.GetMappedColumnIds());
 		}
 
@@ -255,10 +261,17 @@ void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<L
 	auto &index_list = data_table_info.GetIndexes();
 	auto indexed_columns = index_list.GetRequiredColumns();
 
-	vector<LogicalType> index_types;
+	// Store the mapped_column_ids and index_types in sorted canonical form, needed for
+	// buffering WAL index operations during replay (see notes in unbound_index.hpp).
+	// First sort mapped_column_ids, then populate index_types according to the sorted order.
 	for (auto &col : indexed_columns) {
-		index_types.push_back(table_types[col]);
 		mapped_column_ids.emplace_back(col);
+	}
+	std::sort(mapped_column_ids.begin(), mapped_column_ids.end());
+
+	vector<LogicalType> index_types;
+	for (auto &col : mapped_column_ids) {
+		index_types.push_back(table_types[col.GetPrimaryIndex()]);
 	}
 
 	index_chunk.InitializeEmpty(index_types);

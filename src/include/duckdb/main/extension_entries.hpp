@@ -601,6 +601,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_envelope", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_envelope_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_equals", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_expand", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_extent", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_extent_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_extent_approx", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
