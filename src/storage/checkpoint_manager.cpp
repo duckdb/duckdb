@@ -213,33 +213,35 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(context, header);
 
-#ifdef DUCKDB_BLOCK_VERIFICATION
-	// extend verify_block_usage_count
-	auto metadata_info = storage_manager.GetMetadataInfo();
-	for (auto &info : metadata_info) {
-		verify_block_usage_count[info.block_id]++;
-	}
-	for (auto &entry_ref : catalog_entries) {
-		auto &entry = entry_ref.get();
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			auto &table = entry.Cast<DuckTableEntry>();
-			auto &storage = table.GetStorage();
-			auto segment_info = storage.GetColumnSegmentInfo();
-			for (auto &segment : segment_info) {
-				verify_block_usage_count[segment.block_id]++;
-				if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
-					auto overflow_blocks = StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
-					auto splits = StringUtil::Split(overflow_blocks, ", ");
-					for (auto &split : splits) {
-						auto overflow_block_id = std::stoll(split);
-						verify_block_usage_count[overflow_block_id]++;
+	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(db.GetDatabase());
+	if (debug_verify_blocks) {
+		// extend verify_block_usage_count
+		auto metadata_info = storage_manager.GetMetadataInfo();
+		for (auto &info : metadata_info) {
+			verify_block_usage_count[info.block_id]++;
+		}
+		for (auto &entry_ref : catalog_entries) {
+			auto &entry = entry_ref.get();
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				auto &table = entry.Cast<DuckTableEntry>();
+				auto &storage = table.GetStorage();
+				auto segment_info = storage.GetColumnSegmentInfo();
+				for (auto &segment : segment_info) {
+					verify_block_usage_count[segment.block_id]++;
+					if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
+						auto overflow_blocks =
+						    StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
+						auto splits = StringUtil::Split(overflow_blocks, ", ");
+						for (auto &split : splits) {
+							auto overflow_block_id = std::stoll(split);
+							verify_block_usage_count[overflow_block_id]++;
+						}
 					}
 				}
 			}
 		}
+		block_manager.VerifyBlocks(verify_block_usage_count);
 	}
-	block_manager.VerifyBlocks(verify_block_usage_count);
-#endif
 
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
 		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");

@@ -74,7 +74,8 @@ private:
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
-	vector<MetaBlockPointer> existing_pointers;
+	bool reuse_existing_metadata_blocks = false;
+	vector<idx_t> existing_extra_metadata_blocks;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
@@ -103,7 +104,10 @@ public:
 		return collection.get();
 	}
 	//! Returns the list of meta block pointers used by the columns
-	vector<MetaBlockPointer> GetColumnPointers();
+	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
+
+	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
+
 	//! Returns the list of meta block pointers used by the deletes
 	const vector<MetaBlockPointer> &GetDeletesPointers() const {
 		return deletes_pointers;

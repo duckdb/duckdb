@@ -34,7 +34,9 @@ if(NOT WIN32 AND NOT SUN)
   if(${BUILD_TPCE})
     add_subdirectory(tpce)
   endif()
-  add_subdirectory(persistence)
+  if(${ENABLE_UNITTEST_CPP_TESTS})
+    add_subdirectory(persistence)
+  endif()
 endif()
 
 set(UNITTEST_ROOT_DIRECTORY
