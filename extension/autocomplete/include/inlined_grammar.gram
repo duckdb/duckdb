@@ -693,7 +693,7 @@ ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
-BitOperator <- '&' / '|' / '<<' / '>>' / '||'
+BitOperator <- '&' / '|' / '<<' / '>>'
 # LEVEL 10
 AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
 Term <- '+' / '-'

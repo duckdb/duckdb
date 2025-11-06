@@ -681,7 +681,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"StringOperator <- '^@' / '||'\n"
 	"# LEVEL 9\n"
 	"BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*\n"
-	"BitOperator <- '&' / '|' / '<<' / '>>' / '||'\n"
+	"BitOperator <- '&' / '|' / '<<' / '>>'\n"
 	"# LEVEL 10\n"
 	"AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*\n"
 	"Term <- '+' / '-'\n"

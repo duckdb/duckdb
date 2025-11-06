@@ -563,7 +563,10 @@ PEGTransformerFactory::TransformAdditiveExpression(PEGTransformer &transformer,
 string PEGTransformerFactory::TransformTerm(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
-	return choice_pr->Cast<KeywordParseResult>().keyword;
+	if (choice_pr->Cast<KeywordParseResult>().keyword == "+") {
+		return "add";
+	}
+	return "subtract";
 }
 
 // MultiplicativeExpression <- ExponentiationExpression (Factor ExponentiationExpression)*

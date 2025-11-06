@@ -12,6 +12,7 @@
 #include "ast/insert_values.hpp"
 #include "ast/join_prefix.hpp"
 #include "ast/join_qualifier.hpp"
+#include "ast/macro_parameter.hpp"
 #include "ast/on_conflict_expression_target.hpp"
 #include "ast/sequence_option.hpp"
 #include "ast/setting_info.hpp"
@@ -378,11 +379,11 @@ private:
 	                                                               optional_ptr<ParseResult> parse_result);
 	static unique_ptr<MacroFunction> TransformScalarMacroDefinition(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformMacroParameters(PEGTransformer &transformer,
+	static vector<MacroParameter> TransformMacroParameters(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformMacroParameter(PEGTransformer &transformer,
+	static MacroParameter TransformMacroParameter(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformSimpleParameter(PEGTransformer &transformer,
+	static MacroParameter TransformSimpleParameter(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 
 	// create_schema.gram
