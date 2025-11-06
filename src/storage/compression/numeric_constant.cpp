@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 namespace duckdb {
 
@@ -114,6 +115,11 @@ void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool 
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER:
 		break;
+	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
+		auto &opt_filter = filter.Cast<SelectivityOptionalFilter>();
+		return FiltersNullValues(type, *opt_filter.child_filter, filters_nulls, filters_valid_values,
+								 filter_state);
+	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
 		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
