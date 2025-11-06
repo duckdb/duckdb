@@ -270,6 +270,20 @@ typedef enum duckdb_config_option_scope {
 	DUCKDB_CONFIG_OPTION_SCOPE_GLOBAL = 3,
 } duckdb_config_option_scope;
 
+//! An enum over DuckDB's catalog entry types.
+typedef enum duckdb_catalog_entry_type {
+	DUCKDB_CATALOG_ENTRY_TYPE_INVALID = 0,
+	DUCKDB_CATALOG_ENTRY_TYPE_TABLE = 1,
+	DUCKDB_CATALOG_ENTRY_TYPE_SCHEMA = 2,
+	DUCKDB_CATALOG_ENTRY_TYPE_VIEW = 3,
+	DUCKDB_CATALOG_ENTRY_TYPE_INDEX = 4,
+	DUCKDB_CATALOG_ENTRY_TYPE_PREPARED_STATEMENT = 5,
+	DUCKDB_CATALOG_ENTRY_TYPE_SEQUENCE = 6,
+	DUCKDB_CATALOG_ENTRY_TYPE_COLLATION = 7,
+	DUCKDB_CATALOG_ENTRY_TYPE_TYPE = 8,
+	DUCKDB_CATALOG_ENTRY_TYPE_DATABASE = 9,
+} duckdb_catalog_entry_type;
+
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -847,6 +861,18 @@ typedef struct _duckdb_file_system {
 typedef struct _duckdb_file_handle {
 	void *internal_ptr;
 } * duckdb_file_handle;
+
+//===--------------------------------------------------------------------===//
+// Catalog Interface
+//===--------------------------------------------------------------------===//
+
+typedef struct _duckdb_catalog {
+	void *internal_ptr;
+} * duckdb_catalog;
+
+typedef struct _duckdb_catalog_entry {
+	void *internal_ptr;
+} * duckdb_catalog_entry;
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
@@ -5968,6 +5994,83 @@ The result must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_C_API duckdb_logical_type duckdb_table_function_bind_get_result_column_type(duckdb_bind_info info,
                                                                                    idx_t col_idx);
+
+//----------------------------------------------------------------------------------------------------------------------
+// Catalog Interface
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to access catalog entries
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+Retrieve a database catalog instance by name
+
+* @param context The client context.
+* @param catalog_name The name of the catalog.
+* @return The resulting catalog instance, or `nullptr` if a catalog with the specified name does not exist. Must be
+destroyed with `duckdb_destroy_catalog`
+*/
+DUCKDB_C_API duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_context context, const char *catalog_name);
+
+/*!
+Retrieve the "type name" of the given catalog.
+E.g. for a DuckDB database, this returns 'duckdb'.
+The returned string is owned by the catalog and remains valid until the catalog is destroyed.
+
+* @param catalog The catalog.
+* @return The type name of the catalog.
+*/
+DUCKDB_C_API const char *duckdb_catalog_get_type(duckdb_catalog catalog);
+
+/*!
+Retrieve a catalog entry from the given catalog by type, schema name and entry name.
+
+* @param catalog The catalog.
+* @param context The client context.
+* @param entry_type The type of the catalog entry to retrieve.
+* @param schema_name The schema name of the catalog entry.
+* @param entry_name The name of the catalog entry.
+* @return The resulting catalog entry, or `nullptr` if no such entry exists. Must be destroyed with
+`duckdb_destroy_catalog_entry`.
+*/
+DUCKDB_C_API duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalog, duckdb_client_context context,
+                                                           duckdb_catalog_entry_type entry_type,
+                                                           const char *schema_name, const char *entry_name);
+
+/*!
+Destroys the given catalog instance.
+
+Note that this does not actually "drop" the contents of the catalog; it merely frees the C API handle.
+
+* @param catalog The catalog instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_catalog(duckdb_catalog *catalog);
+
+/*!
+Get the type of the given catalog entry.
+
+* @param entry The catalog entry.
+* @return The type of the catalog entry.
+*/
+DUCKDB_C_API duckdb_catalog_entry_type duckdb_catalog_entry_get_type(duckdb_catalog_entry entry);
+
+/*!
+Get the name of the given catalog entry.
+
+* @param entry The catalog entry.
+* @return The name of the catalog entry. The returned string is owned by the catalog entry and remains valid until the
+catalog entry is destroyed.
+*/
+DUCKDB_C_API const char *duckdb_catalog_entry_get_name(duckdb_catalog_entry entry);
+
+/*!
+Destroys the given catalog entry instance.
+
+Note that this does not actually "drop" the catalog entry from the database catalog; it merely frees the C API handle.
+
+* @param entry The catalog entry instance to destroy.
+*/
+DUCKDB_C_API void duckdb_destroy_catalog_entry(duckdb_catalog_entry *entry);
 
 #endif
 

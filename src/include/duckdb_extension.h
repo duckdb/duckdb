@@ -561,6 +561,19 @@ typedef struct {
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
 #endif
 
+// New functions for interacting with catalog entries
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_catalog (*duckdb_client_context_get_catalog)(duckdb_client_context context, const char *catalog_name);
+	const char *(*duckdb_catalog_get_type)(duckdb_catalog catalog);
+	duckdb_catalog_entry (*duckdb_catalog_get_entry)(duckdb_catalog catalog, duckdb_client_context context,
+	                                                 duckdb_catalog_entry_type entry_type, const char *schema_name,
+	                                                 const char *entry_name);
+	void (*duckdb_destroy_catalog)(duckdb_catalog *catalog);
+	duckdb_catalog_entry_type (*duckdb_catalog_entry_get_type)(duckdb_catalog_entry entry);
+	const char *(*duckdb_catalog_entry_get_name)(duckdb_catalog_entry entry);
+	void (*duckdb_destroy_catalog_entry)(duckdb_catalog_entry *entry);
+#endif
+
 // New configuration options functions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_config_option (*duckdb_create_config_option)();
@@ -1173,6 +1186,15 @@ typedef struct {
 #define duckdb_schema_from_arrow              duckdb_ext_api.duckdb_schema_from_arrow
 #define duckdb_data_chunk_from_arrow          duckdb_ext_api.duckdb_data_chunk_from_arrow
 #define duckdb_destroy_arrow_converted_schema duckdb_ext_api.duckdb_destroy_arrow_converted_schema
+
+// Version unstable_new_catalog_interface
+#define duckdb_client_context_get_catalog duckdb_ext_api.duckdb_client_context_get_catalog
+#define duckdb_catalog_get_type           duckdb_ext_api.duckdb_catalog_get_type
+#define duckdb_catalog_get_entry          duckdb_ext_api.duckdb_catalog_get_entry
+#define duckdb_destroy_catalog            duckdb_ext_api.duckdb_destroy_catalog
+#define duckdb_catalog_entry_get_type     duckdb_ext_api.duckdb_catalog_entry_get_type
+#define duckdb_catalog_entry_get_name     duckdb_ext_api.duckdb_catalog_entry_get_name
+#define duckdb_destroy_catalog_entry      duckdb_ext_api.duckdb_destroy_catalog_entry
 
 // Version unstable_new_config_options_functions
 #define duckdb_create_config_option             duckdb_ext_api.duckdb_create_config_option
