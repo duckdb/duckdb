@@ -1,0 +1,13 @@
+# name: test/sql/storage/types/variant/update.test
+# group: [variant]
+
+statement ok
+create table tbl (a VARIANT)
+
+statement ok
+insert into tbl VALUES (42)
+
+statement error
+update tbl SET a = 21
+----
+Not implemented Error: VARIANT Update is not supported.

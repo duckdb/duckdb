@@ -21,13 +21,9 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
 
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
-	auto unshredded_type = LogicalType::STRUCT(StructType::GetChildTypes(type));
+	auto unshredded_type = VariantShredding::GetUnshreddedType();
 	sub_columns.push_back(
 	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index++, start_row, unshredded_type, this));
-}
-
-idx_t VariantColumnData::SubColumnsSize() const {
-	return sub_columns.size();
 }
 
 void VariantColumnData::ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded) {
@@ -38,6 +34,7 @@ void VariantColumnData::ReplaceColumns(unique_ptr<ColumnData> &&unshredded, uniq
 }
 
 void VariantColumnData::CreateScanStates(ColumnScanState &state) {
+	//! Re-initialize the scan state, since VARIANT can have a different shape for every RowGroup
 	state.child_states.clear();
 	state.child_states.resize(sub_columns.size() + 1);
 
@@ -52,7 +49,7 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 
 void VariantColumnData::SetStart(idx_t new_start) {
 	this->start = new_start;
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		sub_column->SetStart(new_start);
 	}
@@ -65,10 +62,7 @@ idx_t VariantColumnData::GetMaxEntry() {
 
 void VariantColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
-		if (!scan_state.scan_child_column[i]) {
-			continue;
-		}
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->InitializePrefetch(prefetch_state, scan_state.child_states[i + 1], rows);
 	}
 }
@@ -82,7 +76,7 @@ void VariantColumnData::InitializeScan(ColumnScanState &state) {
 	validity.InitializeScan(state.child_states[0]);
 
 	// initialize the sub-columns
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->InitializeScan(state.child_states[i + 1]);
 	}
 }
@@ -96,10 +90,7 @@ void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// initialize the sub-columns
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
-		if (!state.scan_child_column[i]) {
-			continue;
-		}
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->InitializeScanWithOffset(state.child_states[i + 1], row_idx);
 	}
 }
@@ -158,10 +149,7 @@ void VariantColumnData::Skip(ColumnScanState &state, idx_t count) {
 	validity.Skip(state.child_states[0], count);
 
 	// skip inside the sub-columns
-	for (idx_t child_idx = 0; child_idx < SubColumnsSize(); child_idx++) {
-		if (!state.scan_child_column[child_idx]) {
-			continue;
-		}
+	for (idx_t child_idx = 0; child_idx < sub_columns.size(); child_idx++) {
 		sub_columns[child_idx]->Skip(state.child_states[child_idx + 1], count);
 	}
 }
@@ -171,7 +159,8 @@ void VariantColumnData::InitializeAppend(ColumnAppendState &state) {
 	validity.InitializeAppend(validity_append);
 	state.child_appends.push_back(std::move(validity_append));
 
-	for (idx_t i = 0; i < 1; i++) {
+	D_ASSERT(!is_shredded && sub_columns.size() == 1);
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		ColumnAppendState child_append;
 		sub_column->InitializeAppend(child_append);
@@ -191,9 +180,8 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 	// append the null values
 	validity.Append(stats, state.child_appends[0], vector, count);
 
-	//! FIXME: We could potentially use the min/max stats of the 'type_id' column to skip the iteration in
-	//! 'VariantStats' if they are the same, and there are no children (i.e, only primitives)
-	for (idx_t i = 0; i < 1; i++) {
+	D_ASSERT(!is_shredded && sub_columns.size() == 1);
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->Append(VariantStats::GetUnshreddedStats(stats), state.child_appends[i + 1], vector, count);
 	}
 	this->count += count;
@@ -201,7 +189,7 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 
 void VariantColumnData::RevertAppend(row_t start_row) {
 	validity.RevertAppend(start_row);
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		sub_column->RevertAppend(start_row);
 	}
@@ -209,86 +197,32 @@ void VariantColumnData::RevertAppend(row_t start_row) {
 }
 
 idx_t VariantColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	// fetch validity mask
-	auto &child_entries = StructVector::GetEntries(result);
-	// insert any child states that are required
-	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
-		ColumnScanState child_state;
-		child_state.scan_options = state.scan_options;
-		state.child_states.push_back(std::move(child_state));
-	}
-	// fetch the validity state
-	idx_t scan_count = validity.Fetch(state.child_states[0], row_id, result);
-	// fetch the sub-column states
-	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Fetch(state.child_states[i + 1], row_id, *child_entries[i]);
-	}
-	return scan_count;
+	throw NotImplementedException("VARIANT Fetch");
 }
 
 void VariantColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
                                Vector &update_vector, row_t *row_ids, idx_t update_count) {
-	validity.Update(transaction, data_table, column_index, update_vector, row_ids, update_count);
-	auto &child_entries = StructVector::GetEntries(update_vector);
-	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Update(transaction, data_table, column_index, *child_entries[i], row_ids, update_count);
-	}
+	throw NotImplementedException("VARIANT Update is not supported.");
 }
 
 void VariantColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
                                      const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                      idx_t update_count, idx_t depth) {
-	// we can never DIRECTLY update a struct column
-	if (depth >= column_path.size()) {
-		throw InternalException("Attempting to directly update a struct column - this should not be possible");
-	}
-	auto update_column = column_path[depth];
-	if (update_column == 0) {
-		// update the validity column
-		validity.UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1);
-	} else {
-		if (update_column > SubColumnsSize()) {
-			throw InternalException("Update column_path out of range");
-		}
-		sub_columns[update_column - 1]->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids,
-		                                             update_count, depth + 1);
-	}
+	throw NotImplementedException("VARIANT Update Column is not supported");
 }
 
 unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
-	// check if any child column has updates
-	auto stats = BaseStatistics::CreateEmpty(type);
-	auto validity_stats = validity.GetUpdateStatistics();
-	if (validity_stats) {
-		stats.Merge(*validity_stats);
-	}
-	auto child_stats = sub_columns[0]->GetUpdateStatistics();
-	if (child_stats) {
-		VariantStats::SetUnshreddedStats(stats, std::move(child_stats));
-	}
-	return stats.ToUnique();
+	return nullptr;
 }
 
 void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-	// fetch validity mask
-	auto &child_entries = StructVector::GetEntries(result);
-	// insert any child states that are required
-	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
-		auto child_state = make_uniq<ColumnFetchState>();
-		state.child_states.push_back(std::move(child_state));
-	}
-	// fetch the validity state
-	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
-	// fetch the sub-column states
-	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], row_id, *child_entries[i], result_idx);
-	}
+	throw NotImplementedException("VARIANT Fetch Row");
 }
 
 void VariantColumnData::CommitDropColumn() {
 	validity.CommitDropColumn();
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		sub_column->CommitDropColumn();
 	}
@@ -442,7 +376,7 @@ bool VariantColumnData::IsPersistent() {
 	if (!validity.IsPersistent()) {
 		return false;
 	}
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		if (!sub_column->IsPersistent()) {
 			return false;
@@ -455,7 +389,7 @@ bool VariantColumnData::HasAnyChanges() const {
 	if (validity.HasAnyChanges()) {
 		return true;
 	}
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		if (sub_column->HasAnyChanges()) {
 			return true;
@@ -467,7 +401,7 @@ bool VariantColumnData::HasAnyChanges() const {
 PersistentColumnData VariantColumnData::Serialize() {
 	PersistentColumnData persistent_data(type);
 	persistent_data.child_columns.push_back(validity.Serialize());
-	for (idx_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		persistent_data.child_columns.push_back(sub_column->Serialize());
 	}
@@ -501,7 +435,7 @@ void VariantColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t 
                                              vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
 	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
 		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	}
@@ -511,7 +445,7 @@ void VariantColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	ColumnData::Verify(parent);
 	validity.Verify(parent);
-	for (idx_t i = 0; i < SubColumnsSize(); i++) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		sub_column->Verify(parent);
 	}

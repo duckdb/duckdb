@@ -21,7 +21,6 @@ public:
 
 	//! The sub-columns of the struct
 	vector<unique_ptr<ColumnData>> sub_columns;
-	//! TODO: remove this, it already exists in the 'unshredded' field
 	ValidityColumnData validity;
 	//! Whether (some of) the fields are stored outside of the VARIANT data
 	bool is_shredded = false;
@@ -74,7 +73,6 @@ private:
 	void ShredVariantData(Vector &input, Vector &output, idx_t count, const LogicalType &shredded_type);
 	void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 	vector<unique_ptr<ColumnData>> WriteShreddedData(RowGroup &row_group, const LogicalType &shredded_type);
-	idx_t SubColumnsSize() const;
 	void ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded);
 	void CreateScanStates(ColumnScanState &state);
 	LogicalType GetShreddedType();
