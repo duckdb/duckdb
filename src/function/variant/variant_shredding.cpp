@@ -274,7 +274,7 @@ void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, 
 			auto offset = entry.offset + j;
 			child_sel[offset] = row;
 			child_value_index_sel[offset] = variant.GetValuesIndex(row, array_data.children_idx + j);
-			child_result_sel[offset] = offset;
+			child_result_sel[offset] = NumericCast<uint32_t>(offset);
 		}
 	}
 
@@ -303,7 +303,7 @@ VariantShreddingState::VariantShreddingState(const LogicalType &type, idx_t tota
     : type(type), shredded_sel(total_count), values_index_sel(total_count), result_sel(total_count) {
 }
 
-bool VariantShreddingState::ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, idx_t values_index) {
+bool VariantShreddingState::ValueIsShredded(UnifiedVariantVectorData &variant, idx_t row, uint32_t values_index) {
 	auto type_id = variant.GetTypeId(row, values_index);
 	if (!GetVariantTypes().count(type_id)) {
 		return false;
@@ -317,7 +317,7 @@ bool VariantShreddingState::ValueIsShredded(UnifiedVariantVectorData &variant, i
 	return true;
 }
 
-void VariantShreddingState::SetShredded(idx_t row, idx_t values_index, idx_t result_idx) {
+void VariantShreddingState::SetShredded(uint32_t row, uint32_t values_index, uint32_t result_idx) {
 	shredded_sel[count] = row;
 	values_index_sel[count] = values_index;
 	result_sel[count] = result_idx;

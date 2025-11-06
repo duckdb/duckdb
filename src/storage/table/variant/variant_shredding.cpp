@@ -515,7 +515,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 			row = static_cast<uint32_t>(sel->get_index(i));
 		}
 
-		idx_t result_index = i;
+		uint32_t result_index = i;
 		if (result_sel) {
 			result_index = result_sel->get_index(i);
 		}

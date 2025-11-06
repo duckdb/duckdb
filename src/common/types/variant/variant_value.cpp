@@ -250,7 +250,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 		values_offset++;
 
 		//! data
-		VarintEncode<uint32_t>(children.size(), blob_data + data_offset);
+		VarintEncode<uint32_t>(static_cast<uint32_t>(children.size()), blob_data + data_offset);
 		data_offset += GetVarintSize(children.size());
 
 		if (!children.empty()) {
@@ -291,7 +291,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 		values_offset++;
 
 		//! data
-		VarintEncode<uint32_t>(children.size(), blob_data + data_offset);
+		VarintEncode<uint32_t>(static_cast<uint32_t>(children.size()), blob_data + data_offset);
 		data_offset += GetVarintSize(children.size());
 
 		if (!children.empty()) {
@@ -544,7 +544,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 			}
 			auto string_data = primitive.GetValueUnsafe<string_t>();
 			auto string_size = string_data.GetSize();
-			VarintEncode<uint32_t>(string_size, blob_data + data_offset);
+			VarintEncode<uint32_t>(static_cast<uint32_t>(string_size), blob_data + data_offset);
 			data_offset += GetVarintSize(string_size);
 			memcpy(blob_data + data_offset, string_data.GetData(), string_size);
 			data_offset += string_size;

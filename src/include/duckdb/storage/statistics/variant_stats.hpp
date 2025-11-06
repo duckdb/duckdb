@@ -36,7 +36,6 @@ public:
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 
-	DUCKDB_API static void Update(BaseStatistics &stats, Vector &vec, idx_t count);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);

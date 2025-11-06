@@ -175,7 +175,6 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 		Append(stats, state, append_vector, count);
 		return;
 	}
-	VariantStats::Update(stats, vector, count);
 
 	// append the null values
 	validity.Append(stats, state.child_appends[0], vector, count);

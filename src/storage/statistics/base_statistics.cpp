@@ -586,8 +586,6 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		} else {
 			VariantStats::SetUnshreddedStats(
 			    result, FromConstant(Value::STRUCT(unshredded_type, StructValue::GetChildren(input))));
-			Vector constant_vec(input);
-			VariantStats::Update(result, constant_vec, 1);
 		}
 		return result;
 	}

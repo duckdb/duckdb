@@ -126,23 +126,21 @@ void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base)
 }
 
 string VariantStats::ToString(const BaseStatistics &stats) {
-	const auto &data = GetDataUnsafe(stats);
-	string result;
-
-	throw NotImplementedException("VariantStats::ToString");
-	return result;
-}
-
-void VariantStats::Update(BaseStatistics &stats, Vector &vector, idx_t count) {
 	auto &data = GetDataUnsafe(stats);
+	return StringUtil::Format("is_shredded: %s", data.is_shredded ? "true" : "false");
 }
 
 void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
-	//! Merge the unshredded stats
-	stats.child_stats[0].Merge(other.child_stats[0]);
+	auto &data = GetDataUnsafe(stats);
+	auto &other_data = GetDataUnsafe(other);
+
+	D_ASSERT(!data.is_shredded && !other_data.is_shredded);
+	for (idx_t i = 0; i < 1; i++) {
+		stats.child_stats[i].Merge(other.child_stats[i]);
+	}
 }
 
 void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
