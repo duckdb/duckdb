@@ -21,6 +21,26 @@ bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics ord
 	return (order == OrderByStatistics::MAX && v1 < v2) || (order == OrderByStatistics::MIN && v1 > v2);
 }
 
+idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const OrderByColumnType type) {
+	if (!stats.CanHaveNull()) {
+		return row_group.count;
+	}
+	NumericStats::IsConstant(stats);
+	if (type == OrderByColumnType::NUMERIC) {
+		if (!NumericStats::HasMinMax(stats)) {
+			return 0;
+		}
+		if (NumericStats::IsConstant(stats)) {
+			return 1;
+		}
+		return 2;
+	} else {
+		// We cannot check if the min/max for StringStats have actually been set. As the strings may be truncated, we
+		// also cannot assume that min and max are the same
+		return 0;
+	}
+}
+
 template <typename It, typename End>
 void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_groups, const idx_t row_limit,
                   const OrderByColumnType column_type, const OrderByStatistics stat_type) {
@@ -30,16 +50,16 @@ void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_gr
 	idx_t qualifying_tuples = 0;
 	idx_t qualify_later = 0;
 
-	auto last_unresolved_row_group = it;
-	idx_t last_unresolved_row_group_sum = last_unresolved_row_group->second.row_group.get().count;
-	auto last_unresolved_boundary =
-	    RowGroupReorderer::RetrieveStat(*last_unresolved_row_group->second.stats, opposite_stat_type, column_type);
+	auto last_unresolved_entry = it;
+	auto &last_stats = it->second.stats;
+	idx_t last_unresolved_row_group_sum = GetQualifyingTupleCount(it->second.row_group.get(), *last_stats, column_type);
+	auto last_unresolved_boundary = RowGroupReorderer::RetrieveStat(*last_stats, opposite_stat_type, column_type);
 
 	for (; it != end; ++it) {
 		auto &current_key = it->first;
 		auto &row_group = it->second.row_group;
 
-		while (last_unresolved_row_group != it) {
+		while (last_unresolved_entry != it) {
 			if (!CompareValues(current_key, last_unresolved_boundary, stat_type)) {
 				if (current_key != std::prev(it)->first) {
 					// Row groups overlap: we can only guarantee one additional qualifying tuple
@@ -55,10 +75,12 @@ void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_gr
 			}
 			// Row groups do not overlap: we can guarantee that the tuples qualify
 			qualifying_tuples = last_unresolved_row_group_sum;
-			++last_unresolved_row_group;
-			last_unresolved_row_group_sum += last_unresolved_row_group->second.row_group.get().count;
-			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(*last_unresolved_row_group->second.stats,
-			                                                           opposite_stat_type, column_type);
+			++last_unresolved_entry;
+			auto &upcoming_row_group = last_unresolved_entry->second.row_group.get();
+			auto &upcoming_stats = *last_unresolved_entry->second.stats;
+
+			last_unresolved_row_group_sum += GetQualifyingTupleCount(upcoming_row_group, upcoming_stats, column_type);
+			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(upcoming_stats, opposite_stat_type, column_type);
 		}
 		if (qualifying_tuples >= row_limit) {
 			return;

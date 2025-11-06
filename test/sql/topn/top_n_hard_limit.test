@@ -14,8 +14,8 @@ USE db
 # [     ]              : 0       10240
 # [     ]              : 2       4097
 #   [     ]            : 4097    4097
-#         [     ]      : 8192    2049
-#                 [ ]  : 10240   2048
+#         [   ]        : 8192    2049
+#               [ ]    : 10240   2048
 
 statement ok
 CREATE TABLE t AS SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
@@ -95,3 +95,18 @@ query II
 EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 4098
 ----
 analyzed_plan	<REGEX>:.*TABLE_SCAN.*10,240 rows.*
+
+statement ok
+INSERT INTO t SELECT 9 i UNION ALL SELECT i FROM repeat(NULL, 2046) t1(i) UNION ALL SELECT 10 i
+
+query II
+EXPLAIN ANALYZE SELECT i FROM t ORDER by i DESC LIMIT 3
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query I
+SELECT i FROM t ORDER BY i DESC LIMIT 3
+----
+10
+9
+8
