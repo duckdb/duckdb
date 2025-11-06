@@ -370,7 +370,8 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 	va_list ap;
 	va_start(ap, zFormat);
 	auto &state = ShellState::Get();
-	if ((state.stdout_is_console && (out == stdout || out == stderr)) || (state.pager_is_active && !state.win_utf8_mode)) {
+	if ((state.stdout_is_console && (out == stdout || out == stderr)) ||
+	    (state.pager_is_active && !state.win_utf8_mode)) {
 		char buffer[2048];
 		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
 		const char *utf8_data;
@@ -382,16 +383,16 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 		} else {
 			utf8_data = buffer;
 		}
-        if (state.pager_is_active) {
-            auto mbcs_text = ShellState::Win32Utf8ToMbcs(utf8_data, true);
-            fputs(mbcs_text.c_str(), out);
-        } else {
-            // convert from utf8 to utf16
-            auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
-            auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-            // use WriteConsoleW to write the unicode codepoints to the console
-            WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
-        }
+		if (state.pager_is_active) {
+			auto mbcs_text = ShellState::Win32Utf8ToMbcs(utf8_data, true);
+			fputs(mbcs_text.c_str(), out);
+		} else {
+			// convert from utf8 to utf16
+			auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
+			auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+			// use WriteConsoleW to write the unicode codepoints to the console
+			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
+		}
 	} else {
 		vfprintf(out, zFormat, ap);
 	}
@@ -1931,7 +1932,7 @@ void ShellState::StartPagerDisplay() {
 }
 
 void ShellState::FinishPagerDisplay() {
-    ShellState::Get().pager_is_active = false;
+	ShellState::Get().pager_is_active = false;
 #if !defined(_WIN32) && !defined(WIN32)
 	// enable sigpipe trap again after finishing the display
 	signal(SIGPIPE, SIG_DFL);
@@ -1939,9 +1940,11 @@ void ShellState::FinishPagerDisplay() {
 }
 
 unique_ptr<PagerState> ShellState::SetupPager() {
-    if (win_utf8_mode) {
-        SetConsoleCP(CP_UTF8);
-    }
+#if defined(_WIN32) || defined(WIN32)
+	if (win_utf8_mode) {
+		SetConsoleCP(CP_UTF8);
+	}
+#endif
 	StartPagerDisplay();
 	auto pager_out = popen(pager_command.c_str(), "w");
 	if (!pager_out) {
@@ -1950,7 +1953,7 @@ unique_ptr<PagerState> ShellState::SetupPager() {
 		       strerror(errno));
 		return nullptr;
 	}
-    pager_is_active = true;
+	pager_is_active = true;
 	out = pager_out;
 	outfile = "|" + pager_command;
 	return make_uniq<PagerState>(*this);

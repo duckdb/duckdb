@@ -238,10 +238,10 @@ public:
 	string pager_command;
 	// only show a pager when this count is exceeded
 	idx_t pager_min_rows = 50;
-    bool pager_is_active = false;
+	bool pager_is_active = false;
 
 #if defined(_WIN32) || defined(WIN32)
-    //! When enabled, sets the console page to UTF8 and renders using that code page
+	//! When enabled, sets the console page to UTF8 and renders using that code page
 	bool win_utf8_mode = false;
 #endif
 
