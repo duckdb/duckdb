@@ -360,8 +360,8 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
 	// NULL list parameter
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<ListLambdaBindData>(bound_function.return_type, nullptr);
+		bound_function.SetReturnType(LogicalType::SQLNULL);
+		return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), nullptr);
 	}
 	// prepared statements
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -385,7 +385,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
 
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr), has_index);
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(lambda_expr), has_index);
 }
 
 void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {

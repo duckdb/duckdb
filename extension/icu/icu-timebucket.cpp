@@ -629,7 +629,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR},
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
 		for (auto &func : set.functions) {
-			BaseScalarFunction::SetReturnsError(func);
+			func.SetFallible();
 		}
 		loader.RegisterFunction(set);
 	}

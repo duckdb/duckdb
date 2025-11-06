@@ -299,8 +299,8 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 		// Create a bound function call expression
 		auto args = vector<unique_ptr<Expression>>();
 		args.push_back(std::move(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, 0)));
-		auto expr =
-		    make_uniq<BoundFunctionExpression>(conversion_func.return_type, conversion_func, std::move(args), nullptr);
+		auto expr = make_uniq<BoundFunctionExpression>(conversion_func.GetReturnType(), conversion_func,
+		                                               std::move(args), nullptr);
 
 		// Create a child reader
 		auto child_reader = ColumnReader::CreateReader(reader, schema.children[0]);

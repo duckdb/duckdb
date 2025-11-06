@@ -1772,7 +1772,7 @@ unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunction &bo
 		arguments.erase(arguments.begin());
 		bound_function.arguments.erase(bound_function.arguments.begin());
 		bound_function.name = "julian";
-		bound_function.return_type = LogicalType::DOUBLE;
+		bound_function.SetReturnType(LogicalType::DOUBLE);
 		switch (arguments[0]->return_type.id()) {
 		case LogicalType::TIMESTAMP:
 		case LogicalType::TIMESTAMP_S:
@@ -1793,7 +1793,7 @@ unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunction &bo
 		arguments.erase(arguments.begin());
 		bound_function.arguments.erase(bound_function.arguments.begin());
 		bound_function.name = "epoch";
-		bound_function.return_type = LogicalType::DOUBLE;
+		bound_function.SetReturnType(LogicalType::DOUBLE);
 		switch (arguments[0]->return_type.id()) {
 		case LogicalType::TIMESTAMP:
 		case LogicalType::TIMESTAMP_S:
@@ -1844,7 +1844,7 @@ ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar
 	                                        nullptr, ts_stats, DATE_CACHE));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
 	for (auto &func : operator_set.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return operator_set;
 }
@@ -1974,8 +1974,8 @@ struct StructDatePart {
 		}
 
 		Function::EraseArgument(bound_function, arguments, 0);
-		bound_function.return_type = LogicalType::STRUCT(struct_children);
-		return make_uniq<BindData>(bound_function.return_type, part_codes);
+		bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
+		return make_uniq<BindData>(bound_function.GetReturnType(), part_codes);
 	}
 
 	template <typename INPUT_TYPE>
@@ -2168,7 +2168,7 @@ ScalarFunctionSet QuarterFun::GetFunctions() {
 ScalarFunctionSet DayOfWeekFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::DayOfWeekOperator>();
 	for (auto &func : set.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return set;
 }
@@ -2203,7 +2203,7 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 	operator_set.AddFunction(function);
 
 	for (auto &func : operator_set.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 
 	return operator_set;
@@ -2408,7 +2408,7 @@ ScalarFunctionSet DatePartFun::GetFunctions() {
 	date_part.AddFunction(StructDatePart::GetFunction<dtime_tz_t>(LogicalType::TIME_TZ));
 
 	for (auto &func : date_part.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 
 	return date_part;

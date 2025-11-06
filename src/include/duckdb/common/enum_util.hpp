@@ -328,6 +328,10 @@ enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
 
+enum class QueryResultMemoryType : uint8_t;
+
+enum class QueryResultOutputType : uint8_t;
+
 enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
@@ -904,6 +908,12 @@ const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationTy
 
 template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value);
+
+template<>
+const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value);
+
+template<>
+const char* EnumUtil::ToChars<QueryResultOutputType>(QueryResultOutputType value);
 
 template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
@@ -1547,6 +1557,12 @@ QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const 
 
 template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
+
+template<>
+QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *value);
+
+template<>
+QueryResultOutputType EnumUtil::FromString<QueryResultOutputType>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);

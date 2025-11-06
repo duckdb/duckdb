@@ -633,7 +633,7 @@ bool ART::SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &ro
 	Iterator it(*this);
 
 	// Early-out, if the maximum value in the ART is lower than the lower bound.
-	if (!it.LowerBound(tree, key, equal, 0)) {
+	if (!it.LowerBound(tree, key, equal)) {
 		return true;
 	}
 
@@ -666,7 +666,7 @@ bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_e
 	Iterator it(*this);
 
 	// Early-out, if the maximum value in the ART is lower than the lower bound.
-	if (!it.LowerBound(tree, lower_bound, left_equal, 0)) {
+	if (!it.LowerBound(tree, lower_bound, left_equal)) {
 		return true;
 	}
 
@@ -1046,7 +1046,7 @@ idx_t ART::GetInMemorySize(IndexLock &index_lock) {
 	return in_memory_size;
 }
 
-//===--------------------------------------------------------------------===//
+//===-------------------------------------------------------------------===//
 // Vacuum
 //===--------------------------------------------------------------------===//
 
@@ -1204,15 +1204,25 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 // Verification
 //===--------------------------------------------------------------------===//
 
-string ART::VerifyAndToString(IndexLock &l, const bool only_verify) {
-	return VerifyAndToStringInternal(only_verify);
+string ART::ToString(IndexLock &l, bool display_ascii) {
+	return ToStringInternal(display_ascii);
 }
 
-string ART::VerifyAndToStringInternal(const bool only_verify) {
+string ART::ToStringInternal(bool display_ascii) {
 	if (tree.HasMetadata()) {
-		return "ART: " + tree.VerifyAndToString(*this, only_verify);
+		return "\nART: \n" + tree.ToString(*this, 0, false, display_ascii);
 	}
 	return "[empty]";
+}
+
+void ART::Verify(IndexLock &l) {
+	VerifyInternal();
+}
+
+void ART::VerifyInternal() {
+	if (tree.HasMetadata()) {
+		tree.Verify(*this);
+	}
 }
 
 void ART::VerifyAllocations(IndexLock &l) {

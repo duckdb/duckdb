@@ -319,10 +319,16 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	bool use_large_bignum = false;
 	auto entry = input.named_parameters.find("use_large_enum");
 	if (entry != input.named_parameters.end()) {
+		if (entry->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for use_large_enum");
+		}
 		use_large_enum = BooleanValue::Get(entry->second);
 	}
 	entry = input.named_parameters.find("use_large_bignum");
 	if (entry != input.named_parameters.end()) {
+		if (entry->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for use_large_bignum");
+		}
 		use_large_bignum = BooleanValue::Get(entry->second);
 	}
 	result->test_types = TestAllTypesFun::GetTestTypes(use_large_enum, use_large_bignum);

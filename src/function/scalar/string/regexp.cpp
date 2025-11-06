@@ -357,7 +357,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 			child_list_t<LogicalType> struct_children;
 			regexp_util::ParseGroupNameList(context, bound_function.name, *arguments[2], constant_string, options,
 			                                constant_pattern, dummy_names, struct_children);
-			bound_function.return_type = LogicalType::STRUCT(struct_children);
+			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		} else {
 			auto group_idx = group.GetValue<int32_t>();
 			if (group_idx < 0 || group_idx > 9) {
@@ -395,7 +395,7 @@ ScalarFunctionSet RegexpMatchesFun::GetFunctions() {
 	    RegexpMatchesFunction<RegexPartialMatch>, RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState,
 	    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
 	for (auto &func : regexp_partial_match.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return (regexp_partial_match);
 }

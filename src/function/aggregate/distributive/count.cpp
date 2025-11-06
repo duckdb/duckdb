@@ -239,7 +239,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 	fun.name = "count_star";
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	fun.window = CountStarFunction::Window<int64_t>;
 	return fun;

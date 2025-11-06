@@ -3,7 +3,12 @@
 #include "history.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "shell_highlight.hpp"
+#include "shell_state.hpp"
+#if defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace duckdb {
 static const char *continuationPrompt = "> ";
@@ -42,7 +47,7 @@ struct AppendBuffer {
 	}
 
 	void Write(int fd) {
-		if (write(fd, buffer.c_str(), buffer.size()) == -1) {
+		if (!Linenoise::Write(fd, buffer.c_str(), buffer.size())) {
 			/* Can't recover from write error. */
 			Linenoise::Log("%s", "Failed to write buffer\n");
 		}
@@ -941,9 +946,6 @@ void Linenoise::RefreshMultiLine() {
 	Linenoise::Log("pos %d", pos);
 	Linenoise::Log("max cols %d", ws.ws_col);
 
-	Linenoise::Log("\n");
-	old_cursor_rows = new_cursor_row;
-
 	if (rendered_completion_lines > 0 || (render_completion_suggestion && !completion_list.completions.empty())) {
 		// if we are tab-completing - write the list of completions one line below
 		if (rendered_completion_lines == 0) {
@@ -1049,6 +1051,13 @@ void Linenoise::RefreshMultiLine() {
 		}
 	}
 
+	/* Go up till we reach the expected position. */
+	if (rows - new_cursor_row > 0) {
+		Linenoise::Log("go-up %d", rows - new_cursor_row);
+		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
+		append_buffer.Append(seq);
+	}
+
 	/* Set column. */
 	col = new_cursor_x;
 	Linenoise::Log("set col %d", 1 + col);
@@ -1059,6 +1068,8 @@ void Linenoise::RefreshMultiLine() {
 	}
 	append_buffer.Append(seq);
 
+	Linenoise::Log("\n");
+	old_cursor_rows = new_cursor_row;
 	append_buffer.Write(fd);
 }
 
