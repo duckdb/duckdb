@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -319,7 +320,18 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 // Block Allocator Size
 //===----------------------------------------------------------------------===//
 void BlockAllocatorSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	const auto size = DBConfig::ParseMemoryLimit(input.ToString());
+	const auto input_string = input.ToString();
+	idx_t size;
+	if (!input_string.empty() && input_string.back() == '%') {
+		double percentage;
+		if (!TryDoubleCast(input_string.c_str(), input_string.size() - 1, percentage, false) || percentage < 0 ||
+		    percentage > 100) {
+			throw InvalidInputException("Unable to parse valid percentage (input: %s)", input_string);
+		}
+		size = LossyNumericCast<idx_t>(percentage) * config.options.maximum_memory / 100;
+	} else {
+		size = DBConfig::ParseMemoryLimit(input_string);
+	}
 	if (db) {
 		BlockAllocator::Get(*db).Resize(size);
 	}

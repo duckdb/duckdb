@@ -215,6 +215,11 @@ void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
 		throw InvalidInputException("The \"block_allocator_size\" setting cannot be reduced (current: %llu)",
 		                            physical_memory_size.load());
 	}
+	if (new_physical_memory_size > virtual_memory_size) {
+		throw InvalidInputException("The \"block_allocator_size\" setting cannot be greater than the virtual memory "
+		                            "size (virtual memory size: %llu)",
+		                            virtual_memory_size);
+	}
 
 	// Enqueue block IDs efficiently in batches
 	uint32_t block_ids[STANDARD_VECTOR_SIZE];
