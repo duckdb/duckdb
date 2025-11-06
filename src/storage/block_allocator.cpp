@@ -328,14 +328,16 @@ bool BlockAllocator::SupportsFlush() const {
 }
 
 void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const {
-	GetBlockAllocatorThreadLocalState(*this).Clear();
+	if (IsActive() && IsEnabled()) {
+		GetBlockAllocatorThreadLocalState(*this).Clear();
+	}
 	if (Allocator::SupportsFlush()) {
 		Allocator::ThreadFlush(allocator_background_threads, threshold, thread_count);
 	}
 }
 
 void BlockAllocator::FlushAll(const optional_idx extra_memory) const {
-	if (extra_memory.IsValid()) {
+	if (IsActive() && IsEnabled() && extra_memory.IsValid()) {
 		FreeInternal(extra_memory.GetIndex());
 	}
 	if (Allocator::SupportsFlush()) {

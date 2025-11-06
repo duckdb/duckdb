@@ -317,9 +317,9 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Block Allocator Size
+// Block Allocator Memory
 //===----------------------------------------------------------------------===//
-void BlockAllocatorSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	const auto input_string = input.ToString();
 	idx_t size;
 	if (!input_string.empty() && input_string.back() == '%') {
@@ -338,7 +338,7 @@ void BlockAllocatorSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 	config.options.block_allocator_size = size;
 }
 
-void BlockAllocatorSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void BlockAllocatorMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	const auto size = DBConfigOptions().block_allocator_size;
 	if (db) {
 		BlockAllocator::Get(*db).Resize(size);
@@ -346,7 +346,7 @@ void BlockAllocatorSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 	config.options.block_allocator_size = size;
 }
 
-Value BlockAllocatorSizeSetting::GetSetting(const ClientContext &context) {
+Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return StringUtil::BytesToHumanReadableString(config.options.block_allocator_size);
 }

@@ -249,9 +249,9 @@ struct AutoloadKnownExtensionsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct BlockAllocatorSizeSetting {
+struct BlockAllocatorMemorySetting {
 	using RETURN_TYPE = string;
-	static constexpr const char *Name = "block_allocator_size";
+	static constexpr const char *Name = "block_allocator_memory";
 	static constexpr const char *Description = "Physical memory that the block allocator is allowed to use (this "
 	                                           "memory is never freed and cannot be reduced).";
 	static constexpr const char *InputType = "VARCHAR";

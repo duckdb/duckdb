@@ -186,7 +186,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
-	    "block_allocator_size"}; // cant reduce
+	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }
 

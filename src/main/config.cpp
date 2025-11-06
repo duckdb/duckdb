@@ -77,7 +77,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
     DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
-    DUCKDB_GLOBAL(BlockAllocatorSizeSetting),
+    DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(CustomExtensionRepositorySetting),
