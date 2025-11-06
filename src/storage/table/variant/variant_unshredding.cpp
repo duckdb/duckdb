@@ -85,7 +85,7 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 	D_ASSERT(child_types.size() == child_entries.size());
 
 	//! First unshred all children
-	vector<vector<VariantValue>> child_values(count);
+	vector<vector<VariantValue>> child_values(child_entries.size());
 	for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 		auto &child_entry = child_entries[child_idx];
 		child_values[child_idx] = Unshred(variant, *child_entry, count, row_sel);

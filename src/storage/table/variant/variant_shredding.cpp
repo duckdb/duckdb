@@ -590,7 +590,7 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 	}
 }
 
-void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t count, const LogicalType &shredded_type) {
+void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t count) {
 	RecursiveUnifiedVectorFormat recursive_format;
 	Vector::RecursiveToUnifiedFormat(input, count, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
