@@ -1893,21 +1893,7 @@ bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
 		return false;
 	}
 	// setup a pager for output
-	bool should_use_pager = false;
-	switch (pager_mode) {
-	case PagerMode::PAGER_ON:
-		should_use_pager = true;
-		break;
-	case PagerMode::PAGER_AUTOMATIC:
-		// by default pager is only used for non-duckbox rendering modes
-		should_use_pager = mode != RenderMode::DUCKBOX;
-		break;
-	case PagerMode::PAGER_OFF:
-	default:
-		should_use_pager = false;
-		break;
-	}
-	if (!should_use_pager) {
+	if (pager_mode == PagerMode::PAGER_OFF) {
 		return false;
 	}
 	if (pager_command.empty()) {
@@ -1918,8 +1904,20 @@ bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
 			return false;
 		}
 	}
-	if (!result.MoreRowsThan(pager_min_rows)) {
-		return false;
+	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
+		// in automatic mode we only use a pager when the output is large enough
+		if (mode == RenderMode::DUCKBOX) {
+			// in duckbox mode the output is automatically truncated to "max_rows"
+			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
+			if (max_rows < pager_min_rows) {
+				return false;
+			}
+		}
+		// otherwise we check the size of the result set
+		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
+		if (result.ColumnCount() < pager_min_columns && !result.MoreRowsThan(pager_min_rows)) {
+			return false;
+		}
 	}
 	return true;
 }

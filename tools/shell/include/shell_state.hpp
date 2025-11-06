@@ -236,8 +236,11 @@ public:
 	PagerMode pager_mode = PagerMode::PAGER_AUTOMATIC;
 	//! The command to run when running the pager
 	string pager_command;
-	// only show a pager when this count is exceeded
+	// In automatic mode, only show a pager when this row count is exceeded
 	idx_t pager_min_rows = 50;
+	// In automatic mode, only show a pager when this column count is exceeded
+	idx_t pager_min_columns = 5;
+	//! Whether or not the pager is currently active
 	bool pager_is_active = false;
 
 #if defined(_WIN32) || defined(WIN32)
