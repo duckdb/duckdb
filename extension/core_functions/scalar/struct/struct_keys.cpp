@@ -79,9 +79,6 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if (arguments.size() != 1) {
-		throw InvalidInputException("struct_keys() expects exactly one argument");
-	}
 	if (arguments[0]->return_type.id() != LogicalTypeId::STRUCT) {
 		throw InvalidInputException("struct_keys() expects a STRUCT argument");
 	}
