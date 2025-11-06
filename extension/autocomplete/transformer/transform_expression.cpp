@@ -516,19 +516,20 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 			children_function.push_back(std::move(right_expr));
 			expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
 		} else {
-			expr = make_uniq<ComparisonExpression>(other_operator, std::move(expr), std::move(right_expr));
+			throw NotImplementedException("Other operator for %s is not implemented.", other_operator);
 		}
 	}
 	return expr;
 }
 
 string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer,
-                                                             optional_ptr<ParseResult> parse_result) {
+                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-string PEGTransformerFactory::TransformStringOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformStringOperator(PEGTransformer &transformer,
+                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	return choice_pr->Cast<KeywordParseResult>().keyword;
