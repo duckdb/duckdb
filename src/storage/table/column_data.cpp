@@ -994,11 +994,11 @@ void ColumnData::Verify(RowGroup &parent) {
 	idx_t current_index = 0;
 	idx_t current_start = this->start;
 	idx_t total_count = 0;
-	for (auto &segment : data.Segments()) {
+	for (auto &segment : data.SegmentNodes()) {
 		D_ASSERT(segment.index == current_index);
-		D_ASSERT(segment.start == current_start);
-		current_start += segment.count;
-		total_count += segment.count;
+		D_ASSERT(segment.row_start == current_start);
+		current_start += segment.node->count;
+		total_count += segment.node->count;
 		current_index++;
 	}
 	D_ASSERT(this->count == total_count);

@@ -148,7 +148,7 @@ public:
 	}
 	optional_ptr<SegmentNode<T>> GetNextSegment(SegmentLock &l, SegmentNode<T> &node) {
 #ifdef DEBUG
-		D_ASSERT(RefersToSameObject(*nodes[node.index].node, node));
+		D_ASSERT(RefersToSameObject(*nodes[node.index], node));
 #endif
 		return GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(node.index + 1));
 	}

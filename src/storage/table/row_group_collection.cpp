@@ -379,7 +379,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 		AppendRowGroup(l, row_start + total_rows);
 	}
 	state.start_row_group = row_groups->GetLastSegment(l);
-	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
+	D_ASSERT(this->row_start + total_rows == state.start_row_group->row_start + state.start_row_group->node->count);
 	state.start_row_group->node->InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
 
@@ -1029,7 +1029,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	}
 	if (state.row_group_counts[segment_idx] == 0) {
 		// segment was already dropped - skip
-		D_ASSERT(!checkpoint_state.segments[segment_idx].node);
+		D_ASSERT(!checkpoint_state.segments[segment_idx]->node);
 		return false;
 	}
 	if (!schedule_vacuum) {
