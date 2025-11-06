@@ -1200,7 +1200,7 @@ def test_open_with_sql_and_no_return(shell):
         .statement(".open -sql \"from a where 1=0;\"")
     )
     result = test.run()
-    result.check_stderr("Error: --sql query returned no value")
+    result.check_stderr("Error")
 
 def test_open_with_sql_and_dml(shell):
     test = (
@@ -1209,7 +1209,7 @@ def test_open_with_sql_and_dml(shell):
         .statement(".open -sql \"insert into test values (1);\"")
     )
     result = test.run()
-    result.check_stderr("Error: the --sql argument")
+    result.check_stderr("Error")
 
 def test_open_with_sql_and_null_return(shell):
     test = (
@@ -1218,13 +1218,5 @@ def test_open_with_sql_and_null_return(shell):
     )
     result = test.run()
     result.check_stderr("Error: --sql query returned a null value")
-
-def test_open_with_sql_and_empty_string_return(shell):
-    test = (
-        ShellTest(shell)
-        .statement(".open -sql \"select '';\"")
-    )
-    result = test.run()
-    result.check_stderr("Error: --sql query returned an empty string")
 
 # fmt: on

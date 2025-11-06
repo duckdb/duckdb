@@ -213,7 +213,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
 	}
 };
@@ -260,7 +260,7 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 		type.Verify();
 		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);
 		function.arguments[0] = type;
-		function.return_type = type;
+		function.SetReturnType(type);
 		return function;
 	}
 	switch (type.InternalType()) {
@@ -318,7 +318,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
 	function.name = std::move(name);
 	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
-	function.return_type = decimal_type;
+	function.SetReturnType(decimal_type);
 	return nullptr;
 }
 

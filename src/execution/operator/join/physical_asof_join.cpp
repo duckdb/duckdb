@@ -179,7 +179,7 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-enum class AsOfJoinSourceStage : uint8_t { INIT, SORT, MATERIALIZE, LEFT, RIGHT, DONE };
+enum class AsOfJoinSourceStage : uint8_t { INIT, SORT, MATERIALIZE, GET, LEFT, RIGHT, DONE };
 
 struct AsOfSourceTask {
 	AsOfSourceTask() {
@@ -392,6 +392,8 @@ public:
 	std::atomic<idx_t> sorted;
 	//! Count of materialization tasks completed
 	std::atomic<idx_t> materialized;
+	//! Count of get tasks completed
+	std::atomic<idx_t> gotten;
 	//! Count of left side tasks completed
 	std::atomic<idx_t> left_completed;
 	//! Count of right side tasks completed
@@ -401,7 +403,7 @@ public:
 AsOfHashGroup::AsOfHashGroup(const PhysicalAsOfJoin &op, const ChunkRow &left_stats, const ChunkRow &right_stats,
                              const idx_t hash_group)
     : op(op), group_idx(hash_group), left_stats(left_stats), right_stats(right_stats),
-      right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), sorted(0), materialized(0),
+      right_outer(IsRightOuterJoin(op.join_type)), stage(AsOfJoinSourceStage::INIT), sorted(0), materialized(0), gotten(0),
       left_completed(0), right_completed(0) {
 	right_outer.Initialize(right_stats.count);
 };
@@ -419,6 +421,9 @@ idx_t AsOfHashGroup::InitTasks(idx_t per_thread_p) {
 
 	//	MATERIALIZE
 	stage_tasks.emplace_back(materialize_tasks);
+
+	//	GET
+	stage_tasks.emplace_back(materialize_tasks ? 1 : 0);
 
 	//	LEFT
 	const auto left_tasks = BinValue(LeftChunks(), per_thread);
@@ -457,6 +462,12 @@ bool AsOfHashGroup::TryPrepareNextStage() {
 		break;
 	case AsOfJoinSourceStage::MATERIALIZE:
 		if (materialized >= stage_tasks[size_t(stage)]) {
+			stage = AsOfJoinSourceStage::GET;
+			return true;
+		}
+		break;
+	case AsOfJoinSourceStage::GET:
+		if (gotten >= stage_tasks[size_t(stage)]) {
 			stage = AsOfJoinSourceStage::LEFT;
 			return true;
 		}
@@ -516,6 +527,11 @@ bool AsOfHashGroup::TryNextTask(AsOfSourceTask &task) {
 			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 		}
 		break;
+	case AsOfJoinSourceStage::GET:
+		task.begin_idx = 0;
+		task.end_idx = 1;
+		task.max_idx = 1;
+		break;
 	case AsOfJoinSourceStage::LEFT:
 		if (left_group) {
 			task.begin_idx = task.thread_idx * per_thread;
@@ -545,6 +561,7 @@ bool AsOfHashGroup::FinishTask(AsOfSourceTask &task) {
 	switch (task.stage) {
 	case AsOfJoinSourceStage::SORT:
 	case AsOfJoinSourceStage::MATERIALIZE:
+	case AsOfJoinSourceStage::GET:
 		break;
 	case AsOfJoinSourceStage::LEFT:
 		if (left_completed >= stage_tasks[size_t(task.stage)]) {
@@ -564,7 +581,7 @@ bool AsOfHashGroup::FinishTask(AsOfSourceTask &task) {
 		break;
 	}
 
-	return (materialized + left_completed + right_completed) >= GetTaskCount();
+	return (materialized + gotten + left_completed + right_completed) >= GetTaskCount();
 }
 
 class AsOfLocalSourceState;
@@ -1261,6 +1278,7 @@ public:
 
 	void ExecuteSortTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
 	void ExecuteMaterializeTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
+	void ExecuteGetTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
 	void ExecuteLeftTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
 	void ExecuteRightTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source);
 
@@ -1271,6 +1289,9 @@ public:
 			break;
 		case AsOfJoinSourceStage::MATERIALIZE:
 			ExecuteMaterializeTask(context, chunk, source);
+			break;
+		case AsOfJoinSourceStage::GET:
+			ExecuteGetTask(context, chunk, source);
 			break;
 		case AsOfJoinSourceStage::LEFT:
 			ExecuteLeftTask(context, chunk, source);
@@ -1394,6 +1415,9 @@ bool AsOfLocalSourceState::TryAssignTask() {
 		case AsOfJoinSourceStage::MATERIALIZE:
 			gsource.asof_groups[task_local.group_idx]->materialized++;
 			break;
+		case AsOfJoinSourceStage::GET:
+			gsource.asof_groups[task_local.group_idx]->gotten++;
+			break;
 		case AsOfJoinSourceStage::LEFT:
 			probe_buffer.EndLeftScan();
 			break;
@@ -1413,6 +1437,7 @@ bool AsOfLocalSourceState::TryAssignTask() {
 	switch (task->stage) {
 	case AsOfJoinSourceStage::SORT:
 	case AsOfJoinSourceStage::MATERIALIZE:
+	case AsOfJoinSourceStage::GET:
 		break;
 	case AsOfJoinSourceStage::LEFT:
 		probe_buffer.BeginLeftScan(*task);
@@ -1502,7 +1527,34 @@ void AsOfLocalSourceState::ExecuteMaterializeTask(ExecutionContext &context, Dat
 
 	auto unused = make_uniq<LocalSourceState>();
 	OperatorSourceInput hsource {hashed_source, *unused, source.interrupt_state};
-	if (hashed_sort.MaterializeSortedRun(context, task_local.group_idx, hsource) == SourceResultType::FINISHED) {
+	hashed_sort.MaterializeSortedRun(context, task_local.group_idx, hsource);
+
+	//	Mark this range as done
+	task->begin_idx = task->end_idx;
+}
+
+void AsOfLocalSourceState::ExecuteGetTask(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &source) {
+	auto &asof_group = *gsource.asof_groups[task_local.group_idx];
+
+	const auto &gsink = gsource.op.sink_state->Cast<AsOfGlobalSinkState>();
+	auto unused = make_uniq<LocalSourceState>();
+
+	for (idx_t child = 0; child < gsink.hashed_sorts.size(); ++child) {
+		//	Don't get children that don't exist
+		if (child) {
+			if (!asof_group.RightChunks()) {
+				continue;
+			}
+		} else {
+			if (!asof_group.LeftChunks()) {
+				continue;
+			}
+		}
+
+		auto &hashed_sort = *gsink.hashed_sorts[child];
+		auto &hashed_source = *gsource.hashed_sources[child];
+		OperatorSourceInput hsource {hashed_source, *unused, source.interrupt_state};
+
 		auto group = hashed_sort.GetSortedRun(context.client, task_local.group_idx, hsource);
 		if (group) {
 			if (child) {

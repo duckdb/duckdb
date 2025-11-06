@@ -422,7 +422,7 @@ unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &
 		child_type = arguments[1]->return_type;
 		break;
 	}
-	bound_function.return_type = LogicalType::LIST(child_type);
+	bound_function.SetReturnType(LogicalType::LIST(child_type));
 	return nullptr;
 }
 
@@ -478,7 +478,7 @@ void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const
 }
 
 unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, ScalarFunction &function) {
-	function.return_type = deserializer.Get<const LogicalType &>();
+	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }
 
@@ -504,7 +504,7 @@ ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	for (auto &function : functions.functions) {
 		function.serialize = EquiWidthBinSerialize;
 		function.deserialize = EquiWidthBinDeserialize;
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 	}
 	return functions;
 }
