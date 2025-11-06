@@ -65,6 +65,11 @@ struct MetaBlockPointer {
 		return block_pointer == rhs.block_pointer && offset == rhs.offset;
 	}
 
+	friend std::ostream &operator<<(std::ostream &os, const MetaBlockPointer &obj) {
+		return os << "{block_id: " << obj.GetBlockId() << " index: " << obj.GetBlockIndex() << " offset: " << obj.offset
+		          << "}";
+	}
+
 	void Serialize(Serializer &serializer) const;
 	static MetaBlockPointer Deserialize(Deserializer &source);
 };

@@ -1,0 +1,29 @@
+{
+  "description": "Run with block verification on persistent databases as storage.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__block_verification.db",
+  "on_init": "SET debug_verify_blocks = true;",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Contains explicit use of the memory catalog.",
+      "paths": [
+        "test/sql/show_select/test_describe_all.test",
+        "test/sql/catalog/function/attached_macro.test",
+        "test/sql/catalog/test_temporary.test",
+        "test/sql/pragma/test_show_tables_temp_views.test",
+        "test/sql/pg_catalog/system_functions.test",
+        "test/sql/pg_catalog/sqlalchemy.test",
+        "test/sql/attach/attach_table_info.test",
+        "test/sql/attach/attach_defaults.test",
+        "test/sql/attach/attach_did_you_mean.test",
+        "test/sql/attach/attach_default_table.test",
+        "test/sql/attach/attach_show_all_tables.test",
+        "test/sql/attach/attach_issue7711.test",
+        "test/sql/attach/attach_issue_7660.test",
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/attach_views.test",
+        "test/sql/copy_database/copy_table_with_sequence.test"
+      ]
+    }
+  ]
+}
