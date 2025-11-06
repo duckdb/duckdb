@@ -732,7 +732,6 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 	} else if (args[1] == "automatic") {
 		state.pager_mode = PagerMode::PAGER_AUTOMATIC;
 	} else {
-		state.pager_mode = PagerMode::PAGER_ON;
 		state.pager_command = args[1];
 	}
 	return MetadataResult::SUCCESS;
