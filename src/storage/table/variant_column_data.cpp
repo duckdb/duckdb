@@ -367,7 +367,7 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
-		auto scanned_count = ScanCommitted(0, scan_state, scan_vector, false, to_scan);
+		ScanCommitted(0, scan_state, scan_vector, false, to_scan);
 		append_chunk.Reset();
 
 		AppendShredded(scan_vector, append_vector, to_scan, append_data);
@@ -390,7 +390,7 @@ LogicalType VariantColumnData::GetShreddedType() {
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
-		auto scanned_count = ScanCommitted(0, scan_state, scan_vector, false, to_scan);
+		ScanCommitted(0, scan_state, scan_vector, false, to_scan);
 		variant_stats.Update(scan_vector, to_scan);
 	}
 

@@ -129,11 +129,11 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 	auto &typed_value_validity = vector_format.validity;
 
 	SelectionVector child_sel(child_size);
-	for (idx_t i = 0; i < count; i++) {
+	for (uint32_t i = 0; i < count; i++) {
 		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
 			continue;
 		}
-		auto row = row_sel ? row_sel->get_index(i) : i;
+		auto row = row_sel ? static_cast<uint32_t>(row_sel->get_index(i)) : i;
 		auto &list_entry = list_data[i];
 		for (idx_t j = 0; j < list_entry.length; j++) {
 			child_sel[list_entry.offset + j] = row;
@@ -188,12 +188,12 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 	auto &untyped_index_validity = untyped_format.validity;
 
 	auto res = UnshredTypedValue(variant, typed_value, count, row_sel);
-	for (idx_t i = 0; i < count; i++) {
+	for (uint32_t i = 0; i < count; i++) {
 		if (!untyped_index_validity.RowIsValid(untyped_format.sel->get_index(i))) {
 			continue;
 		}
 		auto value_index = untyped_index_data[untyped_format.sel->get_index(i)];
-		auto row = row_sel ? row_sel->get_index(i) : i;
+		auto row = row_sel ? static_cast<uint32_t>(row_sel->get_index(i)) : i;
 		auto unshredded = UnshreddedVariantValue(variant, row, value_index);
 
 		if (res[i].IsMissing()) {

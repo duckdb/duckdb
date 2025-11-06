@@ -70,9 +70,9 @@ public:
 	void Verify(RowGroup &parent) override;
 
 	static void ShredVariantData(Vector &input, Vector &output, idx_t count);
+	static void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 
 private:
-	void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 	vector<unique_ptr<ColumnData>> WriteShreddedData(RowGroup &row_group, const LogicalType &shredded_type);
 	void ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded);
 	void CreateScanStates(ColumnScanState &state);

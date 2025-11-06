@@ -517,7 +517,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 
 		uint32_t result_index = i;
 		if (result_sel) {
-			result_index = result_sel->get_index(i);
+			result_index = static_cast<uint32_t>(result_sel->get_index(i));
 		}
 
 		if (variant.RowIsValid(row) && shredding_state.ValueIsShredded(variant, row, value_index)) {
