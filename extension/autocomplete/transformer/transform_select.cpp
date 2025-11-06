@@ -22,7 +22,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PE
 }
 
 MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer,
-                                                                            optional_ptr<ParseResult> parse_result) {
+                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	MacroParameter parameter;
 	parameter.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
