@@ -38,7 +38,7 @@ public:
 	static void Verify(ART &art, const Node &node);
 
 	//! Returns the string representation of the node at indentation level.
-	static string ToString(ART &art, const Node &node, idx_t indent_level, const bool inside_gate = false,
+	static string ToString(ART &art, const Node &node, const idx_t indent_level, const bool inside_gate = false,
 	                       const bool display_ascii = false);
 
 private:

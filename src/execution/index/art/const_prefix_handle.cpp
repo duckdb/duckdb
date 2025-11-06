@@ -20,7 +20,7 @@ uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
 	return data[pos];
 }
 
-string ConstPrefixHandle::ToString(ART &art, const Node &node, idx_t indent_level, const bool inside_gate,
+string ConstPrefixHandle::ToString(ART &art, const Node &node, const idx_t indent_level, const bool inside_gate,
                                    const bool display_ascii) {
 	auto indent = [](string &str, const idx_t n) {
 		for (idx_t i = 0; i < n; ++i) {
