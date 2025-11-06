@@ -186,7 +186,7 @@ public:
 	DuckDBVariantShreddingState(const LogicalType &type, idx_t total_count)
 	    : VariantShreddingState(type, total_count), variant_types(GetVariantType(type)) {
 	}
-	virtual ~DuckDBVariantShreddingState() override {
+	~DuckDBVariantShreddingState() override {
 	}
 
 public:
