@@ -514,7 +514,9 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 			vector<unique_ptr<ParsedExpression>> children_function;
 			children_function.push_back(std::move(expr));
 			children_function.push_back(std::move(right_expr));
-			expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
+			auto func_expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
+			func_expr->is_operator = true;
+			expr = std::move(func_expr);
 		} else {
 			throw NotImplementedException("Other operator for %s is not implemented.", other_operator);
 		}
