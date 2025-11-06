@@ -1270,8 +1270,14 @@ TEST_CASE("Test clear appender data in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_appender_error(appender) == nullptr);
 
+	// We will append rows to reach more than the maximum chunk size
+	// (DEFAULT_FLUSH_COUNT will always be more than a chunk size),
+	// so we will make sure that also the collection is being cleared.
+	// We use the DEFAULT_FLUSH_COUNT so we won't flush before calling the `Clear`
+	constexpr auto rows_to_append = BaseAppender::DEFAULT_FLUSH_COUNT - 10;
+
 	// append a bunch of values that should be cleared
-	for (idx_t i = 0; i < 4000; i++) {
+	for (idx_t i = 0; i < rows_to_append; i++) {
 		status = duckdb_appender_begin_row(appender);
 		REQUIRE(status == DuckDBSuccess);
 		status = duckdb_append_int32(appender, 999);

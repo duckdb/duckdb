@@ -781,11 +781,6 @@ TEST_CASE("Test appending rows with an active column list", "[appender]") {
 }
 
 TEST_CASE("Appender::Clear() clears the data", "[appender]") {
-	// FIXME: We should figure out why this test keeps failing (specifically on CI) when the STANDARD_VECTOR_SIZE is 2
-	if (STANDARD_VECTOR_SIZE != DEFAULT_STANDARD_VECTOR_SIZE) {
-		return;
-	}
-
 	DuckDB db(nullptr);
 	Connection con(db);
 
