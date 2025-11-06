@@ -855,7 +855,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
 					if (true) {
 						auto optional_greater_equals =
-						    make_uniq<SelectivityOptionalFilter>(std::move(greater_equals), 0.5, 20);
+						    make_uniq<SelectivityOptionalFilter>(std::move(greater_equals), 0.75, 40);
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
 					} else {
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
@@ -873,7 +873,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
 					if (true) {
 						auto optional_less_equals =
-						    make_uniq<SelectivityOptionalFilter>(std::move(less_equals), 0.5, 20);
+						    make_uniq<SelectivityOptionalFilter>(std::move(less_equals), 0.75, 40);
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
 					} else {
 						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
