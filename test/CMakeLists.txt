@@ -1,5 +1,4 @@
 include_directories(../third_party/catch)
-include_directories(../third_party/tpce-tool/include)
 include_directories(../third_party/sqlite/include)
 include_directories(include)
 
@@ -31,9 +30,6 @@ add_subdirectory(helpers)
 add_subdirectory(sqlite)
 
 if(NOT WIN32 AND NOT SUN)
-  if(${BUILD_TPCE})
-    add_subdirectory(tpce)
-  endif()
   if(${ENABLE_UNITTEST_CPP_TESTS})
     add_subdirectory(persistence)
   endif()
@@ -53,8 +49,5 @@ endif()
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
 target_link_libraries(unittest duckdb_static test_helpers)
-if(${BUILD_TPCE})
-  target_link_libraries(unittest tpce)
-endif()
 
 link_extension_libraries(unittest "")

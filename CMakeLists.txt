@@ -427,7 +427,6 @@ endif()
 
 option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
-option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)

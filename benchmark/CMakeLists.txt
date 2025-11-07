@@ -1,5 +1,4 @@
 include_directories(../third_party/catch)
-include_directories(../third_party/tpce-tool/include)
 include_directories(../third_party/sqlite/include)
 include_directories(../test/include)
 include_directories(include)
@@ -31,7 +30,3 @@ add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp
 
 target_link_libraries(benchmark_runner duckdb_static imdb test_helpers)
 link_extension_libraries(benchmark_runner "")
-
-if(${BUILD_TPCE})
-  target_link_libraries(benchmark_runner tpce)
-endif()
