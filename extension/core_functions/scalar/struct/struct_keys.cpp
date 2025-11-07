@@ -6,29 +6,28 @@
 namespace duckdb {
 
 struct StructKeysBindData : public FunctionData {
-	LogicalType type;
-	Vector dict_child;
+	const LogicalType type;
+	Vector keys_vector;
 
-	explicit StructKeysBindData(LogicalType type_p) : type(std::move(type_p)), dict_child(LogicalType::LIST(LogicalType::VARCHAR)) {
+	explicit StructKeysBindData(const LogicalType &type_p) : type(type_p), keys_vector(LogicalType::LIST(LogicalType::VARCHAR), 2) {
 		// TODO - Can I set capacity of dict_child according to constant vector / flat vector?
 		const auto &child_types = StructType::GetChildTypes(type);
 		const auto count = child_types.size();
 
-		auto &list_child = ListVector::GetEntry(dict_child);
-		list_child.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &list_child = ListVector::GetEntry(keys_vector);
 		auto child_data = FlatVector::GetData<string_t>(list_child);
 		for (idx_t i = 0; i < count; i++) {
 			child_data[i] = StringVector::AddString(list_child, child_types[i].first);
 		}
-		ListVector::SetListSize(dict_child, count);
+		ListVector::SetListSize(keys_vector, count);
 
-		auto list_entries = FlatVector::GetData<list_entry_t>(dict_child);
+		auto list_entries = FlatVector::GetData<list_entry_t>(keys_vector);
 		list_entries[0] = {0, count};
 		list_entries[1] = {0, 0};
 
-		auto &dict_validity = FlatVector::Validity(dict_child);
-		dict_validity.EnsureWritable();
-		dict_validity.SetInvalid(1);
+		auto &validity = FlatVector::Validity(keys_vector);
+		validity.EnsureWritable();
+		validity.SetInvalid(1);
 	}
 
 	bool Equals(const FunctionData &other) const override {
@@ -47,7 +46,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	const idx_t count = args.size();
 
 	auto &data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<StructKeysBindData>();
-	auto &dict_child = data.dict_child;
+	auto &keys_vector = data.keys_vector;
 
 
 	// If the input is a constant during constant folding, we must return a CONSTANT_VECTOR
@@ -55,13 +54,10 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 		if (ConstantVector::IsNull(input)) {
 			Vector null_vec(LogicalType::LIST(LogicalType::VARCHAR));
 			ConstantVector::SetNull(null_vec, true);
-			result.Reference(null_vec);
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			result .Reference(null_vec);
 			return;
 		}
-
-		result.Reference(dict_child);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::Reference(result, keys_vector, 0, count);
 		return;
 	}
 
@@ -76,8 +72,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 		sel.set_index(i, is_valid ? 0 : 1);
 	}
 
-	result.Reference(dict_child);
-	result.Dictionary(2, sel, count);
+	result.Slice(keys_vector, sel, count);
 }
 
 static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFunction &bound_function,
