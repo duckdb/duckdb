@@ -27,6 +27,10 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
 }
 
 void VariantColumnData::ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded) {
+	for (auto &sub_column : sub_columns) {
+		sub_column->CommitDropColumn();
+	}
+
 	sub_columns.clear();
 	sub_columns.push_back(std::move(unshredded));
 	sub_columns.push_back(std::move(shredded));
