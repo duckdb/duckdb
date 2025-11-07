@@ -23,7 +23,6 @@ struct StructKeysBindData : public FunctionData {
 
 		auto list_entries = FlatVector::GetData<list_entry_t>(keys_vector);
 		list_entries[0] = {0, count};
-		list_entries[1] = {0, 0};
 
 		auto &validity = FlatVector::Validity(keys_vector);
 		validity.EnsureWritable();
@@ -69,7 +68,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		const bool is_valid = input_data.validity.RowIsValid(idx);
-		sel.set_index(i, is_valid ? 0 : 1);
+		sel.set_index(i, !is_valid);
 	}
 
 	result.Slice(keys_vector, sel, count);
