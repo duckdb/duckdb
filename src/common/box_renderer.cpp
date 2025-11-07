@@ -95,7 +95,19 @@ struct BoxRenderValue {
 	ResultRenderType render_mode;
 };
 
-enum class RenderRowType { ROW_VALUES, SEPARATOR, DIVIDER };
+enum class RenderRowType { ROW_VALUES, SEPARATOR, DIVIDER, FOOTER };
+
+struct BoxRendererFooter {
+	string row_count_str;
+	string readable_rows_str;
+	string shown_str;
+	string column_count_str;
+	idx_t render_length = 0;
+	bool must_show_footer = false;
+	bool show_footer = true;
+	bool has_hidden_rows = false;
+	bool has_hidden_columns = false;
+};
 
 struct BoxRenderRow {
 	BoxRenderRow(RenderRowType row_type = RenderRowType::ROW_VALUES) // NOLINT: allow implicit conversion
@@ -128,6 +140,7 @@ private:
 	vector<idx_t> column_map;
 	idx_t total_render_length = 0;
 	vector<BoxRenderRow> render_rows;
+	BoxRendererFooter footer;
 
 private:
 	void RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
@@ -141,9 +154,9 @@ private:
 	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width);
 	void RenderValues();
-	void RenderRowCount(string &row_count_str, string &readable_rows_str, string &shown_str,
-	                    const string &column_count_str, bool has_hidden_rows, bool has_hidden_columns, idx_t row_count,
-	                    idx_t column_count, idx_t minimum_row_length);
+
+	void ComputeRowFooter(idx_t row_count, idx_t rendered_rows);
+	void RenderFooter(idx_t row_count, idx_t column_count);
 
 	string FormatNumber(const string &input);
 	string ConvertRenderValue(const string &input, const LogicalType &type);
@@ -160,6 +173,31 @@ BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig &config, 
                                                      BaseResultRenderer &ss)
     : config(config), context(context), column_names(names), result(result), ss(ss) {
 	result_types = result.Types();
+}
+
+void BoxRendererImplementation::ComputeRowFooter(idx_t row_count, idx_t rendered_rows) {
+	footer.row_count_str = FormatNumber(to_string(row_count)) + " rows";
+	bool has_limited_rows = config.limit > 0 && row_count == config.limit;
+	if (has_limited_rows) {
+		footer.row_count_str = "? rows";
+	}
+	if (config.large_number_rendering == LargeNumberRendering::FOOTER && !has_limited_rows) {
+		footer.readable_rows_str = TryFormatLargeNumber(to_string(row_count));
+		if (!footer.readable_rows_str.empty()) {
+			footer.readable_rows_str += " rows";
+		}
+	}
+	footer.has_hidden_rows = rendered_rows < row_count;
+	if (footer.has_hidden_rows) {
+		if (has_limited_rows) {
+			footer.shown_str += ">" + FormatNumber(to_string(config.limit - 1)) + " rows, ";
+		}
+		footer.shown_str += FormatNumber(to_string(rendered_rows)) + " shown";
+	}
+	footer.must_show_footer = has_limited_rows || footer.has_hidden_rows || row_count == 0;
+	footer.render_length = MaxValue<idx_t>(MaxValue<idx_t>(footer.row_count_str.size(), footer.shown_str.size() + 2),
+	                                       footer.readable_rows_str.size() + 2) +
+	                       4;
 }
 
 void BoxRendererImplementation::Render() {
@@ -196,28 +234,7 @@ void BoxRendererImplementation::Render() {
 		top_rows = rows_to_render / 2 + (rows_to_render % 2 != 0 ? 1 : 0);
 		bottom_rows = rows_to_render - top_rows;
 	}
-	auto row_count_str = FormatNumber(to_string(row_count)) + " rows";
-	bool has_limited_rows = config.limit > 0 && row_count == config.limit;
-	if (has_limited_rows) {
-		row_count_str = "? rows";
-	}
-	string readable_rows_str;
-	if (config.large_number_rendering == LargeNumberRendering::FOOTER && !has_limited_rows) {
-		readable_rows_str = TryFormatLargeNumber(to_string(row_count));
-		if (!readable_rows_str.empty()) {
-			readable_rows_str += " rows";
-		}
-	}
-	string shown_str;
-	bool has_hidden_rows = top_rows < row_count;
-	if (has_hidden_rows) {
-		if (has_limited_rows) {
-			shown_str += ">" + FormatNumber(to_string(config.limit - 1)) + " rows, ";
-		}
-		shown_str += FormatNumber(to_string(top_rows + bottom_rows)) + " shown";
-	}
-	auto minimum_row_length =
-	    MaxValue<idx_t>(MaxValue<idx_t>(row_count_str.size(), shown_str.size() + 2), readable_rows_str.size() + 2) + 4;
+	ComputeRowFooter(row_count, top_rows + bottom_rows);
 
 	// fetch the top and bottom render collections from the result
 	auto collections = FetchRenderCollections(result, top_rows, bottom_rows);
@@ -227,7 +244,7 @@ void BoxRendererImplementation::Render() {
 
 	// for each column, figure out the width
 	// start off by figuring out the name of the header by looking at the column name and column type
-	idx_t min_width = has_hidden_rows || row_count == 0 ? minimum_row_length : 0;
+	idx_t min_width = footer.must_show_footer ? footer.render_length : 0;
 	ComputeRenderWidths(collections, min_width, max_width);
 
 	// render boundaries for the individual columns
@@ -246,34 +263,33 @@ void BoxRendererImplementation::Render() {
 	RenderValues();
 
 	// render the row count and column count
-	auto column_count_str = to_string(result.ColumnCount()) + " column";
+	footer.column_count_str = to_string(result.ColumnCount()) + " column";
 	if (result.ColumnCount() > 1) {
-		column_count_str += "s";
+		footer.column_count_str += "s";
 	}
-	bool has_hidden_columns = false;
+	footer.has_hidden_columns = false;
 	for (auto entry : column_map) {
 		if (entry == SPLIT_COLUMN) {
-			has_hidden_columns = true;
+			footer.has_hidden_columns = true;
 			break;
 		}
 	}
 	idx_t column_count = column_map.size();
 	if (config.render_mode == RenderMode::COLUMNS) {
-		if (has_hidden_columns) {
-			has_hidden_rows = true;
-			shown_str = to_string(column_count - 3) + " shown";
+		if (footer.has_hidden_columns) {
+			footer.has_hidden_rows = true;
+			footer.shown_str = to_string(column_count - 3) + " shown";
 		} else {
-			shown_str = string();
+			footer.shown_str = string();
 		}
 	} else {
-		if (has_hidden_columns) {
+		if (footer.has_hidden_columns) {
 			column_count--;
-			column_count_str += " (" + to_string(column_count) + " shown)";
+			footer.column_count_str += " (" + to_string(column_count) + " shown)";
 		}
 	}
 
-	RenderRowCount(row_count_str, readable_rows_str, shown_str, column_count_str, has_hidden_rows, has_hidden_columns,
-	               row_count, column_count, minimum_row_length);
+	RenderFooter(row_count, column_count);
 }
 
 void BoxRendererImplementation::RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
@@ -1062,15 +1078,18 @@ void BoxRendererImplementation::RenderValues() {
 	}
 }
 
-void BoxRendererImplementation::RenderRowCount(string &row_count_str, string &readable_rows_str, string &shown_str,
-                                               const string &column_count_str, bool has_hidden_rows,
-                                               bool has_hidden_columns, idx_t row_count, idx_t column_count,
-                                               idx_t minimum_row_length) {
+void BoxRendererImplementation::RenderFooter(idx_t row_count, idx_t column_count) {
+	auto &row_count_str = footer.row_count_str;
+	auto &column_count_str = footer.column_count_str;
+	auto &readable_rows_str = footer.readable_rows_str;
+	auto &shown_str = footer.shown_str;
+	auto &has_hidden_columns = footer.has_hidden_columns;
+	auto &has_hidden_rows = footer.has_hidden_rows;
 	// check if we can merge the row_count_str, readable_rows_str and the shown_str
 	auto minimum_length = row_count_str.size() + column_count_str.size() + 6;
 	bool render_rows_and_columns = total_render_length >= minimum_length &&
 	                               ((has_hidden_columns && row_count > 0) || (row_count >= 10 && column_count > 1));
-	bool render_rows = total_render_length >= minimum_row_length && (row_count == 0 || row_count >= 10);
+	bool render_rows = total_render_length >= footer.render_length && (row_count == 0 || row_count >= 10);
 	bool render_anything = true;
 	if (!render_rows && !render_rows_and_columns) {
 		render_anything = false;
