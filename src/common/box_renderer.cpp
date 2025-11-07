@@ -99,7 +99,8 @@ public:
 private:
 	BoxRendererConfig &config;
 	ClientContext &context;
-	const vector<string> &names;
+	vector<string> column_names;
+	vector<LogicalType> result_types;
 	const ColumnDataCollection &result;
 	BaseResultRenderer &ss;
 
@@ -112,16 +113,13 @@ private:
 	                      ResultRenderType &render_mode);
 	list<ColumnDataCollection> FetchRenderCollections(const ColumnDataCollection &result, idx_t top_rows,
 	                                                  idx_t bottom_rows);
-	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, vector<string> &column_names,
-	                                            vector<LogicalType> &result_types, idx_t row_count);
-	vector<idx_t> ComputeRenderWidths(const vector<string> &names, const vector<LogicalType> &result_types,
-	                                  list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width,
+	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, idx_t row_count);
+	vector<idx_t> ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width,
 	                                  vector<idx_t> &column_map, idx_t &total_length);
-	void RenderHeader(const vector<string> &names, const vector<LogicalType> &result_types,
-	                  const vector<idx_t> &column_map, const vector<idx_t> &widths, const vector<idx_t> &boundaries,
+	void RenderHeader(const vector<idx_t> &column_map, const vector<idx_t> &widths, const vector<idx_t> &boundaries,
 	                  idx_t total_length, bool has_results);
 	void RenderValues(const list<ColumnDataCollection> &collections, const vector<idx_t> &column_map,
-	                  const vector<idx_t> &widths, const vector<LogicalType> &result_types);
+	                  const vector<idx_t> &widths);
 	void RenderRowCount(string &row_count_str, string &readable_rows_str, string &shown_str,
 	                    const string &column_count_str, const vector<idx_t> &boundaries, bool has_hidden_rows,
 	                    bool has_hidden_columns, idx_t total_length, idx_t row_count, idx_t column_count,
@@ -139,11 +137,12 @@ const idx_t BoxRendererImplementation::SPLIT_COLUMN = idx_t(-1);
 BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig &config, ClientContext &context,
                                                      const vector<string> &names, const ColumnDataCollection &result,
                                                      BaseResultRenderer &ss)
-    : config(config), context(context), names(names), result(result), ss(ss) {
+    : config(config), context(context), column_names(names), result(result), ss(ss) {
+	result_types = result.Types();
 }
 
 void BoxRendererImplementation::Render() {
-	if (result.ColumnCount() != names.size()) {
+	if (result.ColumnCount() != column_names.size()) {
 		throw InternalException("Error in BoxRenderer::Render - unaligned columns and names");
 	}
 	auto max_width = config.max_width;
@@ -201,10 +200,8 @@ void BoxRendererImplementation::Render() {
 
 	// fetch the top and bottom render collections from the result
 	auto collections = FetchRenderCollections(result, top_rows, bottom_rows);
-	auto column_names = names;
-	auto result_types = result.Types();
 	if (config.render_mode == RenderMode::COLUMNS && rows_to_render > 0) {
-		collections = PivotCollections(std::move(collections), column_names, result_types, row_count);
+		collections = PivotCollections(std::move(collections), row_count);
 	}
 
 	// for each column, figure out the width
@@ -212,8 +209,7 @@ void BoxRendererImplementation::Render() {
 	idx_t min_width = has_hidden_rows || row_count == 0 ? minimum_row_length : 0;
 	vector<idx_t> column_map;
 	idx_t total_length;
-	auto widths =
-	    ComputeRenderWidths(column_names, result_types, collections, min_width, max_width, column_map, total_length);
+	auto widths = ComputeRenderWidths(collections, min_width, max_width, column_map, total_length);
 
 	// render boundaries for the individual columns
 	vector<idx_t> boundaries;
@@ -229,10 +225,10 @@ void BoxRendererImplementation::Render() {
 
 	// now begin rendering
 	// first render the header
-	RenderHeader(column_names, result_types, column_map, widths, boundaries, total_length, row_count > 0);
+	RenderHeader(column_map, widths, boundaries, total_length, row_count > 0);
 
 	// render the values, if there are any
-	RenderValues(collections, column_map, widths, result_types);
+	RenderValues(collections, column_map, widths);
 
 	// render the row count and column count
 	auto column_count_str = to_string(result.ColumnCount()) + " column";
@@ -553,8 +549,6 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 }
 
 list<ColumnDataCollection> BoxRendererImplementation::PivotCollections(list<ColumnDataCollection> input,
-                                                                       vector<string> &column_names,
-                                                                       vector<LogicalType> &result_types,
                                                                        idx_t row_count) {
 	auto &top = input.front();
 	auto &bottom = input.back();
@@ -738,9 +732,7 @@ string BoxRendererImplementation::GetRenderValue(ColumnDataRowCollection &rows, 
 	}
 }
 
-vector<idx_t> BoxRendererImplementation::ComputeRenderWidths(const vector<string> &names,
-                                                             const vector<LogicalType> &result_types,
-                                                             list<ColumnDataCollection> &collections, idx_t min_width,
+vector<idx_t> BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width,
                                                              idx_t max_width, vector<idx_t> &column_map,
                                                              idx_t &total_length) {
 	auto column_count = result_types.size();
@@ -748,7 +740,7 @@ vector<idx_t> BoxRendererImplementation::ComputeRenderWidths(const vector<string
 	vector<idx_t> widths;
 	widths.reserve(column_count);
 	for (idx_t c = 0; c < column_count; c++) {
-		auto name_width = Utf8Proc::RenderWidth(ConvertRenderValue(names[c]));
+		auto name_width = Utf8Proc::RenderWidth(ConvertRenderValue(column_names[c]));
 		auto type_width = Utf8Proc::RenderWidth(RenderType(result_types[c]));
 		widths.push_back(MaxValue<idx_t>(name_width, type_width));
 	}
@@ -856,8 +848,7 @@ vector<idx_t> BoxRendererImplementation::ComputeRenderWidths(const vector<string
 	return new_widths;
 }
 
-void BoxRendererImplementation::RenderHeader(const vector<string> &names, const vector<LogicalType> &result_types,
-                                             const vector<idx_t> &column_map, const vector<idx_t> &widths,
+void BoxRendererImplementation::RenderHeader(const vector<idx_t> &column_map, const vector<idx_t> &widths,
                                              const vector<idx_t> &boundaries, idx_t total_length, bool has_results) {
 	auto column_count = column_map.size();
 	// render the top line
@@ -884,7 +875,7 @@ void BoxRendererImplementation::RenderHeader(const vector<string> &names, const 
 			name = config.DOTDOTDOT;
 		} else {
 			render_mode = ResultRenderType::COLUMN_NAME;
-			name = ConvertRenderValue(names[column_idx]);
+			name = ConvertRenderValue(column_names[column_idx]);
 		}
 		RenderValue(name, widths[c], render_mode);
 	}
@@ -925,8 +916,7 @@ void BoxRendererImplementation::RenderHeader(const vector<string> &names, const 
 }
 
 void BoxRendererImplementation::RenderValues(const list<ColumnDataCollection> &collections,
-                                             const vector<idx_t> &column_map, const vector<idx_t> &widths,
-                                             const vector<LogicalType> &result_types) {
+                                             const vector<idx_t> &column_map, const vector<idx_t> &widths) {
 	auto &top_collection = collections.front();
 	auto &bottom_collection = collections.back();
 	// render the top rows
