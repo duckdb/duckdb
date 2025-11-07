@@ -91,11 +91,13 @@ private:
 		case LogicalOperatorType::LOGICAL_WINDOW:
 			ConvertTableIndex<TYPE>(op.Cast<LogicalWindow>().window_index, 0);
 			break;
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			ConvertTableIndex<TYPE>(op.Cast<LogicalAggregate>().group_index, 0);
-			ConvertTableIndex<TYPE>(op.Cast<LogicalAggregate>().aggregate_index, 1);
-			ConvertTableIndex<TYPE>(op.Cast<LogicalAggregate>().groupings_index, 2);
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			auto &aggr = op.Cast<LogicalAggregate>();
+			ConvertTableIndex<TYPE>(aggr.group_index, 0);
+			ConvertTableIndex<TYPE>(aggr.aggregate_index, 1);
+			ConvertTableIndex<TYPE>(aggr.groupings_index, 2);
 			break;
+		}
 		case LogicalOperatorType::LOGICAL_UNION:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 		case LogicalOperatorType::LOGICAL_INTERSECT:
@@ -175,17 +177,18 @@ public:
 
 class PlanSignature {
 private:
-	PlanSignature(const LogicalOperator &op_p, const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
-	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p)
-	    : op(op_p), stream(stream_p), offset(offset_p), length(length_p),
+	PlanSignature(const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
+	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p,
+	              idx_t base_table_count_p, idx_t max_base_table_cardinality_p)
+	    : stream(stream_p), offset(offset_p), length(length_p),
 	      signature_hash(Hash(stream_p.GetData() + offset, length)), child_signatures(std::move(child_signatures_p)),
-	      operator_count(operator_count_p) {
+	      operator_count(operator_count_p), base_table_count(base_table_count_p),
+	      max_base_table_cardinality(max_base_table_cardinality_p) {
 	}
 
 public:
 	static unique_ptr<PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
-	                                        vector<reference<PlanSignature>> &&child_signatures,
-	                                        const idx_t operator_count) {
+	                                        vector<reference<PlanSignature>> &&child_signatures) {
 		if (!OperatorIsSupported(op)) {
 			return nullptr;
 		}
@@ -208,14 +211,38 @@ public:
 		state.Convert<ConversionType::RESTORE_ORIGINAL>(op);
 
 		if (can_materialize) {
-			return unique_ptr<PlanSignature>(
-			    new PlanSignature(op, state.stream, offset, length, std::move(child_signatures), operator_count));
+			idx_t operator_count = 1;
+			idx_t base_table_count = 0;
+			idx_t max_base_table_cardinality = 0;
+			if (op.children.empty()) {
+				base_table_count++;
+				if (op.has_estimated_cardinality) {
+					max_base_table_cardinality = op.estimated_cardinality;
+				}
+			}
+			for (auto &child_signature : child_signatures) {
+				operator_count += child_signature.get().OperatorCount();
+				base_table_count += child_signature.get().BaseTableCount();
+				max_base_table_cardinality =
+				    MaxValue(max_base_table_cardinality, child_signature.get().MaxBaseTableCardinality());
+			}
+			return unique_ptr<PlanSignature>(new PlanSignature(state.stream, offset, length,
+			                                                   std::move(child_signatures), operator_count,
+			                                                   base_table_count, max_base_table_cardinality));
 		}
 		return nullptr;
 	}
 
 	idx_t OperatorCount() const {
 		return operator_count;
+	}
+
+	idx_t BaseTableCount() const {
+		return base_table_count;
+	}
+
+	idx_t MaxBaseTableCardinality() const {
+		return max_base_table_cardinality;
 	}
 
 	hash_t HashSignature() const {
@@ -295,8 +322,6 @@ private:
 	}
 
 private:
-	const LogicalOperator &op;
-
 	const MemoryStream &stream;
 	const idx_t offset;
 	const idx_t length;
@@ -305,6 +330,8 @@ private:
 
 	const vector<reference<PlanSignature>> child_signatures;
 	const idx_t operator_count;
+	const idx_t base_table_count;
+	const idx_t max_base_table_cardinality;
 };
 
 struct PlanSignatureHash {
@@ -428,11 +455,11 @@ public:
 					continue;
 				}
 			}
-			if (!CTEInlining::EndsInAggregateOrDistinct(*subplan)) {
+			if (CTEInlining::EndsInAggregateOrDistinct(*subplan) || IsSelectiveMultiTablePlan(subplan)) {
+				it++; // This subplan might be useful
+			} else {
 				it = subplans.erase(it); // Not eligible for materialization
-				continue;
 			}
-			it++; // This subplan might be useful
 		}
 
 		return std::move(subplans);
@@ -441,7 +468,6 @@ public:
 private:
 	unique_ptr<PlanSignature> CreatePlanSignature(const unique_ptr<LogicalOperator> &op) {
 		vector<reference<PlanSignature>> child_signatures;
-		idx_t operator_count = 1;
 		for (auto &child : op->children) {
 			auto it = operator_infos.find(child);
 			D_ASSERT(it != operator_infos.end());
@@ -449,9 +475,8 @@ private:
 				return nullptr; // Failed to create signature from one of the children
 			}
 			child_signatures.emplace_back(*it->second.signature);
-			operator_count += it->second.signature->OperatorCount();
 		}
-		return PlanSignature::Create(state, *op, std::move(child_signatures), operator_count);
+		return PlanSignature::Create(state, *op, std::move(child_signatures));
 	}
 
 	unique_ptr<LogicalOperator> &LowestCommonAncestor(reference<unique_ptr<LogicalOperator>> a,
@@ -482,6 +507,19 @@ private:
 		}
 
 		return a.get();
+	}
+
+	bool IsSelectiveMultiTablePlan(unique_ptr<LogicalOperator> &op) const {
+		static constexpr idx_t CARDINALITY_RATIO = 2;
+
+		if (!op->has_estimated_cardinality) {
+			return false;
+		}
+		const auto &signature = *operator_infos.find(op)->second.signature;
+		if (signature.BaseTableCount() <= 1) {
+			return false;
+		}
+		return op->estimated_cardinality < signature.MaxBaseTableCardinality() / CARDINALITY_RATIO;
 	}
 
 private:
