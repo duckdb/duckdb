@@ -1,7 +1,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/cluster_statement.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "algorithm"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
