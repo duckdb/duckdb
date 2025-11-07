@@ -23,7 +23,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 			auto blob_data = Blob::ToBlob(string(c->val.val.str), parameters);
 			auto result = make_uniq<ConstantExpression>(Value::BLOB_RAW(blob_data));
 			SetQueryLocation(*result, root.location);
-			return result;
+			return std::move(result);
 		}
 	}
 	// transform the expression node
