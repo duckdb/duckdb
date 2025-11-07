@@ -87,6 +87,23 @@ const string &StringResultRenderer::str() {
 //===--------------------------------------------------------------------===//
 // Box Renderer Implementation
 //===--------------------------------------------------------------------===//
+struct BoxRenderValue {
+	BoxRenderValue(string text_p, ResultRenderType render_mode) : text(std::move(text_p)), render_mode(render_mode) {}
+
+	string text;
+	ResultRenderType render_mode;
+};
+
+enum class RenderRowType { ROW_VALUES, SEPARATOR };
+
+struct BoxRenderRow {
+	BoxRenderRow(RenderRowType row_type = RenderRowType::ROW_VALUES) // NOLINT: allow implicit conversion
+	    : row_type(row_type) {}
+
+	RenderRowType row_type;
+	vector<BoxRenderValue> values;
+};
+
 struct BoxRendererImplementation {
 	static const idx_t SPLIT_COLUMN;
 
@@ -108,6 +125,7 @@ private:
 	vector<idx_t> column_boundary_positions;
 	vector<idx_t> column_map;
 	idx_t total_render_length;
+	vector<BoxRenderRow> render_rows;
 
 private:
 	void RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
@@ -134,18 +152,6 @@ private:
 };
 
 const idx_t BoxRendererImplementation::SPLIT_COLUMN = idx_t(-1);
-
-struct BoxRenderValue {
-	string text;
-	RenderMode render_mode;
-};
-
-enum class RenderRowType { ROW_VALUES, SEPARATOR };
-
-struct BoxRenderRow {
-	RenderRowType row_values;
-	vector<BoxRenderValue> values;
-};
 
 BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig &config, ClientContext &context,
                                                      const vector<string> &names, const ColumnDataCollection &result,
@@ -746,31 +752,59 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
                                                     idx_t max_width) {
 	auto column_count = result_types.size();
 
-	column_widths.reserve(column_count);
+	// prepare all rows for rendering
+	// header / type
+	BoxRenderRow header_row;
+	BoxRenderRow type_row;
 	for (idx_t c = 0; c < column_count; c++) {
-		auto name_width = Utf8Proc::RenderWidth(ConvertRenderValue(column_names[c]));
-		auto type_width = Utf8Proc::RenderWidth(RenderType(result_types[c]));
-		column_widths.push_back(MaxValue<idx_t>(name_width, type_width));
+		header_row.values.emplace_back(ConvertRenderValue(column_names[c]), ResultRenderType::COLUMN_NAME);
+		type_row.values.emplace_back(RenderType(result_types[c]), ResultRenderType::COLUMN_TYPE);
 	}
-
-	// now iterate over the data in the render collection and find out the true max width
+	render_rows.push_back(std::move(header_row));
+	render_rows.push_back(std::move(type_row));
+	// add a separator
+	render_rows.emplace_back(RenderRowType::SEPARATOR);
+	// prepare the values
 	for (auto &collection : collections) {
 		for (auto &chunk : collection.Chunks()) {
+			vector<BoxRenderRow> chunk_rows;
+			chunk_rows.resize(chunk.size());
 			for (idx_t c = 0; c < column_count; c++) {
 				auto string_data = FlatVector::GetData<string_t>(chunk.data[c]);
 				for (idx_t r = 0; r < chunk.size(); r++) {
 					string render_value;
+					ResultRenderType render_type;
 					if (FlatVector::IsNull(chunk.data[c], r)) {
 						render_value = config.null_value;
+						render_type = ResultRenderType::NULL_VALUE;
 					} else {
 						render_value = ConvertRenderValue(string_data[r].GetString(), result_types[c]);
+						render_type = ResultRenderType::VALUE;
 					}
-					auto render_width = Utf8Proc::RenderWidth(render_value);
-					column_widths[c] = MaxValue<idx_t>(render_width, column_widths[c]);
+					chunk_rows[r].values.emplace_back(std::move(render_value), render_type);
 				}
+			}
+			for(auto &row : chunk_rows) {
+				render_rows.push_back(std::move(row));
 			}
 		}
 	}
+
+	// now all rows are prepared - figure out the max width of each of the columns
+	column_widths.resize(column_count, 0);
+	for(auto &row : render_rows) {
+		if (row.row_type != RenderRowType::ROW_VALUES) {
+			continue;
+		}
+		D_ASSERT(row.values.size() == column_count);
+		for(idx_t c = 0; c < column_count; c++) {
+			auto render_width = Utf8Proc::RenderWidth(row.values[c].text);
+			if (render_width > column_widths[c]) {
+				column_widths[c] = render_width;
+			}
+		}
+	}
+
 
 	// figure out the total length
 	// we start off with a pipe (|)
