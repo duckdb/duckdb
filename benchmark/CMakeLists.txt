@@ -4,6 +4,8 @@ include_directories(../third_party/sqlite/include)
 include_directories(../test/include)
 include_directories(include)
 
+add_third_party(imdb)
+
 add_subdirectory(micro)
 list(FIND DUCKDB_EXTENSION_NAMES tpch _index)
 if(${_index} GREATER -1)
