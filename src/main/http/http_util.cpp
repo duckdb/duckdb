@@ -230,7 +230,9 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		unique_ptr<HTTPResponse> response;
 
 		// When logging is enabled, we collect request timings
-		request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
+		if (request.params.logger) {
+			request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
+		}
 
 		try {
 			if (request.have_request_timing) {
