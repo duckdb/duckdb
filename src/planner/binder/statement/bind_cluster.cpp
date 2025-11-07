@@ -32,54 +32,44 @@ BoundStatement Binder::Bind(ClusterStatement &stmt) {
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBModify(table.catalog, context);
 	}
+	if (table.HasPrimaryKey()) {
+		throw BinderException("Cannot cluster a table with a primary key");
+	}
 
-	// Create the delete
-	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
-	del->bound_constraints = BindConstraints(table);
-	del->AddChild(std::move(root));
+	if (!table.GetStorageInfo(context).index_info.empty()) {
+		throw BinderException("Cannot cluster a table with indexes");
+	}
 
-	// bind the row id columns and add them to the projection list
-	BindRowIdColumns(table, get, del->expressions);
-
-	// Set return chunk
-	del->return_chunk = true;
-	auto update_table_index = GenerateTableIndex();
-	del->table_index = update_table_index;
-
-	// Make star expression to return everything
-	vector<unique_ptr<ParsedExpression>> returning_list;
-	returning_list.push_back(make_uniq<StarExpression>());
-
-	// Bind returning
-	auto returning = BindReturning(std::move(returning_list), table, stmt.target->alias, update_table_index,
-	                               unique_ptr_cast<LogicalDelete, LogicalOperator>(std::move(del)));
-
-	// Make a select node that selects everything, with the order by modifiers
+	// Make a select node that selects everything, with the order by modifiers from the cluster statement
 	vector<unique_ptr<ParsedExpression>> select_list;
 	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
+
+	// Pick everything, but not generated columns
+	for (auto &col : table.GetColumns().Logical()) {
+		if (col.Generated()) {
+			continue;
+		}
+		select_node->select_list.push_back(make_uniq<ColumnRefExpression>(col.GetName()));
+	}
+
 	auto order_modifier = make_uniq<OrderModifier>();
 	order_modifier->orders = std::move(stmt.modifiers);
 	select_node->modifiers.emplace_back(std::move(order_modifier));
 
-	// Now bind the select node
-	// Make a subquery to wrap the returning. We need to do this so that the order modfiers get bound to the top level
-	// projection (and not to the already resolved columns of the delete)
-	auto sub_binder = Binder::CreateBinder(context, this);
+	auto select_and_sort = BindSelectNode(*select_node, std::move(bound_table));
 
-	// Add the returning as a subquery
-	string subquery_alias = stmt.target->alias.empty() ? "__cluster_subquery" : stmt.target->alias;
-	SubqueryRef subquery_ref(nullptr, subquery_alias);
-	sub_binder->bind_context.AddSubquery(returning.plan->GetRootIndex(), subquery_ref.alias, subquery_ref, returning);
+	// Now make the create table
+	// Get the base CreateTableInfo from the TableCatalogEntry, but modify it so that it uses REPLACE_ON_CONFLICT
+	auto unbound_create_table_info = table.GetInfo();
+	unbound_create_table_info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	auto create_table_info = BindCreateTableInfo(std::move(unbound_create_table_info));
 
-	auto select_and_sort = sub_binder->BindSelectNode(*select_node, std::move(returning));
-
-	// Now make the insert
-	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
-	insert->AddChild(std::move(select_and_sort.plan));
+	auto &schema = create_table_info->schema;
+	auto create_table = make_uniq<LogicalCreateTable>(schema, std::move(create_table_info));
+	create_table->children.push_back(std::move(select_and_sort.plan));
 
 	BoundStatement result;
-	result.plan = std::move(insert);
+	result.plan = std::move(create_table);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 

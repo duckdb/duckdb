@@ -1,0 +1,62 @@
+# name: test/sql/cluster/cluster_table_unsupported.test
+# group: [cluster]
+
+statement ok
+CREATE TABLE t1 AS SELECT i, random() as j FROM range(5000) as r(i);
+
+statement ok
+CLUSTER t1 ORDER BY j;
+
+statement ok
+CLUSTER t1 ORDER BY i;
+
+# --- Can only cluster base tables ---
+statement ok
+CREATE VIEW v1 AS SELECT * FROM t1;
+
+statement error
+CLUSTER v1 ORDER BY i;
+----
+Can only cluster base table
+
+# --- With primary key (not supported) ---
+statement ok
+CREATE TABlE t2(i INT PRIMARY KEY, j INT);
+
+statement ok
+INSERT INTO t2 SELECT i, random() as j FROM range(5000) as r(i);
+
+statement error
+CLUSTER t2 ORDER BY j;
+----
+Cannot cluster a table with a primary key
+
+# --- With index (not supported) ---
+statement ok
+CREATE TABLE t3 AS SELECT i, random() as j FROM range(5000) as r(i);
+
+statement ok
+CREATE INDEX t3_idx ON t3(j);
+
+statement error
+CLUSTER t3 ORDER BY i;
+----
+Cannot cluster a table with indexes
+
+
+# --- With generated column ---
+statement ok
+CREATE TABLE t4 (i INT, j INT GENERATED ALWAYS AS (i * 2));
+
+statement ok
+INSERT INTO t4 SELECT i FROM range(5000) as r(i);
+
+statement ok
+CLUSTER t4 ORDER BY i;
+
+# Make sure we dont drop the generated column
+query IIIIII rowsort
+DESCRIBE t4;
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
