@@ -924,7 +924,7 @@ bool PersistentCollectionData::HasUpdates() const {
 }
 
 PersistentColumnData ColumnData::Serialize() {
-	PersistentColumnData result(type, GetDataPointers());
+	auto result = count ? PersistentColumnData(type, GetDataPointers()) : PersistentColumnData(type);
 	result.has_updates = HasUpdates();
 	return result;
 }
