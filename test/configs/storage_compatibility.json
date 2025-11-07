@@ -49,6 +49,7 @@
         "test/sql/copy/csv/test_null_padding_projection.test",
         "test/sql/types/geo/geometry.test",
         "test/sql/types/geo/geometry_stats.test",
+        "test/sql/types/geo/geometry_wkb.test",
         "test/geoparquet/disabled.test",
         "test/geoparquet/geoarrow.test",
         "test/geoparquet/mixed.test",

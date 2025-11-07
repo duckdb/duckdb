@@ -5,12 +5,14 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/scalar/geometry_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "yyjson.hpp"
+#include "reader/string_column_reader.hpp"
 
 namespace duckdb {
 
@@ -283,34 +285,24 @@ const unordered_map<string, GeoParquetColumnMetadata> &GeoParquetFileMetadata::G
 	return geometry_columns;
 }
 
-unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,
-                                                                    const ParquetColumnSchema &schema,
-                                                                    ClientContext &context) {
-	// Get the catalog
-	auto &catalog = Catalog::GetSystemCatalog(context);
+unique_ptr<ColumnReader> GeometryColumnReader::Create(ParquetReader &reader, const ParquetColumnSchema &schema,
+                                                      ClientContext &context) {
+	D_ASSERT(schema.type.id() == LogicalTypeId::GEOMETRY);
+	D_ASSERT(schema.children.size() == 1 && schema.children[0].type.id() == LogicalTypeId::BLOB);
 
-	// WKB encoding
-	if (schema.children[0].type.id() == LogicalTypeId::BLOB) {
-		// Look for a conversion function in the catalog
-		auto &conversion_func_set =
-		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geomfromwkb");
-		auto conversion_func = conversion_func_set.functions.GetFunctionByArguments(context, {LogicalType::BLOB});
+	// Make a string reader for the underlying WKB data
+	auto string_reader = make_uniq<StringColumnReader>(reader, schema.children[0]);
 
-		// Create a bound function call expression
-		auto args = vector<unique_ptr<Expression>>();
-		args.push_back(std::move(make_uniq<BoundReferenceExpression>(LogicalType::BLOB, 0)));
-		auto expr = make_uniq<BoundFunctionExpression>(conversion_func.GetReturnType(), conversion_func,
-		                                               std::move(args), nullptr);
+	// Wrap the string reader in a geometry reader
+	auto args = vector<unique_ptr<Expression>>();
+	auto ref = make_uniq_base<Expression, BoundReferenceExpression>(LogicalTypeId::BLOB, 0);
+	args.push_back(std::move(ref));
 
-		// Create a child reader
-		auto child_reader = ColumnReader::CreateReader(reader, schema.children[0]);
-
-		// Create an expression reader that applies the conversion function to the child reader
-		return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr), schema);
-	}
-
-	// Otherwise, unrecognized encoding
-	throw NotImplementedException("Unsupported geometry encoding");
+	// TODO: Pass the actual target type here so we get the CRS information too
+	auto func = StGeomfromwkbFun::GetFunction();
+	func.name = "ST_GeomFromWKB";
+	auto expr = make_uniq_base<Expression, BoundFunctionExpression>(schema.type, func, std::move(args), nullptr);
+	return make_uniq<ExpressionColumnReader>(context, std::move(string_reader), std::move(expr), schema);
 }
 
 } // namespace duckdb

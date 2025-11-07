@@ -5,7 +5,9 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
+#include <future>
 #include <vector>
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
@@ -776,4 +778,84 @@ TEST_CASE("Test appending rows with an active column list", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {30, 30}));
 	REQUIRE(CHECK_COLUMN(result, 3, {84, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 4, {43, 44}));
+}
+
+TEST_CASE("Appender::Clear() clears the data", "[appender]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE ints(i INTEGER)"));
+	Appender appender(con, "main", "ints");
+
+	// We will append rows to reach more than the maximum chunk size
+	// (DEFAULT_FLUSH_COUNT will always be more than a chunk size),
+	// so we will make sure that also the collection is being cleared.
+	// We use the DEFAULT_FLUSH_COUNT so we won't flush before calling the `Clear`
+	constexpr auto rows_to_append = BaseAppender::DEFAULT_FLUSH_COUNT - 10;
+
+	for (idx_t i = 0; i < rows_to_append; i++) {
+		appender.AppendRow(i);
+	}
+
+	// We're clearing, which means we're expecting to have only the `1` appended after the clear.
+	appender.Clear();
+	appender.AppendRow(1);
+	appender.Close();
+
+	duckdb::unique_ptr<QueryResult> result = con.Query("SELECT * FROM ints");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}
+
+TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes", "[appender]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE ints(i INTEGER)"));
+
+	// Prepare a long time running QueryAppender
+	duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
+	duckdb::vector<string> names = {"i"};
+	// This query will run for a long time by cross joining a huge range
+	string long_query = "INSERT INTO ints SELECT i FROM appended_data, range(1000000000000)";
+	QueryAppender app(con, long_query, types, names);
+
+	// Append a single row so we actually have something to flush
+	app.AppendRow(1);
+
+	atomic<bool> flush_started {false};
+
+	thread t([&]() {
+		flush_started.store(true);
+		try {
+			app.Flush();
+		} catch (std::exception &ex) {
+			ErrorData error_data(ex);
+			REQUIRE((error_data.Type() == ExceptionType::INTERRUPT));
+		}
+	});
+
+	// Wait until the flush thread starts, then interrupt
+	while (!flush_started.load()) {
+		this_thread::yield();
+	}
+	// Give the flush a tiny moment to get into execution before interrupting
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	con.Interrupt();
+
+	t.join();
+
+	// Now clear pending buffers so Close will not attempt to flush again
+	app.Clear();
+
+	// Should finish eventually. Close must complete quickly since no data remains to flush
+	auto future = std::async(std::launch::async, [&]() { app.Close(); });
+
+	auto status = future.wait_for(std::chrono::milliseconds(50));
+
+	if (status == std::future_status::ready) {
+		REQUIRE_NOTHROW(future.get());
+	} else {
+		con.Interrupt();
+		FAIL("app.Close() did not finish within a second");
+	}
 }

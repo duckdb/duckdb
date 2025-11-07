@@ -21,7 +21,7 @@ if(NOT WIN32 AND NOT SUN)
     ${PARAMETERS}
     ../extension/loadable_extension_optimizer_demo.cpp)
 
-  if(${ENABLE_UNITTEST_CPP_TESTS})
+  if(${ENABLE_UNITTEST_CPP_TESTS} AND NOT (${ENABLE_THREAD_SANITIZER}))
     set(TEST_EXT_OBJECTS test_remote_optimizer.cpp)
 
     add_library_unity(test_extensions OBJECT ${TEST_EXT_OBJECTS})

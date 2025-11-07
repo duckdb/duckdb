@@ -619,4 +619,14 @@ void BaseAppender::Close() {
 	}
 }
 
+void BaseAppender::Clear() {
+	chunk.Reset();
+
+	if (collection) {
+		collection->Reset();
+	}
+
+	column = 0;
+}
+
 } // namespace duckdb

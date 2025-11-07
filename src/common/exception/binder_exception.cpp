@@ -18,9 +18,13 @@ BinderException BinderException::ColumnNotFound(const string &name, const vector
 	extra_info["name"] = name;
 	if (!similar_bindings.empty()) {
 		extra_info["candidates"] = StringUtil::Join(similar_bindings, ",");
+		return BinderException(extra_info, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
+		                                                      name, candidate_str));
+	} else {
+		return BinderException(
+		    extra_info,
+		    StringUtil::Format("Referenced column \"%s\" was not found because the FROM clause is missing", name));
 	}
-	return BinderException(
-	    extra_info, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", name, candidate_str));
 }
 
 BinderException BinderException::NoMatchingFunction(const string &catalog_name, const string &schema_name,
