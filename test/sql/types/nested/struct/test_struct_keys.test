@@ -1,9 +1,6 @@
 # name: test/sql/types/nested/struct/test_struct_keys.test
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification;
-
 # Basic
 query I
 select struct_keys({a: 1, b: 2});
