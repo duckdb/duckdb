@@ -422,7 +422,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransforme
 		subquery_reference->alias = table_alias.name;
 		subquery_reference->column_name_alias = table_alias.column_name_alias;
 	}
-	return std::move(subquery_reference);
+	return subquery_reference;
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformSubqueryReference(PEGTransformer &transformer,
@@ -517,7 +517,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformValuesClause(PEGTran
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	auto select_statement = make_uniq<SelectStatement>();
 	select_statement->node = std::move(select_node);
-	return std::move(select_statement);
+	return select_statement;
 }
 
 vector<unique_ptr<ParsedExpression>>

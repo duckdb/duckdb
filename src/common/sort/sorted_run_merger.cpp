@@ -262,6 +262,11 @@ public:
 		destroy_partition_idx = end_partition_idx;
 	}
 
+private:
+	static BlockIteratorStateType GetBlockIteratorStateType(const bool &external) {
+		return external ? BlockIteratorStateType::EXTERNAL : BlockIteratorStateType::IN_MEMORY;
+	}
+
 public:
 	ClientContext &context;
 	const idx_t num_threads;
