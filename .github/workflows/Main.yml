@@ -355,7 +355,7 @@ jobs:
 
 
 
- # TODO: Bring back BLOCK_VERIFICATION: 1, and consider bringing back fts
+ # TODO: Consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
     name: Tests a release build with different configurations
@@ -387,7 +387,7 @@ jobs:
       id: build
       shell: bash
       env:
-        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;autocomplete"
         GEN: ninja
       run: make
 
@@ -414,6 +414,12 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/latest_storage.json
+
+    - name: test/configs/block_verification.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/block_verification.json
 
     - name: test/configs/verify_fetch_row.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
@@ -499,17 +505,30 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/compressed_in_memory.json
 
+    - name: Test sycnronous table scan implementation
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"
+
     - name: Test block prefetching
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/prefetch_all_storage.json
 
-    - name: Test peg_parser
+    - name: Test PEG parser on fallback mode
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/peg_parser.json
+
+    - name: Test PEG parser on strict when supported mode
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/peg_parser_strict.json
+
     - name: Forwards compatibility tests
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash

@@ -224,23 +224,19 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
+	// TODO: (@benfleis) Remove after ${} syntax replaced (test-env, loop vars, ???), and __BUILD_DIRECTORY__ and
+	// ProcessPath replaced, can simplify this into simple `ReplaceVariables` loop.
+	//
 	// Replace environment variables in the SQL
 	for (auto &it : environment_variables) {
 		auto &name = it.first;
 		auto &value = it.second;
 		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
+		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
 	}
 	auto &test_config = TestConfiguration::Get();
 	test_config.ProcessPath(input, file_name);
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
-
-	string data_location = test_config.DataLocation();
-
-	input = StringUtil::Replace(input, "'data/", string("'") + data_location);
-	input = StringUtil::Replace(input, "\"data/", string("\"") + data_location);
-	if (StringUtil::StartsWith(input, "data/")) {
-		input = data_location + input.substr(5);
-	}
 
 	return input;
 }

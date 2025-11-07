@@ -36,7 +36,6 @@ idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLamb
 }
 
 void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
-
 	auto &column_ref = expr.Cast<ColumnRefExpression>();
 	if (column_ref.IsQualified()) {
 		throw BinderException(LambdaExpression::InvalidParametersErrorMessage());
@@ -47,7 +46,6 @@ void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names
 }
 
 void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
-
 	// extract the lambda parameters, which are a single column
 	// reference, or a list of column references (ROW function)
 	string error_message;
@@ -136,17 +134,14 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
                                                      BoundLambdaExpression &bound_lambda_expr,
                                                      const optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                                      const vector<LogicalType> &function_child_types) {
-
 	// check if the original expression is a lambda parameter
 	if (original->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
-
 		auto &bound_lambda_ref = original->Cast<BoundLambdaRefExpression>();
 		auto alias = bound_lambda_ref.GetAlias();
 
 		// refers to a lambda parameter outside the current lambda function
 		// so the lambda parameter will be inside the lambda_bindings
 		if (lambda_bindings && bound_lambda_ref.lambda_idx != lambda_bindings->size()) {
-
 			auto &binding = (*lambda_bindings)[bound_lambda_ref.lambda_idx];
 			auto &column_names = binding.GetColumnNames();
 			auto &column_types = binding.GetColumnTypes();
@@ -155,7 +150,6 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 			// find the matching dummy column in the lambda binding
 			for (idx_t column_idx = 0; column_idx < binding.GetColumnCount(); column_idx++) {
 				if (column_idx == bound_lambda_ref.binding.column_index) {
-
 					// now create the replacement
 					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_expr, bound_lambda_ref);
 					replacement =
@@ -190,7 +184,6 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_expr, unique_ptr<Expression> &expr,
                                             const optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                             const vector<LogicalType> &function_child_types) {
-
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
 		throw BinderException("subqueries in lambda expressions are not supported");
 	}
@@ -208,7 +201,6 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF ||
 	    expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER ||
 	    expr->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
-
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			// Search for UNNEST.
 			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;

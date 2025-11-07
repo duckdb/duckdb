@@ -16,7 +16,6 @@ static const int64_t SUPPORTED_UPPER_BOUND = NumericLimits<uint32_t>::Maximum();
 static const int64_t SUPPORTED_LOWER_BOUND = -SUPPORTED_UPPER_BOUND - 1;
 
 static inline void AssertInSupportedRange(idx_t input_size, int64_t offset, int64_t length) {
-
 	if (input_size > (uint64_t)SUPPORTED_UPPER_BOUND) {
 		throw OutOfRangeException("Substring input size is too large (> %d)", SUPPORTED_UPPER_BOUND);
 	}

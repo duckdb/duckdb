@@ -39,7 +39,7 @@ ScalarFunction EncodeFun::GetFunction() {
 
 ScalarFunction DecodeFun::GetFunction() {
 	ScalarFunction function({LogicalType::BLOB}, LogicalType::VARCHAR, DecodeFunction);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 

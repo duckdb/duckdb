@@ -334,8 +334,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	// Some functions may have an invalid default return type, as they must be bound to infer the return type.
 	// In those cases, we default to SQLNULL.
 	const auto return_type_if_null =
-	    bound_function.return_type.IsComplete() ? bound_function.return_type : LogicalType::SQLNULL;
-	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+	    bound_function.GetReturnType().IsComplete() ? bound_function.GetReturnType() : LogicalType::SQLNULL;
+	if (bound_function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
 				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
@@ -378,7 +378,7 @@ static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 
 static void PropagateCollations(ClientContext &, ScalarFunction &bound_function,
                                 vector<unique_ptr<Expression>> &children) {
-	if (!RequiresCollationPropagation(bound_function.return_type)) {
+	if (!RequiresCollationPropagation(bound_function.GetReturnType())) {
 		// we only need to propagate if the function returns a varchar
 		return;
 	}
@@ -389,7 +389,7 @@ static void PropagateCollations(ClientContext &, ScalarFunction &bound_function,
 	}
 	// propagate the collation to the return type
 	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
-	bound_function.return_type = std::move(collation_type);
+	bound_function.SetReturnType(std::move(collation_type));
 }
 
 static void PushCollations(ClientContext &context, ScalarFunction &bound_function,
@@ -401,8 +401,8 @@ static void PushCollations(ClientContext &context, ScalarFunction &bound_functio
 	}
 	// push collation into the return type if required
 	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
-	if (RequiresCollationPropagation(bound_function.return_type)) {
-		bound_function.return_type = collation_type;
+	if (RequiresCollationPropagation(bound_function.GetReturnType())) {
+		bound_function.SetReturnType(collation_type);
 	}
 	// push collations to the children
 	for (auto &arg : children) {
@@ -417,7 +417,7 @@ static void PushCollations(ClientContext &context, ScalarFunction &bound_functio
 
 static void HandleCollations(ClientContext &context, ScalarFunction &bound_function,
                              vector<unique_ptr<Expression>> &children) {
-	switch (bound_function.collation_handling) {
+	switch (bound_function.GetCollationHandling()) {
 	case FunctionCollationHandling::IGNORE_COLLATIONS:
 		// explicitly ignoring collation handling
 		break;
@@ -436,7 +436,6 @@ static void HandleCollations(ClientContext &context, ScalarFunction &bound_funct
 static void InferTemplateType(ClientContext &context, const LogicalType &source, const LogicalType &target,
                               case_insensitive_map_t<vector<LogicalType>> &bindings, const Expression &current_expr,
                               const BaseScalarFunction &function) {
-
 	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
 		// If the actual type is unknown, we cannot infer anything more.
 		// Therefore, we map all remaining templates in the source to UNKNOWN or SQLNULL, if not already inferred to
@@ -517,7 +516,6 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	case LogicalTypeId::ARRAY: {
 		if ((source.id() == LogicalTypeId::ARRAY || source.id() == LogicalTypeId::LIST) &&
 		    (target.id() == LogicalTypeId::LIST || target.id() == LogicalTypeId::ARRAY)) {
-
 			const auto &source_child =
 			    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
 			const auto &target_child =
@@ -565,7 +563,6 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 
 static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vector<LogicalType>> &bindings,
                                    const string &function_name) {
-
 	// Replace all template types in with their bound concrete types.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
 		if (t.id() == LogicalTypeId::TEMPLATE) {
@@ -614,8 +611,8 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 	}
 
 	// If the return type is templated, we need to subsitute it as well
-	if (bound_function.return_type.IsTemplated()) {
-		to_substitute.emplace_back(bound_function.return_type);
+	if (bound_function.GetReturnType().IsTemplated()) {
+		to_substitute.emplace_back(bound_function.GetReturnType());
 	}
 
 	// Finally, substitute all template types in the bound function with their concrete types.
@@ -641,13 +638,12 @@ void FunctionBinder::CheckTemplateTypesResolved(const BaseScalarFunction &bound_
 		VerifyTemplateType(arg, bound_function.name);
 	}
 	VerifyTemplateType(bound_function.varargs, bound_function.name);
-	VerifyTemplateType(bound_function.return_type, bound_function.name);
+	VerifyTemplateType(bound_function.GetReturnType(), bound_function.name);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
                                                           optional_ptr<Binder> binder) {
-
 	// Attempt to resolve template types, before we call the "Bind" callback.
 	ResolveTemplateTypes(bound_function, children);
 
@@ -679,7 +675,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
 
-	auto return_type = bound_function.return_type;
+	auto return_type = bound_function.GetReturnType();
 	unique_ptr<Expression> result;
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function),
 	                                                      std::move(children), std::move(bind_info), is_operator);
@@ -698,7 +694,6 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
                                                                            vector<unique_ptr<Expression>> children,
                                                                            unique_ptr<Expression> filter,
                                                                            AggregateType aggr_type) {
-
 	ResolveTemplateTypes(bound_function, children);
 
 	unique_ptr<FunctionData> bind_info;

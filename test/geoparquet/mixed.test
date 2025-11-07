@@ -1,8 +1,6 @@
 # name: test/geoparquet/mixed.test
 # group: [geoparquet]
 
-require spatial
-
 require parquet
 
 #------------------------------------------------------------------------------

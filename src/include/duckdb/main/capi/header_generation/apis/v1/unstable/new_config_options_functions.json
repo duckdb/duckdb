@@ -1,0 +1,16 @@
+{
+  "version": "unstable_new_config_options_functions",
+  "description": "New configuration options functions",
+  "entries": [
+    "duckdb_create_config_option",
+    "duckdb_destroy_config_option",
+    "duckdb_config_option_set_name",
+    "duckdb_config_option_set_type",
+    "duckdb_config_option_set_default_value",
+    "duckdb_config_option_set_default_scope",
+    "duckdb_config_option_set_description",
+    "duckdb_register_config_option",
+
+    "duckdb_client_context_get_config_option"
+  ]
+}

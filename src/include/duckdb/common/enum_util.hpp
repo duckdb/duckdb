@@ -78,6 +78,10 @@ enum class ArrowTypeInfoType : uint8_t;
 
 enum class ArrowVariableSizeType : uint8_t;
 
+enum class AsyncResultType : uint8_t;
+
+enum class AsyncResultsExecutionMode : uint8_t;
+
 enum class BinderType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -87,6 +91,8 @@ enum class BitpackingMode : uint8_t;
 enum class BlockIteratorStateType : int8_t;
 
 enum class BlockState : uint8_t;
+
+enum class BufferedIndexReplay : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
@@ -304,6 +310,8 @@ enum class PendingExecutionResult : uint8_t;
 
 enum class PhysicalOperatorType : uint8_t;
 
+enum class PhysicalTableScanExecutionStrategy : uint8_t;
+
 enum class PhysicalType : uint8_t;
 
 enum class PragmaType : uint8_t;
@@ -322,7 +330,13 @@ enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
 
+enum class QueryResultMemoryType : uint8_t;
+
+enum class QueryResultOutputType : uint8_t;
+
 enum class QueryResultType : uint8_t;
+
+enum class RecoveryMode : uint8_t;
 
 enum class RelationType : uint8_t;
 
@@ -525,6 +539,12 @@ template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
 
 template<>
+const char* EnumUtil::ToChars<AsyncResultType>(AsyncResultType value);
+
+template<>
+const char* EnumUtil::ToChars<AsyncResultsExecutionMode>(AsyncResultsExecutionMode value);
+
+template<>
 const char* EnumUtil::ToChars<BinderType>(BinderType value);
 
 template<>
@@ -538,6 +558,9 @@ const char* EnumUtil::ToChars<BlockIteratorStateType>(BlockIteratorStateType val
 
 template<>
 const char* EnumUtil::ToChars<BlockState>(BlockState value);
+
+template<>
+const char* EnumUtil::ToChars<BufferedIndexReplay>(BufferedIndexReplay value);
 
 template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
@@ -864,6 +887,9 @@ template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value);
 
 template<>
+const char* EnumUtil::ToChars<PhysicalTableScanExecutionStrategy>(PhysicalTableScanExecutionStrategy value);
+
+template<>
 const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value);
 
 template<>
@@ -891,7 +917,16 @@ template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value);
 
 template<>
+const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value);
+
+template<>
+const char* EnumUtil::ToChars<QueryResultOutputType>(QueryResultOutputType value);
+
+template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
+
+template<>
+const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
@@ -1159,6 +1194,12 @@ template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
 
 template<>
+AsyncResultType EnumUtil::FromString<AsyncResultType>(const char *value);
+
+template<>
+AsyncResultsExecutionMode EnumUtil::FromString<AsyncResultsExecutionMode>(const char *value);
+
+template<>
 BinderType EnumUtil::FromString<BinderType>(const char *value);
 
 template<>
@@ -1172,6 +1213,9 @@ BlockIteratorStateType EnumUtil::FromString<BlockIteratorStateType>(const char *
 
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value);
+
+template<>
+BufferedIndexReplay EnumUtil::FromString<BufferedIndexReplay>(const char *value);
 
 template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
@@ -1498,6 +1542,9 @@ template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value);
 
 template<>
+PhysicalTableScanExecutionStrategy EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(const char *value);
+
+template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value);
 
 template<>
@@ -1525,7 +1572,16 @@ template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
 
 template<>
+QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *value);
+
+template<>
+QueryResultOutputType EnumUtil::FromString<QueryResultOutputType>(const char *value);
+
+template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
+
+template<>
+RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);

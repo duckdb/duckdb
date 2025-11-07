@@ -5,223 +5,228 @@ require parquet
 
 # Array
 query II
-from 'data/parquet-testing/variant_array_array_string_and_integer.parquet';
+from '{DATA_DIR}/parquet-testing/variant_array_array_string_and_integer.parquet';
 ----
-1	[["string","iceberg",34],[34,null],[],["string","iceberg"],34]
+1	[[string, iceberg, 34], [34, NULL], [], [string, iceberg], 34]
 
 # String
 query II
-from 'data/parquet-testing/variant_string.parquet';
+from '{DATA_DIR}/parquet-testing/variant_string.parquet';
 ----
-1	"iceberg"
+1	iceberg
 
 # BOOL TRUE
 query II
-from 'data/parquet-testing/variant_bool_true.parquet';
+from '{DATA_DIR}/parquet-testing/variant_bool_true.parquet';
 ----
 1	true
 
 # Decimal4
 query II
-from 'data/parquet-testing/variant_decimal4_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_decimal4_positive.parquet';
 ----
-1	"123456.789"
+1	123456.789
 
 # UUID
 query II
-from 'data/parquet-testing/variant_uuid.parquet';
+from '{DATA_DIR}/parquet-testing/variant_uuid.parquet';
 ----
-1	"f24f9b64-81fa-49d1-b74e-8c09a6e31c56"
+1	f24f9b64-81fa-49d1-b74e-8c09a6e31c56
 
 # Empty array
 query II
-from 'data/parquet-testing/variant_array_empty.parquet';
+from '{DATA_DIR}/parquet-testing/variant_array_empty.parquet';
 ----
 1	[]
 
 query II
-from 'data/parquet-testing/variant_int16.parquet';
+from '{DATA_DIR}/parquet-testing/variant_int16.parquet';
 ----
 1	-1234
 
 query II
-from 'data/parquet-testing/variant_int32.parquet';
+from '{DATA_DIR}/parquet-testing/variant_int32.parquet';
 ----
 1	-12345
 
 # Binary
 query II
-from 'data/parquet-testing/variant_binary.parquet';
+from '{DATA_DIR}/parquet-testing/variant_binary.parquet';
 ----
-1	"CgsMDQ=="
+1	CgsMDQ==
 
 # Decimal16
 query II
-from 'data/parquet-testing/variant_decimal16.parquet';
+from '{DATA_DIR}/parquet-testing/variant_decimal16.parquet';
 ----
-1	"9876543210.123456789"
+1	9876543210.123456789
 
 query II
-from 'data/parquet-testing/variant_int64.parquet';
+from '{DATA_DIR}/parquet-testing/variant_int64.parquet';
 ----
 1	-9876543210
 
 # TIMESTAMP_NANOS_NTZ
 query II
-from 'data/parquet-testing/variant_timestamp_nanos_ntz.parquet';
+from '{DATA_DIR}/parquet-testing/variant_timestamp_nanos_ntz.parquet';
 ----
-1	"1957-11-07 12:33:54.123456789"
+1	1957-11-07 12:33:54.123456789
 
 # Array of strings (2-dimensional)
 query II
-from 'data/parquet-testing/variant_array_array_string.parquet';
+from '{DATA_DIR}/parquet-testing/variant_array_array_string.parquet';
 ----
-1	[["string","iceberg"],["apple","banana"]]
+1	[[string, iceberg], [apple, banana]]
 
 # TIMESTAMP_MICROS
 query II
-from 'data/parquet-testing/variant_timestamp_micros.parquet';
+from '{DATA_DIR}/parquet-testing/variant_timestamp_micros.parquet';
 ----
-1	"1957-11-07 12:33:54.123456+00"
-
-# Object {'a': .., 'c': ...}
-query II
-from 'data/parquet-testing/variant_object_primitives.parquet';
-----
-1	{"a":123456789,"c":"string"}
-
-query II
-from 'data/parquet-testing/variant_timestamp_micros_positive.parquet';
-----
-1	"2024-11-07 12:33:54.123456+00"
-
-query II
-from 'data/parquet-testing/variant_int16_positive.parquet';
-----
-1	1234
-
-query II
-from 'data/parquet-testing/variant_time_ntz.parquet';
-----
-1	"12:33:54.123456"
-
-query II
-from 'data/parquet-testing/variant_decimal16_negative.parquet';
-----
-1	"-9876543210.123456789"
-
-query II
-from 'data/parquet-testing/variant_timestamp_nanos1.parquet';
-----
-1	"1957-11-07 12:33:54.123457+00"
-
-query II
-from 'data/parquet-testing/variant_decimal8_negative.parquet';
-----
-1	"-123456789.987654321"
+1	1957-11-07 12:33:54.123456+00
 
 query II
 from 'data/parquet-testing/variant_timestamp_micros_negative.parquet';
 ----
-1	"1957-11-07 12:33:54.123456"
+1	1957-11-07 12:33:54.123456
+
+# Object {'a': .., 'c': ...}
+query II
+from '{DATA_DIR}/parquet-testing/variant_object_primitives.parquet';
+----
+1	{'a': 123456789, 'c': string}
 
 query II
-from 'data/parquet-testing/variant_int8_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_timestamp_micros_positive.parquet';
+----
+1	2024-11-07 12:33:54.123456+00
+
+query II
+from '{DATA_DIR}/parquet-testing/variant_int16_positive.parquet';
+----
+1	1234
+
+query II
+from '{DATA_DIR}/parquet-testing/variant_time_ntz.parquet';
+----
+1	12:33:54.123456
+
+query II
+from '{DATA_DIR}/parquet-testing/variant_decimal16_negative.parquet';
+----
+1	-9876543210.123456789
+
+query II
+from '{DATA_DIR}/parquet-testing/variant_timestamp_nanos1.parquet';
+----
+1	1957-11-07 12:33:54.123457+00
+
+query II
+from '{DATA_DIR}/parquet-testing/variant_decimal8_negative.parquet';
+----
+1	-123456789.987654321
+
+query II
+from '{DATA_DIR}/parquet-testing/variant_timestamp_micros_negative.parquet';
+----
+1	1957-11-07 12:33:54.123456
+
+query II
+from '{DATA_DIR}/parquet-testing/variant_int8_positive.parquet';
 ----
 1	34
 
 query II
-from 'data/parquet-testing/variant_timestamp_nanos2.parquet';
+from '{DATA_DIR}/parquet-testing/variant_timestamp_nanos2.parquet';
 ----
-1	"2024-11-07 12:33:54.123456+00"
+1	2024-11-07 12:33:54.123456+00
 
 query II
-from 'data/parquet-testing/variant_int8_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_int8_negative.parquet';
 ----
 1	-34
 
 query II
-from 'data/parquet-testing/variant_array_string.parquet';
+from '{DATA_DIR}/parquet-testing/variant_array_string.parquet';
 ----
-1	["iceberg","string"]
+1	[iceberg, string]
 
 query II
-from 'data/parquet-testing/variant_date_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_date_negative.parquet';
 ----
-1	"1957-11-07"
+1	1957-11-07
 
 query II
-from 'data/parquet-testing/variant_int64_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_int64_positive.parquet';
 ----
 1	9876543210
 
 query II
-from 'data/parquet-testing/variant_array_object_string_and_integer.parquet';
+from '{DATA_DIR}/parquet-testing/variant_array_object_string_and_integer.parquet';
 ----
-1	[{"a":123456789,"c":"string"},{"a":123456789,"c":"string"},"iceberg",34]
+1	[{'a': 123456789, 'c': string}, {'a': 123456789, 'c': string}, iceberg, 34]
 
 query II
-from 'data/parquet-testing/variant_int32_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_int32_positive.parquet';
 ----
 1	12345
 
 query II
-from 'data/parquet-testing/variant_double_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_double_negative.parquet';
 ----
 1	-14.3
 
 query II
-from 'data/parquet-testing/variant_object_empty.parquet';
+from '{DATA_DIR}/parquet-testing/variant_object_empty.parquet';
 ----
 1	{}
 
 query II
-from 'data/parquet-testing/variant_null.parquet';
+from '{DATA_DIR}/parquet-testing/variant_null.parquet';
 ----
 1	NULL
 
 # -10.11 in the test that it was generated from
 query II
-from 'data/parquet-testing/variant_float_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_float_negative.parquet';
 ----
-1	-10.109999656677246
+1	-10.11
 
 query II
-from 'data/parquet-testing/variant_object_string_and_array.parquet';
+from '{DATA_DIR}/parquet-testing/variant_object_string_and_array.parquet';
 ----
-1	{"a":123456789,"c":["string","iceberg"]}
+1	{'a': 123456789, 'c': [string, iceberg]}
 
 query II
-from 'data/parquet-testing/variant_object_null_and_string.parquet';
+from '{DATA_DIR}/parquet-testing/variant_object_null_and_string.parquet';
 ----
-1	{"a":null,"d":"iceberg"}
+1	{'a': NULL, 'd': iceberg}
 
 query II
-from 'data/parquet-testing/variant_date_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_date_positive.parquet';
 ----
-1	"2024-11-07"
+1	2024-11-07
 
 query II
-from 'data/parquet-testing/variant_bool_false.parquet';
+from '{DATA_DIR}/parquet-testing/variant_bool_false.parquet';
 ----
 1	false
 
 query II
-from 'data/parquet-testing/variant_array_object_string.parquet';
+from '{DATA_DIR}/parquet-testing/variant_array_object_string.parquet';
 ----
-1	[{"a":123456789,"c":"string"},{"a":123456789,"c":"string"}]
+1	[{'a': 123456789, 'c': string}, {'a': 123456789, 'c': string}]
 
 query II
-from 'data/parquet-testing/variant_decimal4_negative.parquet';
+from '{DATA_DIR}/parquet-testing/variant_decimal4_negative.parquet';
 ----
-1	"-123456.789"
+1	-123456.789
 
 query II
-from 'data/parquet-testing/variant_double_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_double_positive.parquet';
 ----
 1	14.3
 
 query II
-from 'data/parquet-testing/variant_timestamp_micros_ntz_positive.parquet';
+from '{DATA_DIR}/parquet-testing/variant_timestamp_micros_ntz_positive.parquet';
 ----
-1	"2024-11-07 12:33:54.123456"
+1	2024-11-07 12:33:54.123456

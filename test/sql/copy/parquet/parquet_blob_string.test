@@ -8,32 +8,32 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_as_string=False) limit 1
+SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet',binary_as_string=False) limit 1
 ----
 BLOB
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_as_string=False)
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet',binary_as_string=False)
 ----
 foo
 bar
 baz
 
 query I
-SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_as_string=True) limit 1
+SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet',binary_as_string=True) limit 1
 ----
 VARCHAR
 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_as_string=True)
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet',binary_as_string=True)
 ----
 foo
 bar
 baz
 
 query I
-SELECT converted_type FROM parquet_schema('data/parquet-testing/binary_string.parquet')
+SELECT converted_type FROM parquet_schema('{DATA_DIR}/parquet-testing/binary_string.parquet')
 ----
 NULL
 NULL
@@ -46,12 +46,12 @@ statement ok
 SET binary_as_string=true
 
 query I
-SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet') limit 1
+SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet') limit 1
 ----
 VARCHAR
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet')
 ----
 foo
 bar
@@ -61,12 +61,12 @@ statement ok
 SET binary_as_string=false
 
 query I
-SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet') limit 1
+SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet') limit 1
 ----
 BLOB
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet')
 ----
 foo
 bar
@@ -77,13 +77,13 @@ statement ok
 PRAGMA binary_as_string=1
 
 query I
-SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet' ,binary_as_string=False) limit 1
+SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet' ,binary_as_string=False) limit 1
 ----
 BLOB
 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet')
 ----
 foo
 bar

@@ -23,7 +23,6 @@ public:
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
 	      ignore_nulls(&all_valid), child_idx(executor.child_idx) {
-
 		if (!executor.arg_order_idx.empty()) {
 			value_tree =
 			    make_uniq<WindowIndexTree>(client, executor.wexpr.arg_orders, executor.arg_order_idx, payload_count);
@@ -139,7 +138,6 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 //===--------------------------------------------------------------------===//
 WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
-
 	for (const auto &order : wexpr.arg_orders) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
@@ -200,7 +198,6 @@ public:
 	                                  const idx_t payload_count, const ValidityMask &partition_mask,
 	                                  const ValidityMask &order_mask)
 	    : WindowValueGlobalState(client, executor, payload_count, partition_mask, order_mask) {
-
 		if (value_tree) {
 			use_framing = true;
 
@@ -842,7 +839,6 @@ static fill_value_t GetFillValueFunction(const LogicalType &type) {
 
 WindowFillExecutor::WindowFillExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowValueExecutor(wexpr, shared) {
-
 	//	We need the sort values for interpolation, so either use the range or the secondary ordering expression
 	if (arg_order_idx.empty()) {
 		//	We use the range ordering, even if it has not been defined
@@ -918,7 +914,6 @@ unique_ptr<LocalSinkState> WindowFillExecutor::GetLocalState(ExecutionContext &c
 
 void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count,
                                           idx_t row_idx, OperatorSinkInput &sink) const {
-
 	auto &lfstate = sink.local_state.Cast<WindowFillLocalState>();
 	auto &cursor = *lfstate.cursor;
 

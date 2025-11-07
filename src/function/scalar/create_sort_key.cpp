@@ -63,7 +63,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 	}
 	if (all_constant) {
 		if (constant_size <= sizeof(int64_t)) {
-			bound_function.return_type = LogicalType::BIGINT;
+			bound_function.SetReturnType(LogicalType::BIGINT);
 		}
 	}
 	return std::move(result);
@@ -863,7 +863,7 @@ unique_ptr<FunctionData> DecodeSortKeyBind(ClientContext &context, ScalarFunctio
 		throw BinderException("sort_key must be either BIGINT or BLOB, got %s instead",
 		                      sort_key_arg.return_type.ToString());
 	}
-	bound_function.return_type = LogicalType::STRUCT(std::move(children));
+	bound_function.SetReturnType(LogicalType::STRUCT(std::move(children)));
 
 	return std::move(result);
 }
@@ -1158,11 +1158,13 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 
 } // namespace
 
-void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
-                                         OrderModifiers modifiers) {
+idx_t CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
+                                          OrderModifiers modifiers) {
 	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
 	DecodeSortKeyData decode_data(sort_key);
 	DecodeSortKeyRecursive(&decode_data, sort_key_data, result, result_idx, 1);
+
+	return decode_data.position;
 }
 
 void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,
@@ -1244,7 +1246,7 @@ ScalarFunction CreateSortKeyFun::GetFunction() {
 	ScalarFunction sort_key_function("create_sort_key", {LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction,
 	                                 CreateSortKeyBind);
 	sort_key_function.varargs = LogicalType::ANY;
-	sort_key_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return sort_key_function;
 }
 

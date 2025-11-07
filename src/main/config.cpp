@@ -86,7 +86,9 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_LOCAL(DebugForceExternalSetting),
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
+    DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
+    DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyVectorSetting),
     DUCKDB_SETTING_CALLBACK(DebugWindowModeSetting),
     DUCKDB_GLOBAL(DefaultBlockSizeSetting),
@@ -180,12 +182,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 84),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 34),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 103),
-                                                     DUCKDB_SETTING_ALIAS("user", 118),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 86),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 36),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 105),
+                                                     DUCKDB_SETTING_ALIAS("user", 120),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 21),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 117),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 119),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -441,8 +443,14 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	return type_id;
 }
 
+bool DBConfig::HasExtensionOption(const string &name) {
+	lock_guard<mutex> l(config_lock);
+	return extension_parameters.find(name) != extension_parameters.end();
+}
+
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope) {
+	lock_guard<mutex> l(config_lock);
 	extension_parameters.insert(make_pair(
 	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope)));
 	// copy over unrecognized options, if they match the new extension option

@@ -17,18 +17,18 @@ true
 
 
 query II nosort read_csv_result
-SELECT drug_exposure_id, ordinality FROM read_csv('data/csv/drug_exposure.csv') WITH ORDINALITY ORDER BY ordinality,drug_exposure_id;
+SELECT drug_exposure_id, ordinality FROM read_csv('{DATA_DIR}/csv/drug_exposure.csv') WITH ORDINALITY ORDER BY ordinality,drug_exposure_id;
 
 query II nosort read_csv_result
-SELECT drug_exposure_id, row_number() OVER () AS ordinality FROM read_csv('data/csv/drug_exposure.csv') ORDER BY ordinality,drug_exposure_id;
+SELECT drug_exposure_id, row_number() OVER () AS ordinality FROM read_csv('{DATA_DIR}/csv/drug_exposure.csv') ORDER BY ordinality,drug_exposure_id;
 
 
 require parquet
 
 
 query III nosort parquet_result
-SELECT name,id,ordinality FROM read_parquet('data/parquet-testing/candidate.parquet') WITH ORDINALITY ORDER BY ordinality,name,id;
+SELECT name,id,ordinality FROM read_parquet('{DATA_DIR}/parquet-testing/candidate.parquet') WITH ORDINALITY ORDER BY ordinality,name,id;
 
 
 query III nosort parquet_result
-SELECT name,id, row_number() OVER () AS ordinality FROM read_parquet('data/parquet-testing/candidate.parquet') ORDER BY ordinality,name,id;
+SELECT name,id, row_number() OVER () AS ordinality FROM read_parquet('{DATA_DIR}/parquet-testing/candidate.parquet') ORDER BY ordinality,name,id;

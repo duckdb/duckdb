@@ -296,7 +296,7 @@ struct VectorMinMaxBase {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
 	}
 };
@@ -367,7 +367,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 
 			// Bind function like arg_min/arg_max.
 			function.arguments[0] = arguments[0]->return_type;
-			function.return_type = arguments[0]->return_type;
+			function.SetReturnType(arguments[0]->return_type);
 			return make_uniq<ArgMinMaxFunctionData>();
 		}
 	}
@@ -519,7 +519,6 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, AggregateFunction &functio
 template <class COMPARATOR>
 unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &function,
                                      vector<unique_ptr<Expression>> &arguments) {
-
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
@@ -531,7 +530,7 @@ unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
 
-	function.return_type = LogicalType::LIST(arguments[0]->return_type);
+	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
 	return nullptr;
 }
 

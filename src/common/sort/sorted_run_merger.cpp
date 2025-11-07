@@ -350,7 +350,9 @@ SourceResultType SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalSta
 		if (!chunk || chunk->size() == 0) {
 			gstate.DestroyScannedData();
 			gstate.partitions[partition_idx.GetIndex()]->scanned = true;
-			const auto scan_count_after_adding = gstate.total_scanned.fetch_add(merged_partition_count);
+			//	fetch_add returns the _previous_ value!
+			const auto scan_count_before_adding = gstate.total_scanned.fetch_add(merged_partition_count);
+			const auto scan_count_after_adding = scan_count_before_adding + merged_partition_count;
 			partition_idx = optional_idx::Invalid();
 			task = SortedRunMergerTask::FINISHED;
 			if (scan_count_after_adding == gstate.merger.total_count) {
@@ -684,34 +686,6 @@ void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate
 	default:
 		throw NotImplementedException("SortedRunMergerLocalState::ScanPartition for %s",
 		                              EnumUtil::ToString(sort_key_type));
-	}
-}
-
-template <class SORT_KEY, class PHYSICAL_TYPE>
-void TemplatedGetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
-                               data_ptr_t *const payload_ptrs) {
-	const auto key_data = FlatVector::GetData<PHYSICAL_TYPE>(key.data[0]);
-	for (idx_t i = 0; i < count; i++) {
-		auto &merged_partition_key = merged_partition_keys[i];
-		merged_partition_key.Deconstruct(key_data[i]);
-		if (SORT_KEY::HAS_PAYLOAD) {
-			payload_ptrs[i] = merged_partition_key.GetPayload();
-		}
-	}
-	key.SetCardinality(count);
-}
-
-template <class SORT_KEY>
-void GetKeyAndPayload(SORT_KEY *const merged_partition_keys, const idx_t count, DataChunk &key,
-                      data_ptr_t *const payload_ptrs) {
-	const auto type_id = key.data[0].GetType().id();
-	switch (type_id) {
-	case LogicalTypeId::BLOB:
-		return TemplatedGetKeyAndPayload<SORT_KEY, string_t>(merged_partition_keys, count, key, payload_ptrs);
-	case LogicalTypeId::BIGINT:
-		return TemplatedGetKeyAndPayload<SORT_KEY, int64_t>(merged_partition_keys, count, key, payload_ptrs);
-	default:
-		throw NotImplementedException("GetKeyAndPayload for %s", EnumUtil::ToString(type_id));
 	}
 }
 

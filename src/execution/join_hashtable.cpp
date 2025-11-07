@@ -45,7 +45,6 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 		auto type = condition.left->return_type;
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
 		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-
 			// ensure that all equality conditions are at the front,
 			// and that all other conditions are at the back
 			D_ASSERT(equality_types.size() == condition_types.size());
@@ -82,7 +81,6 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 
 	// Initialize the row matcher that are used for filtering during the probing only if there are non-equality
 	if (!non_equality_predicates.empty()) {
-
 		row_matcher_probe = unique_ptr<RowMatcher>(new RowMatcher());
 		row_matcher_probe_no_match_sel = unique_ptr<RowMatcher>(new RowMatcher());
 
@@ -172,7 +170,6 @@ idx_t GetOptionalIndex(const SelectionVector *sel, const idx_t idx) {
 
 static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry_t &entry, Vector &pointers_result_v,
                                 idx_t row_ht_offset, idx_t &keys_to_compare_count, const idx_t &row_index) {
-
 	const auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(pointers_result_v);
 	const auto ht_offsets_and_salts = FlatVector::GetData<idx_t>(state.ht_offsets_and_salts_v);
 
@@ -189,13 +186,11 @@ static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry
 template <bool USE_SALTS, bool HAS_SEL>
 static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHashTable &ht, ht_entry_t *entries,
                                       Vector &pointers_result_v, const SelectionVector *row_sel, idx_t &count) {
-
 	auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 
 	idx_t keys_to_compare_count = 0;
 
 	for (idx_t i = 0; i < count; i++) {
-
 		auto row_hash = hashes_dense[i]; // hashes have been flattened before -> always access dense
 		auto row_ht_offset = row_hash & ht.bitmask;
 
@@ -260,7 +255,6 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    Vector &hashes_v, const SelectionVector *row_sel, idx_t &count, JoinHashTable &ht,
                                    ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel,
                                    bool has_row_sel) {
-
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
 	if (has_row_sel) {
 		UnifiedVectorFormat hashes_unified_v;
@@ -339,7 +333,6 @@ inline bool JoinHashTable::UseSalt() const {
 void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
                                    const SelectionVector *sel, idx_t &count, Vector &pointers_result_v,
                                    SelectionVector &match_sel, const bool has_sel) {
-
 	if (UseSalt()) {
 		GetRowPointersInternal<true>(keys, key_state, state, hashes_v, sel, count, *this, entries, pointers_result_v,
 		                             match_sel, has_sel);
@@ -896,7 +889,6 @@ bool ScanStructure::PointersExhausted() const {
 }
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {
-
 	// Initialize the found_match array to the current sel_vector
 	for (idx_t i = 0; i < this->count; ++i) {
 		match_sel.set_index(i, this->sel_vector.get_index(i));
@@ -942,7 +934,6 @@ idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vect
 }
 
 void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_count) {
-
 	if (!ht.chains_longer_than_one) {
 		this->count = 0;
 		return;
