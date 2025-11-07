@@ -8,6 +8,8 @@ add_third_party(miniz)
 add_third_party(hyperloglog)
 add_third_party(fastpforlib)
 add_third_party(yyjson)
+add_third_party(utf8proc)
+
 
 if(${DISABLE_THREADS})
   add_definitions(-DDUCKDB_NO_THREADS)
