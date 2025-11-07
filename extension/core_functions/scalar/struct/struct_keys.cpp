@@ -7,10 +7,15 @@ namespace duckdb {
 
 struct StructKeysBindData : public FunctionData {
 	const LogicalType type;
+	const bool is_unnamed;
 	Vector keys_vector;
 
-	explicit StructKeysBindData(const LogicalType &type_p) : type(type_p), keys_vector(LogicalType::LIST(LogicalType::VARCHAR), 2) {
-		// TODO - Can I set capacity of dict_child according to constant vector / flat vector?
+	explicit StructKeysBindData(const LogicalType &type_p, bool is_unnamed_p)
+	    : type(type_p), is_unnamed(is_unnamed_p), keys_vector(LogicalType::LIST(LogicalType::VARCHAR), 2) {
+		// If the struct is unnamed, we don't need to compute or store the keys at all
+		if (is_unnamed) {
+			return;
+		}
 		const auto &child_types = StructType::GetChildTypes(type);
 		const auto count = child_types.size();
 
@@ -31,12 +36,12 @@ struct StructKeysBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other) const override {
 		auto &o = other.Cast<StructKeysBindData>();
-		// It should be fine to compare just the type as the content is derived from it
-		return type == o.type;
+		// Compare type and flag (content is derived from them)
+		return type == o.type && is_unnamed == o.is_unnamed;
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<StructKeysBindData>(type);
+		return make_uniq<StructKeysBindData>(type, is_unnamed);
 	}
 };
 
@@ -47,13 +52,19 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<StructKeysBindData>();
 	auto &keys_vector = data.keys_vector;
 
+	// Unnamed STRUCTs should yield NULL (decided at bind time)
+	if (data.is_unnamed) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
 
 	// If the input is a constant during constant folding, we must return a CONSTANT_VECTOR
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
 			Vector null_vec(LogicalType::LIST(LogicalType::VARCHAR));
 			ConstantVector::SetNull(null_vec, true);
-			result .Reference(null_vec);
+			result.Reference(null_vec);
 			return;
 		}
 		ConstantVector::Reference(result, keys_vector, 0, count);
@@ -80,7 +91,8 @@ static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFun
 		throw InvalidInputException("struct_keys() expects a STRUCT argument");
 	}
 
-	return make_uniq<StructKeysBindData>(arguments[0]->return_type);
+	const bool is_unnamed = StructType::IsUnnamed(arguments[0]->return_type);
+	return make_uniq<StructKeysBindData>(arguments[0]->return_type, is_unnamed);
 }
 
 ScalarFunction StructKeysFun::GetFunction() {
