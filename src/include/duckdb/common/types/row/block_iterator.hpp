@@ -23,10 +23,6 @@ enum class BlockIteratorStateType : int8_t {
 	EXTERNAL,
 };
 
-static BlockIteratorStateType GetBlockIteratorStateType(const bool &external) {
-	return external ? BlockIteratorStateType::EXTERNAL : BlockIteratorStateType::IN_MEMORY;
-}
-
 template <class BLOCK_ITERATOR_STATE>
 class BlockIteratorStateBase {
 protected:
