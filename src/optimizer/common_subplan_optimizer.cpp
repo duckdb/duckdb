@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
-#include "icu/third_party/icu/common/unicode/uscript.h"
 
 namespace duckdb {
 
