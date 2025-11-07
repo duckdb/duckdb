@@ -225,11 +225,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 				return LogicalType::TIME_TZ;
 			}
 			return LogicalType::TIME;
-		} else if (s_ele.logicalType.__isset.GEOMETRY) {
-			// TODO: Set CRS too
-			return LogicalType::GEOMETRY();
-		} else if (s_ele.logicalType.__isset.GEOGRAPHY) {
-			return LogicalType::GEOMETRY();
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -409,6 +404,9 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
 		return make_uniq<RowNumberColumnReader>(*this, schema);
+	case ParquetColumnSchemaType::GEOMETRY: {
+		return GeometryColumnReader::Create(*this, schema, context);
+	}
 	case ParquetColumnSchemaType::COLUMN: {
 		if (schema.children.empty()) {
 			// leaf reader
@@ -486,11 +484,11 @@ ParquetColumnSchema::ParquetColumnSchema(string name_p, LogicalType type_p, idx_
       max_repeat(max_repeat), schema_index(schema_index), column_index(column_index) {
 }
 
-ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType result_type,
+ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema child, LogicalType result_type,
                                          ParquetColumnSchemaType schema_type)
-    : schema_type(schema_type), name(parent.name), type(std::move(result_type)), max_define(parent.max_define),
-      max_repeat(parent.max_repeat), schema_index(parent.schema_index), column_index(parent.column_index) {
-	children.push_back(std::move(parent));
+    : schema_type(schema_type), name(child.name), type(std::move(result_type)), max_define(child.max_define),
+      max_repeat(child.max_repeat), schema_index(child.schema_index), column_index(child.column_index) {
+	children.push_back(std::move(child));
 }
 
 unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_meta_data,
@@ -517,6 +515,32 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, parquet_options.can_have_nan);
 }
 
+static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadataCache &metadata, idx_t depth) {
+	const auto is_blob = s_ele.__isset.type && s_ele.type == Type::BYTE_ARRAY;
+	if (!is_blob) {
+		return false;
+	}
+
+	// TODO: Handle CRS in the future
+	const auto is_native_geom = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOMETRY;
+	const auto is_native_geog = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOGRAPHY;
+	if (is_native_geom || is_native_geog) {
+		return true;
+	}
+
+	// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
+	const auto is_at_root = depth == 1;
+	const auto is_in_gpq_metadata = metadata.geo_metadata && metadata.geo_metadata->IsGeometryColumn(s_ele.name);
+	const auto is_leaf = s_ele.num_children == 0;
+	const auto is_geoparquet_geom = is_at_root && is_in_gpq_metadata && is_leaf;
+
+	if (is_geoparquet_geom) {
+		return true;
+	}
+
+	return false;
+}
+
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                         idx_t &next_schema_idx, idx_t &next_file_idx,
                                                         ClientContext &context) {
@@ -540,16 +564,26 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		max_repeat++;
 	}
 
-	// Check for geoparquet spatial types
-	if (depth == 1) {
-		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
-		// geoarrow types, although geometry columns, are structs and have children and are handled below.
-		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name) && s_ele.num_children == 0) {
-			auto geom_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
-			// overwrite the derived type with GEOMETRY
-			geom_schema.type = LogicalType::GEOMETRY();
-			return geom_schema;
-		}
+	// Check for geometry type
+	if (IsGeometryType(s_ele, *metadata, depth)) {
+		// Geometries in both GeoParquet and native parquet are stored as a WKB-encoded BLOB.
+		// Because we don't just want to validate that the WKB encoding is correct, but also transform it into
+		// little-endian if necessary, we cant just make use of the StringColumnReader without heavily modifying it.
+		// Therefore, we create a dedicated GEOMETRY parquet column schema type, which wraps the underlying BLOB column.
+		// This schema type gets instantiated as a ExpressionColumnReader on top of the standard Blob/String reader,
+		// which performs the WKB validation/transformation using the `ST_GeomFromWKB` function of DuckDB.
+		// This enables us to also support other geometry encodings (such as GeoArrow geometries) easier in the future.
+
+		// Inner BLOB schema
+		ParquetColumnSchema blob_schema(max_define, max_repeat, this_idx, next_file_idx++,
+		                                ParquetColumnSchemaType::COLUMN);
+		blob_schema.name = s_ele.name;
+		blob_schema.type = LogicalType::BLOB;
+
+		// Wrap in geometry schema
+		ParquetColumnSchema geom_schema(std::move(blob_schema), LogicalType::GEOMETRY(),
+		                                ParquetColumnSchemaType::GEOMETRY);
+		return geom_schema;
 	}
 
 	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
