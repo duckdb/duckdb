@@ -1,1 +1,0 @@
-CreateTypeStmt <- 'TYPE'i IfNotExists? QualifiedName 'AS'i Type

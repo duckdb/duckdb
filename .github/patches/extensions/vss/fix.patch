@@ -1,125 +1,40 @@
-diff --git a/src/hnsw/hnsw_index_plan.cpp b/src/hnsw/hnsw_index_plan.cpp
-index 2505a1f..d534382 100644
---- a/src/hnsw/hnsw_index_plan.cpp
-+++ b/src/hnsw/hnsw_index_plan.cpp
-@@ -14,9 +14,10 @@
- 
- namespace duckdb {
- 
--unique_ptr<PhysicalOperator> HNSWIndex::CreatePlan(PlanIndexInput &input) {
-+PhysicalOperator &HNSWIndex::CreatePlan(PlanIndexInput &input) {
- 	auto &create_index = input.op;
- 	auto &context = input.context;
-+	auto &planner = input.planner;
- 
- 	Value enable_persistence;
- 	context.TryGetCurrentSetting("hnsw_enable_experimental_persistence", enable_persistence);
-@@ -110,9 +111,8 @@ unique_ptr<PhysicalOperator> HNSWIndex::CreatePlan(PlanIndexInput &input) {
- 	select_list.push_back(
- 	    make_uniq<BoundReferenceExpression>(LogicalType::ROW_TYPE, create_index.info->scan_types.size() - 1));
- 
--	auto projection =
--	    make_uniq<PhysicalProjection>(new_column_types, std::move(select_list), create_index.estimated_cardinality);
--	projection->children.push_back(std::move(input.table_scan));
-+	auto &projection = planner.Make<PhysicalProjection>(new_column_types, std::move(select_list), create_index.estimated_cardinality);
-+	projection.children.push_back(input.table_scan);
- 
- 	// filter operator for IS_NOT_NULL on each key column
- 	vector<LogicalType> filter_types;
-@@ -127,18 +127,15 @@ unique_ptr<PhysicalOperator> HNSWIndex::CreatePlan(PlanIndexInput &input) {
- 		filter_select_list.push_back(std::move(is_not_null_expr));
- 	}
- 
--	auto null_filter = make_uniq<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list),
--	                                             create_index.estimated_cardinality);
--	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
--	null_filter->children.push_back(std::move(projection));
-+	auto &null_filter = planner.Make<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list), create_index.estimated_cardinality);
-+	null_filter.types.emplace_back(LogicalType::ROW_TYPE);
-+	null_filter.children.push_back(projection);
- 
--	auto physical_create_index = make_uniq<PhysicalCreateHNSWIndex>(
-+	auto &physical_create_index = planner.Make<PhysicalCreateHNSWIndex>(
- 	    create_index.types, create_index.table, create_index.info->column_ids, std::move(create_index.info),
- 	    std::move(create_index.unbound_expressions), create_index.estimated_cardinality);
--
--	physical_create_index->children.push_back(std::move(null_filter));
--
--	return std::move(physical_create_index);
-+	physical_create_index.children.push_back(null_filter);
-+	return physical_create_index;
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 218aa0e..89e909d 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -566,8 +566,12 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void HNSWIndex::Vacuum(IndexLock &state) {
  }
  
- } // namespace duckdb
-\ No newline at end of file
-diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
-index 472bc09..edd808e 100644
---- a/src/hnsw/hnsw_index_scan.cpp
-+++ b/src/hnsw/hnsw_index_scan.cpp
-@@ -56,7 +56,7 @@ static unique_ptr<GlobalTableFunctionState> HNSWIndexScanInitGlobal(ClientContex
- 	}
- 
- 	// Initialize the storage scan state
--	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
-+	result->local_storage_state.Initialize(result->column_ids, context, input.filters);
- 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
- 
- 	// Initialize the scan state for the index
-diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
-index 9201a3b..a5f6138 100644
---- a/src/hnsw/hnsw_optimize_join.cpp
-+++ b/src/hnsw/hnsw_optimize_join.cpp
-@@ -197,7 +197,7 @@ public:
- 	vector<ColumnBinding> GetColumnBindings() override;
- 	vector<ColumnBinding> GetLeftBindings();
- 	vector<ColumnBinding> GetRightBindings();
--	unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) override;
-+	PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) override;
- 	idx_t EstimateCardinality(ClientContext &context) override;
- 
- public:
-@@ -287,20 +287,20 @@ vector<ColumnBinding> LogicalHNSWIndexJoin::GetColumnBindings() {
- 	return result;
+-string HNSWIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+-	throw NotImplementedException("HNSWIndex::VerifyAndToString() not implemented");
++void HNSWIndex::Verify(IndexLock &l) {
++	throw NotImplementedException("HNSWIndex::Verify() not implemented");
++}
++
++string HNSWIndex::ToString(IndexLock &l, bool display_ascii) {
++	throw NotImplementedException("HNSWIndex::ToString() not implemented");
  }
  
--unique_ptr<PhysicalOperator> LogicalHNSWIndexJoin::CreatePlan(ClientContext &context,
--                                                              PhysicalPlanGenerator &generator) {
-+PhysicalOperator &LogicalHNSWIndexJoin::CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) {
- 
--	auto result = make_uniq<PhysicalHNSWIndexJoin>(types, estimated_cardinality, table, hnsw_index, limit);
--	result->limit = limit;
--	result->inner_column_ids = inner_column_ids;
--	result->inner_projection_ids = inner_projection_ids;
--	result->outer_vector_column = outer_vector_column;
--	result->inner_vector_column = inner_vector_column;
-+	auto &result = planner.Make<PhysicalHNSWIndexJoin>(types, estimated_cardinality, table, hnsw_index, limit);
-+	auto &cast_result = result.Cast<PhysicalHNSWIndexJoin>();
-+	cast_result.limit = limit;
-+	cast_result.inner_column_ids = inner_column_ids;
-+	cast_result.inner_projection_ids = inner_projection_ids;
-+	cast_result.outer_vector_column = outer_vector_column;
-+	cast_result.inner_vector_column = inner_vector_column;
- 
- 	// Plan the	child
--	result->children.push_back(generator.CreatePlan(std::move(children[0])));
--
--	return std::move(result);
-+	auto &plan = planner.CreatePlan(*children[0]);
-+	result.children.push_back(plan);
-+	return result;
- }
- 
- idx_t LogicalHNSWIndexJoin::EstimateCardinality(ClientContext &context) {
+ void HNSWIndex::VerifyAllocations(IndexLock &state) {
 diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
-index dde408c..75783a0 100644
+index 83fb9e7..a22a0b8 100644
 --- a/src/include/hnsw/hnsw_index.hpp
 +++ b/src/include/hnsw/hnsw_index.hpp
-@@ -33,7 +33,7 @@ public:
- 	          AttachedDatabase &db, const case_insensitive_map_t<Value> &options,
- 	          const IndexStorageInfo &info = IndexStorageInfo(), idx_t estimated_cardinality = 0);
+@@ -91,8 +91,14 @@ public:
+ 	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
  
--	static unique_ptr<PhysicalOperator> CreatePlan(PlanIndexInput &input);
-+	static PhysicalOperator &CreatePlan(PlanIndexInput &input);
+-	//! Returns the string representation of the HNSWIndex, or only traverses and verifies the index.
+-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
++	//! Traverses and verifies the index.
++	//! Currently not implemented.
++	void Verify(IndexLock &l) override;
++
++	//! Returns the string representation of an index.
++	//! Currently not implemented.
++	string ToString(IndexLock &l, bool display_ascii = false) override;
++
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
  
- 	//! The actual usearch index
- 	USearchIndexType index;

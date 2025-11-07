@@ -1,0 +1,181 @@
+# name: test/optimizer/pushdown/pushdown_filter_on_coalesced_equal_outer_join_keys.test
+# description: Test pushdown of filters on coalesced join keys compared for equality in the join condition
+# group: [pushdown]
+
+# enable query verification
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 AS FROM VALUES
+(1),
+(2),
+(NULL),
+(4) t(id);
+
+statement ok
+CREATE TABLE t2 AS FROM VALUES
+(1),
+(3),
+(NULL),
+(4) t(id);
+
+statement ok
+CREATE TABLE t3 AS FROM VALUES
+(1),
+(3),
+(NULL),
+(4) t(id);
+
+query I
+SELECT id FROM t1 FULL OUTER JOIN t2 USING (id) WHERE id >=2 ORDER BY id
+----
+2
+3
+4
+
+# should find all NULL rows correctly
+query I
+SELECT id FROM t1 FULL OUTER JOIN t2 USING (id) WHERE id IS NULL
+----
+NULL
+NULL
+
+statement ok
+set explain_output='optimized_only';
+
+# optimized plan is equivalent to plan with manually pushed down filter
+query II nosort single_join
+EXPLAIN SELECT id
+FROM (SELECT id FROM t1) FULL OUTER JOIN (SELECT id FROM t2) USING (id)
+WHERE id >= 2
+----
+
+query II nosort single_join
+EXPLAIN SELECT id
+FROM (SELECT id FROM t1 WHERE id >= 2) FULL OUTER JOIN (SELECT id FROM t2 WHERE id >= 2) USING (id)
+----
+
+# optimized plan is equivalent to plan with manually pushed down filter when using IS NULL as a filtering predicate
+query II nosort single_join_isnull_filter
+EXPLAIN SELECT id
+FROM (SELECT id FROM t1) FULL OUTER JOIN (SELECT id FROM t2) USING (id)
+WHERE id IS NULL
+----
+
+query II nosort single_join_isnull_filter
+EXPLAIN SELECT id
+FROM (SELECT id FROM t1 WHERE id IS NULL) FULL OUTER JOIN (SELECT id FROM t2 WHERE id IS NULL) USING (id)
+----
+
+# optimized plan is equivalent to plan with manually pushed down filter in the case of multiple joins
+query II nosort multiple_joins
+EXPLAIN SELECT id
+FROM (SELECT id FROM t1) FULL OUTER JOIN (SELECT id FROM t2) USING (id) FULL OUTER JOIN (SELECT id FROM t3) USING (id) WHERE id >= 2;
+----
+
+query II nosort multiple_joins
+EXPLAIN SELECT id
+FROM (SELECT id FROM t1 WHERE id >= 2)
+FULL OUTER JOIN (SELECT id FROM t2 WHERE id >= 2) USING (id)
+FULL OUTER JOIN (SELECT id FROM t3 WHERE id >= 2) USING (id);
+----
+
+# should pushdown filter with multiple occurrences of the same coalesced join keys
+query II nosort multiple_occurrences_of_the_same_coalesced_join_keys
+EXPLAIN
+SELECT id FROM (SELECT id FROM t1) FULL OUTER JOIN (SELECT id FROM t2) USING (id)
+WHERE id >= 2 OR id IN (1, 4) OR id IS NULL;
+----
+
+query II nosort multiple_occurrences_of_the_same_coalesced_join_keys
+EXPLAIN SELECT id
+FROM (SELECT id FROM t1 WHERE id >= 2 OR id IN (1, 4) OR id IS NULL)
+FULL OUTER JOIN (SELECT id FROM t2 WHERE id >= 2 OR id IN (1, 4) OR id IS NULL)
+USING (id);
+----
+
+# should pushdown filter containing different but equivalent coalesced join keys
+query II
+EXPLAIN SELECT t1.id, t2.id
+FROM t1 FULL OUTER JOIN t2 ON t1.id = t2.id
+WHERE COALESCE(t1.id, t2.id) >= 2 OR COALESCE(t2.id, t1.id) IS NULL;
+----
+logical_opt	<REGEX>:.*SEQ_SCAN.*Filters.*\(id >= 2\) OR \(id IS NULL\).*
+
+# should not pushdown a volatile filter
+query II
+EXPLAIN SELECT id
+FROM t1 FULL OUTER JOIN t2 USING (id)
+WHERE trunc(random() * id) >= 2
+----
+logical_opt	<!REGEX>:.*SEQ_SCAN.*Filters.*
+
+# coalescing right and left is optimized like coalescing left and right
+query II nosort left_right_coalesce
+EXPLAIN SELECT t1.id, t2.id
+FROM t1 FULL OUTER JOIN t2 ON t1.id = t2.id
+WHERE COALESCE(t1.id, t2.id) >= 2;
+----
+
+query II nosort left_right_coalesce
+EXPLAIN SELECT t1.id, t2.id
+FROM t1 FULL OUTER JOIN t2 ON t1.id = t2.id
+WHERE COALESCE(t2.id, t1.id) >= 2;
+----
+
+statement ok
+CREATE TABLE t4 AS FROM VALUES
+  (1, 20),
+  (2, NULL),
+  (3, 16)
+  t(id, a);
+
+statement ok
+CREATE TABLE t5 AS FROM VALUES
+  (1, NULL),
+  (1, 30)
+  t(id, a);
+
+# should not pushdown filter on coalesced keys that also depend on other columns
+query II
+EXPLAIN SELECT id FROM t1 FULL OUTER JOIN t4 USING (id) WHERE id = a;
+----
+logical_opt	<!REGEX>:.*SEQ_SCAN.*Filters.*
+
+# should not pushdown single filter containing coalesced keys from different join conditions
+query II
+EXPLAIN SELECT id FROM t4 FULL OUTER JOIN t5 USING (id, a) WHERE id IN (a, 1)
+----
+logical_opt	<!REGEX>:.*SEQ_SCAN.*Filters.*
+
+query II nosort nullif_func_join_keys
+EXPLAIN SELECT *
+FROM (SELECT id, a FROM t4 WHERE nullif(id, a) < 3) AS t4
+FULL OUTER JOIN (SELECT id, a FROM t5 WHERE nullif(id, a) < 3) AS t5
+ON nullif(t4.id, t4.a) = nullif(t5.id, t5.a)
+----
+
+# should pushdown filter containing coalesced keys which are functions of the input table
+query II nosort nullif_func_join_keys
+EXPLAIN SELECT *
+FROM (SELECT id, a FROM t4) AS t4
+FULL OUTER JOIN (SELECT id, a FROM t5) AS t5
+ON nullif(t4.id, t4.a) = nullif(t5.id, t5.a)
+WHERE coalesce(nullif(t4.id, t4.a), nullif(t5.id, t5.a)) < 3;
+----
+
+query II nosort list_func_join_keys
+EXPLAIN SELECT * FROM
+(SELECT id, a FROM t4) AS t4
+FULL OUTER JOIN (SELECT id, a FROM t5) AS t5
+ON [t4.id, t4.a] = [t5.id, t5.a]
+WHERE coalesce([t4.id, t4.a], [t5.id, t5.a])[0] < 4;
+----
+
+query II nosort list_func_join_keys
+EXPLAIN SELECT * FROM
+(SELECT id, a FROM t4, WHERE [id, a][0] < 4) AS t4
+FULL OUTER JOIN (SELECT id, a FROM t5 WHERE [id, a][0] < 4) AS t5
+ON [t4.id, t4.a] = [t5.id, t5.a]
+----

@@ -7,6 +7,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -400,8 +401,6 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
-	entry->OnDrop();
-
 	// create a new tombstone entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the tombstone node
@@ -453,6 +452,7 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry) {
 	auto &duck_catalog = GetCatalog();
 
+	entry.OnDrop();
 	// Make sure that we don't see any uncommitted changes
 	auto transaction_id = MAX_TRANSACTION_ID;
 	// This will allow us to see all committed changes made before this COMMIT happened
@@ -674,7 +674,7 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 }
 
 void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
-	// lock the catalog set
+	// Lock the catalog set.
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
 
@@ -687,8 +687,28 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 	}
 }
 
+void CatalogSet::ScanWithReturn(CatalogTransaction transaction, const std::function<bool(CatalogEntry &)> &callback) {
+	// Lock the catalog set.
+	unique_lock<mutex> lock(catalog_lock);
+	CreateDefaultEntries(transaction, lock);
+
+	for (auto &kv : map.Entries()) {
+		auto &entry = *kv.second;
+		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
+		if (!entry_for_transaction.deleted) {
+			if (!callback(entry_for_transaction)) {
+				return;
+			}
+		}
+	}
+}
+
 void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback) {
 	Scan(catalog.GetCatalogTransaction(context), callback);
+}
+
+void CatalogSet::ScanWithReturn(ClientContext &context, const std::function<bool(CatalogEntry &)> &callback) {
+	ScanWithReturn(catalog.GetCatalogTransaction(context), callback);
 }
 
 void CatalogSet::ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,

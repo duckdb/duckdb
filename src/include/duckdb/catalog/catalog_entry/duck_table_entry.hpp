@@ -47,7 +47,7 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo() override;
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context) override;
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 
@@ -66,7 +66,7 @@ private:
 	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
 	unique_ptr<CatalogEntry> SetNotNull(ClientContext &context, SetNotNullInfo &info);
 	unique_ptr<CatalogEntry> DropNotNull(ClientContext &context, DropNotNullInfo &info);
-	unique_ptr<CatalogEntry> AddForeignKeyConstraint(optional_ptr<ClientContext> context, AlterForeignKeyInfo &info);
+	unique_ptr<CatalogEntry> AddForeignKeyConstraint(AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> SetColumnComment(ClientContext &context, SetColumnCommentInfo &info);
 	unique_ptr<CatalogEntry> AddConstraint(ClientContext &context, AddConstraintInfo &info);

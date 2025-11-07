@@ -5,9 +5,9 @@ namespace duckdb {
 //! Pretty Print a given JSON Document
 string_t PrettyPrint(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &, idx_t) {
 	D_ASSERT(alc);
-	idx_t len;
-	auto data =
-	    yyjson_val_write_opts(val, JSONCommon::WRITE_PRETTY_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
+	size_t len_size_t;
+	auto data = yyjson_val_write_opts(val, JSONCommon::WRITE_PRETTY_FLAG, alc, &len_size_t, nullptr);
+	idx_t len = len_size_t;
 	return string_t(data, len);
 }
 

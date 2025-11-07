@@ -1,0 +1,21 @@
+# name: test/sql/merge/merge_into_too_few_columns.test
+# description: Test MERGE INTO with too few columns
+# group: [merge]
+
+statement ok
+CREATE TABLE people (id INTEGER, name VARCHAR, salary FLOAT);
+
+statement ok
+INSERT INTO people VALUES (1, 'John', 92_000.0), (2, 'Anna', 100_000.0);
+
+statement error
+MERGE INTO people
+USING (
+	SELECT
+		3 AS id,
+		89_000.0 AS salary
+) AS upserts
+ON (upserts.id = people.id)
+WHEN NOT MATCHED THEN INSERT;
+----
+has 3 columns but 2 values were supplied

@@ -30,19 +30,17 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr, unordered_set<idx_t> &right_bindings) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-		if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
-			// bound colref belongs to RHS
-			// replace it with a constant NULL
-			return make_uniq<BoundConstantExpression>(Value(expr->return_type));
-		}
-		return expr;
-	}
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceColRefWithNull(std::move(child), right_bindings); });
-	return expr;
+static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> root_expr,
+                                                    unordered_set<idx_t> &right_bindings) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
+		    if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
+			    // bound colref belongs to RHS
+			    // replace it with a constant NULL
+			    expr = make_uniq<BoundConstantExpression>(Value(expr->return_type));
+		    }
+	    });
+	return root_expr;
 }
 
 static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewriter, Expression *expr,
@@ -80,6 +78,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<idx_t> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		op = PushFiltersIntoDelimJoin(std::move(op));
 		return FinishPushdown(std::move(op));
 	}
 	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);

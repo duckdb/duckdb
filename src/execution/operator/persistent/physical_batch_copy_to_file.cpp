@@ -26,9 +26,11 @@ struct ActiveFlushGuard {
 	atomic<bool> &bool_value;
 };
 
-PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(vector<LogicalType> types, CopyFunction function_p,
-                                                 unique_ptr<FunctionData> bind_data_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types), estimated_cardinality),
+PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                                 CopyFunction function_p, unique_ptr<FunctionData> bind_data_p,
+                                                 idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types),
+                       estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)) {
 	if (!function.flush_batch || !function.prepare_batch) {
 		throw InternalException("PhysicalFixedBatchCopy created for copy function that does not have "
@@ -112,12 +114,16 @@ public:
 		}
 		// initialize writing to the file
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		if (op.function.initialize_operator) {
+			op.function.initialize_operator(*global_state, op);
+		}
 		if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 			written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
 			written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
 			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
 			                                           *written_file_info->file_stats);
 		}
+		initialized = true;
 	}
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {

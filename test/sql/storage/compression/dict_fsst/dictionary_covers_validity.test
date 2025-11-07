@@ -12,28 +12,26 @@ CREATE TABLE tbl AS SELECT
 		'a': i,
 		'b': NULL::VARCHAR
 	} col
-FROM range(5000) t(i);
+FROM range(5000) t(i)
+union all
+select
+	{
+		'a': 10000,
+		'b': 'hello'
+	}
 
 statement ok
 set force_compression='dict_fsst';
 
 statement ok
-INSERT INTO tbl VALUES (
-	{
-		'a': 10000,
-		'b': 'hello'
-	}
-);
-
-statement ok
 force checkpoint;
 
-# Dictionary covers the validity, so the validity gets replaced with "Empty Validity"
+# Dictionary FSST covers the validity mask replacing it with "Empty Validity".
+# The BIGINT segment type is either bitpacking (256kB blocks), or uncompressed (16kB blocks).
 query II
-select segment_type, compression from pragma_storage_info('tbl');
+SELECT segment_type, compression FROM pragma_storage_info('tbl') WHERE segment_type != 'BIGINT';
 ----
 VALIDITY	Constant
-BIGINT	BitPacking
 VALIDITY	Constant
 VARCHAR	DICT_FSST
 VALIDITY	Empty Validity
@@ -43,12 +41,18 @@ statement ok
 set force_compression='zstd';
 
 statement ok
-INSERT INTO tbl VALUES (
+CREATE OR REPLACE TABLE tbl AS SELECT
+	{
+		'a': i,
+		'b': NULL::VARCHAR
+	} col
+FROM range(5000) t(i)
+union all
+select
 	{
 		'a': 10000,
 		'b': 'hello'
-	}
-);
+	} FROM range(2)
 
 statement ok
 force checkpoint;

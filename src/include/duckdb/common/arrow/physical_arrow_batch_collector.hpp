@@ -13,8 +13,8 @@ public:
 
 class PhysicalArrowBatchCollector : public PhysicalBatchCollector {
 public:
-	PhysicalArrowBatchCollector(PreparedStatementData &data, idx_t batch_size)
-	    : PhysicalBatchCollector(data), record_batch_size(batch_size) {
+	PhysicalArrowBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data, idx_t batch_size)
+	    : PhysicalBatchCollector(physical_plan, data), record_batch_size(batch_size) {
 	}
 
 public:

@@ -56,11 +56,11 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	}
 
 	// this is more for completeness reasons
-	bound_function.return_type = LogicalType::STRUCT(struct_children);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
-unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
+static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto struct_stats = StructStats::CreateUnknown(expr.return_type);
@@ -71,11 +71,11 @@ unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStati
 }
 
 template <bool IS_STRUCT_PACK>
-ScalarFunction GetStructPackFunction() {
+static ScalarFunction GetStructPackFunction() {
 	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
 	                   StructPackBind<IS_STRUCT_PACK>, nullptr, StructPackStats);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.serialize = VariableReturnBindData::Serialize;
 	fun.deserialize = VariableReturnBindData::Deserialize;
 	return fun;

@@ -1,8 +1,13 @@
 #include "json_multi_file_info.hpp"
 #include "json_scan.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/parallel/async_result.hpp"
 
 namespace duckdb {
+
+unique_ptr<MultiFileReaderInterface> JSONMultiFileInfo::CreateInterface(ClientContext &context) {
+	return make_uniq<JSONMultiFileInfo>();
+}
 
 unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientContext &context,
                                                                        optional_ptr<TableFunctionInfo> info) {
@@ -352,9 +357,6 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	}
 }
 
-void JSONMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
-}
-
 void JSONMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
                                          const vector<string> &expected_names,
                                          const vector<LogicalType> &expected_types) {
@@ -420,9 +422,8 @@ unique_ptr<LocalTableFunctionState> JSONMultiFileInfo::InitializeLocalState(Exec
 	return std::move(result);
 }
 
-double JSONMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
-	auto &json_reader = reader.Cast<JSONReader>();
-	return json_reader.GetProgress();
+double JSONReader::GetProgressInFile(ClientContext &context) {
+	return GetProgress();
 }
 
 shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
@@ -442,30 +443,22 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
 	reader->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
 	return std::move(reader);
 }
-shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
-                                                           JSONReaderOptions &options,
-                                                           const MultiFileOptions &file_options) {
-	throw InternalException("Create reader from file not implemented");
-}
 
-void JSONMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader_p,
-                                       GlobalTableFunctionState &gstate_p) {
-	auto &reader = reader_p.Cast<JSONReader>();
+void JSONReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &gstate_p) {
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	if (gstate.enable_parallel_scans) {
 		// if we are doing parallel scans we need to open the file here
-		reader.Initialize(gstate.allocator, gstate.buffer_capacity);
+		Initialize(gstate.allocator, gstate.buffer_capacity);
 	}
 }
 
-bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
-                                          GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+bool JSONReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                   LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = lstate_p.Cast<JSONLocalTableFunctionState>().state;
-	auto &json_reader = reader->Cast<JSONReader>();
 
 	lstate.GetScanState().ResetForNextBuffer();
-	return lstate.TryInitializeScan(gstate, json_reader);
+	return lstate.TryInitializeScan(gstate, *this);
 }
 
 void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,
@@ -538,26 +531,34 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 	output.SetCardinality(count);
 }
 
-void JSONMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
+AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
                              LocalTableFunctionState &local_state, DataChunk &output) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	{
+		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
+		if (!tasks.empty()) {
+			return AsyncResult(std::move(tasks));
+		}
+	}
+#endif
+
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
 	auto &json_data = gstate.bind_data.bind_data->Cast<JSONScanData>();
-	auto &json_reader = reader.Cast<JSONReader>();
 	switch (json_data.options.type) {
 	case JSONScanType::READ_JSON:
-		ReadJSONFunction(context, json_reader, gstate, lstate, output);
+		ReadJSONFunction(context, *this, gstate, lstate, output);
 		break;
 	case JSONScanType::READ_JSON_OBJECTS:
-		ReadJSONObjectsFunction(context, json_reader, gstate, lstate, output);
+		ReadJSONObjectsFunction(context, *this, gstate, lstate, output);
 		break;
 	default:
 		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
 	}
+	return AsyncResult(output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED);
 }
 
-void JSONMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state,
-                                   BaseFileReader &reader) {
+void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	gstate.file_is_assigned = false;
 }
@@ -566,9 +567,6 @@ void JSONMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctio
                                       LocalTableFunctionState &local_state) {
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
 	lstate.GetScanState().ResetForNextBuffer();
-}
-
-void JSONMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo &info) {
 }
 
 unique_ptr<NodeStatistics> JSONMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
@@ -581,10 +579,6 @@ unique_ptr<NodeStatistics> JSONMultiFileInfo::GetCardinality(const MultiFileBind
 	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
 }
 
-void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
-                                          virtual_column_map_t &result) {
-}
-
 optional_idx JSONMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
                                            FileExpandResult expand_result) {
 	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
@@ -593,6 +587,10 @@ optional_idx JSONMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, c
 	// get the max threads from the bind data (if it is set)
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 	return json_data.max_threads;
+}
+
+FileGlobInput JSONMultiFileInfo::GetGlobInput() {
+	return FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json");
 }
 
 } // namespace duckdb

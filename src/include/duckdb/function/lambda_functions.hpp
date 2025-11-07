@@ -53,10 +53,11 @@ public:
 
 class LambdaFunctions {
 public:
+	//! Returns the list child type
+	static LogicalType DetermineListChildType(const LogicalType &child_type);
+
 	//! Returns the parameter type for binary lambdas
-	static LogicalType BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
-	//! Returns the parameter type for ternary lambdas
-	static LogicalType BindTernaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type);
+	static LogicalType BindBinaryChildren(const vector<LogicalType> &function_child_types, const idx_t parameter_idx);
 
 	//! Checks for NULL list parameter and prepared statements and adds bound cast expression
 	static unique_ptr<FunctionData> ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,

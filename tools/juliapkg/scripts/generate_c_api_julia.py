@@ -494,6 +494,19 @@ class JuliaApiTarget:
         arg_types = [self._get_casted_type(param["type"]) for param in function_obj["params"]]
         return arg_names, arg_types
 
+    def is_index1_function(self, function_obj: FunctionDef):
+        fname = function_obj["name"]
+
+        if not self.auto_1base_index:
+            return [False for param in function_obj["params"]], False
+
+        if fname in self.auto_1base_index_ignore_functions:
+            return [False for param in function_obj["params"]], False
+
+        is_index1_return = fname in self.auto_1base_index_return_functions
+        is_index1_arg = [self._is_index_argument(param["name"], function_obj) for param in function_obj["params"]]
+        return is_index1_arg, is_index1_return
+
     def _write_function_docstring(self, function_obj: FunctionDef):
         r"""_create_function_docstring
 
@@ -518,14 +531,36 @@ class JuliaApiTarget:
 
         description = function_obj.get("comment", {}).get("description", "").strip()
         description = description.replace('"', '\\"')  # escape double quotes
-        arg_names, arg_types = self.get_argument_names_and_types(function_obj)
-        arg_names_s = ", ".join(arg_names)
-        arg_comments = [
-            function_obj.get("comment", {}).get("param_comments", {}).get(param["name"], "")
-            for param in function_obj["params"]
-        ]
 
-        return_value_comment = function_obj.get("comment", {}).get("return_value", "nothing")
+        index1_args, index1_return = self.is_index1_function(function_obj)
+
+        # Arguments
+        arg_names, arg_types = self.get_argument_names_and_types(function_obj)
+
+        arg_comments = []
+        for ix, (name, param, t, is_index1) in enumerate(
+            zip(arg_names, function_obj["params"], arg_types, index1_args)
+        ):
+            param_comment = function_obj.get("comment", {}).get("param_comments", {}).get(param["name"], "")
+            if is_index1:
+                parts = [f"`{name}`:", f"`{t}`", "(1-based index)", param_comment]
+            else:
+                parts = [f"`{name}`:", f"`{t}`", param_comment]
+            arg_comments.append(" ".join(parts))
+
+        arg_names_s = ", ".join(arg_names)
+
+        # Return Values
+        return_type = self._get_casted_type(function_obj["return_type"], is_return_arg=True)
+        if return_type == "Cvoid":
+            return_type = "Nothing"  # Cvoid is equivalent to Nothing in Julia
+        return_comments = [
+            f"`{return_type}`",
+            function_obj.get("comment", {}).get("return_value", ""),
+        ]
+        if index1_return:
+            return_comments.append("(1-based index)")
+        return_value_comment = " ".join(return_comments)
 
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
         self.file.write(f"{'    ' * self.indent}    {function_obj['name']}({arg_names_s})\n")
@@ -534,7 +569,7 @@ class JuliaApiTarget:
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(f"{'    ' * self.indent}# Arguments\n")
         for i, arg_name in enumerate(arg_names):
-            self.file.write(f"{'    ' * self.indent}- `{arg_name}`: {arg_comments[i]}\n")
+            self.file.write(f"{'    ' * self.indent}- {arg_comments[i]}\n")
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(f"{'    ' * self.indent}Returns: {return_value_comment}\n")
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
@@ -581,29 +616,21 @@ class JuliaApiTarget:
 
     def _write_function_definition(self, function_obj: FunctionDef):
         fname = function_obj["name"]
+        index1_args, index1_return = self.is_index1_function(function_obj)
+
         arg_names, arg_types = self.get_argument_names_and_types(function_obj)
         arg_types_tuple = self._list_to_julia_tuple(arg_types)
         arg_names_definition = ", ".join(arg_names)
-        arg_names_call = ", ".join(
-            [
-                (
-                    f"{arg_name} - 1"  # 1-based index
-                    if self.auto_1base_index
-                    and fname not in self.auto_1base_index_ignore_functions
-                    and self._is_index_argument(arg_name, function_obj)
-                    else arg_name
-                )
-                for arg_name in arg_names
-            ]
-        )
+
+        arg_names_call = []
+        for arg_name, is_index1 in zip(arg_names, index1_args):
+            if is_index1:
+                arg_names_call.append(f"{arg_name} - 1")
+            else:
+                arg_names_call.append(arg_name)
+        arg_names_call = ", ".join(arg_names_call)
 
         return_type = self._get_casted_type(function_obj["return_type"], is_return_arg=True)
-
-        is_index1_function = (
-            fname not in self.auto_1base_index_ignore_functions
-            and self.auto_1base_index
-            and fname in self.auto_1base_index_return_functions
-        )
 
         self.file.write(f"{'    ' * self.indent}function {fname}({arg_names_definition})\n")
 
@@ -611,7 +638,7 @@ class JuliaApiTarget:
             self._write_function_depwarn(function_obj, indent=1)
 
         self.file.write(
-            f"{'    ' * self.indent}    return ccall((:{fname}, libduckdb), {return_type}, {arg_types_tuple}, {arg_names_call}){' + 1' if is_index1_function else ''}\n"
+            f"{'    ' * self.indent}    return ccall((:{fname}, libduckdb), {return_type}, {arg_types_tuple}, {arg_names_call}){' + 1' if index1_return else ''}\n"
         )
         self.file.write(f"{'    ' * self.indent}end\n")
 
@@ -801,6 +828,15 @@ def main():
         "duckdb_bind_blob": (
             "duckdb_state",
             ("duckdb_prepared_statement", "idx_t", "Ptr{Cvoid}", "idx_t"),
+        ),
+        "duckdb_vector_assign_string_element_len": (
+            "Cvoid",
+            (
+                "duckdb_vector",
+                "idx_t",
+                "Ptr{UInt8}",
+                "idx_t",
+            ),  # Must be Ptr{UInt8} instead of Cstring to allow '\0' in the middle
         ),
     }
 

@@ -44,8 +44,6 @@ public:
 	DUCKDB_API void WaitForTask();
 	//! Executes a single task within the final pipeline, returning whether or not a chunk is ready to be fetched
 	DUCKDB_API StreamExecutionResult ExecuteTask();
-	//! Fetches a DataChunk from the query result.
-	DUCKDB_API unique_ptr<DataChunk> FetchRaw() override;
 	//! Converts the QueryResult to a string
 	DUCKDB_API string ToString() override;
 	//! Materializes the query result and turns it into a materialized query result
@@ -59,9 +57,12 @@ public:
 	//! The client context this StreamQueryResult belongs to
 	shared_ptr<ClientContext> context;
 
+protected:
+	DUCKDB_API unique_ptr<DataChunk> FetchInternal() override;
+
 private:
 	StreamExecutionResult ExecuteTaskInternal(ClientContextLock &lock);
-	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock);
+	unique_ptr<DataChunk> FetchNextInternal(ClientContextLock &lock);
 	unique_ptr<ClientContextLock> LockContext();
 	void CheckExecutableInternal(ClientContextLock &lock);
 	bool IsOpenInternal(ClientContextLock &lock);

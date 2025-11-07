@@ -5,7 +5,7 @@
 require parquet
 
 statement ok
-IMPORT DATABASE 'data/parquet-testing/malloy-smaller';
+IMPORT DATABASE '{DATA_DIR}/parquet-testing/malloy-smaller';
 
 # minimal reproducible examples for internal issue 1546
 query I

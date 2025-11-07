@@ -1,0 +1,25 @@
+# name: test/sql/order/order_by_internal_5293.test
+# description: Test ORDER BY issue 5293 - New sort code merge logic fails for fixed width strings
+# group: [order]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table t1 as from VALUES
+	('A', 1),
+	('B', 3),
+	('C', 12),
+	('A', 5),
+	('B', 8),
+	('C', 9),
+	('A', 10),
+	('B', 20),
+	('C', 3)
+	t(a, b);
+
+statement ok
+PRAGMA disabled_optimizers='compressed_materialization';
+
+statement ok
+from t1 order by a

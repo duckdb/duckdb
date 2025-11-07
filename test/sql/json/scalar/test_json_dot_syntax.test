@@ -24,6 +24,17 @@ select json('{"foo": null}').foo.bar
 ----
 NULL
 
+# also supports this syntax
+query T
+select json('{"foo": null}')['foo']
+----
+null
+
+query T
+select json('{"foo": null}')['foo']['bar']
+----
+NULL
+
 query T
 select json('null')
 ----

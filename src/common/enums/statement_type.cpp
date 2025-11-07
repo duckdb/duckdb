@@ -65,6 +65,8 @@ string StatementTypeToString(StatementType type) {
 		return "MULTI";
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return "UPDATE_EXTENSIONS";
+	case StatementType::MERGE_INTO_STATEMENT:
+		return "MERGE_INTO";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}

@@ -6,18 +6,18 @@ require parquet
 
 # File row number without the file_row_number option
 query I
-select file_row_number from 'data/parquet-testing/glob/t1.parquet'
+select file_row_number from '{DATA_DIR}/parquet-testing/glob/t1.parquet'
 ----
 0
 
 query I
-select file_row_number from 'data/parquet-testing/glob/t1.parquet' where file_row_number=0
+select file_row_number from '{DATA_DIR}/parquet-testing/glob/t1.parquet' where file_row_number=0
 ----
 0
 
 query IIII
-select i, j, replace(filename, '\', '/'), file_row_number from 'data/parquet-testing/glob*/t?.parquet' order by i;
+select i, j, parse_path(filename)[-2:], file_row_number from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' order by i;
 ----
-1	a	data/parquet-testing/glob/t1.parquet	0
-2	b	data/parquet-testing/glob/t2.parquet	0
-3	c	data/parquet-testing/glob2/t1.parquet	0
+1	a	[glob, t1.parquet]	0
+2	b	[glob, t2.parquet]	0
+3	c	[glob2, t1.parquet]	0

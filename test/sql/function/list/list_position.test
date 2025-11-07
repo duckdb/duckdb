@@ -3,9 +3,6 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table TEST2 (i int[], j int);
 
 statement ok
@@ -172,7 +169,7 @@ NULL
 statement error
 SELECT list_position([1.0,2.0,3.0], 'a')
 ----
-an explicit cast is required
+Conversion Error: Could not convert string "a" to DECIMAL(2,1)
 
 query I
 SELECT list_position([1.0,2.0,3.0]::varchar[], 'a')
@@ -183,7 +180,7 @@ NULL
 statement error
 SELECT list_position('a', 'a')
 ----
-No function matches
+Conversion Error: Type VARCHAR with value 'a' can't be cast to the destination type VARCHAR[]
 
 query T
 SELECT list_position(NULL,NULL)
@@ -279,6 +276,8 @@ SELECT list_position([NULL,7], 7)
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3])
 ----
+Parser Error: syntax error at or near ")"
+
 
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3]])
@@ -407,6 +406,21 @@ query T
 SELECT list_position([MAP([1], [2])], MAP([1], [3]))
 ----
 NULL
+
+query T
+SELECT list_position([MAP([1], [2]), NULL], NULL)
+----
+2
+
+query T
+SELECT list_position([MAP([1], [2]), NULL], MAP([1], [2]))
+----
+1
+
+query T
+SELECT list_position([[1,2,3],NULL],NULL)
+----
+2
 
 # test nested lists in tables
 statement ok

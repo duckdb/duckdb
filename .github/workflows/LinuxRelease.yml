@@ -11,10 +11,13 @@ on:
   workflow_dispatch:
     inputs:
       override_git_describe:
+        description: 'Version tag to override git describe'
         type: string
       git_ref:
+        description: 'Git ref'
         type: string
       skip_tests:
+        description: 'Pass "true" to skip tests'
         type: string
   push:
     branches-ignore:
@@ -23,6 +26,7 @@ on:
       - 'v*.*-*'
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -30,9 +34,10 @@ on:
       - '!.github/workflows/LinuxRelease.yml'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
+      - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
@@ -49,8 +54,17 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
+ check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI
+        run: echo "Event name is ${{ github.event_name }}"
+
  linux-release-cli:
-    needs: linux-extensions-64
+    needs:
+      - check-draft
 
     strategy:
       fail-fast: false
@@ -84,7 +98,17 @@ jobs:
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
         quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
-        bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make -C $PWD"
+        bash -c "
+          set -e
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++
+        
+          source /opt/rh/gcc-toolset-12/enable
+          export CC=gcc
+          export CXX=g++
+
+          git config --global --add safe.directory $PWD
+          make -C $PWD
+        "
 
     - name: Print platform
       shell: bash
@@ -93,9 +117,11 @@ jobs:
     - name: Deploy
       shell: bash
       env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
+        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
         zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
@@ -115,156 +141,50 @@ jobs:
       run: |
         python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
 
+    - name: Release specific tests
+      shell: bash
+      run: |
+        ./build/release/test/unittest --select-tag release
+
     - name: Tools Tests
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
- # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
- # note that the linux-release-64 is based on the manylinux-based extensions, which are built in .github/workflows/Python.yml
- linux-extensions-64:
-    # Builds extensions for linux_amd64
-    name: Linux Extensions (x64)
+ upload-libduckdb-src:
+    name: Upload libduckdb-src.zip
+    needs: linux-release-cli
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        duckdb_arch: [linux_amd64]
-        vcpkg_triplet: [x64-linux]
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: 'duckdb'
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
-      - uses: ./duckdb/.github/actions/build_extensions_dockerized
-        with:
-          vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
-          duckdb_arch: ${{ matrix.duckdb_arch }}
-          run_tests: ${{ inputs.skip_tests != 'true' }}
-          override_git_describe: ${{ inputs.override_git_describe }}
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        python3 scripts/amalgamation.py
+        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: duckdb-extensions-${{ matrix.duckdb_arch }}
-          path: |
-            build/release/extension/*/*.duckdb_extension
-
- upload-linux-extensions-64:
-    name: Upload Linux Extensions (x64)
-    needs: linux-extensions-64
-    strategy:
-      matrix:
-        duckdb_arch: [linux_amd64]
-    uses: ./.github/workflows/_sign_deploy_extensions.yml
-    secrets: inherit
-    with:
-      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
-      duckdb_arch: ${{ matrix.duckdb_arch }}
-      duckdb_sha: ${{ github.sha }}
-
- linux-extensions-64-musl:
-    # Builds extensions for linux_amd64_musl
-    name: Linux Extensions (musl + x64)
-    runs-on: ubuntu-latest
-    needs: linux-extensions-64
-    strategy:
-      matrix:
-        duckdb_arch: [linux_amd64_musl]
-        vcpkg_triplet: [x64-linux]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: 'duckdb'
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - uses: ./duckdb/.github/actions/build_extensions_dockerized
-        with:
-          vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
-          duckdb_arch: ${{ matrix.duckdb_arch }}
-          run_tests: ${{ inputs.skip_tests != 'true' }}
-          override_git_describe: ${{ inputs.override_git_describe }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: duckdb-extensions-${{ matrix.duckdb_arch }}
-          path: |
-            build/release/extension/*/*.duckdb_extension
-
- upload-linux-extensions-64-musl:
-    name: Upload Linux Extensions (musl + x64)
-    needs: linux-extensions-64-musl
-    strategy:
-      matrix:
-        duckdb_arch: [linux_amd64_musl]
-    uses: ./.github/workflows/_sign_deploy_extensions.yml
-    secrets: inherit
-    with:
-      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
-      duckdb_arch: ${{ matrix.duckdb_arch }}
-      duckdb_sha: ${{ github.sha }}
-
- linux-extensions-64-aarch64:
-    # Builds extensions for linux_arm64
-    name: Linux Extensions (aarch64)
-    runs-on: ubuntu-latest
-    needs: linux-extensions-64
-    strategy:
-      matrix:
-        duckdb_arch: [linux_arm64]
-        vcpkg_triplet: [arm64-linux]
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          path: 'duckdb'
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - uses: ./duckdb/.github/actions/build_extensions_dockerized
-        with:
-          vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
-          duckdb_arch: ${{ matrix.duckdb_arch }}
-          run_tests: ${{ inputs.skip_tests != 'true' }}
-          override_git_describe: ${{ inputs.override_git_describe }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: duckdb-extensions-${{ matrix.duckdb_arch }}
-          path: |
-            build/release/extension/*/*.duckdb_extension
- 
- upload-linux-extensions-64-aarch64:
-    name: Upload Linux Extensions (aarch64)
-    needs: linux-extensions-64-aarch64
-    strategy:
-      matrix:
-        duckdb_arch: [linux_arm64]
-    uses: ./.github/workflows/_sign_deploy_extensions.yml
-    secrets: inherit
-    with:
-      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
-      duckdb_arch: ${{ matrix.duckdb_arch }}
-      duckdb_sha: ${{ github.sha }}
-          
- check-load-install-extensions:
-    name: Checks extension entries
-    if: ${{ inputs.skip_tests != 'true' }}
+ symbol-leakage:
+    name: Symbol Leakage
     runs-on: ubuntu-22.04
-    needs: linux-extensions-64
+    needs: linux-release-cli
+    if: ${{ inputs.skip_tests != 'true' }}
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
 
     steps:
@@ -275,9 +195,9 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
+        python-version: '3.12'
 
-    - name: Install
+    - name: Install Ninja
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
@@ -285,70 +205,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      env:
-        GENERATE_EXTENSION_ENTRIES: 1
-        LOCAL_EXTENSION_REPO: build/release/repository_other
-      run: |
-        make
-
-    - uses: actions/download-artifact@v4
-      with:
-        name: duckdb-extensions-linux_amd64
-        path: build/release/repository
-
-    - name: Check if extension_entries.hpp is up to date
-      shell: bash
-      env:
-        EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
-      run: |
-        make extension_configuration
-        python scripts/generate_extensions_function.py
-        pip install "black>=24"
-        pip install cmake-format
-        pip install "clang_format==11.0.1"
-        make format-fix
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: extension_entries.hpp
-        path: |
-          src/include/duckdb/main/extension_entries.hpp
-
-    - name: Check for any difference
-      run: |
-        git diff --exit-code src/include/duckdb/main/extension_entries.hpp && echo "No differences found"
-
-    - name: Explainer
-      if: failure()
-      run: |
-        echo "There are differences in src/include/duckdb/main/extension_entries.hpp"
-        echo "Check the uploaded extension_entries.hpp (in the workflow Summary), and check that in instead of src/include/duckdb/main/extension_entries.hpp"
-
- symbol-leakage:
-    name: Symbol Leakage
-    if: ${{ inputs.skip_tests != 'true' }}
-    runs-on: ubuntu-22.04
-    needs: linux-extensions-64
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Build
       shell: bash
@@ -357,33 +214,3 @@ jobs:
     - name: Symbol Leakage Test
       shell: bash
       run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
- amalgamation-tests:
-    name: Amalgamation Tests
-    if: ${{ inputs.skip_tests != 'true' }}
-    needs: linux-extensions-64
-    runs-on: ubuntu-22.04
-    env:
-      CC: clang
-      CXX: clang++
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1
-      with:
-        version: "14.0"
-
-    - name: Generate Amalgamation
-      shell: bash
-      run:  |
-          python scripts/amalgamation.py --extended
-          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0

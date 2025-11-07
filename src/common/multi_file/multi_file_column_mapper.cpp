@@ -17,12 +17,11 @@ MultiFileColumnMapper::MultiFileColumnMapper(ClientContext &context, MultiFileRe
                                              MultiFileReaderData &reader_data,
                                              const vector<MultiFileColumnDefinition> &global_columns,
                                              const vector<ColumnIndex> &global_column_ids,
-                                             optional_ptr<TableFilterSet> filters, const OpenFileInfo &initial_file,
-                                             const MultiFileReaderBindData &bind_data,
+                                             optional_ptr<TableFilterSet> filters, MultiFileList &multi_file_list,
                                              const virtual_column_map_t &virtual_columns)
-    : context(context), multi_file_reader(multi_file_reader), reader_data(reader_data), global_columns(global_columns),
-      global_column_ids(global_column_ids), global_filters(filters), initial_file(initial_file), bind_data(bind_data),
-      virtual_columns(virtual_columns) {
+    : context(context), multi_file_reader(multi_file_reader), multi_file_list(multi_file_list),
+      reader_data(reader_data), global_columns(global_columns), global_column_ids(global_column_ids),
+      global_filters(filters), virtual_columns(virtual_columns) {
 }
 
 struct MultiFileIndexMapping {
@@ -189,7 +188,8 @@ void MultiFileColumnMapper::ThrowColumnNotFoundError(const string &global_column
 	                            "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
 	                            "%s\nIf you are trying to "
 	                            "read files with different schemas, try setting union_by_name=True",
-	                            file_name, global_column_name, initial_file.path, file_name, candidate_names);
+	                            file_name, global_column_name, multi_file_list.GetFirstFile().path, file_name,
+	                            candidate_names);
 }
 
 //! Check if a column is trivially mappable (i.e. the column is effectively identical to the global column)
@@ -296,6 +296,19 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 			result.column_map = Value::STRUCT(std::move(child_list));
 		}
 	}
+	if (is_selected && child_map.default_value) {
+		// we have default values at a previous level wrap it in a "list"
+		child_list_t<LogicalType> default_type_list;
+		default_type_list.emplace_back("list", child_map.default_value->return_type);
+		vector<unique_ptr<Expression>> default_expressions;
+		child_map.default_value->alias = "list";
+		default_expressions.push_back(std::move(child_map.default_value));
+		auto default_type = LogicalType::STRUCT(std::move(default_type_list));
+		auto struct_pack_fun = StructPackFun::GetFunction();
+		auto bind_data = make_uniq<VariableReturnBindData>(default_type);
+		result.default_value = make_uniq<BoundFunctionExpression>(std::move(default_type), std::move(struct_pack_fun),
+		                                                          std::move(default_expressions), std::move(bind_data));
+	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetId(), std::move(child_indexes));
 	result.mapping = std::move(mapping);
 	return result;
@@ -346,7 +359,7 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 
 	auto nested_mapper = mapper.Create(local_key_value.children);
 	child_list_t<Value> column_mapping;
-	unique_ptr<Expression> default_expression;
+	vector<unique_ptr<Expression>> default_expressions;
 	unordered_map<idx_t, const_reference<ColumnIndex>> selected_children;
 	if (global_index.HasChildren()) {
 		//! FIXME: is this expected for maps??
@@ -377,6 +390,10 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 			// found a column mapping for the component - emplace it
 			column_mapping.emplace_back(name, std::move(map_result.column_map));
 		}
+		if (map_result.default_value) {
+			map_result.default_value->alias = name;
+			default_expressions.push_back(std::move(map_result.default_value));
+		}
 	}
 
 	ColumnMapResult result;
@@ -391,6 +408,18 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 			child_list.emplace_back(string(), std::move(result.column_map));
 			result.column_map = Value::STRUCT(std::move(child_list));
 		}
+	}
+	if (!default_expressions.empty()) {
+		// we have default values at a previous level wrap it in a "list"
+		child_list_t<LogicalType> default_type_list;
+		for (auto &expr : default_expressions) {
+			default_type_list.emplace_back(expr->GetAlias(), expr->return_type);
+		}
+		auto default_type = LogicalType::STRUCT(std::move(default_type_list));
+		auto struct_pack_fun = StructPackFun::GetFunction();
+		auto bind_data = make_uniq<VariableReturnBindData>(default_type);
+		result.default_value = make_uniq<BoundFunctionExpression>(std::move(default_type), std::move(struct_pack_fun),
+		                                                          std::move(default_expressions), std::move(bind_data));
 	}
 	vector<ColumnIndex> map_indexes;
 	map_indexes.emplace_back(0, std::move(child_indexes));
@@ -562,11 +591,6 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t loca
 		}
 		return expr;
 	}
-	// struct column - generate a remap_struct - but only if we have any columns to remap
-	if (mapping.column_map.IsNull()) {
-		// no columns to map - emit the default value directly
-		return std::move(mapping.default_value);
-	}
 	// generate the remap_struct function call
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(expr));
@@ -718,10 +742,10 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 	return result;
 }
 
-ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping() {
+ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping(MultiFileColumnMappingMode mapping_mode) {
 	auto &reader = *reader_data.reader;
 	auto &local_columns = reader.GetColumns();
-	switch (bind_data.mapping) {
+	switch (mapping_mode) {
 	case MultiFileColumnMappingMode::BY_NAME: {
 		// we have expected types: create a map of name -> (local) column id
 		NameMapper name_map(*this, local_columns);
@@ -1006,14 +1030,9 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	}
 }
 
-void SetIndexToZero(Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_REF) {
-		auto &ref = expr.Cast<BoundReferenceExpression>();
-		ref.index = 0;
-		return;
-	}
-
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { SetIndexToZero(child); });
+void SetIndexToZero(unique_ptr<Expression> &root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index = 0; });
 }
 
 bool CanPropagateCast(const MultiFileIndexMapping &mapping, const LogicalType &local_type,
@@ -1072,19 +1091,20 @@ unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, refer
 
 			// add the expression to the expression map - we are now evaluating this inside the reader directly
 			// we need to set the index of the references inside the expression to 0
-			SetIndexToZero(*reader_data.expressions[local_id]);
-			reader.expression_map[filter_idx] = std::move(reader_data.expressions[local_id]);
+			auto &expr = reader_data.expressions[global_index];
+			SetIndexToZero(expr);
+			reader.expression_map[filter_idx] = std::move(expr);
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
-			reader_data.expressions[local_id] = make_uniq<BoundReferenceExpression>(global_type, local_id);
+			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
 		}
 	}
 	return result;
 }
 
-ReaderInitializeType MultiFileColumnMapper::CreateMapping() {
+ReaderInitializeType MultiFileColumnMapper::CreateMapping(MultiFileColumnMappingMode mapping_mode) {
 	// copy global columns and inject any different defaults
-	auto result = CreateColumnMapping();
+	auto result = CreateColumnMapping(mapping_mode);
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)
 	//! If any of these fail, the file can be skipped entirely
 	map<idx_t, reference<TableFilter>> remaining_filters;

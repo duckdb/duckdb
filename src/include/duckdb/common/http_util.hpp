@@ -10,90 +10,22 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/http_status_code.hpp"
 #include <functional>
 
 namespace duckdb {
 class DatabaseInstance;
-class HTTPLogger;
+class Logger;
+class HTTPUtil;
+class FileOpener;
+struct FileOpenerInfo;
 
-enum class HTTPStatusCode : uint16_t {
-	INVALID = 0,
-	// Information responses
-	Continue_100 = 100,
-	SwitchingProtocol_101 = 101,
-	Processing_102 = 102,
-	EarlyHints_103 = 103,
-
-	// Successful responses
-	OK_200 = 200,
-	Created_201 = 201,
-	Accepted_202 = 202,
-	NonAuthoritativeInformation_203 = 203,
-	NoContent_204 = 204,
-	ResetContent_205 = 205,
-	PartialContent_206 = 206,
-	MultiStatus_207 = 207,
-	AlreadyReported_208 = 208,
-	IMUsed_226 = 226,
-
-	// Redirection messages
-	MultipleChoices_300 = 300,
-	MovedPermanently_301 = 301,
-	Found_302 = 302,
-	SeeOther_303 = 303,
-	NotModified_304 = 304,
-	UseProxy_305 = 305,
-	unused_306 = 306,
-	TemporaryRedirect_307 = 307,
-	PermanentRedirect_308 = 308,
-
-	// Client error responses
-	BadRequest_400 = 400,
-	Unauthorized_401 = 401,
-	PaymentRequired_402 = 402,
-	Forbidden_403 = 403,
-	NotFound_404 = 404,
-	MethodNotAllowed_405 = 405,
-	NotAcceptable_406 = 406,
-	ProxyAuthenticationRequired_407 = 407,
-	RequestTimeout_408 = 408,
-	Conflict_409 = 409,
-	Gone_410 = 410,
-	LengthRequired_411 = 411,
-	PreconditionFailed_412 = 412,
-	PayloadTooLarge_413 = 413,
-	UriTooLong_414 = 414,
-	UnsupportedMediaType_415 = 415,
-	RangeNotSatisfiable_416 = 416,
-	ExpectationFailed_417 = 417,
-	ImATeapot_418 = 418,
-	MisdirectedRequest_421 = 421,
-	UnprocessableContent_422 = 422,
-	Locked_423 = 423,
-	FailedDependency_424 = 424,
-	TooEarly_425 = 425,
-	UpgradeRequired_426 = 426,
-	PreconditionRequired_428 = 428,
-	TooManyRequests_429 = 429,
-	RequestHeaderFieldsTooLarge_431 = 431,
-	UnavailableForLegalReasons_451 = 451,
-
-	// Server error responses
-	InternalServerError_500 = 500,
-	NotImplemented_501 = 501,
-	BadGateway_502 = 502,
-	ServiceUnavailable_503 = 503,
-	GatewayTimeout_504 = 504,
-	HttpVersionNotSupported_505 = 505,
-	VariantAlsoNegotiates_506 = 506,
-	InsufficientStorage_507 = 507,
-	LoopDetected_508 = 508,
-	NotExtended_510 = 510,
-	NetworkAuthenticationRequired_511 = 511,
-};
+struct HTTPLogWriter {};
 
 struct HTTPParams {
-	virtual ~HTTPParams() = default;
+	explicit HTTPParams(HTTPUtil &http_util) : http_util(http_util) {
+	}
+	virtual ~HTTPParams();
 
 	static constexpr uint64_t DEFAULT_TIMEOUT_SECONDS = 30; // 30 sec
 	static constexpr uint64_t DEFAULT_RETRIES = 3;
@@ -107,17 +39,18 @@ struct HTTPParams {
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
+	bool follow_location = true;
 
 	string http_proxy;
 	idx_t http_proxy_port;
 	string http_proxy_username;
 	string http_proxy_password;
 	unordered_map<string, string> extra_headers;
-	optional_ptr<HTTPLogger> logger;
+	HTTPUtil &http_util;
+	shared_ptr<Logger> logger;
 
 public:
-	void Initialize(DatabaseInstance &db);
-	void Initialize(ClientContext &context);
+	void Initialize(optional_ptr<FileOpener> opener);
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -294,20 +227,29 @@ public:
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);
 
+	virtual string GetName() const;
+
+	virtual unique_ptr<HTTPParams> InitializeParameters(DatabaseInstance &db, const string &path);
+	virtual unique_ptr<HTTPParams> InitializeParameters(ClientContext &context, const string &path);
+	virtual unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,
+	                                                    optional_ptr<FileOpenerInfo> info);
+
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);
 
 	virtual unique_ptr<HTTPResponse> SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client);
+	virtual void LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> response);
 
 	static void ParseHTTPProxyHost(string &proxy_value, string &hostname_out, idx_t &port_out, idx_t default_port = 80);
 	static void DecomposeURL(const string &url, string &path_out, string &proto_host_port_out);
 	static HTTPStatusCode ToStatusCode(int32_t status_code);
+	static string GetStatusMessage(HTTPStatusCode status);
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>
 	RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)> &on_request, const BaseRequest &request,
-	                    const std::function<void(void)> &retry_cb = {});
+	                    const std::function<void(void)> &retry_cb);
 };
 } // namespace duckdb

@@ -35,6 +35,8 @@
 
 namespace duckdb {
 
+constexpr const idx_t Allocator::MAXIMUM_ALLOC_SIZE;
+
 AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated_size(0) {
 }
 
@@ -254,7 +256,7 @@ static void MallocTrim(idx_t pad) {
 		return; // Another thread has updated LAST_TRIM_TIMESTAMP_MS since we loaded it
 	}
 
-	// We succesfully updated LAST_TRIM_TIMESTAMP_MS, we can trim
+	// We successfully updated LAST_TRIM_TIMESTAMP_MS, we can trim
 	malloc_trim(pad);
 #endif
 }

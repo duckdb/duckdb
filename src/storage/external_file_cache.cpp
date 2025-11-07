@@ -50,18 +50,22 @@ void ExternalFileCache::CachedFileRange::VerifyCheckSum() {
 		return;
 	}
 	auto buffer_handle = block_handle->block_manager.buffer_manager.Pin(block_handle);
+	if (!buffer_handle.IsValid()) {
+		return;
+	}
 	D_ASSERT(checksum == Checksum(buffer_handle.Ptr(), nr_bytes));
 #endif
 }
 
-ExternalFileCache::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
+ExternalFileCache::CachedFile::CachedFile(string path_p)
+    : path(std::move(path_p)), file_size(0), last_modified(0), can_seek(false), on_disk_file(false) {
 }
 
 void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &guard) const {
 #ifdef DEBUG
 	for (const auto &range1 : ranges) {
 		for (const auto &range2 : ranges) {
-			if (range1 == range2) {
+			if (range1.first == range2.first) {
 				continue;
 			}
 			D_ASSERT(range1.second->GetOverlap(*range2.second) != CachedFileRangeOverlap::FULL);
@@ -70,8 +74,8 @@ void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &gua
 #endif
 }
 
-bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, time_t cached_last_modified,
-                                const string &current_version_tag, time_t current_last_modified) {
+bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
+                                const string &current_version_tag, timestamp_t current_last_modified) {
 	if (!validate) {
 		return true; // Assume valid
 	}
@@ -84,8 +88,8 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 	// The last modified time matches. However, we cannot blindly trust this,
 	// because some file systems use a low resolution clock to set the last modified time.
 	// So, we will require that the last modified time is more than 10 seconds ago.
-	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 10;
-	const auto access_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
+	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 10LL * 1000LL * 1000LL;
+	const auto access_time = Timestamp::GetCurrentTimestamp();
 	if (access_time < current_last_modified) {
 		return false; // Last modified in the future?
 	}
@@ -93,7 +97,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 }
 
 bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &guard, bool validate,
-                                            const string &current_version_tag, time_t current_last_modified) {
+                                            const string &current_version_tag, timestamp_t current_last_modified) {
 	if (!validate) {
 		return true; // Assume valid
 	}
@@ -105,7 +109,7 @@ idx_t &ExternalFileCache::CachedFile::FileSize(const unique_ptr<StorageLockKey> 
 	return file_size;
 }
 
-time_t &ExternalFileCache::CachedFile::LastModified(const unique_ptr<StorageLockKey> &guard) {
+timestamp_t &ExternalFileCache::CachedFile::LastModified(const unique_ptr<StorageLockKey> &guard) {
 	return last_modified;
 }
 

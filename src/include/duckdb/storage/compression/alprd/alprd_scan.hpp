@@ -208,7 +208,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> AlpRDInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> AlpRDInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, AlpRDScanState<T>>(segment);
 	return result;
 }
@@ -223,7 +223,7 @@ void AlpRDScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	auto &scan_state = (AlpRDScanState<T> &)*state.scan_state;
 
 	// Get the pointer to the result values
-	auto current_result_ptr = FlatVector::GetData<EXACT_TYPE>(result);
+	auto current_result_ptr = FlatVector::GetDataUnsafe<EXACT_TYPE>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	current_result_ptr += result_offset;
 

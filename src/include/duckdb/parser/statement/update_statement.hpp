@@ -22,6 +22,7 @@ public:
 
 public:
 	unique_ptr<UpdateSetInfo> Copy() const;
+	string ToString() const;
 
 public:
 	// The condition that needs to be met to perform the update

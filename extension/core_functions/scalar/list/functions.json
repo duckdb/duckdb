@@ -2,41 +2,46 @@
     {
         "name": "flatten",
         "parameters": "nested_list",
-        "description": "Flatten a nested list by one level",
+        "description": "Flattens a nested list by one level.",
         "example": "flatten([[1, 2, 3], [4, 5]])",
+        "categories": ["list"],
         "struct": "ListFlattenFun",
         "type": "scalar_function"
     },
     {
         "name": "list_aggregate",
-        "parameters": "list,name",
-        "description": "Executes the aggregate function name on the elements of list",
+        "parameters": "list,function_name",
+        "description": "Executes the aggregate function `function_name` on the elements of `list`.",
         "example": "list_aggregate([1, 2, NULL], 'min')",
+        "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["array_aggregate", "list_aggr", "array_aggr", "aggregate"]
     },
     {
         "name": "list_distinct",
         "parameters": "list",
-        "description": "Removes all duplicates and NULLs from a list. Does not preserve the original order",
+        "description": "Removes all duplicates and `NULL` values from a list. Does not preserve the original order.",
         "example": "list_distinct([1, 1, NULL, -3, 1, 5])",
+        "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["array_distinct"]
     },
     {
         "name": "list_unique",
         "parameters": "list",
-        "description": "Counts the unique elements of a list",
+        "description": "Counts the unique elements of a `list`.",
         "example": "list_unique([1, 1, NULL, -3, 1, 5])",
+        "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["array_unique"]
     },
     {
         "name": "list_value",
         "parameters": "any,...",
-        "description": "Create a LIST containing the argument values",
+        "description": "Creates a LIST containing the argument values.",
         "example": "list_value(4, 5, 6)",
-        "type": "scalar_function",
+        "categories": ["list"],
+        "type": "scalar_function_set",
         "aliases": ["list_pack"]
     },
     {
@@ -48,8 +53,9 @@
                     {"name": "begin"},
                     {"name": "end"}
                 ],
-                "description": "Extract a sublist using slice conventions. Negative values are accepted.",
-                "examples": ["list_slice([4, 5, 6], 2, 3)", "array_slice('DuckDB', 3, 4)", "array_slice('DuckDB', 3, NULL)", "array_slice('DuckDB', 0, -3)"]
+                "description": "Extracts a sublist or substring using slice conventions. Negative values are accepted.",
+                "examples": ["list_slice([4, 5, 6], 2, 3)", "array_slice('DuckDB', 3, 4)", "array_slice('DuckDB', 3, NULL)", "array_slice('DuckDB', 0, -3)"],
+                "categories": ["list", "string"]
             },
             {
                 "parameters": [
@@ -59,7 +65,8 @@
                     {"name": "step"}
                 ],
                 "description": "list_slice with added step feature.",
-                "example": "list_slice([4, 5, 6], 1, 3, 2)"
+                "example": "list_slice([4, 5, 6], 1, 3, 2)",
+                "categories": ["list"]
             }
         ],
         "type": "scalar_function_set",
@@ -68,125 +75,141 @@
     {
         "name": "list_sort",
         "parameters": "list",
-        "description": "Sorts the elements of the list",
+        "description": "Sorts the elements of the list.",
         "example": "list_sort([3, 6, 1, 2])",
+        "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["array_sort"]
     },
     {
         "name": "list_grade_up",
         "parameters": "list",
-        "description": "Returns the index of their sorted position.",
+        "description": "Works like list_sort, but the results are the indexes that correspond to the position in the original list instead of the actual values.",
         "example": "list_grade_up([3, 6, 1, 2])",
+        "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["array_grade_up", "grade_up"]
     },
     {
         "name": "list_reverse_sort",
         "parameters": "list",
-        "description": "Sorts the elements of the list in reverse order",
+        "description": "Sorts the elements of the list in reverse order.",
         "example": "list_reverse_sort([3, 6, 1, 2])",
+        "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["array_reverse_sort"]
     },
     {
         "name": "list_transform",
-        "parameters": "list,lambda",
-        "description": "Returns a list that is the result of applying the lambda function to each element of the input list. See the Lambda Functions section for more details",
-        "example": "list_transform([1, 2, 3], x -> x + 1)",
+        "parameters": "list,lambda(x)",
+        "description": "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. The return type is defined by the return type of the `lambda` function.",
+        "example": "list_transform([1, 2, 3], lambda x : x + 1)",
+        "categories": ["list", "lambda"],
         "type": "scalar_function",
         "aliases": ["array_transform", "list_apply", "array_apply", "apply"]
     },
     {
         "name": "list_filter",
-        "parameters": "list,lambda",
-        "description": "Constructs a list from those elements of the input list for which the lambda function returns true",
-        "example": "list_filter([3, 4, 5], x -> x > 4)",
+        "parameters": "list,lambda(x)",
+        "description": "Constructs a list from those elements of the input `list` for which the `lambda` function returns `true`. DuckDB must be able to cast the `lambda` function's return type to `BOOL`. The return type of `list_filter` is the same as the input list's.",
+        "example": "list_filter([3, 4, 5], lambda x : x > 4)",
+        "categories": ["list", "lambda"],
         "type": "scalar_function",
         "aliases": ["array_filter", "filter"]
     },
     {
         "name": "list_reduce",
-        "parameters": "list,lambda[,initial]",
-        "description": "Returns a single value that is the result of applying the lambda function to each element of the input list, starting with the first element and then repeatedly applying the lambda function to the result of the previous application and the next element of the list. When an initial value is provided, it is used as the first argument to the lambda function",
-        "example": "list_reduce([1, 2, 3], (x, y) -> x + y)",
+        "parameters": "list,lambda(x, y),initial_value",
+        "description": "Reduces all elements of the input `list` into a single scalar value by executing the `lambda` function on a running result and the next list element. The `lambda` function has an optional `initial_value` argument.",
+        "example": "list_reduce([1, 2, 3], lambda x, y : x + y)",
+        "categories": ["list", "lambda"],
         "type": "scalar_function_set",
         "aliases": ["array_reduce", "reduce"]
     },
     {
         "name": "generate_series",
         "parameters": "start,stop,step",
-        "description": "Create a list of values between start and stop - the stop parameter is inclusive",
+        "description": "Creates a list of values between `start` and `stop` - the stop parameter is inclusive.",
         "example": "generate_series(2, 5, 3)",
+        "categories": ["list"],
         "type": "scalar_function_set"
     },
     {
         "name": "range",
         "parameters": "start,stop,step",
-        "description": "Create a list of values between start and stop - the stop parameter is exclusive",
+        "description": "Creates a list of values between `start` and `stop` - the stop parameter is exclusive.",
         "example": "range(2, 5, 3)",
+        "categories": ["list"],
         "type": "scalar_function_set",
         "struct": "ListRangeFun"
     },
     {
         "name": "list_cosine_distance",
         "parameters": "list1,list2",
-        "description": "Compute the cosine distance between two lists",
+        "description": "Computes the cosine distance between two same-sized lists.",
         "example": "list_cosine_distance([1, 2, 3], [1, 2, 3])",
+        "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["<=>"]
     },
     {
         "name": "list_cosine_similarity",
         "parameters": "list1,list2",
-        "description": "Compute the cosine similarity between two lists",
+        "description": "Computes the cosine similarity between two same-sized lists.",
         "example": "list_cosine_similarity([1, 2, 3], [1, 2, 3])",
+        "categories": ["list"],
         "type": "scalar_function_set"
     },
     {
         "name": "list_distance",
         "parameters": "list1,list2",
-        "description": "Compute the distance between two lists",
-        "example": "list_distance([1, 2, 3], [1, 2, 3])",
+        "description": "Calculates the Euclidean distance between two points with coordinates given in two inputs lists of equal length.",
+        "example": "list_distance([1, 2, 3], [1, 2, 5])",
+        "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["<->"]
     },
     {
         "name": "list_inner_product",
         "parameters": "list1,list2",
-        "description": "Compute the inner product between two lists",
+        "description": "Computes the inner product between two same-sized lists.",
         "example": "list_inner_product([1, 2, 3], [1, 2, 3])",
+        "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["list_dot_product"]
     },
     {
         "name": "list_negative_inner_product",
         "parameters": "list1,list2",
-        "description": "Compute the negative inner product between two lists",
+        "description": "Computes the negative inner product between two same-sized lists.",
         "example": "list_negative_inner_product([1, 2, 3], [1, 2, 3])",
+        "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["list_negative_dot_product"]
     },
     {
         "name": "unpivot_list",
         "parameters": "any,...",
-        "description": "Identical to list_value, but generated as part of unpivot for better error messages",
+        "description": "Identical to list_value, but generated as part of unpivot for better error messages.",
         "example": "unpivot_list(4, 5, 6)",
+        "categories": ["list"],
         "type": "scalar_function"
     },
     {
         "name": "list_has_any",
-        "parameters": "l1, l2",
+        "parameters": "list1,list2",
         "description": "Returns true if the lists have any element in common. NULLs are ignored.",
         "example": "list_has_any([1, 2, 3], [2, 3, 4])",
+        "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["array_has_any", "&&"]
     },
     {
         "name": "list_has_all",
-        "parameters": "l1, l2",
-        "description": "Returns true if all elements of l2 are in l1. NULLs are ignored.",
+        "parameters": "list1,list2",
+        "description": "Returns true if all elements of list2 are in list1. NULLs are ignored.",
         "example": "list_has_all([1, 2, 3], [2, 3])",
+        "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["array_has_all", "@>", "<@"]
     }

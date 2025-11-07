@@ -3,9 +3,8 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/original/std/sstream.hpp"
 #include "utf8proc_wrapper.hpp"
-
-#include <sstream>
 
 namespace duckdb {
 
@@ -903,19 +902,11 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 	}
 }
 
-void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const string &column_count_str,
-                                 const vector<idx_t> &boundaries, bool has_hidden_rows, bool has_hidden_columns,
-                                 idx_t total_length, idx_t row_count, idx_t column_count, idx_t minimum_row_length,
-                                 BaseResultRenderer &ss) {
-	// check if we can merge the row_count_str and the shown_str
-	bool display_shown_separately = has_hidden_rows;
-	if (has_hidden_rows && total_length >= row_count_str.size() + shown_str.size() + 5) {
-		// we can!
-		row_count_str += " " + shown_str;
-		shown_str = string();
-		display_shown_separately = false;
-		minimum_row_length = row_count_str.size() + 4;
-	}
+void BoxRenderer::RenderRowCount(string &row_count_str, string &readable_rows_str, string &shown_str,
+                                 const string &column_count_str, const vector<idx_t> &boundaries, bool has_hidden_rows,
+                                 bool has_hidden_columns, idx_t total_length, idx_t row_count, idx_t column_count,
+                                 idx_t minimum_row_length, BaseResultRenderer &ss) {
+	// check if we can merge the row_count_str, readable_rows_str and the shown_str
 	auto minimum_length = row_count_str.size() + column_count_str.size() + 6;
 	bool render_rows_and_columns = total_length >= minimum_length &&
 	                               ((has_hidden_columns && row_count > 0) || (row_count >= 10 && column_count > 1));
@@ -942,23 +933,75 @@ void BoxRenderer::RenderRowCount(string row_count_str, string shown_str, const s
 	if (!render_anything) {
 		return;
 	}
-
+	idx_t padding = total_length - row_count_str.size() - 4;
 	if (render_rows_and_columns) {
-		ss << config.VERTICAL;
-		ss << " ";
-		ss.Render(ResultRenderType::FOOTER, row_count_str);
-		ss << string(total_length - row_count_str.size() - column_count_str.size() - 4, ' ');
-		ss.Render(ResultRenderType::FOOTER, column_count_str);
-		ss << " ";
-		ss << config.VERTICAL;
-		ss << '\n';
-	} else if (render_rows) {
-		RenderValue(ss, row_count_str, total_length - 4, ResultRenderType::FOOTER);
-		ss << config.VERTICAL;
-		ss << '\n';
+		padding -= column_count_str.size();
+	}
+	string extra_render_str;
+	// do we have to space to render the minimum_row_length and the shown string on the same row?
+	idx_t shown_size = readable_rows_str.size() + shown_str.size() + (readable_rows_str.empty() ? 3 : 5);
+	if (has_hidden_rows && padding >= shown_size) {
+		// we have space - render it here
+		extra_render_str = " (";
+		if (!readable_rows_str.empty()) {
+			extra_render_str += readable_rows_str + ", ";
+		}
+		extra_render_str += shown_str;
+		extra_render_str += ")";
+		D_ASSERT(extra_render_str.size() == shown_size);
+		padding -= shown_size;
+		readable_rows_str = string();
+		shown_str = string();
+	}
 
-		if (display_shown_separately) {
-			RenderValue(ss, shown_str, total_length - 4, ResultRenderType::FOOTER);
+	ss << config.VERTICAL;
+	ss << " ";
+	if (render_rows_and_columns) {
+		ss.Render(ResultRenderType::FOOTER, row_count_str);
+		if (!extra_render_str.empty()) {
+			ss.Render(ResultRenderType::NULL_VALUE, extra_render_str);
+		}
+		ss << string(padding, ' ');
+		ss.Render(ResultRenderType::FOOTER, column_count_str);
+	} else if (render_rows) {
+		idx_t lpadding = padding / 2;
+		idx_t rpadding = padding - lpadding;
+		ss << string(lpadding, ' ');
+		ss.Render(ResultRenderType::FOOTER, row_count_str);
+		if (!extra_render_str.empty()) {
+			ss.Render(ResultRenderType::NULL_VALUE, extra_render_str);
+		}
+		ss << string(rpadding, ' ');
+	}
+	ss << " ";
+	ss << config.VERTICAL;
+	ss << '\n';
+	if (!readable_rows_str.empty() || !shown_str.empty()) {
+		// we still need to render the readable rows/shown strings
+		// check if we can merge the two onto one row
+		idx_t combined_shown_length = readable_rows_str.size() + shown_str.size() + 4;
+		if (!readable_rows_str.empty() && !shown_str.empty() && combined_shown_length <= total_length) {
+			// we can! merge them
+			ss << config.VERTICAL;
+			ss << " ";
+			ss.Render(ResultRenderType::NULL_VALUE, readable_rows_str);
+			ss << string(total_length - combined_shown_length, ' ');
+			ss.Render(ResultRenderType::NULL_VALUE, shown_str);
+			ss << " ";
+			ss << config.VERTICAL;
+			ss << '\n';
+			readable_rows_str = string();
+			shown_str = string();
+		}
+		ValueRenderAlignment alignment =
+		    render_rows_and_columns ? ValueRenderAlignment::LEFT : ValueRenderAlignment::MIDDLE;
+		if (!readable_rows_str.empty()) {
+			RenderValue(ss, "(" + readable_rows_str + ")", total_length - 4, ResultRenderType::NULL_VALUE, alignment);
+			ss << config.VERTICAL;
+			ss << '\n';
+		}
+		if (!shown_str.empty()) {
+			RenderValue(ss, "(" + shown_str + ")", total_length - 4, ResultRenderType::NULL_VALUE, alignment);
 			ss << config.VERTICAL;
 			ss << '\n';
 		}
@@ -1007,21 +1050,28 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		top_rows = rows_to_render / 2 + (rows_to_render % 2 != 0 ? 1 : 0);
 		bottom_rows = rows_to_render - top_rows;
 	}
-	auto row_count_str = to_string(row_count) + " rows";
+	auto row_count_str = FormatNumber(to_string(row_count)) + " rows";
 	bool has_limited_rows = config.limit > 0 && row_count == config.limit;
 	if (has_limited_rows) {
 		row_count_str = "? rows";
 	}
+	string readable_rows_str;
+	if (config.large_number_rendering == LargeNumberRendering::FOOTER && !has_limited_rows) {
+		readable_rows_str = TryFormatLargeNumber(to_string(row_count));
+		if (!readable_rows_str.empty()) {
+			readable_rows_str += " rows";
+		}
+	}
 	string shown_str;
 	bool has_hidden_rows = top_rows < row_count;
 	if (has_hidden_rows) {
-		shown_str = "(";
 		if (has_limited_rows) {
-			shown_str += ">" + to_string(config.limit - 1) + " rows, ";
+			shown_str += ">" + FormatNumber(to_string(config.limit - 1)) + " rows, ";
 		}
-		shown_str += to_string(top_rows + bottom_rows) + " shown)";
+		shown_str += FormatNumber(to_string(top_rows + bottom_rows)) + " shown";
 	}
-	auto minimum_row_length = MaxValue<idx_t>(row_count_str.size(), shown_str.size()) + 4;
+	auto minimum_row_length =
+	    MaxValue<idx_t>(MaxValue<idx_t>(row_count_str.size(), shown_str.size() + 2), readable_rows_str.size() + 2) + 4;
 
 	// fetch the top and bottom render collections from the result
 	auto collections = FetchRenderCollections(context, result, top_rows, bottom_rows);
@@ -1074,7 +1124,7 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 	if (config.render_mode == RenderMode::COLUMNS) {
 		if (has_hidden_columns) {
 			has_hidden_rows = true;
-			shown_str = " (" + to_string(column_count - 3) + " shown)";
+			shown_str = to_string(column_count - 3) + " shown";
 		} else {
 			shown_str = string();
 		}
@@ -1085,7 +1135,7 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		}
 	}
 
-	RenderRowCount(std::move(row_count_str), std::move(shown_str), column_count_str, boundaries, has_hidden_rows,
+	RenderRowCount(row_count_str, readable_rows_str, shown_str, column_count_str, boundaries, has_hidden_rows,
 	               has_hidden_columns, total_length, row_count, column_count, minimum_row_length, ss);
 }
 

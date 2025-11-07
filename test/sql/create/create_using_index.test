@@ -5,4 +5,5 @@
 statement error
 CREATE TABLE t0 (i INT, CONSTRAINT any_constraint UNIQUE USING INDEX any_non_existed_index);
 ----
-not supported
+Parser Error: UNIQUE USING INDEX is not supported
+

@@ -1,0 +1,37 @@
+[
+  {
+    "name": "st_geomfromwkb",
+    "parameters": "wkb",
+    "description": "Creates a geometry from Well-Known Binary (WKB) representation",
+    "example": "ST_GeomFromWKB(X'01010000000000000000000000000000000000000000000000')",
+    "categories": ["geometry"],
+    "type": "scalar_function"
+  },
+  {
+    "name": "st_aswkb",
+    "parameters": "geom",
+    "description": "Returns the Well-Known Binary (WKB) representation of the geometry",
+    "example": "st_aswkb(ST_GeomFromWKB(X'01010000000000000000000000000000000000000000000000000'))",
+    "categories": ["geometry"],
+    "type": "scalar_function",
+    "aliases": ["st_asbinary"]
+  },
+  {
+    "name": "st_astext",
+    "parameters": "geom",
+    "description": "Returns the Well-Known Text (WKT) representation of the geometry",
+    "example": "ST_AsText(ST_GeomFromWKB(X'01010000000000000000000000000000000000000000000000'))",
+    "categories": ["geometry"],
+    "type": "scalar_function",
+    "aliases": ["st_aswkt"]
+  },
+  {
+    "name": "st_intersects_extent",
+    "parameters": "geom1,geom2",
+    "description": "Returns true if the geometries bounding boxes intersect",
+    "example": "'POINT(5 5)'::GEOMETRY && 'LINESTRING(0 0, 10 20)'::GEOMETRY;",
+    "categories": ["geometry"],
+    "type": "scalar_function",
+    "aliases": ["&&"]
+  }
+]

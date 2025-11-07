@@ -37,13 +37,16 @@ SELECT {i: r, j: 2} FROM range(3) tbl(r);
 statement error
 SELECT {'i': 3, 'i': 4}
 ----
+<REGEX>:.*Binder Error.*Duplicate struct entry name.*
 
 # empty struct is not allowed
 statement error
 SELECT {};
 ----
+<REGEX>:.*Parser Error.*syntax error at or near "}".*
 
 # need string keys
 statement error
 SELECT {1:3};
 ----
+<REGEX>:.*Parser Error.*syntax error at or near "1".*

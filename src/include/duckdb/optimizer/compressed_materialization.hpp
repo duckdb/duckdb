@@ -76,7 +76,11 @@ typedef column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map_t;
 class CompressedMaterialization {
 private:
 	//! Somewhat defensive constants that try to limit when compressed materialization is triggered for joins
+	//! We only consider compressed materialization for joins when the build cardinality is greater than this
 	static constexpr idx_t JOIN_BUILD_CARDINALITY_THRESHOLD = 1048576;
+	//! If the cardinality > threshold, we always perform compressed materialization if there are this many columns
+	static constexpr idx_t JOIN_BUILD_COLUMN_COUNT_THRESHOLD = 20;
+	//! If not, we perform compressed materialization if join result cardinality > build cardinality * this threshold
 	static constexpr double JOIN_CARDINALITY_RATIO_THRESHOLD = 8;
 
 public:

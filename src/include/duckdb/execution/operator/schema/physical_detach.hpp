@@ -18,8 +18,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DETACH;
 
 public:
-	explicit PhysicalDetach(unique_ptr<DetachInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::DETACH, {LogicalType::BOOLEAN}, estimated_cardinality),
+	PhysicalDetach(PhysicalPlan &physical_plan, unique_ptr<DetachInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::DETACH, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

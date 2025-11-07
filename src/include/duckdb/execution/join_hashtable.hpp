@@ -59,9 +59,14 @@ class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
+#ifdef DUCKDB_HASH_ZERO
+	//! Verify salt when all hashes are 0
+	static constexpr const idx_t USE_SALT_THRESHOLD = 0;
+#else
 	//! only compare salts with the ht entries if the capacity is larger than 8192 so
 	//! that it does not fit into the CPU cache
 	static constexpr const idx_t USE_SALT_THRESHOLD = 8192;
+#endif
 
 	//! Scan structure that can be used to resume scans, as a single probe can
 	//! return 1024*N values (where N is the size of the HT). This is
@@ -149,7 +154,7 @@ public:
 	struct ProbeState : SharedState {
 		ProbeState();
 
-		Vector ht_offsets_v;
+		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
 	};
@@ -168,8 +173,8 @@ public:
 		TupleDataChunkState chunk_state;
 	};
 
-	JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions, vector<LogicalType> build_types,
-	              JoinType type, const vector<idx_t> &output_columns);
+	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
+	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -214,6 +219,7 @@ public:
 	}
 
 	ClientContext &context;
+	const PhysicalOperator &op;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The join conditions
@@ -271,6 +277,8 @@ public:
 	uint64_t bitmask = DConstants::INVALID_INDEX;
 	//! Whether or not we error on multiple rows found per match in a SINGLE join
 	bool single_join_error_on_multiple_rows = true;
+	//! Whether or not to perform deduplication based on join_keys when building ht
+	bool insert_duplicate_keys = true;
 
 	struct {
 		mutex mj_lock;

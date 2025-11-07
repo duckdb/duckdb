@@ -1,0 +1,116 @@
+# name: test/sql/pragma/test_show_tables_from.test
+# description: Test SHOW TABLES FROM syntax
+# group: [pragma]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH IF NOT EXISTS ':memory:' AS db
+
+statement ok
+USE db
+
+statement ok
+CREATE TABLE main_table1(i INTEGER)
+
+statement ok
+CREATE SCHEMA test_schema
+
+statement ok
+CREATE TABLE test_schema.test_schema_table1(k INTEGER)
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1
+
+statement ok
+CREATE TABLE db1.db1_table1(m INTEGER)
+
+statement ok
+CREATE SCHEMA db1.db1_schema
+
+statement ok
+CREATE TABLE db1.db1_schema.db1_schema_table1(n INTEGER)
+
+statement ok
+ATTACH DATABASE ':memory:' AS "db_quo""ted"
+
+statement ok
+CREATE SCHEMA "db_quo""ted"."db_quo""ted_schema";
+
+statement ok
+CREATE TABLE "db_quo""ted"."db_quo""ted_schema"."db_quo""ted_table1"(m INTEGER)
+
+# Test basic SHOW TABLES FROM database syntax
+query I
+SHOW TABLES FROM db.main
+----
+main_table1
+
+query I
+SHOW TABLES FROM db1
+----
+db1_schema_table1
+db1_table1
+
+query I
+SHOW TABLES FROM test_schema
+----
+test_schema_table1
+
+query I
+SHOW TABLES FROM db1.main
+----
+db1_table1
+
+query I
+SHOW TABLES FROM db1.db1_schema
+----
+db1_schema_table1
+
+# Test with case insensitive database/schema names
+query I
+SHOW TABLES FROM DB1
+----
+db1_schema_table1
+db1_table1
+
+query I
+SHOW TABLES FROM DB1.DB1_SCHEMA
+----
+db1_schema_table1
+
+query I
+SHOW TABLES FROM db1.DB1_SCHEMA
+----
+db1_schema_table1
+
+# Test with quoted identifiers
+statement ok
+CREATE SCHEMA "Quoted Schema"
+
+statement ok
+CREATE TABLE "Quoted Schema"."Quoted Table"(r INTEGER)
+
+query I
+SHOW TABLES FROM db."Quoted Schema"
+----
+Quoted Table
+
+# Test with quotes in identifiers
+query I
+SHOW TABLES FROM "db_quo""ted"."db_quo""ted_schema"
+----
+db_quo"ted_table1
+
+# Errors
+statement error
+SHOW TABLES FROM nonexistent_db
+----
+Catalog Error: SHOW TABLES FROM: No catalog + schema named "db.nonexistent_db" found
+
+# Test non-existent schema
+statement error
+SHOW TABLES FROM main.nonexistent_schema
+----
+Catalog Error: SHOW TABLES FROM: No catalog + schema named "main.nonexistent_schema" found

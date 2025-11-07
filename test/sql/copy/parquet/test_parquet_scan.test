@@ -11,10 +11,11 @@ PRAGMA enable_verification
 statement error
 SELECT * FROM parquet_scan('does_not_exist')
 ----
+<REGEX>:.*IO Error: No files found.*
 
 # alltypes_plain.parquet
 query ITIIIIRRTTT
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
 ----
 4	1	0	0	0	0	0.000000	0.000000	03/01/09	0	2009-03-01 00:00:00
 5	0	1	1	1	10	1.100000	10.100000	03/01/09	1	2009-03-01 00:01:00
@@ -27,7 +28,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.parquet')
 
 # we don't need to explicitly use parquet_scan
 query ITIIIIRRTTT
-SELECT * FROM "data/parquet-testing/arrow/alltypes_plain.parquet"
+SELECT * FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet"
 ----
 4	1	0	0	0	0	0.000000	0.000000	03/01/09	0	2009-03-01 00:00:00
 5	0	1	1	1	10	1.100000	10.100000	03/01/09	1	2009-03-01 00:01:00
@@ -40,7 +41,7 @@ SELECT * FROM "data/parquet-testing/arrow/alltypes_plain.parquet"
 
 # we can use table aliases here as well
 query ITIIIIRRTTT
-SELECT tbl.* FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl
+SELECT tbl.* FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl
 ----
 4	1	0	0	0	0	0.000000	0.000000	03/01/09	0	2009-03-01 00:00:00
 5	0	1	1	1	10	1.100000	10.100000	03/01/09	1	2009-03-01 00:01:00
@@ -53,7 +54,7 @@ SELECT tbl.* FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl
 
 # and column aliases
 query I
-SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a)
+SELECT tbl.a FROM "{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet" tbl(a)
 ----
 4
 5
@@ -66,7 +67,7 @@ SELECT tbl.a FROM "data/parquet-testing/arrow/alltypes_plain.parquet" tbl(a)
 
 #unsigned types parquet
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/unsigned.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/unsigned.parquet')
 ----
 1	1	1	1
 2	2	2	2
@@ -77,14 +78,14 @@ SELECT * FROM parquet_scan('data/parquet-testing/unsigned.parquet')
 
 # alltypes_plain.snappy.parquet
 query ITIIIIRRTTT
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.snappy.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.snappy.parquet')
 ----
 6	1	0	0	0	0	0.000000	0.000000	04/01/09	0	2009-04-01 00:00:00
 7	0	1	1	1	10	1.100000	10.100000	04/01/09	1	2009-04-01 00:01:00
 
 # alltypes_dictionary.parquet
 query ITIIIIRRTTT
-SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_dictionary.parquet')
 ----
 0	1	0	0	0	0	0.000000	0.000000	01/01/09	0	2009-01-01 00:00:00
 1	0	1	1	1	10	1.100000	10.100000	01/01/09	1	2009-01-01 00:01:00
@@ -92,7 +93,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parqu
 # this file was created with spark using the data-types.py script
 # data-types.parquet
 query IIIIRRITTTTI
-SELECT * FROM parquet_scan('data/parquet-testing/data-types.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/data-types.parquet')
 ----
 NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 42	43	44	45	4.600000	4.700000	4.80	49	50	1	2019-11-26 20:11:42.501	2020-01-10
@@ -102,12 +103,12 @@ NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 
 # userdata1.parquet
 query I
-SELECT COUNT(*) FROM  parquet_scan('data/parquet-testing/userdata1.parquet')
+SELECT COUNT(*) FROM  parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet')
 ----
 1000
 
 statement ok
-CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('data/parquet-testing/userdata1.parquet')
+CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet')
 
 query I
 SELECT COUNT(*) FROM userdata1
@@ -245,5 +246,6 @@ SELECT FIRST(comments) OVER w, LAST(comments) OVER w FROM userdata1 WINDOW w AS 
 1E+02	(empty)
 
 statement error
-SELECT * FROM parquet_scan('data/parquet-testing/broken-arrow.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/broken-arrow.parquet')
 ----
+<REGEX>:.*Invalid Error: Out of buffer.*

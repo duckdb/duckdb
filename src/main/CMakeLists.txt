@@ -29,12 +29,14 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  database_file_path_manager.cpp
   database_path_and_type.cpp
   database_manager.cpp
   db_instance_cache.cpp
   error_manager.cpp
   extension.cpp
   extension_install_info.cpp
+  extension_manager.cpp
   materialized_query_result.cpp
   pending_query_result.cpp
   prepared_statement.cpp
@@ -43,6 +45,7 @@ add_library_unity(
   relation.cpp
   query_profiler.cpp
   query_result.cpp
+  result_set_manager.cpp
   stream_query_result.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES

@@ -17,7 +17,6 @@
 namespace duckdb {
 
 class DuckDB;
-class HTTPLogger;
 
 enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
 
@@ -242,7 +241,6 @@ private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
 	                                                                 const string &local_path, const string &extension,
 	                                                                 ExtensionInstallOptions &options,
-	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr,
 	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
@@ -252,6 +250,8 @@ private:
 	                           ExtensionInitResult &result, string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
+	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	                                          ExtensionActiveLoad &info);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

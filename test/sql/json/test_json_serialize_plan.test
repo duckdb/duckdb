@@ -1,8 +1,6 @@
 # name: test/sql/json/test_json_serialize_plan.test
 # group: [json]
 
-require noforcestorage
-
 require json
 
 statement ok

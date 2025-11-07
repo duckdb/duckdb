@@ -15,9 +15,10 @@
 
 namespace duckdb {
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
-                                           PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index,
+                                           vector<LogicalType> types, bool union_all, PhysicalOperator &top,
+                                           PhysicalOperator &bottom, idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
       ctename(std::move(ctename)), table_index(table_index), union_all(union_all) {
 	children.push_back(top);
 	children.push_back(bottom);
@@ -33,7 +34,6 @@ class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
-
 		vector<BoundAggregateExpression *> payload_aggregates_ptr;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
 			auto &dat = op.payload_aggregates[i];
@@ -319,6 +319,7 @@ InsertionOrderPreservingMap<string> PhysicalRecursiveCTE::ParamsToString() const
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
 	result["Table Index"] = StringUtil::Format("%llu", table_index);
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

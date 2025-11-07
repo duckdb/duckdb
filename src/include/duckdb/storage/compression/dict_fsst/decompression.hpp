@@ -28,7 +28,7 @@ public:
 	const SelectionVector &GetSelVec(idx_t start, idx_t scan_count);
 	void Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count);
 
-	bool AllowDictionaryScan(idx_t start, idx_t scan_count);
+	bool AllowDictionaryScan(idx_t scan_count);
 
 private:
 	string_t FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx);
@@ -59,7 +59,7 @@ public:
 	data_ptr_t dictionary_indices_ptr;
 	data_ptr_t string_lengths_ptr;
 
-	buffer_ptr<Vector> dictionary;
+	buffer_ptr<VectorChildBuffer> dictionary;
 	void *decoder = nullptr;
 	bool all_values_inlined = false;
 

@@ -1,0 +1,81 @@
+# name: test/sql/function/generic/replace_type.test
+# description: Test replace_type function
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+# start off with mirrorring all cast_to_type tests as these functions are so similar
+query I
+SELECT replace_type('  42', NULL::VARCHAR, NULL::INT)
+----
+42
+
+statement error
+SELECT replace_type('hello', NULL::VARCHAR, NULL::INT)
+----
+Conversion Error
+
+statement ok
+CREATE OR REPLACE MACRO try_trim_null(s) AS CASE WHEN typeof(s)=='VARCHAR' THEN replace_type(nullif(trim(s::VARCHAR), ''), NULL::VARCHAR, s) ELSE s END;
+
+query III
+SELECT try_trim_null(42) as trim_int, try_trim_null('  col  ') as trim_varchar, try_trim_null('') as trim_empty;
+----
+42	col	NULL
+
+statement ok
+create table tbl(i int, v varchar);
+
+statement ok
+insert into tbl values (42, ' hello '), (100, '   ');
+
+query II
+SELECT try_trim_null(COLUMNS(*)) FROM tbl
+----
+42	hello
+100	NULL
+
+# prepared statements
+statement ok
+PREPARE v1 AS SELECT replace_type(' 42', NULL::VARCHAR, ?);
+
+query I
+EXECUTE v1(NULL::INT)
+----
+42
+
+query I
+EXECUTE v1(NULL::VARCHAR)
+----
+ 42
+
+# cast to NULL
+statement error
+SELECT replace_type(42, NULL::INTEGER, NULL);
+----
+cannot be used to replace type with NULL
+
+# works within struct
+query I
+select replace_type({duck: 3.141592653589793::DOUBLE, goose: 2.718281828459045::DOUBLE}, NULL::DOUBLE, NULL::DECIMAL(15,2))
+----
+{'duck': 3.14, 'goose': 2.72}
+
+# map
+query I
+select replace_type(map {'duck': 3.141592653589793::DOUBLE, 'goose': 2.718281828459045::DOUBLE}, NULL::DOUBLE, NULL::DECIMAL(15,2))
+----
+{duck=3.14, goose=2.72}
+
+# list
+query I
+select replace_type([3.141592653589793, 2.718281828459045]::DOUBLE[], NULL::DOUBLE, NULL::DECIMAL(15,2))
+----
+[3.14, 2.72]
+
+# array
+query I
+select replace_type([3.141592653589793, 2.718281828459045]::DOUBLE[2], NULL::DOUBLE, NULL::DECIMAL(15,2))
+----
+[3.14, 2.72]

@@ -65,7 +65,7 @@ public:
 	//! The (optional) dependency of this function (used in Python for example)
 	shared_ptr<DependencyItem> dependency;
 	//! Arrow table data
-	ArrowTableType arrow_table;
+	ArrowTableSchema arrow_table;
 	//! Whether projection pushdown is enabled on the scan
 	bool projection_pushdown_enabled = true;
 };
@@ -89,10 +89,9 @@ public:
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
-	explicit ArrowArrayScanState(ArrowScanLocalState &state, ClientContext &context);
+	explicit ArrowArrayScanState(ClientContext &context);
 
 public:
-	ArrowScanLocalState &state;
 	// Hold ownership over the Arrow Arrays owned by DuckDB to allow for zero-copy
 	shared_ptr<ArrowArrayWrapper> owned_data;
 	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
@@ -153,7 +152,7 @@ public:
 	ArrowArrayScanState &GetState(idx_t child_idx) {
 		auto it = array_states.find(child_idx);
 		if (it == array_states.end()) {
-			auto child_p = make_uniq<ArrowArrayScanState>(*this, context);
+			auto child_p = make_uniq<ArrowArrayScanState>(context);
 			auto &child = *child_p;
 			array_states.emplace(child_idx, std::move(child_p));
 			return child;
@@ -179,6 +178,26 @@ struct ArrowScanGlobalState : public GlobalTableFunctionState {
 	bool CanRemoveFilterColumns() const {
 		return !projection_ids.empty();
 	}
+};
+
+struct ArrowToDuckDBConversion {
+	static void SetValidityMask(Vector &vector, ArrowArray &array, idx_t chunk_offset, idx_t size,
+	                            int64_t parent_offset, int64_t nested_offset, bool add_null = false);
+
+	static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &array, idx_t chunk_offset,
+	                                             ArrowArrayScanState &array_state, idx_t size,
+	                                             const ArrowType &arrow_type, int64_t nested_offset = -1,
+	                                             ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
+
+	static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, idx_t chunk_offset,
+	                                ArrowArrayScanState &array_state, idx_t size, const ArrowType &arrow_type,
+	                                int64_t nested_offset = -1, ValidityMask *parent_mask = nullptr,
+	                                uint64_t parent_offset = 0, bool ignore_extensions = false);
+
+	static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
+	                                          ArrowArrayScanState &array_state, idx_t size, const ArrowType &arrow_type,
+	                                          int64_t nested_offset = -1, const ValidityMask *parent_mask = nullptr,
+	                                          uint64_t parent_offset = 0);
 };
 
 struct ArrowTableFunction {
@@ -214,9 +233,8 @@ public:
 
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-	static void PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
-	                                   const ArrowSchemaWrapper &schema_p, vector<string> &names,
-	                                   vector<LogicalType> &return_types);
+	static void PopulateArrowTableSchema(DBConfig &config, ArrowTableSchema &arrow_table,
+	                                     const ArrowSchema &arrow_schema);
 
 protected:
 	//! Defines Maximum Number of Threads
@@ -226,13 +244,10 @@ protected:
 	static OperatorPartitionData ArrowGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 
 	//! Specify if a given type can be pushed-down by the arrow engine
-	static bool ArrowPushdownType(const LogicalType &type);
+	static bool ArrowPushdownType(const FunctionData &bind_data, idx_t col_idx);
 	//! -----Utility Functions:-----
 	//! Gets Arrow Table's Cardinality
 	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);
-	//! Gets the progress on the table scan, used for Progress Bars
-	static double ArrowProgress(ClientContext &context, const FunctionData *bind_data,
-	                            const GlobalTableFunctionState *global_state);
 };
 
 } // namespace duckdb

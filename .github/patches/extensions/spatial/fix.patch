@@ -1,377 +1,55 @@
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index bd50e20..1ebe9e9 100644
+index a925782..b1d8f9d 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
-@@ -290,6 +290,9 @@ string RTreeIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
- void RTreeIndex::VerifyAllocations(IndexLock &state) {
+@@ -284,8 +284,12 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void RTreeIndex::Vacuum(IndexLock &state) {
  }
  
-+void RTreeIndex::VerifyBuffers(IndexLock &l) {
+-string RTreeIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+-	throw NotImplementedException("RTreeIndex::VerifyAndToString() not implemented");
++void RTreeIndex::Verify(IndexLock &l) {
++	throw NotImplementedException("RTreeIndex::Verify() not implemented");
 +}
 +
- //------------------------------------------------------------------------------
- // Register Index Type
- //------------------------------------------------------------------------------
++string RTreeIndex::ToString(IndexLock &l, bool display_ascii) {
++	throw NotImplementedException("RTreeIndex::ToString() not implemented");
+ }
+ 
+ void RTreeIndex::VerifyAllocations(IndexLock &state) {
 diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
-index 126f220..5e1ae9c 100644
+index 202a6c7..243a476 100644
 --- a/src/spatial/index/rtree/rtree_index.hpp
 +++ b/src/spatial/index/rtree/rtree_index.hpp
-@@ -62,6 +62,7 @@ public:
+@@ -61,8 +61,13 @@ public:
+ 	//! Traverses an RTreeIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+ 
+-	//! Returns the string representation of the RTreeIndex, or only traverses and verifies the index
+-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
++	//! Traverses and verifies the index.
++	//! Currently not implemented.
++	void Verify(IndexLock &l) override;
++
++	//! Returns the string representation of an index.
++	//! Currently not implemented.
++	string ToString(IndexLock &l, bool display_ascii = false) override;
  
  	//! Ensures that the node allocation counts match the node counts.
  	void VerifyAllocations(IndexLock &state) override;
-+	void VerifyBuffers(IndexLock &l) override;
- 
- 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
- 	                                     DataChunk &input) override {
-diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-index 6079be1..e629e5b 100644
---- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-+++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-@@ -14,6 +14,7 @@
- #include "duckdb/planner/operator/logical_projection.hpp"
- #include "duckdb/planner/operator_extension.hpp"
- #include "duckdb/storage/data_table.hpp"
-+#include "duckdb/planner/filter/expression_filter.hpp"
- #include "duckdb/main/database.hpp"
- 
- #include "spatial/geometry/bbox.hpp"
-@@ -57,6 +58,21 @@ public:
- 		    expr, [&](Expression &child) { RewriteIndexExpression(index, get, child, rewrite_possible); });
- 	}
- 
-+	static void RewriteIndexExpressionForFilter(Index &index, LogicalGet &get, unique_ptr<Expression> &expr, idx_t filter_idx, bool &rewrite_possible) {
-+		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-+			auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-+			if (bound_colref.binding.column_index != filter_idx) {
-+				rewrite_possible = false;
-+				return;
-+			}
-+			// this column matches the index column - turn it into a BoundReference
-+			expr = make_uniq<BoundReferenceExpression>(bound_colref.return_type, 0ULL);
-+			return;
-+		}
-+		ExpressionIterator::EnumerateChildren(
-+			*expr, [&](unique_ptr<Expression> &child) { RewriteIndexExpressionForFilter(index, get, child, filter_idx, rewrite_possible); });
-+	}
-+
- 	static bool IsSpatialPredicate(const ScalarFunction &function, const unordered_set<string> &predicates) {
- 
- 		if (predicates.find(function.name) == predicates.end()) {
-@@ -101,26 +117,47 @@ public:
- 	static bool TryOptimize(Binder &binder, ClientContext &context, unique_ptr<LogicalOperator> &plan,
- 	                        unique_ptr<LogicalOperator> &root) {
- 		// Look for a FILTER with a spatial predicate followed by a LOGICAL_GET table scan
-+		// OR for a seq_scan with an ExpressionFilter
- 		auto &op = *plan;
- 
--		if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
--			return false;
--		}
--
--		// Look for a spatial predicate
--		auto &filter = op.Cast<LogicalFilter>();
-+		if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
-+			// extract the filter from the filter node
-+			// Look for a spatial predicate
-+			auto &filter = op.Cast<LogicalFilter>();
- 
--		if (filter.expressions.size() != 1) {
--			// We can only optimize if there is a single expression right now
--			return false;
-+			if (filter.expressions.size() != 1) {
-+				// We can only optimize if there is a single expression right now
-+				return false;
-+			}
-+			auto &filter_expr = filter.expressions[0];
-+			// Look for a table scan
-+			if (filter.children.front()->type != LogicalOperatorType::LOGICAL_GET) {
-+				return false;
-+			}
-+			auto &get_ptr = filter.children.front();
-+			return TryOptimizeGet(binder, context, get_ptr, root, filter, optional_idx(), filter_expr);
- 		}
--		auto &filter_expr = filter.expressions[0];
--
--		// Look for a table scan
--		if (filter.children.front()->type != LogicalOperatorType::LOGICAL_GET) {
-+		if (op.type == LogicalOperatorType::LOGICAL_GET) {
-+			// this is a LogicalGet - check if there is an ExpressionFilter
-+			auto &get = op.Cast<LogicalGet>();
-+			for(auto &entry : get.table_filters.filters) {
-+				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
-+					// not an expression filter
-+					continue;
-+				}
-+				auto &expr_filter = entry.second->Cast<ExpressionFilter>();
-+				if (TryOptimizeGet(binder, context, plan, root, nullptr, entry.first, expr_filter.expr)) {
-+					return true;
-+				}
-+			}
- 			return false;
- 		}
--		auto &get_ptr = filter.children.front();
-+		return false;
-+	}
-+
-+
-+	static bool TryOptimizeGet(Binder &binder, ClientContext &context, unique_ptr<LogicalOperator> &get_ptr,
-+							unique_ptr<LogicalOperator> &root, optional_ptr<LogicalFilter> filter, optional_idx filter_column_idx, unique_ptr<Expression> &filter_expr) {
- 		auto &get = get_ptr->Cast<LogicalGet>();
- 		if (get.function.name != "seq_scan") {
- 			return false;
-@@ -150,9 +187,13 @@ public:
- 
- 		table_info.GetIndexes().BindAndScan<RTreeIndex>(context, table_info, [&](RTreeIndex &index_entry) {
- 			// Create the bind data for this index given the bounding box
--			auto index_expr = index_entry.unbound_expressions[0]->Copy();
- 			bool rewrite_possible = true;
--			RewriteIndexExpression(index_entry, get, *index_expr, rewrite_possible);
-+			auto index_expr = index_entry.unbound_expressions[0]->Copy();
-+			if (filter_column_idx.IsValid()) {
-+				RewriteIndexExpressionForFilter(index_entry, get, index_expr, filter_column_idx.GetIndex(), rewrite_possible);
-+			} else {
-+				RewriteIndexExpression(index_entry, get, *index_expr, rewrite_possible);
-+			}
- 			if (!rewrite_possible) {
- 				// Could not rewrite!
- 				return false;
-@@ -202,8 +243,8 @@ public:
- 		}
- 
- 		// Before we clear projection ids, replace projection map in the filter
--		if (!get.projection_ids.empty()) {
--			for (auto &id : filter.projection_map) {
-+		if (!get.projection_ids.empty() && filter) {
-+			for (auto &id : filter->projection_map) {
- 				id = get.projection_ids[id];
- 			}
- 		}
-diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
-index 7143df8..ae3ea27 100644
---- a/src/spatial/modules/gdal/gdal_module.cpp
-+++ b/src/spatial/modules/gdal/gdal_module.cpp
-@@ -375,7 +375,7 @@ public:
- 
- 		auto file_vector = fs.Glob(file_glob);
- 		for (auto &file : file_vector) {
--			auto tmp = AddPrefix(file);
-+			auto tmp = AddPrefix(file.path);
- 			files.AddString(tmp.c_str());
- 		}
- 		return files.StealList();
-@@ -1105,7 +1105,9 @@ struct ST_Read : ArrowTableFunction {
- 		func.named_parameters["keep_wkb"] = LogicalType::BOOLEAN;
- 		ExtensionUtil::RegisterFunction(db, func);
- 
--		FunctionBuilder::AddTableFunctionDocs(db, "ST_Read", DOCUMENTATION, EXAMPLE, {{"ext", "spatial"}});
-+		InsertionOrderPreservingMap<string> tags;
-+		tags.insert("ext", "spatial");
-+		FunctionBuilder::AddTableFunctionDocs(db, "ST_Read", DOCUMENTATION, EXAMPLE, tags);
- 
- 		// Replacement scan
- 		auto &config = DBConfig::GetConfig(db);
-@@ -1153,9 +1155,9 @@ struct ST_Read_Meta {
- 	// Bind
- 	//------------------------------------------------------------------------------------------------------------------
- 	struct BindData final : TableFunctionData {
--		vector<string> file_names;
-+		vector<OpenFileInfo> file_names;
- 
--		explicit BindData(vector<string> file_names_p) : file_names(std::move(file_names_p)) {
-+		explicit BindData(vector<OpenFileInfo> file_names_p) : file_names(std::move(file_names_p)) {
- 		}
- 	};
- 
-@@ -1276,8 +1278,8 @@ struct ST_Read_Meta {
- 		auto out_size = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.file_names.size() - state.current_idx);
- 
- 		for (idx_t out_idx = 0; out_idx < out_size; out_idx++, state.current_idx++) {
--			auto file_name = bind_data.file_names[state.current_idx];
--			auto prefixed_file_name = GDALClientContextState::GetOrCreate(context).GetPrefix(file_name);
-+			auto &file = bind_data.file_names[state.current_idx];
-+			auto prefixed_file_name = GDALClientContextState::GetOrCreate(context).GetPrefix(file.path);
- 
- 			GDALDatasetUniquePtr dataset;
- 			try {
-@@ -1290,7 +1292,7 @@ struct ST_Read_Meta {
- 				continue;
- 			}
- 
--			output.data[0].SetValue(out_idx, file_name);
-+			output.data[0].SetValue(out_idx, file.path);
- 			output.data[1].SetValue(out_idx, dataset->GetDriver()->GetDescription());
- 			output.data[2].SetValue(out_idx, dataset->GetDriver()->GetMetadataItem(GDAL_DMD_LONGNAME));
- 			output.data[3].SetValue(out_idx, GetLayerData(dataset));
-@@ -1326,7 +1328,9 @@ struct ST_Read_Meta {
- 		const TableFunction func("ST_Read_Meta", {LogicalType::VARCHAR}, Execute, Bind, Init);
- 		ExtensionUtil::RegisterFunction(db, MultiFileReader::CreateFunctionSet(func));
- 
--		FunctionBuilder::AddTableFunctionDocs(db, "ST_Read_Meta", DESCRIPTION, EXAMPLE, {{"ext", "spatial"}});
-+		InsertionOrderPreservingMap<string> tags;
-+		tags.insert("ext", "spatial");
-+		FunctionBuilder::AddTableFunctionDocs(db, "ST_Read_Meta", DESCRIPTION, EXAMPLE, tags);
- 	}
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 60ca737..a44cfc7 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -9243,6 +9243,11 @@ struct ST_MMin : VertexAggFunctionBase<ST_MMin, VertexMinAggOp> {
+ 	static constexpr auto ORDINATE = VertexOrdinate::M;
  };
  
-@@ -1447,7 +1451,9 @@ struct ST_Drivers {
- 		const TableFunction func("ST_Drivers", {}, Execute, Bind, Init);
- 		ExtensionUtil::RegisterFunction(db, func);
- 
--		FunctionBuilder::AddTableFunctionDocs(db, "ST_Drivers", DESCRIPTION, EXAMPLE, {{"ext", "spatial"}});
-+		InsertionOrderPreservingMap<string> tags;
-+		tags.insert("ext", "spatial");
-+		FunctionBuilder::AddTableFunctionDocs(db, "ST_Drivers", DESCRIPTION, EXAMPLE, tags);
- 	}
- };
- 
-diff --git a/src/spatial/modules/main/spatial_functions_table.cpp b/src/spatial/modules/main/spatial_functions_table.cpp
-index e5b11a7..2530526 100644
---- a/src/spatial/modules/main/spatial_functions_table.cpp
-+++ b/src/spatial/modules/main/spatial_functions_table.cpp
-@@ -134,7 +134,10 @@ struct ST_GeneratePoints {
- 		generate_points.arguments = {GeoTypes::BOX_2D(), LogicalType::BIGINT, LogicalType::BIGINT};
- 		set.AddFunction(generate_points);
- 		ExtensionUtil::RegisterFunction(db, set);
--		FunctionBuilder::AddTableFunctionDocs(db, "ST_GeneratePoints", DESCRIPTION, EXAMPLE, {{"ext", "spatial"}});
++constexpr const char * ST_M::NAME;
++constexpr const char * ST_X::NAME;
++constexpr const char * ST_Y::NAME;
++constexpr const char * ST_Z::NAME;
 +
-+		InsertionOrderPreservingMap<string> tags;
-+		tags.insert("ext", "spatial");
-+		FunctionBuilder::AddTableFunctionDocs(db, "ST_GeneratePoints", DESCRIPTION, EXAMPLE, tags);
- 	}
- };
+ } // namespace
  
-diff --git a/src/spatial/modules/osm/osm_module.cpp b/src/spatial/modules/osm/osm_module.cpp
-index e59b776..397c952 100644
---- a/src/spatial/modules/osm/osm_module.cpp
-+++ b/src/spatial/modules/osm/osm_module.cpp
-@@ -900,7 +900,10 @@ void RegisterOSMModule(DatabaseInstance &db) {
- 	read.table_scan_progress = Progress;
- 
- 	ExtensionUtil::RegisterFunction(db, read);
--	FunctionBuilder::AddTableFunctionDocs(db, "ST_ReadOSM", DOC_DESCRIPTION, DOC_EXAMPLE, {{"ext", "spatial"}});
-+
-+	InsertionOrderPreservingMap<string> tags;
-+	tags.insert("ext", "spatial");
-+	FunctionBuilder::AddTableFunctionDocs(db, "ST_ReadOSM", DOC_DESCRIPTION, DOC_EXAMPLE, tags);
- 
- 	// Replacement scan
- 	auto &config = DBConfig::GetConfig(db);
-diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
-index 4b51d75..a0bf5cb 100644
---- a/src/spatial/modules/shapefile/shapefile_module.cpp
-+++ b/src/spatial/modules/shapefile/shapefile_module.cpp
-@@ -935,7 +935,7 @@ constexpr ShapeTypeEntry shape_type_map[] = {
- struct Shapefile_Meta {
- 
- 	struct ShapeFileMetaBindData final : TableFunctionData {
--		vector<string> files;
-+		vector<OpenFileInfo> files;
- 	};
- 
- 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-@@ -947,7 +947,7 @@ struct Shapefile_Meta {
- 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], FileGlobOptions::ALLOW_EMPTY);
- 
- 		for (auto &file : file_list->Files()) {
--			if (StringUtil::EndsWith(StringUtil::Lower(file), ".shp")) {
-+			if (StringUtil::EndsWith(StringUtil::Lower(file.path), ".shp")) {
- 				result->files.push_back(file);
- 			}
- 		}
-@@ -977,7 +977,7 @@ struct Shapefile_Meta {
- 		ShapeFileMetaGlobalState() : current_file_idx(0) {
- 		}
- 		idx_t current_file_idx;
--		vector<string> files;
-+		vector<OpenFileInfo> files;
- 	};
- 
- 	static unique_ptr<GlobalTableFunctionState> InitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-@@ -1011,17 +1011,17 @@ struct Shapefile_Meta {
- 		auto output_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.files.size() - state.current_file_idx);
- 
- 		for (idx_t out_idx = 0; out_idx < output_count; out_idx++) {
--			auto &file_name = bind_data.files[state.current_file_idx + out_idx];
-+			auto &file = bind_data.files[state.current_file_idx + out_idx];
- 
--			auto file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
--			auto shp_handle = OpenSHPFile(fs, file_name.c_str());
-+			auto file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
-+			auto shp_handle = OpenSHPFile(fs, file.path.c_str());
- 
- 			double min_bound[4];
- 			double max_bound[4];
- 			int shape_type;
- 			int record_count;
- 			SHPGetInfo(shp_handle.get(), &record_count, &shape_type, min_bound, max_bound);
--			file_name_data[out_idx] = StringVector::AddString(file_name_vector, file_name);
-+			file_name_data[out_idx] = StringVector::AddString(file_name_vector, file.path);
- 			shape_type_data[out_idx] = 0;
- 			for (size_t shape_type_idx = 0; shape_type_idx < sizeof(shape_type_map) / sizeof(ShapeTypeEntry);
- 			     shape_type_idx++) {
-diff --git a/src/spatial/util/function_builder.cpp b/src/spatial/util/function_builder.cpp
-index 1b1b634..cc24db8 100644
---- a/src/spatial/util/function_builder.cpp
-+++ b/src/spatial/util/function_builder.cpp
-@@ -169,7 +169,7 @@ void FunctionBuilder::Register(DatabaseInstance &db, const char *name, MacroFunc
- }
- 
- void FunctionBuilder::AddTableFunctionDocs(DatabaseInstance &db, const char *name, const char *desc,
--                                           const char *example, const unordered_map<string, string> &tags) {
-+                                           const char *example, const InsertionOrderPreservingMap<string> &tags) {
- 
- 	auto &catalog = Catalog::GetSystemCatalog(db);
- 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
-@@ -185,7 +185,10 @@ void FunctionBuilder::AddTableFunctionDocs(DatabaseInstance &db, const char *nam
- 	function_description.description = RemoveIndentAndTrailingWhitespace(desc);
- 	function_description.examples.push_back(RemoveIndentAndTrailingWhitespace(example));
- 	func_entry.descriptions.push_back(function_description);
--	func_entry.tags.insert(tags.begin(), tags.end());
-+
-+	for (const auto &tag : tags) {
-+		func_entry.tags.insert(tag.first, tag.second);
-+	}
- }
- 
- } // namespace duckdb
-\ No newline at end of file
-diff --git a/src/spatial/util/function_builder.hpp b/src/spatial/util/function_builder.hpp
-index 7b84ce4..d58db78 100644
---- a/src/spatial/util/function_builder.hpp
-+++ b/src/spatial/util/function_builder.hpp
-@@ -4,6 +4,7 @@
- #include "duckdb/function/function_set.hpp"
- #include "duckdb/function/scalar_function.hpp"
- #include "duckdb/parser/parsed_data/create_function_info.hpp"
-+#include "duckdb/common/insertion_order_preserving_map.hpp"
- 
- #include <duckdb/catalog/default/default_functions.hpp>
- 
-@@ -30,7 +31,7 @@ public:
- 
- 	// TODO:
- 	static void AddTableFunctionDocs(DatabaseInstance &db, const char *name, const char *desc, const char *example,
--	                                 const unordered_map<string, string> &tags);
-+	                                 const InsertionOrderPreservingMap<string> &tags);
- 
- 	static string RemoveIndentAndTrailingWhitespace(const char *str);
- 
-@@ -114,7 +115,7 @@ private:
- 
- 	ScalarFunctionSet set;
- 	vector<FunctionDescription> descriptions = {};
--	unordered_map<string, string> tags = {};
-+	InsertionOrderPreservingMap<string> tags = {};
- 
- 	// If not set by a variant
- 	string default_description;
-@@ -192,7 +193,7 @@ private:
- 	}
- 	string description;
- 	string example;
--	unordered_map<string, string> tags;
-+	InsertionOrderPreservingMap<string> tags;
- 	AggregateFunctionSet set;
- };
- 
+ // Helper to access the constant distance from the bind data

@@ -11,7 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-unique_ptr<SegmentScanState> ConstantInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ConstantInitScan(const QueryContext &context, ColumnSegment &segment) {
 	return nullptr;
 }
 
@@ -263,7 +263,7 @@ bool ConstantFun::TypeIsSupported(const PhysicalType physical_type) {
 	case PhysicalType::DOUBLE:
 		return true;
 	default:
-		throw InternalException("Unsupported type for constant function");
+		return false;
 	}
 }
 
