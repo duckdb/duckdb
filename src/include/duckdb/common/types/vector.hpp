@@ -633,8 +633,6 @@ struct MapVector {
 struct StructVector {
 	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
-	DUCKDB_API static const vector<string> GetKeys(const Vector &vector);
-	DUCKDB_API static vector<string> GetKeys(Vector &vector);
 };
 
 struct ArrayVector {

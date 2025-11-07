@@ -2433,23 +2433,6 @@ const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 	return GetEntries((Vector &)vector);
 }
 
-vector<string> StructVector::GetKeys(Vector &vector) {
-	const auto &child_types = StructType::GetChildTypes(vector.GetType());
-
-	std::vector<std::string> keys;
-	keys.reserve(child_types.size());
-
-	for (auto &child_type : child_types) {
-		keys.push_back(child_type.first);
-	}
-
-	return keys;
-}
-
-const vector<string> StructVector::GetKeys(const Vector &vector) {
-	return GetKeys((Vector &)vector);
-}
-
 //===--------------------------------------------------------------------===//
 // ListVector
 //===--------------------------------------------------------------------===//
