@@ -50,6 +50,8 @@ class MetadataManager;
 class RowVersionManager;
 class ScanFilterInfo;
 class StorageCommitState;
+template <class T>
+struct SegmentNode;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -117,7 +119,7 @@ public:
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
-	                               DataChunk &scan_chunk);
+	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
@@ -129,8 +131,8 @@ public:
 	bool HasChanges() const;
 
 	//! Initialize a scan over this row_group
-	bool InitializeScan(CollectionScanState &state);
-	bool InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset);
+	bool InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node);
+	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
 	bool CheckZonemap(ScanFilterInfo &filters);

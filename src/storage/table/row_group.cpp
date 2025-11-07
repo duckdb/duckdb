@@ -85,12 +85,6 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_star
 	if (row_id_is_loaded) {
 		row_id_column_data->SetStart(new_start);
 	}
-	if (!HasUnloadedDeletes()) {
-		auto vinfo = GetVersionInfo();
-		if (vinfo) {
-			vinfo->SetStart(new_start);
-		}
-	}
 }
 
 RowGroup::~RowGroup() {
@@ -250,14 +244,17 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 	}
 }
 
-bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset) {
+bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset) {
 	auto &column_ids = state.GetColumnIds();
 	auto &filters = state.GetFilterInfo();
 	if (!CheckZonemap(filters)) {
 		return false;
 	}
+	if (!RefersToSameObject(*node.node, *this)) {
+		throw InternalException("RowGroup::InitializeScanWithOffset segment node mismatch");
+	}
 
-	state.row_group = this;
+	state.row_group = node;
 	state.vector_index = vector_offset;
 	state.max_row_group_row =
 	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
@@ -276,13 +273,16 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 	return true;
 }
 
-bool RowGroup::InitializeScan(CollectionScanState &state) {
+bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node) {
 	auto &column_ids = state.GetColumnIds();
 	auto &filters = state.GetFilterInfo();
 	if (!CheckZonemap(filters)) {
 		return false;
 	}
-	state.row_group = this;
+	if (!RefersToSameObject(*node.node, *this)) {
+		throw InternalException("RowGroup::InitializeScan segment node mismatch");
+	}
+	state.row_group = node;
 	state.vector_index = 0;
 	state.max_row_group_row =
 	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
@@ -301,7 +301,8 @@ bool RowGroup::InitializeScan(CollectionScanState &state) {
 
 unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, const LogicalType &target_type,
                                          idx_t changed_idx, ExpressionExecutor &executor,
-                                         CollectionScanState &scan_state, DataChunk &scan_chunk) {
+                                         CollectionScanState &scan_state, SegmentNode<RowGroup> &node,
+                                         DataChunk &scan_chunk) {
 	Verify();
 
 	// construct a new column data for this type
@@ -312,7 +313,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 
 	// scan the original table, and fill the new column with the transformed value
 	scan_state.Initialize(executor.GetContext(), GetCollection().GetTypes());
-	InitializeScan(scan_state);
+	InitializeScan(scan_state, node);
 
 	DataChunk append_chunk;
 	vector<LogicalType> append_types;
@@ -479,7 +480,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 			// no segment to skip
 			continue;
 		}
-		idx_t target_row = current_segment->start + current_segment->count;
+		idx_t target_row = current_segment->node->start + current_segment->node->count;
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;
 		}
@@ -530,19 +531,20 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
+		auto &current_row_group = *state.row_group->node;
 
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
 		if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-			count = state.row_group->GetSelVector(transaction, state.vector_index, state.valid_sel, max_count);
+			count = current_row_group.GetSelVector(transaction, state.vector_index, state.valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
 				continue;
 			}
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
-			count = state.row_group->GetCommittedSelVector(transaction.start_time, transaction.transaction_id,
-			                                               state.vector_index, state.valid_sel, max_count);
+			count = current_row_group.GetCommittedSelVector(transaction.start_time, transaction.transaction_id,
+			                                                state.vector_index, state.valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
@@ -707,7 +709,7 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 	}
 	// deletes are not loaded - reload
 	auto root_delete = deletes_pointers[0];
-	auto loaded_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
+	auto loaded_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager());
 	SetVersionInfo(std::move(loaded_info));
 	deletes_is_loaded = true;
 	return version_info;
@@ -723,7 +725,7 @@ shared_ptr<RowVersionManager> RowGroup::GetOrCreateVersionInfoInternal() {
 	lock_guard<mutex> lock(row_group_lock);
 	if (!owned_version_info) {
 		auto &buffer_manager = GetBlockManager().GetBufferManager();
-		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager, start);
+		auto new_info = make_shared_ptr<RowVersionManager>(buffer_manager);
 		SetVersionInfo(std::move(new_info));
 	}
 	return owned_version_info;
