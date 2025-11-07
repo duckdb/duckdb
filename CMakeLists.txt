@@ -416,7 +416,11 @@ option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         TRUE)
 
-if(WIN32 OR ZOS)
+if(ZOS)
+  set(EXTENSION_STATIC_BUILD TRUE)
+endif()
+
+if(WIN32)
   set(EXTENSION_STATIC_BUILD TRUE)
   add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
 endif()
@@ -535,10 +539,6 @@ endif()
 
 if(LATEST_STORAGE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_LATEST_STORAGE")
-endif()
-
-if(BLOCK_VERIFICATION)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_BLOCK_VERIFICATION")
 endif()
 
 if(DEBUG_ALLOCATION)
