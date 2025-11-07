@@ -16,6 +16,12 @@ select struct_keys(NULL::STRUCT(a INT, b VARCHAR));
 ----
 NULL
 
+# NULL as input (untyped)
+query I
+select struct_keys(NULL);
+----
+NULL
+
 # Constant vector as input (same result for every row)
 statement ok
 CREATE TABLE t_struct_constant(x INTEGER);
