@@ -149,11 +149,11 @@ ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
 endif
 ifeq (${BUILD_ALL_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/external_extensions.cmake;.github/config/rust_based_extensions.cmake"
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake"
 else ifeq (${BUILD_ALL_IT_EXT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake"
 else ifeq (${BUILD_ALL_OOT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake;.github/config/external_extensions.cmake;"
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake"
 endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
@@ -235,6 +235,9 @@ ifeq (${HASH_ZERO}, 1)
 endif
 ifeq (${LATEST_STORAGE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
+endif
+ifeq (${BLOCK_VERIFICATION}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_VERIFICATION=1
 endif
 ifneq (${DISABLE_CPP_UNITTESTS}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_UNITTEST_CPP_TESTS=0
@@ -417,6 +420,13 @@ benchmark:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
+amaldebug:
+	mkdir -p ./build/amaldebug && \
+	$(PYTHON) scripts/amalgamation.py && \
+	cd build/amaldebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build . --config Debug
+
 tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
@@ -436,6 +446,9 @@ tidy-fix:
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
 	$(PYTHON) ../../scripts/run-clang-tidy.py -fix
 
+test_compile: # test compilation of individual cpp files
+	$(PYTHON) scripts/amalgamation.py --compile
+
 format-check:
 	$(PYTHON) scripts/format.py --all --check
 
@@ -443,6 +456,7 @@ format-check-silent:
 	$(PYTHON) scripts/format.py --all --check --silent
 
 format-fix:
+	rm -rf src/amalgamation/*
 	$(PYTHON) scripts/format.py --all --fix --noconfirm
 
 format-head:
