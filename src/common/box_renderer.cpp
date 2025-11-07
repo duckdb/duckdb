@@ -88,7 +88,8 @@ const string &StringResultRenderer::str() {
 // Box Renderer Implementation
 //===--------------------------------------------------------------------===//
 struct BoxRenderValue {
-	BoxRenderValue(string text_p, ResultRenderType render_mode) : text(std::move(text_p)), render_mode(render_mode) {}
+	BoxRenderValue(string text_p, ResultRenderType render_mode) : text(std::move(text_p)), render_mode(render_mode) {
+	}
 
 	string text;
 	ResultRenderType render_mode;
@@ -98,7 +99,8 @@ enum class RenderRowType { ROW_VALUES, SEPARATOR, DIVIDER };
 
 struct BoxRenderRow {
 	BoxRenderRow(RenderRowType row_type = RenderRowType::ROW_VALUES) // NOLINT: allow implicit conversion
-	    : row_type(row_type) {}
+	    : row_type(row_type) {
+	}
 
 	RenderRowType row_type;
 	vector<BoxRenderValue> values;
@@ -147,6 +149,7 @@ private:
 	string FormatNumber(const string &input);
 	string ConvertRenderValue(const string &input, const LogicalType &type);
 	string ConvertRenderValue(const string &input);
+	void RenderLayoutLine(const char *layout, const char *boundary, const char *left_corner, const char *right_corner);
 	//! Try to format a large number in a readable way (e.g. 1234567 -> 1.23 million)
 	string TryFormatLargeNumber(const string &numeric);
 };
@@ -785,13 +788,13 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					chunk_rows[r].values.emplace_back(std::move(render_value), render_type);
 				}
 			}
-			for(auto &row : chunk_rows) {
+			for (auto &row : chunk_rows) {
 				render_rows.push_back(std::move(row));
 			}
 		}
 		if (!added_divider && collections.size() > 1) {
 			// render divider between top and bottom collection
-			for(idx_t i = 0; i < 3; i++) {
+			for (idx_t i = 0; i < 3; i++) {
 				render_rows.emplace_back(RenderRowType::DIVIDER);
 			}
 			added_divider = true;
@@ -800,19 +803,18 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 
 	// now all rows are prepared - figure out the max width of each of the columns
 	column_widths.resize(column_count, 0);
-	for(auto &row : render_rows) {
+	for (auto &row : render_rows) {
 		if (row.row_type != RenderRowType::ROW_VALUES) {
 			continue;
 		}
 		D_ASSERT(row.values.size() == column_count);
-		for(idx_t c = 0; c < column_count; c++) {
+		for (idx_t c = 0; c < column_count; c++) {
 			auto render_width = Utf8Proc::RenderWidth(row.values[c].text);
 			if (render_width > column_widths[c]) {
 				column_widths[c] = render_width;
 			}
 		}
 	}
-
 
 	// figure out the total length
 	// we start off with a pipe (|)
@@ -894,21 +896,28 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 	column_widths = std::move(new_widths);
 }
 
-void BoxRendererImplementation::RenderHeader(bool has_results) {
+void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char *boundary, const char *left_corner,
+                                                 const char *right_corner) {
 	auto column_count = column_map.size();
 	// render the top line
-	ss << config.LTCORNER;
+	ss << left_corner;
 	idx_t column_index = 0;
 	for (idx_t k = 0; k < total_render_length - 2; k++) {
 		if (column_index + 1 < column_count && k == column_boundary_positions[column_index]) {
-			ss << config.TMIDDLE;
+			ss << boundary;
 			column_index++;
 		} else {
-			ss << config.HORIZONTAL;
+			ss << layout;
 		}
 	}
-	ss << config.RTCORNER;
+	ss << right_corner;
 	ss << '\n';
+}
+
+void BoxRendererImplementation::RenderHeader(bool has_results) {
+	auto column_count = column_map.size();
+	// render the top line
+	RenderLayoutLine(config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
 
 	// render the header names
 	for (idx_t c = 0; c < column_count; c++) {
@@ -946,18 +955,7 @@ void BoxRendererImplementation::RenderHeader(bool has_results) {
 	}
 
 	// render the line under the header
-	ss << config.LMIDDLE;
-	column_index = 0;
-	for (idx_t k = 0; k < total_render_length - 2; k++) {
-		if (column_index + 1 < column_count && k == column_boundary_positions[column_index]) {
-			ss << (has_results ? config.MIDDLE : config.DMIDDLE);
-			column_index++;
-		} else {
-			ss << config.HORIZONTAL;
-		}
-	}
-	ss << config.RMIDDLE;
-	ss << '\n';
+	RenderLayoutLine(config.HORIZONTAL, has_results ? config.MIDDLE : config.DMIDDLE, config.LMIDDLE, config.RMIDDLE);
 }
 
 void BoxRendererImplementation::RenderValues(const list<ColumnDataCollection> &collections) {
@@ -1121,18 +1119,8 @@ void BoxRendererImplementation::RenderRowCount(string &row_count_str, string &re
 	}
 	// render the bottom of the result values, if there are any
 	if (row_count > 0) {
-		ss << (render_anything ? config.LMIDDLE : config.LDCORNER);
-		idx_t column_index = 0;
-		for (idx_t k = 0; k < total_render_length - 2; k++) {
-			if (column_index + 1 < column_boundary_positions.size() && k == column_boundary_positions[column_index]) {
-				ss << config.DMIDDLE;
-				column_index++;
-			} else {
-				ss << config.HORIZONTAL;
-			}
-		}
-		ss << (render_anything ? config.RMIDDLE : config.RDCORNER);
-		ss << '\n';
+		RenderLayoutLine(config.HORIZONTAL, config.DMIDDLE, render_anything ? config.LMIDDLE : config.LDCORNER,
+		                 render_anything ? config.RMIDDLE : config.RDCORNER);
 	}
 	if (!render_anything) {
 		return;
@@ -1212,12 +1200,7 @@ void BoxRendererImplementation::RenderRowCount(string &row_count_str, string &re
 		}
 	}
 	// render the bottom line
-	ss << config.LDCORNER;
-	for (idx_t k = 0; k < total_render_length - 2; k++) {
-		ss << config.HORIZONTAL;
-	}
-	ss << config.RDCORNER;
-	ss << '\n';
+	RenderLayoutLine(config.HORIZONTAL, config.HORIZONTAL, config.LDCORNER, config.RDCORNER);
 }
 
 //===--------------------------------------------------------------------===//
