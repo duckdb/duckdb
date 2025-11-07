@@ -4332,19 +4332,20 @@ const StringUtil::EnumStringLiteral *GetStatementTypeValues() {
 		{ static_cast<uint32_t>(StatementType::MULTI_STATEMENT), "MULTI_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::COPY_DATABASE_STATEMENT), "COPY_DATABASE_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::UPDATE_EXTENSIONS_STATEMENT), "UPDATE_EXTENSIONS_STATEMENT" },
-		{ static_cast<uint32_t>(StatementType::MERGE_INTO_STATEMENT), "MERGE_INTO_STATEMENT" }
+		{ static_cast<uint32_t>(StatementType::MERGE_INTO_STATEMENT), "MERGE_INTO_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::CLUSTER_STATEMENT), "CLUSTER_STATEMENT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<StatementType>(StatementType value) {
-	return StringUtil::EnumToString(GetStatementTypeValues(), 31, "StatementType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetStatementTypeValues(), 32, "StatementType", static_cast<uint32_t>(value));
 }
 
 template<>
 StatementType EnumUtil::FromString<StatementType>(const char *value) {
-	return static_cast<StatementType>(StringUtil::StringToEnum(GetStatementTypeValues(), 31, "StatementType", value));
+	return static_cast<StatementType>(StringUtil::StringToEnum(GetStatementTypeValues(), 32, "StatementType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatisticsTypeValues() {
