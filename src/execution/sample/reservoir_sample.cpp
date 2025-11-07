@@ -270,7 +270,7 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 	auto weight_tuples_this = static_cast<double>(GetTuplesSeen()) / static_cast<double>(total_seen);
 	auto weight_tuples_other = static_cast<double>(other.GetTuplesSeen()) / static_cast<double>(total_seen);
 
-	// If weights don't add up to 1, most likely a simple merge occured and no new samples were added.
+	// If weights don't add up to 1, most likely a simple merge occurred and no new samples were added.
 	// if that is the case, add the missing weight to the lower weighted sample to adjust.
 	// this is to avoid cases where if you have a 20k row table and add another 20k rows row by row
 	// then eventually the missing weights will add up, and get you a more even distribution

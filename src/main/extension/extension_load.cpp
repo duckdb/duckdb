@@ -76,7 +76,7 @@ struct ExtensionAccess {
 		load_state.has_error = true;
 		load_state.error_data =
 		    error ? ErrorData(error)
-		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occured during "
+		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occurred during "
 		                                                   "initialization, but did not set an error message.");
 	}
 
@@ -591,7 +591,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 		if (result == false) {
 			throw FatalException(
 			    "Extension '%s' failed to initialize but did not return an error. This indicates an "
-			    "error in the extension: C API extensions should return a boolean `true` to indicate succesful "
+			    "error in the extension: C API extensions should return a boolean `true` to indicate successful "
 			    "initialization. "
 			    "This means that the Extension may be partially initialized resulting in an inconsistent state of "
 			    "DuckDB.",
