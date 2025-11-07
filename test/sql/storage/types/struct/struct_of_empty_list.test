@@ -1,0 +1,10 @@
+# name: test/sql/storage/types/struct/struct_of_empty_list.test
+# group: [struct]
+
+load __TEST_DIR__/empty_list_in_struct.db
+
+statement ok
+create table tbl (col STRUCT(a VARCHAR[]))
+
+statement ok
+insert into tbl SELECT {'a': []} from range(122881)
