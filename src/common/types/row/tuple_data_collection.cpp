@@ -513,7 +513,7 @@ void TupleDataCollection::InitializeChunk(DataChunk &chunk, const vector<column_
 	chunk.Initialize(allocator->GetAllocator(), chunk_types);
 }
 
-void TupleDataCollection::InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const {
+void TupleDataCollection::InitializeScanChunk(const TupleDataScanState &state, DataChunk &chunk) const {
 	auto &column_ids = state.chunk_state.column_ids;
 	D_ASSERT(!column_ids.empty());
 	vector<LogicalType> chunk_types;

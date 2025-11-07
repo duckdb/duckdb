@@ -1,4 +1,4 @@
-# name: test/optimizer/topn_window_elimination.test
+# name: test/optimizer/topn_window_elimination.test_slow
 # description: Test Top-N Window Elimination Rule
 # group: [optimizer]
 
