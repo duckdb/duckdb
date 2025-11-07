@@ -132,7 +132,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunct
 
 static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &args, Vector &result) {
 #ifdef DEBUG
-	if (args.data.empty() || expr.function.null_handling != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+	if (args.data.empty() || expr.function.GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		return;
 	}
 

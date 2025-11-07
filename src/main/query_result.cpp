@@ -41,7 +41,7 @@ const ExceptionType &BaseQueryResult::GetErrorType() const {
 	return error.Type();
 }
 
-const std::string &BaseQueryResult::GetError() {
+const std::string &BaseQueryResult::GetError() const {
 	D_ASSERT(HasError());
 	return error.Message();
 }
@@ -108,6 +108,42 @@ unique_ptr<DataChunk> QueryResult::Fetch() {
 	}
 	chunk->Flatten();
 	return chunk;
+}
+
+unique_ptr<DataChunk> QueryResult::FetchRaw() {
+	if (!stored_chunks.empty()) {
+		auto result = std::move(stored_chunks.back());
+		stored_chunks.pop_back();
+		return result;
+	}
+	if (result_exhausted) {
+		return nullptr;
+	}
+	return FetchInternal();
+}
+
+bool QueryResult::MoreRowsThan(idx_t row_count) {
+	// fetch chunks until we have seen more than "row_count" - OR the result is exhausted
+	// store any fetched chunks in "stored_chunks" - we return these again in "Fetch" upon request
+	idx_t result_row_count = 0;
+	if (!stored_chunks.empty()) {
+		std::reverse(stored_chunks.begin(), stored_chunks.end());
+		for (auto &chunk : stored_chunks) {
+			result_row_count += chunk->size();
+		}
+	}
+	while (result_row_count < row_count) {
+		auto chunk = FetchInternal();
+		if (!chunk) {
+			// exhausted result
+			result_exhausted = true;
+			break;
+		}
+		result_row_count += chunk->size();
+		stored_chunks.push_back(std::move(chunk));
+	}
+	std::reverse(stored_chunks.begin(), stored_chunks.end());
+	return result_row_count >= row_count;
 }
 
 bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START

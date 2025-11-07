@@ -26,7 +26,7 @@ enum class tokenType : uint8_t {
 	TOKEN_ERROR
 };
 
-enum class HighlightingType { KEYWORD, CONSTANT, COMMENT, ERROR, CONTINUATION, CONTINUATION_SELECTED };
+enum class HighlightingType { KEYWORD, CONSTANT, COMMENT, ERROR_TOKEN, CONTINUATION, CONTINUATION_SELECTED };
 
 struct highlightToken {
 	tokenType type;

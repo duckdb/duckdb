@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 
 namespace duckdb {
 
@@ -53,7 +54,8 @@ public:
 
 class TupleDataAllocator {
 public:
-	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> &layout_ptr);
+	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr,
+	                   shared_ptr<ArenaAllocator> stl_allocator);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
 	~TupleDataAllocator();
@@ -62,6 +64,8 @@ public:
 	BufferManager &GetBufferManager();
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
+	//! Get the STL allocator
+	ArenaAllocator &GetStlAllocator();
 	//! Get the layout
 	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	const TupleDataLayout &GetLayout() const;
@@ -99,17 +103,22 @@ public:
 
 private:
 	//! Builds out a single part (grabs the lock)
-	TupleDataChunkPart BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
-	                                  const idx_t append_offset, const idx_t append_count, TupleDataChunk &chunk);
+	unsafe_arena_ptr<TupleDataChunkPart> BuildChunkPart(TupleDataSegment &segment, TupleDataPinState &pin_state,
+	                                                    TupleDataChunkState &chunk_state, const idx_t append_offset,
+	                                                    const idx_t append_count, TupleDataChunk &chunk);
 	//! Internal function for InitializeChunkState
 	void InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
 	                                  bool recompute, bool init_heap_pointers, bool init_heap_sizes,
 	                                  unsafe_vector<reference<TupleDataChunkPart>> &parts);
 	//! Internal function for ReleaseOrStoreHandles
 	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
-	                                          unsafe_vector<BufferHandle> &pinned_row_handles,
+	                                          unsafe_arena_vector<BufferHandle> &pinned_row_handles,
 	                                          buffer_handle_map_t &handles, const ContinuousIdSet &block_ids,
-	                                          unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties);
+	                                          unsafe_arena_vector<TupleDataBlock> &blocks,
+	                                          TupleDataPinProperties properties);
+	//! Create a row/heap block, extend the pinned handles in the segment accordingly
+	void CreateRowBlock(TupleDataSegment &segment);
+	void CreateHeapBlock(TupleDataSegment &segment, idx_t size);
 	//! Pins the given row block
 	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Pins the given heap block
@@ -120,6 +129,8 @@ private:
 	data_ptr_t GetBaseHeapPointer(TupleDataPinState &state, const TupleDataChunkPart &part);
 
 private:
+	//! Shared allocator for STL allocations
+	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The layout of the data
@@ -128,13 +139,9 @@ private:
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows
-	unsafe_vector<TupleDataBlock> row_blocks;
+	unsafe_arena_vector<TupleDataBlock> row_blocks;
 	//! Blocks storing the variable-size data of the fixed-size rows (e.g., string, list)
-	unsafe_vector<TupleDataBlock> heap_blocks;
-
-	//! Re-usable arrays used while building buffer space
-	unsafe_vector<reference<TupleDataChunkPart>> chunk_parts;
-	unsafe_vector<pair<idx_t, idx_t>> chunk_part_indices;
+	unsafe_arena_vector<TupleDataBlock> heap_blocks;
 };
 
 } // namespace duckdb

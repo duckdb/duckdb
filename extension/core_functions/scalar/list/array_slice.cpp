@@ -403,11 +403,11 @@ unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &
 		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
 		auto target_type = LogicalType::LIST(child_type);
 		arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), target_type);
-		bound_function.return_type = arguments[0]->return_type;
+		bound_function.SetReturnType(arguments[0]->return_type);
 	} break;
 	case LogicalTypeId::LIST:
 		// The result is the same type
-		bound_function.return_type = arguments[0]->return_type;
+		bound_function.SetReturnType(arguments[0]->return_type);
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
@@ -420,9 +420,9 @@ unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &
 		if (arguments[0]->return_type.IsJSONType()) {
 			// This is needed to avoid producing invalid JSON
 			bound_function.arguments[0] = LogicalType::VARCHAR;
-			bound_function.return_type = LogicalType::VARCHAR;
+			bound_function.SetReturnType(LogicalType::VARCHAR);
 		} else {
-			bound_function.return_type = arguments[0]->return_type;
+			bound_function.SetReturnType(arguments[0]->return_type);
 		}
 		for (idx_t i = 1; i < 3; i++) {
 			if (arguments[i]->return_type.id() != LogicalTypeId::LIST) {
@@ -433,7 +433,7 @@ unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::UNKNOWN:
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
-		bound_function.return_type = LogicalType::SQLNULL;
+		bound_function.SetReturnType(LogicalType::SQLNULL);
 		break;
 	default:
 		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");
@@ -448,7 +448,7 @@ unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &
 		bound_function.arguments[2] = LogicalType::BIGINT;
 	}
 
-	return make_uniq<ListSliceBindData>(bound_function.return_type, begin_is_empty, end_is_empty);
+	return make_uniq<ListSliceBindData>(bound_function.GetReturnType(), begin_is_empty, end_is_empty);
 }
 
 } // namespace
@@ -456,8 +456,8 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,
 	                   ArraySliceBind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	BaseScalarFunction::SetReturnsError(fun);
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
 	fun.arguments.push_back(LogicalType::BIGINT);

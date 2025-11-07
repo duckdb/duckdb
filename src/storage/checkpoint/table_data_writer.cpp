@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
@@ -119,15 +120,16 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	}
 	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
 
-#ifdef DUCKDB_BLOCK_VERIFICATION
-	for (auto &entry : index_storage_infos) {
-		for (auto &allocator : entry.allocator_infos) {
-			for (auto &block : allocator.block_pointers) {
-				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
+	if (debug_verify_blocks) {
+		for (auto &entry : index_storage_infos) {
+			for (auto &allocator : entry.allocator_infos) {
+				for (auto &block : allocator.block_pointers) {
+					checkpoint_manager.verify_block_usage_count[block.block_id]++;
+				}
 			}
 		}
 	}
-#endif
 
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
