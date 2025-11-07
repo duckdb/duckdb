@@ -140,8 +140,7 @@ private:
 	                                                  idx_t bottom_rows);
 	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width);
-	void RenderHeader(bool has_results);
-	void RenderValues(const list<ColumnDataCollection> &collections);
+	void RenderValues();
 	void RenderRowCount(string &row_count_str, string &readable_rows_str, string &shown_str,
 	                    const string &column_count_str, bool has_hidden_rows, bool has_hidden_columns, idx_t row_count,
 	                    idx_t column_count, idx_t minimum_row_length);
@@ -243,11 +242,8 @@ void BoxRendererImplementation::Render() {
 	}
 
 	// now begin rendering
-	// first render the header
-	RenderHeader(row_count > 0);
-
-	// render the values, if there are any
-	RenderValues(collections);
+	// render the box
+	RenderValues();
 
 	// render the row count and column count
 	auto column_count_str = to_string(result.ColumnCount()) + " column";
@@ -764,12 +760,24 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 		type_row.values.emplace_back(RenderType(result_types[c]), ResultRenderType::COLUMN_TYPE);
 	}
 	render_rows.push_back(std::move(header_row));
-	render_rows.push_back(std::move(type_row));
-	// add a separator
+	if (config.render_mode == RenderMode::ROWS) {
+		render_rows.push_back(std::move(type_row));
+	}
+	// add a separator if there are any rows
 	render_rows.emplace_back(RenderRowType::SEPARATOR);
 	// prepare the values
-	bool added_divider = false;
+	bool first_render = true;
 	for (auto &collection : collections) {
+		if (collection.Count() == 0) {
+			continue;
+		}
+		if (!first_render) {
+			// render divider between top and bottom collection
+			for (idx_t i = 0; i < 3; i++) {
+				render_rows.emplace_back(RenderRowType::DIVIDER);
+			}
+		}
+		first_render = false;
 		for (auto &chunk : collection.Chunks()) {
 			vector<BoxRenderRow> chunk_rows;
 			chunk_rows.resize(chunk.size());
@@ -791,13 +799,6 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			for (auto &row : chunk_rows) {
 				render_rows.push_back(std::move(row));
 			}
-		}
-		if (!added_divider && collections.size() > 1) {
-			// render divider between top and bottom collection
-			for (idx_t i = 0; i < 3; i++) {
-				render_rows.emplace_back(RenderRowType::DIVIDER);
-			}
-			added_divider = true;
 		}
 	}
 
@@ -914,57 +915,10 @@ void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char 
 	ss << '\n';
 }
 
-void BoxRendererImplementation::RenderHeader(bool has_results) {
+void BoxRendererImplementation::RenderValues() {
 	auto column_count = column_map.size();
 	// render the top line
 	RenderLayoutLine(config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
-
-	// render the header names
-	for (idx_t c = 0; c < column_count; c++) {
-		auto column_idx = column_map[c];
-		string name;
-		ResultRenderType render_mode;
-		if (column_idx == SPLIT_COLUMN) {
-			render_mode = ResultRenderType::LAYOUT;
-			name = config.DOTDOTDOT;
-		} else {
-			render_mode = ResultRenderType::COLUMN_NAME;
-			name = ConvertRenderValue(column_names[column_idx]);
-		}
-		RenderValue(name, column_widths[c], render_mode);
-	}
-	ss << config.VERTICAL;
-	ss << '\n';
-
-	// render the types
-	if (config.render_mode == RenderMode::ROWS) {
-		for (idx_t c = 0; c < column_count; c++) {
-			auto column_idx = column_map[c];
-			string type;
-			ResultRenderType render_mode;
-			if (column_idx == SPLIT_COLUMN) {
-				render_mode = ResultRenderType::LAYOUT;
-			} else {
-				render_mode = ResultRenderType::COLUMN_TYPE;
-				type = RenderType(result_types[column_idx]);
-			}
-			RenderValue(type, column_widths[c], render_mode);
-		}
-		ss << config.VERTICAL;
-		ss << '\n';
-	}
-
-	// render the line under the header
-	RenderLayoutLine(config.HORIZONTAL, has_results ? config.MIDDLE : config.DMIDDLE, config.LMIDDLE, config.RMIDDLE);
-}
-
-void BoxRendererImplementation::RenderValues(const list<ColumnDataCollection> &collections) {
-	auto &top_collection = collections.front();
-	auto &bottom_collection = collections.back();
-	// render the top rows
-	auto top_rows = top_collection.Count();
-	auto bottom_rows = bottom_collection.Count();
-	auto column_count = column_map.size();
 
 	bool large_number_footer = config.large_number_rendering == LargeNumberRendering::FOOTER;
 	vector<ValueRenderAlignment> alignments;
@@ -980,60 +934,15 @@ void BoxRendererImplementation::RenderValues(const list<ColumnDataCollection> &c
 			}
 		}
 	}
-
-	auto rows = top_collection.GetRows();
-	for (idx_t r = 0; r < top_rows; r++) {
-		for (idx_t c = 0; c < column_count; c++) {
-			auto column_idx = column_map[c];
-			string str;
-			ResultRenderType render_mode;
-			if (column_idx == SPLIT_COLUMN) {
-				str = config.DOTDOTDOT;
-				render_mode = ResultRenderType::LAYOUT;
-			} else {
-				str = GetRenderValue(rows, column_idx, r, result_types[column_idx], render_mode);
-			}
-			ValueRenderAlignment alignment;
-			if (config.render_mode == RenderMode::ROWS) {
-				alignment = alignments[c];
-				if (large_number_footer && r == 1) {
-					// render readable numbers with highlighting of a NULL value
-					render_mode = ResultRenderType::NULL_VALUE;
-				}
-			} else {
-				switch (c) {
-				case 0:
-					render_mode = ResultRenderType::COLUMN_NAME;
-					break;
-				case 1:
-					render_mode = ResultRenderType::COLUMN_TYPE;
-					break;
-				default:
-					render_mode = ResultRenderType::VALUE;
-					break;
-				}
-				if (c < 2) {
-					alignment = ValueRenderAlignment::LEFT;
-				} else if (c == SPLIT_COLUMN) {
-					alignment = ValueRenderAlignment::MIDDLE;
-				} else {
-					alignment = ValueRenderAlignment::RIGHT;
-				}
-			}
-			RenderValue(str, column_widths[c], render_mode, alignment);
+	for (idx_t r = 0; r < render_rows.size(); r++) {
+		auto &row = render_rows[r];
+		if (row.row_type == RenderRowType::SEPARATOR) {
+			// render separator
+			RenderLayoutLine(config.HORIZONTAL, config.MIDDLE, config.LMIDDLE, config.RMIDDLE);
+			continue;
 		}
-		ss << config.VERTICAL;
-		ss << '\n';
-	}
-
-	if (bottom_rows > 0) {
-		if (config.render_mode == RenderMode::COLUMNS) {
-			throw InternalException("Columns render mode does not support bottom rows");
-		}
-		// render the bottom rows
-		// first render the divider
-		auto brows = bottom_collection.GetRows();
-		for (idx_t k = 0; k < 3; k++) {
+		if (row.row_type == RenderRowType::DIVIDER) {
+			// divider
 			for (idx_t c = 0; c < column_count; c++) {
 				auto column_idx = column_map[c];
 				string str;
@@ -1042,11 +951,23 @@ void BoxRendererImplementation::RenderValues(const list<ColumnDataCollection> &c
 					str = config.DOT;
 				} else {
 					// align the dots in the center of the column
-					ResultRenderType render_mode;
-					auto top_value =
-					    GetRenderValue(rows, column_idx, top_rows - 1, result_types[column_idx], render_mode);
-					auto bottom_value =
-					    GetRenderValue(brows, column_idx, bottom_rows - 1, result_types[column_idx], render_mode);
+					// get the previous values
+					string top_value;
+					string bottom_value;
+					for (idx_t prev_idx = r; prev_idx > 0; prev_idx--) {
+						auto &prev_row = render_rows[prev_idx - 1];
+						if (prev_row.row_type == RenderRowType::ROW_VALUES) {
+							top_value = prev_row.values[column_idx].text;
+							break;
+						}
+					}
+					for (idx_t next_idx = r + 1; next_idx < render_rows.size(); next_idx++) {
+						auto &next_row = render_rows[next_idx];
+						if (next_row.row_type == RenderRowType::ROW_VALUES) {
+							bottom_value = next_row.values[column_idx].text;
+							break;
+						}
+					}
 					auto top_length = MinValue<idx_t>(column_widths[c], Utf8Proc::RenderWidth(top_value));
 					auto bottom_length = MinValue<idx_t>(column_widths[c], Utf8Proc::RenderWidth(bottom_value));
 					auto dot_length = MinValue<idx_t>(top_length, bottom_length);
@@ -1083,24 +1004,61 @@ void BoxRendererImplementation::RenderValues(const list<ColumnDataCollection> &c
 			}
 			ss << config.VERTICAL;
 			ss << '\n';
+			continue;
 		}
-		// note that the bottom rows are in reverse order
-		for (idx_t r = 0; r < bottom_rows; r++) {
-			for (idx_t c = 0; c < column_count; c++) {
-				auto column_idx = column_map[c];
-				string str;
-				ResultRenderType render_mode;
-				if (column_idx == SPLIT_COLUMN) {
-					str = config.DOTDOTDOT;
-					render_mode = ResultRenderType::LAYOUT;
+		// render row values
+		for (idx_t c = 0; c < column_count; c++) {
+			auto column_idx = column_map[c];
+			string render_text;
+			ResultRenderType render_mode;
+			ValueRenderAlignment alignment;
+			if (column_idx == SPLIT_COLUMN) {
+				render_text = config.DOTDOTDOT;
+				render_mode = ResultRenderType::LAYOUT;
+				alignment = ValueRenderAlignment::MIDDLE;
+			} else {
+				auto &render_value = row.values[column_idx];
+				render_text = render_value.text;
+				render_mode = render_value.render_mode;
+				if (config.render_mode == RenderMode::ROWS) {
+					alignment = alignments[c];
+					if (large_number_footer && r > 3) {
+						// render readable numbers with highlighting of a NULL value
+						render_mode = ResultRenderType::NULL_VALUE;
+					}
+					if (render_mode == ResultRenderType::COLUMN_NAME || render_mode == ResultRenderType::COLUMN_TYPE) {
+						alignment = ValueRenderAlignment::MIDDLE;
+					} else {
+						alignment = alignments[c];
+					}
 				} else {
-					str = GetRenderValue(brows, column_idx, bottom_rows - r - 1, result_types[column_idx], render_mode);
+					switch (c) {
+					case 0:
+						render_mode = ResultRenderType::COLUMN_NAME;
+						break;
+					case 1:
+						render_mode = ResultRenderType::COLUMN_TYPE;
+						break;
+					default:
+						render_mode = ResultRenderType::VALUE;
+						break;
+					}
+					if (c < 2) {
+						alignment = ValueRenderAlignment::LEFT;
+					} else if (c == SPLIT_COLUMN) {
+						alignment = ValueRenderAlignment::MIDDLE;
+					} else {
+						alignment = ValueRenderAlignment::RIGHT;
+					}
 				}
-				RenderValue(str, column_widths[c], render_mode, alignments[c]);
+				if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
+					ss.SetValueType(result_types[column_idx]);
+				}
 			}
-			ss << config.VERTICAL;
-			ss << '\n';
+			RenderValue(render_text, column_widths[c], render_mode, alignment);
 		}
+		ss << config.VERTICAL;
+		ss << '\n';
 	}
 }
 
