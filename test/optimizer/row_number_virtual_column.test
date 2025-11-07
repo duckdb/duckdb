@@ -55,54 +55,19 @@ create or replace table test as select (random()*10)::INT a, (random()*5)::INT b
 statement ok
 create or replace table test2 as select (random()*100)::INT c, (random()*5)::INT b  from range(10);
 
-statement ok
-pragma enable_optimizer
-
 # Try with a window function on LHS
 
-query III
-SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b limit 10;
+query II
+explain SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b limit 10;
 ----
-1	3	1
-2	5	16
-4	8	16
-5	8	1
-7	2	45
-8	7	24
-9	10	1
-10	1	45
-1	3	31
-5	8	31
-
-
+physical_plan	<REGEX>:.*WINDOW.*
 
 # =================== IGNORE ===================
 # BUILD_SIDE_PROBE_SIDE changes the window from RHS to LHS
 
 # Try with a window function on RHS
 
-query IIII
-SELECT t.a, t.b, t2.row_num, t2.c FROM test t JOIN ( SELECT b, c, ROW_NUMBER() OVER () AS row_num FROM test2) t2 ON t.b = t2.b;
-----
-7	1	1	85
-8	3	2	16
-7	1	3	67
-10	2	4	69
-10	2	5	36
-10	2	6	33
-1	4	7	45
-10	2	8	31
-7	1	9	24
-10	2	10	1
-5	3	2	16
-8	2	4	69
-8	2	5	36
-8	2	6	33
-2	4	7	45
-8	2	8	31
-8	2	10	1
-3	2	4	69
-3	2	5	36
-3	2	6	33
-3	2	8	31
-3	2	10	1
+# query II
+# explain SELECT t.a, t.b, t2.row_num, t2.c FROM test t JOIN ( SELECT b, c, ROW_NUMBER() OVER () AS row_num FROM test2) t2 ON t.b = t2.b;
+# ----
+# physical_plan	<!REGEX>:.*WINDOW.*

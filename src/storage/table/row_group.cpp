@@ -27,14 +27,15 @@
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t count)
-    : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr),
+    : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
       allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
     : SegmentBase<RowGroup>(pointer.tuple_count), collection(collection_p), version_info(nullptr),
-allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
+      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false),
+      has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -126,7 +127,7 @@ ColumnData &RowGroup::GetRowNumberColumnData() {
 	}
 	lock_guard<mutex> l(row_number_group_lock);
 	if (!row_number_column_data) {
-		row_number_column_data = make_uniq<RowNumberColumnData>(GetBlockManager(), GetTableInfo(), start);
+		row_number_column_data = make_uniq<RowNumberColumnData>(GetBlockManager(), GetTableInfo());
 		row_number_column_data->count = count.load();
 		row_number_is_loaded = true;
 	}
@@ -416,7 +417,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 
 	D_ASSERT(removed_column < columns.size());
 
-	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
+	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	// copy over all columns except for the removed one
 	auto &cols = GetColumns();

@@ -2924,7 +2924,7 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_LATE_MATERIALIZATION), "OPTIMIZER_LATE_MATERIALIZATION" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_COMMON_SUBPLAN), "OPTIMIZER_COMMON_SUBPLAN" },
-		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_JOIN_ELIMINATION), "OPTIMIZER_JOIN_ELIMINATION" }
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_JOIN_ELIMINATION), "OPTIMIZER_JOIN_ELIMINATION" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_WINDOW_REWRITER), "OPTIMIZER_WINDOW_REWRITER" }
 	};
 	return values;
@@ -3172,7 +3172,7 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::LATE_MATERIALIZATION), "LATE_MATERIALIZATION" },
 		{ static_cast<uint32_t>(OptimizerType::CTE_INLINING), "CTE_INLINING" },
 		{ static_cast<uint32_t>(OptimizerType::COMMON_SUBPLAN), "COMMON_SUBPLAN" },
-		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" }
+		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" },
 		{ static_cast<uint32_t>(OptimizerType::WINDOW_REWRITER), "WINDOW_REWRITER" }
 	};
 	return values;
