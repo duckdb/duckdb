@@ -888,6 +888,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 	}
 
 	// If there is a matcher for the probing side because of non-equality predicates, use it
+	idx_t result_count;
 	if (ht.needs_chain_matcher) {
 		idx_t no_match_count = 0;
 		auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
@@ -895,12 +896,17 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 
 		// we need to only use the vectors with the indices of the columns that are used in the probe phase, namely
 		// the non-equality columns
-		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, pointers, no_match_sel,
-		                      no_match_count);
+		result_count =
+		    matcher->Match(keys, key_state.vector_data, match_sel, this->count, pointers, no_match_sel, no_match_count);
 	} else {
 		// no match sel is the opposite of match sel
-		return this->count;
+		result_count = this->count;
 	}
+
+	// Update total probe match count
+	ht.total_probe_matches.fetch_add(result_count, std::memory_order_relaxed);
+
+	return result_count;
 }
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
