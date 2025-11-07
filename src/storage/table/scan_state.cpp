@@ -13,7 +13,7 @@ namespace duckdb {
 namespace {
 
 struct RowGroupMapEntry {
-	reference<RowGroup> row_group;
+	reference<SegmentNode<RowGroup>> row_group;
 	unique_ptr<BaseStatistics> stats;
 };
 
@@ -42,7 +42,7 @@ idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const 
 }
 
 template <typename It, typename End>
-void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_groups, const idx_t row_limit,
+void AddRowGroups(It it, End end, vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups, const idx_t row_limit,
                   const OrderByColumnType column_type, const OrderByStatistics stat_type) {
 	const auto opposite_stat_type =
 	    stat_type == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
@@ -52,7 +52,8 @@ void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_gr
 
 	auto last_unresolved_entry = it;
 	auto &last_stats = it->second.stats;
-	idx_t last_unresolved_row_group_sum = GetQualifyingTupleCount(it->second.row_group.get(), *last_stats, column_type);
+	idx_t last_unresolved_row_group_sum =
+	    GetQualifyingTupleCount(*it->second.row_group.get().node, *last_stats, column_type);
 	auto last_unresolved_boundary = RowGroupReorderer::RetrieveStat(*last_stats, opposite_stat_type, column_type);
 
 	for (; it != end; ++it) {
@@ -76,7 +77,7 @@ void AddRowGroups(It it, End end, vector<optional_ptr<RowGroup>> &ordered_row_gr
 			// Row groups do not overlap: we can guarantee that the tuples qualify
 			qualifying_tuples = last_unresolved_row_group_sum;
 			++last_unresolved_entry;
-			auto &upcoming_row_group = last_unresolved_entry->second.row_group.get();
+			auto &upcoming_row_group = *last_unresolved_entry->second.row_group.get().node;
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;
 
 			last_unresolved_row_group_sum += GetQualifyingTupleCount(upcoming_row_group, upcoming_stats, column_type);
@@ -217,7 +218,7 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 
 void SetRowGroupVectorWithLimit(const multimap<Value, RowGroupMapEntry> &row_group_map, const optional_idx row_limit,
                                 const RowGroupOrderType order_type, const OrderByColumnType column_type,
-                                vector<optional_ptr<RowGroup>> &ordered_row_groups) {
+                                vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
 	D_ASSERT(row_limit.IsValid());
 
 	const auto stat_type = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
@@ -235,7 +236,6 @@ void SetRowGroupVectorWithLimit(const multimap<Value, RowGroupMapEntry> &row_gro
 	}
 }
 
-optional_ptr<RowGroup> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
 optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
 	if (initialized) {
 		if (ordered_row_groups.empty()) {
@@ -247,8 +247,8 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 	initialized = true;
 
 	multimap<Value, RowGroupMapEntry> row_group_map;
-	for (auto &row_group : row_groups.Segments()) {
-		auto stats = row_group.GetStatistics(column_idx);
+	for (auto &row_group : row_groups.SegmentNodes()) {
+		auto stats = row_group.node->GetStatistics(column_idx);
 		Value comparison_value = RetrieveStat(*stats, order_by, column_type);
 		auto entry = RowGroupMapEntry {row_group, std::move(stats)};
 		row_group_map.emplace(comparison_value, std::move(entry));
