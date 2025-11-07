@@ -94,7 +94,7 @@ struct BoxRenderValue {
 	ResultRenderType render_mode;
 };
 
-enum class RenderRowType { ROW_VALUES, SEPARATOR };
+enum class RenderRowType { ROW_VALUES, SEPARATOR, DIVIDER };
 
 struct BoxRenderRow {
 	BoxRenderRow(RenderRowType row_type = RenderRowType::ROW_VALUES) // NOLINT: allow implicit conversion
@@ -124,7 +124,7 @@ private:
 	vector<idx_t> column_widths;
 	vector<idx_t> column_boundary_positions;
 	vector<idx_t> column_map;
-	idx_t total_render_length;
+	idx_t total_render_length = 0;
 	vector<BoxRenderRow> render_rows;
 
 private:
@@ -765,6 +765,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 	// add a separator
 	render_rows.emplace_back(RenderRowType::SEPARATOR);
 	// prepare the values
+	bool added_divider = false;
 	for (auto &collection : collections) {
 		for (auto &chunk : collection.Chunks()) {
 			vector<BoxRenderRow> chunk_rows;
@@ -787,6 +788,13 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			for(auto &row : chunk_rows) {
 				render_rows.push_back(std::move(row));
 			}
+		}
+		if (!added_divider && collections.size() > 1) {
+			// render divider between top and bottom collection
+			for(idx_t i = 0; i < 3; i++) {
+				render_rows.emplace_back(RenderRowType::DIVIDER);
+			}
+			added_divider = true;
 		}
 	}
 
