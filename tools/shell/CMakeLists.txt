@@ -1,5 +1,3 @@
-add_third_party(utf8proc)
-
 include_directories(include)
 add_subdirectory(linenoise)
 add_definitions(-DHAVE_LINENOISE=1)
