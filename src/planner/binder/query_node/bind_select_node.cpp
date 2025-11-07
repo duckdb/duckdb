@@ -251,8 +251,9 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 	}
 }
 
-unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names,
-                                             const vector<LogicalType> &sql_types, idx_t table_index, idx_t index) {
+static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names,
+                                                    const vector<LogicalType> &sql_types, idx_t table_index,
+                                                    idx_t index) {
 	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
@@ -264,9 +265,10 @@ unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const 
 	return std::move(result);
 }
 
-unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, idx_t table_index,
-                                                   const vector<string> &names, const vector<LogicalType> &sql_types,
-                                                   const SelectBindState &bind_state) {
+static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, idx_t table_index,
+                                                          const vector<string> &names,
+                                                          const vector<LogicalType> &sql_types,
+                                                          const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
 	switch (constant.value.type().id()) {
 	case LogicalTypeId::UBIGINT: {

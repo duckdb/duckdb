@@ -2323,4 +2323,16 @@ typedef struct PGFunctionParameter {
 	PGExpr *defaultValue;		  /* default value of parameter (optional) */
 } PGFunctionParameter;
 
+/* ----------------------
+ *		CLUSTER Statement
+ * ----------------------
+ */
+
+typedef struct PGClusterStmt {
+	PGNodeTag type;
+	PGRangeVar *targetTable;  /* relation to cluster */
+	PGList *sortClause;       /* sort clause (a list of SortBy's) */
+} PGClusterStmt;
+
+
 }

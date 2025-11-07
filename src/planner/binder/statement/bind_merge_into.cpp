@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
-                                                              const vector<string> &names) {
+static vector<unique_ptr<ParsedExpression>>
+GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases, const vector<string> &names) {
 	vector<unique_ptr<ParsedExpression>> result;
 	D_ASSERT(aliases.size() == names.size());
 
@@ -154,8 +154,8 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 	return result;
 }
 
-void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBinding> &source_bindings,
-                          idx_t new_table_index) {
+static void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBinding> &source_bindings,
+                                 idx_t new_table_index) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    for (idx_t i = 0; i < source_bindings.size(); i++) {
@@ -167,7 +167,8 @@ void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBindi
 	    });
 }
 
-void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings, idx_t new_table_index) {
+static void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings,
+                                 idx_t new_table_index) {
 	LogicalOperatorVisitor::EnumerateExpressions(
 	    op, [&](unique_ptr<Expression> *child) { RewriteMergeBindings(*child, source_bindings, new_table_index); });
 }

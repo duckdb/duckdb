@@ -198,6 +198,7 @@ private:
 
 	unique_ptr<SQLStatement> TransformMergeInto(duckdb_libpgquery::PGMergeIntoStmt &stmt);
 	unique_ptr<MergeIntoAction> TransformMergeIntoAction(duckdb_libpgquery::PGMatchAction &action);
+	unique_ptr<ClusterStatement> TransformCluster(duckdb_libpgquery::PGClusterStmt &stmt);
 
 	//===--------------------------------------------------------------------===//
 	// SetStatement Transform

@@ -91,11 +91,11 @@ void Binder::ExpandDefaultInValuesList(InsertStatement &stmt, TableCatalogEntry 
 	}
 }
 
-void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
-                        vector<unordered_set<string>> &lambda_params);
+static void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_name,
+                               vector<unordered_set<string>> &lambda_params);
 
-void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
-                                vector<unordered_set<string>> &lambda_params) {
+static void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
+                                       vector<unordered_set<string>> &lambda_params) {
 	for (auto &child : function.children) {
 		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child, table_name, lambda_params);
@@ -173,8 +173,8 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
 }
 
-unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, InsertStatement &insert,
-                                                  TableStorageInfo &storage_info) {
+static unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, InsertStatement &insert,
+                                                         TableStorageInfo &storage_info) {
 	auto set_info = make_uniq<UpdateSetInfo>();
 
 	auto &columns = set_info->columns;

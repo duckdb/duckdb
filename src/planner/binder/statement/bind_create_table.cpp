@@ -135,8 +135,8 @@ vector<unique_ptr<BoundConstraint>> Binder::BindNewConstraints(vector<unique_ptr
 	return bound_constraints;
 }
 
-unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint &constraint, const string &table,
-                                                const ColumnList &columns) {
+static unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint &constraint,
+                                                       const string &table, const ColumnList &columns) {
 	auto bound_constraint = make_uniq<BoundCheckConstraint>();
 	auto &bound_check = bound_constraint->Cast<BoundCheckConstraint>();
 
@@ -190,7 +190,7 @@ unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &const
 	return make_uniq<BoundUniqueConstraint>(std::move(indexes), std::move(index_set), unique.IsPrimaryKey());
 }
 
-unique_ptr<BoundConstraint> BindForeignKey(const Constraint &constraint) {
+static unique_ptr<BoundConstraint> BindForeignKey(const Constraint &constraint) {
 	auto &fk = constraint.Cast<ForeignKeyConstraint>();
 	D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 	         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
@@ -343,8 +343,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<Cr
 	return result;
 }
 
-void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
-                                       bool &contains_gcol) {
+static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
+                                              bool &contains_gcol) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
 		                                                               auto &name = column_ref.GetColumnName();

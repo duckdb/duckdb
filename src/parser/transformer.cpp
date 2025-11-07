@@ -227,6 +227,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformCommentOn(PGCast<duckdb_libpgquery::PGCommentOnStmt>(stmt));
 	case duckdb_libpgquery::T_PGMergeIntoStmt:
 		return TransformMergeInto(PGCast<duckdb_libpgquery::PGMergeIntoStmt>(stmt));
+	case duckdb_libpgquery::T_PGClusterStmt:
+		return TransformCluster(PGCast<duckdb_libpgquery::PGClusterStmt>(stmt));
 	default:
 		throw NotImplementedException(NodetypeToString(stmt.type));
 	}
