@@ -45,6 +45,7 @@ using duckdb::InvalidInputException;
 using duckdb::to_string;
 struct Prompt;
 struct ShellProgressBar;
+struct PagerState;
 
 using idx_t = uint64_t;
 
@@ -93,6 +94,7 @@ enum class SuccessState { SUCCESS, FAILURE };
 enum class OptionType { DEFAULT, ON, OFF };
 enum class StartupText { ALL, VERSION, NONE };
 enum class ReadLineVersion { LINENOISE, FALLBACK };
+enum class PagerMode { PAGER_AUTOMATIC, PAGER_ON, PAGER_OFF };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 
@@ -230,7 +232,19 @@ public:
 	ReadLineVersion rl_version = ReadLineVersion::FALLBACK;
 #endif
 
+	//! Whether or not to run the pager
+	PagerMode pager_mode = PagerMode::PAGER_AUTOMATIC;
+	//! The command to run when running the pager
+	string pager_command;
+	// In automatic mode, only show a pager when this row count is exceeded
+	idx_t pager_min_rows = 50;
+	// In automatic mode, only show a pager when this column count is exceeded
+	idx_t pager_min_columns = 5;
+	//! Whether or not the pager is currently active
+	bool pager_is_active = false;
+
 #if defined(_WIN32) || defined(WIN32)
+	//! When enabled, sets the console page to UTF8 and renders using that code page
 	bool win_utf8_mode = false;
 #endif
 
@@ -318,6 +332,11 @@ public:
 		shellFlgs &= ~static_cast<uint32_t>(flag);
 	}
 	void ResetOutput();
+	bool ShouldUsePager(duckdb::QueryResult &result);
+	string GetSystemPager();
+	unique_ptr<PagerState> SetupPager();
+	static void StartPagerDisplay();
+	static void FinishPagerDisplay();
 	void ClearTempFile();
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(const string &zLine);

@@ -82,6 +82,8 @@ public:
 	DUCKDB_API void Flush();
 	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
 	DUCKDB_API void Close();
+	//! Clears any appended data (without flushing).
+	DUCKDB_API void Clear();
 	//! Returns the active types of the appender.
 	const vector<LogicalType> &GetActiveTypes() const;
 

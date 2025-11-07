@@ -370,7 +370,8 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 	va_list ap;
 	va_start(ap, zFormat);
 	auto &state = ShellState::Get();
-	if (state.stdout_is_console && (out == stdout || out == stderr)) {
+	if ((state.stdout_is_console && (out == stdout || out == stderr)) ||
+	    (state.pager_is_active && !state.win_utf8_mode)) {
 		char buffer[2048];
 		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
 		const char *utf8_data;
@@ -382,11 +383,16 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 		} else {
 			utf8_data = buffer;
 		}
-		// convert from utf8 to utf16
-		auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
-		auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-		// use WriteConsoleW to write the unicode codepoints to the console
-		WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
+		if (state.pager_is_active) {
+			auto mbcs_text = ShellState::Win32Utf8ToMbcs(utf8_data, true);
+			fputs(mbcs_text.c_str(), out);
+		} else {
+			// convert from utf8 to utf16
+			auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
+			auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+			// use WriteConsoleW to write the unicode codepoints to the console
+			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
+		}
 	} else {
 		vfprintf(out, zFormat, ap);
 	}
@@ -431,13 +437,15 @@ static void shell_out_of_memory(void) {
 	exit(1);
 }
 
-ShellState::ShellState() : seenInterrupt(0) {
+ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 	config.error_manager->AddCustomError(
 	    duckdb::ErrorType::UNSIGNED_EXTENSION,
 	    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
 	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
+	strcpy(continuePrompt, "· ");
+	strcpy(continuePromptSelected, "‣ ");
 }
 
 ShellState::~ShellState() {
@@ -1408,6 +1416,24 @@ ShellState &ShellState::Get() {
 	return state;
 }
 
+namespace duckdb_shell {
+
+struct PagerState {
+	explicit PagerState(ShellState &state) : state(state) {
+	}
+	~PagerState() {
+		if (state) {
+			state->ResetOutput();
+			ShellState::FinishPagerDisplay();
+			state = nullptr;
+		}
+	}
+
+	optional_ptr<ShellState> state;
+};
+
+} // namespace duckdb_shell
+
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
 	if (!statement->named_param_map.empty()) {
 		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
@@ -1449,12 +1475,17 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
-	if (ShellRenderer::IsColumnar(cMode)) {
-		RenderColumnarResult(res);
-		return SuccessState::SUCCESS;
-	}
 	if (cMode == RenderMode::TRASH) {
 		// execute the query but don't render anything
+		return SuccessState::SUCCESS;
+	}
+	unique_ptr<PagerState> pager_setup;
+	if (ShouldUsePager(res)) {
+		// we should use a pager
+		pager_setup = SetupPager();
+	}
+	if (ShellRenderer::IsColumnar(cMode)) {
+		RenderColumnarResult(res);
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::DUCKBOX) {
@@ -1835,6 +1866,99 @@ FILE *ShellState::OpenOutputFile(const char *zFile, int bTextMode) {
 	return f;
 }
 
+string ShellState::GetSystemPager() {
+	const char *duckdb_pager = getenv("DUCKDB_PAGER");
+
+	// Try DUCKDB_PAGER first (highest priority for env vars)
+	if (duckdb_pager && strlen(duckdb_pager) > 0) {
+		return duckdb_pager;
+	}
+
+	// Try PAGER next
+	const char *pager = getenv("PAGER");
+	if (pager && strlen(pager) > 0) {
+		return pager;
+	}
+
+	// No valid pager environment variable set, use platform default
+#if defined(_WIN32) || defined(WIN32)
+	// On Windows, use 'more' as default pager
+	return "more";
+#else
+	// On other systems, use 'less' as default pager
+	return "less -RX";
+#endif
+}
+
+bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+	if (out != stdout || !stdout_is_console || !outfile.empty()) {
+		// if we have an outfile specified we don't set up the pager
+		return false;
+	}
+	// setup a pager for output
+	if (pager_mode == PagerMode::PAGER_OFF) {
+		return false;
+	}
+	if (pager_command.empty()) {
+		pager_command = GetSystemPager();
+		if (pager_command.empty()) {
+			Print(PrintOutput::STDERR, "Warning: No pager configured. Set DUCKDB_PAGER or PAGER environment variable\n"
+			                           "or supply a command like `.pager 'less -SR'` or `.pager 'pspg --csv'`.\n");
+			return false;
+		}
+	}
+	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
+		// in automatic mode we only use a pager when the output is large enough
+		if (mode == RenderMode::DUCKBOX) {
+			// in duckbox mode the output is automatically truncated to "max_rows"
+			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
+			if (max_rows < pager_min_rows) {
+				return false;
+			}
+		}
+		// otherwise we check the size of the result set
+		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
+		if (result.ColumnCount() < pager_min_columns && !result.MoreRowsThan(pager_min_rows)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void ShellState::StartPagerDisplay() {
+#if !defined(_WIN32) && !defined(WIN32)
+	// disable sigpipe trap while displaying the pager
+	signal(SIGPIPE, SIG_IGN);
+#endif
+}
+
+void ShellState::FinishPagerDisplay() {
+	ShellState::Get().pager_is_active = false;
+#if !defined(_WIN32) && !defined(WIN32)
+	// enable sigpipe trap again after finishing the display
+	signal(SIGPIPE, SIG_DFL);
+#endif
+}
+
+unique_ptr<PagerState> ShellState::SetupPager() {
+#if defined(_WIN32) || defined(WIN32)
+	if (win_utf8_mode) {
+		SetConsoleCP(CP_UTF8);
+	}
+#endif
+	StartPagerDisplay();
+	auto pager_out = popen(pager_command.c_str(), "w");
+	if (!pager_out) {
+		FinishPagerDisplay();
+		PrintF(PrintOutput::STDERR, "Error: Failed to start pager process: %s. Output will be sent to stdout.\n",
+		       strerror(errno));
+		return nullptr;
+	}
+	pager_is_active = true;
+	out = pager_out;
+	outfile = "|" + pager_command;
+	return make_uniq<PagerState>(*this);
+}
 /*
 ** Change the output file back to stdout.
 **
@@ -3292,8 +3416,6 @@ void ShellState::Initialize() {
 	for (auto &component : default_components) {
 		progress_bar->AddComponent(component);
 	}
-	strcpy(continuePrompt, "· ");
-	strcpy(continuePromptSelected, "‣ ");
 #ifdef HAVE_LINENOISE
 	if (rl_version == ReadLineVersion::LINENOISE) {
 		linenoiseSetPrompt(continuePrompt, continuePromptSelected);

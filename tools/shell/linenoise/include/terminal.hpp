@@ -101,7 +101,7 @@ struct KeyPress {
 	      action(ESC), sequence(sequence) {
 	}
 
-	KEY_ACTION action = KEY_NULL;
+	char action = KEY_NULL;
 	EscapeSequence sequence = EscapeSequence::INVALID;
 };
 
