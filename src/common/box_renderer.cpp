@@ -840,6 +840,18 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				collection_rows.push_back(std::move(row));
 			}
 		}
+		if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
+			// when rendering the large number footer we align to the middle
+			for (auto &row : collection_rows) {
+				for (auto &value : row.values) {
+					value.alignment = ValueRenderAlignment::MIDDLE;
+				}
+			}
+			// large number footers should be rendered as NULL values
+			for (auto &row : collection_rows[1].values) {
+				row.render_mode = ResultRenderType::NULL_VALUE;
+			}
+		}
 		if (invert) {
 			// the bottom collection is inverted - so flip the rows
 			std::reverse(collection_rows.begin(), collection_rows.end());
@@ -932,7 +944,6 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 	bool added_split_column = false;
 	vector<idx_t> new_widths;
 	vector<optional_idx> column_map;
-	bool large_number_footer = config.large_number_rendering == LargeNumberRendering::FOOTER;
 	for (idx_t c = 0; c < column_count; c++) {
 		if (pruned_columns.find(c) == pruned_columns.end()) {
 			column_map.push_back(c);
