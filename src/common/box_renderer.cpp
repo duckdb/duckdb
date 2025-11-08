@@ -89,14 +89,16 @@ const string &StringResultRenderer::str() {
 //===--------------------------------------------------------------------===//
 struct BoxRenderValue {
 	BoxRenderValue(string text_p, ResultRenderType render_mode, ValueRenderAlignment alignment,
-	               LogicalType type_p = LogicalTypeId::INVALID)
-	    : text(std::move(text_p)), render_mode(render_mode), alignment(alignment), type(std::move(type_p)) {
+	               LogicalType type_p = LogicalTypeId::INVALID, optional_idx render_width = optional_idx())
+	    : text(std::move(text_p)), render_mode(render_mode), alignment(alignment), type(std::move(type_p)),
+	      render_width(render_width) {
 	}
 
 	string text;
 	ResultRenderType render_mode;
 	ValueRenderAlignment alignment;
 	LogicalType type;
+	optional_idx render_width;
 };
 
 enum class RenderRowType { ROW_VALUES, SEPARATOR, DIVIDER, FOOTER };
@@ -144,7 +146,8 @@ private:
 
 private:
 	void RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
-	                 ValueRenderAlignment alignment = ValueRenderAlignment::MIDDLE);
+	                 ValueRenderAlignment alignment = ValueRenderAlignment::MIDDLE,
+	                 optional_idx render_width = optional_idx());
 	string RenderType(const LogicalType &type);
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
 	string GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r, const LogicalType &type,
@@ -293,6 +296,12 @@ string BoxRendererImplementation::TruncateValue(const string &value, idx_t colum
                                                 idx_t &current_render_width) {
 	idx_t start_pos = pos;
 	while (pos < value.size()) {
+		if (value[pos] == '\n') {
+			// newline character - stop rendering for this line - but skip the newline
+			idx_t render_pos = pos;
+			pos++;
+			return value.substr(start_pos, render_pos - start_pos);
+		}
 		// check if this character fits...
 		auto char_size = Utf8Proc::RenderWidth(value.c_str(), value.size(), pos);
 		if (current_render_width + char_size >= column_width) {
@@ -307,8 +316,16 @@ string BoxRendererImplementation::TruncateValue(const string &value, idx_t colum
 }
 
 void BoxRendererImplementation::RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
-                                            ValueRenderAlignment alignment) {
-	auto render_width = Utf8Proc::RenderWidth(value);
+                                            ValueRenderAlignment alignment, optional_idx render_width_input) {
+	idx_t render_width;
+	if (render_width_input.IsValid()) {
+		render_width = render_width_input.GetIndex();
+		if (render_width != Utf8Proc::RenderWidth(value)) {
+			throw InternalException("Misaligned render width provided for string \"%s\"", value);
+		}
+	} else {
+		render_width = Utf8Proc::RenderWidth(value);
+	}
 
 	const_reference<string> render_value(value);
 	string small_value;
@@ -769,6 +786,144 @@ string BoxRendererImplementation::GetRenderValue(ColumnDataRowCollection &rows, 
 	}
 }
 
+bool CanPrettyPrint(const LogicalType &type) {
+	return type.IsJSONType();
+}
+
+struct Separator {
+	Separator(char sep) // NOLINT: allow implicit conversion
+	    : sep(sep), inlined(false) {
+	}
+
+	char sep;
+	bool inlined = false;
+};
+
+bool SeparatorIsMatching(Separator &sep, char closing_sep) {
+	if (sep.sep == '{' && closing_sep == '}') {
+		return true;
+	}
+	if (sep.sep == '[' && closing_sep == ']') {
+		return true;
+	}
+	return false;
+}
+
+void SkipWhitespace(const string &value, idx_t &pos) {
+	while (pos + 1 < value.size() && StringUtil::CharacterIsSpace(value[pos + 1])) {
+		pos++;
+	}
+}
+
+string PrettyPrintValue(const LogicalType &type, const string &value) {
+	if (!type.IsJSONType()) {
+		return value;
+	}
+	enum class JSONState { REGULAR, IN_QUOTE, ESCAPE };
+	string result;
+	vector<Separator> separators;
+	JSONState state = JSONState::REGULAR;
+	for (idx_t pos = 0; pos < value.size(); pos++) {
+		auto c = value[pos];
+		if (state == JSONState::REGULAR) {
+			switch (c) {
+			case '[':
+			case '{': {
+				// add a newline and indentation based on the separator count
+				separators.push_back(c);
+				result += c;
+				// try to "peek" forward - if the closing separator is less than 10 bytes ahead, inline it
+				idx_t peeked_characters = 0;
+				vector<Separator> extra_separator;
+				for (idx_t next_pos = pos + 1; next_pos < value.size() && peeked_characters < 20; next_pos++) {
+					if (StringUtil::CharacterIsSpace(value[next_pos])) {
+						continue;
+					}
+					if (extra_separator.empty() && SeparatorIsMatching(separators.back(), value[next_pos])) {
+						separators.back().inlined = true;
+						break;
+					}
+					if (value[next_pos] == '{' || value[next_pos] == '[') {
+						// found a different separator opening - open it
+						extra_separator.push_back(value[next_pos]);
+					}
+					if (!extra_separator.empty() && SeparatorIsMatching(extra_separator.back(), value[next_pos])) {
+						// closed the separator - pop it back
+						extra_separator.pop_back();
+					}
+					peeked_characters++;
+				}
+				if (!separators.back().inlined) {
+					result += '\n';
+					result += string(2 * separators.size(), ' ');
+				}
+				SkipWhitespace(value, pos);
+				break;
+			}
+			case '}':
+			case ']': {
+				// closing bracket - move to next line and pop back the separator
+				if (separators.empty() || !SeparatorIsMatching(separators.back(), c)) {
+					throw InternalException("Failed to parse JSON string %s - invalid JSON", value);
+				}
+				bool inlined = separators.back().inlined;
+				separators.pop_back();
+				if (!inlined) {
+					// if we are inlining this separator - don't add the newlines after the closing bracket
+					result += '\n';
+					result += string(2 * separators.size(), ' ');
+				}
+				result += c;
+				SkipWhitespace(value, pos);
+				break;
+			}
+			case '"':
+				state = JSONState::IN_QUOTE;
+				result += c;
+				break;
+			case ',':
+				// comma - move to next line
+				result += c;
+				if (separators.back().inlined) {
+					// current separator is inlined - just add spaces
+					result += ' ';
+				} else {
+					result += '\n';
+					result += string(2 * separators.size(), ' ');
+				}
+				SkipWhitespace(value, pos);
+				break;
+			case ':':
+				result += c;
+				result += ' ';
+				SkipWhitespace(value, pos);
+				break;
+			default:
+				result += c;
+				break;
+			}
+		} else if (state == JSONState::IN_QUOTE) {
+			switch (c) {
+			case '"':
+				// break out of quotes
+				state = JSONState::REGULAR;
+				break;
+			case '\\':
+				// escape
+				state = JSONState::ESCAPE;
+				break;
+			}
+			result += c;
+		} else if (state == JSONState::ESCAPE) {
+			state = JSONState::IN_QUOTE;
+			result += c;
+		} else {
+			throw InternalException("Invalid json state");
+		}
+	}
+	return result;
+}
+
 void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width,
                                                     idx_t max_width) {
 	auto column_count = result_types.size();
@@ -883,6 +1038,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			if (render_width > column_widths[c]) {
 				column_widths[c] = render_width;
 			}
+			row.values[c].render_width = render_width;
 		}
 	}
 
@@ -1006,7 +1162,12 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			// check if this row has truncated columns
 			vector<BoxRenderRow> extra_rows;
 			for (idx_t c = 0; c < row.values.size(); c++) {
-				auto render_width = Utf8Proc::RenderWidth(row.values[c].text);
+				if (CanPrettyPrint(row.values[c].type)) {
+					row.values[c].text = PrettyPrintValue(row.values[c].type, row.values[c].text);
+					// FIXME: hacky
+					row.values[c].render_width = column_widths[c] + 1;
+				}
+				auto render_width = row.values[c].render_width.GetIndex();
 				if (render_width <= column_widths[c]) {
 					// not shortened - skip
 					continue;
@@ -1018,6 +1179,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				idx_t current_render_width = 0;
 				auto full_value = row.values[c].text;
 				row.values[c].text = TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
+				row.values[c].render_width = current_render_width;
 				while (current_pos < full_value.size()) {
 					if (current_row >= extra_rows.size()) {
 						if (rows_left == (need_extra_row ? 1 : 0)) {
@@ -1037,6 +1199,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					current_render_width = 0;
 					extra_row.values[c].text =
 					    TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
+					extra_row.values[c].render_width = current_render_width;
 				}
 			}
 			if (extra_rows.empty()) {
@@ -1180,7 +1343,7 @@ void BoxRendererImplementation::RenderValues() {
 			if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
 				ss.SetValueType(render_value.type);
 			}
-			RenderValue(render_text, column_widths[column_idx], render_mode, alignment);
+			RenderValue(render_text, column_widths[column_idx], render_mode, alignment, render_value.render_width);
 		}
 		ss << config.VERTICAL;
 		ss << '\n';
