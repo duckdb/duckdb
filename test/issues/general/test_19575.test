@@ -1,0 +1,24 @@
+# name: test/issues/general/test_19575.test
+# description: Issue 19575 - [1.4.1] Interesting error with like expression on some character. (Invalid unicode)
+# group: [general]
+
+statement ok
+create or replace table aaa(name varchar);
+
+statement ok
+insert into aaa values('绿色');
+
+query I
+select * from aaa;
+----
+绿色
+
+query I
+select * from aaa where name like '绿%';
+----
+绿色
+
+query I
+select count(*) from aaa where name like '红%';
+----
+0

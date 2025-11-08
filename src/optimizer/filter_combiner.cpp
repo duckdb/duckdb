@@ -24,6 +24,7 @@
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -397,10 +398,12 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	auto &column_index = column_ids[column_ref.binding.column_index];
 	//! Replace prefix with a set of comparisons
 	auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix_string));
-	prefix_string[prefix_string.size() - 1]++;
-	auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
 	table_filters.PushFilter(column_index, std::move(lower_bound));
-	table_filters.PushFilter(column_index, std::move(upper_bound));
+	prefix_string[prefix_string.size() - 1]++;
+	if (Utf8Proc::Analyze(prefix_string.c_str(), prefix_string.size()) != UnicodeType::INVALID) {
+		auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
+		table_filters.PushFilter(column_index, std::move(upper_bound));
+	}
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
