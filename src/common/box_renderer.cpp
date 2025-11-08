@@ -138,6 +138,7 @@ private:
 	vector<idx_t> column_widths;
 	vector<idx_t> column_boundary_positions;
 	vector<idx_t> column_map;
+    vector<ValueRenderAlignment> alignments;
 	idx_t total_render_length = 0;
 	vector<BoxRenderRow> render_rows;
 	BoxRendererFooter footer;
@@ -900,20 +901,45 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 
 	bool added_split_column = false;
 	vector<idx_t> new_widths;
+	bool large_number_footer = config.large_number_rendering == LargeNumberRendering::FOOTER;
 	for (idx_t c = 0; c < column_count; c++) {
 		if (pruned_columns.find(c) == pruned_columns.end()) {
 			column_map.push_back(c);
 			new_widths.push_back(column_widths[c]);
+			if (large_number_footer && result_types[c].IsNumeric()) {
+				alignments.push_back(ValueRenderAlignment::MIDDLE);
+			} else {
+				alignments.push_back(TypeAlignment(result_types[c]));
+			}
 		} else {
 			if (!added_split_column) {
 				// "..."
 				column_map.push_back(SPLIT_COLUMN);
 				new_widths.push_back(config.DOTDOTDOT_LENGTH);
+				alignments.push_back(ValueRenderAlignment::MIDDLE);
 				added_split_column = true;
 			}
 		}
 	}
 	column_widths = std::move(new_widths);
+
+	// update the values based on the columns that were pruned
+	// for(auto &row : render_rows) {
+	// 	if (row.row_type != RenderRowType::ROW_VALUES) {
+	// 		continue;
+	// 	}
+	//     vector<BoxRenderValue> values;
+	// 	for(idx_t c = 0; c < column_map.size(); c++) {
+	// 		auto column_idx = column_map[c];
+	// 		if (column_idx == SPLIT_COLUMN) {
+	// 			// insert a split
+	// 			values.emplace_back(config.DOTDOTDOT, ResultRenderType::LAYOUT);
+	// 		} else {
+	// 			values.push_back(std::move(row.values[column_idx]));
+	// 		}
+	// 	}
+	// 	row.values = std::move(values);
+	// }
 }
 
 void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char *boundary, const char *left_corner,
@@ -939,19 +965,6 @@ void BoxRendererImplementation::RenderValues() {
 	RenderLayoutLine(config.HORIZONTAL, config.TMIDDLE, config.LTCORNER, config.RTCORNER);
 
 	bool large_number_footer = config.large_number_rendering == LargeNumberRendering::FOOTER;
-	vector<ValueRenderAlignment> alignments;
-	if (config.render_mode == RenderMode::ROWS) {
-		for (idx_t c = 0; c < column_count; c++) {
-			auto column_idx = column_map[c];
-			if (column_idx == SPLIT_COLUMN) {
-				alignments.push_back(ValueRenderAlignment::MIDDLE);
-			} else if (large_number_footer && result_types[column_idx].IsNumeric()) {
-				alignments.push_back(ValueRenderAlignment::MIDDLE);
-			} else {
-				alignments.push_back(TypeAlignment(result_types[column_idx]));
-			}
-		}
-	}
 	for (idx_t r = 0; r < render_rows.size(); r++) {
 		auto &row = render_rows[r];
 		if (row.row_type == RenderRowType::SEPARATOR) {
