@@ -175,7 +175,7 @@ public:
 	//! Initializes a chunk with the correct types that can be used to call Append/Scan for the given columns
 	void InitializeChunk(DataChunk &chunk, const vector<column_t> &columns) const;
 	//! Initializes a chunk with the correct types for a given scan state
-	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
+	void InitializeScanChunk(const TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
 	void InitializeScan(TupleDataScanState &state,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
