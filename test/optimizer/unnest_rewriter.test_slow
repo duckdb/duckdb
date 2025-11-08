@@ -219,3 +219,31 @@ explain select foo, value from with_array
 cross join unnest(arr) as values(value);
 ----
 logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+query II rowsort
+select foo, value from with_array
+cross join unnest(arr) as values(value);
+----
+1	1.0
+1	2.0
+1	3.0
+2	4.0
+2	5.0
+2	6.0
+
+query II
+explain select foo, value,ord from with_array
+ cross join unnest(arr) with ORDINALITY as values(value,ord);
+----
+logical_opt	<REGEX>:.*DELIM_JOIN.*
+
+query III rowsort
+select foo, value,ord from with_array
+ cross join unnest(arr) with ORDINALITY as values(value,ord);
+----
+1	1.0	1
+1	2.0	2
+1	3.0	3
+2	4.0	1
+2	5.0	2
+2	6.0	3

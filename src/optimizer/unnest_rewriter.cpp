@@ -13,6 +13,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -112,7 +113,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 	curr_op = &delim_join.children[other_idx];
 	if (curr_op->get()->type == LogicalOperatorType::LOGICAL_GET) {
 		auto &get = curr_op->get()->Cast<LogicalGet>();
-		if (get.function.name != "unnest") {
+		if (!ExpressionBinder::IsUnnestFunction(get.function.name)) {
 			return;
 		}
 		// pattern2: delim_get -> projection -> table_in_out(unnest)
