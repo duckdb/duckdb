@@ -379,7 +379,6 @@ void Executor::Initialize(PhysicalOperator &plan) {
 }
 
 void Executor::InitializeInternal(PhysicalOperator &plan) {
-
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	{
 		lock_guard<mutex> elock(executor_lock);
@@ -423,7 +422,6 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
-
 	{
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
@@ -463,17 +461,23 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
-	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
+	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
+	auto begin = std::chrono::high_resolution_clock::now();
 	std::unique_lock<mutex> l(executor_lock);
+	auto end = std::chrono::high_resolution_clock::now();
+	auto dur = end - begin;
+	auto ms = NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(dur).count());
 	if (to_be_rescheduled_tasks.empty()) {
+		blocked_thread_time += ms;
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
 		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
+		blocked_thread_time += ms;
 		return;
 	}
 
-	blocked_thread_time++;
+	blocked_thread_time += ms + WAIT_TIME_MS.count();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
 #endif
 }
@@ -578,6 +582,12 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 			} else if (result == TaskExecutionResult::TASK_FINISHED) {
 				// if the task is finished, clean it up
 				task.reset();
+			} else if (result == TaskExecutionResult::TASK_ERROR) {
+				if (!HasError()) {
+					// This is very much unexpected, TASK_ERROR means this executor should have an Error
+					throw InternalException("A task executed within Executor::ExecuteTask, from own producer, returned "
+					                        "TASK_ERROR without setting error on the Executor");
+				}
 			}
 		}
 		if (!HasError()) {
@@ -672,13 +682,12 @@ void Executor::ThrowException() {
 }
 
 void Executor::Flush(ThreadContext &thread_context) {
-	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
 	auto global_profiler = profiler;
 	if (global_profiler) {
 		global_profiler->Flush(thread_context.profiler);
 
 		auto blocked_time = blocked_thread_time.load();
-		global_profiler->SetInfo(double(blocked_time * WAIT_TIME_MS.count()) / 1000);
+		global_profiler->SetBlockedTime(double(blocked_time) / 1000.0 / 1000.0);
 	}
 }
 

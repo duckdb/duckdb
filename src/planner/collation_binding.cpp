@@ -8,6 +8,7 @@
 #include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
+constexpr const char *CollateCatalogEntry::Name;
 
 bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
                           CollationType type) {
@@ -109,11 +110,34 @@ bool PushIntervalCollation(ClientContext &context, unique_ptr<Expression> &sourc
 	return true;
 }
 
+bool PushVariantCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
+                          CollationType) {
+	if (sql_type.id() != LogicalTypeId::VARIANT) {
+		return false;
+	}
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "variant_normalize");
+	if (function_entry.functions.Size() != 1) {
+		throw InternalException("variant_normalize should only have a single overload");
+	}
+	auto source_alias = source->GetAlias();
+	auto &scalar_function = function_entry.functions.GetFunctionReferenceByOffset(0);
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(source));
+
+	FunctionBinder function_binder(context);
+	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
+	function->SetAlias(source_alias);
+	source = std::move(function);
+	return true;
+}
+
 // timetz_byte_comparable
 CollationBinding::CollationBinding() {
 	RegisterCollation(CollationCallback(PushVarcharCollation));
 	RegisterCollation(CollationCallback(PushTimeTZCollation));
 	RegisterCollation(CollationCallback(PushIntervalCollation));
+	RegisterCollation(CollationCallback(PushVariantCollation));
 }
 
 void CollationBinding::RegisterCollation(CollationCallback callback) {

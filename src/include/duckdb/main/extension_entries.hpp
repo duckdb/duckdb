@@ -42,7 +42,6 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"!__postfix", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"&&", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"**", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"->>", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"<->", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -69,8 +68,10 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"approx_top_k", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"arg_max", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"arg_max_null", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"arg_max_nulls_last", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"arg_min", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"arg_min_null", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"arg_min_nulls_last", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"argmax", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"argmin", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"array_agg", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
@@ -475,6 +476,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ord", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"parquet_bloom_probe", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_file_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"parquet_full_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_kv_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_scan", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -599,6 +601,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_envelope", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_envelope_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_equals", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_expand", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_extent", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_extent_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_extent_approx", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1081,7 +1084,6 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ui_remote_url", "ui"},
     {"unsafe_disable_etag_checks", "httpfs"},
     {"unsafe_enable_version_guessing", "iceberg"},
-    {"variant_legacy_encoding", "parquet"},
 }; // END_OF_EXTENSION_SETTINGS
 
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {

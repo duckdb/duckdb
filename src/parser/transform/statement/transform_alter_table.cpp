@@ -19,7 +19,6 @@ vector<string> Transformer::TransformNameList(duckdb_libpgquery::PGList &list) {
 }
 
 unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) {
-
 	D_ASSERT(stmt.relation);
 	if (stmt.cmds->length != 1) {
 		throw ParserException("Only one ALTER command per statement is supported");
@@ -30,7 +29,6 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 
 	// Check the ALTER type.
 	for (auto c = stmt.cmds->head; c != nullptr; c = c->next) {
-
 		auto command = PGPointerCast<duckdb_libpgquery::PGAlterTableCmd>(c->data.ptr_value);
 		AlterEntryData data(qualified_name.catalog, qualified_name.schema, qualified_name.name,
 		                    TransformOnEntryNotFound(stmt.missing_ok));

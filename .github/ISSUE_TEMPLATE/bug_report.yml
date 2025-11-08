@@ -8,38 +8,11 @@ body:
       value: >
         DuckDB has several repositories for different components, please make sure you're raising your issue in the correct one:
 
-          * [Documentation/website](https://github.com/duckdb/duckdb-web/issues/new)
-          * APIs:
-            * [duckdb-java](https://github.com/duckdb/duckdb-java/issues/new)
-            * [duckdb-node](https://github.com/duckdb/duckdb-node/issues/new)
-            * [duckdb-node-neo](https://github.com/duckdb/duckdb-node-neo/issues/new)
-            * [duckdb-odbc](https://github.com/duckdb/duckdb-odbc/issues/new)
-            * [duckdb-python](https://github.com/duckdb/duckdb-python/issues/new)
-            * [duckdb-r](https://github.com/duckdb/duckdb-r/issues/new)
-            * [duckdb-rs](https://github.com/duckdb/duckdb-rs/issues/new)
-            * [duckdb-swift](https://github.com/duckdb/duckdb-swift/issues/new)
-            * [duckdb-wasm](https://github.com/duckdb/duckdb-wasm/issues/new)
-            * [go-duckdb](https://github.com/marcboeker/go-duckdb/issues/new)
-          * Extensions:
-            * [AWS extension](https://github.com/duckdb/duckdb-aws/issues/new)
-            * [Azure extension](https://github.com/duckdb/duckdb-azure/issues/new)
-            * [Delta extension](https://github.com/duckdb/duckdb-delta/issues/new)
-            * [Encodings extension](https://github.com/duckdb/duckdb-encodings/issues/new)
-            * [Excel extension](https://github.com/duckdb/duckdb-excel/issues/new)
-            * [fts (full text search) extension](https://github.com/duckdb/duckdb-fts/issues/new)
-            * [httpfs extension](https://github.com/duckdb/duckdb-httpfs/issues/new)
-            * [Iceberg extension](https://github.com/duckdb/duckdb-iceberg/issues/new)
-            * [inet extension](https://github.com/duckdb/duckdb-inet/issues/new)
-            * [MySQL extension](https://github.com/duckdb/duckdb-mysql/issues/new)
-            * [Postgres scanner](https://github.com/duckdb/duckdb-postgres/issues/new)
-            * [Spatial extension](https://github.com/duckdb/duckdb-spatial/issues/new)
-            * [SQLite scanner](https://github.com/duckdb/duckdb-sqlite/issues/new)
-            * [UI](https://github.com/duckdb/duckdb-ui/issues/new)
-            * [VSS extension](https://github.com/duckdb/duckdb-vss/issues/new)
-          * Connectors:
-            * [dbt-duckdb](https://github.com/duckdb/dbt-duckdb)
+          * [Documentation](https://github.com/duckdb/duckdb-web/issues/new)
+          * Clients: [Go](https://github.com/duckdb/duckdb-go/issues/new), [Java (JDBC)](https://github.com/duckdb/duckdb-java/issues/new), [Node.js](https://github.com/duckdb/duckdb-node-neo/issues/new), [ODBC](https://github.com/duckdb/duckdb-odbc/issues/new), [Python](https://github.com/duckdb/duckdb-python/issues/new), [R](https://github.com/duckdb/duckdb-r/issues/new), [Rust](https://github.com/duckdb/duckdb-rs/issues/new), [WebAssembly (Wasm)](https://github.com/duckdb/duckdb-wasm/issues/new)
+          * Extensions: [`aws`](https://github.com/duckdb/duckdb-aws/issues/new), [`azure`](https://github.com/duckdb/duckdb-azure/issues/new), [`delta`](https://github.com/duckdb/duckdb-delta/issues/new), [`ducklake`](https://github.com/duckdb/duckdb-ducklake/issues/new), [`encodings`](https://github.com/duckdb/duckdb-encodings/issues/new), [`excel`](https://github.com/duckdb/duckdb-excel/issues/new), [`fts`](https://github.com/duckdb/duckdb-fts/issues/new), [`httpfs`](https://github.com/duckdb/duckdb-httpfs/issues/new), [`iceberg`](https://github.com/duckdb/duckdb-iceberg/issues/new), [`inet`](https://github.com/duckdb/duckdb-inet/issues/new), [`mysql`](https://github.com/duckdb/duckdb-mysql/issues/new), [`postgres`](https://github.com/duckdb/duckdb-postgres/issues/new), [`spatial`](https://github.com/duckdb/duckdb-spatial/issues/new), [`sqlite`](https://github.com/duckdb/duckdb-sqlite/issues/new), [`ui`](https://github.com/duckdb/duckdb-ui/issues/new), [`vss`](https://github.com/duckdb/duckdb-vss/issues/new)
 
-        If none of the above repositories are applicable, feel free to raise it in this one
+        If the issue occurs in core DuckDB (e.g., a SQL query crashes or returns incorrect results) or if the issue is in the DuckDB command line client, feel free to raise it in this repository.
 
         Please report security vulnerabilities using GitHub's [report vulnerability form](https://github.com/duckdb/duckdb/security/advisories/new).
 
@@ -121,18 +94,17 @@ body:
 
         # Before Submitting:
 
-  - type: dropdown
+  - type: checkboxes
     attributes:
-      label: What is the latest build you tested with? If possible, we recommend testing with the latest nightly build.
-      description: |
-        Visit the [installation page](https://duckdb.org/docs/installation/) for instructions.
+      label: Did you include all relevant configuration (e.g., CPU architecture, Linux distribution) to reproduce the issue?
       options:
-        - I have not tested with any build
-        - I have tested with a stable release
-        - I have tested with a nightly build
-        - I have tested with a source build
-    validations:
-      required: true
+        - label: Yes, I have
+
+  - type: checkboxes
+    attributes:
+      label: Did you include all code required to reproduce the issue?
+      options:
+        - label: Yes, I have
 
   - type: dropdown
     attributes:
@@ -146,15 +118,3 @@ body:
       default: 0
     validations:
       required: true
-
-  - type: checkboxes
-    attributes:
-      label: Did you include all code required to reproduce the issue?
-      options:
-        - label: Yes, I have
-
-  - type: checkboxes
-    attributes:
-      label: Did you include all relevant configuration (e.g., CPU architecture, Python version, Linux distribution) to reproduce the issue?
-      options:
-        - label: Yes, I have

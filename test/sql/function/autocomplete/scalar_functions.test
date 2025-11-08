@@ -5,16 +5,16 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('select gam') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('select gam') LIMIT 1;
 ----
 gamma	7
 
 query II
-FROM sql_auto_complete('select nexta') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('select nexta') LIMIT 1;
 ----
 nextafter	7
 
 query II
-FROM sql_auto_complete('select bit_l') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('select bit_l') LIMIT 1;
 ----
 bit_length	7

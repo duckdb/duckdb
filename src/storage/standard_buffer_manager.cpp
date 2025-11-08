@@ -338,7 +338,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return Pin(QueryContext(), handle);
 }
 
-BufferHandle StandardBufferManager::Pin(QueryContext context, shared_ptr<BlockHandle> &handle) {
+BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) {
 	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
 	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
 	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock
@@ -495,7 +495,6 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
-
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
 
@@ -543,8 +542,10 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
                                                                   BlockHandle &block,
                                                                   unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(!temporary_directory.path.empty());
-	D_ASSERT(temporary_directory.handle.get());
 	auto id = block.BlockId();
+	if (!temporary_directory.handle) {
+		throw InternalException("ReadTemporaryBuffer called but temporary directory has not been instantiated yet");
+	}
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer));
@@ -640,6 +641,10 @@ bool StandardBufferManager::HasFilesInTemporaryDirectory() const {
 		}
 	});
 	return found;
+}
+
+BlockManager &StandardBufferManager::GetTemporaryBlockManager() {
+	return *temp_block_manager;
 }
 
 vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {

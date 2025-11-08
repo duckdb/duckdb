@@ -119,7 +119,6 @@ static void UnpackDelta128(const uint32_t *__restrict in, uhugeint_t *__restrict
 
 static void PackSingle(const uhugeint_t in, uint32_t *__restrict &out, uint16_t delta, uint16_t shl, uhugeint_t mask) {
 	if (delta + shl < 32) {
-
 		if (shl == 0) {
 			out[0] = static_cast<uint32_t>(in & mask);
 		} else {
@@ -127,7 +126,6 @@ static void PackSingle(const uhugeint_t in, uint32_t *__restrict &out, uint16_t 
 		}
 
 	} else if (delta + shl >= 32 && delta + shl < 64) {
-
 		if (shl == 0) {
 			out[0] = static_cast<uint32_t>(in & mask);
 		} else {
@@ -141,7 +139,6 @@ static void PackSingle(const uhugeint_t in, uint32_t *__restrict &out, uint16_t 
 	}
 
 	else if (delta + shl >= 64 && delta + shl < 96) {
-
 		if (shl == 0) {
 			out[0] = static_cast<uint32_t>(in & mask);
 		} else {

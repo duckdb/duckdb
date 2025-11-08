@@ -50,6 +50,8 @@ class MetadataManager;
 class RowVersionManager;
 class ScanFilterInfo;
 class StorageCommitState;
+template <class T>
+struct SegmentNode;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -74,7 +76,8 @@ private:
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
-	vector<MetaBlockPointer> existing_pointers;
+	bool reuse_existing_metadata_blocks = false;
+	vector<idx_t> existing_extra_metadata_blocks;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
@@ -103,7 +106,10 @@ public:
 		return collection.get();
 	}
 	//! Returns the list of meta block pointers used by the columns
-	vector<MetaBlockPointer> GetColumnPointers();
+	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
+
+	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
+
 	//! Returns the list of meta block pointers used by the deletes
 	const vector<MetaBlockPointer> &GetDeletesPointers() const {
 		return deletes_pointers;
@@ -113,7 +119,7 @@ public:
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
-	                               DataChunk &scan_chunk);
+	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
@@ -125,8 +131,8 @@ public:
 	bool HasChanges() const;
 
 	//! Initialize a scan over this row_group
-	bool InitializeScan(CollectionScanState &state);
-	bool InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset);
+	bool InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node);
+	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
 	bool CheckZonemap(ScanFilterInfo &filters);
@@ -171,19 +177,19 @@ public:
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
-	void Update(TransactionData transaction, DataChunk &updates, row_t *ids, idx_t offset, idx_t count,
-	            const vector<PhysicalIndex> &column_ids);
+	void Update(TransactionData transaction, DataTable &data_table, DataChunk &updates, row_t *ids, idx_t offset,
+	            idx_t count, const vector<PhysicalIndex> &column_ids);
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
-	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
-	                  const vector<column_t> &column_path);
+	void UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
+	                  idx_t offset, idx_t count, const vector<column_t> &column_path);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	void MergeIntoStatistics(TableStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
-	void GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result);
+	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
 	PartitionStatistics GetPartitionStats() const;
 
 	idx_t GetAllocationSize() const {

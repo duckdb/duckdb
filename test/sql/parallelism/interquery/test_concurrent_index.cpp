@@ -29,10 +29,8 @@ static void CheckConstraintViolation(const string &result_str) {
 }
 
 static void ReadFromIntegers(DuckDB *db, idx_t thread_idx, atomic<bool> *success) {
-
 	Connection con(*db);
 	while (!concurrent_index_finished) {
-
 		auto expected_value = to_string(thread_idx * 10000);
 		auto result = con.Query("SELECT i FROM integers WHERE i = " + expected_value);
 		if (result->HasError()) {
@@ -86,7 +84,6 @@ static void AppendToIntegers(DuckDB *db, atomic<bool> *success) {
 }
 
 TEST_CASE("Concurrent writes during index creation", "[index][.]") {
-
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
@@ -124,7 +121,6 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 }
 
 static void AppendToPK(DuckDB *db) {
-
 	Connection con(*db);
 	for (idx_t i = 0; i < 1000; i++) {
 		auto result = con.Query("INSERT INTO integers VALUES ($1)", i);
@@ -135,7 +131,6 @@ static void AppendToPK(DuckDB *db) {
 }
 
 TEST_CASE("Concurrent inserts to PRIMARY KEY", "[index][.]") {
-
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
@@ -161,7 +156,6 @@ TEST_CASE("Concurrent inserts to PRIMARY KEY", "[index][.]") {
 }
 
 static void UpdatePK(DuckDB *db) {
-
 	Connection con(*db);
 	for (idx_t i = 0; i < 1000; i++) {
 		auto result = con.Query("UPDATE integers SET i = 1000 + (i % 100) WHERE i = $1", i);
@@ -172,7 +166,6 @@ static void UpdatePK(DuckDB *db) {
 }
 
 TEST_CASE("Concurrent updates to PRIMARY KEY", "[index][.]") {
-
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
@@ -199,10 +192,8 @@ TEST_CASE("Concurrent updates to PRIMARY KEY", "[index][.]") {
 }
 
 static void MixAppendToPK(DuckDB *db, atomic<idx_t> *count) {
-
 	Connection con(*db);
 	for (idx_t i = 0; i < 100; i++) {
-
 		auto result = con.Query("INSERT INTO integers VALUES ($1)", i);
 		if (!result->HasError()) {
 			(*count)++;
@@ -214,14 +205,12 @@ static void MixAppendToPK(DuckDB *db, atomic<idx_t> *count) {
 }
 
 static void MixUpdatePK(DuckDB *db, idx_t thread_idx) {
-
 	std::uniform_int_distribution<> distribution(1, 100);
 	std::mt19937 gen;
 	gen.seed(thread_idx);
 
 	Connection con(*db);
 	for (idx_t i = 0; i < 100; i++) {
-
 		idx_t old_value = distribution(gen);
 		idx_t new_value = 100 + distribution(gen);
 
@@ -234,7 +223,6 @@ static void MixUpdatePK(DuckDB *db, idx_t thread_idx) {
 }
 
 TEST_CASE("Mix updates and inserts on PRIMARY KEY", "[index][.]") {
-
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
@@ -285,7 +273,6 @@ static void TransactionalAppendToPK(DuckDB *db, idx_t thread_idx) {
 	auto initial_count = chunk->GetValue(0, 0).GetValue<int32_t>();
 
 	for (idx_t i = 0; i < 50; i++) {
-
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_idx * 1000 + i));
 		if (result->HasError()) {
 			FAIL(result->GetError());
@@ -347,7 +334,6 @@ static void JoinIntegers(Connection *con) {
 }
 
 TEST_CASE("Concurrent appends during joins", "[index][.]") {
-
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

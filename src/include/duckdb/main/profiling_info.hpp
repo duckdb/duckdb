@@ -41,8 +41,8 @@ public:
 
 public:
 	static profiler_settings_t DefaultSettings();
-	static profiler_settings_t DefaultRootSettings();
-	static profiler_settings_t DefaultOperatorSettings();
+	static profiler_settings_t RootScopeSettings();
+	static profiler_settings_t OperatorScopeSettings();
 
 public:
 	void ResetMetrics();
@@ -53,6 +53,7 @@ public:
 
 public:
 	string GetMetricAsString(const MetricsType metric) const;
+	void WriteMetricsToLog(ClientContext &context);
 	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
 
 public:

@@ -8,7 +8,6 @@
 #include "duckdb/function/cast/variant/to_variant.hpp"
 
 namespace duckdb {
-
 namespace variant {
 
 static void InitializeOffsets(DataChunk &offsets, idx_t count) {
@@ -84,39 +83,6 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	selvec_size = keys_offset;
 }
 
-static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary, SelectionVector &sel,
-                                idx_t sel_size) {
-	auto &keys = VariantVector::GetKeys(variant);
-	auto &keys_entry = ListVector::GetEntry(keys);
-	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
-
-	bool already_sorted = true;
-
-	vector<uint32_t> unsorted_to_sorted(dictionary.size());
-	auto it = dictionary.begin();
-	for (uint32_t sorted_idx = 0; sorted_idx < dictionary.size(); sorted_idx++) {
-		auto unsorted_idx = it->second;
-		if (unsorted_idx != sorted_idx) {
-			already_sorted = false;
-		}
-		unsorted_to_sorted[unsorted_idx] = sorted_idx;
-		D_ASSERT(sorted_idx < ListVector::GetListSize(keys));
-		keys_entry_data[sorted_idx] = it->first;
-		auto size = static_cast<uint32_t>(keys_entry_data[sorted_idx].GetSize());
-		keys_entry_data[sorted_idx].SetSizeAndFinalize(size, size);
-		it++;
-	}
-
-	if (!already_sorted) {
-		//! Adjust the selection vector to point to the right dictionary index
-		for (idx_t i = 0; i < sel_size; i++) {
-			auto &entry = sel[i];
-			auto sorted_idx = unsorted_to_sorted[entry];
-			entry = sorted_idx;
-		}
-	}
-}
-
 static bool GatherOffsetsAndSizes(ToVariantSourceData &source, ToVariantGlobalResultData &result, idx_t count) {
 	InitializeOffsets(result.offsets, count);
 	//! First pass - collect sizes/offsets
@@ -130,6 +96,9 @@ static bool WriteVariantResultData(ToVariantSourceData &source, ToVariantGlobalR
 }
 
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	if (!count) {
+		return true;
+	}
 	DataChunk offsets;
 	offsets.Initialize(Allocator::DefaultAllocator(),
 	                   {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER},
@@ -163,7 +132,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		}
 	}
 
-	FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
+	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 	//! Finalize the 'data'
 	auto &blob = VariantVector::GetData(result);
 	auto blob_data = FlatVector::GetData<string_t>(blob);

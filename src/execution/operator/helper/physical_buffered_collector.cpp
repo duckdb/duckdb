@@ -48,7 +48,7 @@ SinkCombineResultType PhysicalBufferedCollector::Combine(ExecutionContext &conte
 unique_ptr<GlobalSinkState> PhysicalBufferedCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<BufferedCollectorGlobalState>();
 	state->context = context.shared_from_this();
-	state->buffered_data = make_shared_ptr<SimpleBufferedData>(state->context);
+	state->buffered_data = make_shared_ptr<SimpleBufferedData>(context);
 	return std::move(state);
 }
 
@@ -57,7 +57,7 @@ unique_ptr<LocalSinkState> PhysicalBufferedCollector::GetLocalSinkState(Executio
 	return std::move(state);
 }
 
-unique_ptr<QueryResult> PhysicalBufferedCollector::GetResult(GlobalSinkState &state) {
+unique_ptr<QueryResult> PhysicalBufferedCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<BufferedCollectorGlobalState>();
 	lock_guard<mutex> l(gstate.glock);
 	// FIXME: maybe we want to check if the execution was successful before creating the StreamQueryResult ?

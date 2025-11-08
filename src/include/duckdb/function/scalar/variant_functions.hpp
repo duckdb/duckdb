@@ -25,11 +25,21 @@ struct VariantExtractFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct VariantNormalizeFun {
+	static constexpr const char *Name = "variant_normalize";
+	static constexpr const char *Parameters = "input_variant";
+	static constexpr const char *Description = "Normalizes the `input_variant` to a canonical representation.";
+	static constexpr const char *Example = "variant_normalize({'b': [1,2,3], 'a': 42})::VARIANT)";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunction GetFunction();
+};
+
 struct VariantTypeofFun {
 	static constexpr const char *Name = "variant_typeof";
 	static constexpr const char *Parameters = "input_variant";
 	static constexpr const char *Description = "Returns the internal type of the `input_variant`.";
-	static constexpr const char *Example = "variant_typeof({'a': 42, 'b': [1,2,3])::VARIANT)";
+	static constexpr const char *Example = "variant_typeof({'a': 42, 'b': [1,2,3]})::VARIANT)";
 	static constexpr const char *Categories = "variant";
 
 	static ScalarFunction GetFunction();

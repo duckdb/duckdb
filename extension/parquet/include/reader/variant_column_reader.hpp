@@ -15,7 +15,7 @@ namespace duckdb {
 
 class VariantColumnReader : public ColumnReader {
 public:
-	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
+	static constexpr const PhysicalType TYPE = PhysicalType::STRUCT;
 
 public:
 	VariantColumnReader(ClientContext &context, ParquetReader &reader, const ParquetColumnSchema &schema,

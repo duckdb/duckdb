@@ -111,7 +111,6 @@ template class unique_ptr<BoundParameterExpression>;
 template class unique_ptr<BoundReferenceExpression>;
 template class unique_ptr<BoundSubqueryExpression>;
 template class unique_ptr<BoundWindowExpression>;
-template class unique_ptr<BoundBaseTableRef>;
 
 template class unique_ptr<CatalogEntry>;
 template class unique_ptr<BindContext>;

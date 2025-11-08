@@ -198,7 +198,7 @@ scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_typ
 	case LogicalTypeId::UHUGEINT:
 		return GetStringDecompressFunction<uhugeint_t>(input_type);
 	case LogicalTypeId::HUGEINT:
-		return GetStringCompressFunction<hugeint_t>(input_type);
+		return GetStringDecompressFunction<hugeint_t>(input_type);
 	default:
 		throw InternalException("Unexpected type in GetStringDecompressFunctionSwitch");
 	}
@@ -207,7 +207,7 @@ scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_typ
 void CMStringCompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                const ScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.arguments);
-	serializer.WriteProperty(101, "return_type", function.return_type);
+	serializer.WriteProperty(101, "return_type", function.GetReturnType());
 }
 
 unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
@@ -225,7 +225,7 @@ void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<Func
 unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
-	function.return_type = deserializer.Get<const LogicalType &>();
+	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }
 
@@ -248,9 +248,9 @@ ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) 
 	result.serialize = CMStringCompressSerialize;
 	result.deserialize = CMStringCompressDeserialize;
 #if defined(D_ASSERT_IS_ENABLED)
-	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; // Can only throw runtime error when assertions are enabled
+	result.SetFallible(); // Can only throw runtime error when assertions are enabled
 #else
-	result.errors = FunctionErrors::CANNOT_ERROR;
+	result.SetErrorMode(FunctionErrors::CANNOT_ERROR);
 #endif
 	return result;
 }

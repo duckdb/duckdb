@@ -38,14 +38,12 @@ void UnnestRewriterPlanUpdater::VisitExpression(unique_ptr<Expression> *expressi
 }
 
 unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator> op) {
-
 	UnnestRewriterPlanUpdater updater;
 	vector<reference<unique_ptr<LogicalOperator>>> candidates;
 	FindCandidates(op, op, candidates);
 
 	// rewrite the plan and update the bindings
 	for (auto &candidate : candidates) {
-
 		// rearrange the logical operators
 		if (RewriteCandidate(candidate)) {
 			updater.overwritten_tbl_idx = overwritten_tbl_idx;
@@ -167,7 +165,6 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 }
 
 bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> &candidate) {
-
 	auto &topmost_op = *candidate;
 	if (topmost_op.type != LogicalOperatorType::LOGICAL_PROJECTION &&
 	    topmost_op.type != LogicalOperatorType::LOGICAL_WINDOW &&
@@ -221,14 +218,12 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> &candidate) {
 
 void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique_ptr<LogicalOperator> &candidate,
                                        UnnestRewriterPlanUpdater &updater) {
-
 	auto &topmost_op = *candidate;
 	idx_t shift = lhs_bindings.size();
 
 	vector<unique_ptr<LogicalOperator> *> path_to_unnest;
 	auto curr_op = &topmost_op.children[0];
 	while (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-
 		path_to_unnest.push_back(curr_op);
 		D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		auto &proj = curr_op->get()->Cast<LogicalProjection>();
@@ -283,7 +278,6 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 
 	// add the LHS expressions to each LOGICAL_PROJECTION
 	for (idx_t i = path_to_unnest.size(); i > 0; i--) {
-
 		D_ASSERT(path_to_unnest[i - 1]->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		auto &proj = path_to_unnest[i - 1]->get()->Cast<LogicalProjection>();
 
@@ -315,7 +309,6 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 
 void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &updater,
                                                unique_ptr<LogicalOperator> &candidate) {
-
 	auto &topmost_op = *candidate;
 
 	// traverse LOGICAL_PROJECTION(s)
@@ -357,7 +350,6 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 }
 
 void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
-
 	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &delim_join = op.Cast<LogicalComparisonJoin>();
 	for (idx_t i = 0; i < delim_join.duplicate_eliminated_columns.size(); i++) {
@@ -369,7 +361,6 @@ void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
 }
 
 void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
-
 	op.ResolveOperatorTypes();
 	auto col_bindings = op.GetColumnBindings();
 	D_ASSERT(op.types.size() == col_bindings.size());

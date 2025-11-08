@@ -394,7 +394,11 @@ void JSONFunctions::RegisterSimpleCastFunctions(ExtensionLoader &loader) {
 	loader.RegisterCastFunction(LogicalType::LIST(LogicalType::JSON()), LogicalTypeId::VARCHAR, CastJSONListToVarchar,
 	                            json_list_to_varchar_cost);
 
-	// VARCHAR to JSON[] (also needs a special case otherwise get a VARCHAR -> VARCHAR[] cast first)
+	// JSON[] to JSON is allowed implicitly
+	loader.RegisterCastFunction(LogicalType::LIST(LogicalType::JSON()), LogicalType::JSON(), CastJSONListToVarchar,
+	                            100);
+
+	// VARCHAR to JSON[] (also needs a special case otherwise we get a VARCHAR -> VARCHAR[] cast first)
 	const auto varchar_to_json_list_cost =
 	    CastFunctionSet::ImplicitCastCost(db, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::JSON())) - 1;
 	BoundCastInfo varchar_to_json_list_info(CastVarcharToJSONList, nullptr, JSONFunctionLocalState::InitCastLocalState);

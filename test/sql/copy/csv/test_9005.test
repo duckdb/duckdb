@@ -9,8 +9,8 @@ PRAGMA enable_verification
 require notwindows
 
 query IIII
-SELECT * FROM read_csv_auto('data/csv/bug_9005/teste*.csv',filename=true,union_by_name=True) where filename='data/csv/bug_9005/teste1.csv';
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/bug_9005/teste*.csv',filename=true,union_by_name=True) where filename='{DATA_DIR}/csv/bug_9005/teste1.csv';
 ----
-1	Ricardo	1.5	data/csv/bug_9005/teste1.csv
-2	Jose	2.0	data/csv/bug_9005/teste1.csv
+1	Ricardo	1.5	{DATA_DIR}/csv/bug_9005/teste1.csv
+2	Jose	2.0	{DATA_DIR}/csv/bug_9005/teste1.csv
 

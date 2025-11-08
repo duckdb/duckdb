@@ -1,0 +1,23 @@
+# name: test/sql/attach/attach_if_not_exists_detach.test
+# description: Test ATTACH IF NOT EXISTS
+# group: [attach]
+
+statement ok
+ATTACH '__TEST_DIR__/attach_if_not_exists_detach.db' AS db1
+
+# con1 opens a transaction for db1 that prevents it from being fully detached
+statement ok con1
+BEGIN
+
+statement ok con1
+CREATE TABLE db1.tbl(i INTEGER);
+
+# con2 can detach db1, but it will not actually be detached
+statement ok con2
+DETACH db1
+
+# upon attaching we should fail
+statement error con2
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_if_not_exists_detach.db' AS db1
+----
+the process of being detached

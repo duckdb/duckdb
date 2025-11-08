@@ -1,5 +1,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 
+#include "duckdb/main/client_data.hpp"
+
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/exception.hpp"
@@ -216,7 +218,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
 	}
 
-	storage_manager.CreateCheckpoint(QueryContext(context), options);
+	storage_manager.CreateCheckpoint(context, options);
 }
 
 unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
@@ -268,7 +270,14 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		t_lock.unlock();
 		// grab the WAL lock and hold it until the entire commit is finished
 		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
-		error = transaction.WriteToWAL(db, commit_state);
+
+		// Commit the changes to the WAL.
+		if (db.GetRecoveryMode() == RecoveryMode::DEFAULT) {
+			auto &profiler = *context.client_data->profiler;
+			profiler.StartTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
+			error = transaction.WriteToWAL(db, commit_state);
+			profiler.EndTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
+		}
 
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();
@@ -276,7 +285,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// in-memory databases don't have a WAL - we estimate how large their changeset is based on the undo properties
 	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
-		if (storage_manager.InMemory()) {
+		if (storage_manager.InMemory() || db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
 			storage_manager.AddInMemoryChange(undo_properties.estimated_size);
 		}
 	}
@@ -324,7 +333,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	}
 
 	// We do not need to hold the transaction lock during cleanup of transactions,
-	// as they (1) have been removed, or (2) exited old_transactions.
+	// as they (1) have been removed, or (2) enter cleanup_info.
 	t_lock.unlock();
 
 	{
@@ -353,7 +362,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		options.type = checkpoint_decision.type;
 		auto &storage_manager = db.GetStorageManager();
 		try {
-			storage_manager.CreateCheckpoint(QueryContext(context), options);
+			storage_manager.CreateCheckpoint(context, options);
 		} catch (std::exception &ex) {
 			error.Merge(ErrorData(ex));
 		}
@@ -412,7 +421,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 	idx_t t_index = active_transactions.size();
 	auto lowest_start_time = TRANSACTION_ID_START;
 	auto lowest_transaction_id = MAX_TRANSACTION_ID;
-	auto lowest_active_query = MAXIMUM_QUERY_ID;
 	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == &transaction) {
 			t_index = i;
@@ -420,8 +428,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 		}
 		lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
 		lowest_transaction_id = MinValue(lowest_transaction_id, active_transactions[i]->transaction_id);
-		transaction_t active_query = active_transactions[i]->active_query;
-		lowest_active_query = MinValue(lowest_active_query, active_query);
 	}
 	lowest_active_start = lowest_start_time;
 	lowest_active_id = lowest_transaction_id;
@@ -429,7 +435,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 
 	// Decide if we need to store the transaction, or if we can schedule it for cleanup.
 	auto current_transaction = std::move(active_transactions[t_index]);
-	auto current_query = DatabaseManager::Get(db).ActiveQueryNumber();
 	if (store_transaction) {
 		// If the transaction made any changes, we need to keep it around.
 		if (transaction.commit_id != 0) {
@@ -438,9 +443,7 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 			recently_committed_transactions.push_back(std::move(current_transaction));
 		} else {
 			// The transaction was aborted.
-			// We might still need its information; add it to the set of transactions awaiting GC.
-			current_transaction->highest_active_query = current_query;
-			old_transactions.push_back(std::move(current_transaction));
+			cleanup_info->transactions.push_back(std::move(current_transaction));
 		}
 	} else if (transaction.ChangesMade()) {
 		// We do not need to store the transaction, directly schedule it for cleanup.
@@ -464,18 +467,8 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 			break;
 		}
 
-		// Changes made BEFORE this transaction are no longer relevant.
-		// We can schedule the transaction and its undo buffer for cleanup.
 		recently_committed_transactions[i]->awaiting_cleanup = true;
-
-		// HOWEVER: Any currently running QUERY can still be using
-		// the version information of the transaction.
-		// If we remove the UndoBuffer immediately, we have a race condition.
-
-		// Store the current highest active query.
-		recently_committed_transactions[i]->highest_active_query = current_query;
-		// Move it to the list of transactions awaiting GC.
-		old_transactions.push_back(std::move(recently_committed_transactions[i]));
+		cleanup_info->transactions.push_back(std::move(recently_committed_transactions[i]));
 	}
 
 	if (i > 0) {
@@ -483,34 +476,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 		auto start = recently_committed_transactions.begin();
 		auto end = recently_committed_transactions.begin() + static_cast<int64_t>(i);
 		recently_committed_transactions.erase(start, end);
-	}
-
-	// Check if we can clean up and free the memory of any old transactions.
-	i = active_transactions.empty() ? old_transactions.size() : 0;
-	for (; i < old_transactions.size(); i++) {
-		D_ASSERT(old_transactions[i]);
-		D_ASSERT(old_transactions[i]->highest_active_query > 0);
-		if (old_transactions[i]->highest_active_query >= lowest_active_query) {
-			// There is still a query running that could be using
-			// this transactions' data.
-			break;
-		}
-	}
-
-	if (i > 0) {
-		// We garbage-collected old transactions:
-		// - Remove them from the list and schedule them for cleanup.
-
-		// We can only safely do the actual memory cleanup when all the
-		// currently active queries have finished running! (actually,
-		// when all the currently active scans have finished running...).
-
-		// Because we clean up asynchronously, we only clean up once we
-		// no longer need the transaction for anything (i.e., we can move it).
-		for (idx_t t_idx = 0; t_idx < i; t_idx++) {
-			cleanup_info->transactions.push_back(std::move(old_transactions[t_idx]));
-		}
-		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + static_cast<int64_t>(i));
 	}
 
 	return cleanup_info;

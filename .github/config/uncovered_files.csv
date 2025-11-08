@@ -60,7 +60,6 @@ common/serializer/binary_serializer.cpp	11
 common/serializer/memory_stream.cpp	5
 common/sort/comparators.cpp	103
 common/sort/merge_sorter.cpp	100
-common/sort/partition_state.cpp	44
 common/sort/sort_state.cpp	10
 common/sort/sorted_block.cpp	20
 common/string_util.cpp	15
