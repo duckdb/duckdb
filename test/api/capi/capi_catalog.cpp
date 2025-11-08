@@ -11,7 +11,10 @@ using namespace std;
 //----------------------------------------------------------------------------------------------------------------------
 
 static void Execute(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
-	auto context = (duckdb_client_context)duckdb_scalar_function_get_extra_info(info);
+	auto conn = (duckdb_connection)duckdb_scalar_function_get_extra_info(info);
+
+	duckdb_client_context context;
+	duckdb_connection_get_client_context(conn, &context);
 
 	// Get first argument (schema name)
 	auto input_size = duckdb_data_chunk_get_size(input);
@@ -41,6 +44,7 @@ static void Execute(duckdb_function_info info, duckdb_data_chunk input, duckdb_v
 		auto catalog_type = duckdb_catalog_get_type_name(catalog);
 		if (strcmp(catalog_type, "duckdb") != 0) {
 			duckdb_destroy_catalog(&catalog);
+			duckdb_destroy_client_context(&context);
 			duckdb_scalar_function_set_error(info, "Catalog type is not duckdb");
 			return;
 		}
@@ -63,6 +67,7 @@ static void Execute(duckdb_function_info info, duckdb_data_chunk input, duckdb_v
 			if (entry_type != DUCKDB_CATALOG_ENTRY_TYPE_TABLE) {
 				duckdb_destroy_catalog_entry(&entry);
 				duckdb_destroy_catalog(&catalog);
+				duckdb_destroy_client_context(&context);
 				duckdb_scalar_function_set_error(info, "Catalog entry type is not TABLE");
 				return;
 			}
@@ -71,6 +76,7 @@ static void Execute(duckdb_function_info info, duckdb_data_chunk input, duckdb_v
 			if (strcmp(entry_name, name.c_str()) != 0) {
 				duckdb_destroy_catalog_entry(&entry);
 				duckdb_destroy_catalog(&catalog);
+				duckdb_destroy_client_context(&context);
 				duckdb_scalar_function_set_error(info, "Catalog entry name does not match");
 				return;
 			}
@@ -82,6 +88,8 @@ static void Execute(duckdb_function_info info, duckdb_data_chunk input, duckdb_v
 		duckdb_destroy_catalog(&catalog);
 		duckdb_destroy_catalog(&catalog);
 	}
+
+	duckdb_destroy_client_context(&context);
 }
 
 TEST_CASE("Test Catalog Interface in C API", "[capi]") {
@@ -98,6 +106,9 @@ TEST_CASE("Test Catalog Interface in C API", "[capi]") {
 	auto catalog = duckdb_client_context_get_catalog(context, "duckdb");
 	REQUIRE(catalog == nullptr);
 
+	duckdb_destroy_client_context(&context);
+	duckdb_destroy_catalog(&catalog);
+
 	// We need a scalar function to get the catalog (from within a transaction)
 	auto func = duckdb_create_scalar_function();
 	duckdb_scalar_function_set_name(func, "test_lookup_function");
@@ -108,7 +119,7 @@ TEST_CASE("Test Catalog Interface in C API", "[capi]") {
 	duckdb_scalar_function_add_parameter(func, arg_type);
 	duckdb_scalar_function_set_return_type(func, ret_type);
 	duckdb_scalar_function_set_function(func, Execute);
-	duckdb_scalar_function_set_extra_info(func, context, nullptr);
+	duckdb_scalar_function_set_extra_info(func, tester.connection, nullptr);
 
 	REQUIRE(duckdb_register_scalar_function(tester.connection, func) == DuckDBSuccess);
 	duckdb_destroy_scalar_function(&func);
