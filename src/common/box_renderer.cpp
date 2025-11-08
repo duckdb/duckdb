@@ -44,6 +44,9 @@ void BaseResultRenderer::Render(ResultRenderType render_mode, const string &val)
 	case ResultRenderType::NULL_VALUE:
 		RenderNull(val, value_type);
 		break;
+	case ResultRenderType::STRING_LITERAL:
+		RenderStringLiteral(val, value_type);
+		break;
 	case ResultRenderType::FOOTER:
 		RenderFooter(val);
 		break;
@@ -87,6 +90,14 @@ const string &StringResultRenderer::str() {
 //===--------------------------------------------------------------------===//
 // Box Renderer Implementation
 //===--------------------------------------------------------------------===//
+struct HighlightingAnnotation {
+	HighlightingAnnotation(ResultRenderType render_mode, idx_t start) : render_mode(render_mode), start(start) {
+	}
+
+	ResultRenderType render_mode;
+	idx_t start;
+};
+
 struct BoxRenderValue {
 	BoxRenderValue(string text_p, ResultRenderType render_mode, ValueRenderAlignment alignment,
 	               LogicalType type_p = LogicalTypeId::INVALID, optional_idx render_width = optional_idx())
@@ -96,6 +107,7 @@ struct BoxRenderValue {
 
 	string text;
 	ResultRenderType render_mode;
+	vector<HighlightingAnnotation> annotations;
 	ValueRenderAlignment alignment;
 	LogicalType type;
 	optional_idx render_width;
@@ -146,6 +158,7 @@ private:
 
 private:
 	void RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
+	                 const vector<HighlightingAnnotation> &annotations,
 	                 ValueRenderAlignment alignment = ValueRenderAlignment::MIDDLE,
 	                 optional_idx render_width = optional_idx());
 	string RenderType(const LogicalType &type);
@@ -316,6 +329,7 @@ string BoxRendererImplementation::TruncateValue(const string &value, idx_t colum
 }
 
 void BoxRendererImplementation::RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
+                                            const vector<HighlightingAnnotation> &annotations,
                                             ValueRenderAlignment alignment, optional_idx render_width_input) {
 	idx_t render_width;
 	if (render_width_input.IsValid()) {
@@ -361,7 +375,24 @@ void BoxRendererImplementation::RenderValue(const string &value, idx_t column_wi
 	}
 	ss << config.VERTICAL;
 	ss << string(lpadding, ' ');
-	ss.Render(render_mode, render_value.get());
+	if (!annotations.empty()) {
+		// if we have annotations split up the rendering between annotations
+		idx_t pos = 0;
+		ResultRenderType active_render_mode = render_mode;
+		for (auto &annotation : annotations) {
+			if (annotation.start > render_value.get().size()) {
+				throw InternalException("BoxRenderer - rendering annotation is out of range");
+			}
+			ss.Render(active_render_mode, render_value.get().substr(pos, annotation.start - pos));
+			active_render_mode = annotation.render_mode;
+			pos = annotation.start;
+		}
+		if (pos < render_value.get().size()) {
+			ss.Render(active_render_mode, render_value.get().substr(pos, render_value.get().size() - pos));
+		}
+	} else {
+		ss.Render(render_mode, render_value.get());
+	}
 	ss << string(rpadding, ' ');
 }
 
@@ -815,17 +846,30 @@ void SkipWhitespace(const string &value, idx_t &pos) {
 	}
 }
 
-string PrettyPrintValue(const LogicalType &type, const string &value) {
+void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderValue &render_value) {
 	if (!type.IsJSONType()) {
-		return value;
+		return;
 	}
 	enum class JSONState { REGULAR, IN_QUOTE, ESCAPE };
 	string result;
 	vector<Separator> separators;
 	JSONState state = JSONState::REGULAR;
+	bool can_parse_value = false;
 	for (idx_t pos = 0; pos < value.size(); pos++) {
 		auto c = value[pos];
 		if (state == JSONState::REGULAR) {
+			if (can_parse_value) {
+				// check if this is "null"
+				if (pos + 4 < value.size() && c == 'n' && value[pos + 1] == 'u' && value[pos + 2] == 'l' &&
+				    value[pos + 3] == 'l') {
+					// it is! push the NULL annotation
+					render_value.annotations.emplace_back(ResultRenderType::NULL_VALUE, result.size());
+					result += "null";
+					render_value.annotations.emplace_back(render_value.render_mode, result.size());
+					pos += 3;
+					continue;
+				}
+			}
 			switch (c) {
 			case '[':
 			case '{': {
@@ -858,6 +902,7 @@ string PrettyPrintValue(const LogicalType &type, const string &value) {
 					result += string(2 * separators.size(), ' ');
 				}
 				SkipWhitespace(value, pos);
+				can_parse_value = c == '[';
 				break;
 			}
 			case '}':
@@ -878,6 +923,7 @@ string PrettyPrintValue(const LogicalType &type, const string &value) {
 				break;
 			}
 			case '"':
+				render_value.annotations.emplace_back(ResultRenderType::STRING_LITERAL, result.size());
 				state = JSONState::IN_QUOTE;
 				result += c;
 				break;
@@ -897,6 +943,7 @@ string PrettyPrintValue(const LogicalType &type, const string &value) {
 				result += c;
 				result += ' ';
 				SkipWhitespace(value, pos);
+				can_parse_value = true;
 				break;
 			default:
 				result += c;
@@ -907,6 +954,7 @@ string PrettyPrintValue(const LogicalType &type, const string &value) {
 			case '"':
 				// break out of quotes
 				state = JSONState::REGULAR;
+				render_value.annotations.emplace_back(render_value.render_mode, result.size() + 1);
 				break;
 			case '\\':
 				// escape
@@ -921,7 +969,7 @@ string PrettyPrintValue(const LogicalType &type, const string &value) {
 			throw InternalException("Invalid json state");
 		}
 	}
-	return result;
+	render_value.text = result;
 }
 
 void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width,
@@ -1163,7 +1211,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			vector<BoxRenderRow> extra_rows;
 			for (idx_t c = 0; c < row.values.size(); c++) {
 				if (CanPrettyPrint(row.values[c].type)) {
-					row.values[c].text = PrettyPrintValue(row.values[c].type, row.values[c].text);
+					PrettyPrintValue(row.values[c].type, row.values[c].text, row.values[c]);
 					// FIXME: hacky
 					row.values[c].render_width = column_widths[c] + 1;
 				}
@@ -1178,8 +1226,18 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				idx_t current_pos = 0;
 				idx_t current_render_width = 0;
 				auto full_value = row.values[c].text;
+				auto annotations = row.values[c].annotations;
+				idx_t annotation_idx = 0;
+				row.values[c].annotations.clear();
 				row.values[c].text = TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
 				row.values[c].render_width = current_render_width;
+				// copy over annotations
+				for (; annotation_idx < annotations.size(); annotation_idx++) {
+					if (annotations[annotation_idx].start >= current_pos) {
+						break;
+					}
+					row.values[c].annotations.push_back(annotations[annotation_idx]);
+				}
 				while (current_pos < full_value.size()) {
 					if (current_row >= extra_rows.size()) {
 						if (rows_left == (need_extra_row ? 1 : 0)) {
@@ -1195,11 +1253,20 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 						rows_left--;
 					}
 					auto &extra_row = extra_rows[current_row++];
+					idx_t start_pos = current_pos;
 					// stretch out the remainder on this row
 					current_render_width = 0;
 					extra_row.values[c].text =
 					    TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
 					extra_row.values[c].render_width = current_render_width;
+					// copy over annotations
+					for (; annotation_idx < annotations.size(); annotation_idx++) {
+						if (annotations[annotation_idx].start >= current_pos) {
+							break;
+						}
+						annotations[annotation_idx].start -= start_pos;
+						extra_row.values[c].annotations.push_back(annotations[annotation_idx]);
+					}
 				}
 			}
 			if (extra_rows.empty()) {
@@ -1343,7 +1410,8 @@ void BoxRendererImplementation::RenderValues() {
 			if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
 				ss.SetValueType(render_value.type);
 			}
-			RenderValue(render_text, column_widths[column_idx], render_mode, alignment, render_value.render_width);
+			RenderValue(render_text, column_widths[column_idx], render_mode, render_value.annotations, alignment,
+			            render_value.render_width);
 		}
 		ss << config.VERTICAL;
 		ss << '\n';
@@ -1436,14 +1504,16 @@ void BoxRendererImplementation::RenderFooter(idx_t row_count, idx_t column_count
 		}
 		ValueRenderAlignment alignment =
 		    render_rows_and_columns ? ValueRenderAlignment::LEFT : ValueRenderAlignment::MIDDLE;
+		vector<HighlightingAnnotation> annotations;
 		if (!readable_rows_str.empty()) {
 			RenderValue("(" + readable_rows_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE,
-			            alignment);
+			            annotations, alignment);
 			ss << config.VERTICAL;
 			ss << '\n';
 		}
 		if (!shown_str.empty()) {
-			RenderValue("(" + shown_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE, alignment);
+			RenderValue("(" + shown_str + ")", total_render_length - 4, ResultRenderType::NULL_VALUE, annotations,
+			            alignment);
 			ss << config.VERTICAL;
 			ss << '\n';
 		}

@@ -20,7 +20,7 @@ class ColumnDataRowCollection;
 enum class ValueRenderAlignment { LEFT, MIDDLE, RIGHT };
 enum class RenderMode : uint8_t { ROWS, COLUMNS };
 
-enum class ResultRenderType { LAYOUT, COLUMN_NAME, COLUMN_TYPE, VALUE, NULL_VALUE, FOOTER };
+enum class ResultRenderType { LAYOUT, COLUMN_NAME, COLUMN_TYPE, VALUE, NULL_VALUE, FOOTER, STRING_LITERAL };
 
 class BaseResultRenderer {
 public:
@@ -32,6 +32,9 @@ public:
 	virtual void RenderType(const string &text) = 0;
 	virtual void RenderValue(const string &text, const LogicalType &type) = 0;
 	virtual void RenderNull(const string &text, const LogicalType &type) = 0;
+	virtual void RenderStringLiteral(const string &text, const LogicalType &type) {
+		RenderValue(text, type);
+	}
 	virtual void RenderFooter(const string &text) = 0;
 
 	BaseResultRenderer &operator<<(char c);

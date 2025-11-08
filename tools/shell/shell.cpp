@@ -1389,6 +1389,10 @@ public:
 		}
 	}
 
+	void RenderStringLiteral(const string &text, const duckdb::LogicalType &type) override {
+		PrintText(text, HighlightElementType::STRING_CONSTANT);
+	}
+
 	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
 		PrintText(text, HighlightElementType::NULL_VALUE);
 	}
