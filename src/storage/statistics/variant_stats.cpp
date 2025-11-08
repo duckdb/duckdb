@@ -134,12 +134,19 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
+
+	stats.child_stats[0].Merge(other.child_stats[0]);
 	auto &data = GetDataUnsafe(stats);
 	auto &other_data = GetDataUnsafe(other);
 
-	D_ASSERT(!data.is_shredded && !other_data.is_shredded);
-	for (idx_t i = 0; i < 1; i++) {
-		stats.child_stats[i].Merge(other.child_stats[i]);
+	if (other_data.is_shredded) {
+		const bool is_shredded = data.is_shredded;
+		if (!data.is_shredded) {
+			stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
+			data.is_shredded = true;
+		}
+		//! FIXME: assumes equal shredding type?
+		stats.child_stats[1].Merge(other.child_stats[1]);
 	}
 }
 
@@ -149,7 +156,7 @@ void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	auto &other_data = VariantStats::GetDataUnsafe(other);
 	if (other_data.is_shredded) {
 		if (!data.is_shredded) {
-			BaseStatistics::Construct(stats.child_stats[1], other.child_stats[1].GetType());
+			stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
 			data.is_shredded = true;
 		}
 		//! FIXME: assumes equal shredding type?

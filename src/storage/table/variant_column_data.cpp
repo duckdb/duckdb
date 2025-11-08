@@ -163,7 +163,6 @@ void VariantColumnData::InitializeAppend(ColumnAppendState &state) {
 	validity.InitializeAppend(validity_append);
 	state.child_appends.push_back(std::move(validity_append));
 
-	D_ASSERT(!is_shredded && sub_columns.size() == 1);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
 		ColumnAppendState child_append;
