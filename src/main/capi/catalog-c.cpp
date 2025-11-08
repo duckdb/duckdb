@@ -15,7 +15,13 @@ struct CCatalogWrapper {
 	}
 };
 
-static CatalogType CatalogTypeFromC(duckdb_catalog_entry_type type) {
+struct CCatalogEntryWrapper {
+	CatalogEntry &entry;
+	CCatalogEntryWrapper(CatalogEntry &entry) : entry(entry) {
+	}
+};
+
+CatalogType CatalogTypeFromC(duckdb_catalog_entry_type type) {
 	switch (type) {
 	case DUCKDB_CATALOG_ENTRY_TYPE_TABLE:
 		return CatalogType::TABLE_ENTRY;
@@ -40,7 +46,7 @@ static CatalogType CatalogTypeFromC(duckdb_catalog_entry_type type) {
 	}
 }
 
-static duckdb_catalog_entry_type CatalogTypeToC(CatalogType type) {
+duckdb_catalog_entry_type CatalogTypeToC(CatalogType type) {
 	switch (type) {
 	case CatalogType::TABLE_ENTRY:
 		return DUCKDB_CATALOG_ENTRY_TYPE_TABLE;
@@ -77,6 +83,10 @@ duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_context context, 
 	}
 
 	auto &context_ref = *reinterpret_cast<duckdb::CClientContextWrapper *>(context);
+	if (!context_ref.context.transaction.HasActiveTransaction()) {
+		return nullptr;
+	}
+
 	auto catalog_ptr = duckdb::Catalog::GetCatalogEntry(context_ref.context, name);
 
 	if (!catalog_ptr) {
@@ -108,9 +118,10 @@ const char *duckdb_catalog_get_type_name(duckdb_catalog catalog) {
 duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalog, duckdb_client_context context,
                                               duckdb_catalog_entry_type entry_type, const char *schema_name,
                                               const char *entry_name) {
-	if (!catalog) {
+	if (!catalog || !context || !schema_name || !entry_name) {
 		return nullptr;
 	}
+
 	auto &catalog_ref = *reinterpret_cast<duckdb::CCatalogWrapper *>(catalog);
 	auto &context_ref = *reinterpret_cast<duckdb::CClientContextWrapper *>(context);
 
@@ -121,7 +132,7 @@ duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalog, duckdb_cli
 		return nullptr;
 	}
 
-	return reinterpret_cast<duckdb_catalog_entry>(entry.get());
+	return reinterpret_cast<duckdb_catalog_entry>(new duckdb::CCatalogEntryWrapper(*entry));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -133,22 +144,23 @@ duckdb_catalog_entry_type duckdb_catalog_entry_get_type(duckdb_catalog_entry ent
 		return DUCKDB_CATALOG_ENTRY_TYPE_INVALID;
 	}
 
-	auto &entry_ref = *reinterpret_cast<duckdb::CatalogEntry *>(entry);
-	return duckdb::CatalogTypeToC(entry_ref.type);
+	auto &entry_ref = *reinterpret_cast<duckdb::CCatalogEntryWrapper *>(entry);
+	return duckdb::CatalogTypeToC(entry_ref.entry.type);
 }
 
 const char *duckdb_catalog_entry_get_name(duckdb_catalog_entry entry) {
 	if (!entry) {
 		return nullptr;
 	}
-	auto &entry_ref = *reinterpret_cast<duckdb::CatalogEntry *>(entry);
-	return entry_ref.name.c_str();
+	auto &entry_ref = *reinterpret_cast<duckdb::CCatalogEntryWrapper *>(entry);
+	return entry_ref.entry.name.c_str();
 }
 
 void duckdb_destroy_catalog_entry(duckdb_catalog_entry *entry) {
 	if (!entry || !*entry) {
 		return;
 	}
-	// Catalog entries are not owned, so we do not delete them here.
+	auto entry_ptr = reinterpret_cast<duckdb::CCatalogEntryWrapper *>(*entry);
+	delete entry_ptr;
 	*entry = nullptr;
 }

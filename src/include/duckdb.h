@@ -6011,11 +6011,12 @@ DUCKDB_C_API duckdb_logical_type duckdb_table_function_bind_get_result_column_ty
 
 /*!
 Retrieve a database catalog instance by name.
-
+This function can only be called from within the context of an active transaction, e.g. during execution of a registered
+function callback. Otherwise returns `nullptr`.
 * @param context The client context.
 * @param catalog_name The name of the catalog.
-* @return The resulting catalog instance, or `nullptr` if a catalog with the specified name does not exist. Must be
-destroyed with `duckdb_destroy_catalog`
+* @return The resulting catalog instance, or `nullptr` if called from outside an active transaction or if a catalog with
+the specified name does not exist. Must be destroyed with `duckdb_destroy_catalog`
 */
 DUCKDB_C_API duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_context context, const char *catalog_name);
 
@@ -6031,6 +6032,7 @@ DUCKDB_C_API const char *duckdb_catalog_get_type_name(duckdb_catalog catalog);
 
 /*!
 Retrieve a catalog entry from the given catalog by type, schema name and entry name.
+The returned catalog entry remains valid for the duration of the current transaction.
 
 * @param catalog The catalog.
 * @param context The client context.
@@ -6038,7 +6040,7 @@ Retrieve a catalog entry from the given catalog by type, schema name and entry n
 * @param schema_name The schema name of the catalog entry.
 * @param entry_name The name of the catalog entry.
 * @return The resulting catalog entry, or `nullptr` if no such entry exists. Must be destroyed with
-`duckdb_destroy_catalog_entry`.
+`duckdb_destroy_catalog_entry`. Remains valid for the duration of the current transaction.
 */
 DUCKDB_C_API duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalog, duckdb_client_context context,
                                                            duckdb_catalog_entry_type entry_type,
