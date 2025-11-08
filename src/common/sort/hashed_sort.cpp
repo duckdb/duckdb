@@ -835,6 +835,8 @@ HashedSort::SortedRunPtr HashedSort::GetSortedRun(ClientContext &client, idx_t h
 		result = make_uniq<SortedRun>(client, sort, false);
 	}
 
+	hash_group.sort_source.reset();
+
 	return result;
 }
 
