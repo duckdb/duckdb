@@ -1109,25 +1109,75 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 	bool shortened_columns = false;
 	if (total_render_length > max_width) {
 		// before we remove columns, check if we can just reduce the size of columns
+		vector<idx_t> max_shorten_amount;
+		idx_t total_max_shorten_amount = 0;
 		for (auto &w : column_widths) {
 			if (w <= config.max_col_width) {
+				max_shorten_amount.push_back(0);
 				continue;
 			}
 			auto max_diff = w - config.max_col_width;
-			if (total_render_length - max_diff <= max_width) {
-				// if we reduce the size of this column we fit within the limits!
-				// reduce the width exactly enough so that the box fits
-				shortened_columns = true;
-				w -= total_render_length - max_width;
-				total_render_length = max_width;
-				break;
-			} else {
-				// reducing the width of this column does not make the result fit
-				// reduce the column width by the maximum amount anyway
-				shortened_columns = true;
-				w = config.max_col_width;
-				total_render_length -= max_diff;
+			max_shorten_amount.push_back(max_diff);
+			total_max_shorten_amount += max_diff;
+		}
+		if (total_max_shorten_amount >= total_render_length - max_width) {
+			// we can get below the max width by shortening
+			// try to shorten everything by an equivalent percentage
+			// i.e. if we have two long string columns, we would prefer them to both end up as the same size
+			idx_t shorten_amount_required = total_render_length - max_width;
+			double percentage_shorten_amount = double(shorten_amount_required) / double(total_max_shorten_amount);
+			D_ASSERT(percentage_shorten_amount >= 0 && percentage_shorten_amount <= 1);
+			vector<idx_t> actual_shorten_amounts;
+			idx_t total_shorten_amount = 0;
+			for (auto &shorten_amount : max_shorten_amount) {
+				if (shorten_amount == 0) {
+					actual_shorten_amounts.push_back(0);
+					continue;
+				}
+				idx_t new_shorten_amount =
+				    static_cast<idx_t>(percentage_shorten_amount * LossyNumericCast<double>(shorten_amount));
+				actual_shorten_amounts.push_back(new_shorten_amount);
+				total_shorten_amount += new_shorten_amount;
 			}
+			D_ASSERT(total_shorten_amount <= shorten_amount_required);
+			if (total_shorten_amount < shorten_amount_required) {
+				// because of floating point truncation we might not get exactly enough shortening
+				// ensure we
+				idx_t remaining_shorten_amount = shorten_amount_required - total_shorten_amount;
+				for (idx_t c = 0; c < actual_shorten_amounts.size() && remaining_shorten_amount > 0; c++) {
+					idx_t possible_extra_shortening = max_shorten_amount[c] - actual_shorten_amounts[c];
+					if (possible_extra_shortening == 0) {
+						continue;
+					}
+					idx_t extra_shortening = MinValue<idx_t>(remaining_shorten_amount, possible_extra_shortening);
+					remaining_shorten_amount -= extra_shortening;
+					actual_shorten_amounts[c] += extra_shortening;
+				}
+				D_ASSERT(remaining_shorten_amount == 0);
+			}
+			// now perform the shortening
+			for (idx_t c = 0; c < actual_shorten_amounts.size(); c++) {
+				if (actual_shorten_amounts[c] == 0) {
+					continue;
+				}
+				D_ASSERT(actual_shorten_amounts[c] < column_widths[c]);
+				column_widths[c] -= actual_shorten_amounts[c];
+				total_render_length -= actual_shorten_amounts[c];
+				shortened_columns = true;
+			}
+		} else {
+			// we cannot get below the max width by shortening
+			// set everything that is wider than the col width to the max col width
+			// afterwards - we need to prune columns
+			for (auto &w : column_widths) {
+				if (w <= config.max_col_width) {
+					continue;
+				}
+				total_render_length -= w - config.max_col_width;
+				w = config.max_col_width;
+				shortened_columns = true;
+			}
+			D_ASSERT(total_render_length > max_width);
 		}
 
 		if (total_render_length > max_width) {
