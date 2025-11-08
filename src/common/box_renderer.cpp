@@ -136,7 +136,6 @@ private:
 	vector<LogicalType> result_types;
 	const ColumnDataCollection &result;
 	BaseResultRenderer &ss;
-	bool shortened_columns = false;
 	vector<idx_t> column_widths;
 	vector<idx_t> column_boundary_positions;
 	idx_t total_render_length = 0;
@@ -156,6 +155,7 @@ private:
 	void ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width);
 	void RenderValues();
 	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns);
+	string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);
 
 	void ComputeRowFooter(idx_t row_count, idx_t rendered_rows);
 	void RenderFooter(idx_t row_count, idx_t column_count);
@@ -289,11 +289,28 @@ void BoxRendererImplementation::Render() {
 	RenderFooter(row_count, column_count);
 }
 
+string BoxRendererImplementation::TruncateValue(const string &value, idx_t column_width, idx_t &pos,
+                                                idx_t &current_render_width) {
+	idx_t start_pos = pos;
+	while (pos < value.size()) {
+		// check if this character fits...
+		auto char_size = Utf8Proc::RenderWidth(value.c_str(), value.size(), pos);
+		if (current_render_width + char_size >= column_width) {
+			// it doesn't! stop
+			break;
+		}
+		// it does! move to the next character
+		current_render_width += char_size;
+		pos = Utf8Proc::NextGraphemeCluster(value.c_str(), value.size(), pos);
+	}
+	return value.substr(start_pos, pos - start_pos);
+}
+
 void BoxRendererImplementation::RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
                                             ValueRenderAlignment alignment) {
 	auto render_width = Utf8Proc::RenderWidth(value);
 
-	const string *render_value = &value;
+	const_reference<string> render_value(value);
 	string small_value;
 	if (render_width > column_width) {
 		// the string is too large to fit in this column!
@@ -301,20 +318,10 @@ void BoxRendererImplementation::RenderValue(const string &value, idx_t column_wi
 		// figure out how much of this value we can render
 		idx_t pos = 0;
 		idx_t current_render_width = config.DOTDOTDOT_LENGTH;
-		while (pos < value.size()) {
-			// check if this character fits...
-			auto char_size = Utf8Proc::RenderWidth(value.c_str(), value.size(), pos);
-			if (current_render_width + char_size >= column_width) {
-				// it doesn't! stop
-				break;
-			}
-			// it does! move to the next character
-			current_render_width += char_size;
-			pos = Utf8Proc::NextGraphemeCluster(value.c_str(), value.size(), pos);
-		}
-		small_value = value.substr(0, pos) + config.DOTDOTDOT;
-		render_value = &small_value;
+		small_value = TruncateValue(value, column_width, pos, current_render_width);
+		small_value += config.DOTDOTDOT;
 		render_width = current_render_width;
+		render_value = const_reference<string>(small_value);
 	}
 	auto padding_count = (column_width - render_width) + 2;
 	idx_t lpadding;
@@ -337,7 +344,7 @@ void BoxRendererImplementation::RenderValue(const string &value, idx_t column_wi
 	}
 	ss << config.VERTICAL;
 	ss << string(lpadding, ' ');
-	ss.Render(render_mode, *render_value);
+	ss.Render(render_mode, render_value.get());
 	ss << string(rpadding, ' ');
 }
 
@@ -539,6 +546,8 @@ list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(con
 				}
 				insert_result.SetCardinality(1);
 				top_collection.Append(insert_result);
+			} else {
+				config.large_number_rendering = LargeNumberRendering::NONE;
 			}
 		}
 
@@ -892,27 +901,28 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 		total_render_length = min_width;
 	}
 	// now we need to constrain the length
-	shortened_columns = false;
 	unordered_set<idx_t> pruned_columns;
+	bool shortened_columns = false;
 	if (total_render_length > max_width) {
 		// before we remove columns, check if we can just reduce the size of columns
 		for (auto &w : column_widths) {
-			if (w > config.max_col_width) {
-				auto max_diff = w - config.max_col_width;
-				if (total_render_length - max_diff <= max_width) {
-					// if we reduce the size of this column we fit within the limits!
-					// reduce the width exactly enough so that the box fits
-					w -= total_render_length - max_width;
-					total_render_length = max_width;
-					shortened_columns = true;
-					break;
-				} else {
-					// reducing the width of this column does not make the result fit
-					// reduce the column width by the maximum amount anyway
-					w = config.max_col_width;
-					total_render_length -= max_diff;
-					shortened_columns = true;
-				}
+			if (w <= config.max_col_width) {
+				continue;
+			}
+			auto max_diff = w - config.max_col_width;
+			if (total_render_length - max_diff <= max_width) {
+				// if we reduce the size of this column we fit within the limits!
+				// reduce the width exactly enough so that the box fits
+				shortened_columns = true;
+				w -= total_render_length - max_width;
+				total_render_length = max_width;
+				break;
+			} else {
+				// reducing the width of this column does not make the result fit
+				// reduce the column width by the maximum amount anyway
+				shortened_columns = true;
+				w = config.max_col_width;
+				total_render_length -= max_diff;
 			}
 		}
 
@@ -938,6 +948,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			}
 		}
 	}
+
 	// update the footer with the column counts
 	UpdateColumnCountFooter(column_count, pruned_columns);
 
@@ -974,6 +985,71 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			}
 		}
 		row.values = std::move(values);
+	}
+	// check if we shortened any columns that would be rendered and if we can expand them
+	if (shortened_columns && config.render_mode == RenderMode::ROWS && render_rows.size() < config.max_rows) {
+		// if we have shortened any columns - try to expand them
+		// how many rows do we have left to expand before we hit the max row limit?
+		idx_t rows_left = config.max_rows - render_rows.size();
+		// for each row - figure out if we can "expand" the row
+		for (idx_t r = 0; r < render_rows.size(); r++) {
+			auto &row = render_rows[r];
+			if (row.row_type != RenderRowType::ROW_VALUES) {
+				continue;
+			}
+			bool need_extra_row = +1 != render_rows.size();
+			idx_t min_rows = need_extra_row ? 2 : 1;
+			if (rows_left < min_rows) {
+				// no rows left to expand
+				continue;
+			}
+			// check if this row has truncated columns
+			vector<BoxRenderRow> extra_rows;
+			for (idx_t c = 0; c < row.values.size(); c++) {
+				auto render_width = Utf8Proc::RenderWidth(row.values[c].text);
+				if (render_width <= column_widths[c]) {
+					// not shortened - skip
+					continue;
+				}
+				// this value was shortened! try to stretch it out
+				// first truncate what appears on the first row
+				idx_t current_row = 0;
+				idx_t current_pos = 0;
+				idx_t current_render_width = 0;
+				auto full_value = row.values[c].text;
+				row.values[c].text = TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
+				while (current_pos < full_value.size()) {
+					if (current_row >= extra_rows.size()) {
+						if (rows_left == (need_extra_row ? 1 : 0)) {
+							// we need to add an extra row but there's no space anymore - break
+							break;
+						}
+						// add a new row with empty values
+						extra_rows.emplace_back();
+						for (auto &current_val : row.values) {
+							extra_rows.back().values.emplace_back(string(), current_val.render_mode,
+							                                      current_val.alignment, current_val.type);
+						}
+						rows_left--;
+					}
+					auto &extra_row = extra_rows[current_row++];
+					// stretch out the remainder on this row
+					current_render_width = 0;
+					extra_row.values[c].text =
+					    TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
+				}
+			}
+			if (extra_rows.empty()) {
+				continue;
+			}
+			// if we added extra rows we need to add a separator if this is not the last row
+			if (need_extra_row) {
+				extra_rows.emplace_back(RenderRowType::SEPARATOR);
+			}
+			// add the extra rows at the current position
+			render_rows.insert(render_rows.begin() + static_cast<int64_t>(r) + 1, extra_rows.begin(), extra_rows.end());
+			r += extra_rows.size();
+		}
 	}
 	// handle the row dividers
 	for (idx_t r = 0; r < render_rows.size(); r++) {
