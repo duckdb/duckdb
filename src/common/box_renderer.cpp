@@ -154,7 +154,7 @@ private:
 	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width);
 	void RenderValues();
-	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &column_map);
+	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns);
 
 	void ComputeRowFooter(idx_t row_count, idx_t rendered_rows);
 	void RenderFooter(idx_t row_count, idx_t column_count);
@@ -289,7 +289,7 @@ void BoxRendererImplementation::Render() {
 	RenderValues();
 
 	// render the row count and column count
-	idx_t column_count = column_map.size();
+	idx_t column_count = result_types.size();
 	RenderFooter(row_count, column_count);
 }
 
@@ -918,12 +918,11 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 
 void BoxRendererImplementation::RenderLayoutLine(const char *layout, const char *boundary, const char *left_corner,
                                                  const char *right_corner) {
-	auto column_count = column_map.size();
 	// render the top line
 	ss << left_corner;
 	idx_t column_index = 0;
 	for (idx_t k = 0; k < total_render_length - 2; k++) {
-		if (column_index + 1 < column_count && k == column_boundary_positions[column_index]) {
+		if (column_index < column_boundary_positions.size() && k == column_boundary_positions[column_index]) {
 			ss << boundary;
 			column_index++;
 		} else {
