@@ -154,6 +154,7 @@ private:
 	list<ColumnDataCollection> PivotCollections(list<ColumnDataCollection> input, idx_t row_count);
 	void ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width);
 	void RenderValues();
+	void UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &column_map);
 
 	void ComputeRowFooter(idx_t row_count, idx_t rendered_rows);
 	void RenderFooter(idx_t row_count, idx_t column_count);
@@ -198,6 +199,31 @@ void BoxRendererImplementation::ComputeRowFooter(idx_t row_count, idx_t rendered
 	footer.render_length = MaxValue<idx_t>(MaxValue<idx_t>(footer.row_count_str.size(), footer.shown_str.size() + 2),
 	                                       footer.readable_rows_str.size() + 2) +
 	                       4;
+}
+
+void BoxRendererImplementation::UpdateColumnCountFooter(idx_t column_count, const unordered_set<idx_t> &pruned_columns) {
+	if (!pruned_columns.empty()) {
+		footer.has_hidden_columns = true;
+	}
+	footer.column_count_str = to_string(column_count) + " column";
+	if (result.ColumnCount() > 1) {
+		footer.column_count_str += "s";
+	}
+	if (config.render_mode == RenderMode::COLUMNS) {
+		if (footer.has_hidden_columns) {
+			footer.has_hidden_rows = true;
+			idx_t shown_row_count = column_count - pruned_columns.size();
+			footer.shown_str = to_string(shown_row_count - 2) + " shown";
+		} else {
+			footer.shown_str = string();
+		}
+	} else {
+		idx_t shown_column_count = column_count - pruned_columns.size();
+		if (footer.has_hidden_columns) {
+			footer.column_count_str += " (" + to_string(shown_column_count) + " shown)";
+		}
+	}
+
 }
 
 void BoxRendererImplementation::Render() {
@@ -263,32 +289,7 @@ void BoxRendererImplementation::Render() {
 	RenderValues();
 
 	// render the row count and column count
-	footer.column_count_str = to_string(result.ColumnCount()) + " column";
-	if (result.ColumnCount() > 1) {
-		footer.column_count_str += "s";
-	}
-	footer.has_hidden_columns = false;
-	for (auto entry : column_map) {
-		if (entry == SPLIT_COLUMN) {
-			footer.has_hidden_columns = true;
-			break;
-		}
-	}
 	idx_t column_count = column_map.size();
-	if (config.render_mode == RenderMode::COLUMNS) {
-		if (footer.has_hidden_columns) {
-			footer.has_hidden_rows = true;
-			footer.shown_str = to_string(column_count - 3) + " shown";
-		} else {
-			footer.shown_str = string();
-		}
-	} else {
-		if (footer.has_hidden_columns) {
-			column_count--;
-			footer.column_count_str += " (" + to_string(column_count) + " shown)";
-		}
-	}
-
 	RenderFooter(row_count, column_count);
 }
 
@@ -894,6 +895,8 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			}
 		}
 	}
+	// update the footer with the column counts
+	UpdateColumnCountFooter(column_count, pruned_columns);
 
 	bool added_split_column = false;
 	vector<idx_t> new_widths;
