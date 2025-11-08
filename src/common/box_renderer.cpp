@@ -997,7 +997,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			if (row.row_type != RenderRowType::ROW_VALUES) {
 				continue;
 			}
-			bool need_extra_row = +1 != render_rows.size();
+			bool need_extra_row = r + 1 != render_rows.size();
 			idx_t min_rows = need_extra_row ? 2 : 1;
 			if (rows_left < min_rows) {
 				// no rows left to expand
