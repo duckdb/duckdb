@@ -38,10 +38,6 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &l_vec = args.data[0];
 	auto &r_vec = args.data[1];
 
-	if (l_vec.GetType().id() != LogicalTypeId::LIST || r_vec.GetType().id() != LogicalTypeId::LIST) {
-		throw InvalidInputException("list_intersect requires two LIST arguments");
-	}
-
 	const auto l_size = ListVector::GetListSize(l_vec);
 	const auto r_size = ListVector::GetListSize(r_vec);
 
