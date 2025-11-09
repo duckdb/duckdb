@@ -185,8 +185,8 @@ private:
 
 	bool CanPrettyPrint(const LogicalType &type);
 	bool CanHighlight(const LogicalType &type);
-	void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderValue &render_value);
-	void HighlightValue(const LogicalType &type, const string &value, BoxRenderValue &render_value);
+	void PrettyPrintValue(BoxRenderValue &render_value, idx_t max_rows, idx_t max_width);
+	void HighlightValue(BoxRenderValue &render_value);
 };
 
 BoxRendererImplementation::BoxRendererImplementation(BoxRendererConfig &config, ClientContext &context,
@@ -839,20 +839,20 @@ protected:
 	};
 
 public:
-	void Process(const string &value);
+	bool Process(const string &value);
 
 protected:
 	virtual void HandleNull() {
 	}
-	virtual void HandleBracketOpen(char bracket, bool inlined) {
+	virtual void HandleBracketOpen(char bracket) {
 	}
-	virtual void HandleBracketClose(char bracket, bool inlined) {
+	virtual void HandleBracketClose(char bracket) {
 	}
 	virtual void HandleQuoteStart(char quote) {
 	}
 	virtual void HandleQuoteEnd(char quote) {
 	}
-	virtual void HandleComma(char comma, bool inlined) {
+	virtual void HandleComma(char comma) {
 	}
 	virtual void HandleColon() {
 	}
@@ -874,6 +874,7 @@ protected:
 	JSONState state = JSONState::REGULAR;
 	vector<Separator> separators;
 	idx_t pos = 0;
+	bool success = true;
 };
 
 bool JSONParser::SeparatorIsMatching(Separator &sep, char closing_sep) {
@@ -892,11 +893,11 @@ void JSONParser::SkipWhitespace(const string &value, idx_t &pos) {
 	}
 }
 
-void JSONParser::Process(const string &value) {
+bool JSONParser::Process(const string &value) {
 	separators.clear();
 	state = JSONState::REGULAR;
 	bool can_parse_value = false;
-	for (pos = 0; pos < value.size(); pos++) {
+	for (pos = 0; success && pos < value.size(); pos++) {
 		auto c = value[pos];
 		if (state == JSONState::REGULAR) {
 			if (can_parse_value) {
@@ -913,28 +914,7 @@ void JSONParser::Process(const string &value) {
 			case '{': {
 				// add a newline and indentation based on the separator count
 				separators.push_back(c);
-				// try to "peek" forward - if the closing separator is less than 10 bytes ahead, inline it
-				idx_t peeked_characters = 0;
-				vector<Separator> extra_separator;
-				for (idx_t next_pos = pos + 1; next_pos < value.size() && peeked_characters < 20; next_pos++) {
-					if (StringUtil::CharacterIsSpace(value[next_pos])) {
-						continue;
-					}
-					if (extra_separator.empty() && SeparatorIsMatching(separators.back(), value[next_pos])) {
-						separators.back().inlined = true;
-						break;
-					}
-					if (value[next_pos] == '{' || value[next_pos] == '[') {
-						// found a different separator opening - open it
-						extra_separator.push_back(value[next_pos]);
-					}
-					if (!extra_separator.empty() && SeparatorIsMatching(extra_separator.back(), value[next_pos])) {
-						// closed the separator - pop it back
-						extra_separator.pop_back();
-					}
-					peeked_characters++;
-				}
-				HandleBracketOpen(c, separators.back().inlined);
+				HandleBracketOpen(c);
 				SkipWhitespace(value, pos);
 				can_parse_value = c == '[';
 				break;
@@ -945,9 +925,8 @@ void JSONParser::Process(const string &value) {
 				if (separators.empty() || !SeparatorIsMatching(separators.back(), c)) {
 					throw InternalException("Failed to parse JSON string %s - invalid JSON", value);
 				}
-				bool inlined = separators.back().inlined;
 				separators.pop_back();
-				HandleBracketClose(c, inlined);
+				HandleBracketClose(c);
 				SkipWhitespace(value, pos);
 				break;
 			}
@@ -957,7 +936,7 @@ void JSONParser::Process(const string &value) {
 				break;
 			case ',':
 				// comma - move to next line
-				HandleComma(c, separators.back().inlined);
+				HandleComma(c);
 				SkipWhitespace(value, pos);
 				break;
 			case ':':
@@ -992,74 +971,179 @@ void JSONParser::Process(const string &value) {
 			throw InternalException("Invalid json state");
 		}
 	}
+	if (!success) {
+		return false;
+	}
 	Finish();
+	return true;
 }
+
+enum class JSONFormattingMode { STANDARD, COMPACT };
+
+enum class JSONComponentType { BRACKET_OPEN, BRACKET_CLOSE, LITERAL, COLON, COMMA, NULL_VALUE };
+
+struct JSONComponent {
+	JSONComponent(JSONComponentType type, string text_p) : type(type), text(std::move(text_p)) {
+	}
+
+	JSONComponentType type;
+	string text;
+};
 
 struct JSONFormatter : public JSONParser {
 public:
-	explicit JSONFormatter(BoxRenderValue &render_value) : render_value(render_value) {
+	explicit JSONFormatter() {
+	}
+
+	static void FormatValue(BoxRenderValue &render_value, idx_t max_rows, idx_t max_width) {
+		// process the components
+		JSONFormatter formatter;
+		formatter.Process(render_value.text);
+
+		auto success = formatter.TryFormat(JSONFormattingMode::STANDARD, render_value, max_rows, max_width);
+		if (success) {
+			return;
+		}
 	}
 
 protected:
 	void HandleNull() override {
-		result += "null";
+		components.emplace_back(JSONComponentType::NULL_VALUE, "null");
 	}
 
-	void HandleBracketOpen(char bracket, bool inlined) override {
-		result += bracket;
-		if (!inlined) {
-			result += '\n';
-			result += string(2 * Depth(), ' ');
-		}
+	void HandleBracketOpen(char bracket) override {
+		components.emplace_back(JSONComponentType::BRACKET_OPEN, string(1, bracket));
 	}
 
-	void HandleBracketClose(char bracket, bool inlined) override {
-		if (!inlined) {
-			// if we are inlining this separator - don't add the newlines after the closing bracket
-			result += '\n';
-			result += string(2 * Depth(), ' ');
-		}
-		result += bracket;
+	void HandleBracketClose(char bracket) override {
+		components.emplace_back(JSONComponentType::BRACKET_CLOSE, string(1, bracket));
 	}
 
 	void HandleQuoteStart(char quote) override {
-		result += quote;
+		AddLiteralCharacter(quote);
 	}
 
 	void HandleQuoteEnd(char quote) override {
-		result += quote;
+		AddLiteralCharacter(quote);
 	}
 
-	void HandleComma(char comma, bool inlined) override {
-		result += comma;
-		if (inlined) {
-			// current separator is inlined - just add spaces
-			result += ' ';
-		} else {
-			result += '\n';
-			result += string(2 * Depth(), ' ');
-		}
+	void HandleComma(char comma) override {
+		components.emplace_back(JSONComponentType::COMMA, ",");
 	}
 
 	void HandleColon() override {
-		result += ": ";
+		components.emplace_back(JSONComponentType::COLON, ":");
 	}
 
 	void HandleCharacter(char c) override {
-		result += c;
+		AddLiteralCharacter(c);
 	}
 
 	void HandleEscapeStart(char c) override {
-		result += c;
+		AddLiteralCharacter(c);
 	}
 
-	void Finish() override {
+	void AddLiteralCharacter(char c) {
+		if (components.empty() || components.back().type != JSONComponentType::LITERAL) {
+			components.emplace_back(JSONComponentType::LITERAL, "");
+		}
+		components.back().text += c;
+	}
+
+	bool TryFormat(JSONFormattingMode mode, BoxRenderValue &render_value, idx_t max_rows, idx_t max_width) {
+		string result;
+		idx_t row_count = 0;
+		idx_t line_length = 0;
+		idx_t depth = 0;
+		vector<bool> inlined;
+		for (idx_t c = 0; c < components.size() && row_count <= max_rows; c++) {
+			auto &component = components[c];
+			switch (component.type) {
+			case JSONComponentType::BRACKET_OPEN: {
+				depth++;
+				result += component.text;
+				// look forward until the corresponding bracket open - can we inline and not exceed the column width?
+				idx_t peek_depth = 0;
+				idx_t render_size = line_length + Utf8Proc::RenderWidth(component.text);
+				bool inline_bracket = false;
+				for (idx_t peek_idx = c + 1; peek_idx < components.size() && render_size <= max_width; peek_idx++) {
+					auto &peek_component = components[peek_idx];
+					if (peek_component.type == JSONComponentType::BRACKET_OPEN) {
+						peek_depth++;
+					} else if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
+						if (peek_depth == 0) {
+							// close!
+							inline_bracket = true;
+							break;
+						}
+						peek_depth--;
+					}
+					render_size += Utf8Proc::RenderWidth(peek_component.text);
+					if (peek_component.type == JSONComponentType::COMMA ||
+					    peek_component.type == JSONComponentType::COLON) {
+						render_size++;
+					}
+				}
+				inlined.push_back(inline_bracket);
+				if (!inlined.back()) {
+					// not inlined
+					result += '\n';
+					result += string(2 * depth, ' ');
+					row_count++;
+					line_length = 2 * depth;
+				} else {
+					line_length += Utf8Proc::RenderWidth(component.text);
+				}
+				break;
+			}
+			case JSONComponentType::BRACKET_CLOSE:
+				depth--;
+				if (!inlined.back()) {
+					result += '\n';
+					result += string(2 * depth, ' ');
+					row_count++;
+					line_length = 2 * depth + Utf8Proc::RenderWidth(component.text);
+				} else {
+					line_length += Utf8Proc::RenderWidth(component.text);
+				}
+				result += component.text;
+				inlined.pop_back();
+				break;
+			case JSONComponentType::COMMA:
+				result += component.text;
+				if (inlined.back()) {
+					result += " ";
+					line_length += Utf8Proc::RenderWidth(component.text) + 1;
+				} else {
+					result += '\n';
+					result += string(2 * depth, ' ');
+					row_count++;
+					line_length = 2 * depth;
+				}
+				break;
+			case JSONComponentType::COLON:
+				result += component.text;
+				result += " ";
+				line_length += Utf8Proc::RenderWidth(component.text) + 1;
+				break;
+			case JSONComponentType::NULL_VALUE:
+			case JSONComponentType::LITERAL:
+				result += component.text;
+				line_length += Utf8Proc::RenderWidth(component.text) + 1;
+				break;
+			default:
+				throw InternalException("Unsupported JSON component type");
+			}
+		}
+		if (row_count > max_rows) {
+			return false;
+		}
 		render_value.text = result;
+		return true;
 	}
 
 protected:
-	BoxRenderValue &render_value;
-	string result;
+	vector<JSONComponent> components;
 };
 
 struct JSONHighlighter : public JSONParser {
@@ -1073,33 +1157,12 @@ protected:
 		render_value.annotations.emplace_back(render_value.render_mode, pos + 4);
 	}
 
-	void HandleBracketOpen(char bracket, bool inlined) override {
-	}
-
-	void HandleBracketClose(char bracket, bool inlined) override {
-	}
-
 	void HandleQuoteStart(char quote) override {
 		render_value.annotations.emplace_back(ResultRenderType::STRING_LITERAL, pos);
 	}
 
 	void HandleQuoteEnd(char quote) override {
 		render_value.annotations.emplace_back(render_value.render_mode, pos + 1);
-	}
-
-	void HandleComma(char comma, bool inlined) override {
-	}
-
-	void HandleColon() override {
-	}
-
-	void HandleCharacter(char c) override {
-	}
-
-	void HandleEscapeStart(char c) override {
-	}
-
-	void Finish() override {
 	}
 
 protected:
@@ -1114,22 +1177,19 @@ bool BoxRendererImplementation::CanHighlight(const LogicalType &type) {
 	return type.IsJSONType();
 }
 
-void BoxRendererImplementation::PrettyPrintValue(const LogicalType &type, const string &value,
-                                                 BoxRenderValue &render_value) {
-	if (!type.IsJSONType()) {
+void BoxRendererImplementation::PrettyPrintValue(BoxRenderValue &render_value, idx_t max_rows, idx_t max_width) {
+	if (!render_value.type.IsJSONType()) {
 		return;
 	}
-	JSONFormatter formatter(render_value);
-	formatter.Process(value);
+	JSONFormatter::FormatValue(render_value, max_rows, max_width);
 }
 
-void BoxRendererImplementation::HighlightValue(const LogicalType &type, const string &value,
-                                               BoxRenderValue &render_value) {
-	if (!type.IsJSONType()) {
+void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
+	if (!render_value.type.IsJSONType()) {
 		return;
 	}
 	JSONHighlighter highlighter(render_value);
-	highlighter.Process(value);
+	highlighter.Process(render_value.text);
 }
 void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width,
                                                     idx_t max_width) {
@@ -1420,9 +1480,13 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			vector<BoxRenderRow> extra_rows;
 			for (idx_t c = 0; c < row.values.size(); c++) {
 				if (CanPrettyPrint(row.values[c].type)) {
-					PrettyPrintValue(row.values[c].type, row.values[c].text, row.values[c]);
+					idx_t max_rows = rows_left + extra_rows.size();
+					if (need_extra_row) {
+						max_rows--;
+					}
+					PrettyPrintValue(row.values[c], max_rows, column_widths[c]);
 					if (CanHighlight(row.values[c].type)) {
-						HighlightValue(row.values[c].type, row.values[c].text, row.values[c]);
+						HighlightValue(row.values[c]);
 					}
 					// FIXME: hacky
 					row.values[c].render_width = column_widths[c] + 1;
@@ -1624,7 +1688,7 @@ void BoxRendererImplementation::RenderValues() {
 			if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
 				ss.SetValueType(render_value.type);
 				if (!render_value.decomposed && CanHighlight(render_value.type)) {
-					HighlightValue(render_value.type, render_value.text, render_value);
+					HighlightValue(render_value);
 				}
 			}
 			RenderValue(render_value.text, column_widths[column_idx], render_mode, render_value.annotations, alignment,
