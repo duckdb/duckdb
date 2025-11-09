@@ -978,9 +978,11 @@ bool JSONParser::Process(const string &value) {
 	return true;
 }
 
-enum class JSONFormattingMode { STANDARD, COMPACT };
+enum class JSONFormattingMode { STANDARD, COMPACT_VERTICAL, COMPACT_HORIZONTAL };
 
 enum class JSONComponentType { BRACKET_OPEN, BRACKET_CLOSE, LITERAL, COLON, COMMA, NULL_VALUE };
+
+enum class JSONFormattingResult { SUCCESS, TOO_MANY_ROWS, TOO_WIDE };
 
 struct JSONComponent {
 	JSONComponent(JSONComponentType type, string text_p) : type(type), text(std::move(text_p)) {
@@ -1000,13 +1002,24 @@ public:
 		JSONFormatter formatter;
 		formatter.Process(render_value.text);
 
-		auto success = formatter.TryFormat(JSONFormattingMode::STANDARD, render_value, max_rows, max_width);
-		if (success) {
+		idx_t indentation_size = 2;
+
+		auto result =
+		    formatter.TryFormat(JSONFormattingMode::STANDARD, render_value, max_rows, max_width, indentation_size);
+		if (result == JSONFormattingResult::SUCCESS) {
 			return;
 		}
 		// if we exceeded the max row count - try in compact mode
-		success = formatter.TryFormat(JSONFormattingMode::COMPACT, render_value, max_rows, max_width);
-		if (success) {
+		JSONFormattingMode mode;
+		if (result == JSONFormattingResult::TOO_WIDE) {
+			// reduce indentation size if the result was too wide
+			mode = JSONFormattingMode::COMPACT_HORIZONTAL;
+			indentation_size = 1;
+		} else {
+			mode = JSONFormattingMode::COMPACT_VERTICAL;
+		}
+		result = formatter.TryFormat(mode, render_value, max_rows, max_width, indentation_size);
+		if (result == JSONFormattingResult::SUCCESS) {
 			return;
 		}
 	}
@@ -1062,12 +1075,40 @@ protected:
 		idx_t row_count = 0;
 		idx_t line_length = 0;
 		idx_t depth = 0;
+		idx_t max_rows;
 		idx_t max_width;
+		idx_t indentation_size = 2;
+		JSONFormattingResult format_result = JSONFormattingResult::SUCCESS;
 	};
 
-	void FormatComponent(FormatState &format_state, JSONComponent &component, bool inlined) {
+	void AddLiteral(FormatState &format_state, const string &text) {
 		auto &result = format_state.result;
+		auto &line_length = format_state.line_length;
+		result += text;
+		line_length += Utf8Proc::RenderWidth(text);
+		if (line_length > format_state.max_width) {
+			format_state.format_result = JSONFormattingResult::TOO_WIDE;
+		}
+	}
+	void AddNewline(FormatState &format_state) {
+		auto &result = format_state.result;
+		auto &depth = format_state.depth;
 		auto &row_count = format_state.row_count;
+		auto &line_length = format_state.line_length;
+		result += '\n';
+		result += string(format_state.indentation_size * depth, ' ');
+		row_count++;
+		if (row_count > format_state.max_rows) {
+			format_state.format_result = JSONFormattingResult::TOO_MANY_ROWS;
+			return;
+		}
+		line_length = format_state.indentation_size * depth;
+		if (line_length > format_state.max_width) {
+			format_state.format_result = JSONFormattingResult::TOO_WIDE;
+		}
+	}
+
+	void FormatComponent(FormatState &format_state, JSONComponent &component, bool inlined) {
 		auto &depth = format_state.depth;
 		auto &line_length = format_state.line_length;
 		auto &max_width = format_state.max_width;
@@ -1075,12 +1116,12 @@ protected:
 		switch (component.type) {
 		case JSONComponentType::BRACKET_OPEN: {
 			depth++;
-			result += component.text;
+			AddLiteral(format_state, component.text);
 			if (!inlined) {
 				// not inlined
 				// look forward until the corresponding bracket open - can we inline and not exceed the column width?
 				idx_t peek_depth = 0;
-				idx_t render_size = line_length + Utf8Proc::RenderWidth(component.text);
+				idx_t render_size = line_length;
 				idx_t peek_idx;
 				bool inline_bracket = false;
 				for (peek_idx = c + 1; peek_idx < components.size() && render_size <= max_width; peek_idx++) {
@@ -1108,47 +1149,44 @@ protected:
 						FormatComponent(format_state, inline_component, true);
 					}
 					c = peek_idx;
-					line_length = render_size;
 					return;
 				}
-				if (format_state.mode == JSONFormattingMode::COMPACT) {
+				if (format_state.mode == JSONFormattingMode::COMPACT_VERTICAL) {
 					// we can't inline - but is the next token a bracket open?
 					if (c + 1 < components.size() && components[c + 1].type == JSONComponentType::BRACKET_OPEN) {
 						// it is! that bracket open will add a newline - we don't need to do it here
 						return;
 					}
 				}
-				result += '\n';
-				result += string(2 * depth, ' ');
-				row_count++;
-				line_length = 2 * depth;
-			} else {
-				line_length += Utf8Proc::RenderWidth(component.text);
+				AddNewline(format_state);
 			}
 			break;
 		}
 		case JSONComponentType::BRACKET_CLOSE:
 			depth--;
 			if (!inlined) {
-				result += '\n';
-				result += string(2 * depth, ' ');
-				row_count++;
-				line_length = 2 * depth + Utf8Proc::RenderWidth(component.text);
-			} else {
-				line_length += Utf8Proc::RenderWidth(component.text);
+				AddNewline(format_state);
 			}
-			result += component.text;
+			AddLiteral(format_state, component.text);
 			break;
 		case JSONComponentType::COMMA:
-			result += component.text;
-			if (inlined) {
-				result += " ";
-				line_length += Utf8Proc::RenderWidth(component.text) + 1;
+		case JSONComponentType::COLON:
+			AddLiteral(format_state, component.text);
+			bool always_inline;
+			if (format_state.mode == JSONFormattingMode::COMPACT_HORIZONTAL) {
+				// if we are trying to compact horizontally - don't inline colons unless it fits
+				always_inline = false;
 			} else {
-				if (format_state.mode == JSONFormattingMode::COMPACT) {
+				// in normal processing we always inline colons
+				always_inline = component.type == JSONComponentType::COLON;
+			}
+			if (inlined || always_inline) {
+				AddLiteral(format_state, " ");
+			} else {
+				if (format_state.mode != JSONFormattingMode::STANDARD) {
 					// if we are not inlining in compact mode, try to inline until the next comma
 					idx_t peek_depth = 0;
-					idx_t render_size = line_length + Utf8Proc::RenderWidth(component.text) + 1;
+					idx_t render_size = line_length + 1;
 					idx_t peek_idx;
 					bool inline_comma = false;
 					for (peek_idx = c + 1; peek_idx < components.size() && render_size <= max_width; peek_idx++) {
@@ -1172,52 +1210,46 @@ protected:
 					}
 					if (inline_comma) {
 						// we can inline until the next comma! do it
-						result += " ";
+						AddLiteral(format_state, " ");
 						for (idx_t inline_idx = c + 1; inline_idx < peek_idx; inline_idx++) {
 							auto &inline_component = components[inline_idx];
 							FormatComponent(format_state, inline_component, true);
 						}
 						c = peek_idx - 1;
-						line_length = render_size;
 						return;
 					}
 				}
-				result += '\n';
-				result += string(2 * depth, ' ');
-				row_count++;
-				line_length = 2 * depth;
+				AddNewline(format_state);
 			}
-			break;
-		case JSONComponentType::COLON:
-			result += component.text;
-			result += " ";
-			line_length += Utf8Proc::RenderWidth(component.text) + 1;
 			break;
 		case JSONComponentType::NULL_VALUE:
 		case JSONComponentType::LITERAL:
-			result += component.text;
-			line_length += Utf8Proc::RenderWidth(component.text) + 1;
+			AddLiteral(format_state, component.text);
 			break;
 		default:
 			throw InternalException("Unsupported JSON component type");
 		}
 	}
 
-	bool TryFormat(JSONFormattingMode mode, BoxRenderValue &render_value, idx_t max_rows, idx_t max_width) {
+	JSONFormattingResult TryFormat(JSONFormattingMode mode, BoxRenderValue &render_value, idx_t max_rows,
+	                               idx_t max_width, idx_t indentation_size = 2) {
 		FormatState format_state;
 		format_state.mode = mode;
+		format_state.max_rows = max_rows;
 		format_state.max_width = max_width;
-		for (format_state.component_idx = 0;
-		     format_state.component_idx < components.size() && format_state.row_count <= max_rows;
+		format_state.indentation_size = indentation_size;
+		for (format_state.component_idx = 0; format_state.component_idx < components.size() &&
+		                                     format_state.format_result == JSONFormattingResult::SUCCESS;
 		     format_state.component_idx++) {
 			auto &component = components[format_state.component_idx];
 			FormatComponent(format_state, component, false);
 		}
-		if (format_state.row_count > max_rows) {
-			return false;
+
+		if (format_state.format_result != JSONFormattingResult::SUCCESS) {
+			return format_state.format_result;
 		}
 		render_value.text = format_state.result;
-		return true;
+		return JSONFormattingResult::SUCCESS;
 	}
 
 protected:
