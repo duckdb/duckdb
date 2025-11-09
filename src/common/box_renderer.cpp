@@ -7,7 +7,6 @@
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
-
 //===--------------------------------------------------------------------===//
 // Result Renderer
 //===--------------------------------------------------------------------===//
@@ -821,16 +820,52 @@ bool CanPrettyPrint(const LogicalType &type) {
 	return type.IsJSONType();
 }
 
-struct Separator {
-	Separator(char sep) // NOLINT: allow implicit conversion
-	    : sep(sep), inlined(false) {
+struct JSONParser {
+protected:
+	enum class JSONState { REGULAR, IN_QUOTE, ESCAPE };
+
+	struct Separator {
+		Separator(char sep) // NOLINT: allow implicit conversion
+		    : sep(sep), inlined(false) {
+		}
+
+		char sep;
+		bool inlined = false;
+	};
+
+public:
+	JSONParser(BoxRenderValue &render_value) : render_value(render_value) {
 	}
 
-	char sep;
-	bool inlined = false;
+	void Process(const string &value);
+
+protected:
+	virtual void HandleNull();
+	virtual void HandleBracketOpen(char bracket, bool inlined);
+	virtual void HandleBracketClose(char bracket, bool inlined);
+	virtual void HandleQuoteStart(char quote);
+	virtual void HandleQuoteEnd(char quote);
+	virtual void HandleComma(char comma, bool inlined);
+	virtual void HandleColon();
+	virtual void HandleCharacter(char c);
+	virtual void HandleEscapeStart(char c);
+	virtual void Finish();
+
+protected:
+	bool SeparatorIsMatching(Separator &sep, char closing_sep);
+	void SkipWhitespace(const string &value, idx_t &pos);
+	idx_t Depth() const {
+		return separators.size();
+	}
+
+protected:
+	JSONState state = JSONState::REGULAR;
+	vector<Separator> separators;
+	BoxRenderValue &render_value;
+	string result;
 };
 
-bool SeparatorIsMatching(Separator &sep, char closing_sep) {
+bool JSONParser::SeparatorIsMatching(Separator &sep, char closing_sep) {
 	if (sep.sep == '{' && closing_sep == '}') {
 		return true;
 	}
@@ -840,20 +875,75 @@ bool SeparatorIsMatching(Separator &sep, char closing_sep) {
 	return false;
 }
 
-void SkipWhitespace(const string &value, idx_t &pos) {
+void JSONParser::SkipWhitespace(const string &value, idx_t &pos) {
 	while (pos + 1 < value.size() && StringUtil::CharacterIsSpace(value[pos + 1])) {
 		pos++;
 	}
 }
 
-void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderValue &render_value) {
-	if (!type.IsJSONType()) {
-		return;
+void JSONParser::HandleNull() {
+	// it is! push the NULL annotation
+	render_value.annotations.emplace_back(ResultRenderType::NULL_VALUE, result.size());
+	result += "null";
+	render_value.annotations.emplace_back(render_value.render_mode, result.size());
+}
+
+void JSONParser::HandleBracketOpen(char bracket, bool inlined) {
+	result += bracket;
+	if (!inlined) {
+		result += '\n';
+		result += string(2 * Depth(), ' ');
 	}
-	enum class JSONState { REGULAR, IN_QUOTE, ESCAPE };
-	string result;
-	vector<Separator> separators;
-	JSONState state = JSONState::REGULAR;
+}
+
+void JSONParser::HandleBracketClose(char bracket, bool inlined) {
+	if (!inlined) {
+		// if we are inlining this separator - don't add the newlines after the closing bracket
+		result += '\n';
+		result += string(2 * Depth(), ' ');
+	}
+	result += bracket;
+}
+
+void JSONParser::HandleQuoteStart(char quote) {
+	render_value.annotations.emplace_back(ResultRenderType::STRING_LITERAL, result.size());
+	result += quote;
+}
+
+void JSONParser::HandleQuoteEnd(char quote) {
+	render_value.annotations.emplace_back(render_value.render_mode, result.size() + 1);
+	result += quote;
+}
+
+void JSONParser::HandleComma(char comma, bool inlined) {
+	result += comma;
+	if (inlined) {
+		// current separator is inlined - just add spaces
+		result += ' ';
+	} else {
+		result += '\n';
+		result += string(2 * Depth(), ' ');
+	}
+}
+
+void JSONParser::HandleColon() {
+	result += ": ";
+}
+
+void JSONParser::HandleCharacter(char c) {
+	result += c;
+}
+
+void JSONParser::HandleEscapeStart(char c) {
+	result += c;
+}
+
+void JSONParser::Finish() {
+	render_value.text = result;
+}
+void JSONParser::Process(const string &value) {
+	separators.clear();
+	state = JSONState::REGULAR;
 	bool can_parse_value = false;
 	for (idx_t pos = 0; pos < value.size(); pos++) {
 		auto c = value[pos];
@@ -862,10 +952,7 @@ void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderVal
 				// check if this is "null"
 				if (pos + 4 < value.size() && c == 'n' && value[pos + 1] == 'u' && value[pos + 2] == 'l' &&
 				    value[pos + 3] == 'l') {
-					// it is! push the NULL annotation
-					render_value.annotations.emplace_back(ResultRenderType::NULL_VALUE, result.size());
-					result += "null";
-					render_value.annotations.emplace_back(render_value.render_mode, result.size());
+					HandleNull();
 					pos += 3;
 					continue;
 				}
@@ -875,7 +962,6 @@ void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderVal
 			case '{': {
 				// add a newline and indentation based on the separator count
 				separators.push_back(c);
-				result += c;
 				// try to "peek" forward - if the closing separator is less than 10 bytes ahead, inline it
 				idx_t peeked_characters = 0;
 				vector<Separator> extra_separator;
@@ -897,10 +983,7 @@ void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderVal
 					}
 					peeked_characters++;
 				}
-				if (!separators.back().inlined) {
-					result += '\n';
-					result += string(2 * separators.size(), ' ');
-				}
+				HandleBracketOpen(c, separators.back().inlined);
 				SkipWhitespace(value, pos);
 				can_parse_value = c == '[';
 				break;
@@ -913,40 +996,26 @@ void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderVal
 				}
 				bool inlined = separators.back().inlined;
 				separators.pop_back();
-				if (!inlined) {
-					// if we are inlining this separator - don't add the newlines after the closing bracket
-					result += '\n';
-					result += string(2 * separators.size(), ' ');
-				}
-				result += c;
+				HandleBracketClose(c, inlined);
 				SkipWhitespace(value, pos);
 				break;
 			}
 			case '"':
-				render_value.annotations.emplace_back(ResultRenderType::STRING_LITERAL, result.size());
+				HandleQuoteStart(c);
 				state = JSONState::IN_QUOTE;
-				result += c;
 				break;
 			case ',':
 				// comma - move to next line
-				result += c;
-				if (separators.back().inlined) {
-					// current separator is inlined - just add spaces
-					result += ' ';
-				} else {
-					result += '\n';
-					result += string(2 * separators.size(), ' ');
-				}
+				HandleComma(c, separators.back().inlined);
 				SkipWhitespace(value, pos);
 				break;
 			case ':':
-				result += c;
-				result += ' ';
+				HandleColon();
 				SkipWhitespace(value, pos);
 				can_parse_value = true;
 				break;
 			default:
-				result += c;
+				HandleCharacter(c);
 				break;
 			}
 		} else if (state == JSONState::IN_QUOTE) {
@@ -954,22 +1023,33 @@ void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderVal
 			case '"':
 				// break out of quotes
 				state = JSONState::REGULAR;
-				render_value.annotations.emplace_back(render_value.render_mode, result.size() + 1);
+				HandleQuoteEnd(c);
 				break;
 			case '\\':
 				// escape
 				state = JSONState::ESCAPE;
+				HandleEscapeStart(c);
+				break;
+			default:
+				HandleCharacter(c);
 				break;
 			}
-			result += c;
 		} else if (state == JSONState::ESCAPE) {
 			state = JSONState::IN_QUOTE;
-			result += c;
+			HandleCharacter(c);
 		} else {
 			throw InternalException("Invalid json state");
 		}
 	}
-	render_value.text = result;
+	Finish();
+}
+
+void PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderValue &render_value) {
+	if (!type.IsJSONType()) {
+		return;
+	}
+	JSONParser parser(render_value);
+	parser.Process(value);
 }
 
 void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &collections, idx_t min_width,
@@ -1325,6 +1405,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			// if we added extra rows we need to add a separator if this is not the last row
 			if (need_extra_row) {
 				extra_rows.emplace_back(RenderRowType::SEPARATOR);
+				rows_left--;
 			}
 			// add the extra rows at the current position
 			render_rows.insert(render_rows.begin() + static_cast<int64_t>(r) + 1, extra_rows.begin(), extra_rows.end());
