@@ -649,25 +649,25 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 
 	unique_ptr<FunctionData> bind_info;
 
-	if (bound_function.bind) {
-		bind_info = bound_function.bind(context, bound_function, children);
-	} else if (bound_function.bind_extended) {
+	if (bound_function.HasBindCallback()) {
+		bind_info = bound_function.GetBindCallback()(context, bound_function, children);
+	} else if (bound_function.HasBindExtendedCallback()) {
 		if (!binder) {
 			throw InternalException("Function '%s' has a 'bind_extended' but the FunctionBinder was created without "
 			                        "a reference to a Binder",
 			                        bound_function.name);
 		}
 		ScalarFunctionBindInput bind_input(*binder);
-		bind_info = bound_function.bind_extended(bind_input, bound_function, children);
+		bind_info = bound_function.GetBindExtendedCallback()(bind_input, bound_function, children);
 	}
 
 	// After the "bind" callback, we verify that all template types are bound to concrete types.
 	CheckTemplateTypesResolved(bound_function);
 
-	if (bound_function.get_modified_databases && binder) {
+	if (bound_function.HasModifiedDatabasesCallback() && binder) {
 		auto &properties = binder->GetStatementProperties();
 		FunctionModifiedDatabasesInput input(bind_info, properties);
-		bound_function.get_modified_databases(context, input);
+		bound_function.GetModifiedDatabasesCallback()(context, input);
 	}
 
 	HandleCollations(context, bound_function, children);
@@ -679,10 +679,10 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 	unique_ptr<Expression> result;
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function),
 	                                                      std::move(children), std::move(bind_info), is_operator);
-	if (result_func->function.bind_expression) {
+	if (result_func->function.HasBindExpressionCallback()) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression
 		FunctionBindExpressionInput input(context, result_func->bind_info.get(), result_func->children);
-		result = result_func->function.bind_expression(input);
+		result = result_func->function.GetBindExpressionCallback()(input);
 	}
 	if (!result) {
 		result = std::move(result_func);

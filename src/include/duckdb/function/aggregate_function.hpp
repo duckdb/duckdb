@@ -184,6 +184,16 @@ public:
 	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
 	}
 
+	// clang-format off
+	bool HasBindCallback() const { return bind != nullptr; }
+	bind_aggregate_function_t GetBindCallback() const { return bind; }
+	bool HasSerializationCallbacks() const { return serialize != nullptr && deserialize != nullptr; }
+	void SetSerializeCallback(aggregate_serialize_t callback) { serialize = callback; }
+	void SetDeserializeCallback(aggregate_deserialize_t callback) { deserialize = callback; }
+	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
+	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
+	// clang-format on
+
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;
 	//! The hashed aggregate state initialization function
@@ -218,6 +228,7 @@ public:
 	//! Additional function info, passed to the bind
 	shared_ptr<AggregateFunctionInfo> function_info;
 
+public:
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
 		       combine == rhs.combine && finalize == rhs.finalize && window == rhs.window;

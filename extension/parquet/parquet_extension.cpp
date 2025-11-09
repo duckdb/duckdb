@@ -867,7 +867,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			}
 
 			auto transform_func = VariantColumnWriter::GetTransformFunction();
-			transform_func.bind(context, transform_func, arguments);
+			transform_func.GetBindCallback()(context, transform_func, arguments);
 
 			auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.GetReturnType(), transform_func,
 			                                                    std::move(arguments), nullptr, false);

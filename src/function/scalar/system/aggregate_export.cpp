@@ -348,8 +348,8 @@ ScalarFunction FinalizeFun::GetFunction() {
 	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
 	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.serialize = ExportStateScalarSerialize;
-	result.deserialize = ExportStateScalarDeserialize;
+	result.SetSerializeCallback(ExportStateScalarSerialize);
+	result.SetDeserializeCallback(ExportStateScalarDeserialize);
 	return result;
 }
 
@@ -358,8 +358,8 @@ ScalarFunction CombineFun::GetFunction() {
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
 	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.serialize = ExportStateScalarSerialize;
-	result.deserialize = ExportStateScalarDeserialize;
+	result.SetSerializeCallback(ExportStateScalarSerialize);
+	result.SetDeserializeCallback(ExportStateScalarDeserialize);
 	return result;
 }
 

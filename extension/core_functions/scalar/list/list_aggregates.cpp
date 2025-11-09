@@ -505,8 +505,8 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	result.varargs = LogicalType::ANY;
-	result.serialize = ListAggregatesBindData::SerializeFunction;
-	result.deserialize = ListAggregatesBindData::DeserializeFunction;
+	result.SetSerializeCallback(ListAggregatesBindData::SerializeFunction);
+	result.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
 	return result;
 }
 
