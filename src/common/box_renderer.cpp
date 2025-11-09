@@ -1631,9 +1631,10 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					}
 					row.values[c].annotations.push_back(annotations[annotation_idx]);
 				}
+				idx_t min_leftover_rows = need_extra_row ? 1 : 0;
 				while (current_pos < full_value.size()) {
 					if (current_row >= extra_rows.size()) {
-						if (rows_left == (need_extra_row ? 1 : 0)) {
+						if (rows_left == min_leftover_rows) {
 							// we need to add an extra row but there's no space anymore - break
 							break;
 						}
@@ -1645,12 +1646,21 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 						}
 						rows_left--;
 					}
+					bool can_add_extra_row = rows_left > min_leftover_rows;
 					auto &extra_row = extra_rows[current_row++];
 					idx_t start_pos = current_pos;
 					// stretch out the remainder on this row
 					current_render_width = 0;
-					extra_row.values[c].text =
-					    TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
+					if (can_add_extra_row) {
+						// if we can add an extra row after this row truncate it
+						extra_row.values[c].text =
+						    TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
+					} else {
+						// if we cannot add an extra row after this just throw all remaining text on this row
+						extra_row.values[c].text = full_value.substr(current_pos);
+						current_render_width = Utf8Proc::RenderWidth(extra_row.values[c].text);
+						current_pos = full_value.size();
+					}
 					extra_row.values[c].render_width = current_render_width;
 					extra_row.values[c].decomposed = true;
 					// copy over annotations
