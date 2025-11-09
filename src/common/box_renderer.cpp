@@ -110,6 +110,7 @@ struct BoxRenderValue {
 	ValueRenderAlignment alignment;
 	LogicalType type;
 	optional_idx render_width;
+	bool decomposed = false;
 };
 
 enum class RenderRowType { ROW_VALUES, SEPARATOR, DIVIDER, FOOTER };
@@ -347,6 +348,7 @@ void BoxRendererImplementation::RenderValue(const string &value, idx_t column_wi
 
 	const_reference<string> render_value(value);
 	string small_value;
+	idx_t max_render_pos = value.size();
 	if (render_width > column_width) {
 		// the string is too large to fit in this column!
 		// the size of this column must have been reduced
@@ -354,6 +356,7 @@ void BoxRendererImplementation::RenderValue(const string &value, idx_t column_wi
 		idx_t pos = 0;
 		idx_t current_render_width = config.DOTDOTDOT_LENGTH;
 		small_value = TruncateValue(value, column_width, pos, current_render_width);
+		max_render_pos = pos;
 		small_value += config.DOTDOTDOT;
 		render_width = current_render_width;
 		render_value = const_reference<string>(small_value);
@@ -384,10 +387,11 @@ void BoxRendererImplementation::RenderValue(const string &value, idx_t column_wi
 		idx_t pos = 0;
 		ResultRenderType active_render_mode = render_mode;
 		for (auto &annotation : annotations) {
-			if (annotation.start > render_value.get().size()) {
-				throw InternalException("BoxRenderer - rendering annotation is out of range");
+			if (annotation.start >= render_value.get().size()) {
+				break;
 			}
-			ss.Render(active_render_mode, render_value.get().substr(pos, annotation.start - pos));
+			auto render_end = MinValue<idx_t>(max_render_pos, annotation.start);
+			ss.Render(active_render_mode, render_value.get().substr(pos, render_end - pos));
 			active_render_mode = annotation.render_mode;
 			pos = annotation.start;
 		}
@@ -993,7 +997,8 @@ void JSONParser::Process(const string &value) {
 
 struct JSONFormatter : public JSONParser {
 public:
-	explicit JSONFormatter(BoxRenderValue &render_value) : render_value(render_value) {}
+	explicit JSONFormatter(BoxRenderValue &render_value) : render_value(render_value) {
+	}
 
 protected:
 	void HandleNull() override {
@@ -1059,7 +1064,8 @@ protected:
 
 struct JSONHighlighter : public JSONParser {
 public:
-	explicit JSONHighlighter(BoxRenderValue &render_value) : render_value(render_value) {}
+	explicit JSONHighlighter(BoxRenderValue &render_value) : render_value(render_value) {
+	}
 
 protected:
 	void HandleNull() override {
@@ -1108,7 +1114,8 @@ bool BoxRendererImplementation::CanHighlight(const LogicalType &type) {
 	return type.IsJSONType();
 }
 
-void BoxRendererImplementation::PrettyPrintValue(const LogicalType &type, const string &value, BoxRenderValue &render_value) {
+void BoxRendererImplementation::PrettyPrintValue(const LogicalType &type, const string &value,
+                                                 BoxRenderValue &render_value) {
 	if (!type.IsJSONType()) {
 		return;
 	}
@@ -1116,7 +1123,8 @@ void BoxRendererImplementation::PrettyPrintValue(const LogicalType &type, const 
 	formatter.Process(value);
 }
 
-void BoxRendererImplementation::HighlightValue(const LogicalType &type, const string &value, BoxRenderValue &render_value) {
+void BoxRendererImplementation::HighlightValue(const LogicalType &type, const string &value,
+                                               BoxRenderValue &render_value) {
 	if (!type.IsJSONType()) {
 		return;
 	}
@@ -1435,6 +1443,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				row.values[c].annotations.clear();
 				row.values[c].text = TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
 				row.values[c].render_width = current_render_width;
+				row.values[c].decomposed = true;
 				// copy over annotations
 				for (; annotation_idx < annotations.size(); annotation_idx++) {
 					if (annotations[annotation_idx].start >= current_pos) {
@@ -1463,6 +1472,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					extra_row.values[c].text =
 					    TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
 					extra_row.values[c].render_width = current_render_width;
+					extra_row.values[c].decomposed = true;
 					// copy over annotations
 					for (; annotation_idx < annotations.size(); annotation_idx++) {
 						if (annotations[annotation_idx].start >= current_pos) {
@@ -1613,6 +1623,9 @@ void BoxRendererImplementation::RenderValues() {
 			auto alignment = render_value.alignment;
 			if (render_mode == ResultRenderType::NULL_VALUE || render_mode == ResultRenderType::VALUE) {
 				ss.SetValueType(render_value.type);
+				if (!render_value.decomposed && CanHighlight(render_value.type)) {
+					HighlightValue(render_value.type, render_value.text, render_value);
+				}
 			}
 			RenderValue(render_value.text, column_widths[column_idx], render_mode, render_value.annotations, alignment,
 			            render_value.render_width);
