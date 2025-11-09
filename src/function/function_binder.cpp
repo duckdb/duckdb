@@ -697,8 +697,8 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 	ResolveTemplateTypes(bound_function, children);
 
 	unique_ptr<FunctionData> bind_info;
-	if (bound_function.bind) {
-		bind_info = bound_function.bind(context, bound_function, children);
+	if (bound_function.HasBindCallback()) {
+		bind_info = bound_function.GetBindCallback()(context, bound_function, children);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}

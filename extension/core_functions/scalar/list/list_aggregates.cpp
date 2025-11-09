@@ -93,10 +93,10 @@ struct StateVector {
 	~StateVector() { // NOLINT
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
-		if (aggr.function.destructor) {
+		if (aggr.function.HasStateDestructorCallback()) {
 			ArenaAllocator allocator(Allocator::DefaultAllocator());
 			AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
-			aggr.function.destructor(state_vector, aggr_input_data, count);
+			aggr.function.GetStateDestructorCallback()(state_vector, aggr_input_data, count);
 		}
 	}
 
@@ -222,7 +222,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	allocator.Reset();
 	AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 
-	D_ASSERT(aggr.function.update);
+	D_ASSERT(aggr.function.HasStateUpdateCallback());
 
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
@@ -236,7 +236,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
-	idx_t size = aggr.function.state_size(aggr.function);
+	idx_t size = aggr.function.GetStateSizeCallback()(aggr.function);
 	auto state_buffer = make_unsafe_uniq_array_uninitialized<data_t>(size * count);
 
 	// state vector for initialize and finalize
@@ -255,7 +255,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		// initialize the state for this list
 		auto state_ptr = state_buffer.get() + size * i;
 		states[i] = state_ptr;
-		aggr.function.initialize(aggr.function, states[i]);
+		aggr.function.GetStateInitCallback()(aggr.function, states[i]);
 
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
@@ -276,7 +276,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 			if (states_idx == STANDARD_VECTOR_SIZE) {
 				// update the aggregate state(s)
 				Vector slice(child_vector, sel_vector, states_idx);
-				aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
+				aggr.function.GetStateUpdateCallback()(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 
 				// reset values
 				states_idx = 0;
@@ -292,12 +292,12 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
 		Vector slice(child_vector, sel_vector, states_idx);
-		aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
+		aggr.function.GetStateUpdateCallback()(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 	}
 
 	if (IS_AGGR) {
 		// finalize all the aggregate states
-		aggr.function.finalize(state_vector.state_vector, aggr_input_data, result, count, 0);
+		aggr.function.GetStateFinalizeCallback()(state_vector.state_vector, aggr_input_data, result, count, 0);
 
 	} else {
 		// finalize manually to use the map
