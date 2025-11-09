@@ -146,7 +146,7 @@ public:
 	// Keep these on one-line for readability
 	bool HasFunctionCallback() const { return function != nullptr; }
 	scalar_function_t GetFunctionCallback() const { return function; }
-	void SetFunctionCallback(scalar_function_t callback) { function = callback; }
+	void SetFunctionCallback(scalar_function_t callback) { function = std::move(callback); }
 
 	bool HasBindCallback() const { return bind != nullptr; };
 	bind_scalar_function_t GetBindCallback() const { return bind; };
