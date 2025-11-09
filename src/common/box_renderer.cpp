@@ -896,6 +896,7 @@ void JSONParser::SkipWhitespace(const string &value, idx_t &pos) {
 bool JSONParser::Process(const string &value) {
 	separators.clear();
 	state = JSONState::REGULAR;
+	char quote_char = '"';
 	bool can_parse_value = false;
 	for (pos = 0; success && pos < value.size(); pos++) {
 		auto c = value[pos];
@@ -931,7 +932,9 @@ bool JSONParser::Process(const string &value) {
 				break;
 			}
 			case '"':
+			case '\'':
 				HandleQuoteStart(c);
+				quote_char = c;
 				state = JSONState::IN_QUOTE;
 				break;
 			case ',':
@@ -949,20 +952,16 @@ bool JSONParser::Process(const string &value) {
 				break;
 			}
 		} else if (state == JSONState::IN_QUOTE) {
-			switch (c) {
-			case '"':
+			if (c == quote_char) {
 				// break out of quotes
 				state = JSONState::REGULAR;
 				HandleQuoteEnd(c);
-				break;
-			case '\\':
+			} else if (c == '\\') {
 				// escape
 				state = JSONState::ESCAPE;
 				HandleEscapeStart(c);
-				break;
-			default:
+			} else {
 				HandleCharacter(c);
-				break;
 			}
 		} else if (state == JSONState::ESCAPE) {
 			state = JSONState::IN_QUOTE;
@@ -1280,22 +1279,22 @@ protected:
 };
 
 bool BoxRendererImplementation::CanPrettyPrint(const LogicalType &type) {
-	return type.IsJSONType();
+	return type.IsJSONType() || type.IsNested();
 }
 
 bool BoxRendererImplementation::CanHighlight(const LogicalType &type) {
-	return type.IsJSONType();
+	return type.IsJSONType() || type.IsNested();
 }
 
 void BoxRendererImplementation::PrettyPrintValue(BoxRenderValue &render_value, idx_t max_rows, idx_t max_width) {
-	if (!render_value.type.IsJSONType()) {
+	if (!CanPrettyPrint(render_value.type)) {
 		return;
 	}
 	JSONFormatter::FormatValue(render_value, max_rows, max_width);
 }
 
 void BoxRendererImplementation::HighlightValue(BoxRenderValue &render_value) {
-	if (!render_value.type.IsJSONType()) {
+	if (!CanHighlight(render_value.type)) {
 		return;
 	}
 	JSONHighlighter highlighter(render_value);
@@ -1614,6 +1613,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				auto full_value = row.values[c].text;
 				auto annotations = row.values[c].annotations;
 				idx_t annotation_idx = 0;
+				ResultRenderType active_render_mode = ResultRenderType::VALUE;
 				row.values[c].annotations.clear();
 				row.values[c].text = TruncateValue(full_value, column_widths[c], current_pos, current_render_width);
 				row.values[c].render_width = current_render_width;
@@ -1648,12 +1648,16 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					extra_row.values[c].render_width = current_render_width;
 					extra_row.values[c].decomposed = true;
 					// copy over annotations
+					if (active_render_mode != ResultRenderType::VALUE) {
+						extra_row.values[c].annotations.emplace_back(active_render_mode, 0);
+					}
 					for (; annotation_idx < annotations.size(); annotation_idx++) {
 						if (annotations[annotation_idx].start >= current_pos) {
 							break;
 						}
 						annotations[annotation_idx].start -= start_pos;
 						extra_row.values[c].annotations.push_back(annotations[annotation_idx]);
+						active_render_mode = annotations[annotation_idx].render_mode;
 					}
 				}
 			}
