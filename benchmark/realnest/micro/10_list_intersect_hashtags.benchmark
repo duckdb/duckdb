@@ -1,6 +1,6 @@
-# name: benchmark/realnest/10_list_intersect_hashtags.benchmark
+# name: benchmark/realnest/micro/10_list_intersect_hashtags.benchmark
 # description: list_intersect to get common hashtags
-# group: [realnest]
+# group: [micro]
 
 name list_intersect_hashtags
 group real_nest
