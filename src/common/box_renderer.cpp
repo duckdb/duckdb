@@ -903,8 +903,10 @@ bool JSONParser::Process(const string &value) {
 		if (state == JSONState::REGULAR) {
 			if (can_parse_value) {
 				// check if this is "null"
-				if (pos + 4 < value.size() && c == 'n' && value[pos + 1] == 'u' && value[pos + 2] == 'l' &&
-				    value[pos + 3] == 'l') {
+				if (pos + 4 < value.size() && StringUtil::CharacterToLower(c) == 'n' &&
+				    StringUtil::CharacterToLower(value[pos + 1]) == 'u' &&
+				    StringUtil::CharacterToLower(value[pos + 2]) == 'l' &&
+				    StringUtil::CharacterToLower(value[pos + 3]) == 'l') {
 					HandleNull();
 					pos += 3;
 					continue;
@@ -1193,6 +1195,10 @@ protected:
 						if (peek_component.type == JSONComponentType::BRACKET_OPEN) {
 							peek_depth++;
 						} else if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
+							if (peek_depth == 0) {
+								inline_comma = true;
+								break;
+							}
 							peek_depth--;
 						}
 						if (peek_depth == 0 && peek_component.type == JSONComponentType::COMMA &&
@@ -1579,7 +1585,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			if (row.row_type != RenderRowType::ROW_VALUES) {
 				continue;
 			}
-			bool need_extra_row = r + 1 != render_rows.size();
+			bool need_extra_row = r + 1 != render_rows.size() && r != 1;
 			idx_t min_rows = need_extra_row ? 2 : 1;
 			if (rows_left < min_rows) {
 				// no rows left to expand
