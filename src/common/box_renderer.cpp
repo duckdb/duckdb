@@ -356,7 +356,7 @@ void BoxRendererImplementation::RenderValue(const string &value, idx_t column_wi
 		idx_t pos = 0;
 		idx_t current_render_width = config.DOTDOTDOT_LENGTH;
 		small_value = TruncateValue(value, column_width, pos, current_render_width);
-		max_render_pos = pos;
+		max_render_pos = small_value.size();
 		small_value += config.DOTDOTDOT;
 		render_width = current_render_width;
 		render_value = const_reference<string>(small_value);
@@ -387,13 +387,13 @@ void BoxRendererImplementation::RenderValue(const string &value, idx_t column_wi
 		idx_t pos = 0;
 		ResultRenderType active_render_mode = render_mode;
 		for (auto &annotation : annotations) {
-			if (annotation.start >= render_value.get().size()) {
+			if (annotation.start >= max_render_pos) {
 				break;
 			}
 			auto render_end = MinValue<idx_t>(max_render_pos, annotation.start);
 			ss.Render(active_render_mode, render_value.get().substr(pos, render_end - pos));
 			active_render_mode = annotation.render_mode;
-			pos = annotation.start;
+			pos = render_end;
 		}
 		if (pos < render_value.get().size()) {
 			ss.Render(active_render_mode, render_value.get().substr(pos, render_value.get().size() - pos));
