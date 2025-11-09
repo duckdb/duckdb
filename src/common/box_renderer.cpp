@@ -1442,6 +1442,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 	unordered_set<idx_t> pruned_columns;
 	bool shortened_columns = false;
 	if (total_render_length > max_width) {
+		auto original_widths = column_widths;
 		// before we remove columns, check if we can just reduce the size of columns
 		vector<idx_t> max_shorten_amount;
 		idx_t total_max_shorten_amount = 0;
@@ -1534,6 +1535,22 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 					offset = -offset;
 				}
 			}
+
+			// if we have any space left after truncating columns we can try to increase the size of columns again
+			idx_t space_left = max_width - total_render_length;
+			for (idx_t c = 0; c < column_widths.size() && space_left > 0; c++) {
+				if (pruned_columns.find(c) != pruned_columns.end()) {
+					// only increase size of visible columns
+					continue;
+				}
+				if (column_widths[c] >= original_widths[c]) {
+					continue;
+				}
+				idx_t increase_amount = MinValue<idx_t>(space_left, original_widths[c] - column_widths[c]);
+				column_widths[c] += increase_amount;
+				space_left -= increase_amount;
+				total_render_length += increase_amount;
+			}
 		}
 	}
 
@@ -1568,6 +1585,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 			if (!column_idx.IsValid()) {
 				// insert the split column
 				values.emplace_back(config.DOTDOTDOT, ResultRenderType::LAYOUT, ValueRenderAlignment::MIDDLE);
+				values.back().render_width = 1;
 			} else {
 				values.push_back(std::move(row.values[column_idx.GetIndex()]));
 			}
@@ -1609,6 +1627,10 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 				auto render_width = row.values[c].render_width.GetIndex();
 				if (render_width <= column_widths[c]) {
 					// not shortened - skip
+					if (c == 0) {
+						// if the first row is not stretched out, we don't need to add a separator
+						need_extra_row = false;
+					}
 					continue;
 				}
 				// this value was shortened! try to stretch it out
