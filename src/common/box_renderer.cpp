@@ -1004,6 +1004,11 @@ public:
 		if (success) {
 			return;
 		}
+		// if we exceeded the max row count - try in compact mode
+		success = formatter.TryFormat(JSONFormattingMode::COMPACT, render_value, max_rows, max_width);
+		if (success) {
+			return;
+		}
 	}
 
 protected:
@@ -1050,23 +1055,35 @@ protected:
 		components.back().text += c;
 	}
 
-	bool TryFormat(JSONFormattingMode mode, BoxRenderValue &render_value, idx_t max_rows, idx_t max_width) {
+	struct FormatState {
+		JSONFormattingMode mode;
 		string result;
+		idx_t component_idx = 0;
 		idx_t row_count = 0;
 		idx_t line_length = 0;
 		idx_t depth = 0;
-		vector<bool> inlined;
-		for (idx_t c = 0; c < components.size() && row_count <= max_rows; c++) {
-			auto &component = components[c];
-			switch (component.type) {
-			case JSONComponentType::BRACKET_OPEN: {
-				depth++;
-				result += component.text;
+		idx_t max_width;
+	};
+
+	void FormatComponent(FormatState &format_state, JSONComponent &component, bool inlined) {
+		auto &result = format_state.result;
+		auto &row_count = format_state.row_count;
+		auto &depth = format_state.depth;
+		auto &line_length = format_state.line_length;
+		auto &max_width = format_state.max_width;
+		auto &c = format_state.component_idx;
+		switch (component.type) {
+		case JSONComponentType::BRACKET_OPEN: {
+			depth++;
+			result += component.text;
+			if (!inlined) {
+				// not inlined
 				// look forward until the corresponding bracket open - can we inline and not exceed the column width?
 				idx_t peek_depth = 0;
 				idx_t render_size = line_length + Utf8Proc::RenderWidth(component.text);
+				idx_t peek_idx;
 				bool inline_bracket = false;
-				for (idx_t peek_idx = c + 1; peek_idx < components.size() && render_size <= max_width; peek_idx++) {
+				for (peek_idx = c + 1; peek_idx < components.size() && render_size <= max_width; peek_idx++) {
 					auto &peek_component = components[peek_idx];
 					if (peek_component.type == JSONComponentType::BRACKET_OPEN) {
 						peek_depth++;
@@ -1084,61 +1101,122 @@ protected:
 						render_size++;
 					}
 				}
-				inlined.push_back(inline_bracket);
-				if (!inlined.back()) {
-					// not inlined
-					result += '\n';
-					result += string(2 * depth, ' ');
-					row_count++;
-					line_length = 2 * depth;
-				} else {
-					line_length += Utf8Proc::RenderWidth(component.text);
+				if (inline_bracket) {
+					// we can inline! do it
+					for (idx_t inline_idx = c + 1; inline_idx <= peek_idx; inline_idx++) {
+						auto &inline_component = components[inline_idx];
+						FormatComponent(format_state, inline_component, true);
+					}
+					c = peek_idx;
+					line_length = render_size;
+					return;
 				}
-				break;
+				if (format_state.mode == JSONFormattingMode::COMPACT) {
+					// we can't inline - but is the next token a bracket open?
+					if (c + 1 < components.size() && components[c + 1].type == JSONComponentType::BRACKET_OPEN) {
+						// it is! that bracket open will add a newline - we don't need to do it here
+						return;
+					}
+				}
+				result += '\n';
+				result += string(2 * depth, ' ');
+				row_count++;
+				line_length = 2 * depth;
+			} else {
+				line_length += Utf8Proc::RenderWidth(component.text);
 			}
-			case JSONComponentType::BRACKET_CLOSE:
-				depth--;
-				if (!inlined.back()) {
-					result += '\n';
-					result += string(2 * depth, ' ');
-					row_count++;
-					line_length = 2 * depth + Utf8Proc::RenderWidth(component.text);
-				} else {
-					line_length += Utf8Proc::RenderWidth(component.text);
-				}
-				result += component.text;
-				inlined.pop_back();
-				break;
-			case JSONComponentType::COMMA:
-				result += component.text;
-				if (inlined.back()) {
-					result += " ";
-					line_length += Utf8Proc::RenderWidth(component.text) + 1;
-				} else {
-					result += '\n';
-					result += string(2 * depth, ' ');
-					row_count++;
-					line_length = 2 * depth;
-				}
-				break;
-			case JSONComponentType::COLON:
-				result += component.text;
+			break;
+		}
+		case JSONComponentType::BRACKET_CLOSE:
+			depth--;
+			if (!inlined) {
+				result += '\n';
+				result += string(2 * depth, ' ');
+				row_count++;
+				line_length = 2 * depth + Utf8Proc::RenderWidth(component.text);
+			} else {
+				line_length += Utf8Proc::RenderWidth(component.text);
+			}
+			result += component.text;
+			break;
+		case JSONComponentType::COMMA:
+			result += component.text;
+			if (inlined) {
 				result += " ";
 				line_length += Utf8Proc::RenderWidth(component.text) + 1;
-				break;
-			case JSONComponentType::NULL_VALUE:
-			case JSONComponentType::LITERAL:
-				result += component.text;
-				line_length += Utf8Proc::RenderWidth(component.text) + 1;
-				break;
-			default:
-				throw InternalException("Unsupported JSON component type");
+			} else {
+				if (format_state.mode == JSONFormattingMode::COMPACT) {
+					// if we are not inlining in compact mode, try to inline until the next comma
+					idx_t peek_depth = 0;
+					idx_t render_size = line_length + Utf8Proc::RenderWidth(component.text) + 1;
+					idx_t peek_idx;
+					bool inline_comma = false;
+					for (peek_idx = c + 1; peek_idx < components.size() && render_size <= max_width; peek_idx++) {
+						auto &peek_component = components[peek_idx];
+						if (peek_component.type == JSONComponentType::BRACKET_OPEN) {
+							peek_depth++;
+						} else if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
+							peek_depth--;
+						}
+						if (peek_depth == 0 && peek_component.type == JSONComponentType::COMMA &&
+						    render_size + 2 <= max_width) {
+							// found the next comma - inline!
+							inline_comma = true;
+							break;
+						}
+						render_size += Utf8Proc::RenderWidth(peek_component.text);
+						if (peek_component.type == JSONComponentType::COMMA ||
+						    peek_component.type == JSONComponentType::COLON) {
+							render_size++;
+						}
+					}
+					if (inline_comma) {
+						// we can inline until the next comma! do it
+						result += " ";
+						for (idx_t inline_idx = c + 1; inline_idx < peek_idx; inline_idx++) {
+							auto &inline_component = components[inline_idx];
+							FormatComponent(format_state, inline_component, true);
+						}
+						c = peek_idx - 1;
+						line_length = render_size;
+						return;
+					}
+				}
+				result += '\n';
+				result += string(2 * depth, ' ');
+				row_count++;
+				line_length = 2 * depth;
 			}
+			break;
+		case JSONComponentType::COLON:
+			result += component.text;
+			result += " ";
+			line_length += Utf8Proc::RenderWidth(component.text) + 1;
+			break;
+		case JSONComponentType::NULL_VALUE:
+		case JSONComponentType::LITERAL:
+			result += component.text;
+			line_length += Utf8Proc::RenderWidth(component.text) + 1;
+			break;
+		default:
+			throw InternalException("Unsupported JSON component type");
 		}
-		if (row_count > max_rows) {
+	}
+
+	bool TryFormat(JSONFormattingMode mode, BoxRenderValue &render_value, idx_t max_rows, idx_t max_width) {
+		FormatState format_state;
+		format_state.mode = mode;
+		format_state.max_width = max_width;
+		for (format_state.component_idx = 0;
+		     format_state.component_idx < components.size() && format_state.row_count <= max_rows;
+		     format_state.component_idx++) {
+			auto &component = components[format_state.component_idx];
+			FormatComponent(format_state, component, false);
+		}
+		if (format_state.row_count > max_rows) {
 			return false;
 		}
-		render_value.text = result;
+		render_value.text = format_state.result;
 		return true;
 	}
 
