@@ -42,10 +42,6 @@ public:
 	//! The SAMPLE clause
 	unique_ptr<SampleOptions> sample;
 
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		return select_list;
-	}
-
 public:
 	//! Convert the query node to a string
 	string ToString() const override;

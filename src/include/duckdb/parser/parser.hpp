@@ -15,6 +15,7 @@
 #include "duckdb/parser/simplified_token.hpp"
 #include "duckdb/parser/parser_options.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb_libpgquery {
 struct PGNode;
@@ -73,6 +74,9 @@ public:
 	                                              ParserOptions options = ParserOptions());
 
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
+
+	StatementType GetStatementType(const string &query);
+	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
 	ParserOptions options;

@@ -300,7 +300,6 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
                                    const vector<MultiFileColumnDefinition> &global_columns,
                                    const vector<ColumnIndex> &global_column_ids, ClientContext &context,
                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
-
 	// create a map of name -> column index
 	auto &local_columns = reader_data.reader->GetColumns();
 	auto &filename = reader_data.reader->GetFileName();

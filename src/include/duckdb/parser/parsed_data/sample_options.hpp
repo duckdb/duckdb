@@ -21,7 +21,6 @@ enum class SampleMethod : uint8_t { SYSTEM_SAMPLE = 0, BERNOULLI_SAMPLE = 1, RES
 string SampleMethodToString(SampleMethod method);
 
 class SampleOptions {
-
 public:
 	explicit SampleOptions(int64_t seed_ = -1);
 

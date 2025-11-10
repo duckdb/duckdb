@@ -9,10 +9,15 @@ import os
 from pathlib import Path
 
 
-def test_left_align(shell):
+@pytest.mark.parametrize("dot_command", [
+    ".mode box",
+    ""
+])
+def test_left_align(shell, dot_command):
+    args = ['-box'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode box")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement(".width 5")
         .statement(f'select 100 AS r')
     )
@@ -31,10 +36,15 @@ def test_right_align(shell):
     result = test.run()
     result.check_stdout("│   100 │")
 
-def test_markdown(shell):
+@pytest.mark.parametrize("dot_command", [
+    ".mode markdown",
+    ""
+])
+def test_markdown(shell, dot_command):
+    args = ['-markdown'] if len(dot_command) == 0 else []
     test = (
-        ShellTest(shell)
-        .statement(".mode markdown")
+        ShellTest(shell, args)
+        .statement(dot_command)
         .statement("select 42 a, 'hello' str")
     )
 

@@ -162,7 +162,6 @@ void ParsedExpressionIterator::EnumerateChildren(
 
 void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
     QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
-
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
 		case ResultModifierType::LIMIT_MODIFIER: {
@@ -269,12 +268,6 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		auto &rcte_node = node.Cast<RecursiveCTENode>();
 		EnumerateQueryNodeChildren(*rcte_node.left, expr_callback, ref_callback);
 		EnumerateQueryNodeChildren(*rcte_node.right, expr_callback, ref_callback);
-		break;
-	}
-	case QueryNodeType::CTE_NODE: {
-		auto &cte_node = node.Cast<CTENode>();
-		EnumerateQueryNodeChildren(*cte_node.query, expr_callback, ref_callback);
-		EnumerateQueryNodeChildren(*cte_node.child, expr_callback, ref_callback);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {

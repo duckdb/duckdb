@@ -32,10 +32,6 @@ public:
 	//! targets for key variants
 	vector<unique_ptr<ParsedExpression>> key_targets;
 
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		return left->GetSelectList();
-	}
-
 public:
 	//! Convert the query node to a string
 	string ToString() const override;

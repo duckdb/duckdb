@@ -41,7 +41,8 @@
       {
         "id": 102,
         "name": "materialized",
-        "type": "CTEMaterialize"
+        "type": "CTEMaterialize",
+        "serialize_property": "GetMaterializedForSerialization(serializer)"
       },
       {
         "id": 103,

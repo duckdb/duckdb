@@ -4,10 +4,9 @@
 
 namespace duckdb {
 
-FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
-    : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), segment_size(segment_size),
-      total_segment_count(0) {
-
+FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager, MemoryTag memory_tag)
+    : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), memory_tag(memory_tag),
+      segment_size(segment_size), total_segment_count(0) {
 	if (segment_size > block_manager.GetBlockSize() - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
 		                        to_string(block_manager.GetBlockSize() - sizeof(validity_t)));
@@ -48,7 +47,7 @@ IndexPointer FixedSizeAllocator::New() {
 	if (!buffer_with_free_space.IsValid()) {
 		// Add a new buffer.
 		auto buffer_id = GetAvailableBufferId();
-		buffers[buffer_id] = make_uniq<FixedSizeBuffer>(block_manager);
+		buffers[buffer_id] = make_uniq<FixedSizeBuffer>(block_manager, memory_tag);
 		buffers_with_free_space.insert(buffer_id);
 		buffer_with_free_space = buffer_id;
 
@@ -321,7 +320,6 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 	total_segment_count = 0;
 
 	for (idx_t i = 0; i < info.buffer_ids.size(); i++) {
-
 		// read all FixedSizeBuffer data
 		auto buffer_id = info.buffer_ids[i];
 

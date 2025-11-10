@@ -2,7 +2,7 @@
 
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/statement/list.hpp"
-#include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/parser_options.hpp"
 
 namespace duckdb {
@@ -228,31 +228,6 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 	default:
 		throw NotImplementedException(NodetypeToString(stmt.type));
 	}
-}
-
-unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode> root) {
-	// Extract materialized CTEs from cte_map
-	vector<unique_ptr<CTENode>> materialized_ctes;
-
-	for (auto &cte : root->cte_map.map) {
-		auto &cte_entry = cte.second;
-		auto mat_cte = make_uniq<CTENode>();
-		mat_cte->ctename = cte.first;
-		mat_cte->query = TransformMaterializedCTE(cte_entry->query->node->Copy());
-		mat_cte->aliases = cte_entry->aliases;
-		mat_cte->materialized = cte_entry->materialized;
-		materialized_ctes.push_back(std::move(mat_cte));
-	}
-
-	while (!materialized_ctes.empty()) {
-		unique_ptr<CTENode> node_result;
-		node_result = std::move(materialized_ctes.back());
-		node_result->child = std::move(root);
-		root = std::move(node_result);
-		materialized_ctes.pop_back();
-	}
-
-	return root;
 }
 
 void Transformer::SetQueryLocation(ParsedExpression &expr, int query_location) {

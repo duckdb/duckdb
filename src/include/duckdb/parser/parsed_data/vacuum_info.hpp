@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/tableref.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
 class Serializer;

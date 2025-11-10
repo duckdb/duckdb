@@ -9,74 +9,74 @@ PRAGMA explain_output = PHYSICAL_ONLY
 
 # empty reference result
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where false;
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where false;
 ----
 
 # verify null stats work
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where id is null;
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id is null;
 ----
 
 # verify min/max stats on int cols work
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where id < 1;
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id < 1;
 ----
 
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where id > 1000;
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id > 1000;
 ----
 
 
 # verify min/max stats on double cols work
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where salary < 12380;
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where salary < 12380;
 ----
 
 # max is nan because of parquet's unique setup - so we can't prune here
 # query I nosort empty
-# explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where salary > 286593 and salary < 286594;
+# explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where salary > 286593 and salary < 286594;
 # ----
 
 # verify min/max stats on timestamp cols work
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/timestamp.parquet') where time < '2020-10-04';
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/timestamp.parquet') where time < '2020-10-04';
 ----
 
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/timestamp.parquet') where time > '2020-10-06';
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/timestamp.parquet') where time > '2020-10-06';
 ----
 
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/timestamp-ms.parquet') where time < '2020-10-04';
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/timestamp-ms.parquet') where time < '2020-10-04';
 ----
 
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/timestamp-ms.parquet') where time > '2020-10-06';
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/timestamp-ms.parquet') where time > '2020-10-06';
 ----
 
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/data-types.parquet') where timestampval < '2019-11-25';
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/data-types.parquet') where timestampval < '2019-11-25';
 ----
 
 query I nosort empty
-explain select * from parquet_scan('data/parquet-testing/data-types.parquet') where timestampval > '2019-11-27';
+explain select * from parquet_scan('{DATA_DIR}/parquet-testing/data-types.parquet') where timestampval > '2019-11-27';
 ----
 
 # TODO string comparisons are not pruned yet
 # verify min/max stats on string cols work
 #query I nosort empty
-#explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where country < 'Aruba';
+#explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where country < 'Aruba';
 #----
 
 #query I nosort empty
-#explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where country > 'Zimbabwe';
+#explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where country > 'Zimbabwe';
 #----
 
 
 # see if stats work correctly for globs
 
 query I nosort nostats
-explain select time from parquet_scan('data/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
+explain select time from parquet_scan('{DATA_DIR}/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
 ----
 
 statement ok
@@ -87,16 +87,16 @@ mode skip
 
 # no stats since there are two files and the cache is on but we have not read all files yet
 query I nosort nostats
-explain select time from parquet_scan('data/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
+explain select time from parquet_scan('{DATA_DIR}/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
 ----
 
 statement ok
-select time from parquet_scan('data/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
+select time from parquet_scan('{DATA_DIR}/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
 
 
 # but now we should have them
 query I nosort empty
-explain select time from parquet_scan('data/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
+explain select time from parquet_scan('{DATA_DIR}/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
 ----
 
 statement ok
@@ -104,5 +104,5 @@ pragma disable_object_cache
 
 # no stats again
 query I nosort nostats
-explain select time from parquet_scan('data/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
+explain select time from parquet_scan('{DATA_DIR}/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
 ----

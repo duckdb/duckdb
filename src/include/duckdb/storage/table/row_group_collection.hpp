@@ -36,6 +36,7 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class DataTable;
 
 class RowGroupCollection {
 public:
@@ -67,8 +68,8 @@ public:
 	void InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
 	static bool InitializeScanInRowGroup(const QueryContext &context, CollectionScanState &state,
-	                                     RowGroupCollection &collection, RowGroup &row_group, idx_t vector_index,
-	                                     idx_t max_row);
+	                                     RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
+	                                     idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
@@ -101,14 +102,15 @@ public:
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
-	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
-	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
-	                  DataChunk &updates);
+	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
+	            DataChunk &updates);
+	void UpdateColumn(TransactionData transaction, DataTable &table, Vector &row_ids,
+	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-	                           vector<SegmentNode<RowGroup>> &segments);
+	                           vector<unique_ptr<SegmentNode<RowGroup>>> &segments);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
@@ -153,7 +155,7 @@ public:
 private:
 	bool IsEmpty(SegmentLock &) const;
 
-	optional_ptr<RowGroup> NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const;
+	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const;
 
 private:
 	//! BlockManager

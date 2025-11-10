@@ -90,9 +90,6 @@ public:
 	//! Closes the writer, optionally writes a postfix
 	void Close();
 
-	unique_ptr<CSVWriterState> InitializeLocalWriteState(ClientContext &context, idx_t flush_size);
-	unique_ptr<CSVWriterState> InitializeLocalWriteState(DatabaseInstance &db, idx_t flush_size);
-
 	vector<unique_ptr<Expression>> string_casts;
 
 	idx_t BytesWritten();

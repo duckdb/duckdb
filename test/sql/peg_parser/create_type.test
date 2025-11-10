@@ -1,9 +1,0 @@
-# name: test/sql/peg_parser/create_type.test
-# description: Test create table syntax in peg parser
-# group: [peg_parser]
-
-require autocomplete
-
-statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$CREATE TYPE t4 AS UNION ( v0 SETOF t4 );$TEST_PEG_PARSER$);
-

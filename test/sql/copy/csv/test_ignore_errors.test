@@ -9,10 +9,10 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'data/csv/test/error_too_little.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING FALSE)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING FALSE)
 
 statement error
-COPY integers FROM 'data/csv/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
@@ -30,10 +30,10 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-INSERT INTO integers SELECT * FROM read_csv('data/csv/test/error_too_little.csv', columns={'i': 'INTEGER', 'j': 'INTEGER'},  ignore_errors=1, null_padding=0)
+INSERT INTO integers SELECT * FROM read_csv('{DATA_DIR}/csv/test/error_too_little.csv', columns={'i': 'INTEGER', 'j': 'INTEGER'},  ignore_errors=1, null_padding=0)
 
 statement error
-INSERT INTO integers SELECT * FROM read_csv('data/csv/test/error_too_little.csv', columns={'i': 'INTEGER'}, null_padding=0)
+INSERT INTO integers SELECT * FROM read_csv('{DATA_DIR}/csv/test/error_too_little.csv', columns={'i': 'INTEGER'}, null_padding=0)
 ----
 table integers has 2 columns but 1 values were supplied
 
@@ -51,10 +51,10 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-COPY integers FROM 'data/csv/test/error_too_little_single.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_single.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
 
 statement error
-COPY integers FROM 'data/csv/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
@@ -68,10 +68,10 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SAMPLE_SIZE -1, strict_mode TRUE)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SAMPLE_SIZE -1, strict_mode TRUE)
 
 statement error
-COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER)
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_many.csv' (HEADER)
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
@@ -89,10 +89,10 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-COPY integers FROM 'data/csv/test/error_invalid_type.csv' (HEADER, IGNORE_ERRORS)
+COPY integers FROM '{DATA_DIR}/csv/test/error_invalid_type.csv' (HEADER, IGNORE_ERRORS)
 
 statement error
-COPY integers FROM 'data/csv/test/error_invalid_type.csv' (HEADER)
+COPY integers FROM '{DATA_DIR}/csv/test/error_invalid_type.csv' (HEADER)
 ----
 This type was either manually set or derived from an existing table. Select a different type to correctly parse this column.
 
@@ -110,7 +110,7 @@ statement ok
 CREATE TABLE nullable_type (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10), col_d VARCHAR(10));
 
 statement ok
-COPY nullable_type FROM 'data/csv/test/test_incompatible_type_with_nullable.csv'
+COPY nullable_type FROM '{DATA_DIR}/csv/test/test_incompatible_type_with_nullable.csv'
 
 query IIII
 SELECT * FROM nullable_type
@@ -119,7 +119,7 @@ SELECT * FROM nullable_type
 2	NULL	test	null
 
 query IIIIIIIIIIII
-FROM read_csv('data/csv/titanic.csv', ignore_errors=1) limit 10
+FROM read_csv('{DATA_DIR}/csv/titanic.csv', ignore_errors=1) limit 10
 ----
 1	0	3	Braund, Mr. Owen Harris	male	22.0	1	0	A/5 21171	7.25	NULL	S
 2	1	1	Cumings, Mrs. John Bradley (Florence Briggs Thayer)	female	38.0	1	0	PC 17599	71.2833	C85	C
@@ -134,16 +134,16 @@ FROM read_csv('data/csv/titanic.csv', ignore_errors=1) limit 10
 
 # If we can't parse even one row, we can't sniff it.
 statement error
-SELECT * FROM read_csv('data/csv/test_ignore_errors.csv', columns = {'Order ref ID': 'VARCHAR'}, delim = ',',  ignore_errors=true);
+SELECT * FROM read_csv('{DATA_DIR}/csv/test_ignore_errors.csv', columns = {'Order ref ID': 'VARCHAR'}, delim = ',',  ignore_errors=true);
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
 query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-SELECT * FROM read_csv('data/csv/test_ignore_errors.csv', types = {'Order ref ID': 'VARCHAR'}, ignore_errors=true);
+SELECT * FROM read_csv('{DATA_DIR}/csv/test_ignore_errors.csv', types = {'Order ref ID': 'VARCHAR'}, ignore_errors=true);
 ----
 40243121-bechamelfoodsin@gmail_com_item_01_2024.csv	523944955	163178211923806	163178211923806	swiggy	Completed	AMD_VASTRAPUR_JUNOS	NFD	-	-	AMD_VASTRAPUR_JUNOS_swiggy_JP	675029	NFD	NFD	NFD	-	2024-01-02	20:46:54	2235571	474092	Exotica Pizza	exotica pizza	1	539.0	26.95	aggregator	10.0	575.95	Medium | 1mm" Thin Crust	1797632 | 1876675	None	Ahmedabad	JP	1.0	0.0	27.45	10.0	0.0	27.45	10.0	Cooked	996331	5.0	0.0	549.0
 
 query IIIIIIIIIIIIIIIIIIIIIIIII
-FROM read_csv('data/csv/rejects_sniffer.csv',ignore_errors = true)
+FROM read_csv('{DATA_DIR}/csv/rejects_sniffer.csv',ignore_errors = true)
 ----
 Dummy Naam	DUMMYREKENINGNUMMER	1234567890	 	Dummy Transactiestatus	USD	123,45	 	DUMMYBATCHNAAM	2023-01-01	 	2023-01-01	USD	DUMMYEIGENREKENING	Dummy Eigen Rekening Naam	Dummy Batchtype	Dummy Batchstatus	 	 	 	 	dummy_file.xml	DUMMYCHECKSUMSHA1	DUMMYCHECKSUMSHA2	false

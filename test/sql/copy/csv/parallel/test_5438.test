@@ -12,7 +12,7 @@ statement ok
 PRAGMA verify_parallelism
 
 query I
-SELECT j->>'duck' FROM read_csv_auto('data/csv/test/5438.csv', delim='', columns={'j': 'JSON'}, auto_detect = false)
+SELECT j->>'duck' FROM read_csv_auto('{DATA_DIR}/csv/test/5438.csv', delim='', columns={'j': 'JSON'}, auto_detect = false)
 ----
 1
 2

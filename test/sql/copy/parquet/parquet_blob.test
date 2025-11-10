@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query III
-select * from parquet_scan('data/parquet-testing/blob.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/blob.parquet')
 ----
 1	\x04\x00	str1
 2	\x04\x00\x80	str2

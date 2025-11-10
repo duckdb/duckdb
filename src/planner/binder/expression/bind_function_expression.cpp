@@ -195,7 +195,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	if (result->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
-		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
+		if (bound_function.function.GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
 		}
 	}
@@ -204,7 +204,6 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
-
 	// get the callback function for the lambda parameter types
 	auto &scalar_function = func.functions.functions.front();
 	auto &bind_lambda_function = scalar_function.bind_lambda;
@@ -302,13 +301,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	idx_t offset = 0;
 	if (lambda_bindings) {
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-
 			auto &binding = (*lambda_bindings)[i - 1];
-			D_ASSERT(binding.names.size() == binding.types.size());
+			auto &column_names = binding.GetColumnNames();
+			auto &column_types = binding.GetColumnTypes();
+			D_ASSERT(column_names.size() == column_types.size());
 
-			for (idx_t column_idx = binding.names.size(); column_idx > 0; column_idx--) {
-				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(binding.names[column_idx - 1],
-				                                                              binding.types[column_idx - 1], offset);
+			for (idx_t column_idx = column_names.size(); column_idx > 0; column_idx--) {
+				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(column_names[column_idx - 1],
+				                                                              column_types[column_idx - 1], offset);
 				offset++;
 				bound_function_expr.children.push_back(std::move(bound_lambda_param));
 			}

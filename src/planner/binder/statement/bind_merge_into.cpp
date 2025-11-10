@@ -1,6 +1,5 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -173,16 +172,45 @@ void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &sour
 	    op, [&](unique_ptr<Expression> *child) { RewriteMergeBindings(*child, source_bindings, new_table_index); });
 }
 
+LogicalGet &ExtractLogicalGet(LogicalOperator &op) {
+	reference<LogicalOperator> current_op(op);
+	while (current_op.get().type == LogicalOperatorType::LOGICAL_FILTER) {
+		current_op = *current_op.get().children[0];
+	}
+	if (current_op.get().type != LogicalOperatorType::LOGICAL_GET) {
+		throw InvalidInputException("BindMerge - expected to find an operator of type LOGICAL_GET but got %s",
+		                            op.ToString());
+	}
+	return current_op.get().Cast<LogicalGet>();
+}
+
+void CheckMergeAction(MergeActionCondition condition, MergeActionType action_type) {
+	if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) {
+		switch (action_type) {
+		case MergeActionType::MERGE_UPDATE:
+		case MergeActionType::MERGE_DELETE:
+			throw ParserException("WHEN NOT MATCHED (BY TARGET) cannot be combined with UPDATE or DELETE actions - as "
+			                      "there is no corresponding row in the target to update or delete.\nDid you mean to "
+			                      "use WHEN MATCHED or WHEN NOT MATCHED BY SOURCE?");
+		default:
+			break;
+		}
+	}
+}
+
 BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
 	string table_alias = stmt.target->alias;
 	auto bound_table = target_binder->Bind(*stmt.target);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("Can only merge into base tables!");
 	}
-	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-	auto &table = table_binding.table;
+	auto table_ptr = bound_table.plan->Cast<LogicalGet>().GetTable();
+	if (!table_ptr) {
+		throw BinderException("Can only merge into base tables!");
+	}
+	auto &table = *table_ptr;
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
@@ -198,9 +226,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	vector<string> source_names;
 	for (auto &binding_entry : source_binder->bind_context.GetBindingsList()) {
 		auto &binding = *binding_entry;
-		for (idx_t c = 0; c < binding.names.size(); c++) {
-			source_aliases.push_back(binding.alias);
-			source_names.push_back(binding.names[c]);
+		auto &column_names = binding.GetColumnNames();
+		for (idx_t c = 0; c < column_names.size(); c++) {
+			source_aliases.push_back(binding.GetBindingAlias());
+			source_names.push_back(column_names[c]);
 		}
 	}
 
@@ -231,7 +260,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	}
 	auto bound_join_node = Bind(join);
 
-	auto root = CreatePlan(*bound_join_node);
+	auto root = std::move(bound_join_node.plan);
 	auto join_ref = reference<LogicalOperator>(*root);
 	while (join_ref.get().children.size() == 1) {
 		join_ref = *join_ref.get().children[0];
@@ -243,7 +272,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
 	bool inverted = join.type == JoinType::RIGHT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
-	auto &get = join_ref.get().children[inverted ? 0 : 1]->Cast<LogicalGet>();
+	auto &get = ExtractLogicalGet(*join_ref.get().children[inverted ? 0 : 1]);
 
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
 	merge_into->table_index = GenerateTableIndex();
@@ -265,6 +294,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	for (auto &entry : stmt.actions) {
 		vector<unique_ptr<BoundMergeIntoAction>> bound_actions;
 		for (auto &action : entry.second) {
+			CheckMergeAction(entry.first, action->action_type);
 			bound_actions.push_back(BindMergeAction(*merge_into, table, get, proj_index, projection_expressions, root,
 			                                        *action, source_aliases, source_names));
 		}
@@ -335,7 +365,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

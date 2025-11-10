@@ -25,7 +25,6 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
       tableref(tableref), table(table), columns(std::move(columns)), expressions(std::move(expressions)),
       bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints)),
       return_chunk(return_chunk), index_update(false) {
-
 	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
 	auto index_columns = indexes.GetRequiredColumns();
 
@@ -67,7 +66,6 @@ public:
 	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
 	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
-
 		// Initialize the update chunk.
 		auto &allocator = Allocator::Get(context);
 		vector<LogicalType> update_types;

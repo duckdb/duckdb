@@ -31,9 +31,15 @@ class Index {
 protected:
 	Index(const vector<column_t> &column_ids, TableIOManager &table_io_manager, AttachedDatabase &db);
 
-	//! The logical column ids of the indexed table
+	//! The physical column ids of the indexed columns.
+	//! For example, given a table with the following columns:
+	//! (a INT, gen AS (2 * a), b INT, c VARCHAR), an index on columns (a,c) would have physical
+	//! column_ids [0,2] (since the virtual column is skipped in the physical representation).
+	//! Also see comments in bound_index.hpp to see how these column IDs are used in the context of
+	//! bound/unbound expressions.
+	//! Note that these are the columns for this Index, not all Indexes on the table.
 	vector<column_t> column_ids;
-	//! Unordered set of column_ids used by the index
+	//! Unordered set of column_ids used by the Index
 	unordered_set<column_t> column_id_set;
 
 public:

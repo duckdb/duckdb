@@ -367,7 +367,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	// first we translate the QueryNode of the subquery into a logical plan
 	auto sub_binder = Binder::CreateBinder(context, this);
 	sub_binder->is_outside_flattened = false;
-	auto subquery_root = sub_binder->CreatePlan(*expr.subquery);
+	auto subquery_root = std::move(expr.subquery.plan);
 	D_ASSERT(subquery_root);
 
 	// now we actually flatten the subquery

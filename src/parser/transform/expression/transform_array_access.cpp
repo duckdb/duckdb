@@ -8,7 +8,6 @@
 namespace duckdb {
 
 unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery::PGAIndirection &indirection_node) {
-
 	// Transform the source expression.
 	unique_ptr<ParsedExpression> result;
 	result = TransformExpression(indirection_node.arg);

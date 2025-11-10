@@ -1,12 +1,9 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
 SetOperationNode::SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NODE) {
-}
-
-const vector<unique_ptr<ParsedExpression>> &SetOperationNode::GetSelectList() const {
-	return children[0]->GetSelectList();
 }
 
 string SetOperationNode::ToString() const {

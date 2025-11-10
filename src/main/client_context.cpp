@@ -51,6 +51,7 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 namespace duckdb {
 
@@ -333,7 +334,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->prepared);
 	auto &executor = GetExecutor();
 	auto &prepared = *active_query->prepared;
-	bool create_stream_result = prepared.properties.allow_stream_result && pending.allow_stream_result;
+	bool create_stream_result =
+	    prepared.properties.output_type == QueryResultOutputType::ALLOW_STREAMING && pending.allow_stream_result;
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
@@ -357,10 +359,10 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 
-shared_ptr<PreparedStatementData>
-ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
-                                               unique_ptr<SQLStatement> statement,
-                                               optional_ptr<case_insensitive_map_t<BoundParameterData>> values) {
+shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock,
+                                                                                 const string &query,
+                                                                                 unique_ptr<SQLStatement> statement,
+                                                                                 PendingQueryParameters parameters) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
@@ -368,8 +370,8 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
 	profiler.StartPhase(MetricsType::PLANNER);
 	Planner logical_planner(*this);
-	if (values) {
-		auto &parameter_values = *values;
+	if (parameters.parameters) {
+		auto &parameter_values = *parameters.parameters;
 		for (auto &value : parameter_values) {
 			logical_planner.parameter_data.emplace(value.first, BoundParameterData(value.second));
 		}
@@ -412,10 +414,10 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	return result;
 }
 
-shared_ptr<PreparedStatementData>
-ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                       optional_ptr<case_insensitive_map_t<BoundParameterData>> values,
-                                       PreparedStatementMode mode) {
+shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
+                                                                         unique_ptr<SQLStatement> statement,
+                                                                         PendingQueryParameters parameters,
+                                                                         PreparedStatementMode mode) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto &state : registered_state->States()) {
@@ -428,7 +430,7 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		// if any registered state can request a rebind we do the binding on a copy first
 		shared_ptr<PreparedStatementData> result;
 		try {
-			result = CreatePreparedStatementInternal(lock, query, statement->Copy(), values);
+			result = CreatePreparedStatementInternal(lock, query, statement->Copy(), parameters);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			// check if any registered client context state wants to try a rebind
@@ -457,7 +459,7 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		// an extension wants to do a rebind - do it once
 	}
 
-	return CreatePreparedStatementInternal(lock, query, std::move(statement), values);
+	return CreatePreparedStatementInternal(lock, query, std::move(statement), parameters);
 }
 
 QueryProgress ClientContext::GetQueryProgress() {
@@ -483,8 +485,7 @@ void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const strin
 		                        "an unbound statement so rebinding cannot be done");
 	}
 	// catalog was modified: rebind the statement before execution
-	auto new_prepared =
-	    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
+	auto new_prepared = CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters);
 	D_ASSERT(new_prepared->properties.bound_all_parameters);
 	new_prepared->properties.parameter_count = prepared->properties.parameter_count;
 	prepared = std::move(new_prepared);
@@ -539,7 +540,8 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 		query_progress.Restart();
 	}
 
-	auto stream_result = parameters.allow_stream_result && statement_data.properties.allow_stream_result;
+	const auto stream_result = parameters.query_parameters.output_type == QueryResultOutputType::ALLOW_STREAMING &&
+	                           statement_data.properties.output_type == QueryResultOutputType::ALLOW_STREAMING;
 
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
@@ -547,7 +549,9 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 	if (!stream_result && client_config.get_result_collector) {
 		get_collector = client_config.get_result_collector;
 	}
-	statement_data.is_streaming = stream_result;
+	statement_data.output_type =
+	    stream_result ? QueryResultOutputType::ALLOW_STREAMING : QueryResultOutputType::FORCE_MATERIALIZED;
+	statement_data.memory_type = parameters.query_parameters.memory_type;
 
 	// Get the result collector and initialize the executor.
 	auto &collector = get_collector(*this, statement_data);
@@ -707,7 +711,8 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
 	RunFunctionInTransactionInternal(
-	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement)); }, false);
+	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), {}); },
+	    false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),
 	                                    std::move(named_param_map));
@@ -775,10 +780,10 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
                                                case_insensitive_map_t<BoundParameterData> &values,
-                                               bool allow_stream_result) {
+                                               QueryParameters query_parameters) {
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
-	parameters.allow_stream_result = allow_stream_result;
+	parameters.query_parameters = query_parameters;
 	return Execute(query, prepared, parameters);
 }
 
@@ -790,7 +795,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 		PreparedStatement::VerifyParameters(*parameters.parameters, statement->named_param_map);
 	}
 
-	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters,
+	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters,
 	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
 
 	idx_t parameter_count = !parameters.parameters ? 0 : parameters.parameters->size();
@@ -807,13 +812,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	return PendingPreparedStatementInternal(lock, std::move(prepared), parameters);
 }
 
-unique_ptr<QueryResult>
-ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                    bool allow_stream_result,
-                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params, bool verify) {
-	PendingQueryParameters parameters;
-	parameters.allow_stream_result = allow_stream_result;
-	parameters.parameters = params;
+unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
+                                                            unique_ptr<SQLStatement> statement,
+                                                            const PendingQueryParameters &parameters, bool verify) {
 	auto pending = PendingQueryInternal(lock, std::move(statement), parameters, verify);
 	if (pending->HasError()) {
 		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
@@ -846,7 +847,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			// in case this is a select query, we verify the original statement
 			ErrorData error;
 			try {
-				error = VerifyQuery(lock, query, std::move(statement), parameters.parameters);
+				error = VerifyQuery(lock, query, std::move(statement), parameters);
 			} catch (std::exception &ex) {
 				error = ErrorData(ex);
 			}
@@ -958,15 +959,15 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 	client_data->log_query_writer->Sync();
 }
 
-unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	auto pending_query = PendingQuery(std::move(statement), allow_stream_result);
+unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
+	auto pending_query = PendingQuery(std::move(statement), parameters);
 	if (pending_query->HasError()) {
 		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();
 }
 
-unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameters query_parameters) {
 	auto lock = LockContext();
 
 	vector<unique_ptr<SQLStatement>> statements;
@@ -991,7 +992,10 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		auto &statement = statements[i];
 		bool is_last_statement = i + 1 == statements.size();
 		PendingQueryParameters parameters;
-		parameters.allow_stream_result = allow_stream_result && is_last_statement;
+		parameters.query_parameters = query_parameters;
+		if (!is_last_statement) {
+			parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+		}
 		auto pending_query = PendingQueryInternal(*lock, std::move(statement), parameters);
 		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
 		unique_ptr<QueryResult> current_result;
@@ -1032,20 +1036,27 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(ClientContextLoc
 	return ParseStatementsInternal(lock, query);
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, bool allow_stream_result) {
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, QueryParameters parameters) {
 	case_insensitive_map_t<BoundParameterData> empty_param_list;
-	return PendingQuery(query, empty_param_list, allow_stream_result);
+	return PendingQuery(query, empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
-                                                           bool allow_stream_result) {
+                                                           QueryParameters parameters) {
 	case_insensitive_map_t<BoundParameterData> empty_param_list;
-	return PendingQuery(std::move(statement), empty_param_list, allow_stream_result);
+	return PendingQuery(std::move(statement), empty_param_list, parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
                                                            case_insensitive_map_t<BoundParameterData> &values,
-                                                           bool allow_stream_result) {
+                                                           QueryParameters parameters) {
+	PendingQueryParameters params;
+	params.parameters = values;
+	params.query_parameters = parameters;
+	return PendingQuery(query, params);
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, PendingQueryParameters parameters) {
 	auto lock = LockContext();
 	try {
 		InitialCleanup(*lock);
@@ -1058,11 +1069,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 			throw InvalidInputException("Cannot prepare multiple statements at once!");
 		}
 
-		PendingQueryParameters params;
-		params.allow_stream_result = allow_stream_result;
-		params.parameters = values;
-
-		return PendingQueryInternal(*lock, std::move(statements[0]), params, true);
+		return PendingQueryInternal(*lock, std::move(statements[0]), parameters, true);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		ProcessError(error, query);
@@ -1072,14 +1079,14 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            case_insensitive_map_t<BoundParameterData> &values,
-                                                           bool allow_stream_result) {
+                                                           QueryParameters parameters) {
 	auto lock = LockContext();
 	auto query = statement->query;
 	try {
 		InitialCleanup(*lock);
 
 		PendingQueryParameters params;
-		params.allow_stream_result = allow_stream_result;
+		params.query_parameters = parameters;
 		params.parameters = values;
 
 		return PendingQueryInternal(*lock, std::move(statement), params, true);
@@ -1335,7 +1342,7 @@ unordered_set<string> ClientContext::GetTableNames(const string &query, const bo
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
                                                                    const shared_ptr<Relation> &relation,
-                                                                   bool allow_stream_result) {
+                                                                   QueryParameters query_parameters) {
 	InitialCleanup(lock);
 
 	string query;
@@ -1347,20 +1354,23 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 			// verify read only statements by running a select statement
 			auto select = make_uniq<SelectStatement>();
 			select->node = relation->GetQueryNode();
-			RunStatementInternal(lock, query, std::move(select), false, nullptr);
+			PendingQueryParameters parameters;
+			parameters.query_parameters = query_parameters;
+			parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+			RunStatementInternal(lock, query, std::move(select), parameters);
 		}
 	}
 
 	auto relation_stmt = make_uniq<RelationStatement>(relation);
 	PendingQueryParameters parameters;
-	parameters.allow_stream_result = allow_stream_result;
+	parameters.query_parameters = query_parameters;
 	return PendingQueryInternal(lock, std::move(relation_stmt), parameters);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const shared_ptr<Relation> &relation,
-                                                           bool allow_stream_result) {
+                                                           QueryParameters query_parameters) {
 	auto lock = LockContext();
-	return PendingQueryInternal(*lock, relation, allow_stream_result);
+	return PendingQueryInternal(*lock, relation, query_parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
@@ -1443,6 +1453,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
 	options.max_expression_depth = client_config.max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
+	options.parser_override_setting = DBConfig::GetConfig(*this).options.allow_parser_override_extension;
 	return options;
 }
 

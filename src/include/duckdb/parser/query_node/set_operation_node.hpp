@@ -28,8 +28,6 @@ public:
 	//! The children of the set operation
 	vector<unique_ptr<QueryNode>> children;
 
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override;
-
 public:
 	//! Convert the query node to a string
 	string ToString() const override;

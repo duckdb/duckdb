@@ -20,17 +20,17 @@ Exception::Exception(ExceptionType exception_type, const string &message)
     : std::runtime_error(ToJSON(exception_type, message)) {
 }
 
-Exception::Exception(ExceptionType exception_type, const string &message,
-                     const unordered_map<string, string> &extra_info)
-    : std::runtime_error(ToJSON(exception_type, message, extra_info)) {
+Exception::Exception(const unordered_map<string, string> &extra_info, ExceptionType exception_type,
+                     const string &message)
+    : std::runtime_error(ToJSON(extra_info, exception_type, message)) {
 }
 
 string Exception::ToJSON(ExceptionType type, const string &message) {
 	unordered_map<string, string> extra_info;
-	return ToJSON(type, message, extra_info);
+	return ToJSON(extra_info, type, message);
 }
 
-string Exception::ToJSON(ExceptionType type, const string &message, const unordered_map<string, string> &extra_info) {
+string Exception::ToJSON(const unordered_map<string, string> &extra_info, ExceptionType type, const string &message) {
 #ifndef DUCKDB_DEBUG_STACKTRACE
 	// by default we only enable stack traces for internal exceptions
 	if (type == ExceptionType::INTERNAL || type == ExceptionType::FATAL)
@@ -241,9 +241,8 @@ TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const Lo
 
 TypeMismatchException::TypeMismatchException(optional_idx error_location, const LogicalType &type_1,
                                              const LogicalType &type_2, const string &msg)
-    : Exception(ExceptionType::MISMATCH_TYPE,
-                "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg,
-                Exception::InitializeExtraInfo(error_location)) {
+    : Exception(Exception::InitializeExtraInfo(error_location), ExceptionType::MISMATCH_TYPE,
+                "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
 }
 
 TypeMismatchException::TypeMismatchException(const string &msg) : Exception(ExceptionType::MISMATCH_TYPE, msg) {
@@ -307,8 +306,12 @@ DependencyException::DependencyException(const string &msg) : Exception(Exceptio
 IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
 }
 
-IOException::IOException(const string &msg, const unordered_map<string, string> &extra_info)
-    : Exception(ExceptionType::IO, msg, extra_info) {
+IOException::IOException(const unordered_map<string, string> &extra_info, const string &msg)
+    : Exception(extra_info, ExceptionType::IO, msg) {
+}
+
+NotImplementedException::NotImplementedException(const unordered_map<string, string> &extra_info, const string &msg)
+    : Exception(extra_info, ExceptionType::NOT_IMPLEMENTED, msg) {
 }
 
 MissingExtensionException::MissingExtensionException(const string &msg)
@@ -340,20 +343,24 @@ InternalException::InternalException(const string &msg) : Exception(ExceptionTyp
 #endif
 }
 
+InternalException::InternalException(const unordered_map<string, string> &extra_info, const string &msg)
+    : Exception(extra_info, ExceptionType::INTERNAL, msg) {
+}
+
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
 }
 
-InvalidInputException::InvalidInputException(const string &msg, const unordered_map<string, string> &extra_info)
-    : Exception(ExceptionType::INVALID_INPUT, msg, extra_info) {
+InvalidInputException::InvalidInputException(const unordered_map<string, string> &extra_info, const string &msg)
+    : Exception(extra_info, ExceptionType::INVALID_INPUT, msg) {
 }
 
 InvalidConfigurationException::InvalidConfigurationException(const string &msg)
     : Exception(ExceptionType::INVALID_CONFIGURATION, msg) {
 }
 
-InvalidConfigurationException::InvalidConfigurationException(const string &msg,
-                                                             const unordered_map<string, string> &extra_info)
-    : Exception(ExceptionType::INVALID_CONFIGURATION, msg, extra_info) {
+InvalidConfigurationException::InvalidConfigurationException(const unordered_map<string, string> &extra_info,
+                                                             const string &msg)
+    : Exception(extra_info, ExceptionType::INVALID_CONFIGURATION, msg) {
 }
 
 OutOfMemoryException::OutOfMemoryException(const string &msg)

@@ -1,6 +1,7 @@
 {
     "group": "table_functions",
     "deprecated": false,
+    "description": "Functions to create, execute, and register custom table functions. Table functions take one or more input parameters, and return one or more output parameters.",
     "entries": [
         {
             "name": "duckdb_create_table_function",
