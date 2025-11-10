@@ -59,12 +59,10 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 		return;
 	}
 
-	// If the input is a constant during constant folding, we must return a CONSTANT_VECTOR
+	// If the input is a constant, we must return a CONSTANT_VECTOR
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			Vector null_vec(LogicalType::LIST(LogicalType::VARCHAR));
-			ConstantVector::SetNull(null_vec, true);
-			result.Reference(null_vec);
+			ConstantVector::SetNull(result, true);
 			return;
 		}
 		ConstantVector::Reference(result, keys_vector, 0, count);
