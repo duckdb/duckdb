@@ -88,10 +88,7 @@ void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
-	// result.EnsureWritable();
-	if (!result.GetData()) {
-		result.Initialize();
-	}
+
 	auto result_data = (validity_t *) FlatVector::GetData<uint64_t>(result);
 
 // #ifdef DEBUG

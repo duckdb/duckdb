@@ -478,11 +478,7 @@ public:
 
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
-		auto &result_mask = FlatVector::Validity(result);
-		UnifiedVectorFormat unified;
-		result.ToUnifiedFormat(to_scan, unified);
-		auto &validity = unified.validity;
-		auto vector_from_validity = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
+		auto &validity = FlatVector::Validity(result);
 
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
@@ -491,6 +487,8 @@ public:
 			// If we are mapping valid entries, that means the majority of the bits are invalid
 			// so we set everything to invalid and only flip the bits that are present in the array
 			printf("\nArrayContainerScanState::ScanPartial");
+			validity.EnsureWritable();
+			auto vector_from_validity = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
 			SetInvalidRange(vector_from_validity, result_offset, result_offset + to_scan);
 		}
 
@@ -508,9 +506,9 @@ public:
 			}
 			auto index = value - scanned_count;
 			if (INVERTED) {
-				result_mask.SetInvalid(result_offset + index);
+				validity.SetInvalid(result_offset + index);
 			} else {
-				result_mask.SetValid(result_offset + index);
+				validity.SetValid(result_offset + index);
 			}
 			LoadNextValue();
 		}

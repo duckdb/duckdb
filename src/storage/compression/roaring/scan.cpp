@@ -56,10 +56,7 @@ RunContainerScanState::RunContainerScanState(idx_t container_index, idx_t contai
 
 void RunContainerScanState::ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
 	// auto input_vector = Vector(LogicalType::UBIGINT, data_ptr_cast(result.GetData()));
-	UnifiedVectorFormat unified;
-	result.ToUnifiedFormat(to_scan, unified);
-	auto &validity = unified.validity;
-	auto vector_from_validity = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
+	auto &validity = FlatVector::Validity(result);
 
 	// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 	// scanned.
@@ -86,6 +83,8 @@ void RunContainerScanState::ScanPartial(Vector &result, idx_t result_offset, idx
 			idx_t start = result_offset + result_idx;
 			idx_t end = start + amount;
 			printf("\nRunContainerScanState::ScanPartial");
+			validity.EnsureWritable();
+			auto vector_from_validity = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
 			SetInvalidRange(vector_from_validity, start, end);
 		}
 
