@@ -52,6 +52,8 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
+	void SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize);
+
 	SourceResultType MaterializeColumnData(ExecutionContext &context, idx_t hash_bin,
 	                                       OperatorSourceInput &source) const;
 	HashGroupPtr GetColumnData(idx_t hash_bin, OperatorSourceInput &source) const;
