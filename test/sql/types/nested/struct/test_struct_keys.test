@@ -3,9 +3,9 @@
 
 # Basic
 query I
-select struct_keys({a: 1, b: 2});
+select struct_keys({a: 1, b: 2, c: 3, d: 4, e: 5});
 ----
-[a, b]
+[a, b, c, d, e]
 
 # NULL as input (typed)
 query I

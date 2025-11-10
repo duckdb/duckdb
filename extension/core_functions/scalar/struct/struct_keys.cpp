@@ -19,6 +19,7 @@ struct StructKeysBindData : public FunctionData {
 		const auto &child_types = StructType::GetChildTypes(type);
 		const auto count = child_types.size();
 
+		ListVector::Reserve(keys_vector, count);
 		auto &list_child = ListVector::GetEntry(keys_vector);
 		auto child_data = FlatVector::GetData<string_t>(list_child);
 		for (idx_t i = 0; i < count; i++) {
