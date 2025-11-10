@@ -147,7 +147,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			MoveCorrelatedExpressions(*subquery->binder);
 			seen_subquery = true;
 			arguments.emplace_back(LogicalTypeId::TABLE);
-			parameters.emplace_back(Value());
+			parameters.emplace_back();
 			continue;
 		}
 

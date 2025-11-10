@@ -183,6 +183,7 @@ public:
 	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
 	static string JSONSanitize(const string &text);
 	static string DrawPadded(const string &str, idx_t width);
+	DUCKDB_API void ToLog() const;
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 

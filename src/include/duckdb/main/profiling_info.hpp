@@ -56,6 +56,7 @@ public:
 
 public:
 	string GetMetricAsString(const MetricsType metric) const;
+	void WriteMetricsToLog(ClientContext &context);
 	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
 
 public:

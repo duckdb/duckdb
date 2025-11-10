@@ -228,11 +228,26 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
 		unique_ptr<HTTPResponse> response;
+
+		// When logging is enabled, we collect request timings
+		if (request.params.logger) {
+			request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
+		}
+
 		try {
+			if (request.have_request_timing) {
+				request.request_start = Timestamp::GetCurrentTimestamp();
+			}
 			response = client->Request(request);
 		} catch (...) {
+			if (request.have_request_timing) {
+				request.request_end = Timestamp::GetCurrentTimestamp();
+			}
 			LogRequest(request, nullptr);
 			throw;
+		}
+		if (request.have_request_timing) {
+			request.request_end = Timestamp::GetCurrentTimestamp();
 		}
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
