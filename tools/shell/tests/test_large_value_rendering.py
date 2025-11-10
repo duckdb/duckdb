@@ -4,18 +4,19 @@ import pytest
 import subprocess
 import sys
 import os
+import re
 from typing import List
 from conftest import ShellTest
 
 long_string = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.'
 
-nested_view = '''NESTED_VIEW
+nested_view = '''
 create view special_characters as select {
-	'" this ''name contains \\special" characters "': 420, 'a': ' this ''value contains \\special" characters ', 'b': 84, 'c': DATE '2020-01-01', 'd': (SELECT lineitem FROM 'data/parquet-testing/lineitem-top10000.gzip.parquet' LIMIT 1),
+	'" this ''name contains \\special" characters "': 420, 'a': ' this ''value contains \\special" characters ', 'b': 84, 'c': DATE '2020-01-01', 'd': (SELECT lineitem FROM 'data/parquet-testing/lineitem-top10000.gzip.parquet' AS lineitem LIMIT 1),
 	'e': range(10),
 	'f': NULL
 	} s;
-NESTED_VIEW'''
+'''
 
 json_widespace = '''
 {
@@ -123,11 +124,40 @@ def test_multiple_long_strings_many_rows(shell):
 def test_big_json(shell):
     test = (
         ShellTest(shell)
+        .statement('.maxwidth 120')
+        .statement(f"SELECT '{big_json}'::JSON s")
+    )
+    result = test.run()
+    # verify rendering is like "|      "from_table": ...
+    keys = ["from_table", "where_clause", "group_expressions", "group_sets"]
+    for key in keys:
+        assert re.search(f'│\\s+["]{key}["]:', result.stdout) is not None
+
+def test_big_json_compact(shell):
+    # test compact rendering - this might result in multiple keys being placed on one line
+    test = (
+        ShellTest(shell)
         .statement('.maxwidth 80')
         .statement(f"SELECT '{big_json}'::JSON s")
     )
     result = test.run()
-    result.check_stdout("named_param_map")
+    # verify rendering is like "|      "from_table": ...
+    keys = ["error", "statements", "from_table"]
+    for key in keys:
+        assert re.search(f'│\\s+["]{key}["]:', result.stdout) is not None
+
+def test_multi_big_json(shell):
+    # test compact rendering - this might result in multiple keys being placed on one line
+    test = (
+        ShellTest(shell)
+        .statement('.maxwidth 170')
+        .statement(f"SELECT s, s, s FROM (SELECT '{big_json}'::JSON s)")
+    )
+    result = test.run()
+    # verify rendering is like "|      "from_table": ...
+    keys = ["error", "statements", "from_table"]
+    for key in keys:
+        assert re.search(f'│\\s+["]{key}["]:', result.stdout) is not None
 
 def test_json_newlines(shell):
     # verify there's no literal \n in the output
@@ -138,5 +168,44 @@ def test_json_newlines(shell):
     )
     result = test.run()
     result.check_not_exist("\\n")
+
+def test_struct_special_characters(shell):
+    test = (
+        ShellTest(shell)
+        .statement(nested_view)
+        .statement('.maxwidth 120')
+        .statement("select s from special_characters")
+    )
+    result = test.run()
+    # verify rendering is like "|      "from_table": ...
+    keys = ["l_orderkey", "l_shipdate", "f"]
+    for key in keys:
+        assert re.search(f"│\\s+[']{key}[']:", result.stdout) is not None
+
+def test_variant_special_characters(shell):
+    test = (
+        ShellTest(shell)
+        .statement(nested_view)
+        .statement('.maxwidth 120')
+        .statement("select s::variant from special_characters")
+    )
+    result = test.run()
+    # verify rendering is like "|      "from_table": ...
+    keys = ["l_orderkey", "l_shipdate", "f"]
+    for key in keys:
+        assert re.search(f"│\\s+[']{key}[']:", result.stdout) is not None
+
+def test_json_special_characters(shell):
+    test = (
+        ShellTest(shell)
+        .statement(nested_view)
+        .statement('.maxwidth 120')
+        .statement("select s::json from special_characters")
+    )
+    result = test.run()
+    # verify rendering is like "|      "from_table": ...
+    keys = ["l_orderkey", "l_shipdate", "f"]
+    for key in keys:
+        assert re.search(f'│\\s+["]{key}["]:', result.stdout) is not None
 
 # fmt: on

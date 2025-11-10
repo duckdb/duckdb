@@ -1093,6 +1093,15 @@ protected:
 		JSONFormattingResult format_result = JSONFormattingResult::SUCCESS;
 	};
 
+	bool LiteralFits(FormatState &format_state, const string &text) {
+		auto &line_length = format_state.line_length;
+		idx_t render_width = Utf8Proc::RenderWidth(text);
+		if (line_length + render_width > format_state.max_width) {
+			return false;
+		}
+		return true;
+	}
+
 	void AddLiteral(FormatState &format_state, const string &text) {
 		auto &result = format_state.result;
 		auto &line_length = format_state.line_length;
@@ -1143,7 +1152,7 @@ protected:
 					} else if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
 						if (peek_depth == 0) {
 							// close!
-							inline_bracket = true;
+							inline_bracket = render_size + 1 < max_width;
 							break;
 						}
 						peek_depth--;
@@ -1183,6 +1192,12 @@ protected:
 			break;
 		case JSONComponentType::COMMA:
 		case JSONComponentType::COLON:
+			if (format_state.mode != JSONFormattingMode::STANDARD) {
+				// add a newline if the comma does not fit
+				if (!LiteralFits(format_state, component.text)) {
+					AddNewline(format_state);
+				}
+			}
 			AddLiteral(format_state, component.text);
 			bool always_inline;
 			if (format_state.mode == JSONFormattingMode::COMPACT_HORIZONTAL) {
@@ -1207,15 +1222,14 @@ protected:
 							peek_depth++;
 						} else if (peek_component.type == JSONComponentType::BRACKET_CLOSE) {
 							if (peek_depth == 0) {
-								inline_comma = true;
+								inline_comma = render_size + 1 < max_width;
 								break;
 							}
 							peek_depth--;
 						}
-						if (peek_depth == 0 && peek_component.type == JSONComponentType::COMMA &&
-						    render_size + 2 <= max_width) {
+						if (peek_depth == 0 && peek_component.type == JSONComponentType::COMMA) {
 							// found the next comma - inline!
-							inline_comma = true;
+							inline_comma = render_size + 2 <= max_width;
 							break;
 						}
 						render_size += Utf8Proc::RenderWidth(peek_component.text);
