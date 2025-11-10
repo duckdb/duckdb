@@ -53,7 +53,6 @@ class TestResult:
             print(self.stdout, file=sys.stderr)
             assert not is_needle_in_haystack(not_exist, self.stdout)
 
-
     def check_stderr(self, expected):
         if expected is None:
             assert self.stderr == ""

@@ -827,6 +827,8 @@ string BoxRendererImplementation::GetRenderValue(ColumnDataRowCollection &rows, 
 
 struct JSONParser {
 protected:
+	virtual ~JSONParser() = default;
+
 	enum class JSONState { REGULAR, IN_QUOTE, ESCAPE };
 
 	struct Separator {
@@ -865,7 +867,6 @@ protected:
 
 protected:
 	bool SeparatorIsMatching(Separator &sep, char closing_sep);
-	void SkipWhitespace(const string &value, idx_t &pos);
 	idx_t Depth() const {
 		return separators.size();
 	}
@@ -887,10 +888,9 @@ bool JSONParser::SeparatorIsMatching(Separator &sep, char closing_sep) {
 	return false;
 }
 
-void JSONParser::SkipWhitespace(const string &value, idx_t &pos) {
-	while (pos + 1 < value.size() && StringUtil::CharacterIsSpace(value[pos + 1])) {
-		pos++;
-	}
+bool IsWhitespaceEscape(const char c) {
+	// \n and \t are whitespace escapes
+	return c == 'n' || c == 't';
 }
 
 bool JSONParser::Process(const string &value) {
@@ -898,7 +898,8 @@ bool JSONParser::Process(const string &value) {
 	state = JSONState::REGULAR;
 	char quote_char = '"';
 	bool can_parse_value = false;
-	for (pos = 0; success && pos < value.size(); pos++) {
+	pos = 0;
+	for (; success && pos < value.size(); pos++) {
 		auto c = value[pos];
 		if (state == JSONState::REGULAR) {
 			if (can_parse_value) {
@@ -918,7 +919,6 @@ bool JSONParser::Process(const string &value) {
 				// add a newline and indentation based on the separator count
 				separators.push_back(c);
 				HandleBracketOpen(c);
-				SkipWhitespace(value, pos);
 				can_parse_value = c == '[';
 				break;
 			}
@@ -930,7 +930,6 @@ bool JSONParser::Process(const string &value) {
 				}
 				separators.pop_back();
 				HandleBracketClose(c);
-				SkipWhitespace(value, pos);
 				break;
 			}
 			case '"':
@@ -942,12 +941,24 @@ bool JSONParser::Process(const string &value) {
 			case ',':
 				// comma - move to next line
 				HandleComma(c);
-				SkipWhitespace(value, pos);
 				break;
 			case ':':
 				HandleColon();
-				SkipWhitespace(value, pos);
 				can_parse_value = true;
+				break;
+			case '\\':
+				// skip literal "\n" and "\t" (these were escaped previously by our rendering algorithm)
+				if (pos + 1 < value.size() && IsWhitespaceEscape(value[pos + 1])) {
+					pos++;
+					break;
+				}
+				// if this is not a whitespace escape just handle it
+				HandleCharacter(c);
+				break;
+			case ' ':
+			case '\t':
+			case '\n':
+				// skip whitespace
 				break;
 			default:
 				HandleCharacter(c);
