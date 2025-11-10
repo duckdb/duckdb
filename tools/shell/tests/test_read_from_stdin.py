@@ -25,6 +25,7 @@ class TestReadFromStdin(object):
         result = test.run()
         result.check_stdout("len")
         result.check_stdout('77780')
+
     def test_read_stdin_csv(self, shell):
         test = (
             ShellTest(shell)
