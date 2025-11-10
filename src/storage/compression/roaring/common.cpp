@@ -81,22 +81,28 @@ namespace duckdb {
 
 namespace roaring {
 
+// TODO: change signature to void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 // Set all the bits from start (inclusive) to end (exclusive) to 0
-void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
+void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
+	printf("\nSetInvalidRange");
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
-	result.EnsureWritable();
-	auto result_data = (validity_t *)result.GetData();
-
-#ifdef DEBUG
-	ValidityMask copy_for_verification(result.Capacity());
-	copy_for_verification.EnsureWritable();
-	for (idx_t i = 0;
-	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
-		copy_for_verification.GetData()[i] = result.GetData()[i];
+	// result.EnsureWritable();
+	if (!result.GetData()) {
+		result.Initialize();
 	}
-#endif
+	auto result_data = (validity_t *) FlatVector::GetData<uint64_t>(result);
+
+// #ifdef DEBUG
+// 	ValidityMask copy_for_verification(result.Capacity());
+// 	copy_for_verification.EnsureWritable();
+// 	for (idx_t i = 0;
+// 	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
+// 		copy_for_verification.GetData()[i] = result.GetData()[i];
+// 	}
+// #endif
+
 	idx_t index = start;
 
 	if ((index % ValidityMask::BITS_PER_VALUE) != 0) {
@@ -153,17 +159,17 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 		result_data[entry_idx] &= mask;
 	}
 
-#ifdef DEBUG
-	D_ASSERT(end <= result.Capacity());
-	for (idx_t i = 0; i < result.Capacity(); i++) {
-		if (i >= start && i < end) {
-			D_ASSERT(!result.RowIsValidUnsafe(i));
-		} else {
-			// Ensure no others bits are touched by this method
-			D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
-		}
-	}
-#endif
+// #ifdef DEBUG
+// 	D_ASSERT(end <= result.Capacity());
+// 	for (idx_t i = 0; i < result.Capacity(); i++) {
+// 		if (i >= start && i < end) {
+// 			D_ASSERT(!result.RowIsValidUnsafe(i));
+// 		} else {
+// 			// Ensure no others bits are touched by this method
+// 			D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
+// 		}
+// 	}
+// #endif
 }
 
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
@@ -218,6 +224,7 @@ unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, Column
 //===--------------------------------------------------------------------===//
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
+	printf("\nroaring::RoaringScanPartial");
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
@@ -225,6 +232,7 @@ void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 }
 
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	printf("\nroaring::RoaringScan");
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 
@@ -232,6 +240,7 @@ void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_coun
 // Fetch
 //===--------------------------------------------------------------------===//
 void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+	printf("\nroaring::RoaringFetchRow");
 	RoaringScanState scan_state(segment);
 
 	idx_t internal_offset;

@@ -56,7 +56,7 @@ static_assert(
     (1 << ARRAY_CONTAINER_SIZE_BITWIDTH) - 1 >= MAX_ARRAY_IDX + 1,
     "The bitwidth used to store the size of an array/bitset container has to be big enough to store the maximum size");
 
-void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end);
+void SetInvalidRange(Vector &result, idx_t start, idx_t end);
 
 struct RunContainerRLEPair {
 	uint16_t start;
@@ -479,6 +479,10 @@ public:
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
 		auto &result_mask = FlatVector::Validity(result);
+		UnifiedVectorFormat unified;
+		result.ToUnifiedFormat(to_scan, unified);
+		auto &validity = unified.validity;
+		auto vector_from_validity = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
 
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
@@ -486,7 +490,8 @@ public:
 		if (!INVERTED) {
 			// If we are mapping valid entries, that means the majority of the bits are invalid
 			// so we set everything to invalid and only flip the bits that are present in the array
-			SetInvalidRange(result_mask, result_offset, result_offset + to_scan);
+			printf("\nArrayContainerScanState::ScanPartial");
+			SetInvalidRange(vector_from_validity, result_offset, result_offset + to_scan);
 		}
 
 		if (!array_index) {

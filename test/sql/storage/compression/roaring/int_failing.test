@@ -1,0 +1,37 @@
+# name: test/sql/storage/compression/roaring/roaring_run_simple.test
+# description: Test bitpacking with nulls
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.2.0
+
+statement ok
+PRAGMA force_compression='roaring';
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BIGINT);
+
+statement ok
+INSERT INTO test VALUES (1),(2),(3),(4),(null),(null),(null);
+# INSERT INTO test SELECT case when i < 5 then NULL else 1337 end FROM range(0,10) tbl(i);
+
+# INSERT INTO test VALUES (true), (false), (true), (null), (false), (true), (null), (false);
+
+statement ok
+checkpoint;
+
+query I
+FROM test;
+----
+1
+2
+3
+4
+NULL
+NULL
+NULL
+
+query I
+select count(*) from test WHERE a IS NOT NULL;
+----
+4
