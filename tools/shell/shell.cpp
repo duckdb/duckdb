@@ -1890,7 +1890,7 @@ string ShellState::GetSystemPager() {
 	return "more";
 #else
 	// On other systems, use 'less' as default pager
-	return "less -RX";
+	return "less -SRX";
 #endif
 }
 
