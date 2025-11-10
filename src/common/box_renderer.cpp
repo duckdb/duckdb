@@ -826,9 +826,10 @@ string BoxRendererImplementation::GetRenderValue(ColumnDataRowCollection &rows, 
 }
 
 struct JSONParser {
-protected:
+public:
 	virtual ~JSONParser() = default;
 
+protected:
 	enum class JSONState { REGULAR, IN_QUOTE, ESCAPE };
 
 	struct Separator {
