@@ -218,7 +218,7 @@ private:
 
 	//! Maximum size and current size
 	const idx_t maximum_size;
-	idx_t size;
+	uint32_t size;
 
 	//! Dictionary capacity (power of two) and corresponding mask
 	const idx_t capacity;
