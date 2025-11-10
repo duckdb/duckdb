@@ -353,15 +353,9 @@ jobs:
       id: build
       shell: bash
       env:
-        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;httpfs"
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
         GEN: ninja
       run: make
-
-    - name: test/configs/encryption.json
-      if: (success() || failure()) && steps.build.conclusion == 'success'
-      shell: bash
-      run: |
-        ./build/release/test/unittest --test-config test/configs/encryption.json
 
     - name: test/configs/force_storage.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
@@ -470,3 +464,21 @@ jobs:
       shell: bash
       run: |
         python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2" --new-unittest build/release/test/unittest
+
+    # TODO: clean this up: we should probably be able to run this whole test suite with httpfs
+    # We want to run the remainder of tests with httpfs
+    - name: Build with httpfs extension
+      id: build
+      shell: bash
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      env:
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;httpfs"
+        GEN: ninja
+      run:
+        make
+
+    - name: test/configs/encryption.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/encryption.json

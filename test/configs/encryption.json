@@ -5,6 +5,7 @@
   "on_load": "skip",
   "skip_compiled": "true",
   "statically_loaded_extensions": [
+    "core_functions",
     "httpfs"
   ],
   "skip_tests": [
@@ -45,6 +46,14 @@
       "reason": "Attached databases have a main schema, which is not implicit.",
       "paths": [
         "test/fuzzer/sqlsmith/current_schemas_null.test"
+      ]
+    },
+    {
+      "reason": "Expects httpfs to not be present",
+      "paths" : [
+          "test/sql/secrets/create_secret_hffs_autoload.test",
+          "test/sql/secrets/secret_autoloading_errors.test",
+          "test/sql/partitioning/hive_partitioning_autodetect.test"
       ]
     }
   ]
