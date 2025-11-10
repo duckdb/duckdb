@@ -7,6 +7,6 @@ duckdb_extension_load(httpfs
     # TODO: restore once httpfs is fixed
     ${LOAD_HTTPFS_TESTS}
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 8356a9017444f54018159718c8017ff7db4ea756
+    GIT_TAG b80c680f86dff6061614536d908d4b08c85c9ef4
     INCLUDE_DIR src/include
 )
