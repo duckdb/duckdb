@@ -12,7 +12,6 @@
 
 namespace duckdb {
 
-
 enum class SelectivityOptionalFilterStatus : uint8_t {
 	ACTIVE, // ready and in use
 	PAUSED_DUE_TO_ZONE_MAP_STATS,
@@ -20,7 +19,6 @@ enum class SelectivityOptionalFilterStatus : uint8_t {
 };
 
 class SelectivityOptionalFilter final : public TableFilter {
-
 	struct SelectivityStats {
 		atomic<idx_t> tuples_accepted;
 		atomic<idx_t> tuples_processed;
@@ -65,7 +63,6 @@ private:
 	idx_t n_vectors_to_check;
 
 public:
-
 	static constexpr float MIN_MAX_THRESHOLD = 0.75f;
 	static constexpr idx_t MIN_MAX_CHECK_N = 40;
 
