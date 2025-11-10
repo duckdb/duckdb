@@ -39,6 +39,8 @@ struct QualifiedColumnName {
 	string table;
 	string column;
 
+	static QualifiedColumnName Parse(string &input);
+
 	string ToString() const;
 
 	void Serialize(Serializer &serializer) const;

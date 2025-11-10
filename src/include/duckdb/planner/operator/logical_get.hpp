@@ -58,6 +58,8 @@ public:
 	ExtraOperatorInfo extra_info;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
+	//! Information for WITH ORDINALITY
+	optional_idx ordinality_idx;
 
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

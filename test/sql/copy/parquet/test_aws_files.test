@@ -8,6 +8,6 @@ statement ok
 PRAGMA enable_verification
 
 query III
-SELECT * FROM parquet_scan('data/parquet-testing/aws1.snappy.parquet') limit 100
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/aws1.snappy.parquet') limit 100
 ----
 11000 values hashing to 5a3700bd7f58ae786d89a06bfb6fb4f6

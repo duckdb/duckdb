@@ -22,6 +22,26 @@ unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList 
 	return std::move(result);
 }
 
+vector<string> Transformer::TransformInsertColumns(duckdb_libpgquery::PGList &cols) {
+	vector<string> result;
+	for (auto c = cols.head; c != nullptr; c = lnext(c)) {
+		auto target = PGPointerCast<duckdb_libpgquery::PGResTarget>(c->data.ptr_value);
+		result.emplace_back(target->name);
+	}
+	return result;
+}
+
+InsertColumnOrder Transformer::TransformColumnOrder(duckdb_libpgquery::PGInsertColumnOrder insert_column_order) {
+	switch (insert_column_order) {
+	case duckdb_libpgquery::PG_INSERT_BY_POSITION:
+		return InsertColumnOrder::INSERT_BY_POSITION;
+	case duckdb_libpgquery::PG_INSERT_BY_NAME:
+		return InsertColumnOrder::INSERT_BY_NAME;
+	default:
+		throw InternalException("Unrecognized insert column order in TransformInsert");
+	}
+}
+
 unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt) {
 	auto result = make_uniq<InsertStatement>();
 	if (stmt.withClause) {
@@ -30,10 +50,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGIn
 
 	// first check if there are any columns specified
 	if (stmt.cols) {
-		for (auto c = stmt.cols->head; c != nullptr; c = lnext(c)) {
-			auto target = PGPointerCast<duckdb_libpgquery::PGResTarget>(c->data.ptr_value);
-			result->columns.emplace_back(target->name);
-		}
+		result->columns = TransformInsertColumns(*stmt.cols);
 	}
 
 	// Grab and transform the returning columns from the parser.
@@ -64,16 +81,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGIn
 		result->on_conflict_info = DummyOnConflictClause(stmt.onConflictAlias, result->schema);
 		result->table_ref = TransformRangeVar(*stmt.relation);
 	}
-	switch (stmt.insert_column_order) {
-	case duckdb_libpgquery::PG_INSERT_BY_POSITION:
-		result->column_order = InsertColumnOrder::INSERT_BY_POSITION;
-		break;
-	case duckdb_libpgquery::PG_INSERT_BY_NAME:
-		result->column_order = InsertColumnOrder::INSERT_BY_NAME;
-		break;
-	default:
-		throw InternalException("Unrecognized insert column order in TransformInsert");
-	}
+	result->column_order = TransformColumnOrder(stmt.insert_column_order);
 	result->catalog = qname.catalog;
 	return result;
 }

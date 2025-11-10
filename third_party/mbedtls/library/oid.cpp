@@ -1071,7 +1071,7 @@ int mbedtls_oid_from_numeric_string(mbedtls_asn1_buf *oid,
     size_t bytes_per_subidentifier = (((sizeof(unsigned int) * 8) - 1) / 7)
                                      + 1;
     size_t max_possible_bytes = num_dots * bytes_per_subidentifier;
-    oid->p = (unsigned char*) mbedtls_calloc(max_possible_bytes, 1);
+    oid->p = (unsigned char *) mbedtls_calloc(max_possible_bytes, 1);
     if (oid->p == NULL) {
         return MBEDTLS_ERR_ASN1_ALLOC_FAILED;
     }
@@ -1142,7 +1142,7 @@ int mbedtls_oid_from_numeric_string(mbedtls_asn1_buf *oid,
     }
 
     encoded_len = (size_t) (out_ptr - oid->p);
-    resized_mem = (unsigned char*) mbedtls_calloc(encoded_len, 1);
+    resized_mem = (unsigned char *) mbedtls_calloc(encoded_len, 1);
     if (resized_mem == NULL) {
         ret = MBEDTLS_ERR_ASN1_ALLOC_FAILED;
         goto error;

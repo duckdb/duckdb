@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE VIEW tbl AS SELECT * FROM PARQUET_SCAN('data/parquet-testing/filter_bug1391.parquet');
+CREATE VIEW tbl AS SELECT * FROM PARQUET_SCAN('{DATA_DIR}/parquet-testing/filter_bug1391.parquet');
 
 query I
 SELECT ORGUNITID FROM tbl LIMIT 10

@@ -15,24 +15,30 @@ SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &c
 SQLLogicTestLogger::~SQLLogicTestLogger() {
 }
 
+void SQLLogicTestLogger::Log(const string &annotation, const string &str) {
+	std::cerr << annotation << str;
+	AppendFailure(str);
+}
+
 void SQLLogicTestLogger::AppendFailure(const string &log_message) {
 	FailureSummary::Log(log_message);
 }
 
 void SQLLogicTestLogger::LogFailure(const string &log_message) {
-	std::cerr << log_message;
-	AppendFailure(log_message);
+	Log("", log_message);
 }
 
-void SQLLogicTestLogger::Log(const string &str) {
-	std::cerr << str;
-	AppendFailure(str);
+void SQLLogicTestLogger::LogFailureAnnotation(const string &log_message) {
+	const char *ci = std::getenv("CI");
+	// check the value is "true" otherwise you'll see the prefix in local run outputs
+	auto prefix = (ci && string(ci) == "true") ? "\n::error::" : "";
+	Log(prefix, log_message);
 }
 
-void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
+void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name, idx_t query_line) {
 	auto failures_count = to_string(FailureSummary::GetSummaryCounter());
 	if (std::getenv("NO_DUPLICATING_HEADERS") == 0) {
-		LogFailure("\n" + failures_count + ". " + file_name + "\n");
+		LogFailure("\n" + failures_count + ". " + file_name + ":" + to_string(query_line) + "\n");
 		PrintLineSep();
 	}
 }
@@ -89,7 +95,7 @@ void SQLLogicTestLogger::PrintSQL() {
 			query += ";";
 		}
 	}
-	Log(query + "\n");
+	Log("", query + "\n");
 }
 
 void SQLLogicTestLogger::PrintSQLFormatted() {
@@ -126,12 +132,12 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_line, const string &description) {
 	std::ostringstream oss;
-	PrintSummaryHeader(file_name);
+	PrintSummaryHeader(file_name, query_line);
 	oss << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
 	if (!file_name.empty()) {
 		oss << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
 	}
-	LogFailure(oss.str() + "\n");
+	LogFailureAnnotation(oss.str() + "\n");
 }
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
@@ -250,7 +256,6 @@ void SQLLogicTestLogger::WrongRowCount(idx_t expected_rows, MaterializedQueryRes
 
 void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expected_columns, idx_t expected_column_count,
                                                           MaterializedQueryResult &result) {
-
 	std::ostringstream oss;
 	PrintErrorHeader("Wrong column count in query!");
 	oss << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got "
@@ -274,7 +279,6 @@ void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expecte
 }
 
 void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count) {
-
 	std::ostringstream oss;
 	PrintLineSep();
 	PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " + to_string(row_number) +

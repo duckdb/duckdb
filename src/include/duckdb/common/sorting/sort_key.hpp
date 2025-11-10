@@ -45,7 +45,7 @@ struct SortKey;
 template <class SORT_KEY>
 struct SortKeyNoPayload {
 protected:
-	SortKeyNoPayload() = default;
+	SortKeyNoPayload() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -63,7 +63,7 @@ public:
 template <class SORT_KEY>
 struct SortKeyPayload {
 protected:
-	SortKeyPayload() = default;
+	SortKeyPayload() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -80,10 +80,20 @@ public:
 	}
 };
 
+template <idx_t REMAINING>
+static bool SortKeyLessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
+	return (*lhs < *rhs) || ((*lhs == *rhs) && SortKeyLessThan<REMAINING - 1>(lhs + 1, rhs + 1));
+}
+
+template <>
+inline bool SortKeyLessThan<1>(const uint64_t *const &lhs, const uint64_t *const &rhs) {
+	return *lhs < *rhs;
+}
+
 template <class SORT_KEY, bool HAS_PAYLOAD>
 struct FixedSortKey : std::conditional<HAS_PAYLOAD, SortKeyPayload<SORT_KEY>, SortKeyNoPayload<SORT_KEY>>::type {
 protected:
-	FixedSortKey() = default;
+	FixedSortKey() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -145,32 +155,15 @@ public:
 		throw InternalException("GetHeapSize() called on a FixedSortKey");
 	}
 
-	static bool LessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
-		switch (SORT_KEY::PARTS) {
-		case 1:
-			return lhs[0] < rhs[0];
-		case 2:
-			return lhs[0] == rhs[0] ? lhs[1] < rhs[1] : lhs[0] < rhs[0];
-		case 3:
-			return lhs[0] == rhs[0] ? (lhs[1] == rhs[1] ? lhs[2] < rhs[2] : lhs[1] < rhs[1]) : lhs[0] < rhs[0];
-		case 4:
-			return lhs[0] == rhs[0]
-			           ? (lhs[1] == rhs[1] ? (lhs[2] == rhs[2] ? lhs[3] < rhs[3] : lhs[2] < rhs[2]) : lhs[1] < rhs[1])
-			           : lhs[0] < rhs[0];
-		default:
-			throw NotImplementedException("FixedSortKey::LessThan for %llu parts", SORT_KEY::PARTS);
-		}
-	}
-
 	friend bool operator<(const SORT_KEY &lhs, const SORT_KEY &rhs) {
-		return LessThan(&lhs.part0, &rhs.part0);
+		return SortKeyLessThan<SORT_KEY::PARTS>(&lhs.part0, &rhs.part0);
 	}
 };
 
 template <class SORT_KEY, bool HAS_PAYLOAD>
 struct VariableSortKey : std::conditional<HAS_PAYLOAD, SortKeyPayload<SORT_KEY>, SortKeyNoPayload<SORT_KEY>>::type {
 protected:
-	VariableSortKey() = default;
+	VariableSortKey() = default; // NOLINT
 	friend SORT_KEY;
 
 public:
@@ -277,7 +270,6 @@ public:
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_8> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>, false> {
-	using PHYSICAL_TYPE = int64_t;
 	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
 	uint64_t part0;
@@ -285,7 +277,6 @@ struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_8> : FixedSortKey<SortKey<SortKeyTy
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_16> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>, false> {
-	using PHYSICAL_TYPE = string_t;
 	static constexpr idx_t PARTS = 2;
 	static constexpr idx_t INLINE_LENGTH = 16;
 	uint64_t part0;
@@ -294,7 +285,6 @@ struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_16> : FixedSortKey<SortKey<SortKeyT
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_24> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>, false> {
-	using PHYSICAL_TYPE = string_t;
 	static constexpr idx_t PARTS = 3;
 	static constexpr idx_t INLINE_LENGTH = 24;
 	uint64_t part0;
@@ -304,7 +294,6 @@ struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_24> : FixedSortKey<SortKey<SortKeyT
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_32> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>, false> {
-	using PHYSICAL_TYPE = string_t;
 	static constexpr idx_t PARTS = 4;
 	static constexpr idx_t INLINE_LENGTH = 32;
 	uint64_t part0;
@@ -316,7 +305,6 @@ struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_32> : FixedSortKey<SortKey<SortKeyT
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>
     : VariableSortKey<SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>, false> {
-	using PHYSICAL_TYPE = string_t;
 	static constexpr idx_t PARTS = 2;
 	static constexpr idx_t INLINE_LENGTH = 16;
 	static constexpr idx_t HEAP_SIZE_OFFSET = 16;
@@ -328,7 +316,6 @@ struct SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>
 
 template <>
 struct SortKey<SortKeyType::PAYLOAD_FIXED_16> : FixedSortKey<SortKey<SortKeyType::PAYLOAD_FIXED_16>, true> {
-	using PHYSICAL_TYPE = int64_t;
 	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
 	uint64_t part0;
@@ -337,7 +324,6 @@ struct SortKey<SortKeyType::PAYLOAD_FIXED_16> : FixedSortKey<SortKey<SortKeyType
 
 template <>
 struct SortKey<SortKeyType::PAYLOAD_FIXED_24> : FixedSortKey<SortKey<SortKeyType::PAYLOAD_FIXED_24>, true> {
-	using PHYSICAL_TYPE = string_t;
 	static constexpr idx_t PARTS = 2;
 	static constexpr idx_t INLINE_LENGTH = 16;
 	uint64_t part0;
@@ -347,7 +333,6 @@ struct SortKey<SortKeyType::PAYLOAD_FIXED_24> : FixedSortKey<SortKey<SortKeyType
 
 template <>
 struct SortKey<SortKeyType::PAYLOAD_FIXED_32> : FixedSortKey<SortKey<SortKeyType::PAYLOAD_FIXED_32>, true> {
-	using PHYSICAL_TYPE = string_t;
 	static constexpr idx_t PARTS = 3;
 	static constexpr idx_t INLINE_LENGTH = 24;
 	uint64_t part0;
@@ -358,7 +343,6 @@ struct SortKey<SortKeyType::PAYLOAD_FIXED_32> : FixedSortKey<SortKey<SortKeyType
 
 template <>
 struct SortKey<SortKeyType::PAYLOAD_VARIABLE_32> : VariableSortKey<SortKey<SortKeyType::PAYLOAD_VARIABLE_32>, true> {
-	using PHYSICAL_TYPE = string_t;
 	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
 	static constexpr idx_t HEAP_SIZE_OFFSET = 8;

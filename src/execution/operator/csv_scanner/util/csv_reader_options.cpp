@@ -125,6 +125,10 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 	if (delim_str.size() > 4) {
 		throw InvalidInputException("The delimiter option cannot exceed a size of 4 bytes.");
 	}
+	if (this->dialect_options.state_machine_options.delimiter.IsSetByUser()) {
+		// we can't know in which order delim and sep were specified, so we throw an exception here
+		throw BinderException("CSV Reader function option delim and sep are aliases, only one can be supplied");
+	}
 	this->dialect_options.state_machine_options.delimiter.Set(delim_str);
 }
 
@@ -461,7 +465,7 @@ bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
 	return was_type_manually_set[i];
 }
 
-string CSVReaderOptions::ToString(const string &current_file_path) const {
+string CSVReaderOptions::ToString(const String &current_file_path) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
@@ -471,7 +475,7 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
-	string error = "  file = " + current_file_path + "\n  ";
+	string error = "  file = " + current_file_path.ToStdString() + "\n  ";
 	// Let's first print options that can either be set by the user or by the sniffer
 	// delimiter
 	error += FormatOptionLine("delimiter", delimiter);

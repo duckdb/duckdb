@@ -1,312 +1,40 @@
-diff --git a/src/hnsw/hnsw_index_macros.cpp b/src/hnsw/hnsw_index_macros.cpp
-index 774b409..450f75a 100644
---- a/src/hnsw/hnsw_index_macros.cpp
-+++ b/src/hnsw/hnsw_index_macros.cpp
-@@ -1,5 +1,5 @@
- #include "duckdb/function/table_macro_function.hpp"
--#include "duckdb/main/extension_util.hpp"
-+#include "duckdb/main/extension/extension_loader.hpp"
- #include "duckdb/optimizer/matcher/expression_matcher.hpp"
- #include "hnsw/hnsw.hpp"
- #include "hnsw/hnsw_index.hpp"
-@@ -77,7 +77,7 @@ FROM
- //-------------------------------------------------------------------------
- // Register
- //-------------------------------------------------------------------------
--static void RegisterTableMacro(DatabaseInstance &db, const string &name, const string &query,
-+static void RegisterTableMacro(ExtensionLoader &loader, const string &name, const string &query,
-                                const vector<string> &params, const child_list_t<Value> &named_params) {
- 
- 	Parser parser;
-@@ -101,15 +101,15 @@ static void RegisterTableMacro(DatabaseInstance &db, const string &name, const s
- 	info.internal = true;
- 	info.macros.push_back(std::move(func));
- 
--	ExtensionUtil::RegisterFunction(db, info);
-+	loader.RegisterFunction(info);
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 218aa0e..89e909d 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -566,8 +566,12 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void HNSWIndex::Vacuum(IndexLock &state) {
  }
  
--void HNSWModule::RegisterMacros(DatabaseInstance &db) {
-+void HNSWModule::RegisterMacros(ExtensionLoader &loader) {
- 
--	RegisterTableMacro(db, "vss_join", VSS_JOIN_MACRO, {"left_table", "right_table", "left_col", "right_col", "k"},
-+	RegisterTableMacro(loader, "vss_join", VSS_JOIN_MACRO, {"left_table", "right_table", "left_col", "right_col", "k"},
- 	                   {{"metric", Value("l2sq")}});
- 
--	RegisterTableMacro(db, "vss_match", VSS_MATCH_MACRO, {"right_table", "left_col", "right_col", "k"},
-+	RegisterTableMacro(loader, "vss_match", VSS_MATCH_MACRO, {"right_table", "left_col", "right_col", "k"},
- 	                   {{"metric", Value("l2sq")}});
- }
- 
-diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
-index 72225ec..8bd423e 100644
---- a/src/hnsw/hnsw_index_physical_create.cpp
-+++ b/src/hnsw/hnsw_index_physical_create.cpp
-@@ -14,12 +14,12 @@
- 
- namespace duckdb {
- 
--PhysicalCreateHNSWIndex::PhysicalCreateHNSWIndex(const vector<LogicalType> &types_p, TableCatalogEntry &table_p,
-+PhysicalCreateHNSWIndex::PhysicalCreateHNSWIndex(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p, TableCatalogEntry &table_p,
-                                                  const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
-                                                  vector<unique_ptr<Expression>> unbound_expressions,
-                                                  idx_t estimated_cardinality)
-     // Declare this operators as a EXTENSION operator
--    : PhysicalOperator(PhysicalOperatorType::EXTENSION, types_p, estimated_cardinality),
-+    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, types_p, estimated_cardinality),
-       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)),
-       sorted(false) {
- 
-diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
-index 50b5779..05f19f9 100644
---- a/src/hnsw/hnsw_index_pragmas.cpp
-+++ b/src/hnsw/hnsw_index_pragmas.cpp
-@@ -8,7 +8,7 @@
- #include "duckdb/storage/table/scan_state.hpp"
- #include "duckdb/transaction/duck_transaction.hpp"
- #include "duckdb/transaction/local_storage.hpp"
--#include "duckdb/main/extension_util.hpp"
-+#include "duckdb/main/extension/extension_loader.hpp"
- #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
- #include "duckdb/storage/data_table.hpp"
- 
-@@ -192,14 +192,13 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
- //-------------------------------------------------------------------------
- // Register
- //-------------------------------------------------------------------------
--void HNSWModule::RegisterIndexPragmas(DatabaseInstance &db) {
--	ExtensionUtil::RegisterFunction(
--	    db, PragmaFunction::PragmaCall("hnsw_compact_index", CompactIndexPragma, {LogicalType::VARCHAR}));
-+void HNSWModule::RegisterIndexPragmas(ExtensionLoader &loader) {
-+	loader.RegisterFunction(PragmaFunction::PragmaCall("hnsw_compact_index", CompactIndexPragma, {LogicalType::VARCHAR}));
- 
- 	// TODO: This is kind of ugly and maybe should just take a parameter instead...
- 	TableFunction info_function("pragma_hnsw_index_info", {}, HNSWIndexInfoExecute, HNSWindexInfoBind,
- 	                            HNSWIndexInfoInitGlobal);
--	ExtensionUtil::RegisterFunction(db, info_function);
-+	loader.RegisterFunction(info_function);
- }
- 
- } // namespace duckdb
-\ No newline at end of file
-diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
-index edd808e..73ab224 100644
---- a/src/hnsw/hnsw_index_scan.cpp
-+++ b/src/hnsw/hnsw_index_scan.cpp
-@@ -8,7 +8,7 @@
- #include "duckdb/storage/table/scan_state.hpp"
- #include "duckdb/transaction/duck_transaction.hpp"
- #include "duckdb/transaction/local_storage.hpp"
--#include "duckdb/main/extension_util.hpp"
-+#include "duckdb/main/extension/extension_loader.hpp"
- #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
- #include "duckdb/storage/data_table.hpp"
- 
-@@ -155,8 +155,8 @@ TableFunction HNSWIndexScanFunction::GetFunction() {
- //-------------------------------------------------------------------------
- // Register
- //-------------------------------------------------------------------------
--void HNSWModule::RegisterIndexScan(DatabaseInstance &db) {
--	ExtensionUtil::RegisterFunction(db, HNSWIndexScanFunction::GetFunction());
-+void HNSWModule::RegisterIndexScan(ExtensionLoader &loader) {
-+	loader.RegisterFunction(HNSWIndexScanFunction::GetFunction());
- }
- 
- } // namespace duckdb
-\ No newline at end of file
-diff --git a/src/hnsw/hnsw_optimize_expr.cpp b/src/hnsw/hnsw_optimize_expr.cpp
-index a05f1a6..573593e 100644
---- a/src/hnsw/hnsw_optimize_expr.cpp
-+++ b/src/hnsw/hnsw_optimize_expr.cpp
-@@ -6,6 +6,7 @@
- #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
- #include "duckdb/optimizer/column_binding_replacer.hpp"
- #include "duckdb/optimizer/optimizer.hpp"
-+#include "duckdb/main/extension/extension_loader.hpp"
- 
- #include "hnsw/hnsw.hpp"
- #include "hnsw/hnsw_index.hpp"
-diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
-index 1a8d93b..58917b7 100644
---- a/src/hnsw/hnsw_optimize_join.cpp
-+++ b/src/hnsw/hnsw_optimize_join.cpp
-@@ -34,9 +34,9 @@ class PhysicalHNSWIndexJoin final : public PhysicalOperator {
- public:
- 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXTENSION;
- 
--	PhysicalHNSWIndexJoin(const vector<LogicalType> &types_p, const idx_t estimated_cardinality,
-+	PhysicalHNSWIndexJoin(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p, const idx_t estimated_cardinality,
- 	                      DuckTableEntry &table_p, HNSWIndex &hnsw_index_p, const idx_t limit_p)
--	    : PhysicalOperator(TYPE, types_p, estimated_cardinality), table(table_p), hnsw_index(hnsw_index_p),
-+	    : PhysicalOperator(physical_plan, TYPE, types_p, estimated_cardinality), table(table_p), hnsw_index(hnsw_index_p),
- 	      limit(limit_p) {
- 	}
- 
-diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
-index d5aded4..73fa183 100644
---- a/src/hnsw/hnsw_optimize_scan.cpp
-+++ b/src/hnsw/hnsw_optimize_scan.cpp
-@@ -10,6 +10,7 @@
- #include "duckdb/planner/operator/logical_top_n.hpp"
- #include "duckdb/planner/operator/logical_filter.hpp"
- #include "duckdb/storage/data_table.hpp"
-+#include "duckdb/main/extension/extension_loader.hpp"
- 
- #include "hnsw/hnsw.hpp"
- #include "hnsw/hnsw_index.hpp"
-diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
-index 14967d3..f5455fc 100644
---- a/src/hnsw/hnsw_optimize_topk.cpp
-+++ b/src/hnsw/hnsw_optimize_topk.cpp
-@@ -8,7 +8,7 @@
- #include "duckdb/optimizer/optimizer.hpp"
- #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
- #include "duckdb/optimizer/matcher/expression_matcher.hpp"
--
-+#include "duckdb/main/extension/extension_loader.hpp"
- #include "hnsw/hnsw.hpp"
- #include "hnsw/hnsw_index.hpp"
- #include "hnsw/hnsw_index_scan.hpp"
-diff --git a/src/include/hnsw/hnsw.hpp b/src/include/hnsw/hnsw.hpp
-index 5f0b55e..c5dd550 100644
---- a/src/include/hnsw/hnsw.hpp
-+++ b/src/include/hnsw/hnsw.hpp
-@@ -1,16 +1,19 @@
- #pragma once
- 
- #include "duckdb.hpp"
--
-+#include "duckdb/main/extension/extension_loader.hpp"
- namespace duckdb {
- 
- struct HNSWModule {
- public:
--	static void Register(DatabaseInstance &db) {
-+	static void Register(ExtensionLoader &loader) {
+-string HNSWIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+-	throw NotImplementedException("HNSWIndex::VerifyAndToString() not implemented");
++void HNSWIndex::Verify(IndexLock &l) {
++	throw NotImplementedException("HNSWIndex::Verify() not implemented");
++}
 +
-+		auto &db = loader.GetDatabaseInstance();
++string HNSWIndex::ToString(IndexLock &l, bool display_ascii) {
++	throw NotImplementedException("HNSWIndex::ToString() not implemented");
+ }
+ 
+ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 83fb9e7..a22a0b8 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -91,8 +91,14 @@ public:
+ 	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+ 
+-	//! Returns the string representation of the HNSWIndex, or only traverses and verifies the index.
+-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
++	//! Traverses and verifies the index.
++	//! Currently not implemented.
++	void Verify(IndexLock &l) override;
 +
- 		RegisterIndex(db);
--		RegisterIndexScan(db);
--		RegisterIndexPragmas(db);
--		RegisterMacros(db);
-+		RegisterIndexScan(loader);
-+		RegisterIndexPragmas(loader);
-+		RegisterMacros(loader);
++	//! Returns the string representation of an index.
++	//! Currently not implemented.
++	string ToString(IndexLock &l, bool display_ascii = false) override;
++
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
  
- 		// Optimizers
- 		RegisterExprOptimizer(db);
-@@ -20,15 +23,14 @@ public:
- 	}
- 
- private:
--	static void RegisterIndex(DatabaseInstance &db);
--	static void RegisterIndexScan(DatabaseInstance &db);
--	static void RegisterMultiScan(DatabaseInstance &db);
--	static void RegisterIndexPragmas(DatabaseInstance &db);
--	static void RegisterMacros(DatabaseInstance &db);
--	static void RegisterTopKOptimizer(DatabaseInstance &db);
-+	static void RegisterIndex(DatabaseInstance &ldb);
-+	static void RegisterIndexScan(ExtensionLoader &loader);
-+	static void RegisterIndexPragmas(ExtensionLoader &loader);
-+	static void RegisterMacros(ExtensionLoader &loader);
-+	static void RegisterTopKOperator(DatabaseInstance &db);
- 
- 	static void RegisterExprOptimizer(DatabaseInstance &db);
--	static void RegisterTopKOperator(DatabaseInstance &db);
-+	static void RegisterTopKOptimizer(DatabaseInstance &db);
- 	static void RegisterScanOptimizer(DatabaseInstance &db);
- 	static void RegisterJoinOptimizer(DatabaseInstance &db);
- };
-diff --git a/src/include/hnsw/hnsw_index_physical_create.hpp b/src/include/hnsw/hnsw_index_physical_create.hpp
-index 8b3e19d..2b1cc6a 100644
---- a/src/include/hnsw/hnsw_index_physical_create.hpp
-+++ b/src/include/hnsw/hnsw_index_physical_create.hpp
-@@ -12,7 +12,7 @@ public:
- 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXTENSION;
- 
- public:
--	PhysicalCreateHNSWIndex(const vector<LogicalType> &types_p, TableCatalogEntry &table,
-+	PhysicalCreateHNSWIndex(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p, TableCatalogEntry &table,
- 	                        const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
- 	                        vector<unique_ptr<Expression>> unbound_expressions, idx_t estimated_cardinality);
- 
-diff --git a/src/include/usearch/index.hpp b/src/include/usearch/index.hpp
-index ef79586..d1e71f3 100644
---- a/src/include/usearch/index.hpp
-+++ b/src/include/usearch/index.hpp
-@@ -3363,7 +3363,7 @@ class index_gt {
-         bool operator==(candidates_iterator_t const& other) noexcept { return current_ == other.current_; }
-         bool operator!=(candidates_iterator_t const& other) noexcept { return current_ != other.current_; }
- 
--        vector_key_t key() const noexcept { return index_->node_at_(slot()).key(); }
-+        vector_key_t key() const noexcept { return index_.node_at_(slot()).key(); }
-         compressed_slot_t slot() const noexcept { return neighbors_[current_]; }
-         friend inline std::size_t get_slot(candidates_iterator_t const& it) noexcept { return it.slot(); }
-         friend inline vector_key_t get_key(candidates_iterator_t const& it) noexcept { return it.key(); }
-diff --git a/src/include/vss_extension.hpp b/src/include/vss_extension.hpp
-index a941b5e..e34943c 100644
---- a/src/include/vss_extension.hpp
-+++ b/src/include/vss_extension.hpp
-@@ -6,7 +6,7 @@ namespace duckdb {
- 
- class VssExtension : public Extension {
- public:
--	void Load(DuckDB &db) override;
-+	void Load(ExtensionLoader &loader) override;
- 	std::string Name() override;
- };
- 
-diff --git a/src/vss_extension.cpp b/src/vss_extension.cpp
-index c010292..0a73510 100644
---- a/src/vss_extension.cpp
-+++ b/src/vss_extension.cpp
-@@ -1,24 +1,22 @@
--#define DUCKDB_EXTENSION_MAIN
--
- #include "vss_extension.hpp"
- #include "duckdb.hpp"
- #include "duckdb/common/exception.hpp"
- #include "duckdb/common/string_util.hpp"
- #include "duckdb/function/scalar_function.hpp"
--#include "duckdb/main/extension_util.hpp"
-+#include "duckdb/main/extension/extension_loader.hpp"
- #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
- 
- #include "hnsw/hnsw.hpp"
- 
- namespace duckdb {
- 
--static void LoadInternal(DatabaseInstance &instance) {
-+static void LoadInternal(ExtensionLoader &loader) {
- 	// Register the HNSW index module
--	HNSWModule::Register(instance);
-+	HNSWModule::Register(loader);
- }
- 
--void VssExtension::Load(DuckDB &db) {
--	LoadInternal(*db.instance);
-+void VssExtension::Load(ExtensionLoader &loader) {
-+	LoadInternal(loader);
- }
- 
- std::string VssExtension::Name() {
-@@ -29,16 +27,8 @@ std::string VssExtension::Name() {
- 
- extern "C" {
- 
--DUCKDB_EXTENSION_API void vss_init(duckdb::DatabaseInstance &db) {
--	duckdb::DuckDB db_wrapper(db);
--	db_wrapper.LoadExtension<duckdb::VssExtension>();
-+DUCKDB_CPP_EXTENSION_ENTRY(vss, loader) {
-+	duckdb::LoadInternal(loader);
- }
- 
--DUCKDB_EXTENSION_API const char *vss_version() {
--	return duckdb::DuckDB::LibraryVersion();
--}
- }
--
--#ifndef DUCKDB_EXTENSION_MAIN
--#error DUCKDB_EXTENSION_MAIN not defined
--#endif

@@ -162,7 +162,6 @@ void ParsedExpressionIterator::EnumerateChildren(
 
 void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
     QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
-
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
 		case ResultModifierType::LIMIT_MODIFIER: {
@@ -255,6 +254,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	case TableReferenceType::INVALID:
 	case TableReferenceType::CTE:
+	case TableReferenceType::BOUND_TABLE_REF:
 		throw NotImplementedException("TableRef type not implemented for traversal");
 	}
 	ref_callback(ref);
@@ -268,12 +268,6 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		auto &rcte_node = node.Cast<RecursiveCTENode>();
 		EnumerateQueryNodeChildren(*rcte_node.left, expr_callback, ref_callback);
 		EnumerateQueryNodeChildren(*rcte_node.right, expr_callback, ref_callback);
-		break;
-	}
-	case QueryNodeType::CTE_NODE: {
-		auto &cte_node = node.Cast<CTENode>();
-		EnumerateQueryNodeChildren(*cte_node.query, expr_callback, ref_callback);
-		EnumerateQueryNodeChildren(*cte_node.child, expr_callback, ref_callback);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {
@@ -299,8 +293,9 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &setop_node = node.Cast<SetOperationNode>();
-		EnumerateQueryNodeChildren(*setop_node.left, expr_callback, ref_callback);
-		EnumerateQueryNodeChildren(*setop_node.right, expr_callback, ref_callback);
+		for (auto &child : setop_node.children) {
+			EnumerateQueryNodeChildren(*child, expr_callback, ref_callback);
+		}
 		break;
 	}
 	default:
@@ -314,6 +309,27 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	for (auto &kv : node.cte_map.map) {
 		EnumerateQueryNodeChildren(*kv.second->query->node, expr_callback, ref_callback);
 	}
+}
+
+void ParsedExpressionIterator::VisitExpressionClass(
+    const ParsedExpression &expr, ExpressionClass expr_class,
+    const std::function<void(const ParsedExpression &child)> &callback) {
+	if (expr.GetExpressionClass() == expr_class) {
+		callback(expr);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { VisitExpressionClass(child, expr_class, callback); });
+}
+
+void ParsedExpressionIterator::VisitExpressionClassMutable(
+    ParsedExpression &expr, ExpressionClass expr_class, const std::function<void(ParsedExpression &child)> &callback) {
+	if (expr.GetExpressionClass() == expr_class) {
+		callback(expr);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { VisitExpressionClassMutable(child, expr_class, callback); });
 }
 
 } // namespace duckdb

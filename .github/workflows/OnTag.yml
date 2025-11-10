@@ -9,13 +9,6 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
-  twine_upload:
-    uses: ./.github/workflows/TwineUpload.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe || github.ref_name }}
-      twine_upload: 'true'
-
   staged_upload:
     uses: ./.github/workflows/StagedUpload.yml
     secrets: inherit

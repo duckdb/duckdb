@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct FrameSet {
 	inline explicit FrameSet(const SubFrames &frames_p) : frames(frames_p) {
 	}
@@ -55,7 +57,6 @@ struct QuantileReuseUpdater {
 };
 
 void ReuseIndexes(idx_t *index, const SubFrames &currs, const SubFrames &prevs) {
-
 	//  Copy overlapping indices by scanning the previous set and copying down into holes.
 	//	We copy instead of leaving gaps in case there are fewer values in the current frame.
 	FrameSet prev_set(prevs);
@@ -315,7 +316,7 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunctionInternal(const Logi
 
 AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
 	auto result = GetMedianAbsoluteDeviationAggregateFunctionInternal(type);
-	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	result.SetFallible();
 	return result;
 }
 
@@ -326,6 +327,8 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &conte
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return BindMAD(context, function, arguments);
 }
+
+} // namespace
 
 AggregateFunctionSet MadFun::GetFunctions() {
 	AggregateFunctionSet mad("mad");

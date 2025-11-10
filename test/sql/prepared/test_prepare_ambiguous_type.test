@@ -80,6 +80,7 @@ PREPARE v5 AS SELECT printf('%s', ?)
 statement error
 EXECUTE v5(4)
 ----
+<REGEX>:.*Invalid Input Error.*Invalid type specifier.*
 
 query I
 EXECUTE v5('hello')
@@ -97,6 +98,7 @@ EXECUTE v6(4)
 statement error
 EXECUTE v6('hello')
 ----
+<REGEX>:.*Invalid Input Error.*Invalid type specifier.*
 
 # lists and structs
 statement ok
@@ -286,6 +288,7 @@ false
 statement error
 EXECUTE v18([1])
 ----
+<REGEX>:.*Binder Error.*Cannot deduce template type.*
 
 statement ok
 PREPARE v19 AS SELECT ARRAY_CONTAINS(?, 1)
@@ -298,3 +301,4 @@ true
 statement error
 EXECUTE v19(0)
 ----
+<REGEX>:.*Binder Error.*No function matches.*

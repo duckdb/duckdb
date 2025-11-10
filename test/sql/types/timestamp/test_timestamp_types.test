@@ -85,6 +85,12 @@ select '1969-01-01T23:59:59.9999999'::timestamp_ns;
 ----
 1969-01-01 23:59:59.9999999
 
+# Zero µs witn non-zero ns
+query I
+SELECT '1970-01-01 00:00:00.000000123'::TIMESTAMP_NS;
+----
+1970-01-01 00:00:00.000000123
+
 # TIME conversions are now supported
 query I
 select sec::TIME from timestamp;

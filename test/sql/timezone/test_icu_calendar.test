@@ -36,7 +36,7 @@ persian
 roc
 
 query IIIII
-SELECT * FROM duckdb_settings() WHERE name = 'Calendar';
+SELECT name, value, description, input_type, scope FROM duckdb_settings() WHERE name = 'Calendar';
 ----
 Calendar	gregorian	The current calendar	VARCHAR	LOCAL
 
@@ -73,7 +73,7 @@ statement ok
 SET Calendar = 'japanese';
 
 query IIIII
-SELECT * FROM duckdb_settings() WHERE name = 'Calendar';
+SELECT name, value, description, input_type, scope FROM duckdb_settings() WHERE name = 'Calendar';
 ----
 Calendar	japanese	The current calendar	VARCHAR	LOCAL
 

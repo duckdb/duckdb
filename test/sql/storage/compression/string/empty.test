@@ -54,11 +54,7 @@ SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_empty'
 1
 
 statement ok
-CREATE TABLE test_empty_large AS SELECT '' as a from range(0,10000);
-
-statement ok
-INSERT INTO test_empty_large VALUES('A');
-INSERT INTO test_empty_large VALUES('');
+CREATE TABLE test_empty_large AS SELECT '' as a from range(0,10000) union all select 'A' union all select '';
 
 statement ok
 CHECKPOINT

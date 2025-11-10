@@ -12,21 +12,25 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
 
 //===--------------------------------------------------------------------===//
 // Scalar function
 //===--------------------------------------------------------------------===//
-inline int32_t hello_fun(string_t what) {
+static inline int32_t hello_fun(string_t what) {
 	return what.GetSize() + 5;
 }
 
-inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(Value("Hello Alias!"));
 }
 
-inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -67,7 +71,7 @@ inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	result.Verify(count);
 }
 
-inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -192,10 +196,11 @@ public:
 	QuackExtension() {
 		parse_function = QuackParseFunction;
 		plan_function = QuackPlanFunction;
+		parser_override = QuackParser;
 	}
 
 	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, const string &query) {
-		auto lcase = StringUtil::Lower(StringUtil::Replace(query, ";", ""));
+		auto lcase = StringUtil::Lower(query);
 		if (!StringUtil::Contains(lcase, "quack")) {
 			// quack not found!?
 			if (StringUtil::Contains(lcase, "quac")) {
@@ -210,11 +215,14 @@ public:
 			StringUtil::Trim(split);
 			if (!split.empty()) {
 				// we only accept quacks here
+				if (StringUtil::CIEquals(split, ";")) {
+					continue;
+				}
 				return ParserExtensionParseResult("This is not a quack: " + split);
 			}
 		}
 		// QUACK
-		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size() + 1));
+		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size()));
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
@@ -228,6 +236,32 @@ public:
 		result.return_type = StatementReturnType::QUERY_RESULT;
 		return result;
 	}
+
+	static ParserOverrideResult QuackParser(ParserExtensionInfo *info, const string &query) {
+		vector<string> queries = StringUtil::Split(query, ";");
+		vector<unique_ptr<SQLStatement>> statements;
+		for (const auto &query_input : queries) {
+			if (StringUtil::CIEquals(query_input, "override")) {
+				auto select_node = make_uniq<SelectNode>();
+				select_node->select_list.push_back(
+				    make_uniq<ConstantExpression>(Value("The DuckDB parser has been overridden")));
+				select_node->from_table = make_uniq<EmptyTableRef>();
+				auto select_statement = make_uniq<SelectStatement>();
+				select_statement->node = std::move(select_node);
+				statements.push_back(std::move(select_statement));
+			}
+			if (StringUtil::CIEquals(query_input, "over")) {
+				auto exception = ParserException("Parser overridden, query equaled \"over\" but not \"override\"");
+				return ParserOverrideResult(exception);
+			}
+		}
+		if (statements.empty()) {
+			auto not_implemented_exception =
+			    NotImplementedException("QuackParser has not yet implemented the statements to transform this query");
+			return ParserOverrideResult(not_implemented_exception);
+		}
+		return ParserOverrideResult(std::move(statements));
+	}
 };
 
 static set<string> test_loaded_extension_list;
@@ -238,7 +272,7 @@ class QuackLoadExtension : public ExtensionCallback {
 	}
 };
 
-inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	string result_str;
 	for (auto &ext : test_loaded_extension_list) {
 		if (!result_str.empty()) {
@@ -328,7 +362,7 @@ static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFun
 		auto new_max_val = left_max_val + right_max_val;
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.arguments[1] = arguments[1]->return_type;
-		bound_function.return_type = BoundedType::Get(new_max_val);
+		bound_function.SetReturnType(BoundedType::Get(new_max_val));
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
 	}
@@ -354,12 +388,12 @@ static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
-		bound_function.return_type = arguments[0]->return_type;
+		bound_function.SetReturnType(arguments[0]->return_type);
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");
 	}
 	auto result = make_uniq<BoundedFunctionData>();
-	result->max_val = BoundedType::GetMaxValue(bound_function.return_type);
+	result->max_val = BoundedType::GetMaxValue(bound_function.GetReturnType());
 	return std::move(result);
 }
 

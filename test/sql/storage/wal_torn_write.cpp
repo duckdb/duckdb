@@ -115,11 +115,13 @@ TEST_CASE("Test torn WAL writes followed by successful commits", "[storage][.]")
 
 static void FlipWALByte(FileSystem &fs, const string &path, idx_t byte_pos) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
-	idx_t wal_size = handle->GetFileSize();
+	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
-	handle->Read(wal_contents.get(), wal_size, 0);
+
+	handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
 	wal_contents[byte_pos]++;
-	handle->Write(nullptr, wal_contents.get(), wal_size, 0);
+
+	handle->Write(QueryContext(), wal_contents.get(), wal_size, 0);
 }
 
 TEST_CASE("Test WAL checksums", "[storage][.]") {

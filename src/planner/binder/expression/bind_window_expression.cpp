@@ -3,6 +3,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -16,7 +17,6 @@
 namespace duckdb {
 
 static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const vector<LogicalType> &child_types) {
-
 	idx_t param_count;
 	switch (window_type) {
 	case ExpressionType::WINDOW_RANK:
@@ -114,7 +114,6 @@ static bool IsFillType(const LogicalType &type) {
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
                                        unique_ptr<ParsedExpression> &order_expr) {
-
 	vector<unique_ptr<Expression>> children;
 
 	D_ASSERT(order_expr.get());
@@ -292,6 +291,16 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 		// found a matching function! bind it as an aggregate
 		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+
+		if (!bound_function.CanAggregate() && bound_function.CanWindow() && !window.arg_orders.empty()) {
+			// ORDER BY in non-aggregate window functions not supported
+			// (The WindowCustomAggregator does not support it for now)
+			ErrorData err(BinderException("Function '%s' cannot be used as a window with ORDER BY arguments",
+			                              bound_function.name));
+			err.AddQueryLocation(window);
+			err.Throw();
+		}
+
 		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
 		aggregate = make_uniq<AggregateFunction>(window_bound_aggregate->function);
@@ -321,13 +330,13 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType start_type = LogicalType::BIGINT;
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = config.ResolveOrder(window.orders[0].type);
+		range_sense = config.ResolveOrder(context, window.orders[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		start_type = BindRangeExpression(context, range_name, window.start_expr, window.orders[0].expression);
 
 	} else if (window.start == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = config.ResolveOrder(window.orders[0].type);
+		range_sense = config.ResolveOrder(context, window.orders[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		start_type = BindRangeExpression(context, range_name, window.start_expr, window.orders[0].expression);
 	}
@@ -335,13 +344,13 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = config.ResolveOrder(window.orders[0].type);
+		range_sense = config.ResolveOrder(context, window.orders[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		end_type = BindRangeExpression(context, range_name, window.end_expr, window.orders[0].expression);
 
 	} else if (window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = config.ResolveOrder(window.orders[0].type);
+		range_sense = config.ResolveOrder(context, window.orders[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		end_type = BindRangeExpression(context, range_name, window.end_expr, window.orders[0].expression);
 	}
@@ -368,16 +377,16 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	for (auto &order : window.orders) {
-		auto type = config.ResolveOrder(order.type);
-		auto null_order = config.ResolveNullOrder(type, order.null_order);
+		auto type = config.ResolveOrder(context, order.type);
+		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, std::move(expression));
 	}
 
 	// Argument orders are just like arguments, not frames
 	for (auto &order : window.arg_orders) {
-		auto type = config.ResolveOrder(order.type);
-		auto null_order = config.ResolveNullOrder(type, order.null_order);
+		auto type = config.ResolveOrder(context, order.type);
+		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->arg_orders.emplace_back(type, null_order, std::move(expression));
 	}

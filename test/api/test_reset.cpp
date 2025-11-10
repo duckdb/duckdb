@@ -40,8 +40,8 @@ struct OptionValueSet {
 	duckdb::vector<OptionValuePair> pairs;
 };
 
-void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line);
-#define REQUIRE_VALUE_EQUAL(op, lhs, rhs) RequireValueEqual(op, lhs, rhs, __LINE__)
+void RequireValueEqual(const string &option, const Value &left, const Value &right, int line);
+#define REQUIRE_VALUE_EQUAL(option, lhs, rhs) RequireValueEqual(option, lhs, rhs, __LINE__)
 
 OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	static unordered_map<string, OptionValueSet> value_map = {
@@ -49,8 +49,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"checkpoint_threshold", {"4.0 GiB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
 	    {"default_collation", {"nocase"}},
-	    {"default_order", {"desc"}},
-	    {"default_null_order", {"nulls_first"}},
+	    {"default_order", {"DESC"}},
+	    {"default_null_order", {"NULLS_FIRST"}},
 	    {"disabled_compression_methods", {"RLE"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"debug_force_external", {Value(true)}},
@@ -62,6 +62,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
+	    {"allow_parser_override_extension", {"fallback"}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
@@ -88,8 +89,9 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"memory_limit", {"4.0 GiB"}},
 	    {"storage_compatibility_version", {"v0.10.0"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
-	    {"null_order", {"nulls_first"}},
+	    {"null_order", {"NULLS_FIRST"}},
 	    {"debug_verify_vector", {"dictionary_expression"}},
+	    {"debug_physical_table_scan_execution_strategy", {"default"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
@@ -116,11 +118,13 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"http_proxy", {"localhost:80"}},
 	    {"http_proxy_username", {"john"}},
 	    {"http_proxy_password", {"doe"}},
-	    {"http_logging_output", {"my_cool_outputfile"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
-	    {"enable_external_file_cache", {false}}};
+	    {"enable_external_file_cache", {false}},
+	    {"experimental_metadata_reuse", {false}},
+	    {"storage_block_prefetch", {"always_prefetch"}},
+	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -159,6 +163,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allow_community_extensions",    // cant change this while db is running
 	    "allow_unredacted_secrets",      // cant change this while db is running
 	    "disable_database_invalidation", // cant change this while db is running
+	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "streaming_buffer_size",
 	    "log_query_path",
@@ -174,7 +179,13 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "default_block_size",
 	    "index_scan_percentage",
 	    "scheduler_process_partial",
-	    "index_scan_max_count"};
+	    "http_logging_output",
+	    "enable_profiling",
+	    "enable_progress_bar",
+	    "enable_progress_bar_print",
+	    "progress_bar_time",
+	    "index_scan_max_count",
+	    "profiling_mode"};
 	return excluded_options.count(name) == 1;
 }
 
@@ -182,48 +193,67 @@ bool ValueEqual(const Value &left, const Value &right) {
 	return Value::NotDistinctFrom(left, right);
 }
 
-void RequireValueEqual(const ConfigurationOption &op, const Value &left, const Value &right, int line) {
+void RequireValueEqual(const string &option_name, const Value &left, const Value &right, int line) {
 	if (ValueEqual(left, right)) {
 		return;
 	}
 	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line,
-	                                op.name, left.ToString(), right.ToString());
+	                                option_name, left.ToString(), right.ToString());
 	cerr << error << endl;
 	REQUIRE(false);
+}
+
+Value GetValueForSetting(Connection &con, const string &name, const LogicalType &type) {
+	string new_value;
+	auto result = con.Query(StringUtil::Format("SELECT value FROM duckdb_settings() WHERE name = %s", SQLString(name)));
+	for (auto &row : *result) {
+		new_value = row.GetValue<string>(0);
+	}
+	return Value(new_value).CastAs(*con.context, type);
 }
 
 //! New options should be added to the value_map in GetValueForOption
 //! Or added to the 'excluded_options' in OptionIsExcludedFromTest
 TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 	// Create a connection
-	DuckDB db(nullptr);
+	DBConfig config;
+	config.options.load_extensions = false;
+	DuckDB db(nullptr, &config);
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");
 	con.Query("PRAGMA disable_profiling");
 
-	auto &config = DBConfig::GetConfig(*db.instance);
-	// Get all configuration options
-	auto options = config.GetOptions();
+	struct ResetSettingOption {
+		string name;
+		Value value;
+		LogicalType type;
+	};
+	duckdb::vector<ResetSettingOption> options;
 
-	// Test RESET for every option
-	for (auto &option : options) {
+	auto result = con.Query("SELECT name, value, input_type FROM duckdb_settings()");
+	for (auto row : *result) {
+		ResetSettingOption option;
+		option.name = row.GetValue<string>(0);
+		option.type = DBConfig::ParseLogicalType(row.GetValue<string>(2));
+		if (row.IsNull(1)) {
+			option.value = Value(option.type);
+		} else {
+			Value str_val = Value(row.GetValue<string>(1));
+			option.value = str_val.CastAs(*con.context, option.type);
+		}
+
 		if (OptionIsExcludedFromTest(option.name)) {
 			continue;
 		}
-
-		auto op = config.GetOptionByName(option.name);
-		REQUIRE(op);
-
-		// Get the current value of the option
-		auto original_value = op->get_setting(*con.context);
-		auto parameter_type = DBConfig::ParseLogicalType(option.parameter_type);
-
-		auto value_set = GetValueForOption(option.name, parameter_type);
+		options.push_back(std::move(option));
+	}
+	for (auto &option : options) {
+		auto value_set = GetValueForOption(option.name, option.type);
 		// verify that at least one value is different
 		bool any_different = false;
 		string options;
 		for (auto &value_pair : value_set.pairs) {
-			if (!ValueEqual(original_value, value_pair.output)) {
+			if (!ValueEqual(option.value, value_pair.output)) {
 				any_different = true;
 			} else {
 				if (!options.empty()) {
@@ -234,33 +264,30 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 		}
 		if (!any_different) {
 			auto error = StringUtil::Format(
-			    "\n(Option:%s) | Expected original value '%s' and provided option '%s' to be different", op->name,
-			    original_value.ToString(), options);
+			    "\n(Option:%s) | Expected original value '%s' and provided option '%s' to be different", option.name,
+			    option.value.ToString(), options);
 			cerr << error << endl;
 			REQUIRE(false);
 		}
+		auto original_value = GetValueForSetting(con, option.name, option.type);
 		for (auto &value_pair : value_set.pairs) {
 			// Get the new value for the option
-			auto input = value_pair.input.DefaultCastAs(parameter_type);
+			auto input = value_pair.input.CastAs(*con.context, option.type);
 			// Set the new option
-			if (op->set_local) {
-				op->set_local(*con.context, input);
-			} else {
-				op->set_global(db.instance.get(), config, input);
-			}
-			// Get the value of the option again
-			auto changed_value = op->get_setting(*con.context);
-			REQUIRE_VALUE_EQUAL(*op, changed_value, value_pair.output);
+			REQUIRE_NO_FAIL(con.Query(StringUtil::Format("SET %s = %s", option.name, input.ToSQLString())));
 
-			if (op->reset_local) {
-				op->reset_local(*con.context);
-			} else {
-				op->reset_global(db.instance.get(), config);
-			}
+			auto changed_value = GetValueForSetting(con, option.name, option.type);
+
+			// Get the value of the option again
+			REQUIRE_VALUE_EQUAL(option.name, changed_value, value_pair.output);
+
+			// reset the option again
+			REQUIRE_NO_FAIL(con.Query(StringUtil::Format("RESET %s", option.name)));
+
+			auto reset_value = GetValueForSetting(con, option.name, option.type);
 
 			// Get the reset value of the option
-			auto reset_value = op->get_setting(*con.context);
-			REQUIRE_VALUE_EQUAL(*op, reset_value, original_value);
+			REQUIRE_VALUE_EQUAL(option.name, reset_value, original_value);
 		}
 	}
 }

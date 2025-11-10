@@ -10,6 +10,7 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -56,11 +57,11 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 	physical_plan->SetRoot(CreatePlan(op));
 	physical_plan->Root().estimated_cardinality = op.estimated_cardinality;
 
-	auto &config = DBConfig::GetConfig(context);
-	if (config.options.debug_verify_vector != DebugVectorVerification::NONE) {
-		if (config.options.debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION) {
-			physical_plan->SetRoot(
-			    Make<PhysicalVerifyVector>(physical_plan->Root(), config.options.debug_verify_vector));
+	auto debug_verify_vector = DBConfig::GetSetting<DebugVerifyVectorSetting>(context);
+	if (debug_verify_vector != DebugVectorVerification::NONE) {
+		if (debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION &&
+		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR) {
+			physical_plan->SetRoot(Make<PhysicalVerifyVector>(physical_plan->Root(), debug_verify_vector));
 		}
 	}
 	return std::move(physical_plan);
@@ -120,6 +121,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalExpressionGet>());
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		return CreatePlan(op.Cast<LogicalUpdate>());
+	case LogicalOperatorType::LOGICAL_MERGE_INTO:
+		return CreatePlan(op.Cast<LogicalMergeInto>());
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan(op.Cast<LogicalCreateTable>());
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:

@@ -121,7 +121,7 @@ SELECT list_contains([1.0,2.0,3.0],4)
 statement error
 SELECT list_contains([1.0,2.0,3.0], 'a')
 ----
-an explicit cast is required
+Conversion Error: Could not convert string "a" to DECIMAL(2,1)
 
 # Not a list as input
 statement error
@@ -224,6 +224,7 @@ SELECT list_contains([NULL,7], 7)
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3])
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3]])

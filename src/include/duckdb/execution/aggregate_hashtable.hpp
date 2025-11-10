@@ -42,11 +42,14 @@ class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
-	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0);
+	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
-	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0);
-	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
+	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	~GroupedAggregateHashTable() override;
 
 public:

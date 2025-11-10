@@ -40,7 +40,7 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info)
 	if (lm_entry == open_options.end()) {
 		return ParquetCacheValidity::UNKNOWN;
 	}
-	time_t new_last_modified = Timestamp::ToTimeT(lm_entry->second.GetValue<timestamp_t>());
+	auto new_last_modified = lm_entry->second.GetValue<timestamp_t>();
 	string new_etag;
 	const auto etag_entry = open_options.find("etag");
 	if (etag_entry != open_options.end()) {

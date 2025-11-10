@@ -18,8 +18,8 @@ namespace duckdb {
 struct InterpolateOperator {
 	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
-		const auto delta = hi - lo;
-		return LossyNumericCast<TARGET_TYPE>(lo + delta * d);
+		const auto delta = static_cast<double>(hi - lo);
+		return LossyNumericCast<TARGET_TYPE>(lo + static_cast<TARGET_TYPE>(delta * d));
 	}
 };
 

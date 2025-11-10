@@ -43,10 +43,10 @@ select * from tbl;
 statement error
 insert into tbl VALUES (4,3), (3,8) ON CONFLICT (a) WHERE excluded.b < 8 DO NOTHING;
 ----
-Constraint Error: Duplicate key "a: 3" violates primary key constraint
+ON CONFLICT WHERE clause is only supported in DO UPDATE SET
 
 statement ok
-insert into tbl VALUES (4,3), (3,8) ON CONFLICT (a) WHERE excluded.b >= 8 DO UPDATE SET b = 10;
+insert into tbl VALUES (4,3), (3,8) ON CONFLICT (a) DO UPDATE SET b = 10;
 
 query II
 select * from tbl;

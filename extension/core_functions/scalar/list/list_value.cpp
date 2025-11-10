@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct PrimitiveAssign {
 	template <class T>
 	static T Assign(const T &input, Vector &result) {
@@ -29,7 +31,7 @@ struct StringAssign {
 };
 
 template <class T, class OP = PrimitiveAssign>
-static void TemplatedPopulateChild(DataChunk &args, Vector &result) {
+void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	const auto column_count = args.ColumnCount();
 	const auto row_count = args.size();
 
@@ -53,7 +55,7 @@ static void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	}
 }
 
-static void PopulateChildFallback(DataChunk &args, Vector &result) {
+void PopulateChildFallback(DataChunk &args, Vector &result) {
 	auto &child_type = ListType::GetChildType(result.GetType());
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	for (idx_t i = 0; i < args.size(); i++) {
@@ -66,11 +68,11 @@ static void PopulateChildFallback(DataChunk &args, Vector &result) {
 	}
 }
 
-static void ListFunction(DataChunk &args, Vector &result);
-static bool StructFunction(DataChunk &args, Vector &result);
+void ListFunction(DataChunk &args, Vector &result);
+bool StructFunction(DataChunk &args, Vector &result);
 
 template <class OP = PrimitiveAssign>
-static bool PopulateChild(DataChunk &args, Vector &result) {
+bool PopulateChild(DataChunk &args, Vector &result) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -131,7 +133,7 @@ static bool PopulateChild(DataChunk &args, Vector &result) {
 	return true;
 }
 
-static void ListFunction(DataChunk &args, Vector &result) {
+void ListFunction(DataChunk &args, Vector &result) {
 	const idx_t column_count = args.ColumnCount();
 
 	vector<idx_t> col_offsets;
@@ -183,7 +185,7 @@ static void ListFunction(DataChunk &args, Vector &result) {
 	ListVector::SetListSize(result, offset_sum);
 }
 
-static bool StructFunction(DataChunk &args, Vector &result) {
+bool StructFunction(DataChunk &args, Vector &result) {
 	const idx_t column_count = args.ColumnCount();
 	auto &result_members = StructVector::GetEntries(result);
 
@@ -226,7 +228,7 @@ static bool StructFunction(DataChunk &args, Vector &result) {
 	return true;
 }
 
-static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -260,45 +262,37 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 	ListVector::SetListSize(result, column_count * args.size());
 }
 
-template <bool IS_UNPIVOT = false>
-static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bound_function,
+                                     vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	LogicalType child_type =
 	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			if (IS_UNPIVOT) {
-				string list_arguments = "Full list: ";
-				idx_t error_index = list_arguments.size();
-				for (idx_t k = 0; k < arguments.size(); k++) {
-					if (k > 0) {
-						list_arguments += ", ";
-					}
-					if (k == i) {
-						error_index = list_arguments.size();
-					}
-					list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
+			string list_arguments = "Full list: ";
+			idx_t error_index = list_arguments.size();
+			for (idx_t k = 0; k < arguments.size(); k++) {
+				if (k > 0) {
+					list_arguments += ", ";
 				}
-				auto error =
-				    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
-				                       child_type.ToString(), arg_type.ToString());
-				throw BinderException(arguments[i]->GetQueryLocation(),
-				                      QueryErrorContext::Format(list_arguments, error, error_index, false));
-			} else {
-				throw BinderException(arguments[i]->GetQueryLocation(),
-				                      "Cannot create a list of types %s and %s - an explicit cast is required",
-				                      child_type.ToString(), arg_type.ToString());
+				if (k == i) {
+					error_index = list_arguments.size();
+				}
+				list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
 			}
+			auto error = StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
+			                                child_type.ToString(), arg_type.ToString());
+			throw BinderException(arguments[i]->GetQueryLocation(),
+			                      QueryErrorContext::Format(list_arguments, error, error_index, false));
 		}
 	}
 	child_type = LogicalType::NormalizeType(child_type);
 
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;
-	bound_function.return_type = LogicalType::LIST(child_type);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(LogicalType::LIST(child_type));
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -312,19 +306,32 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 	return list_stats.ToUnique();
 }
 
-ScalarFunction ListValueFun::GetFunction() {
-	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, ListValueBind, nullptr,
-	                   ListValueStats);
-	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return fun;
+} // namespace
+
+ScalarFunctionSet ListValueFun::GetFunctions() {
+	ScalarFunctionSet set("list_value");
+
+	// Overload for 0 arguments, which returns an empty list.
+	ScalarFunction empty_fun({}, LogicalType::LIST(LogicalType::SQLNULL), ListValueFunction, nullptr, nullptr,
+	                         ListValueStats);
+	set.AddFunction(empty_fun);
+
+	// Overload for 1 + N arguments, which returns a list of the arguments.
+	auto element_type = LogicalType::TEMPLATE("T");
+	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr, nullptr,
+	                         ListValueStats);
+	value_fun.varargs = element_type;
+	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	set.AddFunction(value_fun);
+
+	return set;
 }
 
 ScalarFunction UnpivotListFun::GetFunction() {
-	auto fun = ListValueFun::GetFunction();
-	fun.name = "unpivot_list";
-	fun.bind = ListValueBind<true>;
+	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, nullptr,
+	                   ListValueStats);
+	fun.varargs = LogicalTypeId::ANY;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

@@ -98,7 +98,7 @@ void EnumColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, Column
 	auto enum_count = EnumType::GetSize(Type());
 	auto string_values = FlatVector::GetData<string_t>(enum_values);
 	// first write the contents of the dictionary page to a temporary buffer
-	auto temp_writer = make_uniq<MemoryStream>(Allocator::Get(writer.GetContext()));
+	auto temp_writer = make_uniq<MemoryStream>(BufferAllocator::Get(writer.GetContext()));
 	for (idx_t r = 0; r < enum_count; r++) {
 		D_ASSERT(!FlatVector::IsNull(enum_values, r));
 		// update the statistics

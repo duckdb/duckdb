@@ -31,6 +31,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
         MetricsType::OPTIMIZER_LIMIT_PUSHDOWN,
         MetricsType::OPTIMIZER_TOP_N,
+        MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
         MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
         MetricsType::OPTIMIZER_DUPLICATE_GROUPS,
         MetricsType::OPTIMIZER_REORDER_FILTER,
@@ -41,6 +42,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_SUM_REWRITER,
         MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
         MetricsType::OPTIMIZER_CTE_INLINING,
+        MetricsType::OPTIMIZER_COMMON_SUBPLAN,
         MetricsType::OPTIMIZER_JOIN_ELIMINATION,
     };
 }
@@ -49,12 +51,12 @@ profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
     return {
         MetricsType::ALL_OPTIMIZERS,
         MetricsType::CUMULATIVE_OPTIMIZER_TIMING,
-        MetricsType::PLANNER,
-        MetricsType::PLANNER_BINDING,
         MetricsType::PHYSICAL_PLANNER,
         MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING,
-        MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
         MetricsType::PHYSICAL_PLANNER_CREATE_PLAN,
+        MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
+        MetricsType::PLANNER,
+        MetricsType::PLANNER_BINDING,
     };
 }
 
@@ -96,6 +98,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
         case OptimizerType::TOP_N:
             return MetricsType::OPTIMIZER_TOP_N;
+        case OptimizerType::TOP_N_WINDOW_ELIMINATION:
+            return MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION;
         case OptimizerType::COMPRESSED_MATERIALIZATION:
             return MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION;
         case OptimizerType::DUPLICATE_GROUPS:
@@ -116,6 +120,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_LATE_MATERIALIZATION;
         case OptimizerType::CTE_INLINING:
             return MetricsType::OPTIMIZER_CTE_INLINING;
+        case OptimizerType::COMMON_SUBPLAN:
+            return MetricsType::OPTIMIZER_COMMON_SUBPLAN;
         case OptimizerType::JOIN_ELIMINATION:
             return MetricsType::OPTIMIZER_JOIN_ELIMINATION;
        default:
@@ -161,6 +167,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::LIMIT_PUSHDOWN;
         case MetricsType::OPTIMIZER_TOP_N:
             return OptimizerType::TOP_N;
+        case MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
+            return OptimizerType::TOP_N_WINDOW_ELIMINATION;
         case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
             return OptimizerType::COMPRESSED_MATERIALIZATION;
         case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
@@ -181,6 +189,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::LATE_MATERIALIZATION;
         case MetricsType::OPTIMIZER_CTE_INLINING:
             return OptimizerType::CTE_INLINING;
+        case MetricsType::OPTIMIZER_COMMON_SUBPLAN:
+            return OptimizerType::COMMON_SUBPLAN;
         case MetricsType::OPTIMIZER_JOIN_ELIMINATION:
             return OptimizerType::JOIN_ELIMINATION;
     default:
@@ -208,6 +218,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
         case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
         case MetricsType::OPTIMIZER_TOP_N:
+        case MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
         case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
         case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
         case MetricsType::OPTIMIZER_REORDER_FILTER:
@@ -218,6 +229,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_SUM_REWRITER:
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
         case MetricsType::OPTIMIZER_CTE_INLINING:
+        case MetricsType::OPTIMIZER_COMMON_SUBPLAN:
         case MetricsType::OPTIMIZER_JOIN_ELIMINATION:
             return true;
         default:
@@ -229,12 +241,12 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricsType type) {
     switch(type) {
         case MetricsType::ALL_OPTIMIZERS:
         case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
-        case MetricsType::PLANNER:
-        case MetricsType::PLANNER_BINDING:
         case MetricsType::PHYSICAL_PLANNER:
         case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING:
-        case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
         case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN:
+        case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
+        case MetricsType::PLANNER:
+        case MetricsType::PLANNER_BINDING:
             return true;
         default:
             return false;
@@ -243,9 +255,13 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricsType type) {
 
 bool MetricsUtils::IsQueryGlobalMetric(MetricsType type) {
     switch(type) {
+        case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
+        case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
         case MetricsType::BLOCKED_THREAD_TIME:
+        case MetricsType::CHECKPOINT_LATENCY:
         case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
         case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
+        case MetricsType::WAITING_TO_ATTACH_LATENCY:
             return true;
         default:
             return false;

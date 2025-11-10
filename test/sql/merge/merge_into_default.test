@@ -1,0 +1,55 @@
+# name: test/sql/merge/merge_into_default.test
+# description: Test MERGE INTO with default values
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Stock(item_id int, balance int DEFAULT 0);
+
+# explicit default
+query I
+MERGE INTO Stock USING (VALUES (10)) new_accounts(item_id) USING (item_id)
+WHEN NOT MATCHED THEN INSERT VALUES (new_accounts.item_id, DEFAULT)
+----
+1
+
+# column list
+query I
+MERGE INTO Stock USING (VALUES (20)) new_accounts(item_id) USING (item_id)
+WHEN NOT MATCHED THEN INSERT (item_id) VALUES (new_accounts.item_id)
+----
+1
+
+# default values
+query I
+MERGE INTO Stock USING (VALUES (30)) new_accounts(item_id) USING (item_id)
+WHEN NOT MATCHED THEN INSERT DEFAULT VALUES
+----
+1
+
+query II
+FROM Stock
+----
+10	0
+20	0
+NULL	0
+
+statement ok
+UPDATE Stock SET balance=100
+
+# update default
+query I
+MERGE INTO Stock USING (VALUES (10)) reset_accounts(item_id) USING (item_id)
+WHEN MATCHED THEN UPDATE SET balance=DEFAULT
+WHEN NOT MATCHED THEN ERROR
+----
+1
+
+query II
+FROM Stock
+----
+10	0
+20	100
+NULL	100

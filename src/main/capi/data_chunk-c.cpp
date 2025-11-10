@@ -48,8 +48,12 @@ void duckdb_data_chunk_reset(duckdb_data_chunk chunk) {
 
 duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity) {
 	auto dtype = reinterpret_cast<duckdb::LogicalType *>(type);
-	auto vector = new duckdb::Vector(*dtype, capacity);
-	return reinterpret_cast<duckdb_vector>(vector);
+	try {
+		auto vector = new duckdb::Vector(*dtype, capacity);
+		return reinterpret_cast<duckdb_vector>(vector);
+	} catch (...) {
+		return nullptr;
+	}
 }
 
 void duckdb_destroy_vector(duckdb_vector *vector) {
@@ -163,20 +167,20 @@ idx_t duckdb_list_vector_get_size(duckdb_vector vector) {
 
 duckdb_state duckdb_list_vector_set_size(duckdb_vector vector, idx_t size) {
 	if (!vector) {
-		return duckdb_state::DuckDBError;
+		return DuckDBError;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
 	duckdb::ListVector::SetListSize(*v, size);
-	return duckdb_state::DuckDBSuccess;
+	return DuckDBSuccess;
 }
 
 duckdb_state duckdb_list_vector_reserve(duckdb_vector vector, idx_t required_capacity) {
 	if (!vector) {
-		return duckdb_state::DuckDBError;
+		return DuckDBError;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
 	duckdb::ListVector::Reserve(*v, required_capacity);
-	return duckdb_state::DuckDBSuccess;
+	return DuckDBSuccess;
 }
 
 duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index) {
@@ -246,6 +250,14 @@ void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector sel, idx_t 
 	auto d_dict = reinterpret_cast<duckdb::Vector *>(dict);
 	auto d_sel = reinterpret_cast<duckdb::SelectionVector *>(sel);
 	d_dict->Slice(*d_sel, len);
+}
+
+void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
+                            idx_t src_offset, idx_t dst_offset) {
+	auto d_src = reinterpret_cast<duckdb::Vector *>(src);
+	auto d_dst = reinterpret_cast<duckdb::Vector *>(dst);
+	auto d_sel = reinterpret_cast<duckdb::SelectionVector *>(sel);
+	duckdb::VectorOperations::Copy(*d_src, *d_dst, *d_sel, src_count, src_offset, dst_offset);
 }
 
 void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value) {

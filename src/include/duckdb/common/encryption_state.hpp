@@ -9,14 +9,25 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
-class EncryptionState {
-
+class EncryptionTypes {
 public:
-	DUCKDB_API explicit EncryptionState(const_data_ptr_t key = nullptr, idx_t key_len = 0);
+	enum CipherType : uint8_t { INVALID = 0, GCM = 1, CTR = 2, CBC = 3 };
+	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
+	enum Mode { ENCRYPT, DECRYPT };
+
+	static string CipherToString(CipherType cipher_p);
+	static CipherType StringToCipher(const string &encryption_cipher_p);
+	static string KDFToString(KeyDerivationFunction kdf_p);
+	static KeyDerivationFunction StringToKDF(const string &key_derivation_function_p);
+};
+
+class EncryptionState {
+public:
+	DUCKDB_API explicit EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len);
 	DUCKDB_API virtual ~EncryptionState();
 
 public:
@@ -28,19 +39,19 @@ public:
 	DUCKDB_API virtual size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
 	DUCKDB_API virtual void GenerateRandomData(data_ptr_t data, idx_t len);
 
-public:
-	enum Mode { ENCRYPT, DECRYPT };
-	enum Cipher { GCM, CTR };
+protected:
+	EncryptionTypes::CipherType cipher;
+	idx_t key_len;
 };
 
 class EncryptionUtil {
-
 public:
 	DUCKDB_API explicit EncryptionUtil() {};
 
 public:
-	virtual shared_ptr<EncryptionState> CreateEncryptionState(const_data_ptr_t key = nullptr, idx_t key_len = 0) const {
-		return make_shared_ptr<EncryptionState>();
+	virtual shared_ptr<EncryptionState> CreateEncryptionState(EncryptionTypes::CipherType cipher_p,
+	                                                          idx_t key_len = 0) const {
+		return make_shared_ptr<EncryptionState>(cipher_p, key_len);
 	}
 
 	virtual ~EncryptionUtil() {

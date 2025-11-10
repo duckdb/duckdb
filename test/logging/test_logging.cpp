@@ -4,8 +4,10 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_manager.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -167,7 +169,9 @@ TEST_CASE("Test thread context logger", "[logging][.]") {
 
 	duckdb::TableFunction tf("test_thread_logger", {}, TestLoggingFunction, TestLoggingBind, nullptr,
 	                         TestLoggingInitLocal);
-	ExtensionLoader loader(*db.instance, "log_test_extension");
+	ExtensionInfo extension_info {};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "log_test_extension"};
+	ExtensionLoader loader {load_info};
 	loader.RegisterFunction(tf);
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
@@ -188,7 +192,14 @@ public:
 		log_store.insert(log_message);
 	};
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override {};
-	void Flush() override {};
+	void Flush(LoggingTargetTable table) override {};
+	void FlushAll() override {};
+	bool IsEnabled(LoggingTargetTable table) override {
+		return table == LoggingTargetTable::ALL_LOGS;
+	}
+	const string GetStorageName() override {
+		return "MyLogStorage";
+	}
 
 	unordered_set<string> log_store;
 };

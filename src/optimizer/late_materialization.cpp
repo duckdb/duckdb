@@ -1,4 +1,6 @@
 #include "duckdb/optimizer/late_materialization.hpp"
+
+#include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -14,54 +16,12 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {
-	max_row_count = ClientConfig::GetConfig(optimizer.context).late_materialization_max_rows;
-}
-
-vector<idx_t> LateMaterialization::GetOrInsertRowIds(LogicalGet &get) {
-	auto &column_ids = get.GetMutableColumnIds();
-
-	vector<idx_t> result;
-	for (idx_t r_idx = 0; r_idx < row_id_column_ids.size(); ++r_idx) {
-		// check if it is already projected
-		auto row_id_column_id = row_id_column_ids[r_idx];
-		auto &row_id_column = row_id_columns[r_idx];
-		optional_idx row_id_index;
-		for (idx_t i = 0; i < column_ids.size(); ++i) {
-			if (column_ids[i].GetPrimaryIndex() == row_id_column_id) {
-				// already projected - return the id
-				row_id_index = i;
-				break;
-			}
-		}
-		if (row_id_index.IsValid()) {
-			result.push_back(row_id_index.GetIndex());
-			continue;
-		}
-		// row id is not yet projected - push it and return the new index
-		column_ids.push_back(ColumnIndex(row_id_column_id));
-		if (!get.projection_ids.empty()) {
-			get.projection_ids.push_back(column_ids.size() - 1);
-		}
-		if (!get.types.empty()) {
-			get.types.push_back(row_id_column.type);
-		}
-		result.push_back(column_ids.size() - 1);
-	}
-	return result;
-}
-
-unique_ptr<LogicalGet> LateMaterialization::ConstructLHS(LogicalGet &get) {
-	// we need to construct a new scan of the same table
-	auto table_index = optimizer.binder.GenerateTableIndex();
-	auto new_get = make_uniq<LogicalGet>(table_index, get.function, get.bind_data->Copy(), get.returned_types,
-	                                     get.names, get.virtual_columns);
-	new_get->GetMutableColumnIds() = get.GetColumnIds();
-	new_get->projection_ids = get.projection_ids;
-	return new_get;
+	max_row_count = DBConfig::GetSetting<LateMaterializationMaxRowsSetting>(optimizer.context);
 }
 
 vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op) {
@@ -75,7 +35,7 @@ vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperat
 	}
 	// we have reached the logical get - now we need to push the row-id column (if it is not yet projected out)
 	auto &get = child.get().Cast<LogicalGet>();
-	auto row_id_indexes = GetOrInsertRowIds(get);
+	auto row_id_indexes = LateMaterializationHelper::GetOrInsertRowIds(get, row_id_column_ids, row_id_columns);
 	idx_t column_count = get.projection_ids.empty() ? get.GetColumnIds().size() : get.projection_ids.size();
 	D_ASSERT(column_count == get.GetColumnBindings().size());
 
@@ -137,7 +97,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 			// visit the expressions of the operator and continue into the child node
 			auto &top_n = op.Cast<LogicalTopN>();
 			for (auto &order : top_n.orders) {
-				ReplaceTableReferences(*order.expression, new_index);
+				ReplaceTableReferences(order.expression, new_index);
 			}
 			current_op = *op.children[0];
 			break;
@@ -147,7 +107,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 		case LogicalOperatorType::LOGICAL_LIMIT: {
 			// visit the expressions of the operator and continue into the child node
 			for (auto &expr : op.expressions) {
-				ReplaceTableReferences(*expr, new_index);
+				ReplaceTableReferences(expr, new_index);
 			}
 			current_op = *op.children[0];
 			break;
@@ -158,14 +118,11 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 	}
 }
 
-void LateMaterialization::ReplaceTableReferences(Expression &expr, idx_t new_table_index) {
-	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
-		bound_column_ref.binding.table_index = new_table_index;
-	}
-
-	ExpressionIterator::EnumerateChildren(expr,
-	                                      [&](Expression &child) { ReplaceTableReferences(child, new_table_index); });
+void LateMaterialization::ReplaceTableReferences(unique_ptr<Expression> &root_expr, idx_t new_table_index) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
+		    bound_column_ref.binding.table_index = new_table_index;
+	    });
 }
 
 unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, idx_t column_index) {
@@ -186,15 +143,11 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, i
 	}
 }
 
-void LateMaterialization::ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &expr) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
-		expr = GetExpression(next_op, bound_column_ref.binding.column_index);
-		return;
-	}
-
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionReferences(next_op, child); });
+void LateMaterialization::ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
+		    expr = GetExpression(next_op, bound_column_ref.binding.column_index);
+	    });
 }
 
 bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op) {
@@ -283,12 +236,12 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	// we need to ensure the operator returns exactly the same column bindings as before
 
 	// construct the LHS from the LogicalGet
-	auto lhs = ConstructLHS(get);
+	auto lhs = LateMaterializationHelper::CreateLHSGet(get, optimizer.binder);
 	// insert the row-id column on the left hand side
 	auto &lhs_get = *lhs;
 	auto lhs_index = lhs_get.table_index;
 	auto lhs_columns = lhs_get.GetColumnIds().size();
-	auto lhs_row_indexes = GetOrInsertRowIds(lhs_get);
+	auto lhs_row_indexes = LateMaterializationHelper::GetOrInsertRowIds(lhs_get, row_id_column_ids, row_id_columns);
 	vector<ColumnBinding> lhs_bindings;
 	for (auto &lhs_row_index : lhs_row_indexes) {
 		lhs_bindings.emplace_back(lhs_index, lhs_row_index);
@@ -384,7 +337,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		proj->children.push_back(std::move(join));
 
 		for (auto &order : final_orders) {
-			ReplaceTableReferences(*order.expression, proj_index);
+			ReplaceTableReferences(order.expression, proj_index);
 		}
 		auto order = make_uniq<LogicalOrder>(std::move(final_orders));
 		if (proj->has_estimated_cardinality) {
@@ -418,8 +371,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 }
 
 bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset) {
-	auto &config = DBConfig::GetConfig(optimizer.context);
-	if (!has_offset && !config.options.preserve_insertion_order) {
+	if (!has_offset && !DBConfig::GetSetting<PreserveInsertionOrderSetting>(optimizer.context)) {
 		// we avoid optimizing large limits if preserve insertion order is false
 		// since the limit is executed in parallel anyway
 		return false;

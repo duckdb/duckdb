@@ -1,0 +1,91 @@
+# name: test/sql/pragma/profiling/test_profiling_fs.test
+# description: Test profiling file system reads and writes.
+# group: [profiling]
+
+require json
+
+require noforcestorage
+
+require skip_reload
+
+# FIXME: Enable when more read paths have been added to profiling.
+require no_alternative_verify
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+ATTACH '__TEST_DIR__/profile_fs.db';
+
+statement ok
+CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(10000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CHECKPOINT profile_fs;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+
+statement ok
+SELECT total_bytes_written FROM metrics_output;
+
+query I
+SELECT
+	CASE WHEN total_bytes_written > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+statement ok
+CREATE INDEX idx ON profile_fs.tbl(id);
+
+statement ok
+DETACH profile_fs;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profile_fs.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
+
+statement ok
+ATTACH '__TEST_DIR__/profile_fs.db';
+
+statement ok
+SELECT * FROM profile_fs.tbl;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_fs.json';
+
+query I
+SELECT
+	CASE WHEN total_bytes_read > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true

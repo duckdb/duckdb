@@ -13,6 +13,8 @@
 // start catch.hpp
 
 #include <memory>
+#include <sstream>
+
 #ifndef DUCKDB_BASE_STD
 namespace duckdb_base_std {
 	using ::std::unique_ptr;
@@ -21,7 +23,7 @@ namespace duckdb_base_std {
 	using ::std::stringstream;
 } // namespace duckdb_base_std
 #endif
-// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB 
+// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB
 #ifdef DUCKDB_DEBUG_STACKTRACE
 #include "duckdb/common/exception.hpp"
 #define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X).c_str()
@@ -3013,6 +3015,7 @@ namespace Catch {
         virtual void registerTranslator( const IExceptionTranslator* translator ) = 0;
         virtual void registerTagAlias( std::string const& alias, std::string const& tag, SourceLineInfo const& lineInfo ) = 0;
         virtual void registerStartupException() noexcept = 0;
+        virtual void clearTests() = 0;
         virtual IMutableEnumValuesRegistry& getMutableEnumValuesRegistry() = 0;
     };
 
@@ -12385,6 +12388,7 @@ namespace Catch {
         virtual ~TestRegistry() = default;
 
         virtual void registerTest( TestCase const& testCase );
+        virtual void clearTests();
 
         std::vector<TestCase> const& getAllTests() const override;
         std::vector<TestCase> const& getAllTestsSorted( IConfig const& config ) const override;
@@ -12566,6 +12570,9 @@ namespace Catch {
             }
             void registerTest( TestCase const& testInfo ) override {
                 m_testCaseRegistry.registerTest( testInfo );
+            }
+            void clearTests() override {
+                m_testCaseRegistry.clearTests();
             }
             void registerTranslator( const IExceptionTranslator* translator ) override {
                 m_exceptionTranslatorRegistry.registerTranslator( translator );
@@ -13395,10 +13402,40 @@ namespace Catch {
 #include <set>
 #include <iterator>
 
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#else
+#include <sys/ioctl.h>
+#include <unistd.h>
+#endif
+
 namespace Catch {
 
     namespace {
         const int MaxExitCode = 255;
+
+        // Helper function to check if stdout is a terminal
+        bool IsTerminal() {
+#ifdef _WIN32
+            return GetFileType(GetStdHandle(STD_OUTPUT_HANDLE)) == FILE_TYPE_CHAR;
+#else
+            return isatty(1);
+#endif
+        }
+
+        // Helper function to get terminal width
+        int TerminalWidth() {
+#ifdef _WIN32
+            CONSOLE_SCREEN_BUFFER_INFO csbi;
+            GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+            return csbi.srWindow.Right - csbi.srWindow.Left + 1;
+#else
+            struct winsize w;
+            ioctl(0, TIOCGWINSZ, &w);
+            return w.ws_col;
+#endif
+        }
 
         IStreamingReporterPtr createReporter(std::string const& reporterName, IConfigPtr const& config) {
             auto reporter = Catch::getRegistryHub().getReporterRegistry().create(reporterName, config);
@@ -13409,14 +13446,37 @@ namespace Catch {
 
         void renderTestProgress(int current_test, int total_tests, std::string next_test) {
             double progress = (double) current_test / (double) total_tests;
-            int render_width = 80;
-            std::string result = "[" + std::to_string(current_test) + "/" + std::to_string(total_tests) + "] (" + std::to_string(int(progress * 100)) + "%): " + next_test;
-            if (result.size() < render_width) {
-                result += std::string(render_width - result.size(), ' ');
-            } else if (result.size() > render_width) {
-                result = result.substr(0, render_width - 3) + "...";
+            std::string prefix = "[" + std::to_string(current_test) + "/" + std::to_string(total_tests) + "] (" + std::to_string(int(progress * 100)) + "%): ";
+            std::string result = prefix + next_test;
+
+            if (IsTerminal()) {
+                // For terminals, we want to overwrite the previous line to not flood the window with successful tests.
+                // We overwrite by writing \r at the end of the block, but to make sure we fully overwrite the previous
+                // line we should make sure the line fits fully in the terminal width.
+                int render_width = TerminalWidth();
+                if (render_width <= 0) {
+                    render_width = 80; // fallback to 80 if we can't determine width
+                }
+
+                if (result.size() < static_cast<size_t>(render_width)) {
+                    result += std::string(render_width - result.size(), ' ');
+                } else if (result.size() > static_cast<size_t>(render_width)) {
+                    int available_for_test = render_width - prefix.size() - 3; // 3 for "..."
+                    if (available_for_test > 0 && next_test.size() > static_cast<size_t>(available_for_test)) {
+                        // Replace the start of the test name with "..." to indicate truncation
+                        result = prefix + "..." + next_test.substr(next_test.size() - available_for_test);
+                    } else {
+                        // If prefix is too long for terminal width, fall back to simple truncation
+                        result = result.substr(0, render_width - 3) + "...";
+                    }
+                }
+
+                std::cout << "\r" << result;
+            } else {
+                // For non-terminals, we just print each line
+                std::cout << "\n" << result;
             }
-            std::cout << "\r" << result;
+
             std::cout.flush();
         }
 
@@ -14448,6 +14508,10 @@ namespace Catch {
             return registerTest( testCase.withName( rss.str() ) );
         }
         m_functions.push_back( testCase );
+    }
+
+    void TestRegistry::clearTests() {
+        m_functions.clear();
     }
 
     std::vector<TestCase> const& TestRegistry::getAllTests() const {
@@ -18130,4 +18194,3 @@ using Catch::Detail::Approx;
 // end catch_reenable_warnings.h
 // end catch.hpp
 #endif // TWOBLUECUBES_SINGLE_INCLUDE_CATCH_HPP_INCLUDED
-

@@ -7,6 +7,9 @@
     "duckdb_scalar_function_get_client_context",
     "duckdb_scalar_function_set_bind_data",
     "duckdb_scalar_function_get_bind_data",
-    "duckdb_scalar_function_bind_get_extra_info"
+    "duckdb_scalar_function_bind_get_extra_info",
+    "duckdb_scalar_function_bind_get_argument_count",
+    "duckdb_scalar_function_bind_get_argument",
+    "duckdb_scalar_function_set_bind_data_copy"
   ]
 }

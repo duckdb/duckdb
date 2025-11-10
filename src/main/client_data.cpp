@@ -56,6 +56,9 @@ public:
 		return buffer_manager.ReAllocate(handle, block_size);
 	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
+		return Pin(QueryContext(), handle);
+	}
+	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) override {
 		return buffer_manager.Pin(handle);
 	}
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) override {
@@ -82,9 +85,6 @@ public:
 	}
 	idx_t GetBlockSize() const override {
 		return buffer_manager.GetBlockSize();
-	}
-	idx_t GetTemporaryBlockHeaderSize() const override {
-		return buffer_manager.GetTemporaryBlockHeaderSize();
 	}
 	idx_t GetQueryMaxMemory() const override {
 		return buffer_manager.GetQueryMaxMemory();
@@ -119,6 +119,9 @@ public:
 		return buffer_manager.SetSwapLimit(limit);
 	}
 
+	BlockManager &GetTemporaryBlockManager() override {
+		return buffer_manager.GetTemporaryBlockManager();
+	}
 	vector<TemporaryFileInformation> GetTemporaryFiles() override {
 		return buffer_manager.GetTemporaryFiles();
 	}
@@ -130,6 +133,9 @@ public:
 	}
 	bool HasTemporaryDirectory() const override {
 		return buffer_manager.HasTemporaryDirectory();
+	}
+	bool HasFilesInTemporaryDirectory() const override {
+		return buffer_manager.HasFilesInTemporaryDirectory();
 	}
 
 	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size, unique_ptr<FileBuffer> &&source,
@@ -155,9 +161,9 @@ public:
 	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) override {
 		return buffer_manager.WriteTemporaryBuffer(tag, block_id, buffer);
 	}
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer) override {
-		return buffer_manager.ReadTemporaryBuffer(tag, block, std::move(buffer));
+		return buffer_manager.ReadTemporaryBuffer(context, tag, block, std::move(buffer));
 	}
 	void DeleteTemporaryFile(BlockHandle &block) override {
 		return buffer_manager.DeleteTemporaryFile(block);

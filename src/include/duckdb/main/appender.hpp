@@ -82,6 +82,8 @@ public:
 	DUCKDB_API void Flush();
 	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
 	DUCKDB_API void Close();
+	//! Clears any appended data (without flushing).
+	DUCKDB_API void Clear();
 	//! Returns the active types of the appender.
 	const vector<LogicalType> &GetActiveTypes() const;
 
@@ -90,12 +92,14 @@ public:
 	}
 	DUCKDB_API void AppendDataChunk(DataChunk &value);
 
+	virtual void AppendDefault();
+	virtual void AppendDefault(DataChunk &chunk, idx_t col, idx_t row);
 	//! Appends a column to the active column list.
 	//! Immediately flushes all previous data.
-	virtual void AddColumn(const string &name) = 0;
+	virtual void AddColumn(const string &name);
 	//! Removes all columns from the active column list.
 	//! Immediately flushes all previous data.
-	virtual void ClearColumns() = 0;
+	virtual void ClearColumns();
 
 protected:
 	void Destructor();
@@ -125,8 +129,22 @@ protected:
 };
 
 class Appender : public BaseAppender {
+public:
+	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
+	                    const string &table_name);
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
+	DUCKDB_API Appender(Connection &con, const string &table_name);
+	DUCKDB_API ~Appender() override;
+
+public:
+	void AppendDefault() override;
+	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row) override;
+	void AddColumn(const string &name) override;
+	void ClearColumns() override;
+
+private:
 	//! A shared pointer to the context of this appender.
-	shared_ptr<ClientContext> context;
+	weak_ptr<ClientContext> context;
 	//! The table description including the column names.
 	unique_ptr<TableDescription> description;
 	//! All table default values.
@@ -136,22 +154,29 @@ class Appender : public BaseAppender {
 	//! Any other columns default to NULL, or their default values.
 	vector<LogicalIndex> column_ids;
 
-public:
-	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
-	                    const string &table_name);
-	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
-	DUCKDB_API Appender(Connection &con, const string &table_name);
-	DUCKDB_API ~Appender() override;
-
-public:
-	void AppendDefault();
-	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row);
-	void AddColumn(const string &name) override;
-	void ClearColumns() override;
-
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
 	Value GetDefaultValue(idx_t column);
+};
+
+class QueryAppender : public BaseAppender {
+public:
+	DUCKDB_API QueryAppender(Connection &con, string query, vector<LogicalType> types,
+	                         vector<string> names = vector<string>(), string table_name = string());
+	DUCKDB_API ~QueryAppender() override;
+
+private:
+	//! A shared pointer to the context of this appender.
+	weak_ptr<ClientContext> context;
+	//! The query to run
+	string query;
+	//! The column names of the to-be-appended data, or "col1, col2, ..." if empty
+	vector<string> names;
+	//! The table name that we can reference in the query, or "appended_data" if empty
+	string table_name;
+
+protected:
+	void FlushInternal(ColumnDataCollection &collection) override;
 };
 
 class InternalAppender : public BaseAppender {
@@ -167,8 +192,6 @@ public:
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
-	void AddColumn(const string &name) override;
-	void ClearColumns() override;
 };
 
 template <>

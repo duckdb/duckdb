@@ -89,6 +89,10 @@ bool BufferManager::HasTemporaryDirectory() const {
 	return false;
 }
 
+bool BufferManager::HasFilesInTemporaryDirectory() const {
+	return false;
+}
+
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, idx_t block_header_size,
                                                              unique_ptr<FileBuffer> &&, FileBufferType type) {
 	throw NotImplementedException("This type of BufferManager can not construct managed buffers");
@@ -110,7 +114,7 @@ void BufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, Fil
 	throw NotImplementedException("This type of BufferManager does not support 'WriteTemporaryBuffer");
 }
 
-unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
                                                           unique_ptr<FileBuffer> buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'ReadTemporaryBuffer");
 }

@@ -68,11 +68,11 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 		new_children.push_back(make_pair(child->GetAlias(), arguments[i]->return_type));
 	}
 
-	bound_function.return_type = LogicalType::STRUCT(new_children);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(LogicalType::STRUCT(new_children));
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
-unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
+static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto new_stats = StructStats::CreateUnknown(expr.return_type);
@@ -93,7 +93,7 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 
 ScalarFunction StructInsertFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, nullptr, StructInsertStats);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.varargs = LogicalType::ANY;
 	fun.serialize = VariableReturnBindData::Serialize;
 	fun.deserialize = VariableReturnBindData::Deserialize;

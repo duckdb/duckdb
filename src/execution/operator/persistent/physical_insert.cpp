@@ -36,7 +36,6 @@ PhysicalInsert::PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> 
       set_expressions(std::move(set_expressions)), set_columns(std::move(set_columns)), set_types(std::move(set_types)),
       on_conflict_condition(std::move(on_conflict_condition_p)), do_update_condition(std::move(do_update_condition_p)),
       conflict_target(std::move(conflict_target_p)), update_is_del_and_insert(update_is_del_and_insert) {
-
 	if (action_type == OnConflictAction::THROW) {
 		return;
 	}
@@ -76,12 +75,12 @@ void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<Logi
 InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<LogicalType> &return_types,
                                      DuckTableEntry &table)
     : table(table), insert_count(0), return_collection(context, return_types) {
+	table.GetStorage().BindIndexes(context);
 }
 
 InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
                                    const vector<unique_ptr<BoundConstraint>> &bound_constraints)
     : collection_index(DConstants::INVALID_INDEX), bound_constraints(bound_constraints) {
-
 	auto &allocator = Allocator::Get(context);
 	update_chunk.Initialize(allocator, types);
 	append_chunk.Initialize(allocator, types);
@@ -188,7 +187,6 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 
 static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
                               DataChunk &update_chunk, const PhysicalInsert &op) {
-
 	auto &do_update_condition = op.do_update_condition;
 	auto &set_types = op.set_types;
 	auto &set_expressions = op.set_expressions;
@@ -202,21 +200,22 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Table
 		do_update_filter_result.SetCardinality(chunk.size());
 		do_update_filter_result.Flatten();
 
-		ManagedSelection selection(chunk.size());
+		SelectionVector sel(chunk.size());
+		idx_t count = 0;
 
 		auto where_data = FlatVector::GetData<bool>(do_update_filter_result.data[0]);
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (where_data[i]) {
-				selection.Append(i);
+				sel.set_index(count, i);
+				count++;
 			}
 		}
-		if (selection.Count() != selection.Size()) {
-			// Not all conflicts met the condition, need to filter out the ones that don't
-			chunk.Slice(selection.Selection(), selection.Count());
-			chunk.SetCardinality(selection.Count());
-			// Also apply this Slice to the to-update row_ids
-			row_ids.Slice(selection.Selection(), selection.Count());
-			row_ids.Flatten(selection.Count());
+		if (count != chunk.size()) {
+			// Filter any conflicts not meeting the condition.
+			chunk.Slice(sel, count);
+			chunk.SetCardinality(count);
+			row_ids.Slice(sel, count);
+			row_ids.Flatten(count);
 		}
 	}
 
@@ -357,7 +356,7 @@ static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr
 }
 
 static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInfo &info,
-                                                   unordered_set<BoundIndex *> &matched_indexes) {
+                                                   reference_set_t<Index> &matched_indexes) {
 	map<idx_t, vector<idx_t>> conflicts;
 	unordered_map<idx_t, unique_ptr<Vector>> sort_keys;
 	//! Register which rows have already caused a conflict
@@ -366,7 +365,7 @@ static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictInf
 	auto &column_ids = info.column_ids;
 	if (column_ids.empty()) {
 		for (auto index : matched_indexes) {
-			auto &index_column_ids = index->GetColumnIdSet();
+			auto &index_column_ids = index.get().GetColumnIdSet();
 			PrepareSortKeys(input, sort_keys, index_column_ids);
 			vector<reference<Vector>> columns;
 			for (auto &idx : index_column_ids) {
@@ -400,16 +399,19 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 		return;
 	}
 
-	// We need to throw. Filter all tuples that passed, and verify again with those that violate the constraint.
-	ManagedSelection sel(combined_chunk.size());
+	// We need to throw.
+	// Filter any passing tuples and verify again with those violating the constraint.
+	SelectionVector sel(combined_chunk.size());
+	idx_t count = 0;
 	auto data = FlatVector::GetData<bool>(conflict_condition_result.data[0]);
 	for (idx_t i = 0; i < combined_chunk.size(); i++) {
 		if (!data[i]) {
-			// This tuple did not meet the condition.
-			sel.Append(i);
+			// The tuple does not meet the condition.
+			sel.set_index(count, i);
+			count++;
 		}
 	}
-	combined_chunk.Slice(sel.Selection(), sel.Count());
+	combined_chunk.Slice(sel, count);
 
 	// Verify and throw.
 	if (GLOBAL) {
@@ -419,7 +421,7 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 
 	auto &indexes = local_storage.GetIndexes(context.client, data_table);
 	auto storage = local_storage.GetStorage(data_table);
-	DataTable::VerifyUniqueIndexes(indexes, storage, tuples, nullptr);
+	data_table.VerifyUniqueIndexes(indexes, storage, tuples, nullptr);
 	throw InternalException("VerifyUniqueIndexes was expected to throw but didn't");
 }
 
@@ -431,7 +433,6 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	auto &conflict_target = op.conflict_target;
 	auto &columns_to_fetch = op.columns_to_fetch;
 	auto &data_table = table.GetStorage();
-
 	auto &local_storage = LocalStorage::Get(context.client, data_table.db);
 
 	ConflictInfo conflict_info(conflict_target);
@@ -442,45 +443,52 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, storage, &conflict_manager);
 	} else {
 		auto &indexes = local_storage.GetIndexes(context.client, data_table);
-		DataTable::VerifyUniqueIndexes(indexes, storage, tuples, &conflict_manager);
+		data_table.VerifyUniqueIndexes(indexes, storage, tuples, &conflict_manager);
 	}
 
-	conflict_manager.Finalize();
-	if (conflict_manager.ConflictCount() == 0) {
-		// No conflicts found, 0 updates performed
+	if (!conflict_manager.HasConflicts()) {
+		// No conflicts, i.e., no updates.
 		return 0;
 	}
-	idx_t affected_tuples = 0;
 
-	auto &conflicts = conflict_manager.Conflicts();
-	auto &row_ids = conflict_manager.RowIds();
+	if (GLOBAL) {
+		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
+		conflict_manager.FinalizeGlobal(transaction, data_table);
+	} else {
+		conflict_manager.FinalizeLocal(data_table, local_storage);
+	}
+	auto &row_ids = conflict_manager.GetRowIds();
+	auto conflict_count = conflict_manager.ConflictCount();
 
-	DataChunk conflict_chunk; // contains only the conflicting values
-	DataChunk scan_chunk;     // contains the original values, that caused the conflict
-	DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
-
-	// Filter out everything but the conflicting rows
-	conflict_chunk.Initialize(context.client, tuples.GetTypes());
-	conflict_chunk.Reference(tuples);
-	conflict_chunk.Slice(conflicts.Selection(), conflicts.Count());
-	conflict_chunk.SetCardinality(conflicts.Count());
-
-	// Holds the pins for the fetched rows
+	// Contains the original values causing the conflicts.
+	DataChunk scan_chunk;
+	// ColumnFetchState pins the fetched rows.
 	unique_ptr<ColumnFetchState> fetch_state;
+
 	if (!types_to_fetch.empty()) {
 		D_ASSERT(scan_chunk.size() == 0);
-		// When these values are required for the conditions or the SET expressions,
-		// then we scan the existing table for the conflicting tuples, using the rowids
+		// We scan the existing table for the conflicting tuples, if we
+		// need them for the conditions, or SET expressions.
 		scan_chunk.Initialize(context.client, types_to_fetch);
 		fetch_state = make_uniq<ColumnFetchState>();
+
 		if (GLOBAL) {
 			auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-			data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflicts.Count(), *fetch_state);
+			data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflict_count, *fetch_state);
 		} else {
-			local_storage.FetchChunk(data_table, row_ids, conflicts.Count(), columns_to_fetch, scan_chunk,
-			                         *fetch_state);
+			local_storage.FetchChunk(data_table, row_ids, conflict_count, columns_to_fetch, scan_chunk, *fetch_state);
 		}
 	}
+
+	// Only contains the conflicting values.
+	DataChunk conflict_chunk;
+	conflict_chunk.InitializeEmpty(tuples.GetTypes());
+	conflict_chunk.Reference(tuples);
+	conflict_chunk.Slice(conflict_manager.GetInvertedSel(), conflict_count);
+	conflict_chunk.SetCardinality(conflict_count);
+
+	// Contains the conflict chunk and the scanned chunk (wide).
+	DataChunk combined_chunk;
 
 	// Splice the Input chunk and the fetched chunk together
 	CombineExistingAndInsertTuples(combined_chunk, scan_chunk, conflict_chunk, context.client, op);
@@ -491,16 +499,18 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 
 	if (&tuples == &lstate.update_chunk) {
 		// Allow updating duplicate rows for the 'update_chunk'
-		RegisterUpdatedRows(lstate, row_ids, combined_chunk.size());
+		RegisterUpdatedRows(lstate, row_ids, conflict_count);
 	}
-
-	affected_tuples += PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
+	auto affected_tuples = PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
 
 	// Remove the conflicting tuples from the insert chunk
+	// We can use only the primay data because the secondary data has the same indexes in the chunk.
 	SelectionVector sel_vec(tuples.size());
-	idx_t new_size = SelectionVector::Inverted(conflicts.Selection(), sel_vec, conflicts.Count(), tuples.size());
+	auto &inverted_sel = conflict_manager.GetInvertedSel();
+	auto new_size = SelectionVector::Inverted(inverted_sel, sel_vec, conflict_count, tuples.size());
 	tuples.Slice(sel_vec, new_size);
 	tuples.SetCardinality(new_size);
+
 	return affected_tuples;
 }
 
@@ -517,42 +527,42 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	}
 
 	ConflictInfo conflict_info(conflict_target);
+	reference_set_t<Index> matching_indexes;
 
-	auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
-	auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-
-	unordered_set<BoundIndex *> matched_indexes;
 	if (conflict_info.column_ids.empty()) {
+		auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
 		global_indexes.Scan([&](Index &index) {
 			if (!index.IsUnique()) {
 				return false;
 			}
+			D_ASSERT(index.IsBound());
 			if (conflict_info.ConflictTargetMatches(index)) {
-				D_ASSERT(index.IsBound());
-				auto &bound_index = index.Cast<BoundIndex>();
-				matched_indexes.insert(&bound_index);
+				matching_indexes.insert(index);
 			}
 			return false;
 		});
+		auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
 		local_indexes.Scan([&](Index &index) {
 			if (!index.IsUnique()) {
 				return false;
 			}
+			D_ASSERT(index.IsBound());
 			if (conflict_info.ConflictTargetMatches(index)) {
-				D_ASSERT(index.IsBound());
 				auto &bound_index = index.Cast<BoundIndex>();
-				matched_indexes.insert(&bound_index);
+				matching_indexes.insert(bound_index);
 			}
 			return false;
 		});
 	}
 
-	auto inner_conflicts = CheckDistinctness(insert_chunk, conflict_info, matched_indexes);
+	auto inner_conflicts = CheckDistinctness(insert_chunk, conflict_info, matching_indexes);
 	idx_t count = insert_chunk.size();
 	if (!inner_conflicts.empty()) {
-		// We have at least one inner conflict, filter it out
-		ManagedSelection sel_vec(count);
+		// We have at least one inner conflict to filter out.
+		SelectionVector sel(count);
+		idx_t sel_count = 0;
+
 		ValidityMask not_a_conflict(count);
 		set<idx_t> last_occurrences_of_conflict;
 		for (idx_t i = 0; i < count; i++) {
@@ -570,7 +580,8 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 				}
 			}
 			if (not_a_conflict.RowIsValid(i)) {
-				sel_vec.Append(i);
+				sel.set_index(sel_count, i);
+				sel_count++;
 			}
 		}
 		if (action_type == OnConflictAction::UPDATE) {
@@ -579,18 +590,21 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 				throw NotImplementedException("Inner conflicts detected with a conditional DO UPDATE on-conflict "
 				                              "action, not fully implemented yet");
 			}
-			ManagedSelection last_occurrences(last_occurrences_of_conflict.size());
+
+			SelectionVector last_occurrences(last_occurrences_of_conflict.size());
+			idx_t last_occurrences_count = 0;
 			for (auto &idx : last_occurrences_of_conflict) {
-				last_occurrences.Append(idx);
+				last_occurrences.set_index(last_occurrences_count, idx);
+				last_occurrences_count++;
 			}
 
 			lstate.update_chunk.Reference(insert_chunk);
-			lstate.update_chunk.Slice(last_occurrences.Selection(), last_occurrences.Count());
-			lstate.update_chunk.SetCardinality(last_occurrences.Count());
+			lstate.update_chunk.Slice(last_occurrences, last_occurrences_count);
+			lstate.update_chunk.SetCardinality(last_occurrences_count);
 		}
 
-		insert_chunk.Slice(sel_vec.Selection(), sel_vec.Count());
-		insert_chunk.SetCardinality(sel_vec.Count());
+		insert_chunk.Slice(sel, sel_count);
+		insert_chunk.SetCardinality(sel_count);
 	}
 
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition
@@ -634,27 +648,26 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 	D_ASSERT(!return_chunk);
 	auto &data_table = gstate.table.GetStorage();
 	if (!lstate.collection_index.IsValid()) {
-		auto table_info = storage.GetDataTableInfo();
-		auto &io_manager = TableIOManager::Get(table.GetStorage());
-
-		// Create the local row group collection.
-		auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
-		auto collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
-		collection->InitializeEmpty();
-		collection->InitializeAppend(lstate.local_append_state);
-
 		lock_guard<mutex> l(gstate.lock);
-		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(data_table);
-		lstate.collection_index = data_table.CreateOptimisticCollection(context.client, std::move(collection));
+		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(context.client, data_table);
+		// Create the local row group collection.
+		auto optimistic_collection = lstate.optimistic_writer->CreateCollection(storage, insert_types);
+		auto &collection = *optimistic_collection->collection;
+		collection.InitializeEmpty();
+		collection.InitializeAppend(lstate.local_append_state);
+
+		lstate.collection_index =
+		    data_table.CreateOptimisticCollection(context.client, std::move(optimistic_collection));
 	}
 
 	OnConflictHandling(table, context, gstate, lstate, insert_chunk);
 	D_ASSERT(action_type != OnConflictAction::UPDATE);
 
-	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &optimistic_collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &collection = *optimistic_collection.collection;
 	auto new_row_group = collection.Append(insert_chunk, lstate.local_append_state);
 	if (new_row_group) {
-		lstate.optimistic_writer->WriteNewRowGroup(collection);
+		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -677,7 +690,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	// parallel append: finalize the append
 	TransactionData tdata(0, 0);
 	auto &data_table = gstate.table.GetStorage();
-	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &optimistic_collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto &collection = *optimistic_collection.collection;
 	collection.FinalizeAppend(tdata, lstate.local_append_state);
 
 	auto append_count = collection.GetTotalRows();
@@ -696,9 +710,9 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.FinalizeLocalAppend(append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.optimistic_writer->WriteLastRowGroup(collection);
+		lstate.optimistic_writer->WriteLastRowGroup(optimistic_collection);
 		lstate.optimistic_writer->FinalFlush();
-		gstate.table.GetStorage().LocalMerge(context.client, collection);
+		gstate.table.GetStorage().LocalMerge(context.client, optimistic_collection);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
 		optimistic_writer.Merge(*lstate.optimistic_writer);
 	}

@@ -14,19 +14,14 @@ CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
       column_ids(info.column_ids), scan_types(info.scan_types), names(info.names) {
 }
 
-static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &expr, const string &table_name) {
-	if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
-		ParsedExpressionIterator::EnumerateChildren(*expr, [&table_name](unique_ptr<ParsedExpression> &child) {
-			RemoveTableQualificationRecursive(child, table_name);
-		});
-		return;
-	}
-
-	auto &col_ref = expr->Cast<ColumnRefExpression>();
-	auto &col_names = col_ref.column_names;
-	if (col_ref.IsQualified() && col_ref.GetTableName() == table_name) {
-		col_names.erase(col_names.begin());
-	}
+static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const string &table_name) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
+	    *root_expr, [&](ColumnRefExpression &col_ref) {
+		    auto &col_names = col_ref.column_names;
+		    if (col_ref.IsQualified() && col_ref.GetTableName() == table_name) {
+			    col_names.erase(col_names.begin());
+		    }
+	    });
 }
 
 vector<string> CreateIndexInfo::ExpressionsToList() const {

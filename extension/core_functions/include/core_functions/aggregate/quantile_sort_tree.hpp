@@ -300,12 +300,12 @@ struct QuantileIncluded {
 };
 
 struct QuantileSortTree {
-
 	unique_ptr<WindowIndexTree> index_tree;
 
 	QuantileSortTree(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition) {
 		// TODO: Two pass parallel sorting using Build
 		auto &inputs = *partition.inputs;
+		auto &interrupt = partition.interrupt_state;
 		ColumnDataScanState scan;
 		DataChunk sort;
 		inputs.InitializeScan(scan, partition.column_ids);
@@ -320,8 +320,8 @@ struct QuantileSortTree {
 		vector<column_t> sort_idx(1, 0);
 		const auto count = partition.count;
 
-		index_tree = make_uniq<WindowIndexTree>(partition.context, order_bys, sort_idx, count);
-		auto index_state = index_tree->GetLocalState();
+		index_tree = make_uniq<WindowIndexTree>(partition.context.client, order_bys, sort_idx, count);
+		auto index_state = index_tree->GetLocalState(partition.context);
 		auto &local_state = index_state->Cast<WindowIndexTreeLocalState>();
 
 		//	Build the indirection array by scanning the valid indices
@@ -338,12 +338,12 @@ struct QuantileSortTree {
 						filter_sel[filtered++] = i;
 					}
 				}
-				local_state.SinkChunk(sort, row_idx, filter_sel, filtered);
+				local_state.Sink(partition.context, sort, row_idx, filter_sel, filtered, interrupt);
 			} else {
-				local_state.SinkChunk(sort, row_idx, nullptr, 0);
+				local_state.Sink(partition.context, sort, row_idx, nullptr, 0, interrupt);
 			}
 		}
-		local_state.Sort();
+		local_state.Finalize(partition.context, interrupt);
 	}
 
 	inline idx_t SelectNth(const SubFrames &frames, size_t n) const {

@@ -28,6 +28,7 @@ struct CScalarFunctionInfo : public ScalarFunctionInfo {
 struct CScalarFunctionBindData : public FunctionData {
 	explicit CScalarFunctionBindData(CScalarFunctionInfo &info) : info(info) {
 	}
+
 	~CScalarFunctionBindData() override {
 		if (bind_data && delete_callback) {
 			delete_callback(bind_data);
@@ -37,8 +38,15 @@ struct CScalarFunctionBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<CScalarFunctionBindData>(info);
+		auto copy = make_uniq<CScalarFunctionBindData>(info);
+		if (copy_callback) {
+			copy->bind_data = copy_callback(bind_data);
+			copy->delete_callback = delete_callback;
+			copy->copy_callback = copy_callback;
+		}
+		return std::move(copy);
 	}
+
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<CScalarFunctionBindData>();
 		return info.extra_info == other.info.extra_info && info.function == other.info.function;
@@ -47,6 +55,7 @@ struct CScalarFunctionBindData : public FunctionData {
 	CScalarFunctionInfo &info;
 	void *bind_data = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
+	duckdb_copy_callback_t copy_callback = nullptr;
 };
 
 struct CScalarFunctionInternalBindInfo {
@@ -141,13 +150,14 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	if (!function_info.success) {
 		throw InvalidInputException(function_info.error);
 	}
-	if (all_const && (input.size() == 1 || function.function.stability != FunctionStability::VOLATILE)) {
+	if (all_const && (input.size() == 1 || function.function.GetStability() != FunctionStability::VOLATILE)) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
 } // namespace duckdb
 
+using duckdb::ExpressionWrapper;
 using duckdb::GetCScalarFunction;
 using duckdb::GetCScalarFunctionBindInfo;
 using duckdb::GetCScalarFunctionInfo;
@@ -190,7 +200,7 @@ void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function
 		return;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	scalar_function.null_handling = duckdb::FunctionNullHandling::SPECIAL_HANDLING;
+	scalar_function.SetNullHandling(duckdb::FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 void duckdb_scalar_function_set_volatile(duckdb_scalar_function function) {
@@ -198,7 +208,7 @@ void duckdb_scalar_function_set_volatile(duckdb_scalar_function function) {
 		return;
 	}
 	auto &scalar_function = GetCScalarFunction(function);
-	scalar_function.stability = duckdb::FunctionStability::VOLATILE;
+	scalar_function.SetVolatile();
 }
 
 void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckdb_logical_type type) {
@@ -216,7 +226,7 @@ void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duc
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.return_type = *logical_type;
+	scalar_function.SetReturnType(*logical_type);
 }
 
 void *duckdb_scalar_function_get_extra_info(duckdb_function_info info) {
@@ -270,6 +280,24 @@ void duckdb_scalar_function_bind_set_error(duckdb_bind_info info, const char *er
 	bind_info.success = false;
 }
 
+idx_t duckdb_scalar_function_bind_get_argument_count(duckdb_bind_info info) {
+	if (!info) {
+		return 0;
+	}
+	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	return bind_info.arguments.size();
+}
+
+duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_bind_info info, idx_t index) {
+	if (!info || index >= duckdb_scalar_function_bind_get_argument_count(info)) {
+		return nullptr;
+	}
+	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	auto wrapper = new ExpressionWrapper();
+	wrapper->expr = bind_info.arguments[index]->Copy();
+	return reinterpret_cast<duckdb_expression>(wrapper);
+}
+
 void duckdb_scalar_function_set_extra_info(duckdb_scalar_function function, void *extra_info,
                                            duckdb_delete_callback_t destroy) {
 	if (!function || !extra_info) {
@@ -297,6 +325,14 @@ void duckdb_scalar_function_set_bind_data(duckdb_bind_info info, void *bind_data
 	auto &bind_info = GetCScalarFunctionBindInfo(info);
 	bind_info.bind_data.bind_data = bind_data;
 	bind_info.bind_data.delete_callback = destroy;
+}
+
+void duckdb_scalar_function_set_bind_data_copy(duckdb_bind_info info, duckdb_copy_callback_t copy) {
+	if (!info) {
+		return;
+	}
+	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	bind_info.bind_data.copy_callback = copy;
 }
 
 void duckdb_scalar_function_set_function(duckdb_scalar_function function, duckdb_scalar_function_t execute_func) {
@@ -356,8 +392,8 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		if (scalar_function.name.empty() || !info.function) {
 			return DuckDBError;
 		}
-		if (duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::INVALID) ||
-		    duckdb::TypeVisitor::Contains(scalar_function.return_type, duckdb::LogicalTypeId::ANY)) {
+		if (duckdb::TypeVisitor::Contains(scalar_function.GetReturnType(), duckdb::LogicalTypeId::INVALID) ||
+		    duckdb::TypeVisitor::Contains(scalar_function.GetReturnType(), duckdb::LogicalTypeId::ANY)) {
 			return DuckDBError;
 		}
 		for (const auto &argument : scalar_function.arguments) {
@@ -372,6 +408,7 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateScalarFunctionInfo sf_info(scalar_function_set);
+			sf_info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {

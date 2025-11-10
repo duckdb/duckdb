@@ -7,9 +7,6 @@ require parquet
 require vector_size 512
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA verify_parallelism;
 
 statement ok
@@ -135,7 +132,7 @@ Directory
 statement error
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
 ----
-FILENAME_PATTERN cannot be empty
+Copy option "FILENAME_PATTERN" requires an argument of type VARCHAR
 
 statement ok
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN a_file_name);

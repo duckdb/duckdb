@@ -98,9 +98,9 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, {{nullptr, nullptr}}, "arr[2:]"},
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, {{nullptr, nullptr}}, "list_concat(arr, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, {{nullptr, nullptr}}, "list_concat(list_value(e), arr)"},
-	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, {{nullptr, nullptr}}, "list_aggr(arr::varchar[], 'string_agg', sep)"},
+	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, {{nullptr, nullptr}}, "case len(arr::varchar[]) when 0 then '' else list_aggr(arr::varchar[], 'string_agg', sep) end"},
 	// Test default parameters
-	{DEFAULT_SCHEMA, "array_to_string_comma_default", {"arr", nullptr}, {{"sep", "','"}, {nullptr, nullptr}}, "list_aggr(arr::varchar[], 'string_agg', sep)"},
+	{DEFAULT_SCHEMA, "array_to_string_comma_default", {"arr", nullptr}, {{"sep", "','"}, {nullptr, nullptr}}, "case len(arr::varchar[]) when 0 then '' else list_aggr(arr::varchar[], 'string_agg', sep) end"},
 
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, {{nullptr, nullptr}}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, {{nullptr, nullptr}}, "floor(x/y)"},
@@ -195,12 +195,13 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(ar
 			    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 		}
 		for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
-			auto expr_list = Parser::ParseExpressionList(default_macro.named_parameters[named_idx].default_value);
+			const auto &named_param = default_macro.named_parameters[named_idx];
+			auto expr_list = Parser::ParseExpressionList(named_param.default_value);
 			if (expr_list.size() != 1) {
 				throw InternalException("Expected a single expression");
 			}
-			function->default_parameters.insert(
-				make_pair(default_macro.named_parameters[named_idx].name, std::move(expr_list[0])));
+			function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
+			function->default_parameters.insert(make_pair(named_param.name, std::move(expr_list[0])));
 		}
 		D_ASSERT(function->type == MacroType::SCALAR_MACRO);
 		bind_info->macros.push_back(std::move(function));

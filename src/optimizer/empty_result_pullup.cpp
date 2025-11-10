@@ -66,7 +66,6 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_WINDOW:
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_PIVOT:
@@ -77,6 +76,14 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 				op = make_uniq<LogicalEmptyResult>(std::move(op));
 				break;
 			}
+		}
+		return op;
+	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		D_ASSERT(op->children.size() == 2);
+		if (op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+			break;
 		}
 		return op;
 	}

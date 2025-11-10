@@ -32,7 +32,7 @@ struct MapFun {
 	static constexpr const char *Example = "map(['key1', 'key2'], ['val1', 'val2'])";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MapEntriesFun {

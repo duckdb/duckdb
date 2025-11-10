@@ -1,0 +1,44 @@
+# name: test/sql/storage/encryption/temp_files/encrypt_asof_join_merge.test_slow
+# description: Test merge queue and repartitioning with encrypted temporary files
+# group: [temp_files]
+
+foreach cipher GCM CTR
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+
+statement ok
+SET temp_file_encryption=true;
+
+statement ok
+USE enc;
+
+statement ok
+PRAGMA memory_limit='400M'
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+SET temp_directory='__TEST_DIR__/temp.tmp'
+
+# Force PhysicalAsOfJoin
+statement ok
+PRAGMA asof_loop_join_threshold = 0;
+
+query II
+WITH build AS (
+	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v
+	FROM range(3000000) t(i), range(2) tk(k)
+), probe AS (
+	SELECT k, t
+	FROM range(2) tk(k),
+		 range('2021-01-01 00:00:30'::TIMESTAMP, '2021-02-01 00:00:30'::TIMESTAMP, INTERVAL 1 HOUR) tt(t)
+) SELECT SUM(v) AS v, COUNT(*) AS n
+FROM probe ASOF JOIN build USING(k, t)
+----
+26790	1488
+
+restart
+
+endloop

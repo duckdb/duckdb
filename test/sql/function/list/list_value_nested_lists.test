@@ -175,7 +175,7 @@ SELECT LIST_VALUE(a, b, c) FROM nested_list_table;
 statement error
 SELECT LIST_VALUE([1, 1], ['a', 'a'], [ROW(2, 2), ROW(3, 3)]);
 ----
-Binder Error: Cannot create a list of types INTEGER[] and VARCHAR[] - an explicit cast is required
+Binder Error: Cannot deduce template type
 
 # list with array
 query I

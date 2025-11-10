@@ -1,0 +1,62 @@
+[
+	{
+		"name": "variant_extract",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "field",
+						"type": "VARCHAR"
+					}
+				],
+				"categories": [
+					"variant"
+				],
+				"description": "Returns the `field` from the `input_variant` if it's an OBJECT.",
+				"example": "variant_extract({'a': 42, 'b': [1,2,3])::VARIANT, 'b')"
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "index",
+						"type": "UINTEGER"
+					}
+				],
+				"categories": [
+					"variant"
+				],
+				"description": "Returns the entry at `index` from the `input_variant` if it's an ARRAY.",
+				"example": "variant_extract([1,2,3])::VARIANT, 0)"
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
+		"name": "variant_normalize",
+		"parameters": "input_variant",
+		"description": "Normalizes the `input_variant` to a canonical representation.",
+		"example": "variant_normalize({'b': [1,2,3], 'a': 42})::VARIANT)",
+		"categories": [
+			"variant"
+		],
+		"type": "scalar_function"
+	},
+	{
+		"name": "variant_typeof",
+		"parameters": "input_variant",
+		"description": "Returns the internal type of the `input_variant`.",
+		"example": "variant_typeof({'a': 42, 'b': [1,2,3]})::VARIANT)",
+		"categories": [
+			"variant"
+		],
+		"type": "scalar_function"
+	}
+]

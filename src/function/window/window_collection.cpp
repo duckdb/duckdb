@@ -143,4 +143,34 @@ WindowCursor::WindowCursor(const WindowCollection &paged, column_t col_idx)
     : WindowCursor(paged, vector<column_t>(1, col_idx)) {
 }
 
+LogicalType WindowCollectionChunkScanner::PrefixStructType(column_t end, column_t begin) {
+	child_list_t<LogicalType> partition_children;
+	for (auto c = begin; c < end; ++c) {
+		auto name = std::to_string(c);
+		auto type = chunk.data[c].GetType();
+		std::pair<string, LogicalType> child {name, type};
+		partition_children.emplace_back(child);
+	}
+	//	For single children, don;t build a struct - compare will be slow
+	if (partition_children.size() == 1) {
+		return partition_children[0].second;
+	}
+	return LogicalType::STRUCT(partition_children);
+}
+
+void WindowCollectionChunkScanner::ReferenceStructColumns(DataChunk &chunk, Vector &vec, column_t end, column_t begin) {
+	//	Check for single column
+	const auto width = end - begin;
+	if (width == 1) {
+		vec.Reference(chunk.data[begin]);
+		return;
+	}
+
+	auto &entries = StructVector::GetEntries(vec);
+	D_ASSERT(width == entries.size());
+	for (column_t i = 0; i < entries.size(); ++i) {
+		entries[i]->Reference(chunk.data[begin + i]);
+	}
+}
+
 } // namespace duckdb

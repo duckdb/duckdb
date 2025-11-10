@@ -195,4 +195,14 @@ struct CastToTypeFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ReplaceTypeFun {
+	static constexpr const char *Name = "replace_type";
+	static constexpr const char *Parameters = "param,type1,type2";
+	static constexpr const char *Description = "Casts all fields of type1 to type2";
+	static constexpr const char *Example = "replace_type({duck: 3.141592653589793::DOUBLE}, NULL::DOUBLE, NULL::DECIMAL(15,2))";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

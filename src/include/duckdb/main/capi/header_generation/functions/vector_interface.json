@@ -1,6 +1,7 @@
 {
     "group": "vector_interface",
     "deprecated": false,
+    "description": "Functions to interact with `duckdb_vector`. A vector typically (but not always) lives in a data chunk and contains a subset of the rows of a column.",
     "entries": [
         {
             "name": "duckdb_create_vector",
@@ -212,12 +213,12 @@
                 }
             ],
             "comment": {
-                "description": "Sets the total size of the underlying child-vector of a list vector.\n\n",
+                "description": "Sets the size of the underlying child-vector of a list vector.\nNote that this does NOT reserve the memory in the child buffer,\nand that it is possible to set a size exceeding the capacity.\nTo set the capacity, use `duckdb_list_vector_reserve`.\n\n",
                 "param_comments": {
                     "vector": "The list vector.",
                     "size": "The size of the child list."
                 },
-                "return_value": "The duckdb state. Returns DuckDBError if the vector is nullptr."
+                "return_value": "The duckdb state. Returns DuckDBError, if the vector is nullptr."
             }
         },
         {
@@ -234,12 +235,12 @@
                 }
             ],
             "comment": {
-                "description": "Sets the total capacity of the underlying child-vector of a list.\n\nAfter calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current\ndata and validity pointers\n\n",
+                "description": "Sets the capacity of the underlying child-vector of a list vector.\nWe increment to the next power of two, based on the required capacity.\nThus, the capacity might not match the size of the list (capacity >= size),\nwhich is set via `duckdb_list_vector_set_size`.\n\n",
                 "param_comments": {
                     "vector": "The list vector.",
-                    "required_capacity": "the total capacity to reserve."
+                    "required_capacity": "The child buffer capacity to reserve."
                 },
-                "return_value": "The duckdb state. Returns DuckDBError if the vector is nullptr."
+                "return_value": "The duckdb state. Returns DuckDBError, if the vector is nullptr."
             }
         },
         {
@@ -304,6 +305,47 @@
                     "vector": "The vector to slice.",
                     "sel": "The selection vector.",
                     "len": "The length of the selection vector."
+                }
+            }
+        },
+        {
+            "name": "duckdb_vector_copy_sel",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "src"
+                },
+                {
+                    "type": "duckdb_vector",
+                    "name": "dst"
+                },
+                {
+                    "type": "duckdb_selection_vector",
+                    "name": "sel"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "src_count"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "src_offset"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "dst_offset"
+                }
+            ],
+            "comment": {
+                "description": "Copy the src vector to the dst with a selection vector that identifies which indices to copy.\n\n",
+                "param_comments": {
+                    "src": "The vector to copy from.",
+                    "dst": "The vector to copy to.",
+                    "sel": "The selection vector. The length of the selection vector should not be more than the length of the src vector",
+                    "src_count": "The number of entries from selection vector to copy. Think of this as the effective length of the selection vector starting from index 0",
+                    "src_offset": "The offset in the selection vector to copy from (important: actual number of items copied = src_count - src_offset).",
+                    "dst_offset": "The offset in the dst vector to start copying to."
                 }
             }
         },

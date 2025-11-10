@@ -3,6 +3,7 @@
 
 namespace duckdb {
 
+namespace {
 struct StatsBindData : public FunctionData {
 	explicit StatsBindData(string stats_p = string()) : stats(std::move(stats_p)) {
 	}
@@ -20,7 +21,7 @@ public:
 	}
 };
 
-static void StatsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void StatsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<StatsBindData>();
 	if (info.stats.empty()) {
@@ -35,7 +36,7 @@ unique_ptr<FunctionData> StatsBind(ClientContext &context, ScalarFunction &bound
 	return make_uniq<StatsBindData>();
 }
 
-static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
 	auto &info = bind_data->Cast<StatsBindData>();
@@ -43,11 +44,13 @@ static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, Fu
 	return nullptr;
 }
 
+} // namespace
+
 ScalarFunction StatsFun::GetFunction() {
 	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
 	                     StatsPropagateStats);
-	stats.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	stats.stability = FunctionStability::VOLATILE;
+	stats.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	stats.SetStability(FunctionStability::VOLATILE);
 	return stats;
 }
 

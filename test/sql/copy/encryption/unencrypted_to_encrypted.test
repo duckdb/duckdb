@@ -24,7 +24,10 @@ statement ok
 COPY FROM DATABASE unencrypted to encrypted;
 
 statement ok
-USE memory;
+ATTACH '__TEST_DIR__/not_relevant.duckdb' AS other;
+
+statement ok
+USE other;
 
 statement ok
 DETACH unencrypted

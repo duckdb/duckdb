@@ -201,6 +201,7 @@ CREATE TABLE timeparts AS (
 		tz
 	FROM timestamps t
 	LEFT JOIN timezones z ON (month(t.ts) = z.mm)
+	ORDER BY ts
 );
 
 query IIIIIIII

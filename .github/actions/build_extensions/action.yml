@@ -1,3 +1,9 @@
+# # # # # # # # # # # # # # # # # #
+#
+# WARNING: DEPRECATED!
+#
+# # # # # # # # # # # # # # # # # #
+
 name: "Build Extensions"
 description: "Build, test and deploy the DuckDB extensions"
 inputs:
@@ -114,7 +120,7 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
-        echo "BUILD_COMPLETE_EXTENSION_SET=${{ inputs.build_complete_extensions_set }}" >> docker_env.txt
+        echo "BUILD_COMPLETE_EXTENSION_SET=${{ inputs.build_complete_extensions_set }}" >> $GITHUB_ENV
 
     - name: workaround for https://github.com/duckdb/duckdb/issues/8360
       if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'
@@ -160,8 +166,6 @@ runs:
 
       run: |
         ls
-        mkdir -p ~/.ssh
-        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
         ls -al
         pwd
@@ -219,6 +223,29 @@ runs:
         ${{ inputs.unittest_script }} '-f test.list'
         rm -rf build/release/extension
         mv build/extension_tmp build/release/extension
+
+    - name: Run tests with auto loading with VS2019 C++ stdlib
+      if: ${{ inputs.run_autoload_tests == '1' && inputs.vcpkg_target_triplet == 'x64-windows-static-md' }}
+      shell: bash
+      env:
+        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == '1' && github.workspace || ''}}
+      run: |
+        rm -rf build/extension_tmp
+        mv build/release/extension build/extension_tmp
+        choco install wget -y --no-progress
+        cd  ${{ inputs.build_dir }}
+        TEST_RUNNER_DIR=./build/release/test/Release
+        if [ ! -f ${TEST_RUNNER_DIR}/unittest.exe ]; then
+          echo "Invalid unit tests runner dir: ${TEST_RUNNER_DIR}, check 'inputs.unittest_script' argument"
+          exit 1
+        fi
+        wget -P ${TEST_RUNNER_DIR} https://blobs.duckdb.org/ci/msvcp140.dll
+        ls ${TEST_RUNNER_DIR}
+        # test.list is generated on the previous step
+        ${{ inputs.unittest_script }} '-f test.list'
+        rm ${TEST_RUNNER_DIR}/msvcp140.dll
+        rm -rf ./build/release/extension
+        mv ./build/extension_tmp ./build/release/extension
 
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}

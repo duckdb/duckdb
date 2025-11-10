@@ -30,8 +30,8 @@ struct EncryptionOptions {
 	bool additional_authenticated_data = false;
 	//! derived encryption key id
 	string derived_key_id;
-	//! Cipher used for encryption
-	EncryptionTypes::CipherType cipher;
+	// //! Cipher used for encryption
+	// EncryptionTypes::CipherType cipher = EncryptionTypes::CipherType::INVALID;
 	//! key derivation function (kdf) used
 	EncryptionTypes::KeyDerivationFunction kdf = EncryptionTypes::KeyDerivationFunction::SHA256;
 	//! Key Length
@@ -48,7 +48,8 @@ struct StorageManagerOptions {
 	optional_idx storage_version;
 	optional_idx version_number;
 	optional_idx block_header_size;
-
+	//! Unique database identifier and optional encryption salt.
+	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
 	EncryptionOptions encryption_options;
 };
 
@@ -62,10 +63,10 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(optional_ptr<ClientContext> context);
+	void CreateNewDatabase(QueryContext context);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase();
+	void LoadExistingDatabase(QueryContext context);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -87,16 +88,19 @@ public:
 	//! Return the meta block id
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
-	void Read(Block &block) override;
+	void Read(QueryContext context, Block &block) override;
+
 	//! Read individual blocks
 	void ReadBlock(Block &block, bool skip_block_header = false) const;
 	void ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header = false) const;
 	//! Read the content of a range of blocks into a buffer
 	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
-	//! Write the given block to disk
-	void Write(FileBuffer &block, block_id_t block_id) override;
+	//! Write the block to disk. Use Write with client context instead.
+	void Write(FileBuffer &buffer, block_id_t block_id) override;
+	//! Write the block to disk.
+	void Write(QueryContext context, FileBuffer &buffer, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
-	void WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) override;
+	void WriteHeader(QueryContext context, DatabaseHeader header) override;
 	//! Sync changes to the underlying file
 	void FileSync() override;
 	//! Truncate the underlying database file after a checkpoint
@@ -111,10 +115,24 @@ public:
 	idx_t FreeBlocks() override;
 	//! Whether or not the attached database is a remote file
 	bool IsRemote() override;
+	//! Whether or not to prefetch
+	bool Prefetch() override;
+
+	//! Return the checkpoint iteration of the file.
+	uint64_t GetCheckpointIteration() const {
+		return iteration_count;
+	}
+	//! Return the version number of the file.
+	uint64_t GetVersionNumber() const;
+	//! Return the database identifier.
+	data_ptr_t GetDBIdentifier() {
+		return options.db_identifier;
+	}
 
 private:
 	//! Loads the free list of the file.
-	void LoadFreeList();
+	void LoadFreeList(QueryContext context);
+
 	//! Initializes the database header. We pass the provided block allocation size as a parameter
 	//!	to detect inconsistencies with the file header.
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
@@ -122,16 +140,21 @@ private:
 	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
 	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
 
-	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
-	void ChecksumAndWrite(optional_ptr<ClientContext> context, FileBuffer &handle, uint64_t location,
+	void ReadAndChecksum(QueryContext context, FileBuffer &handle, uint64_t location,
+	                     bool skip_block_header = false) const;
+	void ChecksumAndWrite(QueryContext context, FileBuffer &handle, uint64_t location,
 	                      bool skip_block_header = false) const;
 
 	idx_t GetBlockLocation(block_id_t block_id) const;
 
 	// Encrypt, Store, Decrypt the canary
-	static void StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id);
-	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
+	static void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id);
+	static void StoreDBIdentifier(MainHeader &main_header, const data_ptr_t db_identifier);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
+
+	//! Check and adding Encryption Keys
+	void CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key);
+	void CheckAndAddEncryptionKey(MainHeader &main_header);
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();
@@ -143,7 +166,6 @@ private:
 	void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) override;
 
 	void AddStorageVersionTag();
-	uint64_t GetVersionNumber();
 
 private:
 	AttachedDatabase &db;
@@ -171,7 +193,7 @@ private:
 	block_id_t max_block;
 	//! The block id where the free list can be found
 	idx_t free_list_id;
-	//! The current header iteration count
+	//! The current header iteration count.
 	uint64_t iteration_count;
 	//! The storage manager options
 	StorageManagerOptions options;

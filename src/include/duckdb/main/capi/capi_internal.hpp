@@ -42,10 +42,17 @@ struct CClientContextWrapper {
 	ClientContext &context;
 };
 
+struct CClientArrowOptionsWrapper {
+	explicit CClientArrowOptionsWrapper(ClientProperties &properties) : properties(properties) {};
+	ClientProperties properties;
+};
+
 struct PreparedStatementWrapper {
 	//! Map of name -> values
 	case_insensitive_map_t<BoundParameterData> values;
 	unique_ptr<PreparedStatement> statement;
+	bool success = true;
+	ErrorData error_data;
 };
 
 struct ExtractStatementsWrapper {
@@ -64,7 +71,7 @@ struct ArrowResultWrapper {
 };
 
 struct AppenderWrapper {
-	unique_ptr<Appender> appender;
+	unique_ptr<BaseAppender> appender;
 	ErrorData error_data;
 };
 
@@ -75,6 +82,10 @@ struct TableDescriptionWrapper {
 
 struct ErrorDataWrapper {
 	ErrorData error_data;
+};
+
+struct ExpressionWrapper {
+	unique_ptr<Expression> expr;
 };
 
 enum class CAPIResultSetType : uint8_t {

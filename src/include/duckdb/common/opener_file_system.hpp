@@ -41,7 +41,7 @@ public:
 	int64_t GetFileSize(FileHandle &handle) override {
 		return GetFileSystem().GetFileSize(handle);
 	}
-	time_t GetLastModifiedTime(FileHandle &handle) override {
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
 		return GetFileSystem().GetLastModifiedTime(handle);
 	}
 	string GetVersionTag(FileHandle &handle) override {
@@ -141,6 +141,10 @@ public:
 
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
+	}
+
+	bool SubSystemIsDisabled(const string &name) override {
+		return GetFileSystem().SubSystemIsDisabled(name);
 	}
 
 	vector<string> ListSubSystems() override {

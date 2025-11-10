@@ -31,6 +31,8 @@ EncryptionKey::~EncryptionKey() {
 void EncryptionKey::LockEncryptionKey(data_ptr_t key, idx_t key_len) {
 #if defined(_WIN32)
 	VirtualLock(key, key_len);
+#elif defined(__MVS__)
+	__mlockall(_BPX_NONSWAP);
 #else
 	mlock(key, key_len);
 #endif
@@ -39,9 +41,11 @@ void EncryptionKey::LockEncryptionKey(data_ptr_t key, idx_t key_len) {
 void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, idx_t key_len) {
 	memset(key, 0, key_len);
 #if defined(_WIN32)
-	VirtualUnlock(static_cast<void *>(&key[0]), key_len);
+	VirtualUnlock(key, key_len);
+#elif defined(__MVS__)
+	__mlockall(_BPX_SWAP);
 #else
-	munlock(static_cast<void *>(&key[0]), key_len);
+	munlock(key, key_len);
 #endif
 }
 
@@ -88,13 +92,18 @@ void EncryptionKeyManager::DeleteKey(const string &key_name) {
 	derived_keys.erase(key_name);
 }
 
-void EncryptionKeyManager::KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt,
+void EncryptionKeyManager::KeyDerivationFunctionSHA256(const_data_ptr_t key, idx_t key_size, data_ptr_t salt,
                                                        data_ptr_t derived_key) {
 	//! For now, we are only using SHA256 for key derivation
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
-	state.AddSalt(salt, MainHeader::SALT_LEN);
-	state.AddBytes(duckdb::data_ptr_t(reinterpret_cast<const uint8_t *>(user_key.data())), user_key.size());
+	state.AddSalt(salt, MainHeader::DB_IDENTIFIER_LEN);
+	state.AddBytes(key, key_size);
 	state.FinalizeDerivedKey(derived_key);
+}
+
+void EncryptionKeyManager::KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
+                                                       data_ptr_t derived_key) {
+	KeyDerivationFunctionSHA256(reinterpret_cast<const_data_ptr_t>(user_key), user_key_size, salt, derived_key);
 }
 
 string EncryptionKeyManager::Base64Decode(const string &key) {
@@ -117,7 +126,8 @@ void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr
 		decoded_key = user_key;
 	}
 
-	KeyDerivationFunctionSHA256(decoded_key, salt, derived_key);
+	KeyDerivationFunctionSHA256(reinterpret_cast<const_data_ptr_t>(decoded_key.data()), decoded_key.size(), salt,
+	                            derived_key);
 
 	// wipe the original and decoded key
 	std::fill(user_key.begin(), user_key.end(), 0);

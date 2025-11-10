@@ -9,6 +9,7 @@
 #include "include/icu-datefunc.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -163,7 +164,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMP to TIMESTAMPTZ cast.");
 		}
-		if (input.context->config.disable_timestamptz_casts) {
+		if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
 			throw BinderException("Casting from TIMESTAMP to TIMESTAMP WITH TIME ZONE without an explicit time zone "
 			                      "has been disabled  - use \"AT TIME ZONE ...\"");
 		}
@@ -184,16 +185,20 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 			throw InternalException("Type %s not handled in BindCastFromNaive", LogicalTypeIdToString(source.id()));
 		}
 	}
+	static void AddCast(CastFunctionSet &casts, const LogicalType &source, const LogicalType &target) {
+		const auto implicit_cost = CastRules::ImplicitCast(source, target);
+		casts.RegisterCastFunction(source, target, BindCastFromNaive, implicit_cost);
+	}
 
 	static void AddCasts(ExtensionLoader &loader) {
+		auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+		auto &casts = config.GetCastFunctions();
 
-		const auto implicit_cost = CastRules::ImplicitCast(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ);
-		loader.RegisterCastFunction(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, BindCastFromNaive,
-		                            implicit_cost);
-		loader.RegisterCastFunction(LogicalType::TIMESTAMP_MS, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
-		loader.RegisterCastFunction(LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
-		loader.RegisterCastFunction(LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
-		loader.RegisterCastFunction(LogicalType::DATE, LogicalType::TIMESTAMP_TZ, BindCastFromNaive);
+		AddCast(casts, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ);
+		AddCast(casts, LogicalType::TIMESTAMP_MS, LogicalType::TIMESTAMP_TZ);
+		AddCast(casts, LogicalType::TIMESTAMP_NS, LogicalType::TIMESTAMP_TZ);
+		AddCast(casts, LogicalType::TIMESTAMP_S, LogicalType::TIMESTAMP_TZ);
+		AddCast(casts, LogicalType::DATE, LogicalType::TIMESTAMP_TZ);
 	}
 };
 
@@ -246,7 +251,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMPTZ to TIMESTAMP cast.");
 		}
-		if (input.context->config.disable_timestamptz_casts) {
+		if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
 			throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to TIMESTAMP without an explicit time zone "
 			                      "has been disabled  - use \"AT TIME ZONE ...\"");
 		}
@@ -262,7 +267,6 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 };
 
 struct ICULocalTimestampFunc : public ICUDateFunc {
-
 	struct BindDataNow : public BindData {
 		explicit BindDataNow(ClientContext &context) : BindData(context) {
 			now = MetaTransaction::Get(context).start_timestamp;
@@ -447,7 +451,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
 		                               Execute<ICUToTimeTZ, dtime_tz_t>, Bind));
 		for (auto &func : set.functions) {
-			BaseScalarFunction::SetReturnsError(func);
+			func.SetFallible();
 		}
 		loader.RegisterFunction(set);
 	}

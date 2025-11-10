@@ -28,4 +28,20 @@ unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {
 	throw NotImplementedException("GetAlterInfo not implemented for this type");
 }
 
+string CreateInfo::GetCreatePrefix(const string &entry) const {
+	string prefix = "CREATE";
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		prefix += " OR REPLACE";
+	}
+	if (temporary) {
+		prefix += " TEMP";
+	}
+	prefix += " " + entry + " ";
+
+	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		prefix += " IF NOT EXISTS ";
+	}
+	return prefix;
+}
+
 } // namespace duckdb

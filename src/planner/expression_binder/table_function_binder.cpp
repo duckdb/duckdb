@@ -6,8 +6,10 @@
 
 namespace duckdb {
 
-TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context, string table_function_name_p)
-    : ExpressionBinder(binder, context), table_function_name(std::move(table_function_name_p)) {
+TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context, string table_function_name_p,
+                                         string clause_p)
+    : ExpressionBinder(binder, context), table_function_name(std::move(table_function_name_p)),
+      clause(std::move(clause_p)) {
 }
 
 BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
@@ -18,18 +20,22 @@ BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, i
 
 BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
                                                     bool root_expression) {
-	// try binding as a lambda parameter
 	auto &col_ref = expr_ptr->Cast<ColumnRefExpression>();
 	if (!col_ref.IsQualified()) {
-		auto column_name = col_ref.GetName();
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name);
+		// Try binding as a lambda parameter.
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
-		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(column_name)) {
+
+		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
 			throw ParameterNotResolvedException();
 		}
+	} else if (col_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && binder.macro_binding &&
+	           binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
+		throw ParameterNotResolvedException();
 	}
+
 	auto query_location = col_ref.GetQueryLocation();
 	auto column_names = col_ref.column_names;
 	auto result_name = StringUtil::Join(column_names, ".");
@@ -67,18 +73,18 @@ BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> &exp
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnReference(expr_ptr, depth, root_expression);
 	case ExpressionClass::SUBQUERY:
-		throw BinderException("Table function cannot contain subqueries");
+		throw BinderException(clause + " cannot contain subqueries");
 	case ExpressionClass::DEFAULT:
-		return BindResult("Table function cannot contain DEFAULT clause");
+		return BindResult(clause + " cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult("Table function cannot contain window functions!");
+		return BindResult(clause + " cannot contain window functions!");
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
 }
 
 string TableFunctionBinder::UnsupportedAggregateMessage() {
-	return "Table function cannot contain aggregates!";
+	return clause + " cannot contain aggregates!";
 }
 
 } // namespace duckdb

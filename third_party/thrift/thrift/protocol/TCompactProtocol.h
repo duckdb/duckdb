@@ -156,8 +156,8 @@ protected:
                                   const int16_t fieldId,
                                   int8_t typeOverride);
   uint32_t writeCollectionBegin(const TType elemType, int32_t size);
-  uint32_t writeVarint32(uint32_t n);
-  uint32_t writeVarint64(uint64_t n);
+  uint32_t writeBignum32(uint32_t n);
+  uint32_t writeBignum64(uint64_t n);
   uint64_t i64ToZigzag(const int64_t l);
   uint32_t i32ToZigzag(const int32_t n);
   inline int8_t getCompactType(const TType ttype);
@@ -206,8 +206,8 @@ public:
   uint32_t readSetEnd() { return 0; }
 
 protected:
-  uint32_t readVarint32(int32_t& i32);
-  uint32_t readVarint64(int64_t& i64);
+  uint32_t readBignum32(int32_t& i32);
+  uint32_t readBignum64(int64_t& i64);
   int32_t zigzagToI32(uint32_t n);
   int64_t zigzagToI64(uint64_t n);
   TType getTType(int8_t type);

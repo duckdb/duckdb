@@ -168,5 +168,4 @@ SELECT list_transform([1, 2, 3], "x.y" -> "x.y" + x.y) AS l FROM (VALUES (42), (
 statement error
 SELECT list_reduce([1, 2, 3, 4], x *++++++++* y -> x - y) AS l;
 ----
-Invalid lambda parameters
-
+Binder Error: Invalid lambda parameters!

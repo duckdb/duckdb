@@ -103,7 +103,9 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	case ExpressionClass::STAR:
 		return BindResult(BinderException::Unsupported(expr_ref, "STAR expression is not supported here"));
 	default:
-		throw NotImplementedException("Unimplemented expression class");
+		return BindResult(
+		    NotImplementedException("Unimplemented expression class in ExpressionBinder::BindExpression: %s",
+		                            EnumUtil::ToString(expr_ref.GetExpressionClass())));
 	}
 }
 
