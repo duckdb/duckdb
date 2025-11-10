@@ -33,8 +33,14 @@ def extract_declarations(setting) -> str:
             definition += f"static bool OnLocalSet(ClientContext &context, const Value &input);\n"
         if setting.on_reset:
             definition += f"static bool OnLocalReset(ClientContext &context);\n"
+    if setting.scope is not None:
+        definition += f"    static Value GetSetting(const ClientContext &context);\n"
+    if setting.is_generic_setting:
+        definition += f"    static constexpr const char *DefaultValue = \"{setting.default_value}\";\n"
+        definition += f"    static constexpr SetScope DefaultScope = SetScope::{setting.default_scope};\n"
+        if setting.on_set:
+            definition += f"    static void OnSet(SettingCallbackInfo &info, Value &input);\n"
 
-    definition += f"    static Value GetSetting(const ClientContext &context);\n"
     definition += f"}};\n\n"
     return definition
 

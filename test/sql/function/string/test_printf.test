@@ -35,6 +35,12 @@ SELECT printf('%d', 33), printf('%d + %d = %d', 3, 5, 3 + 5)
 ----
 33	3 + 5 = 8
 
+# maximum of ubigint
+query I
+SELECT printf('%d', 18446744073709551615::UBIGINT);
+----
+18446744073709551615
+
 # integers with special formatting specifiers
 query TTT
 SELECT printf('%04d', 33), printf('%s %02d:%02d:%02d %s', 'time', 12, 3, 16, 'AM'), printf('%10d', 1992)
@@ -68,15 +74,30 @@ SELECT printf('%s', BLOB '\x01\xa0')
 
 # hugeint
 query T
-SELECT printf('%s', 120381902481294715712::HUGEINT)
+SELECT printf('%d', 120381902481294715712::HUGEINT)
 ----
 120381902481294715712
 
+query I
+SELECT printf('%d', '-170141183460469231731687303715884105728'::HUGEINT)
+----
+-170141183460469231731687303715884105728
+
+query I
+SELECT printf('%d', '170141183460469231731687303715884105727'::HUGEINT)
+----
+170141183460469231731687303715884105727
+
 # uhugeint
 query T
-SELECT printf('%s', 120381902481294715712::UHUGEINT)
+SELECT printf('%d', 120381902481294715712::UHUGEINT)
 ----
 120381902481294715712
+
+query I
+SELECT printf('%d', '340282366920938463463374607431768211455'::UHUGEINT)
+----
+340282366920938463463374607431768211455
 
 query I
 select printf('%x', 255::utinyint);
@@ -98,6 +119,11 @@ select printf('%x', 18446744073709551615::ubigint);
 ----
 ffffffffffffffff
 
+query I
+select printf('%x', '340282366920938463463374607431768211455'::uhugeint);
+----
+ffffffffffffffffffffffffffffffff
+
 # decimal
 query T
 SELECT printf('%.3f', '1.234'::DECIMAL)
@@ -109,6 +135,11 @@ query T
 SELECT printf('%d %x %o %#x %#o', 100, 100, 100, 100, 100)
 ----
 100 64 144 0x64 0144
+
+query I
+select printf('%b', '-170141183460469231731687303715884105728'::HUGEINT);
+----
+10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
 # ascii characters
 query T

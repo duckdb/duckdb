@@ -37,7 +37,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::VERIFY_VECTOR;
 
 public:
-	explicit PhysicalVerifyVector(PhysicalOperator &child, DebugVectorVerification verification);
+	PhysicalVerifyVector(PhysicalPlan &physical_plan, PhysicalOperator &child, DebugVectorVerification verification);
 
 	DebugVectorVerification verification;
 

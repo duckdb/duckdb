@@ -1,4 +1,5 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"

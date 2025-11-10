@@ -10,7 +10,9 @@
 
 namespace duckdb {
 
-static hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
+namespace {
+
+hugeint_t GetPreviousPowerOfTen(hugeint_t input) {
 	hugeint_t power_of_ten = 1;
 	while (power_of_ten < input) {
 		power_of_ten *= 10;
@@ -60,7 +62,7 @@ hugeint_t MakeNumberNice(hugeint_t input, hugeint_t step, NiceRounding rounding)
 	}
 }
 
-static double GetPreviousPowerOfTen(double input) {
+double GetPreviousPowerOfTen(double input) {
 	double power_of_ten = 1;
 	if (input < 1) {
 		while (power_of_ten > input) {
@@ -420,12 +422,12 @@ unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &
 		child_type = arguments[1]->return_type;
 		break;
 	}
-	bound_function.return_type = LogicalType::LIST(child_type);
+	bound_function.SetReturnType(LogicalType::LIST(child_type));
 	return nullptr;
 }
 
 template <class T, class OP>
-static void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	static constexpr int64_t MAX_BIN_COUNT = 1000000;
 	auto &min_arg = args.data[0];
 	auto &max_arg = args.data[1];
@@ -467,7 +469,7 @@ static void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector
 	VectorOperations::DefaultCast(intermediate_result, result, args.size());
 }
 
-static void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector &) {
+void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector &) {
 	throw BinderException(state.expr, "Unsupported type \"%s\" for equi_width_bins", args.data[0].GetType());
 }
 
@@ -476,9 +478,11 @@ void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const
 }
 
 unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, ScalarFunction &function) {
-	function.return_type = deserializer.Get<const LogicalType &>();
+	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }
+
+} // namespace
 
 ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	ScalarFunctionSet functions("equi_width_bins");
@@ -500,7 +504,7 @@ ScalarFunctionSet EquiWidthBinsFun::GetFunctions() {
 	for (auto &function : functions.functions) {
 		function.serialize = EquiWidthBinSerialize;
 		function.deserialize = EquiWidthBinDeserialize;
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 	}
 	return functions;
 }

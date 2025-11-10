@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct MD5Operator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
@@ -30,17 +32,19 @@ struct MD5Number128Operator {
 	}
 };
 
-static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
+void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
 	UnaryExecutor::ExecuteString<string_t, string_t, MD5Operator>(input, result, args.size());
 }
 
-static void MD5NumberFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void MD5NumberFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
 	UnaryExecutor::Execute<string_t, uhugeint_t, MD5Number128Operator>(input, result, args.size());
 }
+
+} // namespace
 
 ScalarFunctionSet MD5Fun::GetFunctions() {
 	ScalarFunctionSet set("md5");

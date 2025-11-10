@@ -77,6 +77,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		    Make<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), column_ids,
 		                                     op.estimated_cardinality, std::move(op.projected_input));
 		table_in_out.children.push_back(child);
+		auto &cast_table_in_out = table_in_out.Cast<PhysicalTableInOutFunction>();
+		cast_table_in_out.ordinality_idx = op.ordinality_idx;
 		return table_in_out;
 	}
 
@@ -103,7 +105,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		for (auto &entry : table_filters->filters) {
 			auto column_id = column_ids[entry.first].GetPrimaryIndex();
 			auto &type = op.returned_types[column_id];
-			if (!op.function.supports_pushdown_type(type)) {
+			if (!op.function.supports_pushdown_type(*op.bind_data, column_id)) {
 				idx_t column_id_filter = entry.first;
 				bool found_projection = false;
 				for (idx_t i = 0; i < projection_ids.size(); i++) {

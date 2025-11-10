@@ -6,11 +6,12 @@ name Big Range Query (ART)
 group art
 
 load
+SET index_scan_percentage = 1.0;
 CREATE TABLE integers AS SELECT i, i + 2 AS j FROM range(0, 100000000) t(i);
 CREATE INDEX i_index ON integers USING ART(i);
 
 run
-SELECT COUNT(j) FROM integers WHERE i >= 0 AND i < 15000200;
+SELECT COUNT(j) FROM integers WHERE i < 1500200;
 
 result I
-15000200
+1500200

@@ -6,52 +6,52 @@ require autocomplete
 
 # literal
 query II
-FROM sql_auto_complete('SELECT row_number() OVER (RANG') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANG') LIMIT 1;
 ----
 RANGE 	26
 
 query II
-FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWE') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWE') LIMIT 1;
 ----
 BETWEEN 	32
 
 query II
-FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN UNBOU') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN UNBOU') LIMIT 1;
 ----
 UNBOUNDED 	40
 
 query II
-FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN UNBOUNDED PREC') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN UNBOUNDED PREC') LIMIT 1;
 ----
 PRECEDING 	50
 
 query II
-FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN CURRENT ROW AND 5 PREC') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN CURRENT ROW AND 5 PREC') LIMIT 1;
 ----
 PRECEDING 	58
 
 query II
-FROM sql_auto_complete('SELECT row_number() OVER (PART') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (PART') LIMIT 1;
 ----
 PARTITION 	26
 
 query II
-FROM sql_auto_complete('SELECT lag(col1) OVER (PARTITION BY col1, col2 ORD') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT lag(col1) OVER (PARTITION BY col1, col2 ORD') LIMIT 1;
 ----
 ORDER 	47
 
 query II
-FROM sql_auto_complete('SELECT sum(42) OVER (PARTITION BY col1, col2 ORDER BY col3 ROW') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT sum(42) OVER (PARTITION BY col1, col2 ORDER BY col3 ROW') LIMIT 1;
 ----
 ROWS 	59
 
 # window clause
 query II
-FROM sql_auto_complete('SELECT lead(l_orderkey) OVER win FR') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT lead(l_orderkey) OVER win FR') LIMIT 1;
 ----
 FROM 	33
 
 query II
-FROM sql_auto_complete('SELECT lead(l_orderkey) OVER (win) FROM tbl WINDOW win AS (PART') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT lead(l_orderkey) OVER (win) FROM tbl WINDOW win AS (PART') LIMIT 1;
 ----
 PARTITION 	59

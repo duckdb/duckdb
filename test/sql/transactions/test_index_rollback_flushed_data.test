@@ -32,6 +32,7 @@ COMMIT;
 statement error con2
 COMMIT;
 ----
+PRIMARY KEY or UNIQUE constraint violation
 
 statement ok
 INSERT INTO integers SELECT i FROM range(2, 4097, 1) t1(i)

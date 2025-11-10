@@ -37,14 +37,24 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
 
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-else()
-  find_program(CCACHE_PROGRAM sccache)
-  if(CCACHE_PROGRAM)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
-  endif()
+if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C compiler launcher")
+        set(CMAKE_C_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
+endif()
+
+if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+    find_program(COMPILER_LAUNCHER NAMES ccache sccache)
+    if(COMPILER_LAUNCHER)
+        message(STATUS "Using ${COMPILER_LAUNCHER} as C++ compiler launcher")
+        set(CMAKE_CXX_COMPILER_LAUNCHER
+                "${COMPILER_LAUNCHER}"
+                CACHE STRING "" FORCE)
+    endif()
 endif()
 
 # Determine install paths
@@ -164,28 +174,8 @@ option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
 option(DISABLE_VPTR_SANITIZER "Disable vptr sanitizer; work-around for sanitizer false positive on Macbook M1" FALSE)
-option(
-  FORCE_SANITIZER
-  "Forces building with sanitizers even if the Python and R modules are enabled."
-  FALSE)
-if((BUILD_PYTHON)
-   AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
-   AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
-  if(FORCE_SANITIZER)
-    message(
-      WARNING
-        "FORCE_SANITIZER is set and the Python/R/Node builds are enabled. Sanitizers will be linked as a shared library (-shared-libasan). You may need to do LD_PRELOAD tricks to load packages built in this way."
-    )
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -shared-libasan")
-  else()
-    message(
-      WARNING
-        "Sanitizers are enabled but will not be built because the Python/R builds are enabled. Use FORCE_SANITIZER to force building of the sanitizers even when building these packages."
-    )
-    set(ENABLE_SANITIZER FALSE)
-    set(ENABLE_UBSAN FALSE)
-  endif()
-endif()
+option(STANDALONE_DEBUG "add clang compile option -fstandalone-debug" FALSE)
+
 if(${ENABLE_THREAD_SANITIZER})
   if(${ENABLE_SANITIZER})
     message(
@@ -257,9 +247,8 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - CMakeLists.txt
 # - scripts/amalgamation.py
 # - scripts/package_build.py
-# - tools/pythonpkg/setup.py
 ######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" FALSE)
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")
 endif()
@@ -272,7 +261,7 @@ if (ENABLE_EXTENSION_AUTOLOADING)
   add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
 endif()
 if (ENABLE_EXTENSION_AUTOINSTALL)
-  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=${ENABLE_EXTENSION_AUTOINSTALL})
+  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1)
 endif()
 
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)
@@ -376,6 +365,8 @@ if (NOT DEFINED GIT_COMMIT_HASH)
   string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g([a-f0-9]+)" "\\1" GIT_COMMIT_HASH "${GIT_DESCRIBE}")
 endif()
 
+set(DUCKDB_VERSION_NUMBER "${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
+
 string(LENGTH "${GIT_COMMIT_HASH}" LENGTH_GIT_COMMIT_HASH)
 if (NOT ${LENGTH_GIT_COMMIT_HASH} EQUAL 10)
    message(STATUS "GIT_COMMIT_HASH has length ${LENGTH_GIT_COMMIT_HASH} different than the expected 10")
@@ -428,8 +419,13 @@ option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         FALSE)
 
-if(WIN32 OR ZOS)
+if(ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
+endif()
+
+if(WIN32)
+  set(EXTENSION_STATIC_BUILD TRUE)
+  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
 endif()
 
 option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
@@ -437,8 +433,6 @@ option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
-option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
-option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
@@ -447,15 +441,15 @@ option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
-option(PREFETCH_ALL_PARQUET_FILES "Debug setting: always prefetch all Parquet files" FALSE)
 option(DISABLE_POINTER_SALT "Debug setting: verify correct results without pointer salt" FALSE)
+option(HASH_ZERO "Debug setting: verify hash collision resolution by setting all hashes to 0" FALSE)
 option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
 option(DEBUG_ALLOCATION "Debug setting: keep track of outstanding allocations to detect memory leaks" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
-option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle)" "none")
+option(VERIFY_VECTOR "Debug setting: verify vectors (options: dictionary_expression, dictionary_operator, constant_operator, sequence_operator, nested_shuffle, variant_vector)" "none")
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the unittest runner." TRUE)
 option(ENABLE_UNITTEST_CPP_TESTS "Build the C++ Unit Tests." TRUE)
@@ -463,14 +457,15 @@ option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead
 option(CUSTOM_LINKER "Use a custom linker program" "")
 option(CRASH_ON_ASSERT "Trigger a sigabort on an assert failing, instead of throwing an exception" FALSE)
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
+option(FORCE_DEBUG "Force adding a debug define, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
-option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
+option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -538,20 +533,16 @@ if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
 endif()
 
-if(PREFETCH_ALL_PARQUET_FILES)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_PREFETCH_ALL_PARQUET_FILES")
-endif()
-
 if(DISABLE_POINTER_SALT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DISABLE_POINTER_SALT")
 endif()
 
-if(LATEST_STORAGE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_LATEST_STORAGE")
+if(HASH_ZERO)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_HASH_ZERO")
 endif()
 
-if(BLOCK_VERIFICATION)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_BLOCK_VERIFICATION")
+if(LATEST_STORAGE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_LATEST_STORAGE")
 endif()
 
 if(DEBUG_ALLOCATION)
@@ -574,6 +565,17 @@ if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
 endif()
 
+if(FORCE_DEBUG)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG")
+endif()
+
+if(STANDALONE_DEBUG)
+  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+    message(FATAL_ERROR "Only clang compiler supports -fstandalone-debug")
+  endif()
+  add_compile_options(-fstandalone-debug)
+endif()
+
 function(is_number input_string return_var)
     if("${input_string}" MATCHES "^[0-9]+$")
         set(${return_var} TRUE PARENT_SCOPE)
@@ -583,7 +585,6 @@ function(is_number input_string return_var)
 endfunction()
 
 set(STANDARD_VECTOR_SIZE "" CACHE STRING "Set a custom STANDARD_VECTOR_SIZE at compile time")
-set(BLOCK_ALLOC_SIZE "" CACHE STRING "Set a custom BLOCK_ALLOC_SIZE at compile time")
 
 if(DEFINED STANDARD_VECTOR_SIZE AND NOT STANDARD_VECTOR_SIZE STREQUAL "")
     is_number(${STANDARD_VECTOR_SIZE} is_number_result)
@@ -592,16 +593,6 @@ if(DEFINED STANDARD_VECTOR_SIZE AND NOT STANDARD_VECTOR_SIZE STREQUAL "")
         message(STATUS "STANDARD_VECTOR_SIZE is set to ${STANDARD_VECTOR_SIZE}")
     else()
         message(FATAL_ERROR "STANDARD_VECTOR_SIZE must be a number, not ${STANDARD_VECTOR_SIZE}")
-    endif()
-endif()
-
-if(DEFINED BLOCK_ALLOC_SIZE AND NOT BLOCK_ALLOC_SIZE STREQUAL "")
-    is_number(${BLOCK_ALLOC_SIZE} is_number_result)
-    if(is_number_result)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_BLOCK_ALLOC_SIZE=${BLOCK_ALLOC_SIZE}")
-        message(STATUS "BLOCK_ALLOC_SIZE is set to ${BLOCK_ALLOC_SIZE}")
-    else()
-        message(FATAL_ERROR "BLOCK_ALLOC_SIZE must be a number, not ${BLOCK_ALLOC_SIZE}")
     endif()
 endif()
 
@@ -680,22 +671,24 @@ if(OS_NAME STREQUAL "windows")
   endif()
 endif()
 
-
 include_directories(src/include)
 include_directories(third_party/fsst)
 include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/fastpforlib)
 include_directories(third_party/skiplist)
+include_directories(third_party/ska_sort)
 include_directories(third_party/fast_float)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
 include_directories(third_party/utf8proc/include)
 include_directories(third_party/concurrentqueue)
 include_directories(third_party/pcg)
+include_directories(third_party/pdqsort)
 include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
 include_directories(third_party/jaro_winkler)
+include_directories(third_party/vergesort)
 include_directories(third_party/yyjson/include)
 include_directories(third_party/zstd/include)
 
@@ -785,9 +778,6 @@ function(add_extension_definitions)
     # Note: weird commas are for easy substring matching in c++
     add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE=\",${COMMA_SEPARATED_EXTENSIONS},\")
     add_definitions(-DDUCKDB_EXTENSIONS_BUILD_PATH="${CMAKE_BINARY_DIR}/extension")
-  endif()
-  if(NOT("${TEST_REMOTE_INSTALL}" STREQUAL "OFF"))
-    add_definitions(-DDUCKDB_TEST_REMOTE_INSTALL="${TEST_REMOTE_INSTALL}")
   endif()
 
   if(${DISABLE_BUILTIN_EXTENSIONS})
@@ -923,7 +913,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
       if (APPLE)
         set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
         # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
-        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_storage_ini*")
+        set(WHITELIST "-Wl,-exported_symbol,_${NAME}_duckdb_cpp_init")
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
       elseif (ZOS)
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
@@ -967,7 +957,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     set(TO_BE_LINKED ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS} )
     separate_arguments(TO_BE_LINKED)
     if (${ABI_TYPE} STREQUAL "CPP")
-      set(EXPORTED_FUNCTIONS "_${NAME}_init,_${NAME}_version")
+      set(EXPORTED_FUNCTIONS "_${NAME}_duckdb_cpp_init")
     elseif (${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
       set(EXPORTED_FUNCTIONS "_${NAME}_init_c_api")
     endif()
@@ -1102,17 +1092,25 @@ endfunction()
 # Downloads the external extension repo at the specified commit and calls register_extension
 macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES LINKED_LIBS SUBMODULES EXTENSION_VERSION)
   include(FetchContent)
-  if (${APPLY_PATCHES})
-    set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+
+  string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
+  if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
+    set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
+    message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\"")
+  else()
+    if (${APPLY_PATCHES})
+      set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+    endif()
+    FETCHCONTENT_DECLARE(
+            ${NAME}_extension_fc
+            GIT_REPOSITORY ${URL}
+            GIT_TAG ${COMMIT}
+            GIT_SUBMODULES "${SUBMODULES}"
+            PATCH_COMMAND ${PATCH_COMMAND}
+    )
+    FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
+    message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
   endif()
-  FETCHCONTENT_DECLARE(
-          ${NAME}_extension_fc
-          GIT_REPOSITORY ${URL}
-          GIT_TAG ${COMMIT}
-          GIT_SUBMODULES "${SUBMODULES}"
-          PATCH_COMMAND ${PATCH_COMMAND}
-  )
-  FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   # Autogenerate version tag if not provided
   if ("${EXTENSION_VERSION}" STREQUAL "")
@@ -1120,8 +1118,6 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
   else()
     set(EXTERNAL_EXTENSION_VERSION "${EXTENSION_VERSION}")
   endif()
-
-  message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
 
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${EXTERNAL_EXTENSION_VERSION}" PARENT_SCOPE)
@@ -1199,14 +1195,6 @@ function(duckdb_extension_load NAME)
   list (FIND DUCKDB_EXTENSION_NAMES ${EXTENSION_NAME_LOWERCASE} _index)
   if (${_index} GREATER -1)
     return()
-  endif()
-
-  # Running this function in whitelist mode will only build the extensions in the whitelist
-  if (${DUCKDB_EXTENSION_LOAD_WHITELIST_SET})
-    list (FIND DUCKDB_EXTENSION_LOAD_WHITELIST ${EXTENSION_NAME_LOWERCASE} _index)
-    if (${_index} EQUAL -1)
-      return()
-    endif()
   endif()
 
   list (FIND SKIP_EXTENSIONS ${EXTENSION_NAME_LOWERCASE} _index)
@@ -1292,21 +1280,29 @@ foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
   endif()
 endforeach()
 
+set(EXTENSION_CONFIG_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/extensions/")
+
+if(DEFINED CORE_EXTENSIONS)
+  message(DEPRECATION "CORE_EXTENSIONS is deprecated. Use BUILD_EXTENSIONS instead.")
+  if(NOT DEFINED BUILD_EXTENSIONS)
+    set(BUILD_EXTENSIONS ${CORE_EXTENSIONS})
+  else()
+    list(APPEND BUILD_EXTENSIONS ${CORE_EXTENSIONS})
+  endif()
+endif()
+
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
   if(NOT "${EXT}" STREQUAL "")
-    duckdb_extension_load(${EXT})
+    if (EXISTS "${EXTENSION_CONFIG_BASE_DIR}/${EXT}.cmake")
+      # out-of-tree extension: load cmake file
+      include("${EXTENSION_CONFIG_BASE_DIR}/${EXT}.cmake")
+    else()
+      # in-tree or non-existent extension: load it
+      duckdb_extension_load(${EXT})
+    endif()
   endif()
 endforeach()
-
-if (NOT "${CORE_EXTENSIONS}" STREQUAL "")
-    SET(DUCKDB_EXTENSION_LOAD_WHITELIST ${CORE_EXTENSIONS})
-    SET(DUCKDB_EXTENSION_LOAD_WHITELIST_SET 1)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/.github/config/out_of_tree_extensions.cmake)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/.github/config/in_tree_extensions.cmake)
-    SET(DUCKDB_EXTENSION_LOAD_WHITELIST "")
-    SET(DUCKDB_EXTENSION_LOAD_WHITELIST_SET 0)
-endif()
 
 # Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
 foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
@@ -1318,11 +1314,6 @@ endforeach()
 # Local extension config
 if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
-endif()
-
-# Load client specific config
-if(BUILD_PYTHON)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
 endif()
 
 # Load base extension config
@@ -1357,7 +1348,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
 
   # Warning for trying to load vcpkg extensions without having VCPKG_BUILD SET
   if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json" AND NOT DEFINED VCPKG_BUILD)
-    message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}vcpkg.json")
+    message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json")
   endif()
 
   if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
@@ -1446,57 +1437,6 @@ if(${EXTENSION_CONFIG_BUILD})
   return()
 endif()
 
-if(BUILD_PYTHON)
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
-  elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
-  elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    set(ALL_COMPILE_FLAGS
-            "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-  else()
-    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS}")
-  endif()
-
-  # Check for MSVC compiler and set the correct C++ standard flag
-  if(MSVC)
-    # MSVC does not support `-std=c++11` or `-std=c++14`, use `/std:c++14`
-    set(ALL_COMPILE_FLAGS "${ALL_COMPILE_FLAGS} /std:c++14")
-  else()
-    # For non-MSVC compilers, use the `-std=c++11`
-    set(ALL_COMPILE_FLAGS "${ALL_COMPILE_FLAGS} -std=c++11")
-  endif()
-
-  get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
-
-  set(PIP_COMMAND
-      cmake
-      -E
-      env
-      DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
-      DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
-      DUCKDB_LIBS="${duckdb_libs}"
-    )
-
-  if(PYTHON_EDITABLE_BUILD)
-    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install --editable .)
-  else()
-    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .)
-  endif()
-
-  if(USER_SPACE)
-    set(PIP_COMMAND ${PIP_COMMAND} --user)
-  endif()
-  add_custom_target(
-    duckdb_python ALL
-    COMMAND ${PIP_COMMAND}
-    DEPENDS duckdb duckdb_static
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-    COMMENT Build
-    Python package)
-  add_extension_dependencies(duckdb_python)
-endif()
-
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)
 
@@ -1509,7 +1449,7 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   add_custom_command(
           OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
           DEPENDS duckdb_platform_binary
-          COMMAND duckdb_platform_binary > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+	  COMMAND $<TARGET_FILE:duckdb_platform_binary> > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
 else()

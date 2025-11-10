@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
@@ -75,9 +75,9 @@ public:
 	                                                optional_ptr<ReplacementScanData> data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
-	static void RegisterSimpleCastFunctions(CastFunctionSet &casts);
-	static void RegisterJSONCreateCastFunctions(CastFunctionSet &casts);
-	static void RegisterJSONTransformCastFunctions(CastFunctionSet &casts);
+	static void RegisterSimpleCastFunctions(ExtensionLoader &loader);
+	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
+	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
 
 private:
 	// Scalar functions

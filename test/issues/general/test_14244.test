@@ -1,0 +1,44 @@
+# name: test/issues/general/test_14244.test
+# description: Issue 14244 - 'with recursive cte' within a function bleeds into subsequent 'with recursive cte'
+# group: [general]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create or replace function fun() as table (
+  with recursive cte(i) as (
+    select 0 AS i
+    union all
+    select 1234 AS i
+  )
+  select max(i) from cte
+);
+
+query II
+with recursive cte(i, j) as (
+    select 0 as i, 0 as j
+    union all
+    select i + 1 AS i, (from fun()) AS j
+    from cte
+    where i = 0
+)
+select * from cte
+ORDER BY all
+----
+0	0
+1	1234
+
+query II
+with recursive differentName(i, j) as (
+    select 0 as i, 0 as j
+    union all
+    select i + 1 AS i, (from fun()) AS j
+    from differentName
+    where i = 0
+)
+select * from differentName
+ORDER BY all
+----
+0	0
+1	1234

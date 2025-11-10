@@ -24,13 +24,14 @@
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/main/query_parameters.hpp"
 
 namespace duckdb {
+
 class Appender;
 class Catalog;
 class CatalogSearchPath;
@@ -56,8 +57,8 @@ class RegisteredStateManager;
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
 	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
-	//! Whether a stream result should be allowed
-	bool allow_stream_result = false;
+	//! Whether a stream/buffer-managed result should be allowed
+	QueryParameters query_parameters;
 };
 
 //! The ClientContext holds information relevant to the current client session
@@ -106,22 +107,24 @@ public:
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT
 	//! statement.
-	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, bool allow_stream_result);
-	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, bool allow_stream_result);
+	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, QueryParameters query_parameters);
+	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, QueryParameters query_parameters);
 
 	//! Issues a query to the database and returns a Pending Query Result. Note that "query" may only contain
 	//! a single statement.
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, bool allow_stream_result);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, QueryParameters query_parameters);
 	//! Issues a query to the database and returns a Pending Query Result
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-	                                                       bool allow_stream_result);
+	                                                       QueryParameters query_parameters);
 
 	//! Create a pending query with a list of parameters
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
 	                                                       case_insensitive_map_t<BoundParameterData> &values,
-	                                                       bool allow_stream_result);
-	DUCKDB_API unique_ptr<PendingQueryResult>
-	PendingQuery(const string &query, case_insensitive_map_t<BoundParameterData> &values, bool allow_stream_result);
+	                                                       QueryParameters query_parameters);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
+	                                                       case_insensitive_map_t<BoundParameterData> &values,
+	                                                       QueryParameters query_parameters);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, PendingQueryParameters parameters);
 
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
@@ -131,6 +134,9 @@ public:
 	                                                  const string &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	//! Execute a query with the given collection "attached" to the query using a CTE
+	DUCKDB_API void Append(ColumnDataCollection &collection, const string &query, const vector<string> &column_names,
+	                       const string &collection_name);
 	//! Appends a DataChunk and its default columns to the specified table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection,
 	                       optional_ptr<const vector<LogicalIndex>> column_ids = nullptr);
@@ -144,7 +150,7 @@ public:
 
 	//! Execute a relation
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const shared_ptr<Relation> &relation,
-	                                                       bool allow_stream_result);
+	                                                       QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
 	//! Prepare a query
@@ -162,9 +168,10 @@ public:
 	//! Execute a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
-	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	                                           case_insensitive_map_t<BoundParameterData> &values,
-	                                           bool allow_stream_result = true);
+	DUCKDB_API unique_ptr<QueryResult>
+	Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
+	        case_insensitive_map_t<BoundParameterData> &values,
+	        QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           const PendingQueryParameters &parameters);
 
@@ -190,7 +197,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -224,8 +231,7 @@ public:
 
 private:
 	//! Parse statements and resolve pragmas from a query
-	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
-	                     ErrorData &error);
+	vector<unique_ptr<SQLStatement>> ParseStatements(ClientContextLock &lock, const string &query);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);
@@ -236,7 +242,7 @@ private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
 	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                      optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr);
+	                      PendingQueryParameters parameters);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -250,22 +256,21 @@ private:
 	                                                        shared_ptr<PreparedStatementData> statement_p,
 	                                                        const PendingQueryParameters &parameters);
 	unique_ptr<PendingQueryResult> PendingPreparedStatementInternal(ClientContextLock &lock,
-	                                                                shared_ptr<PreparedStatementData> statement_p,
+	                                                                shared_ptr<PreparedStatementData> statement_data_p,
 	                                                                const PendingQueryParameters &parameters);
 	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                        optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr,
+	                        PendingQueryParameters parameters,
 	                        PreparedStatementMode mode = PreparedStatementMode::PREPARE_ONLY);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
-	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
-	                                             optional_ptr<case_insensitive_map_t<BoundParameterData>> params,
-	                                             bool verify = true);
+	                                             unique_ptr<SQLStatement> statement,
+	                                             const PendingQueryParameters &parameters, bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
@@ -290,7 +295,7 @@ private:
 	                                                            const PendingQueryParameters &parameters);
 
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
-	                                                    bool allow_stream_result);
+	                                                    QueryParameters query_parameters);
 
 	void RebindPreparedStatement(ClientContextLock &lock, const string &query,
 	                             shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters);
@@ -298,9 +303,11 @@ private:
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
 
-	shared_ptr<PreparedStatementData>
-	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
+	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
+	                                                                  unique_ptr<SQLStatement> statement,
+	                                                                  PendingQueryParameters parameters);
+
+	SettingLookupResult TryGetCurrentSettingInternal(const string &key, Value &result) const;
 
 private:
 	//! Lock on using the ClientContext in parallel
@@ -323,6 +330,29 @@ public:
 
 private:
 	lock_guard<mutex> client_guard;
+};
+
+//! The QueryContext wraps an optional client context.
+//! It makes query-related information available to operations.
+class QueryContext {
+public:
+	QueryContext() : context(nullptr) {
+	}
+	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
+	}
+	QueryContext(ClientContext &context) : context(&context) { // NOLINT: allow implicit construction
+	}
+
+public:
+	bool Valid() const {
+		return context != nullptr;
+	}
+	optional_ptr<ClientContext> GetClientContext() const {
+		return context;
+	}
+
+private:
+	optional_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

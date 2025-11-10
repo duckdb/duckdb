@@ -27,7 +27,7 @@ public:
 
 public:
 	explicit LogicalDependentJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                              vector<CorrelatedColumnInfo> correlated_columns, JoinType type,
+	                              CorrelatedColumns correlated_columns, JoinType type,
 	                              unique_ptr<Expression> condition);
 
 	explicit LogicalDependentJoin(JoinType type);
@@ -35,7 +35,7 @@ public:
 	//! The conditions of the join
 	unique_ptr<Expression> join_condition;
 	//! The list of columns that have correlations with the right
-	vector<CorrelatedColumnInfo> correlated_columns;
+	CorrelatedColumns correlated_columns;
 
 	SubqueryType subquery_type = SubqueryType::INVALID;
 	bool perform_delim = true;
@@ -51,7 +51,7 @@ public:
 
 public:
 	static unique_ptr<LogicalOperator> Create(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                                          vector<CorrelatedColumnInfo> correlated_columns, JoinType type,
+	                                          CorrelatedColumns correlated_columns, JoinType type,
 	                                          unique_ptr<Expression> condition);
 };
 } // namespace duckdb

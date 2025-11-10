@@ -17,12 +17,12 @@
 #endif
 
 /*
- * To improve readability of constant_time_internal.h, the inline
+ * To improve readability of constant_time_internal.h, the static inline
  * definitions are here, and constant_time_internal.h has only the declarations.
  *
  * This results in duplicate declarations of the form:
- *     inline void f();         // from constant_time_internal.h
- *     inline void f() { ... }  // from constant_time_impl.h
+ *     static inline void f();         // from constant_time_internal.h
+ *     static inline void f() { ... }  // from constant_time_impl.h
  * when constant_time_internal.h is included.
  *
  * This appears to behave as if the declaration-without-definition was not present
@@ -36,24 +36,9 @@
     #pragma GCC diagnostic ignored "-Wredundant-decls"
 #endif
 
-/* Disable asm under Memsan because it confuses Memsan and generates false errors.
- *
- * We also disable under Valgrind by default, because it's more useful
- * for Valgrind to test the plain C implementation. MBEDTLS_TEST_CONSTANT_FLOW_ASM //no-check-names
- * may be set to permit building asm under Valgrind.
- */
-#if defined(MBEDTLS_TEST_CONSTANT_FLOW_MEMSAN) || \
-    (defined(MBEDTLS_TEST_CONSTANT_FLOW_VALGRIND) && !defined(MBEDTLS_TEST_CONSTANT_FLOW_ASM)) //no-check-names
-#define MBEDTLS_CT_NO_ASM
-#elif defined(__has_feature)
-#if __has_feature(memory_sanitizer)
-#define MBEDTLS_CT_NO_ASM
-#endif
-#endif
-
 /* armcc5 --gnu defines __GNUC__ but doesn't support GNU's extended asm */
 #if defined(MBEDTLS_HAVE_ASM) && defined(__GNUC__) && (!defined(__ARMCC_VERSION) || \
-    __ARMCC_VERSION >= 6000000) && !defined(MBEDTLS_CT_NO_ASM)
+    __ARMCC_VERSION >= 6000000)
 #define MBEDTLS_CT_ASM
 #if (defined(__arm__) || defined(__thumb__) || defined(__thumb2__))
 #define MBEDTLS_CT_ARM_ASM
@@ -97,7 +82,7 @@ extern volatile mbedtls_ct_uint_t mbedtls_ct_zero;
  *                 there is no way for the compiler to ever know anything about
  *                 the value of an mbedtls_ct_condition_t.
  */
-inline mbedtls_ct_uint_t mbedtls_ct_compiler_opaque(mbedtls_ct_uint_t x)
+static inline mbedtls_ct_uint_t mbedtls_ct_compiler_opaque(mbedtls_ct_uint_t x)
 {
 #if defined(MBEDTLS_CT_ASM)
     asm volatile ("" : [x] "+r" (x) :);
@@ -132,7 +117,7 @@ inline mbedtls_ct_uint_t mbedtls_ct_compiler_opaque(mbedtls_ct_uint_t x)
 #endif
 
 /* Convert a number into a condition in constant time. */
-inline mbedtls_ct_condition_t mbedtls_ct_bool(mbedtls_ct_uint_t x)
+static inline mbedtls_ct_condition_t mbedtls_ct_bool(mbedtls_ct_uint_t x)
 {
     /*
      * Define mask-generation code that, as far as possible, will not use branches or conditional instructions.
@@ -217,7 +202,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool(mbedtls_ct_uint_t x)
 #endif
 }
 
-inline mbedtls_ct_uint_t mbedtls_ct_if(mbedtls_ct_condition_t condition,
+static inline mbedtls_ct_uint_t mbedtls_ct_if(mbedtls_ct_condition_t condition,
                                               mbedtls_ct_uint_t if1,
                                               mbedtls_ct_uint_t if0)
 {
@@ -283,7 +268,7 @@ inline mbedtls_ct_uint_t mbedtls_ct_if(mbedtls_ct_condition_t condition,
 #endif
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_uint_lt(mbedtls_ct_uint_t x, mbedtls_ct_uint_t y)
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_lt(mbedtls_ct_uint_t x, mbedtls_ct_uint_t y)
 {
 #if defined(MBEDTLS_CT_AARCH64_ASM) && (defined(MBEDTLS_CT_SIZE_32) || defined(MBEDTLS_CT_SIZE_64))
     uint64_t s1;
@@ -394,7 +379,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_uint_lt(mbedtls_ct_uint_t x, mbedtls_ct
 #endif
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_uint_ne(mbedtls_ct_uint_t x, mbedtls_ct_uint_t y)
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_ne(mbedtls_ct_uint_t x, mbedtls_ct_uint_t y)
 {
     /* diff = 0 if x == y, non-zero otherwise */
     const mbedtls_ct_uint_t diff = mbedtls_ct_compiler_opaque(x) ^ mbedtls_ct_compiler_opaque(y);
@@ -403,7 +388,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_uint_ne(mbedtls_ct_uint_t x, mbedtls_ct
     return mbedtls_ct_bool(diff);
 }
 
-inline unsigned char mbedtls_ct_uchar_in_range_if(unsigned char low,
+static inline unsigned char mbedtls_ct_uchar_in_range_if(unsigned char low,
                                                          unsigned char high,
                                                          unsigned char c,
                                                          unsigned char t)
@@ -423,21 +408,21 @@ inline unsigned char mbedtls_ct_uchar_in_range_if(unsigned char low,
  * Everything below here is trivial wrapper functions
  */
 
-inline size_t mbedtls_ct_size_if(mbedtls_ct_condition_t condition,
+static inline size_t mbedtls_ct_size_if(mbedtls_ct_condition_t condition,
                                         size_t if1,
                                         size_t if0)
 {
     return (size_t) mbedtls_ct_if(condition, (mbedtls_ct_uint_t) if1, (mbedtls_ct_uint_t) if0);
 }
 
-inline unsigned mbedtls_ct_uint_if(mbedtls_ct_condition_t condition,
+static inline unsigned mbedtls_ct_uint_if(mbedtls_ct_condition_t condition,
                                           unsigned if1,
                                           unsigned if0)
 {
     return (unsigned) mbedtls_ct_if(condition, (mbedtls_ct_uint_t) if1, (mbedtls_ct_uint_t) if0);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_bool_if(mbedtls_ct_condition_t condition,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_if(mbedtls_ct_condition_t condition,
                                                         mbedtls_ct_condition_t if1,
                                                         mbedtls_ct_condition_t if0)
 {
@@ -447,7 +432,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool_if(mbedtls_ct_condition_t conditio
 
 #if defined(MBEDTLS_BIGNUM_C)
 
-inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if(mbedtls_ct_condition_t condition,
+static inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if(mbedtls_ct_condition_t condition,
                                                       mbedtls_mpi_uint if1,
                                                       mbedtls_mpi_uint if0)
 {
@@ -458,17 +443,17 @@ inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if(mbedtls_ct_condition_t condition,
 
 #endif
 
-inline size_t mbedtls_ct_size_if_else_0(mbedtls_ct_condition_t condition, size_t if1)
+static inline size_t mbedtls_ct_size_if_else_0(mbedtls_ct_condition_t condition, size_t if1)
 {
     return (size_t) (condition & if1);
 }
 
-inline unsigned mbedtls_ct_uint_if_else_0(mbedtls_ct_condition_t condition, unsigned if1)
+static inline unsigned mbedtls_ct_uint_if_else_0(mbedtls_ct_condition_t condition, unsigned if1)
 {
     return (unsigned) (condition & if1);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_bool_if_else_0(mbedtls_ct_condition_t condition,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_if_else_0(mbedtls_ct_condition_t condition,
                                                                mbedtls_ct_condition_t if1)
 {
     return (mbedtls_ct_condition_t) (condition & if1);
@@ -476,7 +461,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool_if_else_0(mbedtls_ct_condition_t c
 
 #if defined(MBEDTLS_BIGNUM_C)
 
-inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if_else_0(mbedtls_ct_condition_t condition,
+static inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if_else_0(mbedtls_ct_condition_t condition,
                                                              mbedtls_mpi_uint if1)
 {
     return (mbedtls_mpi_uint) (condition & if1);
@@ -484,7 +469,7 @@ inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if_else_0(mbedtls_ct_condition_t con
 
 #endif /* MBEDTLS_BIGNUM_C */
 
-inline int mbedtls_ct_error_if(mbedtls_ct_condition_t condition, int if1, int if0)
+static inline int mbedtls_ct_error_if(mbedtls_ct_condition_t condition, int if1, int if0)
 {
     /* Coverting int -> uint -> int here is safe, because we require if1 and if0 to be
      * in the range -32767..0, and we require 32-bit int and uint types.
@@ -496,54 +481,54 @@ inline int mbedtls_ct_error_if(mbedtls_ct_condition_t condition, int if1, int if
                                  (mbedtls_ct_uint_t) (-if0)));
 }
 
-inline int mbedtls_ct_error_if_else_0(mbedtls_ct_condition_t condition, int if1)
+static inline int mbedtls_ct_error_if_else_0(mbedtls_ct_condition_t condition, int if1)
 {
     return -((int) (condition & (-if1)));
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_uint_eq(mbedtls_ct_uint_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_eq(mbedtls_ct_uint_t x,
                                                         mbedtls_ct_uint_t y)
 {
     return ~mbedtls_ct_uint_ne(x, y);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_uint_gt(mbedtls_ct_uint_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_gt(mbedtls_ct_uint_t x,
                                                         mbedtls_ct_uint_t y)
 {
     return mbedtls_ct_uint_lt(y, x);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_uint_ge(mbedtls_ct_uint_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_ge(mbedtls_ct_uint_t x,
                                                         mbedtls_ct_uint_t y)
 {
     return ~mbedtls_ct_uint_lt(x, y);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_uint_le(mbedtls_ct_uint_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_le(mbedtls_ct_uint_t x,
                                                         mbedtls_ct_uint_t y)
 {
     return ~mbedtls_ct_uint_gt(x, y);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_bool_ne(mbedtls_ct_condition_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_ne(mbedtls_ct_condition_t x,
                                                         mbedtls_ct_condition_t y)
 {
     return (mbedtls_ct_condition_t) (x ^ y);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_bool_and(mbedtls_ct_condition_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_and(mbedtls_ct_condition_t x,
                                                          mbedtls_ct_condition_t y)
 {
     return (mbedtls_ct_condition_t) (x & y);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_bool_or(mbedtls_ct_condition_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_or(mbedtls_ct_condition_t x,
                                                         mbedtls_ct_condition_t y)
 {
     return (mbedtls_ct_condition_t) (x | y);
 }
 
-inline mbedtls_ct_condition_t mbedtls_ct_bool_not(mbedtls_ct_condition_t x)
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_not(mbedtls_ct_condition_t x)
 {
     return (mbedtls_ct_condition_t) (~x);
 }

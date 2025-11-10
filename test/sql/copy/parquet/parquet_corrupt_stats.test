@@ -5,6 +5,6 @@
 require parquet
 
 query I
-FROM 'data/parquet-testing/out_of_range_stats.parquet'
+FROM '{DATA_DIR}/parquet-testing/out_of_range_stats.parquet'
 ----
 255

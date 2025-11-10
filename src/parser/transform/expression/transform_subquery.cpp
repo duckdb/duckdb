@@ -8,17 +8,14 @@
 
 namespace duckdb {
 
-void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
-	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		auto &col_names = col_ref.column_names;
-		if (col_names.size() > 1) {
-			col_names = vector<string> {col_names.back()};
-		}
-	} else {
-		ParsedExpressionIterator::EnumerateChildren(
-		    *expr, [](unique_ptr<ParsedExpression> &child) { RemoveOrderQualificationRecursive(child); });
-	}
+void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
+	    *root_expr, [&](ColumnRefExpression &col_ref) {
+		    auto &col_names = col_ref.column_names;
+		    if (col_names.size() > 1) {
+			    col_names = vector<string> {col_names.back()};
+		    }
+	    });
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink &root) {
@@ -27,7 +24,6 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	subquery_expr->subquery = TransformSelectStmt(*root.subselect);
 	SetQueryLocation(*subquery_expr, root.location);
 	D_ASSERT(subquery_expr->subquery);
-	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());
 
 	switch (root.subLinkType) {
 	case duckdb_libpgquery::PG_EXISTS_SUBLINK: {

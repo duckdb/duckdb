@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-HasCorrelatedExpressions::HasCorrelatedExpressions(const vector<CorrelatedColumnInfo> &correlated, bool lateral,
+HasCorrelatedExpressions::HasCorrelatedExpressions(const CorrelatedColumns &correlated, bool lateral,
                                                    idx_t lateral_depth)
     : has_correlated_expressions(false), lateral(lateral), correlated_columns(correlated),
       lateral_depth(lateral_depth) {

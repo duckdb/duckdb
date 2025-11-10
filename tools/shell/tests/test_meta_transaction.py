@@ -5,6 +5,7 @@ from conftest import ShellTest
 def test_temp_directory(shell):
     test = (
         ShellTest(shell)
+        .statement(".mode csv")
         .statement("CREATE SEQUENCE id_seq;")
         .statement("""
             CREATE TABLE my_table (

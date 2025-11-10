@@ -11,71 +11,71 @@ CREATE TABLE test2 AS SELECT 2 as id, 'value2' as value;
 
 # filenames could allow you to parse hive partitions manually using SQL
 query III
-select id, value, replace(filename, '\', '/') from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', FILENAME=1) order by id
+SELECT id, value, parse_path(filename)[-4:] from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', FILENAME=1) order by id
 ----
-1	value1	data/csv/hive-partitioning/simple/part=a/date=2012-01-01/test.csv
-2	value2	data/csv/hive-partitioning/simple/part=b/date=2013-01-01/test.csv
+1	value1	[simple, 'part=a', 'date=2012-01-01', test.csv]
+2	value2	[simple, 'part=b', 'date=2013-01-01', test.csv]
 
 # however this is just a lot nicer
 query IIII
-select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1) order by id
+select id, value, part, date from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1) order by id
 ----
 1	value1	a	2012-01-01
 2	value2	b	2013-01-01
 
 # As long as the names match, we don't really mind since everything is a string anyway
 query IIII
-select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1)  order by id
+select id, value, part, date from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1)  order by id
 ----
 1	value1	a	2012-01-01
 2	value2	b	2013-01-01
 
 # If the key names don't add up, we throw
 statement error
-select * from read_csv_auto('data/csv/hive-partitioning/mismatching_names/*/*/test.csv', HIVE_PARTITIONING=1)
+select * from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_names/*/*/test.csv', HIVE_PARTITIONING=1)
 ----
 Hive partition mismatch
 
 # If the key names don't add up, we throw
 statement error
-select * from read_csv_auto('data/csv/hive-partitioning/mismatching_count/*/*/test.csv', HIVE_PARTITIONING=1)
+select * from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/mismatching_count/*/*/test.csv', HIVE_PARTITIONING=1)
 ----
 Hive partition mismatch
 
 # Now we do a bunch of filtering on the partitions, to test the file skipping mechanism
 query IIII
-select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1) where part='a'
+select id, value, part, date from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1) where part='a'
 ----
 1	value1	a	2012-01-01
 
 query IIII
-select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1) where part='b'
+select id, value, part, date from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1) where part='b'
 ----
 2	value2	b	2013-01-01
 
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where part_cast > 0 and part_cast < 5000;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where part_cast > 0 and part_cast < 5000;
 ----
 1	value1	1000	2012-01-01
 
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where part_cast > 5000;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where part_cast > 5000;
 ----
 2	value2	9000	2013-01-01
 
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where date_cast > CAST('2000-01-01' as DATE) and date_cast < CAST('2012-12-12' as DATE);
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where date_cast > CAST('2000-01-01' as DATE) and date_cast < CAST('2012-12-12' as DATE);
 ----
 1	value1	1000	2012-01-01
 
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where date_cast > CAST('2000-01-01' as DATE) order by date_cast;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where date_cast > CAST('2000-01-01' as DATE) order by date_cast;
 ----
 1	value1	1000	2012-01-01
 2	value2	9000	2013-01-01
 
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where date_cast=CAST('2012-01-01' as DATE) OR part_cast=9000 ORDER BY date_cast;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where date_cast=CAST('2012-01-01' as DATE) OR part_cast=9000 ORDER BY date_cast;
 ----
 1	value1	1000	2012-01-01
 2	value2	9000	2013-01-01
@@ -84,68 +84,68 @@ select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cas
 
 # Filtering out 0/2 files
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == '2012-01-011000') OR (part_cast=9000) ORDER BY date_cast;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == '2012-01-011000') OR (part_cast=9000) ORDER BY date_cast;
 ----
 1	value1	1000	2012-01-01
 2	value2	9000	2013-01-01
 
 # There should not be any filter operation remaining since it can be handled completely during pushdown by pruning file list
 query II
-EXPLAIN select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == '2012-01-011000') OR (part_cast=9000) ORDER BY date_cast;
+EXPLAIN select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == '2012-01-011000') OR (part_cast=9000) ORDER BY date_cast;
 ----
 physical_plan	<!REGEX>:.*FILTER.*
 
 # Query filtering out first file
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=9000) ORDER BY date_cast;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=9000) ORDER BY date_cast;
 ----
 2	value2	9000	2013-01-01
 
 # Again, we should not have a filter operator here
 query II
-explain select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=9000) ORDER BY date_cast;
+explain select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=9000) ORDER BY date_cast;
 ----
 physical_plan	<!REGEX>:.*FILTER.*
 
 # Query filtering out second file
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == '2012-01-011000') OR (part_cast=1337) ORDER BY date_cast;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == '2012-01-011000') OR (part_cast=1337) ORDER BY date_cast;
 ----
 1	value1	1000	2012-01-01
 
 # Again, we should not have a filter operator here
 query II
-explain select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == '2012-01-011000') OR (part_cast=1337) ORDER BY date_cast;
+explain select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == '2012-01-011000') OR (part_cast=1337) ORDER BY date_cast;
 ----
 physical_plan	<!REGEX>:.*FILTER.*
 
 # Filtering out both files
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=1337) ORDER BY date_cast;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=1337) ORDER BY date_cast;
 ----
 
 # Again, we should not have a filter operator here
 query II
-EXPLAIN select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=1337) ORDER BY date_cast;
+EXPLAIN select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=1337) ORDER BY date_cast;
 ----
 physical_plan	<!REGEX>:.*FILTER.*
 
 # projection pushdown
 query I
-select value from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1)  order by 1
+select value from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1)  order by 1
 ----
 value1
 value2
 
 query I
-select part from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1)  order by 1
+select part from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1)  order by 1
 ----
 a
 b
 
 # project only some columns from a hive partition
 query I
-select date from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1)  order by 1
+select date from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1)  order by 1
 ----
 2012-01-01
 2013-01-01

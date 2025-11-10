@@ -217,6 +217,7 @@ public:
 
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);
+	DUCKDB_API static uint64_t CIHash(const char *str, idx_t size);
 
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
@@ -299,6 +300,15 @@ public:
 		}
 		return strcmp(s1, s2) == 0;
 	}
+	static bool Equals(const string &s1, const char *s2) {
+		return Equals(s1.c_str(), s2);
+	}
+	static bool Equals(const char *s1, const string &s2) {
+		return Equals(s1, s2.c_str());
+	}
+	static bool Equals(const string &s1, const string &s2) {
+		return s1 == s2;
+	}
 
 	//! JSON method that parses a { string: value } JSON blob
 	//! NOTE: this method is not efficient
@@ -317,6 +327,8 @@ public:
 	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
 	//! Transforms an complex JSON to a JSON string
 	DUCKDB_API static string ToComplexJSONMap(const ComplexJSON &complex_json);
+
+	DUCKDB_API static string ValidateJSON(const char *data, const idx_t &len);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);

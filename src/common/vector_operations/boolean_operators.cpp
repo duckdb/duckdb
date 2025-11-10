@@ -10,11 +10,12 @@
 
 namespace duckdb {
 
+namespace {
 //===--------------------------------------------------------------------===//
 // AND/OR
 //===--------------------------------------------------------------------===//
 template <class OP>
-static void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
+void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
 	D_ASSERT(left.GetType().id() == LogicalTypeId::BOOLEAN && right.GetType().id() == LogicalTypeId::BOOLEAN &&
 	         result.GetType().id() == LogicalTypeId::BOOLEAN);
 
@@ -105,10 +106,6 @@ struct TernaryAnd {
 	}
 };
 
-void VectorOperations::And(Vector &left, Vector &right, Vector &result, idx_t count) {
-	TemplatedBooleanNullmask<TernaryAnd>(left, right, result, count);
-}
-
 /*
 SQL OR Rules:
 
@@ -158,16 +155,22 @@ struct TernaryOr {
 	}
 };
 
-void VectorOperations::Or(Vector &left, Vector &right, Vector &result, idx_t count) {
-	TemplatedBooleanNullmask<TernaryOr>(left, right, result, count);
-}
-
 struct NotOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
 		return !left;
 	}
 };
+
+} // namespace
+
+void VectorOperations::And(Vector &left, Vector &right, Vector &result, idx_t count) {
+	TemplatedBooleanNullmask<TernaryAnd>(left, right, result, count);
+}
+
+void VectorOperations::Or(Vector &left, Vector &right, Vector &result, idx_t count) {
+	TemplatedBooleanNullmask<TernaryOr>(left, right, result, count);
+}
 
 void VectorOperations::Not(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(input.GetType() == LogicalType::BOOLEAN && result.GetType() == LogicalType::BOOLEAN);

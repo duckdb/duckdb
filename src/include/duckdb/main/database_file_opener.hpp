@@ -12,6 +12,7 @@
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 class DatabaseInstance;

@@ -388,6 +388,16 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			result.insert(FRAME_END);
 		}
 		break;
+	case ExpressionType::WINDOW_FILL:
+		result.insert(FRAME_BEGIN);
+		result.insert(FRAME_END);
+		if (wexpr.arg_orders.empty()) {
+			//	FILL uses the validity ranges to quickly eliminate indexes that can't be interpolated.
+			//	This only works for non-secondary orderings
+			result.insert(VALID_BEGIN);
+			result.insert(VALID_END);
+		}
+		break;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_NTH_VALUE:
@@ -610,7 +620,6 @@ void WindowBoundariesState::PartitionEnd(DataChunk &bounds, idx_t row_idx, const
 
 void WindowBoundariesState::PeerBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump,
                                       const ValidityMask &partition_mask, const ValidityMask &order_mask) {
-
 	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
 
 	//	OVER()
@@ -687,7 +696,7 @@ void WindowBoundariesState::ValidBegin(DataChunk &bounds, idx_t row_idx, const i
 			valid_start = partition_begin_data[chunk_idx];
 			const auto valid_end = partition_end_data[chunk_idx];
 
-			if ((valid_start < valid_end) && has_preceding_range) {
+			if (valid_start < valid_end) {
 				// Exclude any leading NULLs
 				if (range->CellIsNull(0, valid_start)) {
 					idx_t n = 1;
@@ -720,7 +729,7 @@ void WindowBoundariesState::ValidEnd(DataChunk &bounds, idx_t row_idx, const idx
 			const auto valid_start = valid_begin_data[chunk_idx];
 			valid_end = partition_end_data[chunk_idx];
 
-			if ((valid_start < valid_end) && has_following_range) {
+			if (valid_start < valid_end) {
 				// Exclude any trailing NULLs
 				if (range->CellIsNull(0, valid_end - 1)) {
 					idx_t n = 1;

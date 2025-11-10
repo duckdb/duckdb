@@ -10,11 +10,11 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "test_config.hpp"
 
 namespace duckdb {
 class SQLLogicTestRunner;
 
-enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
 enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN, RESULT_DONT_CARE };
 
 struct LoopDefinition {
@@ -90,6 +90,21 @@ public:
 	bool SupportsConcurrent() const override {
 		return true;
 	}
+};
+
+class ResetLabel : public Command {
+public:
+	ResetLabel(SQLLogicTestRunner &runner);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
+
+	bool SupportsConcurrent() const override {
+		return true;
+	}
+
+public:
+	string query_label;
 };
 
 class Query : public Command {

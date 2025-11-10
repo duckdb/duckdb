@@ -54,6 +54,7 @@ public:
 	//! Read data from the stream.
 	//! Throws if the read would exceed the capacity of the stream
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
+	void ReadData(QueryContext context, data_ptr_t buffer, idx_t read_size) override;
 
 	//! Rewind the stream to the start, keeping the capacity and the backing buffer intact
 	void Rewind();

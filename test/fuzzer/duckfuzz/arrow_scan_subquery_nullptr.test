@@ -6,3 +6,4 @@ statement error
 SELECT * FROM (SELECT * FROM arrow_scan(NULL, NULL, NULL));
 Binder Error: arrow_scan: pointers cannot be null
 ----
+Parser Error: syntax error at or near "Binder"

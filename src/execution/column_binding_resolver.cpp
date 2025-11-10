@@ -112,21 +112,22 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		//! We want to execute the normal path, but also add a dummy 'excluded' binding if there is a
 		// ON CONFLICT DO UPDATE clause
 		auto &insert_op = op.Cast<LogicalInsert>();
-		if (insert_op.action_type != OnConflictAction::THROW) {
+		if (insert_op.on_conflict_info.action_type != OnConflictAction::THROW) {
 			// Get the bindings from the children
 			VisitOperatorChildren(op);
 			auto column_count = insert_op.table.GetColumns().PhysicalColumnCount();
-			auto dummy_bindings = LogicalOperator::GenerateColumnBindings(insert_op.excluded_table_index, column_count);
+			auto dummy_bindings =
+			    LogicalOperator::GenerateColumnBindings(insert_op.on_conflict_info.excluded_table_index, column_count);
 			// Now insert our dummy bindings at the start of the bindings,
 			// so the first 'column_count' indices of the chunk are reserved for our 'excluded' columns
 			bindings.insert(bindings.begin(), dummy_bindings.begin(), dummy_bindings.end());
 			// TODO: fill types in too (clearing skips type checks)
 			types.clear();
-			if (insert_op.on_conflict_condition) {
-				VisitExpression(&insert_op.on_conflict_condition);
+			if (insert_op.on_conflict_info.on_conflict_condition) {
+				VisitExpression(&insert_op.on_conflict_info.on_conflict_condition);
 			}
-			if (insert_op.do_update_condition) {
-				VisitExpression(&insert_op.do_update_condition);
+			if (insert_op.on_conflict_info.do_update_condition) {
+				VisitExpression(&insert_op.on_conflict_info.do_update_condition);
 			}
 			VisitOperatorExpressions(op);
 			bindings = op.GetColumnBindings();

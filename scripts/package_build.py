@@ -30,11 +30,14 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
     includes += [os.path.join('third_party', 'miniz')]
     includes += [os.path.join('third_party', 'pcg')]
+    includes += [os.path.join('third_party', 'pdqsort')]
     includes += [os.path.join('third_party', 're2')]
+    includes += [os.path.join('third_party', 'ska_sort')]
     includes += [os.path.join('third_party', 'skiplist')]
     includes += [os.path.join('third_party', 'tdigest')]
     includes += [os.path.join('third_party', 'utf8proc')]
     includes += [os.path.join('third_party', 'utf8proc', 'include')]
+    includes += [os.path.join('third_party', 'vergesort')]
     includes += [os.path.join('third_party', 'yyjson', 'include')]
     includes += [os.path.join('third_party', 'zstd', 'include')]
     return includes
@@ -143,9 +146,8 @@ def get_relative_path(source_dir, target_file):
 # - CMakeLists.txt
 # - scripts/amalgamation.py
 # - scripts/package_build.py
-# - tools/pythonpkg/setup.py
 ######
-MAIN_BRANCH_VERSIONING = False
+MAIN_BRANCH_VERSIONING = True
 if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
     MAIN_BRANCH_VERSIONING = False
 if os.getenv('MAIN_BRANCH_VERSIONING') == "1":

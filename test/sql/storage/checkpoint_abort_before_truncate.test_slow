@@ -49,7 +49,10 @@ statement ok
 PRAGMA debug_checkpoint_abort='before_truncate';
 
 statement ok
-UPDATE integers SET i=i;
+UPDATE integers SET i=i+1;
+
+statement ok
+UPDATE integers SET i=i-1;
 
 statement error
 CHECKPOINT;

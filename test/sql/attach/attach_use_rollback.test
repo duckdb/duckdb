@@ -1,0 +1,20 @@
+# name: test/sql/attach/attach_use_rollback.test
+# description: Test rolling back of an attach leading to the default database not being attached
+# group: [attach]
+
+statement ok
+begin;
+
+statement ok
+attach ':memory:' as mem;
+
+statement ok
+use mem;
+
+statement ok
+rollback;
+
+statement error
+create table tbl(i int);
+----
+mem does not exist

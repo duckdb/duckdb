@@ -30,11 +30,13 @@ INSERT INTO tbl VALUES(5);
 statement error
 INSERT INTO tbl VALUES(2,3)
 ----
+<REGEX>:.*Binder Error: table tbl has 1 columns.*
 
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error
 ALTER TABLE tbl DROP COLUMN x;
 ----
+<REGEX>:.*Catalog Error.*column is a dependency.*
 
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_generated_columns' (FORMAT CSV);
@@ -55,13 +57,15 @@ SELECT * FROM tbl
 statement error
 INSERT INTO tbl VALUES(2,3)
 ----
+<REGEX>:.*Binder Error: table tbl has 1 columns.*
 
 statement error
 drop macro my_macro;
 ----
-Dependency Error: Cannot drop entry "my_macro" because there are entries that depend on it
+<REGEX>:.*Dependency Error.*Cannot drop entry.*
 
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error
 ALTER TABLE tbl DROP COLUMN x;
 ----
+<REGEX>:.*Catalog Error.*column is a dependency.*

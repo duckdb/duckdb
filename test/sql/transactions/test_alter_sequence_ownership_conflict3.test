@@ -2,8 +2,6 @@
 # description: Test DROP and OWNED BY transactionality | drop commits first
 # group: [transactions]
 
-require noforcestorage
-
 load __TEST_DIR__/alter_sequence_ownership3.db;
 
 statement ok

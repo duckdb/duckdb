@@ -266,7 +266,7 @@ SELECT *
       AS p
   ORDER BY EMPID;
 ----
-
+Parser Error: syntax error at or near ")"
 
 # star
 statement error
@@ -276,7 +276,7 @@ SELECT *
       AS p
   ORDER BY EMPID;
 ----
-must contain columns or lists of columns
+Parser Error: PIVOT IN list must contain columns or lists of columns
 
 query I
 FROM

@@ -30,15 +30,12 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
                                                                  CompressionType compression_type,
                                                                  BaseStatistics statistics,
                                                                  unique_ptr<ColumnSegmentState> segment_state) {
-
 	auto &config = DBConfig::GetConfig(db);
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 
-	if (block_id == INVALID_BLOCK) {
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
-	} else {
-		function = config.GetCompressionFunction(compression_type, type.InternalType());
+	function = config.GetCompressionFunction(compression_type, type.InternalType());
+	if (block_id != INVALID_BLOCK) {
 		block = block_manager.RegisterBlock(block_id);
 	}
 
@@ -50,7 +47,6 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
                                                                 const LogicalType &type, const idx_t start,
                                                                 const idx_t segment_size, BlockManager &block_manager) {
-
 	// Allocate a buffer for the uncompressed segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	D_ASSERT(&buffer_manager == &block_manager.buffer_manager);
@@ -72,7 +68,6 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
     : SegmentBase<ColumnSegment>(start, count), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
       segment_type(segment_type), stats(std::move(statistics)), block(std::move(block_p)), function(function_p),
       block_id(block_id_p), offset(offset), segment_size(segment_size_p) {
-
 	if (function.get().init_segment) {
 		segment_state = function.get().init_segment(*this, block_id, segment_state_p.get());
 	}
@@ -82,12 +77,10 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
-
     : SegmentBase<ColumnSegment>(start, other.count.load()), db(other.db), type(std::move(other.type)),
       type_size(other.type_size), segment_type(other.segment_type), stats(std::move(other.stats)),
       block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
       segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
-
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
 	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
 }
@@ -111,7 +104,7 @@ void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScan
 }
 
 void ColumnSegment::InitializeScan(ColumnScanState &state) {
-	state.scan_state = function.get().init_scan(*this);
+	state.scan_state = function.get().init_scan(state.context, *this);
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
@@ -223,35 +216,39 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 //===--------------------------------------------------------------------===//
 // Convert To Persistent
 //===--------------------------------------------------------------------===//
-void ColumnSegment::ConvertToPersistent(optional_ptr<BlockManager> block_manager, block_id_t block_id_p) {
+void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<BlockManager> block_manager,
+                                        const block_id_t block_id_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	segment_type = ColumnSegmentType::PERSISTENT;
-
 	block_id = block_id_p;
 	offset = 0;
 
-	if (block_id == INVALID_BLOCK) {
-		// constant block: no need to write anything to disk besides the stats
-		// set up the compression function to constant
-		D_ASSERT(stats.statistics.IsConstant());
-		auto &config = DBConfig::GetConfig(db);
-		function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
-		// reset the block buffer
-		block.reset();
-	} else {
+	if (block_id != INVALID_BLOCK) {
 		D_ASSERT(!stats.statistics.IsConstant());
-		// non-constant block: write the block to disk
-		// the data for the block already exists in-memory of our block
-		// instead of copying the data we alter some metadata so the buffer points to an on-disk block
-		block = block_manager->ConvertToPersistent(block_id, std::move(block));
+		// Non-constant block: write the block to disk.
+		// The block data already exists in memory, so we alter the metadata,
+		// which ensures that the buffer points to an on-disk block.
+		block = block_manager->ConvertToPersistent(context, block_id, std::move(block));
+		return;
 	}
+
+	// Constant block: no need to write anything to disk besides the stats (metadata).
+	// I.e., we do not need to write an actual block.
+	// Thus, we set the compression function to constant and reset the block buffer.
+	D_ASSERT(stats.statistics.IsConstant());
+	auto &config = DBConfig::GetConfig(db);
+	function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+	block.reset();
 }
 
 void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-	segment_type = ColumnSegmentType::PERSISTENT;
-
 	block_id = block_p->BlockId();
+	SetBlock(std::move(block_p), offset_p);
+}
+
+void ColumnSegment::SetBlock(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
+	segment_type = ColumnSegmentType::PERSISTENT;
 	offset = offset_p;
 	block = std::move(block_p);
 }

@@ -79,7 +79,7 @@ struct CSVReaderOptions {
 	vector<string> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
-	//! Types considered as candidates for auto-detection ordered by descending specificity (~ from high to low)
+	//! Types considered as candidates for auto-detection ordered by ascending specificity (~ from low to high)
 	vector<LogicalType> auto_type_candidates = {
 	    LogicalType::VARCHAR,      LogicalType::DOUBLE,    LogicalType::BIGINT,
 	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, LogicalType::DATE,
@@ -196,7 +196,7 @@ struct CSVReaderOptions {
 	//! Verify options are not conflicting
 	void Verify(MultiFileOptions &file_options);
 
-	string ToString(const string &current_file_path) const;
+	string ToString(const String &current_file_path) const;
 	//! If the type for column with idx i was manually set
 	bool WasTypeManuallySet(idx_t i) const;
 

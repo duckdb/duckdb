@@ -54,14 +54,17 @@ public:
 	static void DeprecatedFree(ART &art, Node &node);
 	//! Fills the row_ids vector with the row IDs of this linked list of leaves.
 	//! Never pushes more than max_count row IDs.
-	static bool DeprecatedGetRowIds(ART &art, const Node &node, unsafe_vector<row_t> &row_ids, const idx_t max_count);
+	static bool DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, const idx_t max_count);
 	//! Vacuums the linked list of leaves.
 	static void DeprecatedVacuum(ART &art, Node &node);
-	//! Returns the string representation of the linked list of leaves, if only_verify is true.
-	//! Else, it traverses and verifies the linked list of leaves.
-	static string DeprecatedVerifyAndToString(ART &art, const Node &node, const bool only_verify);
+
+	//! Traverses and verifies the linked list of leaves.
+	static void DeprecatedVerify(ART &art, const Node &node);
 	//! Count the number of leaves.
 	void DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
+
+	//! Return string representation of the linked list of leaves.
+	static string DeprecatedToString(ART &art, const Node &node);
 };
 
 } // namespace duckdb

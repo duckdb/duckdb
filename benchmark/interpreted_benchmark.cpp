@@ -49,6 +49,10 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(!res->HasError());
+		if (!instance.memory_limit.empty()) {
+			res = con.Query("PRAGMA memory_limit='" + instance.memory_limit + "'");
+			D_ASSERT(!res->HasError());
+		}
 	}
 
 	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig(const string &version = "") {
@@ -607,11 +611,12 @@ ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenc
 		return ScopedConfigSetting(
 		    config,
 		    [&benchmark](ClientConfig &config) {
-			    config.result_collector = [&benchmark](ClientContext &context, PreparedStatementData &data) {
+			    config.get_result_collector = [&benchmark](ClientContext &context,
+			                                               PreparedStatementData &data) -> PhysicalOperator & {
 				    return PhysicalArrowCollector::Create(context, data, benchmark.ArrowBatchSize());
 			    };
 		    },
-		    [](ClientConfig &config) { config.result_collector = nullptr; });
+		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
 	}
 	return ScopedConfigSetting(config);
 }

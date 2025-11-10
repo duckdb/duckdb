@@ -14,3 +14,4 @@ CREATE TABLE table2 (table1_id INTEGER);
 statement error
 INSERT INTO table2 WITH cte AS (INSERT INTO table1 SELECT 1, 2 RETURNING id) SELECT id FROM cte;
 ----
+<REGEX>:.*Parser Error.*A CTE needs a SELECT.*

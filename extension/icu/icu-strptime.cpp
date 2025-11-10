@@ -14,7 +14,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 
 namespace duckdb {
 
@@ -221,8 +221,9 @@ struct ICUStrptime : public ICUDateFunc {
 				if (!error.empty()) {
 					throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 				}
-				// If any format has UTC offsets, then we have to produce TSTZ
+				// If any format has UTC offsets or names, then we have to produce TSTZ
 				has_tz = has_tz || format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME);
+				has_tz = has_tz || format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET);
 				formats.emplace_back(format);
 			}
 			if (has_tz) {
@@ -237,9 +238,9 @@ struct ICUStrptime : public ICUDateFunc {
 		return bind_strptime(context, bound_function, arguments);
 	}
 
-	static void TailPatch(const string &name, DatabaseInstance &db, const vector<LogicalType> &types) {
+	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
 		// Find the old function
-		auto &scalar_function = ExtensionUtil::GetFunction(db, name);
+		auto &scalar_function = loader.GetFunction(name);
 		auto &functions = scalar_function.functions.functions;
 		optional_idx best_index;
 		for (idx_t i = 0; i < functions.size(); i++) {
@@ -257,12 +258,12 @@ struct ICUStrptime : public ICUDateFunc {
 		bound_function.bind = StrpTimeBindFunction;
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
+	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
-		TailPatch(name, db, types);
+		TailPatch(name, loader, types);
 
 		types[1] = LogicalType::LIST(LogicalType::VARCHAR);
-		TailPatch(name, db, types);
+		TailPatch(name, loader, types);
 	}
 
 	static bool VarcharToTimestampTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -270,14 +271,14 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr cal(info.calendar->clone());
 
-		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
+		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_tz_t>(
 		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
-			    timestamp_t result;
+			    timestamp_tz_t result;
 			    const auto str = input.GetData();
 			    const auto len = input.GetSize();
 			    string_t tz(nullptr, 0);
 			    bool has_offset = false;
-			    auto success = Timestamp::TryConvertTimestampTZ(str, len, result, has_offset, tz);
+			    auto success = Timestamp::TryConvertTimestampTZ(str, len, result, true, has_offset, tz);
 			    if (success != TimestampCastResult::SUCCESS) {
 				    string msg;
 				    if (success == TimestampCastResult::ERROR_RANGE) {
@@ -302,7 +303,7 @@ struct ICUStrptime : public ICUDateFunc {
 				    }
 
 				    // Now get the parts in the given time zone
-				    result = FromNaive(calendar, result);
+				    result = timestamp_tz_t(FromNaive(calendar, result));
 			    }
 
 			    return result;
@@ -362,12 +363,9 @@ struct ICUStrptime : public ICUDateFunc {
 		}
 	}
 
-	static void AddCasts(DatabaseInstance &db) {
-		auto &config = DBConfig::GetConfig(db);
-		auto &casts = config.GetCastFunctions();
-
-		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
-		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIME_TZ, BindCastFromVarchar);
+	static void AddCasts(ExtensionLoader &loader) {
+		loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
+		loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIME_TZ, BindCastFromVarchar);
 	}
 };
 
@@ -460,11 +458,11 @@ struct ICUStrftime : public ICUDateFunc {
 		}
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
+	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction, Bind));
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {
@@ -533,23 +531,20 @@ struct ICUStrftime : public ICUDateFunc {
 		return BoundCastInfo(CastToVarchar, std::move(cast_data));
 	}
 
-	static void AddCasts(DatabaseInstance &db) {
-		auto &config = DBConfig::GetConfig(db);
-		auto &casts = config.GetCastFunctions();
-
-		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR, BindCastToVarchar);
+	static void AddCasts(ExtensionLoader &loader) {
+		loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR, BindCastToVarchar);
 	}
 };
 
-void RegisterICUStrptimeFunctions(DatabaseInstance &db) {
-	ICUStrptime::AddBinaryTimestampFunction("strptime", db);
-	ICUStrptime::AddBinaryTimestampFunction("try_strptime", db);
+void RegisterICUStrptimeFunctions(ExtensionLoader &loader) {
+	ICUStrptime::AddBinaryTimestampFunction("strptime", loader);
+	ICUStrptime::AddBinaryTimestampFunction("try_strptime", loader);
 
-	ICUStrftime::AddBinaryTimestampFunction("strftime", db);
+	ICUStrftime::AddBinaryTimestampFunction("strftime", loader);
 
 	// Add string casts
-	ICUStrptime::AddCasts(db);
-	ICUStrftime::AddCasts(db);
+	ICUStrptime::AddCasts(loader);
+	ICUStrftime::AddCasts(loader);
 }
 
 } // namespace duckdb

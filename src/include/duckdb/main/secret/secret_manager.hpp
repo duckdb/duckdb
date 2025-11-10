@@ -20,6 +20,24 @@ class SecretManager;
 struct DBConfig;
 class SchemaCatalogEntry;
 
+//! A Secret Entry in the secret manager
+struct SecretEntry {
+public:
+	explicit SecretEntry(unique_ptr<const BaseSecret> secret) : secret(secret != nullptr ? secret->Clone() : nullptr) {
+	}
+	SecretEntry(const SecretEntry &other)
+	    : persist_type(other.persist_type), storage_mode(other.storage_mode),
+	      secret((other.secret != nullptr) ? other.secret->Clone() : nullptr) {
+	}
+
+	//! Whether the secret is persistent
+	SecretPersistType persist_type;
+	//! The storage backend of the secret
+	string storage_mode;
+	//! The secret pointer
+	unique_ptr<const BaseSecret> secret;
+};
+
 //! Return value of a Secret Lookup
 struct SecretMatch {
 public:
@@ -50,24 +68,6 @@ public:
 
 	unique_ptr<SecretEntry> secret_entry;
 	int64_t score;
-};
-
-//! A Secret Entry in the secret manager
-struct SecretEntry {
-public:
-	explicit SecretEntry(unique_ptr<const BaseSecret> secret) : secret(secret != nullptr ? secret->Clone() : nullptr) {
-	}
-	SecretEntry(const SecretEntry &other)
-	    : persist_type(other.persist_type), storage_mode(other.storage_mode),
-	      secret((other.secret != nullptr) ? other.secret->Clone() : nullptr) {
-	}
-
-	//! Whether the secret is persistent
-	SecretPersistType persist_type;
-	//! The storage backend of the secret
-	string storage_mode;
-	//! The secret pointer
-	unique_ptr<const BaseSecret> secret;
 };
 
 struct SecretManagerConfig {

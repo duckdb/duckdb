@@ -1,0 +1,57 @@
+# name: test/sql/topn/concurrent_topn_insert.test_slow
+# description: Concurrent TopN queries with row group reordering and inserts/deletes/checkpoints
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_topn_insert.duckdb'
+
+statement ok
+SET wal_autocheckpoint = '500 KiB';
+
+statement ok
+CREATE OR REPLACE TABLE integers AS SELECT i FROM range(0, 245000) t(i)
+
+concurrentloop threadid 0 20
+
+loop k 0 20
+
+# Test TopN with concurrent inserts
+onlyif threadid=0
+statement ok
+INSERT INTO integers SELECT * FROM range(245000 + ${k} * 100000, 345000 + ${k} * 100000);
+
+onlyif threadid>=1&&threadid<=10
+statement ok
+SELECT * FROM integers ORDER BY i ASC LIMIT 100;
+
+onlyif threadid>=11
+statement ok
+SELECT * FROM integers ORDER BY i DESC LIMIT 100;
+
+endloop
+
+endloop
+
+concurrentloop threadid 0 20
+
+loop k 0 20
+
+# Test TopN with concurrent deletes
+onlyif threadid=0
+statement ok
+DELETE FROM integers WHERE i BETWEEN (245000 + ${k} * 100000) AND (345000 + ${k} * 100000);
+
+onlyif threadid>=1&&threadid<=10
+statement ok
+SELECT * FROM integers ORDER BY i ASC LIMIT 100;
+
+onlyif threadid>=11
+statement ok
+SELECT * FROM integers ORDER BY i DESC LIMIT 100;
+
+endloop
+
+endloop

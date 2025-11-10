@@ -17,7 +17,6 @@ def add_all_settings_to_global_list():
     valid_entries = [
         'name',
         'description',
-        'return_type',
         'type',
         'scope',
         'internal_setting',
@@ -25,6 +24,8 @@ def add_all_settings_to_global_list():
         'custom_implementation',
         'struct',
         'aliases',
+        'default_scope',
+        'default_value',
     ]
 
     print(f"Parsing and sorting the settings data in {JSON_PATH}")
@@ -40,14 +41,15 @@ def add_all_settings_to_global_list():
         setting = Setting(
             name=entry['name'],
             description=entry['description'],
-            return_type=entry.get('return_type', ''),
             sql_type=entry['type'],
             internal_setting=entry.get('internal_setting', entry['name']),
-            scope=entry['scope'],
+            scope=entry.get('scope', None),
             struct_name=entry.get('struct', ''),
             on_callbacks=entry.get('on_callbacks', []),
             custom_implementation=entry.get('custom_implementation', False),
             aliases=entry.get('aliases', []),
+            default_scope=entry.get('default_scope', None),
+            default_value=entry.get('default_value', None),
         )
         SettingsList.append(setting)
 

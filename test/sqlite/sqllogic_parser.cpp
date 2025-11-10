@@ -159,6 +159,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_HALT:
 	case SQLLogicTokenType::SQLLOGIC_MODE:
 	case SQLLogicTokenType::SQLLOGIC_SET:
+	case SQLLogicTokenType::SQLLOGIC_RESET:
 	case SQLLogicTokenType::SQLLOGIC_LOOP:
 	case SQLLogicTokenType::SQLLOGIC_FOREACH:
 	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP:
@@ -166,11 +167,13 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV:
+	case SQLLogicTokenType::SQLLOGIC_TEST_ENV:
 	case SQLLogicTokenType::SQLLOGIC_LOAD:
 	case SQLLogicTokenType::SQLLOGIC_RESTART:
 	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
 	case SQLLogicTokenType::SQLLOGIC_SLEEP:
 	case SQLLogicTokenType::SQLLOGIC_UNZIP:
+	case SQLLogicTokenType::SQLLOGIC_TAGS:
 		return true;
 
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
@@ -178,6 +181,42 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_INVALID:
 	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
 	case SQLLogicTokenType::SQLLOGIC_QUERY:
+		return false;
+
+	default:
+		throw std::runtime_error("Unknown SQLLogic token found!");
+	}
+}
+
+// (All) Context statements must precede all non-header statements
+bool SQLLogicParser::IsTestCommand(SQLLogicTokenType &type) {
+	switch (type) {
+	case SQLLogicTokenType::SQLLOGIC_QUERY:
+	case SQLLogicTokenType::SQLLOGIC_STATEMENT:
+		return true;
+
+	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_FOREACH:
+	case SQLLogicTokenType::SQLLOGIC_CONCURRENT_LOOP:
+	case SQLLogicTokenType::SQLLOGIC_ENDLOOP:
+	case SQLLogicTokenType::SQLLOGIC_FOREACH:
+	case SQLLogicTokenType::SQLLOGIC_HALT:
+	case SQLLogicTokenType::SQLLOGIC_HASH_THRESHOLD:
+	case SQLLogicTokenType::SQLLOGIC_INVALID:
+	case SQLLogicTokenType::SQLLOGIC_LOAD:
+	case SQLLogicTokenType::SQLLOGIC_LOOP:
+	case SQLLogicTokenType::SQLLOGIC_MODE:
+	case SQLLogicTokenType::SQLLOGIC_ONLY_IF:
+	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
+	case SQLLogicTokenType::SQLLOGIC_REQUIRE:
+	case SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV:
+	case SQLLogicTokenType::SQLLOGIC_RESET:
+	case SQLLogicTokenType::SQLLOGIC_RESTART:
+	case SQLLogicTokenType::SQLLOGIC_SET:
+	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
+	case SQLLogicTokenType::SQLLOGIC_SLEEP:
+	case SQLLogicTokenType::SQLLOGIC_TAGS:
+	case SQLLogicTokenType::SQLLOGIC_TEST_ENV:
+	case SQLLogicTokenType::SQLLOGIC_UNZIP:
 		return false;
 
 	default:
@@ -202,6 +241,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_MODE;
 	} else if (token == "set") {
 		return SQLLogicTokenType::SQLLOGIC_SET;
+	} else if (token == "reset") {
+		return SQLLogicTokenType::SQLLOGIC_RESET;
 	} else if (token == "loop") {
 		return SQLLogicTokenType::SQLLOGIC_LOOP;
 	} else if (token == "concurrentloop") {
@@ -216,6 +257,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_REQUIRE;
 	} else if (token == "require-env") {
 		return SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV;
+	} else if (token == "test-env") {
+		return SQLLogicTokenType::SQLLOGIC_TEST_ENV;
 	} else if (token == "load") {
 		return SQLLogicTokenType::SQLLOGIC_LOAD;
 	} else if (token == "restart") {
@@ -226,6 +269,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_SLEEP;
 	} else if (token == "unzip") {
 		return SQLLogicTokenType::SQLLOGIC_UNZIP;
+	} else if (token == "tags") {
+		return SQLLogicTokenType::SQLLOGIC_TAGS;
 	}
 	Fail("Unrecognized parameter %s", token);
 	return SQLLogicTokenType::SQLLOGIC_INVALID;

@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ConstantOrNullBindData : public FunctionData {
 	explicit ConstantOrNullBindData(Value val) : value(std::move(val)) {
 	}
@@ -69,6 +71,22 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
+unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFunction &bound_function,
+                                            vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	if (!arguments[0]->IsFoldable()) {
+		throw BinderException("ConstantOrNull requires a constant input");
+	}
+	D_ASSERT(arguments.size() >= 2);
+	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
+	bound_function.SetReturnType(arguments[0]->return_type);
+	return make_uniq<ConstantOrNullBindData>(std::move(value));
+}
+
+} // namespace
+
 unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
@@ -81,20 +99,6 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value
 	auto &bind_data = expr.bind_info->Cast<ConstantOrNullBindData>();
 	D_ASSERT(bind_data.value.type() == val.type());
 	return bind_data.value == val;
-}
-
-unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[0]->IsFoldable()) {
-		throw BinderException("ConstantOrNull requires a constant input");
-	}
-	D_ASSERT(arguments.size() >= 2);
-	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	bound_function.return_type = arguments[0]->return_type;
-	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
 ScalarFunction ConstantOrNullFun::GetFunction() {

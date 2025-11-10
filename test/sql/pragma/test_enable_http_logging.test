@@ -2,15 +2,15 @@
 # description: Test PRAGMA enable_http_logging parsing
 # group: [pragma]
 
+# select the location of where to save the http logging output (instead of printing to stdout)
+statement error
+SET http_logging_output='__TEST_DIR__/httplog.txt'
+----
+Not implemented Error: This setting is deprecated and can no longer be used. Check out the DuckDB docs on logging for more information
+
 # disable/enable
 statement ok
 SET enable_http_logging=false
 
 statement ok
 SET enable_http_logging=true
-
-# select the location of where to save the http logging output (instead of printing to stdout)
-statement error
-SET http_logging_output='__TEST_DIR__/httplog.txt'
-----
-Not implemented Error: This setting is deprecated and can no longer be used. Check out the DuckDB docs on logging for more information

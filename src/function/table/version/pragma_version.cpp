@@ -73,6 +73,12 @@ const char *DuckDB::ReleaseCodename() {
 	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.3.")) {
 		return "Ossivalis";
 	}
+	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.4.")) {
+		return "Andium";
+	}
+	if (StringUtil::StartsWith(DUCKDB_VERSION, "v1.5.")) {
+		return "Variegata";
+	}
 	// add new version names here
 
 	// we should not get here, but let's not fail because of it because tags on forks can be whatever

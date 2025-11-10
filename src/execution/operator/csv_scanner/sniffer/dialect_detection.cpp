@@ -146,7 +146,6 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	for (const auto &comment : dialect_candidates.comment_candidates) {
 		for (const auto quote_escape_candidate : dialect_candidates.quote_escape_candidates) {
 			for (const auto &delimiter : dialect_candidates.delim_candidates) {
-
 				D_ASSERT(buffer_manager);
 				CSVStateMachineOptions state_machine_options(
 				    delimiter, quote_escape_candidate.quote, quote_escape_candidate.escape, comment, new_line_id,
@@ -394,6 +393,18 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				if (stats.best_consistent_rows == consistent_rows && num_cols >= max_columns_found) {
 					// If both have not been escaped, this might get solved later on.
 					sniffing_state_machine.dialect_options.num_cols = num_cols;
+					if (options.dialect_options.skip_rows.IsSetByUser()) {
+						// If skip rows are set by the user, and we found dirty notes, we only accept it if either
+						// null_padding or ignore_errors is set
+						if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
+							return;
+						}
+						sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+					} else if (!options.null_padding) {
+						sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
+					}
+					sniffing_state_machine.dialect_options.num_cols = num_cols;
+					lines_sniffed = sniffed_column_counts.result_position;
 					successful_candidates.emplace_back(std::move(scanner));
 					max_columns_found = num_cols;
 					return;
@@ -495,7 +506,7 @@ void CSVSniffer::RefineCandidates() {
 		return;
 	}
 	if (candidates.size() == 1 || candidates[0]->FinishedFile()) {
-		// Only one candidate nothing to refine or all candidates already checked
+		// Only one candidate nothing to refine, or all candidates already checked
 		return;
 	}
 
@@ -612,7 +623,8 @@ void CSVSniffer::DetectDialect() {
 		if (all_fail_max_line_size) {
 			error = line_error;
 		} else {
-			error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found_error, set_columns);
+			error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found_error, set_columns,
+			                                false);
 		}
 		error_handler->Error(error, true);
 	}

@@ -166,8 +166,11 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	vector<LogicalType> scanned_types;
 	vector<ColumnIndex> column_indexes;
 	optional_ptr<TableFilterSet> filters;
+	atomic<bool> finished {false};
 
 	unique_ptr<GlobalTableFunctionState> global_state;
+
+	optional_ptr<const PhysicalOperator> op;
 
 	idx_t MaxThreads() const override {
 		return max_threads;

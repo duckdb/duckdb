@@ -6,6 +6,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -14,6 +15,12 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
+
+PhysicalOperator::PhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
+                                   idx_t estimated_cardinality)
+    : children(physical_plan.ArenaRef()), type(type), types(std::move(types)),
+      estimated_cardinality(estimated_cardinality) {
+}
 
 string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
@@ -202,50 +209,53 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	op_state.reset();
 
 	auto &state = meta_pipeline.GetState();
-	if (IsSink()) {
-		// operator is a sink, build a pipeline
-		sink_state.reset();
-		D_ASSERT(children.size() == 1);
+	if (!IsSink() && children.empty()) {
+		// Operator is a source.
+		state.SetPipelineSource(current, *this);
+		return;
+	}
 
-		// single operator: the operator becomes the data source of the current pipeline
+	if (children.size() != 1) {
+		throw InternalException("Operator not supported in BuildPipelines");
+	}
+
+	if (IsSink()) {
+		// Operator is a sink.
+		sink_state.reset();
+
+		// It becomes the data source of the current pipeline.
 		state.SetPipelineSource(current, *this);
 
-		// we create a new pipeline starting from the child
+		// Create a new pipeline starting at the child.
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-		child_meta_pipeline.Build(children[0]);
-	} else {
-		// operator is not a sink! recurse in children
-		if (children.empty()) {
-			// source
-			state.SetPipelineSource(current, *this);
-		} else {
-			if (children.size() != 1) {
-				throw InternalException("Operator not supported in BuildPipelines");
-			}
-			state.AddPipelineOperator(current, *this);
-			children[0].get().BuildPipelines(current, meta_pipeline);
-		}
+		child_meta_pipeline.Build(children[0].get());
+		return;
 	}
+
+	// Recurse into the child.
+	state.AddPipelineOperator(current, *this);
+	children[0].get().BuildPipelines(current, meta_pipeline);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
 	vector<const_reference<PhysicalOperator>> result;
-	if (IsSink()) {
-		D_ASSERT(children.size() == 1);
+	if (!IsSink() && children.empty()) {
+		// Operator is a source.
 		result.push_back(*this);
 		return result;
-	} else {
-		if (children.empty()) {
-			// source
-			result.push_back(*this);
-			return result;
-		} else {
-			if (children.size() != 1) {
-				throw InternalException("Operator not supported in GetSource");
-			}
-			return children[0].get().GetSources();
-		}
 	}
+
+	if (children.size() != 1) {
+		throw InternalException("Operator not supported in GetSource");
+	}
+
+	if (IsSink()) {
+		result.push_back(*this);
+		return result;
+	}
+
+	// Recurse into the child.
+	return children[0].get().GetSources();
 }
 
 bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
@@ -288,10 +298,9 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	}
 }
 
-CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types_p,
-                                                 idx_t estimated_cardinality)
-    : PhysicalOperator(type, std::move(types_p), estimated_cardinality) {
-
+CachingPhysicalOperator::CachingPhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type,
+                                                 vector<LogicalType> types_p, idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, type, std::move(types_p), estimated_cardinality) {
 	caching_supported = true;
 	for (auto &col_type : types) {
 		if (!CanCacheType(col_type)) {

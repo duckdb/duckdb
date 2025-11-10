@@ -29,12 +29,16 @@ timestamp_ns_t ParquetTimestampUsToTimestampNs(const int64_t &raw_us);
 timestamp_ns_t ParquetTimestampNsToTimestampNs(const int64_t &raw_ns);
 
 date_t ParquetIntToDate(const int32_t &raw_date);
-dtime_t ParquetIntToTimeMs(const int32_t &raw_time);
-dtime_t ParquetIntToTime(const int64_t &raw_time);
-dtime_t ParquetIntToTimeNs(const int64_t &raw_time);
+dtime_t ParquetMsIntToTime(const int32_t &raw_millis);
+dtime_t ParquetIntToTime(const int64_t &raw_micros);
+dtime_t ParquetNsIntToTime(const int64_t &raw_nanos);
 
-dtime_tz_t ParquetIntToTimeMsTZ(const int32_t &raw_time);
-dtime_tz_t ParquetIntToTimeTZ(const int64_t &raw_time);
-dtime_tz_t ParquetIntToTimeNsTZ(const int64_t &raw_time);
+dtime_ns_t ParquetMsIntToTimeNs(const int32_t &raw_millis);
+dtime_ns_t ParquetUsIntToTimeNs(const int64_t &raw_micros);
+dtime_ns_t ParquetIntToTimeNs(const int64_t &raw_nanos);
+
+dtime_tz_t ParquetIntToTimeMsTZ(const int32_t &raw_millis);
+dtime_tz_t ParquetIntToTimeTZ(const int64_t &raw_micros);
+dtime_tz_t ParquetIntToTimeNsTZ(const int64_t &raw_nanos);
 
 } // namespace duckdb

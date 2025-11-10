@@ -138,13 +138,18 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 #endif
 
 	// Finally, we check the list of currently loaded extensions
-	auto &extensions = db.GetExtensions();
-	for (auto &e : extensions) {
-		if (!e.second.is_loaded) {
+	auto &manager = ExtensionManager::Get(db);
+	auto extensions = manager.GetExtensions();
+	for (auto &ext_name : extensions) {
+		auto ext_info = manager.GetExtensionInfo(ext_name);
+		if (!ext_info) {
 			continue;
 		}
-		auto &ext_name = e.first;
-		auto &ext_data = e.second;
+		lock_guard<mutex> guard(ext_info->lock);
+		if (!ext_info->is_loaded) {
+			continue;
+		}
+		auto &ext_data = *ext_info;
 		if (auto &ext_install_info = ext_data.install_info) {
 			auto entry = installed_extensions.find(ext_name);
 			if (entry == installed_extensions.end() || !entry->second.installed) {

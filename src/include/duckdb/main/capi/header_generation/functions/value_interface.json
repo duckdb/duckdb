@@ -1,6 +1,7 @@
 {
     "group": "value_interface",
     "deprecated": false,
+    "description": "Functions to create a `duckdb_value` for each of DuckDB's supported data types, and to access the contents of a `duckdb_value`. The `duckdb_value` wrapper allows handling of primitive and arbitrarily (nested) types through the same interface.",
     "entries": [
         {
             "name": "duckdb_destroy_value",
@@ -245,18 +246,18 @@
             }
         },
         {
-            "name": "duckdb_create_varint",
+            "name": "duckdb_create_bignum",
             "return_type": "duckdb_value",
             "params": [
                 {
-                    "type": "duckdb_varint",
+                    "type": "duckdb_bignum",
                     "name": "input"
                 }
             ],
             "comment": {
-                "description": "Creates a VARINT value from a duckdb_varint\n\n",
+                "description": "Creates a BIGNUM value from a duckdb_bignum\n\n",
                 "param_comments": {
-                    "input": "The duckdb_varint value"
+                    "input": "The duckdb_bignum value"
                 },
                 "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
             }
@@ -340,6 +341,23 @@
             ],
             "comment": {
                 "description": "Creates a value from a time\n\n",
+                "param_comments": {
+                    "input": "The time value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_time_ns",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_time_ns",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a time_ns\n\n",
                 "param_comments": {
                     "input": "The time value"
                 },
@@ -709,8 +727,8 @@
             }
         },
         {
-            "name": "duckdb_get_varint",
-            "return_type": "duckdb_varint",
+            "name": "duckdb_get_bignum",
+            "return_type": "duckdb_bignum",
             "params": [
                 {
                     "type": "duckdb_value",
@@ -718,11 +736,11 @@
                 }
             ],
             "comment": {
-                "description": "Returns the duckdb_varint value of the given value.\nThe `data` field must be destroyed with `duckdb_free`.\n\n",
+                "description": "Returns the duckdb_bignum value of the given value.\nThe `data` field must be destroyed with `duckdb_free`.\n\n",
                 "param_comments": {
-                    "val": "A duckdb_value containing a VARINT"
+                    "val": "A duckdb_value containing a BIGNUM"
                 },
-                "return_value": "A duckdb_varint. The `data` field must be destroyed with `duckdb_free`."
+                "return_value": "A duckdb_bignum. The `data` field must be destroyed with `duckdb_free`."
             }
         },
         {
@@ -808,6 +826,23 @@
                     "val": "A duckdb_value containing a time"
                 },
                 "return_value": "A duckdb_time, or MinValue<time> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_time_ns",
+            "return_type": "duckdb_time_ns",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the time_ns value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a time_ns"
+                },
+                "return_value": "A duckdb_time_ns, or MinValue<time_ns> if the value cannot be converted"
             }
         },
         {
@@ -1144,7 +1179,7 @@
                 "param_comments": {
                     "union_type": "The union type",
                     "tag_index": "The index of the tag of the union",
-                    "value": "The value of the union"
+                    "value": "The value of the union for that tag"
                 },
                 "return_value": "The union value, or nullptr, if the parameters are invalid."
             }

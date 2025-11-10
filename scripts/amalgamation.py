@@ -39,7 +39,7 @@ main_header_files = [
     os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'memory_stream.hpp'),
     os.path.join(include_dir, 'duckdb', 'main', 'appender.hpp'),
     os.path.join(include_dir, 'duckdb', 'main', 'client_context.hpp'),
-    os.path.join(include_dir, 'duckdb', 'main', 'extension_util.hpp'),
+    os.path.join(include_dir, 'duckdb', 'main', 'extension', 'extension_loader.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'function.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'table_function.hpp'),
     os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_table_function_info.hpp'),
@@ -277,9 +277,8 @@ def git_commit_hash():
 # - CMakeLists.txt
 # - scripts/amalgamation.py
 # - scripts/package_build.py
-# - tools/pythonpkg/setup.py
 ######
-MAIN_BRANCH_VERSIONING = False
+MAIN_BRANCH_VERSIONING = True
 if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
     MAIN_BRANCH_VERSIONING = False
 if os.getenv('MAIN_BRANCH_VERSIONING') == "1":

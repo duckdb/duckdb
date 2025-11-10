@@ -3,9 +3,6 @@
 # group: [string]
 
 statement ok
-pragma verify_fetch_row
-
-statement ok
 ATTACH '__TEST_DIR__/test_filter_pushdown_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
 
 statement ok

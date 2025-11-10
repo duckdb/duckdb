@@ -143,10 +143,10 @@ bool EvictionQueue::TryDequeueWithLock(BufferEvictionNode &node) {
 
 void EvictionQueue::Purge() {
 	// only one thread purges the queue, all other threads early-out
-	if (!purge_lock.try_lock()) {
+	unique_lock<mutex> guard(purge_lock, std::try_to_lock);
+	if (!guard.owns_lock()) {
 		return;
 	}
-	lock_guard<mutex> lock {purge_lock, std::adopt_lock};
 
 	// we purge INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER nodes
 	idx_t purge_size = INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER;

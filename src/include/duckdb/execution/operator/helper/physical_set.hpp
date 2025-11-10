@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
@@ -23,9 +24,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::SET;
 
 public:
-	PhysicalSet(const string &name_p, Value value_p, SetScope scope_p, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::SET, {LogicalType::BOOLEAN}, estimated_cardinality), name(name_p),
-	      value(std::move(value_p)), scope(scope_p) {
+	PhysicalSet(PhysicalPlan &physical_plan, const string &name_p, Value value_p, SetScope scope_p,
+	            idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::SET, {LogicalType::BOOLEAN}, estimated_cardinality),
+	      name(physical_plan.ArenaRef().MakeString(name_p)), value(std::move(value_p)), scope(scope_p) {
 	}
 
 public:
@@ -36,11 +38,13 @@ public:
 		return true;
 	}
 
-	static void SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const string &name,
+	static void SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const String &name,
 	                                 SetScope scope, const Value &value);
 
+	static void SetGenericVariable(ClientContext &context, const String &name, SetScope scope, Value target_value);
+
 public:
-	const string name;
+	String name;
 	const Value value;
 	const SetScope scope;
 };

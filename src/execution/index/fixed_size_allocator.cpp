@@ -4,10 +4,9 @@
 
 namespace duckdb {
 
-FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
-    : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), segment_size(segment_size),
-      total_segment_count(0) {
-
+FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager, MemoryTag memory_tag)
+    : block_manager(block_manager), buffer_manager(block_manager.buffer_manager), memory_tag(memory_tag),
+      segment_size(segment_size), total_segment_count(0) {
 	if (segment_size > block_manager.GetBlockSize() - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
 		                        to_string(block_manager.GetBlockSize() - sizeof(validity_t)));
@@ -48,14 +47,18 @@ IndexPointer FixedSizeAllocator::New() {
 	if (!buffer_with_free_space.IsValid()) {
 		// Add a new buffer.
 		auto buffer_id = GetAvailableBufferId();
-		buffers[buffer_id] = make_uniq<FixedSizeBuffer>(block_manager);
+		buffers[buffer_id] = make_uniq<FixedSizeBuffer>(block_manager, memory_tag);
 		buffers_with_free_space.insert(buffer_id);
 		buffer_with_free_space = buffer_id;
 
 		// Set and initialize the bitmask of the new buffer.
 		D_ASSERT(buffers.find(buffer_id) != buffers.end());
 		auto &buffer = buffers.find(buffer_id)->second;
-		ValidityMask mask(reinterpret_cast<validity_t *>(buffer->Get()), available_segments_per_buffer);
+
+		// Get a handle to the buffer's validity mask (offset 0).
+		SegmentHandle handle(*buffer, 0);
+		const auto bitmask_ptr = handle.GetPtr<validity_t>();
+		ValidityMask mask(bitmask_ptr, available_segments_per_buffer);
 		mask.SetAllValid(available_segments_per_buffer);
 	}
 
@@ -88,10 +91,15 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	D_ASSERT(buffer_it != buffers.end());
 	auto &buffer = buffer_it->second;
 
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffer->Get());
-	ValidityMask mask(bitmask_ptr, offset + 1); // FIXME
-	D_ASSERT(!mask.RowIsValid(offset));
-	mask.SetValid(offset);
+	{
+		// Get a handle to the buffer's validity mask (offset 0).
+		SegmentHandle handle(*buffer, 0);
+		const auto bitmask_ptr = handle.GetPtr<validity_t>();
+
+		ValidityMask mask(bitmask_ptr, offset + 1); // FIXME
+		D_ASSERT(!mask.RowIsValid(offset));
+		mask.SetValid(offset);
+	}
 
 	D_ASSERT(total_segment_count > 0);
 	D_ASSERT(buffer->segment_count > 0);
@@ -250,7 +258,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 	vacuum_buffers.clear();
 }
 
-IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
+IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer old_ptr) {
 	// we do not need to adjust the bitmask of the old buffer, because we will free the entire
 	// buffer after the vacuum operation
 
@@ -258,7 +266,10 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	// new increases the allocation count, we need to counter that here
 	total_segment_count--;
 
-	memcpy(Get(new_ptr), Get(ptr), segment_size);
+	auto old_handle = GetHandle(old_ptr);
+	auto new_handle = GetHandle(new_ptr);
+
+	memcpy(new_handle.GetPtr(), old_handle.GetPtr(), segment_size);
 	return new_ptr;
 }
 
@@ -296,7 +307,10 @@ vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
 	vector<IndexBufferInfo> buffer_infos;
 	for (auto &buffer : buffers) {
 		buffer.second->SetAllocationSize(available_segments_per_buffer, segment_size, bitmask_offset);
-		buffer_infos.emplace_back(buffer.second->Get(), buffer.second->allocation_size);
+
+		// Get a handle to the buffer's memory (offset 0).
+		SegmentHandle handle(*buffer.second, 0);
+		buffer_infos.emplace_back(handle.GetPtr(), buffer.second->allocation_size);
 	}
 	return buffer_infos;
 }
@@ -306,7 +320,6 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 	total_segment_count = 0;
 
 	for (idx_t i = 0; i < info.buffer_ids.size(); i++) {
-
 		// read all FixedSizeBuffer data
 		auto buffer_id = info.buffer_ids[i];
 

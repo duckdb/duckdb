@@ -1,0 +1,17 @@
+# name: benchmark/micro/logger/storage/file/log_message_size/small_string.benchmark
+# description: test writing small strings as log messages
+# group: [log_message_size]
+
+name Client Context Memory Logger
+group logger
+
+# Note: we write a single log entry to trigger the lazy file initialization
+load
+CALL enable_logging(level='info', storage_path='${BENCHMARK_DIR}/logging_enabled_client_context');
+SELECT write_log('hi', level := 'info', scope := 'connection' );
+
+run
+SELECT write_log('hi', level := 'info', scope := 'connection' ) from range(0,2000000);
+
+cleanup
+CALL truncate_duckdb_logs()

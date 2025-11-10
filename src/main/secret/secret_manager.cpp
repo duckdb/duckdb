@@ -75,14 +75,15 @@ void SecretManager::LoadSecretStorage(unique_ptr<SecretStorage> storage) {
 
 void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage) {
 	if (secret_storages.find(storage->GetName()) != secret_storages.end()) {
-		throw InternalException("Secret Storage with name '%s' already registered!", storage->GetName());
+		throw InvalidConfigurationException("Secret Storage with name '%s' already registered!", storage->GetName());
 	}
 
 	// Check for tie-break offset collisions to ensure we can always tie-break cleanly
 	for (const auto &storage_ptr : secret_storages) {
 		if (storage_ptr.second->tie_break_offset == storage->tie_break_offset) {
-			throw InternalException("Failed to load secret storage '%s', tie break score collides with '%s'",
-			                        storage->GetName(), storage_ptr.second->GetName());
+			throw InvalidConfigurationException(
+			    "Failed to load secret storage '%s', tie break score collides with '%s'", storage->GetName(),
+			    storage_ptr.second->GetName());
 		}
 	}
 
@@ -97,8 +98,8 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 	vector<string> scope;
 	deserializer.ReadList(103, "scope",
 	                      [&](Deserializer::List &list, idx_t i) { scope.push_back(list.ReadElement<string>()); });
-	auto serialization_type =
-	    deserializer.ReadPropertyWithExplicitDefault(104, "serialization_type", SecretSerializationType::CUSTOM);
+	auto serialization_type = deserializer.ReadPropertyWithExplicitDefault(104, "serialization_type",
+	                                                                       SecretSerializationType::KEY_VALUE_SECRET);
 
 	switch (serialization_type) {
 	// This allows us to skip looking up the secret type for deserialization altogether
@@ -118,7 +119,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 	}
 
 	if (!deserialized_type.deserializer) {
-		throw InternalException(
+		throw InvalidConfigurationException(
 		    "Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
 	}
 
@@ -351,7 +352,7 @@ unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transa
 		auto lookup = storage_ref.get().GetSecretByName(name, &transaction);
 		if (lookup) {
 			if (found) {
-				throw InternalException(
+				throw InvalidConfigurationException(
 				    "Ambiguity detected for secret name '%s', secret occurs in multiple storage backends.", name);
 			}
 

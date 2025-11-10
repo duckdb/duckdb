@@ -13,7 +13,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
     : BaseFileReader(file_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(std::move(options_p)) {
-
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
 		buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file, per_file_single_threaded);

@@ -24,6 +24,11 @@ on:
         description: 'True, if all the builds in InvokeCI had succeeded'
         default: 'false'
         type: 'string'
+      override-git-describe:
+        description: 'The name of the release tag, used for release builds'
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       duckdb-sha:
@@ -48,19 +53,25 @@ on:
         description: 'True, if all the builds in InvokeCI had succeeded'
         default: 'false'
         type: 'string'
+      override-git-describe:
+        description: 'The name of the release tag, used for release builds'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 
+env:
+  PAT_USER: ${{ secrets.PAT_USERNAME }}
+  PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+
 jobs:
   notify-odbc-run:
     name: Run ODBC Vendor
     runs-on: ubuntu-latest
-    if: ${{ inputs.is-success == 'true' }}
-    env:
-      PAT_USER: ${{ secrets.PAT_USERNAME }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    if: ${{ inputs.is-success == 'true' && inputs.override-git-describe == '' }}
     steps:
       - name: Run ODBC Vendor
         if: ${{ github.repository == 'duckdb/duckdb' }}
@@ -72,10 +83,7 @@ jobs:
   notify-jdbc-run:
     name: Run JDBC Vendor
     runs-on: ubuntu-latest
-    if: ${{ inputs.is-success == 'true' }}
-    env:
-      PAT_USER: ${{ secrets.PAT_USERNAME }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    if: ${{ inputs.is-success == 'true' && inputs.override-git-describe == '' }}
     steps:
       - name: Run JDBC Vendor
         if: ${{ github.repository == 'duckdb/duckdb' }}
@@ -87,13 +95,21 @@ jobs:
   notify-nightly-build-status:
     name: Run Nightly build status
     runs-on: ubuntu-latest
-    env:
-      PAT_USER: ${{ secrets.PAT_USERNAME }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     steps:
       - name: Run Nightly build status
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
+          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
+
+  notify-python-nightly:
+    name: Dispatch Python nightly build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /dispatch
+        if: ${{ github.repository == 'duckdb/duckdb' && inputs.override-git-describe == '' }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/release.yml/dispatches
+          export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}", "pypi-index": "prod" }}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"

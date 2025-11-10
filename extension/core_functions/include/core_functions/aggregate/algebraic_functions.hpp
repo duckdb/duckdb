@@ -34,7 +34,7 @@ struct MeanFun {
 struct CorrFun {
 	static constexpr const char *Name = "corr";
 	static constexpr const char *Parameters = "y,x";
-	static constexpr const char *Description = "Returns the correlation coefficient for non-null pairs in a group.";
+	static constexpr const char *Description = "Returns the correlation coefficient for non-NULL pairs in a group.";
 	static constexpr const char *Example = "COVAR_POP(y, x) / (STDDEV_POP(x) * STDDEV_POP(y))";
 	static constexpr const char *Categories = "";
 
@@ -54,7 +54,7 @@ struct CovarPopFun {
 struct CovarSampFun {
 	static constexpr const char *Name = "covar_samp";
 	static constexpr const char *Parameters = "y,x";
-	static constexpr const char *Description = "Returns the sample covariance for non-null pairs in a group.";
+	static constexpr const char *Description = "Returns the sample covariance for non-NULL pairs in a group.";
 	static constexpr const char *Example = "(SUM(x*y) - SUM(x) * SUM(y) / COUNT(*)) / (COUNT(*) - 1)";
 	static constexpr const char *Categories = "";
 

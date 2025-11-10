@@ -5,7 +5,7 @@
 require parquet
 
 statement error
-SELECT a FROM 'data/parquet-testing/corrupt_stats.parquet' GROUP BY a;
+SELECT a FROM '{DATA_DIR}/parquet-testing/corrupt_stats.parquet' GROUP BY a;
 ----
 This likely means that the statistics in your data source are corrupt
 
@@ -13,6 +13,6 @@ statement ok
 PRAGMA disable_optimizer
 
 query I
-SELECT a FROM 'data/parquet-testing/corrupt_stats.parquet' GROUP BY a;
+SELECT a FROM '{DATA_DIR}/parquet-testing/corrupt_stats.parquet' GROUP BY a;
 ----
 2021-01-01 12:00:00

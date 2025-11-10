@@ -1,0 +1,12 @@
+# name: benchmark/cast/varchar_bignum_1M.benchmark
+# description: Casting of a Varchar with 1M digits to bignum
+# group: [cast]
+
+name Casting of a Varchar with 1M digits to bignum
+group csv
+
+load
+CREATE TABLE t1 AS select concat('1', repeat('0', 1000000)) as a;
+
+run
+SELECT a::bignum from t1

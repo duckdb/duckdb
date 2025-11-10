@@ -46,13 +46,12 @@ CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation
 ORIGINAL_FUNCTION_GROUP_ORDER = [
     'open_connect',
     'configuration',
+    'error_data',
     'query_execution',
-    'result_functions',
     'safe_fetch_functions',
     'helpers',
     'date_time_timestamp_helpers',
-    'hugeint_helpers',
-    'unsigned_hugeint_helpers',
+    'hugeint_and_uhugeint_helpers',
     'decimal_helpers',
     'prepared_statements',
     'bind_values_to_prepared_statements',
@@ -79,6 +78,10 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'threading_information',
     'streaming_result_interface',
     'cast_functions',
+    'expression_interface',
+    'file_system_interface',
+    'config_options_interface',
+    'copy_functions',
 ]
 
 # The file that forms the base for the header generation
@@ -440,6 +443,31 @@ def create_version_defines(version):
     return result
 
 
+def comment_function_group(name, deprecated, use_instead, description):
+    text = '//----------------------------------------------------------------------------------------------------------------------'
+    text += '\n// ' + name
+    text += '\n//----------------------------------------------------------------------------------------------------------------------'
+
+    text += '\n// DESCRIPTION:'
+    text += '\n// ' + description
+
+    if deprecated:
+        text += '\n//\n// DEPRECATION NOTICE:\n// This function group is deprecated and scheduled for removal.'
+        if use_instead != "":
+            text += '\n//'
+            text += '\n// USE INSTEAD:'
+            text += '\n//' + use_instead
+        else:
+            print(f"Function group {name} marked as deprecated without 'use_instead' instructions!")
+            exit(1)
+    elif use_instead != "":
+        print(f"Function group {name} not marked as deprecated but has 'use_instead' instructions!")
+        exit(1)
+
+    text += '\n//----------------------------------------------------------------------------------------------------------------------\n\n'
+    return text
+
+
 # Create duckdb.h
 def create_duckdb_h(file, function_groups, write_functions=True):
     declarations = ''
@@ -450,13 +478,21 @@ def create_duckdb_h(file, function_groups, write_functions=True):
         declarations += '\n'
 
         for curr_group in function_groups:
-            declarations += COMMENT_HEADER(to_camel_case(curr_group['group']))
+            group_name = to_camel_case(curr_group['group'])
+            group_is_deprecated = 'deprecated' in curr_group and curr_group['deprecated']
+
+            use_instead = ""
+            if 'use_instead' in curr_group:
+                use_instead = curr_group['use_instead']
+
+            if not 'description' in curr_group:
+                raise Exception(f"Group {group_name} does not have a description!")
+            description = curr_group['description']
+
+            declarations += comment_function_group(group_name, group_is_deprecated, use_instead, description)
             declarations += '\n'
-            if 'description' in curr_group:
-                declarations += curr_group['description'] + '\n'
 
             deprecated_state = False
-            group_is_deprecated = 'deprecated' in curr_group and curr_group['deprecated']
             if group_is_deprecated:
                 declarations += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
                 deprecated_state = True
@@ -464,7 +500,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
             for function in curr_group['entries']:
                 function_is_deprecated = group_is_deprecated or ('deprecated' in function and function['deprecated'])
                 if deprecated_state and not function_is_deprecated:
-                    declarations += '#endif\n'
+                    declarations += '#endif\n\n'
                     deprecated_state = False
                 elif not deprecated_state and function_is_deprecated:
                     declarations += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
@@ -487,7 +523,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
                 declarations += '\n'
 
             if deprecated_state:
-                declarations += '#endif\n'
+                declarations += '#endif\n\n'
 
     declarations += '#endif\n'
 

@@ -1,0 +1,55 @@
+# name: test/parquet/variant/variant_all_types_shredded.test
+# group: [variant]
+
+require parquet
+
+statement ok
+create macro data() as table (
+	select COLUMNS([
+		x for x in (*) if x NOT IN [
+			'utinyint',
+			'usmallint',
+			'uint',
+			'ubigint',
+			'hugeint',
+			'uhugeint',
+			'bignum',
+			'timestamp_s',
+			'timestamp_ms',
+			'timestamp_tz',
+			'time_tz',
+			'interval',
+			'bit',
+			'dec_4_1', -- Parquet VARIANT doesn't have int16_t DECIMAL
+-- Conversion isn't 1-to-1
+			'dec_9_4', -- can't roundtrip with json
+			'dec_18_6', -- can't roundtrip with json
+			'dec38_10', -- can't roundtrip with json
+			'blob' -- data is base64-encoded in parquet read
+		]
+	])::VARIANT var from test_all_types()
+)
+
+query I nosort expected_res
+select * from data();
+----
+
+foreach type bool tinyint smallint int bigint date time timestamp timestamp_ns timestamp_tz float double dec_9_4 dec_18_6 dec38_10 uuid varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs
+
+statement ok
+SET VARIABLE type_str = (SELECT $$STRUCT("${type}" $$ || typeof("${type}") || ')' from test_all_types() limit 1);
+
+statement ok
+COPY (
+	FROM data()
+) TO '__TEST_DIR__/all_types_shredded_${type}.parquet' (
+	SHREDDING {
+		'var': getvariable('type_str')
+	}
+)
+
+query I nosort expected_res
+select * from '__TEST_DIR__/all_types_shredded_${type}.parquet'
+----
+
+endloop

@@ -2,15 +2,10 @@
 # description: Test physical operator logging
 # group: [logging]
 
-require noforcestorage
-
 require parquet
 
 statement ok
-pragma enable_logging
-
-statement ok
-set logging_level='DEBUG'
+CALL enable_logging('PhysicalOperator')
 
 # force external so we can see the external log message being added
 statement ok
@@ -19,16 +14,22 @@ set debug_force_external=true
 statement ok
 set threads=1
 
+# trigger external join, order result by i so we have good and predictable zone maps
 statement ok
 copy (
     select t1.i
     from range(3_000_000) t1(i)
     join range(3_000_000) t2(i)
     using (i)
+    order by i
 ) to '__TEST_DIR__/physical_operator_logging.parquet'
 
+# this is for row group read/skip logging
 statement ok
-pragma disable_logging
+from '__TEST_DIR__/physical_operator_logging.parquet' where i = 42
+
+statement ok
+CALL disable_logging()
 
 # enabling external hash join happens exactly once
 query I
@@ -51,3 +52,15 @@ select count(*) = (
 from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetWriter' and event = 'FlushRowGroup'
 ----
 1
+
+# there are many row groups, but only one of them contains the value 42, so we should only have 1 of these
+query I
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetReader' and event = 'ReadRowGroup'
+----
+1
+
+# all other row groups are skipped
+query I
+select count(*) from duckdb_logs_parsed('PhysicalOperator') where class = 'ParquetReader' and event = 'SkipRowGroup'
+----
+24

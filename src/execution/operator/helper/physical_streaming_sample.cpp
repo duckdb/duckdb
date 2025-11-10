@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-PhysicalStreamingSample::PhysicalStreamingSample(vector<LogicalType> types, unique_ptr<SampleOptions> options,
-                                                 idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::STREAMING_SAMPLE, std::move(types), estimated_cardinality),
+PhysicalStreamingSample::PhysicalStreamingSample(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                                 unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::STREAMING_SAMPLE, std::move(types), estimated_cardinality),
       sample_options(std::move(options)) {
 	percentage = sample_options->sample_size.GetValue<double>() / 100;
 }

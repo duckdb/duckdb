@@ -11,6 +11,8 @@ bool TryMultiplyOperator::Operation(double left, int64_t right, int64_t &result)
 	return TryCast::Operation<double, int64_t>(left * double(right), result);
 }
 
+namespace {
+
 struct ToMillenniaOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -181,10 +183,12 @@ ScalarFunctionSet GetIntegerIntervalFunctions() {
 	function_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                                        ScalarFunction::UnaryFunction<int64_t, interval_t, OP>));
 	for (auto &func : function_set.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return function_set;
 }
+
+} // namespace
 
 ScalarFunctionSet ToMillenniaFun::GetFunctions() {
 	return GetIntegerIntervalFunctions<ToMillenniaOperator>();
@@ -221,35 +225,35 @@ ScalarFunctionSet ToDaysFun::GetFunctions() {
 ScalarFunction ToHoursFun::GetFunction() {
 	ScalarFunction function({LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                        ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
 ScalarFunction ToMinutesFun::GetFunction() {
 	ScalarFunction function({LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                        ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
 ScalarFunction ToSecondsFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                        ScalarFunction::UnaryFunction<double, interval_t, ToSecondsOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
 ScalarFunction ToMillisecondsFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                        ScalarFunction::UnaryFunction<double, interval_t, ToMilliSecondsOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
 ScalarFunction ToMicrosecondsFun::GetFunction() {
 	ScalarFunction function({LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                        ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 

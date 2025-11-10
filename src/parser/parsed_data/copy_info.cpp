@@ -3,16 +3,24 @@
 
 namespace duckdb {
 
+CopyInfo::CopyInfo()
+    : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA), is_from(false), is_format_auto_detected(true) {
+}
+
 unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	auto result = make_uniq<CopyInfo>();
 	result->catalog = catalog;
 	result->schema = schema;
 	result->table = table;
 	result->select_list = select_list;
+	result->file_path_expression = file_path_expression ? file_path_expression->Copy() : nullptr;
 	result->file_path = file_path;
 	result->is_from = is_from;
 	result->format = format;
 	result->is_format_auto_detected = is_format_auto_detected;
+	for (auto &entry : parsed_options) {
+		result->parsed_options[entry.first] = entry.second ? entry.second->Copy() : nullptr;
+	}
 	result->options = options;
 	if (select_statement) {
 		result->select_statement = select_statement->Copy();
@@ -20,11 +28,10 @@ unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	return result;
 }
 
-string CopyInfo::CopyOptionsToString(const string &format, bool is_format_auto_detected,
-                                     const case_insensitive_map_t<vector<Value>> &options) {
+string CopyInfo::CopyOptionsToString() const {
 	// We only output the format if there is a format, and it was manually set.
 	const bool output_format = !format.empty() && !is_format_auto_detected;
-	if (!output_format && options.empty()) {
+	if (!output_format && options.empty() && parsed_options.empty()) {
 		return string();
 	}
 	string result;
@@ -33,6 +40,15 @@ string CopyInfo::CopyOptionsToString(const string &format, bool is_format_auto_d
 	vector<string> stringified;
 	if (!format.empty() && !is_format_auto_detected) {
 		stringified.push_back(StringUtil::Format(" FORMAT %s", format));
+	}
+	for (auto &opt : parsed_options) {
+		auto &name = opt.first;
+		auto &expr = opt.second;
+		string option_string = name;
+		if (expr) {
+			option_string += " " + expr->ToString();
+		}
+		stringified.push_back(option_string);
 	}
 	for (auto &opt : options) {
 		auto &name = opt.first;
@@ -84,8 +100,6 @@ string CopyInfo::ToString() const {
 		D_ASSERT(!select_statement);
 		result += TablePartToString();
 		result += " FROM";
-		result += StringUtil::Format(" %s", SQLString(file_path));
-		result += CopyOptionsToString(format, is_format_auto_detected, options);
 	} else {
 		if (select_statement) {
 			// COPY (select-node) TO ...
@@ -94,9 +108,15 @@ string CopyInfo::ToString() const {
 			result += TablePartToString();
 		}
 		result += " TO ";
-		result += StringUtil::Format("%s", SQLString(file_path));
-		result += CopyOptionsToString(format, is_format_auto_detected, options);
 	}
+	if (file_path_expression && file_path.empty()) {
+		result += "(";
+		result += file_path_expression->ToString();
+		result += ")";
+	} else {
+		result += StringUtil::Format(" %s", SQLString(file_path));
+	}
+	result += CopyOptionsToString();
 	result += ";";
 	return result;
 }

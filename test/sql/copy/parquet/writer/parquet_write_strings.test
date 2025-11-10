@@ -158,7 +158,7 @@ SELECT * FROM '__TEST_DIR__/strings.parquet'
 ----
 
 
-# non-dictionary table
+# non-dictionary table, also no distinct count
 statement ok
 DELETE FROM strings
 
@@ -174,7 +174,7 @@ COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
 query I
 SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
 ----
-RLE_DICTIONARY
+PLAIN
 
 query I
 SELECT * FROM '__TEST_DIR__/strings.parquet'
@@ -213,7 +213,7 @@ SELECT * FROM '__TEST_DIR__/strings.parquet'
 query I
 SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/strings.parquet')
 ----
-30
+NULL
 
 # non-dictionary table with null
 statement ok
