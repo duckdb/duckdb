@@ -1,7 +1,7 @@
 import os
+import sys
 import math
 import functools
-import shutil
 from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 from dataclasses import dataclass
 from typing import Optional, List, Union
@@ -42,12 +42,12 @@ parser.add_argument("--nofail", action="store_true", help="Do not fail on regres
 parser.add_argument("--disable-timeout", action="store_true", help="Disable timeout.")
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
-parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
+parser.add_argument("--no-summary", action="store_true", help="No summary in the end.")
 parser.add_argument(
     "--regression-threshold-seconds",
     type=float,
     default=0.05,
-    help="The threshold at which we consider individual benchmark a regression (percentage)",
+    help="The threshold at which we consider individual benchmark as a regression (seconds)",
 )
 parser.add_argument(
     "--max-allowed-regression-percentage",
@@ -84,11 +84,11 @@ MAX_ALLOWED_REGRESS_PERCENTAGE = max_allowed_regression_percentage
 
 if not os.path.isfile(old_runner_path):
     print(f"Failed to find old runner {old_runner_path}")
-    exit(1)
+    sys.exit(1)
 
 if not os.path.isfile(new_runner_path):
     print(f"Failed to find new runner {new_runner_path}")
-    exit(1)
+    sys.exit(1)
 
 config_dict = vars(args)
 old_runner = BenchmarkRunner(BenchmarkRunnerConfig.from_params(old_runner_path, benchmark_file, **config_dict))
@@ -143,8 +143,10 @@ for i in range(NUMBER_REPETITIONS):
         ):
             regression_list.append(BenchmarkResult(benchmark, old_res, new_res))
         else:
-            improved_by = int((new_res - old_res) * 100.0 / new_res)
-            # breakpoint()
+            try:
+                improved_by = int((float(old_res) - float(new_res)) * 100.0 / float(old_res))
+            except Exception:
+                improved_by = 0
             if improved_by > 0:
                 improvements_list.append(BenchmarkResult(benchmark, old_res, new_res, improvement=improved_by))
             else:
@@ -158,12 +160,13 @@ exit_code = 0
 regression_list.extend(error_list)
 summary = []
 if len(regression_list) > 0:
-    # regression_list already consists of the benchmarks regressed of more than 10%
-    regression_percentage = int((time_new - time_old) * 100.0 / time_new)
-    is_regression = time_new > time_old * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE / 100)
+    if not (isinstance(time_old, str) or isinstance(time_new, str)):
+        regression_percentage = int((time_new - time_old) * 100.0 / time_old)
+    else:
+        regression_percentage = 0
     if (
         isinstance(MAX_ALLOWED_REGRESS_PERCENTAGE, int)
-        and is_regression
+        and isinstance(regression_percentage, int)
         and regression_percentage < MAX_ALLOWED_REGRESS_PERCENTAGE
     ):
         # allow individual regressions less than 10% when overall geomean had improved or hadn't change (on large benchmarks)
@@ -195,8 +198,13 @@ if len(regression_list) > 0:
                 summary.append(new_data)
             print("")
 
-        if is_regression:
-            print(f"Old timing geometric mean: {time_old}, roughly {regression_percentage}% faster")
+        if not (isinstance(time_old, str) or isinstance(time_new, str)):
+            delta_pct = int(((time_old - time_new) * 100) / time_old)
+            if delta_pct > 0:
+                print(f"Old timing geometric mean: {time_old}, roughly {regression_percentage}% faster")
+            else:
+                print(f"Old timing geometric mean: {time_old}, roughly {abs(regression_percentage)})% faster")
+
             print(f"New timing geometric mean: {time_new}")
             print("")
     print(
@@ -240,15 +248,19 @@ print("")
 if isinstance(time_old, str) or isinstance(time_new, str):
     print(f"Old: {time_old}")
     print(f"New: {time_new}")
-elif time_old > time_new * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE / 100):
-    print(f"Old timing geometric mean: {time_old}")
-    print(f"New timing geometric mean: {time_new}, roughly {int((time_old - time_new) * 100.0 / time_old)}% faster")
-elif time_new > time_old * (1 + MAX_ALLOWED_REGRESS_PERCENTAGE / 100):
-    print(f"Old timing geometric mean: {time_old}, roughly {int((time_new - time_old) * 100.0 / time_new)}% faster")
-    print(f"New timing geometric mean: {time_new}")
 else:
-    print(f"Old timing geometric mean: {time_old}")
-    print(f"New timing geometric mean: {time_new}")
+    threshold = 1 + MAX_ALLOWED_REGRESS_PERCENTAGE / 100
+    if time_new < time_old / threshold:
+        pct = int(((time_old - time_new) * 100.0) / time_old)
+        print(f"Old timing geometric mean: {time_old}")
+        print(f"New timing geometric mean: {time_new}, roughly {pct}% faster")
+    elif time_new > time_old * threshold:
+        pct = int(((time_old - time_new) * 100.0) / time_old)
+        print(f"Old timing geometric mean: {time_old}, roughly {pct}% faster")
+        print(f"New timing geometric mean: {time_new}")
+    else:
+        print(f"Old timing geometric mean: {time_old}")
+        print(f"New timing geometric mean: {time_new}")
 
 if summary and not no_summary:
     print(
@@ -266,4 +278,4 @@ if summary and not no_summary:
             print(failure_message["old_failure"])
         print("-", 52)
 
-exit(exit_code)
+sys.exit(exit_code)
