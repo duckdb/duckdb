@@ -9,16 +9,16 @@ ${EXT_LOADER_BODY}
     return ExtensionLoadResult::NOT_LOADED;
 }
 
+static vector<string> LinkedExtensions(){
+    vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
+    };
+    return VEC;
+}
+
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
     for (auto& ext_name : LinkedExtensions()) {
         LoadExtension(db, ext_name);
     }
-}
-
-vector<string> LinkedExtensions(){
-    vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
-    };
-    return VEC;
 }
 
 vector<string> ExtensionHelper::LoadedExtensionTestPaths(){
