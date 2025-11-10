@@ -1,0 +1,33 @@
+# name: test/sql/table_function/duckdb_settings_in_bytes.test
+# description: Test duckdb_settings(in_bytes=...) returns bytes for memory-like settings
+# group: [table_function]
+
+# Configuring a setting
+statement ok
+PRAGMA wal_autocheckpoint='1 KiB';
+
+# Default behavior unchanged (VARCHAR)
+query I
+SELECT typeof(value) FROM duckdb_settings() WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+VARCHAR
+
+# In bytes mode the value should be a number (UBIGINT) for memory-like settings
+query I
+SELECT typeof(value) FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+UBIGINT
+
+# The numeric value should match 1024 for the memory-like setting we just set
+query I
+SELECT value FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+1024
+
+# Non-byte settings should not be returned at all
+statement ok
+SET default_collation='nfc';
+
+query I
+SELECT value IS NULL FROM duckdb_settings(in_bytes=true) WHERE name='default_collation';
+----
