@@ -5,6 +5,8 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
@@ -58,7 +60,6 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 }
 
 unique_ptr<LogicalOperator> WindowRewriter::Optimize(unique_ptr<LogicalOperator> op) {
-
 	ColumnBindingReplacer replacer;
 	op = OptimizeInternal(std::move(op), replacer);
 
@@ -82,7 +83,8 @@ unique_ptr<LogicalOperator> WindowRewriter::Rewrite(unique_ptr<LogicalOperator> 
 	idx_t row_number_index = 0;
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		auto &col = proj.expressions.at(i);
-		D_ASSERT(col->type == ExpressionType::BOUND_COLUMN_REF);
+		if (col->type != ExpressionType::BOUND_COLUMN_REF)
+			continue;
 		auto &col_ref = col->Cast<BoundColumnRefExpression>();
 		if (col_ref.binding.table_index == window.window_index) {
 			row_number_index = i;
@@ -95,7 +97,7 @@ unique_ptr<LogicalOperator> WindowRewriter::Rewrite(unique_ptr<LogicalOperator> 
 	auto types = get.types;
 	auto projection_ids = get.projection_ids;
 
-	column_ids.emplace_back(ColumnIndex(COLUMN_IDENTIFIER_ROW_NUMBER));
+	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_NUMBER);
 	types.push_back(LogicalType::BIGINT);
 	projection_ids.push_back(column_ids.size() - 1);
 
@@ -119,12 +121,9 @@ unique_ptr<LogicalOperator> WindowRewriter::Rewrite(unique_ptr<LogicalOperator> 
 			auto &row_number_binding = child_bindings.back();
 			expressions.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, row_number_binding));
 		} else {
-			// Copy the existing projection
-			D_ASSERT(proj.expressions[i]->type == ExpressionType::BOUND_COLUMN_REF);
-			auto &col_ref = proj.expressions[i]->Cast<BoundColumnRefExpression>();
-			auto binding_index = col_ref.binding.column_index;
-			expressions.push_back(
-			    make_uniq<BoundColumnRefExpression>(child_types[binding_index], child_bindings[binding_index]));
+			// Copy the rest
+			auto &expr = proj.expressions[i];
+			expressions.push_back(expr->Copy());
 		}
 	}
 
@@ -146,7 +145,6 @@ unique_ptr<LogicalOperator> WindowRewriter::Rewrite(unique_ptr<LogicalOperator> 
 
 unique_ptr<LogicalOperator> WindowRewriter::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                              ColumnBindingReplacer &replacer) {
-
 	if (CanOptimize(*op)) {
 		return Rewrite(std::move(op), replacer);
 	}
