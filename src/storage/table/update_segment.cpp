@@ -105,8 +105,9 @@ idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
 	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 }
 
-void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id) {
+void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id, idx_t row_group_start) {
 	info.max = STANDARD_VECTOR_SIZE;
+	info.row_group_start = row_group_start;
 	info.version_number = transaction_id;
 	info.table = &data_table;
 	info.segment = nullptr;
@@ -1239,10 +1240,10 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 }
 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, DataTable &data_table, idx_t type_size, idx_t count,
-                                  unsafe_unique_array<char> &data) {
+                                  unsafe_unique_array<char> &data, idx_t row_group_start) {
 	data = make_unsafe_uniq_array_uninitialized<char>(UpdateInfo::GetAllocSize(type_size));
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
-	UpdateInfo::Initialize(*update_info, data_table, transaction.transaction_id);
+	UpdateInfo::Initialize(*update_info, data_table, transaction.transaction_id, row_group_start);
 	return update_info;
 }
 
@@ -1261,7 +1262,7 @@ void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 }
 
 void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_p,
-                           row_t *ids, idx_t count, Vector &base_data) {
+                           row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -1288,8 +1289,8 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
 	auto first_id = ids[sel.get_index(0)];
-	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - column_data.start) / STANDARD_VECTOR_SIZE;
-	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - row_group_start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_offset = row_group_start + vector_index * STANDARD_VECTOR_SIZE;
 
 	if (!root || vector_index >= root->info.size() || !root->info[vector_index].IsSet()) {
 		// get a list of effective updates - i.e. updates that actually change rows
@@ -1304,7 +1305,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 
 	InitializeUpdateInfo(vector_index);
 
-	D_ASSERT(idx_t(first_id) >= column_data.start);
+	D_ASSERT(idx_t(first_id) >= row_group_start);
 
 	if (root->info[vector_index].IsSet()) {
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
@@ -1324,10 +1325,10 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
 				auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-				node_ref = dtransaction.CreateUpdateInfo(type_size, data_table, count);
+				node_ref = dtransaction.CreateUpdateInfo(type_size, data_table, count, row_group_start);
 				node = &UpdateInfo::Get(node_ref);
 			} else {
-				node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data);
+				node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
 			}
 			node->segment = this;
 			node->vector_index = vector_index;
@@ -1361,7 +1362,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 		auto handle = root->allocator.Allocate(alloc_size);
 		auto &update_info = UpdateInfo::Get(handle);
-		UpdateInfo::Initialize(update_info, data_table, TRANSACTION_ID_START - 1);
+		UpdateInfo::Initialize(update_info, data_table, TRANSACTION_ID_START - 1, row_group_start);
 		update_info.column_index = column_index;
 
 		InitializeUpdateInfo(update_info, ids, sel, count, vector_index, vector_offset);
@@ -1371,10 +1372,10 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		UndoBufferReference node_ref;
 		optional_ptr<UpdateInfo> transaction_node;
 		if (transaction.transaction) {
-			node_ref = transaction.transaction->CreateUpdateInfo(type_size, data_table, count);
+			node_ref = transaction.transaction->CreateUpdateInfo(type_size, data_table, count, row_group_start);
 			transaction_node = &UpdateInfo::Get(node_ref);
 		} else {
-			transaction_node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data);
+			transaction_node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
 		}
 
 		InitializeUpdateInfo(*transaction_node, ids, sel, count, vector_index, vector_offset);

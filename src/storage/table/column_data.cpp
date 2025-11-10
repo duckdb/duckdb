@@ -299,12 +299,14 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 }
 
 void ColumnData::UpdateInternal(TransactionData transaction, DataTable &data_table, idx_t column_index,
-                                Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector) {
+                                Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector,
+                                idx_t row_group_start) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_uniq<UpdateSegment>(*this);
 	}
-	updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
+	updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	                row_group_start);
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -588,19 +590,21 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 }
 
 void ColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
-                        row_t *row_ids, idx_t update_count) {
+                        row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	Vector base_vector(type);
 	ColumnScanState state;
 	FetchUpdateData(state, row_ids, base_vector);
 
-	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
+	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	               row_group_start);
 }
 
 void ColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
-                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
+                              idx_t row_group_start) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count);
+	ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count, row_group_start);
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {

@@ -139,13 +139,13 @@ void RowIdColumnData::RevertAppend(row_t start_row) {
 }
 
 void RowIdColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
-                             Vector &update_vector, row_t *row_ids, idx_t update_count) {
+                             Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw InternalException("RowIdColumnData cannot be updated");
 }
 
 void RowIdColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
                                    const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
-                                   idx_t update_count, idx_t depth) {
+                                   idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw InternalException("RowIdColumnData cannot be updated");
 }
 

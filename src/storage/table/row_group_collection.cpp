@@ -676,7 +676,8 @@ void RowGroupCollection::Update(TransactionData transaction, DataTable &data_tab
 		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
 
 		auto &current_row_group = *row_group->node;
-		current_row_group.Update(transaction, data_table, updates, ids, start, pos - start, column_ids);
+		current_row_group.Update(transaction, data_table, updates, ids, start, pos - start, column_ids,
+		                         row_group->row_start);
 
 		auto l = stats.GetLock();
 		for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -809,7 +810,8 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &da
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(ids, pos, updates.size());
 		auto &current_row_group = *row_group->node;
-		current_row_group.UpdateColumn(transaction, data_table, updates, row_ids, start, pos - start, column_path);
+		current_row_group.UpdateColumn(transaction, data_table, updates, row_ids, start, pos - start, column_path,
+		                               row_group->row_start);
 
 		auto lock = stats.GetLock();
 		auto primary_column_idx = column_path[0];
