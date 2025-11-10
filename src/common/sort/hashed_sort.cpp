@@ -759,6 +759,16 @@ static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_
 		return hash_group.get_columns++ ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 	}
 
+	//	OVER(PARTITION BY...)
+	if (gsink.grouping_data) {
+		lock_guard<mutex> reset_guard(hash_group.scan_lock);
+		auto &partitions = gsink.grouping_data->GetPartitions();
+		if (hash_bin < partitions.size()) {
+			//	Release the memory now that we have finished scanning it.
+			partitions[hash_bin].reset();
+		}
+	}
+
 	auto &sort = *hash_group.sort;
 	auto &sort_global = *hash_group.sort_source;
 	auto sort_local = sort.GetLocalSourceState(context, sort_global);
@@ -792,6 +802,7 @@ HashedSort::HashGroupPtr HashedSort::GetColumnData(idx_t hash_bin, OperatorSourc
 
 	OperatorSourceInput input {sort_global, source.local_state, source.interrupt_state};
 	auto result = sort.GetColumnData(input);
+	hash_group.sort_source.reset();
 
 	//	Just because MaterializeColumnData returned FINISHED doesn't mean that the same thread will
 	//	get the result...
@@ -823,6 +834,8 @@ HashedSort::SortedRunPtr HashedSort::GetSortedRun(ClientContext &client, idx_t h
 		D_ASSERT(hash_group.count == 0);
 		result = make_uniq<SortedRun>(client, sort, false);
 	}
+
+	hash_group.sort_source.reset();
 
 	return result;
 }

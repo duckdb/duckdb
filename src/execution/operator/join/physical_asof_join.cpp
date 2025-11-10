@@ -1303,10 +1303,6 @@ public:
 		case AsOfJoinSourceStage::DONE:
 			throw InternalException("Invalid state for AsOf Task");
 		}
-
-		if (TaskFinished()) {
-			++gsource.finished;
-		}
 	}
 
 	void BeginRightScan();
@@ -1391,6 +1387,8 @@ void AsOfGlobalSourceState::FinishTask(TaskPtr task) {
 	if (!task) {
 		return;
 	}
+
+	++finished;
 
 	const auto group_idx = task->group_idx;
 	auto &finished_hash_group = asof_groups[group_idx];

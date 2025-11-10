@@ -139,3 +139,82 @@ SELECT list_sort(list_intersect([1, 4, 3, 5, 5, 2, 2], [5, 5, 5, 1, 1, 2, 4]));
 ----
 [1, 2, 4, 5]
 
+# Test when r_list is smaller than l_list (use_l_for_hash = false)
+query I
+SELECT list_sort(list_intersect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [2, 5, 8]));
+----
+[2, 5, 8]
+
+query I
+SELECT list_sort(list_intersect([10, 20, 30, 40, 50], [20, 40]));
+----
+[20, 40]
+
+query I
+SELECT list_sort(list_intersect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], [3, 6, 9, 12]));
+----
+[3, 6, 9, 12]
+
+# Test with strings when r_list is smaller
+query I
+SELECT list_sort(list_intersect(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], ['b', 'd', 'f']));
+----
+[b, d, f]
+
+# Test with duplicates when r_list is smaller
+query I
+SELECT list_sort(list_intersect([1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10], [2, 2, 5, 5, 8]));
+----
+[2, 5, 8]
+
+# Test when r_list is much smaller
+query I
+SELECT list_sort(list_intersect(range(1, 1000), [100, 200, 300]));
+----
+[100, 200, 300]
+
+query I
+SELECT list_sort(list_intersect([true, false], [1, 0]));
+----
+[0, 1]
+
+query I
+SELECT list_sort(list_intersect([1, 0], [true, false]));
+----
+[0, 1]
+
+query I
+SELECT list_sort(list_intersect([true, false, 1], [1, 0, 1, 1, 1, 1, 1]));
+----
+[0, 1]
+
+query I
+SELECT list_sort(list_intersect([1::INT, 2::INT, 3::INT], [2::BIGINT, 3::BIGINT, 4::BIGINT]));
+----
+[2, 3]
+
+query I
+SELECT typeof(list_intersect([1::INT, 2::INT], [2::BIGINT, 3::BIGINT]));
+----
+BIGINT[]
+
+query I
+SELECT list_sort(list_intersect([1::SMALLINT, 2::SMALLINT, 3::SMALLINT], [2::INT, 3::INT, 4::INT]));
+----
+[2, 3]
+
+query I
+SELECT typeof(list_intersect([1::SMALLINT, 2::SMALLINT], [2::INT, 3::INT]));
+----
+INTEGER[]
+
+query I
+SELECT list_sort(list_intersect([1::INT, 2::INT, 3::INT], [2.0::DOUBLE, 3.0::DOUBLE, 4.0::DOUBLE]));
+----
+[2.0, 3.0]
+
+query I
+SELECT typeof(list_intersect([1::INT, 2::INT], [2.0::DOUBLE, 3.0::DOUBLE]));
+----
+DOUBLE[]
+
