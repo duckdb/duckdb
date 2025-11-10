@@ -54,9 +54,7 @@ unique_ptr<TableFilter> SelectivityOptionalFilter::Deserialize(Deserializer &des
 }
 
 string SelectivityOptionalFilter::ToString(const string &column_name) const {
-	const auto active_string = EnumUtil::ToString(selectivity_stats->status.load());
-	const auto child_string = child_filter ? child_filter->ToString(column_name) : "NULL";
-	return child_string + " [" + active_string + "]";
+	return string("s_optional: ") + child_filter->ToString(column_name);
 }
 
 unique_ptr<TableFilter> SelectivityOptionalFilter::Copy() const {
