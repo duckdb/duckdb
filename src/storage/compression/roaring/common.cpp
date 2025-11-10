@@ -89,16 +89,16 @@ void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
 
-	auto result_data = (validity_t *) FlatVector::GetData<uint64_t>(result);
+	auto result_data = (validity_t *)FlatVector::GetData<uint64_t>(result);
 
-// #ifdef DEBUG
-// 	ValidityMask copy_for_verification(result.Capacity());
-// 	copy_for_verification.EnsureWritable();
-// 	for (idx_t i = 0;
-// 	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
-// 		copy_for_verification.GetData()[i] = result.GetData()[i];
-// 	}
-// #endif
+	// #ifdef DEBUG
+	// 	ValidityMask copy_for_verification(result.Capacity());
+	// 	copy_for_verification.EnsureWritable();
+	// 	for (idx_t i = 0;
+	// 	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++)
+	// { 		copy_for_verification.GetData()[i] = result.GetData()[i];
+	// 	}
+	// #endif
 
 	idx_t index = start;
 
@@ -156,17 +156,17 @@ void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 		result_data[entry_idx] &= mask;
 	}
 
-// #ifdef DEBUG
-// 	D_ASSERT(end <= result.Capacity());
-// 	for (idx_t i = 0; i < result.Capacity(); i++) {
-// 		if (i >= start && i < end) {
-// 			D_ASSERT(!result.RowIsValidUnsafe(i));
-// 		} else {
-// 			// Ensure no others bits are touched by this method
-// 			D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
-// 		}
-// 	}
-// #endif
+	// #ifdef DEBUG
+	// 	D_ASSERT(end <= result.Capacity());
+	// 	for (idx_t i = 0; i < result.Capacity(); i++) {
+	// 		if (i >= start && i < end) {
+	// 			D_ASSERT(!result.RowIsValidUnsafe(i));
+	// 		} else {
+	// 			// Ensure no others bits are touched by this method
+	// 			D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
+	// 		}
+	// 	}
+	// #endif
 }
 
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
@@ -269,30 +269,30 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	compression_compress_data_t compress = nullptr;
 
 	switch (data_type) {
-		case PhysicalType::BIT: {
-			analyze = roaring::RoaringAnalyze<PhysicalType::BIT>;
-			compress = roaring::RoaringCompress<PhysicalType::BIT>;
-			break;
-		}
-		case PhysicalType::BOOL: {
-			analyze = roaring::RoaringAnalyze<PhysicalType::BOOL>;
-			compress = roaring::RoaringCompress<PhysicalType::BOOL>;
-			break;
-		}
-		default:
-			throw InternalException("Roaring GetCompressionFunction, type %s not handled", EnumUtil::ToString(data_type));
+	case PhysicalType::BIT: {
+		analyze = roaring::RoaringAnalyze<PhysicalType::BIT>;
+		compress = roaring::RoaringCompress<PhysicalType::BIT>;
+		break;
 	}
-	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, roaring::RoaringInitAnalyze,
-								analyze, roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression,
-	                           compress, roaring::RoaringFinalizeCompress, roaring::RoaringInitScan,
-	                           roaring::RoaringScan, roaring::RoaringScanPartial, roaring::RoaringFetchRow,
-	                           roaring::RoaringSkip, roaring::RoaringInitSegment);
+	case PhysicalType::BOOL: {
+		analyze = roaring::RoaringAnalyze<PhysicalType::BOOL>;
+		compress = roaring::RoaringCompress<PhysicalType::BOOL>;
+		break;
+	}
+	default:
+		throw InternalException("Roaring GetCompressionFunction, type %s not handled", EnumUtil::ToString(data_type));
+	}
+	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, roaring::RoaringInitAnalyze, analyze,
+	                           roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression, compress,
+	                           roaring::RoaringFinalizeCompress, roaring::RoaringInitScan, roaring::RoaringScan,
+	                           roaring::RoaringScanPartial, roaring::RoaringFetchRow, roaring::RoaringSkip,
+	                           roaring::RoaringInitSegment);
 }
 
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BIT:
-	// case PhysicalType::BOOL:
+		// case PhysicalType::BOOL:
 		return GetCompressionFunction(type);
 	default:
 		throw InternalException("Unsupported type for Roaring");
@@ -302,7 +302,7 @@ CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 bool RoaringCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
 	switch (physical_type) {
 	case PhysicalType::BIT:
-	// case PhysicalType::BOOL:
+		// case PhysicalType::BOOL:
 		return true;
 	default:
 		return false;

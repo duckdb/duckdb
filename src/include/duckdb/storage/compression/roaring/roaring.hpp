@@ -225,8 +225,9 @@ public:
 	void FlushContainer();
 	template <PhysicalType TYPE>
 	void Analyze(Vector &input, idx_t count) {
-		throw InternalException("RoaringAnalyzState::Analyze, type %s not handled", EnumUtil::ToString(TYPE));
+		throw InternalException("RoaringAnalyzeState::Analyze, type %s not handled", EnumUtil::ToString(TYPE));
 	}
+
 public:
 	unsafe_unique_array<BitmaskTableEntry> bitmask_table;
 
@@ -351,6 +352,7 @@ public:
 	void Compress(Vector &input, idx_t count) {
 		throw InternalException("RoaringCompressState::Compress, type %s not handled", EnumUtil::ToString(TYPE));
 	}
+
 public:
 	unique_ptr<AnalyzeState> owned_analyze_state;
 	RoaringAnalyzeState &analyze_state;

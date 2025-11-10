@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/roaring/roaring_run_simple.test
+# name: test/sql/storage/compression/roaring/int_failing.test
 # description: Test bitpacking with nulls
 # group: [roaring]
 
