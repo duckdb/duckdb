@@ -1,0 +1,57 @@
+# name: test/sql/upsert/upsert_global_mixed_conflicts.test
+# group: [upsert]
+
+statement ok
+create table tbl (
+	number INTEGER PRIMARY KEY,
+	str VARCHAR
+);
+
+statement ok
+insert into tbl VALUES
+	(1, 'd'),
+	(3, 'nope'),
+	(2, 'n')
+;
+
+## Postgres says:
+## ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time
+## HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
+# This insert causes both:
+# - conflicts only within the to-be-inserted-data
+# - conflicts only with the existing data
+# - both conflicts with the existing data as well as within the to-be-inserted-data
+statement ok
+insert into tbl VALUES
+	(1, 'c'),	-- conflict (existing)
+	(6, 'yep'),
+	(3, 'abc'),	-- conflict (existing)
+	(4, 'abc'),
+	(7, 'tes'),
+	(2, 'b'),	-- conflict (existing)
+	(1, 'c'),	-- conflict (existing + inner)
+	(5, 'abc'),
+	(7, 'tes'), -- conflict (inner)
+	(2, 'b')	-- conflict (existing + inner)
+ON CONFLICT (number) DO UPDATE SET str = excluded.str || 'e';
+
+
+query II rowsort
+select * from tbl;
+----
+1	ce
+2	be
+3	abce
+4	abc
+5	abc
+6	yep
+7	tes
+
+## sqlite says this is the correct order ??:
+## 1	e
+## 2	e
+## 3	e
+## 4	abc
+## 5	abc
+## 6	yep
+## 7	e

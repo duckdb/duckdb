@@ -100,19 +100,19 @@ makeTypeCast(PGNode *arg, PGTypeName *tpname, int trycast, int location)
 }
 
 static PGNode *
-makeStringConst(char *str, int location)
+makeStringConst(const char *str, int location)
 {
 	PGAConst *n = makeNode(PGAConst);
 
 	n->val.type = T_PGString;
-	n->val.val.str = str;
+	n->val.val.str = (char *) str;
 	n->location = location;
 
 	return (PGNode *)n;
 }
 
 static PGNode *
-makeStringConstCast(char *str, int location, PGTypeName *tpname)
+makeStringConstCast(const char *str, int location, PGTypeName *tpname)
 {
 	PGNode *s = makeStringConst(str, location);
 
@@ -157,10 +157,10 @@ makeIntervalNode(PGNode *arg, int location, PGList *typmods) {
 }
 
 static PGNode *
-makeSampleSize(PGValue *sample_size, bool is_percentage) {
+makeSampleSize(PGNode *sample_size, bool is_percentage) {
 	PGSampleSize *n = makeNode(PGSampleSize);
 
-	n->sample_size = *sample_size;
+	n->sample_size = sample_size;
 	n->is_percentage = is_percentage;
 
 	return (PGNode *)n;
@@ -366,7 +366,7 @@ static PGNode* makeNamedParamRef(char *name, int location)
 static void
 insertSelectOptions(PGSelectStmt *stmt,
 					PGList *sortClause, PGList *lockingClause,
-					PGNode *limitOffset, PGNode *limitCount,
+					PGNode *limitOffset, PGNode *limitCount, PGNode *isLimitOffsetFirst,
 					PGWithClause *withClause,
 					core_yyscan_t yyscanner)
 {
@@ -410,6 +410,9 @@ insertSelectOptions(PGSelectStmt *stmt,
 					 errmsg("multiple LIMIT clauses not allowed"),
 					 parser_errposition(exprLocation(limitCount))));
 		stmt->limitCount = limitCount;
+	}
+	if (limitOffset == isLimitOffsetFirst) {
+		stmt->offset_first = true;
 	}
 	if (withClause)
 	{

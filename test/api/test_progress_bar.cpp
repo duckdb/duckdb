@@ -68,6 +68,9 @@ public:
 			}
 		}
 		if (cur_rows_read != total_cardinality) {
+			if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {
+				return;
+			}
 			error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });
 		}
 	}

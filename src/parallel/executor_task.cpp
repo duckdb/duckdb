@@ -1,4 +1,5 @@
-#include "duckdb/parallel/task.hpp"
+#include "duckdb/parallel/executor_task.hpp"
+#include "duckdb/parallel/task_notifier.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -6,13 +7,13 @@
 namespace duckdb {
 
 ExecutorTask::ExecutorTask(Executor &executor_p, shared_ptr<Event> event_p)
-    : executor(executor_p), event(std::move(event_p)) {
+    : executor(executor_p), event(std::move(event_p)), context(executor_p.context) {
 	executor.RegisterTask();
 }
 
-ExecutorTask::ExecutorTask(ClientContext &context, shared_ptr<Event> event_p, const PhysicalOperator &op_p)
-    : executor(Executor::Get(context)), event(std::move(event_p)), op(&op_p) {
-	thread_context = make_uniq<ThreadContext>(context);
+ExecutorTask::ExecutorTask(ClientContext &context_p, shared_ptr<Event> event_p, const PhysicalOperator &op_p)
+    : executor(Executor::Get(context_p)), event(std::move(event_p)), op(&op_p), context(context_p) {
+	thread_context = make_uniq<ThreadContext>(context_p);
 	executor.RegisterTask();
 }
 
@@ -36,17 +37,25 @@ void ExecutorTask::Reschedule() {
 TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {
 	try {
 		if (thread_context) {
-			thread_context->profiler.StartOperator(op);
-			auto result = ExecuteTask(mode);
-			thread_context->profiler.EndOperator(nullptr);
+			TaskExecutionResult result;
+			do {
+				TaskNotifier task_notifier {context};
+				thread_context->profiler.StartOperator(op);
+				// to allow continuous profiling, always execute in small steps
+				result = ExecuteTask(TaskExecutionMode::PROCESS_PARTIAL);
+				thread_context->profiler.EndOperator(nullptr);
+				executor.Flush(*thread_context);
+			} while (mode == TaskExecutionMode::PROCESS_ALL && result == TaskExecutionResult::TASK_NOT_FINISHED);
 			return result;
 		} else {
-			return ExecuteTask(mode);
+			TaskNotifier task_notifier {context};
+			auto result = ExecuteTask(mode);
+			return result;
 		}
 	} catch (std::exception &ex) {
 		executor.PushError(ErrorData(ex));
 	} catch (...) { // LCOV_EXCL_START
-		executor.PushError(ErrorData("Unknown exception in Finalize!"));
+		executor.PushError(ErrorData("Unknown exception in ExecutorTask::Execute"));
 	} // LCOV_EXCL_STOP
 	return TaskExecutionResult::TASK_ERROR;
 }

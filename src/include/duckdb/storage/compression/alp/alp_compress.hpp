@@ -28,20 +28,19 @@ namespace duckdb {
 
 template <class T>
 struct AlpCompressionState : public CompressionState {
-
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
-	    : CompressionState(analyze_state->info), checkpointer(checkpointer),
-	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
-		CreateEmptySegment(checkpointer.GetRowGroup().start);
+	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
+	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
+	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
+		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 
 		//! Combinations found on the analyze step are needed for compression
 		state.best_k_combinations = analyze_state->state.best_k_combinations;
 	}
 
-	ColumnDataCheckpointer &checkpointer;
+	ColumnDataCheckpointData &checkpoint_data;
 	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
@@ -90,13 +89,12 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
+		auto &db = checkpoint_data.GetDatabase();
+		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
+		                                                                info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
-		current_segment->function = function;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		handle = buffer_manager.Pin(current_segment->block);
@@ -177,7 +175,7 @@ public:
 	}
 
 	void FlushSegment() {
-		auto &checkpoint_state = checkpointer.GetCheckpointState();
+		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		auto dataptr = handle.Ptr();
 
 		idx_t metadata_offset = AlignValue(UsedSpace());
@@ -210,8 +208,7 @@ public:
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 
-		handle.Destroy();
-		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
+		checkpoint_state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
 	}
@@ -264,8 +261,9 @@ public:
 };
 
 template <class T>
-unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_uniq<AlpCompressionState<T>>(checkpointer, (AlpAnalyzeState<T> *)state.get());
+unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointData &checkpoint_data,
+                                                unique_ptr<AnalyzeState> state) {
+	return make_uniq<AlpCompressionState<T>>(checkpoint_data, (AlpAnalyzeState<T> *)state.get());
 }
 
 template <class T>

@@ -15,20 +15,27 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	}
 
 	D_ASSERT(vacuum.column_id_map.empty());
+
 	auto bound_table = Bind(*info.ref);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
-		throw InvalidInputException("can only vacuum or analyze base tables");
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("Can only vacuum or analyze base tables");
 	}
-	auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(std::move(bound_table));
-	auto &table = ref->table;
+	auto table_scan = std::move(bound_table.plan);
+	auto &get = table_scan->Cast<LogicalGet>();
+	auto table_ptr = get.GetTable();
+	if (!table_ptr) {
+		throw BinderException("Can only vacuum or analyze base tables");
+	}
+	auto &table = *table_ptr;
 	vacuum.SetTable(table);
 
 	vector<unique_ptr<Expression>> select_list;
 	auto &columns = info.columns;
 	if (columns.empty()) {
 		// Empty means ALL columns should be vacuumed/analyzed
-		auto &get = ref->get->Cast<LogicalGet>();
-		columns.insert(columns.end(), get.names.begin(), get.names.end());
+		for (auto &col : table.GetColumns().Physical()) {
+			columns.push_back(col.GetName());
+		}
 	}
 
 	case_insensitive_set_t column_name_set;
@@ -45,7 +52,9 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		auto &col = table.GetColumn(col_name);
 		// ignore generated column
 		if (col.Generated()) {
-			continue;
+			throw BinderException(
+			    "cannot vacuum or analyze generated column \"%s\" - specify non-generated columns to vacuum or analyze",
+			    col.GetName());
 		}
 		non_generated_column_names.push_back(col_name);
 		ColumnRefExpression colref(col_name, table.name);
@@ -56,19 +65,12 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		select_list.push_back(std::move(result.expression));
 	}
 	info.columns = std::move(non_generated_column_names);
-	// Creating a table without any physical columns is not supported
-	D_ASSERT(!select_list.empty());
-
-	auto table_scan = CreatePlan(*ref);
-	D_ASSERT(table_scan->type == LogicalOperatorType::LOGICAL_GET);
-
-	auto &get = table_scan->Cast<LogicalGet>();
 
 	auto &column_ids = get.GetColumnIds();
 	D_ASSERT(select_list.size() == column_ids.size());
 	D_ASSERT(info.columns.size() == column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		vacuum.column_id_map[i] = table.GetColumns().LogicalToPhysical(LogicalIndex(column_ids[i])).index;
+		vacuum.column_id_map[i] = table.GetColumns().LogicalToPhysical(column_ids[i].ToLogical()).index;
 	}
 
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));

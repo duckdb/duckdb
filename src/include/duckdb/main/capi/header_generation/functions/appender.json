@@ -1,6 +1,6 @@
 {
     "group": "appender",
-    "description": "// Appenders are the most efficient way of loading data into DuckDB from within the C interface, and are recommended for\n// fast data loading. The appender is much faster than using prepared statements or individual `INSERT INTO` statements.\n\n// Appends are made in row-wise format. For every column, a `duckdb_append_[type]` call should be made, after which\n// the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,\n// `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.\n\n// Instead of appending rows with `duckdb_appender_end_row`, it is also possible to fill and append\n// chunks-at-a-time.\n\n// Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns\n// `DuckDBError`.",
+    "description": "Appenders are the most efficient way of bulk-loading data into DuckDB. They are recommended for fast data loading as they perform better than prepared statements or individual `INSERT INTO` statements. Appends are possible in row-wise format, and by appending entire data chunks. Try to use chunk-wise appends via `duckdb_append_data_chunk` to ensure support for all of DuckDBs data types. Chunk-wise appends consecutively call `duckdb_append_data_chunk` until all chunks have been appended. Afterward, call `duckdb_appender_destroy` flush any outstanding data and to destroy the appender instance.",
     "deprecated": false,
     "entries": [
         {
@@ -36,6 +36,90 @@
             }
         },
         {
+            "name": "duckdb_appender_create_ext",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "catalog"
+                },
+                {
+                    "type": "const char *",
+                    "name": "schema"
+                },
+                {
+                    "type": "const char *",
+                    "name": "table"
+                },
+                {
+                    "type": "duckdb_appender *",
+                    "name": "out_appender"
+                }
+            ],
+            "comment": {
+                "description": "Creates an appender object.\n\nNote that the object must be destroyed with `duckdb_appender_destroy`.\n\n",
+                "param_comments": {
+                    "connection": "The connection context to create the appender in.",
+                    "catalog": "The catalog of the table to append to, or `nullptr` for the default catalog.",
+                    "schema": "The schema of the table to append to, or `nullptr` for the default schema.",
+                    "table": "The table name to append to.",
+                    "out_appender": "The resulting appender object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_appender_create_query",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "query"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "column_count"
+                },
+                {
+                    "type": "duckdb_logical_type *",
+                    "name": "types"
+                },
+                {
+                    "type": "const char *",
+                    "name": "table_name"
+                },
+                {
+                    "type": "const char **",
+                    "name": "column_names"
+                },
+                {
+                    "type": "duckdb_appender *",
+                    "name": "out_appender"
+                }
+            ],
+            "comment": {
+                "description": "Creates an appender object that executes the given query with any data appended to it.\n\nNote that the object must be destroyed with `duckdb_appender_destroy`.\n\n",
+                "param_comments": {
+                    "connection": "The connection context to create the appender in.",
+                    "query": "The query to execute, can be an INSERT, DELETE, UPDATE or MERGE INTO statement.",
+                    "column_count": "The number of columns to append.",
+                    "types": "The types of the columns to append.",
+                    "table_name": "(optionally) the table name used to refer to the appended data, defaults to \"appended_data\".",
+                    "column_names": "(optionally) the list of column names, defaults to \"col1\", \"col2\", ...",
+                    "out_appender": "The resulting appender object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
             "name": "duckdb_appender_column_count",
             "return_type": "idx_t",
             "params": [
@@ -45,11 +129,11 @@
                 }
             ],
             "comment": {
-                "description": "Returns the number of columns in the table that belongs to the appender.\n\n",
+                "description": "Returns the number of columns that belong to the appender. \nIf there is no active column list, then this equals the table's physical columns. \n\n",
                 "param_comments": {
                     "appender": "The appender to get the column count from."
                 },
-                "return_value": "The number of columns in the table."
+                "return_value": "The number of columns in the data chunks."
             }
         },
         {
@@ -66,16 +150,17 @@
                 }
             ],
             "comment": {
-                "description": "Returns the type of the column at the specified index.\n\nNote: The resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Returns the type of the column at the specified index. This is either a type in the active column list, or the same type as a column in the receiving table.\n\nNote: The resulting type must be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
                     "appender": "The appender to get the column type from.",
                     "col_idx": "The index of the column to get the type of."
                 },
-                "return_value": "The duckdb_logical_type of the column."
+                "return_value": "The `duckdb_logical_type` of the column."
             }
         },
         {
             "name": "duckdb_appender_error",
+            "deprecated": true,
             "return_type": "const char *",
             "params": [
                 {
@@ -84,11 +169,28 @@
                 }
             ],
             "comment": {
-                "description": "Returns the error message associated with the given appender.\nIf the appender has no error message, this returns `nullptr` instead.\n\nThe error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.\n\n",
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\nUse duckdb_appender_error_data instead.\n\nReturns the error message associated with the appender.\nIf the appender has no error message, this returns `nullptr` instead.\n\nThe error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.\n\n",
                 "param_comments": {
                     "appender": "The appender to get the error from."
                 },
                 "return_value": "The error message, or `nullptr` if there is none."
+            }
+        },
+        {
+            "name": "duckdb_appender_error_data",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                }
+            ],
+            "comment": {
+                "description": "Returns the error data associated with the appender.\nMust be destroyed with duckdb_destroy_error_data.\n\n",
+                "param_comments": {
+                    "appender": "The appender to get the error data from."
+                },
+                "return_value": "The error data."
             }
         },
         {
@@ -101,9 +203,26 @@
                 }
             ],
             "comment": {
-                "description": "Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a\nconstraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.\nIt is not possible to append more values. Call duckdb_appender_error to obtain the error message followed by\nduckdb_appender_destroy to destroy the invalidated appender.\n\n",
+                "description": "Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a\nconstraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.\nIt is not possible to append more values. Call duckdb_appender_error_data to obtain the error data followed by\nduckdb_appender_destroy to destroy the invalidated appender.\n\n",
                 "param_comments": {
                     "appender": "The appender to flush."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_appender_clear",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                }
+            ],
+            "comment": {
+                "description": "Clears all buffered data from the appender without flushing it to the table. This discards any data that has been appended but not yet written. The appender can continue to be used after clearing.\n\n",
+                "param_comments": {
+                    "appender": "The appender to clear."
                 },
                 "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
             }
@@ -118,7 +237,7 @@
                 }
             ],
             "comment": {
-                "description": "Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data\ntriggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.\nCall duckdb_appender_error to obtain the error message followed by duckdb_appender_destroy to destroy the invalidated\nappender.\n\n",
+                "description": "Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data\ntriggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.\nCall duckdb_appender_error_data to obtain the error data followed by duckdb_appender_destroy to destroy the invalidated\nappender.\n\n",
                 "param_comments": {
                     "appender": "The appender to flush and close."
                 },
@@ -138,6 +257,45 @@
                 "description": "Closes the appender by flushing all intermediate states to the table and destroying it. By destroying it, this function\nde-allocates all memory associated with the appender. If flushing the data triggers a constraint violation,\nthen all data is invalidated, and this function returns DuckDBError. Due to the destruction of the appender, it is no\nlonger possible to obtain the specific error message with duckdb_appender_error. Therefore, call duckdb_appender_close\nbefore destroying the appender, if you need insights into the specific error.\n\n",
                 "param_comments": {
                     "appender": "The appender to flush, close and destroy."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_appender_add_column",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Appends a column to the active column list of the appender. Immediately flushes all previous data. \n\nThe active column list specifies all columns that are expected when flushing the data. Any non-active columns are filled with their default values, or NULL. \n\n",
+                "param_comments": {
+                    "appender": "The appender to add the column to.",
+                    "chunk": "The column name."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_appender_clear_columns",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                }
+            ],
+            "comment": {
+                "description": "Removes all columns from the active column list of the appender, resetting the appender to treat all columns as active. Immediately flushes all previous data. \n\n",
+                "param_comments": {
+                    "appender": "The appender to clear the columns from."
                 },
                 "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
             }
@@ -184,6 +342,38 @@
             "comment": {
                 "description": "Append a DEFAULT value (NULL if DEFAULT not available for column) to the appender.\n"
             }
+        },
+        {
+            "name": "duckdb_append_default_to_chunk",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+          "comment": {
+            "description": "Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not available for column) to the chunk created from the specified appender.\nThe default value of the column must be a constant value. Non-deterministic expressions like nextval('seq') or random() are not supported.\n\n",
+            "param_comments": {
+              "appender": "The appender to get the default value from.",
+              "chunk": "The data chunk to append the default value to.",
+              "col": "The chunk column index to append the default value to.",
+              "row": "The chunk row index to append the default value to."
+            },
+            "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+          }
         },
         {
             "name": "duckdb_append_bool",
@@ -547,6 +737,23 @@
             }
         },
         {
+            "name": "duckdb_append_value",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Append a duckdb_value to the appender.\n"
+            }
+        },
+        {
             "name": "duckdb_append_data_chunk",
             "return_type": "duckdb_state",
             "params": [
@@ -560,12 +767,12 @@
                 }
             ],
             "comment": {
-                "description": "Appends a pre-filled data chunk to the specified appender.\n\nThe types of the data chunk must exactly match the types of the table, no casting is performed.\nIf the types do not match or the appender is in an invalid state, DuckDBError is returned.\nIf the append is successful, DuckDBSuccess is returned.\n\n",
+                "description": "Appends a pre-filled data chunk to the specified appender.\n Attempts casting, if the data chunk types do not match the active appender types. \n\n",
                 "param_comments": {
                     "appender": "The appender to append to.",
                     "chunk": "The data chunk to append."
                 },
-                "return_value": "The return state."
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
             }
         }
     ]

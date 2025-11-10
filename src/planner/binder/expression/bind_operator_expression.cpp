@@ -1,13 +1,15 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -24,16 +26,18 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 	}
 	// get the maximum type from the children
 	LogicalType max_type = ExpressionBinder::GetExpressionReturnType(*children[0]);
-	bool is_in_operator = (op.type == ExpressionType::COMPARE_IN || op.type == ExpressionType::COMPARE_NOT_IN);
+	bool is_in_operator = (op.GetExpressionType() == ExpressionType::COMPARE_IN ||
+	                       op.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
 	for (idx_t i = 1; i < children.size(); i++) {
 		auto child_return = ExpressionBinder::GetExpressionReturnType(*children[i]);
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
-			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type, op.type)) {
+			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type,
+			                                                  op.GetExpressionType())) {
 				throw BinderException(op,
 				                      "Cannot mix values of type %s and %s in %s clause - an explicit cast is required",
 				                      max_type.ToString(), child_return.ToString(),
-				                      op.type == ExpressionType::COMPARE_IN ? "IN" : "NOT IN");
+				                      op.GetExpressionType() == ExpressionType::COMPARE_IN ? "IN" : "NOT IN");
 			}
 		} else {
 			// If it's COALESCE operator, don't do extra adjustment.
@@ -57,7 +61,7 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 }
 
 LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
-	switch (op.type) {
+	switch (op.GetExpressionType()) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
@@ -73,6 +77,9 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 	case ExpressionType::OPERATOR_COALESCE: {
 		return ResolveCoalesceType(op, children);
 	}
+	case ExpressionType::OPERATOR_TRY: {
+		return children[0]->return_type;
+	}
 	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
 	default:
@@ -85,7 +92,7 @@ BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth) {
-	if (op.type == ExpressionType::GROUPING_FUNCTION) {
+	if (op.GetExpressionType() == ExpressionType::GROUPING_FUNCTION) {
 		return BindGroupingFunction(op, depth);
 	}
 
@@ -101,22 +108,41 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 
 	// all children bound successfully
 	string function_name;
-	switch (op.type) {
+	switch (op.GetExpressionType()) {
+	case ExpressionType::OPERATOR_UNPACK:
+		return BindResult("UNPACK not allowed here, should have been resolved earlier");
 	case ExpressionType::ARRAY_EXTRACT: {
-		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
 		const auto &b_exp_type = b_exp->return_type;
 		if (b_exp_type.id() == LogicalTypeId::MAP) {
-			function_name = "map_extract";
+			function_name = "map_extract_value";
 		} else if (b_exp_type.IsJSONType() && op.children.size() == 2) {
 			function_name = "json_extract";
 			// Make sure we only extract array elements, not fields, by adding the $[] syntax
 			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
+			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+			    !i_exp->Cast<BoundConstantExpression>().value.IsNull()) {
+				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
+				if (const_exp.value.TryCastAs(context, LogicalType::UINTEGER)) {
+					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
+					auto index = UIntegerValue::Get(const_exp.value);
+					const_exp.value = StringUtil::Format("$[%lld]", index);
+					const_exp.return_type = LogicalType::VARCHAR;
+				} else if (const_exp.return_type.id() == LogicalType::VARCHAR) {
+					// Field extraction
+					const_exp.value = StringUtil::Format("$.\"%s\"", const_exp.value.ToString());
+					const_exp.return_type = LogicalType::VARCHAR;
+				}
+			}
+		} else if (b_exp_type.id() == LogicalTypeId::VARIANT && op.children.size() == 2) {
+			function_name = "variant_extract";
+			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
 			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
-				if (!const_exp.value.IsNull()) {
-					const_exp.value = StringUtil::Format("$[%s]", const_exp.value.ToString());
-					const_exp.return_type = LogicalType::VARCHAR;
+				if (!const_exp.value.IsNull() && const_exp.return_type.IsNumeric()) {
+					const_exp.value = const_exp.value.DefaultCastAs(LogicalType::UINTEGER, true);
+					const_exp.return_type = LogicalType::UINTEGER;
 				}
 			}
 		} else {
@@ -129,19 +155,35 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	case ExpressionType::STRUCT_EXTRACT: {
 		D_ASSERT(op.children.size() == 2);
-		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		D_ASSERT(op.children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[1]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
+		if (extract_exp->HasParameter() || extract_exp->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
 		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
-		    extract_expr_type.id() != LogicalTypeId::SQLNULL && !extract_expr_type.IsJSONType()) {
+		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
+		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT) {
 			return BindResult(StringUtil::Format(
-			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, or json",
+			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
 			    name_exp->ToString(), extract_exp->ToString()));
 		}
 		if (extract_expr_type.id() == LogicalTypeId::UNION) {
 			function_name = "union_extract";
+		} else if (extract_expr_type.id() == LogicalTypeId::MAP) {
+			function_name = "map_extract_value";
+		} else if (extract_expr_type.id() == LogicalTypeId::VARIANT) {
+			function_name = "variant_extract";
+			auto &i_exp = BoundExpression::GetExpression(*op.children[1]);
+			if (i_exp->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+				auto &const_exp = i_exp->Cast<BoundConstantExpression>();
+				if (!const_exp.value.IsNull()) {
+					const_exp.value = StringUtil::Format("%s", const_exp.value.ToString());
+					const_exp.return_type = LogicalType::VARCHAR;
+				}
+			}
 		} else if (extract_expr_type.IsJSONType()) {
 			function_name = "json_extract";
 			// Make sure we only extract fields, not array elements, by adding $. syntax
@@ -163,6 +205,16 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::ARROW:
 		function_name = "json_extract";
 		break;
+	case ExpressionType::OPERATOR_TRY: {
+		auto &expr = BoundExpression::GetExpression(*op.children[0]);
+		if (expr->HasSubquery()) {
+			throw BinderException("TRY can not be used in combination with a scalar subquery");
+		}
+		if (expr->IsVolatile()) {
+			throw BinderException("TRY can not be used in combination with a volatile function");
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -173,12 +225,12 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < op.children.size(); i++) {
-		D_ASSERT(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[i]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		children.push_back(std::move(BoundExpression::GetExpression(*op.children[i])));
 	}
 	// now resolve the types
 	LogicalType result_type = ResolveOperatorType(op, children);
-	if (op.type == ExpressionType::OPERATOR_COALESCE) {
+	if (op.GetExpressionType() == ExpressionType::OPERATOR_COALESCE) {
 		if (children.empty()) {
 			throw BinderException("COALESCE needs at least one child");
 		}
@@ -187,7 +239,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		}
 	}
 
-	auto result = make_uniq<BoundOperatorExpression>(op.type, result_type);
+	auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), result_type);
 	for (auto &child : children) {
 		result->children.push_back(std::move(child));
 	}

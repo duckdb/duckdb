@@ -1,8 +1,5 @@
 name: Create or Label Mirror Issue
 on:
-  discussion:
-    types:
-      - labeled
   issues:
     types:
       - labeled
@@ -13,15 +10,33 @@ env:
   PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
 
 jobs:
-  handle_pr_submitted_label:
-    if: github.event.label.name == 'PR submitted'
+  handle_pr_submitted_or_fix_on_nightly_label:
+    if: github.event.label.name == 'PR submitted' || github.event.label.name == 'fixed on nightly'
     runs-on: ubuntu-latest
     steps:
       - name: Remove 'needs triage' label
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
 
-  create_or_label_issue:
+  add_needs_reproducible_example_comment:
+    if: github.event.label.name == 'needs reproducible example'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add comment
+        run: |
+          cat > needs-reproducible-example-comment.md << EOF
+          Thanks for opening this issue in the DuckDB issue tracker! To resolve this issue, our team needs a reproducible example. This includes:
+
+          * A source code snippet which reproduces the issue.
+          * The snippet should be self-contained, i.e., it should contain all imports and should use relative paths instead of hard coded paths (please avoid \`/Users/JohnDoe/...\`).
+          * A lot of issues can be reproduced with plain SQL code executed in the [DuckDB command line client](https://duckdb.org/docs/api/cli/overview). If you can provide such an example, it greatly simplifies the reproduction process and likely results in a faster fix.
+          * If the script needs additional data, please share the data as a CSV, JSON, or Parquet file. Unfortunately, we cannot fix issues that can only be reproduced with a confidential data set. [Support contracts](https://duckdblabs.com/#support) allow sharing confidential data with the core DuckDB team under NDA.
+
+          For more detailed guidelines on how to create reproducible examples, please visit Stack Overflow's [“Minimal, Reproducible Example”](https://stackoverflow.com/help/minimal-reproducible-example) page.
+          EOF
+          gh issue comment --repo duckdb/duckdb ${{ github.event.issue.number }} --body-file needs-reproducible-example-comment.md
+
+  create_or_label_mirror_issue:
     if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
     runs-on: ubuntu-latest
     steps:
@@ -56,11 +71,11 @@ jobs:
       - name: Set label environment variable
         run: |
           if ${{ github.event.label.name == 'reproduced' }}; then
-            echo "LABEL=needs label" >> $GITHUB_ENV
-            echo "UNLABEL=needs triage" >> $GITHUB_ENV
+            echo "LABEL=reproduced" >> $GITHUB_ENV
+            echo "UNLABEL=under review" >> $GITHUB_ENV
           else
-            echo "LABEL=needs triage" >> $GITHUB_ENV
-            echo "UNLABEL=needs label" >> $GITHUB_ENV
+            echo "LABEL=under review" >> $GITHUB_ENV
+            echo "UNLABEL=reproduced" >> $GITHUB_ENV
           fi
 
       - name: Create or label issue

@@ -1,0 +1,17 @@
+# name: test/sql/aggregate/aggregates/first_memory_usage.test_slow
+# description: Issue 14132 - Out of memory on basic hash aggregations with large values/aggregates
+# group: [aggregates]
+
+load __TEST_DIR__/first_memory_usage.db
+
+statement ok
+set threads=1;
+
+statement ok
+set memory_limit='500mb';
+
+# this query uses the first() aggregate, which used to use too much memory (it did redundant allocation in Combine)
+# we also limit the number of threads in RadixPartitionedHashtable to limit memory usage when close to the limit
+# we can now easily complete this query
+statement ok
+select distinct on (a) b from (select s a, md5(s::text) b from generate_series(1,5_000_000) as g(s)) limit 10;

@@ -1,19 +1,26 @@
 add_library_unity(
   duckdb_table_func_system
   OBJECT
+  duckdb_connection_count.cpp
+  duckdb_approx_database_count.cpp
   duckdb_columns.cpp
   duckdb_constraints.cpp
   duckdb_databases.cpp
   duckdb_dependencies.cpp
   duckdb_extensions.cpp
+  duckdb_external_file_cache.cpp
   duckdb_functions.cpp
   duckdb_keywords.cpp
+  duckdb_log.cpp
+  duckdb_log_contexts.cpp
   duckdb_indexes.cpp
   duckdb_memory.cpp
   duckdb_optimizers.cpp
   duckdb_schemas.cpp
   duckdb_secrets.cpp
+  duckdb_prepared_statements.cpp
   duckdb_which_secret.cpp
+  duckdb_secret_types.cpp
   duckdb_sequences.cpp
   duckdb_settings.cpp
   duckdb_tables.cpp
@@ -21,11 +28,13 @@ add_library_unity(
   duckdb_types.cpp
   duckdb_variables.cpp
   duckdb_views.cpp
+  logging_utils.cpp
   pragma_collations.cpp
   pragma_database_size.cpp
   pragma_metadata_info.cpp
   pragma_storage_info.cpp
   pragma_table_info.cpp
+  pragma_table_sample.cpp
   pragma_user_agent.cpp
   test_all_types.cpp
   test_vector_types.cpp)

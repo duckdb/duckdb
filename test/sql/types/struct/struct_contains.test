@@ -1,0 +1,259 @@
+# name: test/sql/types/struct/struct_contains.test
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+# ==========================================================
+# Unnamed struct
+# ==========================================================
+query I
+SELECT struct_contains(ROW(1, 2), 2);
+----
+true
+
+query I
+SELECT struct_contains(ROW(1, 2), 3);
+----
+false
+
+query I
+SELECT struct_contains(ROW(1, 2), NULL);
+----
+NULL
+
+query I
+SELECT struct_contains(ROW(1, NULL), 1);
+----
+true
+
+query I
+SELECT struct_contains(ROW(1, NULL), NULL);
+----
+NULL
+
+query I
+SELECT struct_contains(NULL, 1);
+----
+NULL
+
+query I
+SELECT struct_contains(ROW(1), NULL);
+----
+NULL
+
+query I
+SELECT struct_contains(ROW(NULL), NULL);
+----
+NULL
+
+query I
+SELECT struct_contains(ROW('test', 'notest'), 'notest');
+----
+true
+
+query I
+SELECT struct_contains(ROW('test', 'notest'), 'a');
+----
+false
+
+# ==========================================================
+# cast to max logical type
+# ==========================================================
+query I
+SELECT struct_contains(ROW(1, 2, 3), TRUE);
+----
+true
+
+query I
+SELECT struct_contains(ROW(1, 2, 3), 1.0);
+----
+true
+
+query I
+SELECT struct_contains(ROW(1.0, 2.0, 3.0), 2);
+----
+true
+
+# ==========================================================
+# tables
+# ==========================================================
+statement ok
+CREATE TABLE t1 (c0 INT, c1 INT, c2 INT, c3 VARCHAR);
+
+statement ok
+INSERT INTO t1 VALUES (1, 2, 3, 'a'), (4, 5, 6, 'b'), (7, 8, 9, 'c'), (NULL, 10, 11, 'd'), (12, 13, 14, NULL);
+
+query I
+SELECT struct_contains(ROW(c0, c1, c2), 1) FROM t1;
+----
+true
+false
+false
+false
+false
+
+query I 
+SELECT struct_contains(ROW(c0, c1, c2), NULL) FROM t1;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT struct_contains(ROW(c0, c1, c2, c3), 1) FROM t1;
+----
+true
+false
+false
+false
+false
+
+query I
+SELECT struct_contains(ROW(c0, c1, c2, c3), 'a') FROM t1;
+----
+true
+false
+false
+false
+false
+
+query III
+SELECT ROW(c0, c1, c2, c3), c0, struct_contains(ROW(c0, c1, c2, c3), c0) FROM t1;
+----
+(1, 2, 3, a)	1	true
+(4, 5, 6, b)	4	true
+(7, 8, 9, c)	7	true
+(NULL, 10, 11, d)	NULL	NULL
+(12, 13, 14, NULL)	12	true
+
+# ==========================================================
+# Target type does have match in struct type
+# ==========================================================
+
+query I
+SELECT struct_contains(row(1, TRUE, 1.0), '1');
+----
+false
+
+statement ok
+CREATE TABLE mixed_types(c0 INT, c1 BOOL, c2 DECIMAL(10, 2), val VARCHAR);
+
+statement ok
+INSERT INTO mixed_types VALUES (1, TRUE, 1.0, '1'), (2, FALSE, 2.0, '2'), (3, TRUE, 3.0, NULL), (NULL, NULL, NULL, '4');
+
+query III
+SELECT ROW(c0, c1, c2), val, struct_contains(ROW(c0, c1, c2), val) FROM mixed_types;
+----
+(1, true, 1.00)	1	false
+(2, false, 2.00)	2	false
+(3, true, 3.00)	NULL	NULL
+(NULL, NULL, NULL)	4	false
+
+# ==========================================================
+# Nested structs
+# ==========================================================
+
+query I
+SELECT struct_contains(ROW(ROW(1, 2), ROW(3, 4)), ROW(1, 2));
+----
+true
+
+query I
+SELECT struct_contains(ROW([1, 2], 3), [1, 2]);
+----
+true
+
+query I
+SELECT struct_contains(ROW(ROW(1, 2), [1,2]), ROW(5, 6));
+----
+false
+
+query I
+SELECT struct_contains(ROW(ROW(1, 2), [1,2]), ROW(1, 2));
+----
+true
+
+query I
+SELECT struct_contains(ROW(ROW(1, 2), [1,2]), [1, 2]);
+----
+true
+
+query I
+SELECT struct_contains(ROW(ROW(NULL), [1,2]), ROW(NULL));
+----
+true
+
+query I
+SELECT struct_contains(ROW(MAP([1], [2])), MAP([1], [2]));
+----
+true
+
+query I
+SELECT struct_contains(ROW(MAP([1], [2])), MAP([1], [3]));
+----
+false
+
+query I
+SELECT struct_contains(ROW(ROW(c0, c1), [c0, c1]), ROW(1, 2)) FROM t1;
+----
+true
+false
+false
+false
+false
+
+query I
+SELECT struct_contains(ROW(ROW(c0, c1), [c0, c1]), [1, 2]) FROM t1;
+----
+true
+false
+false
+false
+false
+
+query I
+SELECT struct_contains(NULL, row(c1, c2)) FROM t1;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+# ==========================================================
+# IN keyword (calls struct_contains)
+# ==========================================================
+query I
+SELECT 1 in x FROM (SELECT (1, 2) AS x);
+----
+true
+
+statement ok
+CREATE TABLE t0 (c0 INT, c1 INT);
+
+statement ok
+INSERT INTO t0 VALUES (1, 2), (3, 4), (5, 6);
+
+query II
+SELECT c0, c0 IN x FROM (SELECT [c0, c1] AS x FROM t0) AS y, t0 ORDER BY c0, x;
+----
+1	true
+1	false
+1	false
+3	false
+3	true
+3	false
+5	false
+5	false
+5	true
+
+# ==========================================================
+# Errors
+# ==========================================================
+statement error
+SELECT struct_contains({'a': 1, 'b': 2}, 2);
+----
+<REGEX>:Binder Error.*struct_contains can only be used on unnamed structs.*

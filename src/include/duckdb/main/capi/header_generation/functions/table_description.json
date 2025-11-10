@@ -1,6 +1,7 @@
 {
     "group": "table_description",
     "deprecated": false,
+    "description": "Functions to create and access a `duckdb_table_description` instance.",
     "entries": [
         {
             "name": "duckdb_table_description_create",
@@ -27,6 +28,43 @@
                 "description": "Creates a table description object. Note that `duckdb_table_description_destroy` should always be called on the resulting table_description, even if the function returns `DuckDBError`.\n\n",
                 "param_comments": {
                     "connection": "The connection context.",
+                    "schema": "The schema of the table, or `nullptr` for the default schema.",
+                    "table": "The table name.",
+                    "out": "The resulting table description object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_table_description_create_ext",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "catalog"
+                },
+                {
+                    "type": "const char *",
+                    "name": "schema"
+                },
+                {
+                    "type": "const char *",
+                    "name": "table"
+                },
+                {
+                    "type": "duckdb_table_description *",
+                    "name": "out"
+                }
+            ],
+            "comment": {
+                "description": "Creates a table description object. Note that `duckdb_table_description_destroy` must be called on the resulting table_description, even if the function returns `DuckDBError`.\n\n",
+                "param_comments": {
+                    "connection": "The connection context.",
+                    "catalog": "The catalog (database) name of the table, or `nullptr` for the default catalog.",
                     "schema": "The schema of the table, or `nullptr` for the default schema.",
                     "table": "The table name.",
                     "out": "The resulting table description object."
@@ -92,6 +130,67 @@
                     "out": "The out-parameter used to store the result."
                 },
                 "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_table_description_get_column_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_table_description",
+                    "name": "table_description"
+                }
+            ],
+            "comment": {
+                "description": "Return the number of columns of the described table.\n\n",
+                "param_comments": {
+                    "table_description": "The table_description to query."
+                },
+                "return_value": "The column count."
+            }
+        },
+        {
+            "name": "duckdb_table_description_get_column_name",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_table_description",
+                    "name": "table_description"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Obtain the column name at 'index'.\nThe out result must be destroyed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "table_description": "The table_description to query.",
+                    "index": "The index of the column to query."
+                },
+                "return_value": "The column name."
+            }
+        },
+        {
+            "name": "duckdb_table_description_get_column_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_table_description",
+                    "name": "table_description"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Obtain the column type at 'index'.\nThe return value must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "table_description": "The table_description to query.",
+                    "index": "The index of the column to query."
+                },
+                "return_value": "The column type."
             }
         }
     ]

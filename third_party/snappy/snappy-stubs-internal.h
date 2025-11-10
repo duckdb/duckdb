@@ -31,6 +31,19 @@
 #ifndef THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
 #define THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
 
+// DuckDB - LNK: define here instead of in CMake
+#ifdef __GNUC__
+#define HAVE_BUILTIN_EXPECT 1
+#define HAVE_BUILTIN_CTZ 1
+#define HAVE_BUILTIN_PREFETCH 1
+#endif
+
+// These should always be available on aarch64, but sadly not on iOS/Android
+// #if defined(__aarch64__)
+// #define SNAPPY_HAVE_NEON 1
+// #define SNAPPY_HAVE_NEON_CRC32 1
+// #endif
+
 #include "snappy_version.hpp"
 
 #if SNAPPY_NEW_VERSION
@@ -46,14 +59,6 @@
 #include <cstring>
 #include <limits>
 #include <string>
-
-// DuckDB - LNK: define here instead of in CMake
-#ifdef __GNUC__
-#define HAVE_BUILTIN_EXPECT 1
-#define HAVE_BUILTIN_CTZ 1
-#define HAVE_BUILTIN_PREFETCH 1
-#endif
-
 
 #if HAVE_SYS_MMAN_H
 #include <sys/mman.h>
@@ -442,15 +447,15 @@ inline int Bits::FindLSBSetNonZero64(uint64_t n) {
 #endif  // HAVE_BUILTIN_CTZ
 
 // Variable-length integer encoding.
-class Varint {
+class Bignum {
  public:
-  // Maximum lengths of varint encoding of uint32_t.
+  // Maximum lengths of bignum encoding of uint32_t.
   static const int kMax32 = 5;
 
-  // Attempts to parse a varint32 from a prefix of the bytes in [ptr,limit-1].
-  // Never reads a character at or beyond limit.  If a valid/terminated varint32
+  // Attempts to parse a bignum32 from a prefix of the bytes in [ptr,limit-1].
+  // Never reads a character at or beyond limit.  If a valid/terminated bignum32
   // was found in the range, stores it in *OUTPUT and returns a pointer just
-  // past the last byte of the varint32. Else returns NULL.  On success,
+  // past the last byte of the bignum32. Else returns NULL.  On success,
   // "result <= limit".
   static const char* Parse32WithLimit(const char* ptr, const char* limit,
                                       uint32_t* OUTPUT);
@@ -460,11 +465,11 @@ class Varint {
   //            byte just past the last encoded byte.
   static char* Encode32(char* ptr, uint32_t v);
 
-  // EFFECTS    Appends the varint representation of "value" to "*s".
+  // EFFECTS    Appends the bignum representation of "value" to "*s".
   static void Append32(std::string* s, uint32_t value);
 };
 
-inline const char* Varint::Parse32WithLimit(const char* p,
+inline const char* Bignum::Parse32WithLimit(const char* p,
                                             const char* l,
                                             uint32_t* OUTPUT) {
   const unsigned char* ptr = reinterpret_cast<const unsigned char*>(p);
@@ -480,13 +485,13 @@ inline const char* Varint::Parse32WithLimit(const char* p,
   b = *(ptr++); result |= (b & 127) << 21; if (b < 128) goto done;
   if (ptr >= limit) return NULL;
   b = *(ptr++); result |= (b & 127) << 28; if (b < 16) goto done;
-  return NULL;       // Value is too long to be a varint32
+  return NULL;       // Value is too long to be a bignum32
  done:
   *OUTPUT = result;
   return reinterpret_cast<const char*>(ptr);
 }
 
-inline char* Varint::Encode32(char* sptr, uint32_t v) {
+inline char* Bignum::Encode32(char* sptr, uint32_t v) {
   // Operate on characters as unsigneds
   uint8_t* ptr = reinterpret_cast<uint8_t*>(sptr);
   static const uint8_t B = 128;
@@ -551,13 +556,6 @@ inline char* string_as_array(std::string* str) {
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-
-// DuckDB - LNK: define here instead of in CMake
-#ifdef __GNUC__
-#define HAVE_BUILTIN_EXPECT
-#define HAVE_BUILTIN_CTZ
-#define HAVE_BUILTIN_PREFETCH
-#endif
 
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
@@ -925,15 +923,15 @@ inline int Bits::FindLSBSetNonZero64(uint64 n) {
 #endif  // End portable versions.
 
 // Variable-length integer encoding.
-class Varint {
+class Bignum {
  public:
-  // Maximum lengths of varint encoding of uint32.
+  // Maximum lengths of bignum encoding of uint32.
   static const int kMax32 = 5;
 
-  // Attempts to parse a varint32 from a prefix of the bytes in [ptr,limit-1].
-  // Never reads a character at or beyond limit.  If a valid/terminated varint32
+  // Attempts to parse a bignum32 from a prefix of the bytes in [ptr,limit-1].
+  // Never reads a character at or beyond limit.  If a valid/terminated bignum32
   // was found in the range, stores it in *OUTPUT and returns a pointer just
-  // past the last byte of the varint32. Else returns NULL.  On success,
+  // past the last byte of the bignum32. Else returns NULL.  On success,
   // "result <= limit".
   static const char* Parse32WithLimit(const char* ptr, const char* limit,
                                       uint32* OUTPUT);
@@ -943,11 +941,11 @@ class Varint {
   //            byte just past the last encoded byte.
   static char* Encode32(char* ptr, uint32 v);
 
-  // EFFECTS    Appends the varint representation of "value" to "*s".
+  // EFFECTS    Appends the bignum representation of "value" to "*s".
   static void Append32(string* s, uint32 value);
 };
 
-inline const char* Varint::Parse32WithLimit(const char* p,
+inline const char* Bignum::Parse32WithLimit(const char* p,
                                             const char* l,
                                             uint32* OUTPUT) {
   const unsigned char* ptr = reinterpret_cast<const unsigned char*>(p);
@@ -963,13 +961,13 @@ inline const char* Varint::Parse32WithLimit(const char* p,
   b = *(ptr++); result |= (b & 127) << 21; if (b < 128) goto done;
   if (ptr >= limit) return NULL;
   b = *(ptr++); result |= (b & 127) << 28; if (b < 16) goto done;
-  return NULL;       // Value is too long to be a varint32
+  return NULL;       // Value is too long to be a bignum32
  done:
   *OUTPUT = result;
   return reinterpret_cast<const char*>(ptr);
 }
 
-inline char* Varint::Encode32(char* sptr, uint32 v) {
+inline char* Bignum::Encode32(char* sptr, uint32 v) {
   // Operate on characters as unsigneds
   unsigned char* ptr = reinterpret_cast<unsigned char*>(sptr);
   static const int B = 128;

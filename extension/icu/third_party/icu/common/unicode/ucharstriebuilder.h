@@ -156,7 +156,7 @@ private:
     class UCTLinearMatchNode : public LinearMatchNode {
     public:
         UCTLinearMatchNode(const char16_t *units, int32_t len, Node *nextNode);
-        virtual UBool operator==(const Node &other) const;
+        virtual bool operator==(const Node &other) const;
         virtual void write(StringTrieBuilder &builder);
     private:
         const char16_t *s;

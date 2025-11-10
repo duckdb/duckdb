@@ -13,6 +13,10 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	// prepare no statements
 	REQUIRE_FAIL(con.Prepare(""));
 
+	// PrepareAndExecute with no values
+	duckdb::vector<Value> values;
+	REQUIRE_FAIL(con.PendingQuery("", values, false));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (11), (12), (13)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));
@@ -495,4 +499,44 @@ TEST_CASE("Test prepared statements with SET", "[api]") {
 	REQUIRE_FAIL(prepare->Execute("unsupported_mode"));
 	// this works
 	REQUIRE_NO_FAIL(prepare->Execute("NULLS FIRST"));
+}
+
+TEST_CASE("Test prepared statements that require rebind", "[api]") {
+	DuckDB db(nullptr);
+	Connection con1(db);
+	con1.EnableQueryVerification();
+
+	auto prepared = con1.Prepare("DROP TABLE IF EXISTS t1");
+
+	Connection con2(db);
+	REQUIRE_NO_FAIL(con2.Query("CREATE OR REPLACE TABLE t1 (c1 varchar)"));
+	REQUIRE_NO_FAIL(prepared->Execute());
+}
+
+class TestExtensionState : public ClientContextState {
+public:
+	bool CanRequestRebind() override {
+		return true;
+	}
+};
+
+TEST_CASE("Test prepared statements with extension that can request a rebind", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE t1 (c1 INTEGER)"));
+
+	// https://github.com/duckdb/duckdb/pull/11096
+	con.context->registered_state->Insert("test_extension", make_shared_ptr<TestExtensionState>());
+
+	// SelectStatement
+	REQUIRE_NO_FAIL(con.Prepare("SELECT ?")->Execute(42));
+
+	// InsertStatement
+	REQUIRE_NO_FAIL(con.Prepare("INSERT INTO t1 VALUES(?)")->Execute(42));
+
+	// UpdateStatement
+	REQUIRE_NO_FAIL(con.Prepare("UPDATE t1 SET c1 = ?")->Execute(43));
+
+	// SetVariableStatement
+	REQUIRE_NO_FAIL(con.Prepare("SET VARIABLE test_var = ?")->Execute(42));
 }

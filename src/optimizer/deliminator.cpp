@@ -206,8 +206,8 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
 		auto &delim_side = delim_idx == 0 ? *cond.left : *cond.right;
 		auto &other_side = delim_idx == 0 ? *cond.right : *cond.left;
-		if (delim_side.type != ExpressionType::BOUND_COLUMN_REF ||
-		    other_side.type != ExpressionType::BOUND_COLUMN_REF) {
+		if (delim_side.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+		    other_side.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false;
 		}
 		auto &delim_colref = delim_side.Cast<BoundColumnRefExpression>();
@@ -257,7 +257,8 @@ bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector
 			}
 		}
 
-		if (current_idx == expressions.size() || expressions[current_idx]->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (current_idx == expressions.size() ||
+		    expressions[current_idx]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false; // Didn't find / can't deal with non-colref
 		}
 
@@ -293,7 +294,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	// We only support colref's
 	vector<ColumnBinding> traced_bindings;
 	for (const auto &cond : delim_conditions) {
-		if (cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false;
 		}
 		auto &colref = cond.right->Cast<BoundColumnRefExpression>();
@@ -348,6 +349,17 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 					}
 				}
 				delim_condition.comparison = FlipComparisonExpression(join_comparison);
+				// join condition was a not equal and filtered out all NULLS.
+				// DELIM JOIN need to do that for not DELIM_GET side. Easiest way is to change the
+				// comparison expression type. See duckdb/duckdb#16803
+				if (delim_join.join_type != JoinType::MARK) {
+					if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_NOTEQUAL;
+					}
+					if (delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_EQUAL;
+					}
+				}
 				found = true;
 				break;
 			}
@@ -367,7 +379,7 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 		if (!IsEqualityJoinCondition(cond)) {
 			return;
 		}
-		if (cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return;
 		}
 		auto &colref = cond.right->Cast<BoundColumnRefExpression>();

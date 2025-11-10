@@ -16,27 +16,31 @@ namespace duckdb {
 
 class OrderGlobalSinkState;
 
-//! Physically re-orders the input data
+//! PhysicalOrder sorts the input data
 class PhysicalOrder : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ORDER_BY;
 
 public:
-	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
-	              idx_t estimated_cardinality);
+	PhysicalOrder(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders,
+	              vector<idx_t> projections, idx_t estimated_cardinality, bool is_index_sort = false);
 
-	//! Input data
 	vector<BoundOrderByNode> orders;
 	vector<idx_t> projections;
+	bool is_index_sort;
 
 public:
-	// Source interface
+	//===--------------------------------------------------------------------===//
+	// Source Interface
+	//===--------------------------------------------------------------------===//
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-	idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                    LocalSourceState &lstate) const override;
+	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                                       LocalSourceState &lstate,
+	                                       const OperatorPartitionInfo &partition_info) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	bool IsSource() const override {
 		return true;
@@ -46,7 +50,10 @@ public:
 		return true;
 	}
 
-	bool SupportsBatchIndex() const override {
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override {
+		if (partition_info.RequiresPartitionColumns()) {
+			return false;
+		}
 		return true;
 	}
 
@@ -55,13 +62,17 @@ public:
 	}
 
 public:
-	// Sink interface
+	//===--------------------------------------------------------------------===//
+	// Sink Interface
+	//===--------------------------------------------------------------------===//
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
+	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+	                             const ProgressData source_progress) const override;
 
 	bool IsSink() const override {
 		return true;
@@ -75,9 +86,6 @@ public:
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
-
-	//! Schedules tasks to merge the data during the Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalSinkState &state);
 };
 
 } // namespace duckdb

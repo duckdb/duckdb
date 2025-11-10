@@ -1,0 +1,43 @@
+# name: test/sql/copy/csv/unquoted_escape/basic.test
+# description: Test the parsing of unquoted escape characters
+# group: [unquoted_escape]
+
+statement ok
+PRAGMA enable_verification
+
+query IT
+SELECT * FROM read_csv('{DATA_DIR}/csv/unquoted_escape/plain.csv', escape = '\', sep = ',', strict_mode = false, nullstr = '\N');
+----
+0	\
+1	,
+2	"
+3	\,
+4	\"
+5	,"
+6	\,"
+7	NULL
+8	\N
+9	Na
+
+statement ok
+CREATE TABLE special_char(a INT, b STRING);
+
+statement ok
+INSERT INTO special_char VALUES
+    (0, E'\\'), (1, E'\t'), (2, E'\n'),
+    (3, E'a\\a'), (4, E'b\tb'), (5, E'c\nc'),
+    (6, E'\\d'), (7, E'\te'), (8, E'\nf'),
+    (9, E'g\\'), (10, E'h\t'), (11, E'i\n'),
+    (12, E'\\j'), (13, E'\tk'), (14, E'\nl'),
+    (15, E'\\\\'), (16, E'\t\t'), (17, E'\n\n'),
+    (18, E'\\\t\n');
+
+loop buffer_size 10 25
+
+# replace CRLF with LF to pass the test on Windows
+query I
+SELECT bool_and(b = replace(s, E'\r\n', E'\n'))::int FROM special_char JOIN read_csv('{DATA_DIR}/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t', strict_mode = false) t (i, s, j) ON i = a;
+----
+1
+
+endloop

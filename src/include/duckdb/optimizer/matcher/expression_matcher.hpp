@@ -126,11 +126,34 @@ public:
 	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
+class AggregateExpressionMatcher : public ExpressionMatcher {
+public:
+	AggregateExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_AGGREGATE) {
+	}
+	//! The matchers for the child expressions
+	vector<unique_ptr<ExpressionMatcher>> matchers;
+	//! The set matcher matching policy to use
+	SetMatcher::Policy policy;
+	//! The function name to match
+	unique_ptr<FunctionMatcher> function;
+
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
+};
+
 //! The FoldableConstant matcher matches any expression that is foldable into a constant by the ExpressionExecutor (i.e.
 //! scalar but not aggregate/window/parameter)
 class FoldableConstantMatcher : public ExpressionMatcher {
 public:
 	FoldableConstantMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {
+	}
+
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
+};
+
+//! The stable expression matcher matches only stable expressions (non-volatile)
+class StableExpressionMatcher : public ExpressionMatcher {
+public:
+	StableExpressionMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {
 	}
 
 	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;

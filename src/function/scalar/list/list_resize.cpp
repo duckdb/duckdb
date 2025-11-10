@@ -1,13 +1,13 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
-void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
-
+static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// Early-out, if the return value is a constant NULL.
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -62,7 +62,6 @@ void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-
 		auto list_idx = lists_data.sel->get_index(row_idx);
 		auto new_size_idx = new_sizes_data.sel->get_index(row_idx);
 
@@ -133,14 +132,14 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 	// Early-out, if the first argument is a constant NULL.
 	if (arguments[0]->return_type == LogicalType::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		bound_function.SetReturnType(LogicalType::SQLNULL);
+		return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 	}
 
 	// Early-out, if the first argument is a prepared statement.
 	if (arguments[0]->return_type == LogicalType::UNKNOWN) {
-		bound_function.return_type = arguments[0]->return_type;
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		bound_function.SetReturnType(arguments[0]->return_type);
+		return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 	}
 
 	// Attempt implicit casting, if the default type does not match list the list child type.
@@ -150,28 +149,23 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 		bound_function.arguments[2] = ListType::GetChildType(arguments[0]->return_type);
 	}
 
-	bound_function.return_type = arguments[0]->return_type;
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(arguments[0]->return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
-void ListResizeFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet ListResizeFun::GetFunctions() {
 	ScalarFunction simple_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY},
 	                          LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
-	simple_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-
+	simple_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	simple_fun.SetFallible();
 	ScalarFunction default_value_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY, LogicalTypeId::ANY},
 	                                 LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
-	default_value_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-
-	ScalarFunctionSet list_resize("list_resize");
-	list_resize.AddFunction(simple_fun);
-	list_resize.AddFunction(default_value_fun);
-	set.AddFunction(list_resize);
-
-	ScalarFunctionSet array_resize("array_resize");
-	array_resize.AddFunction(simple_fun);
-	array_resize.AddFunction(default_value_fun);
-	set.AddFunction(array_resize);
+	default_value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	default_value_fun.SetFallible();
+	ScalarFunctionSet list_resize_set("list_resize");
+	list_resize_set.AddFunction(simple_fun);
+	list_resize_set.AddFunction(default_value_fun);
+	return list_resize_set;
 }
 
 } // namespace duckdb

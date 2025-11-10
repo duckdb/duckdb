@@ -81,7 +81,7 @@ public:
 	}
 
 	template <typename T>
-	inline T ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, T &&default_value) {
+	inline T ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, T default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			OnOptionalPropertyEnd(false);
 			return std::forward<T>(default_value);
@@ -104,7 +104,7 @@ public:
 	}
 
 	template <typename T>
-	inline void ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
+	inline void ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, T &ret, T default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			ret = std::forward<T>(default_value);
 			OnOptionalPropertyEnd(false);
@@ -116,7 +116,7 @@ public:
 
 	template <typename T>
 	inline void ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, CSVOption<T> &ret,
-	                                            T &&default_value) {
+	                                            T default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			ret = std::forward<T>(default_value);
 			OnOptionalPropertyEnd(false);
@@ -159,6 +159,11 @@ public:
 		return data.Get<T>();
 	}
 
+	template <class T>
+	optional_ptr<T> TryGet() {
+		return data.TryGet<T>();
+	}
+
 	//! Unset a serialization property
 	template <class T>
 	void Unset() {
@@ -174,15 +179,30 @@ public:
 	}
 
 	template <class FUNC>
-	void ReadList(const field_id_t field_id, const char *tag, FUNC func) {
-		OnPropertyBegin(field_id, tag);
+	void ReadListInternal(FUNC func) {
 		auto size = OnListBegin();
 		List list {*this};
 		for (idx_t i = 0; i < size; i++) {
 			func(list, i);
 		}
 		OnListEnd();
+	}
+
+	template <class FUNC>
+	void ReadList(const field_id_t field_id, const char *tag, FUNC func) {
+		OnPropertyBegin(field_id, tag);
+		ReadListInternal(func);
 		OnPropertyEnd();
+	}
+
+	template <class FUNC>
+	void ReadOptionalList(const field_id_t field_id, const char *tag, FUNC func) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		ReadListInternal(func);
+		OnOptionalPropertyEnd(true);
 	}
 
 	template <class FUNC>

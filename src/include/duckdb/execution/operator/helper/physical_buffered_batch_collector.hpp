@@ -23,10 +23,10 @@ public:
 
 class PhysicalBufferedBatchCollector : public PhysicalResultCollector {
 public:
-	explicit PhysicalBufferedBatchCollector(PreparedStatementData &data);
+	PhysicalBufferedBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
 
 public:
-	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
+	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;
 
 public:
 	// Sink interface
@@ -37,8 +37,8 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
-	bool RequiresBatchIndex() const override {
-		return true;
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return OperatorPartitionInfo::BatchIndex();
 	}
 
 	bool ParallelSink() const override {

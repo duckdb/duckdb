@@ -122,26 +122,23 @@ bool ColumnDefinition::Generated() const {
 // Generated Columns (VIRTUAL)
 //===--------------------------------------------------------------------===//
 
-static void VerifyColumnRefs(ParsedExpression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = expr.Cast<ColumnRefExpression>();
+static void VerifyColumnRefs(const ParsedExpression &expr) {
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(expr, [&](const ColumnRefExpression &column_ref) {
 		if (column_ref.IsQualified()) {
 			throw ParserException(
 			    "Qualified (tbl.name) column references are not allowed inside of generated column expressions");
 		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { VerifyColumnRefs((ParsedExpression &)child); });
+	});
 }
 
 static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &dependencies) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto columnref = expr.Cast<ColumnRefExpression>();
 		auto &name = columnref.GetColumnName();
 		dependencies.push_back(name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		if (expr.type == ExpressionType::LAMBDA) {
+		if (expr.GetExpressionType() == ExpressionType::LAMBDA) {
 			throw NotImplementedException("Lambda functions are currently not supported in generated columns.");
 		}
 		InnerGetListOfDependencies((ParsedExpression &)child, dependencies);

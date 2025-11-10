@@ -1,0 +1,36 @@
+# name: test/sql/index/art/constraints/test_art_simple_update.test
+# description: Test a simple update on a PK with a LIST column.
+# group: [constraints]
+
+statement ok
+CREATE TABLE tbl (i BIGINT PRIMARY KEY, l1 BIGINT[]);
+
+statement ok
+INSERT INTO tbl VALUES(1, [1, 2, 3]), (2, [42]);
+
+query III
+SELECT i, l1, rowid FROM tbl ORDER BY ALL;
+----
+1	[1, 2, 3]	0
+2	[42]	1
+
+statement ok
+UPDATE tbl SET l1 = [1, 2, 4] WHERE i = 1;
+
+query III
+SELECT i, l1, rowid FROM tbl ORDER BY ALL;
+----
+1	[1, 2, 4]	2
+2	[42]	1
+
+statement ok
+INSERT OR REPLACE INTO tbl VALUES (2, [43]);
+
+statement ok
+INSERT OR REPLACE INTO tbl VALUES (2, [44]);
+
+query III
+SELECT i, l1, rowid FROM tbl ORDER BY ALL;
+----
+1	[1, 2, 4]	2
+2	[44]	4

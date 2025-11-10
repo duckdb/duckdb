@@ -328,7 +328,7 @@ private:
 
 
 // ---------------------------------------------------
-// TZGNCore - core implmentation of TimeZoneGenericNames
+// TZGNCore - core implementation of TimeZoneGenericNames
 //
 // TimeZoneGenericNames is parallel to TimeZoneNames,
 // but handles run-time generated time zone names.
@@ -1287,7 +1287,7 @@ TimeZoneGenericNames::createInstance(const Locale& locale, UErrorCode& status) {
     return instance;
 }
 
-UBool
+bool
 TimeZoneGenericNames::operator==(const TimeZoneGenericNames& other) const {
     // Just compare if the other object also use the same
     // ref entry

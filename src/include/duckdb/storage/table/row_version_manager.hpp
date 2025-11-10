@@ -12,21 +12,22 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/execution/index/fixed_size_allocator.hpp"
 
 namespace duckdb {
 
 struct DeleteInfo;
 class MetadataManager;
+class BufferManager;
 struct MetaBlockPointer;
 
 class RowVersionManager {
 public:
-	explicit RowVersionManager(idx_t start) noexcept;
+	explicit RowVersionManager(BufferManager &buffer_manager) noexcept;
 
-	idx_t GetStart() {
-		return start;
+	FixedSizeAllocator &GetAllocator() {
+		return allocator;
 	}
-	void SetStart(idx_t start);
 	idx_t GetCommittedDeletedCount(idx_t count);
 
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
@@ -43,19 +44,19 @@ public:
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
 	vector<MetaBlockPointer> Checkpoint(MetadataManager &manager);
-	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager,
-	                                                 idx_t start);
+	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 private:
 	mutex version_lock;
-	idx_t start;
-	unique_ptr<ChunkInfo> vector_info[Storage::ROW_GROUP_VECTOR_COUNT];
+	FixedSizeAllocator allocator;
+	vector<unique_ptr<ChunkInfo>> vector_info;
 	bool has_changes;
 	vector<MetaBlockPointer> storage_pointers;
 
 private:
 	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
 	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
+	void FillVectorInfo(idx_t vector_idx);
 };
 
 } // namespace duckdb

@@ -24,7 +24,7 @@ idx_t Bit::ComputeBitstringLen(idx_t len) {
 
 static inline idx_t GetBitPadding(const bitstring_t &bit_string) {
 	auto data = const_data_ptr_cast(bit_string.GetData());
-	D_ASSERT(idx_t(data[0]) <= 8);
+	D_ASSERT(idx_t(data[0]) < 8);
 	return data[0];
 }
 
@@ -179,7 +179,7 @@ void Bit::BitToBlob(bitstring_t bit, string_t &output_blob) {
 	auto output = output_blob.GetDataWriteable();
 	idx_t size = output_blob.GetSize();
 
-	output[0] = UnsafeNumericCast<char>(GetFirstByte(bit));
+	output[0] = static_cast<char>(GetFirstByte(bit));
 	if (size >= 2) {
 		++output;
 		// First byte in bitstring contains amount of padded bits,

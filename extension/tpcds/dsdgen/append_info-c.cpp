@@ -101,7 +101,7 @@ void append_decimal(append_info info, decimal_t *val) {
 		return;
 	}
 	auto &appender = append_info->appender;
-	auto &type = appender.GetTypes()[appender.CurrentColumn()];
+	auto &type = appender.GetActiveTypes()[appender.CurrentColumn()];
 	D_ASSERT(type.id() == duckdb::LogicalTypeId::DECIMAL);
 	D_ASSERT(duckdb::DecimalType::GetScale(type) == val->precision);
 	appender.Append<int64_t>(val->number);

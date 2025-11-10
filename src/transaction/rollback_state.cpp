@@ -10,13 +10,17 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
+
+RollbackState::RollbackState(DuckTransaction &transaction_p) : transaction(transaction_p) {
+}
 
 void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
-		// undo this catalog entry
+		// Load and undo the catalog entry.
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->set);
 		catalog_entry->set->Undo(*catalog_entry);
@@ -25,7 +29,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert the append in the base table
-		info->table->RevertAppend(info->start_row, info->count);
+		info->table->RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -37,6 +41,12 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		auto info = reinterpret_cast<UpdateInfo *>(data);
 		info->segment->RollbackUpdate(*info);
+		break;
+	}
+	case UndoFlags::ATTACHED_DATABASE: {
+		auto db = Load<AttachedDatabase *>(data);
+		auto &db_manager = DatabaseManager::Get(db->GetDatabase());
+		db_manager.DetachInternal(db->name);
 		break;
 	}
 	case UndoFlags::SEQUENCE_VALUE:

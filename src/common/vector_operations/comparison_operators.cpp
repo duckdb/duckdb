@@ -15,7 +15,7 @@
 namespace duckdb {
 
 template <class T>
-bool EqualsFloat(T left, T right) {
+static bool EqualsFloat(T left, T right) {
 	if (DUCKDB_UNLIKELY(Value::IsNan(left) && Value::IsNan(right))) {
 		return true;
 	}
@@ -33,7 +33,7 @@ bool Equals::Operation(const double &left, const double &right) {
 }
 
 template <class T>
-bool GreaterThanFloat(T left, T right) {
+static bool GreaterThanFloat(T left, T right) {
 	// handle nans
 	// nan is always bigger than everything else
 	bool left_is_nan = Value::IsNan(left);
@@ -60,7 +60,7 @@ bool GreaterThan::Operation(const double &left, const double &right) {
 }
 
 template <class T>
-bool GreaterThanEqualsFloat(T left, T right) {
+static bool GreaterThanEqualsFloat(T left, T right) {
 	// handle nans
 	// nan is always bigger than everything else
 	bool left_is_nan = Value::IsNan(left);
@@ -86,7 +86,7 @@ template <>
 bool GreaterThanEquals::Operation(const double &left, const double &right) {
 	return GreaterThanEqualsFloat<double>(left, right);
 }
-
+namespace {
 struct ComparisonSelector {
 	template <typename OP>
 	static idx_t Select(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
@@ -167,6 +167,9 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 		auto &result_validity = ConstantVector::Validity(result);
 		SelectionVector true_sel(1);
 		auto match_count = ComparisonSelector::Select<OP>(left, right, nullptr, 1, &true_sel, nullptr, result_validity);
+		// since we are dealing with nested types where the values are not NULL, the result is always valid (i.e true or
+		// false)
+		result_validity.SetAllValid(1);
 		auto result_data = ConstantVector::GetData<bool>(result);
 		result_data[0] = match_count > 0;
 		return;
@@ -220,7 +223,8 @@ private:
 public:
 	template <class OP>
 	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		D_ASSERT(left.GetType() == right.GetType() && result.GetType() == LogicalType::BOOLEAN);
+		D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType() &&
+		         result.GetType() == LogicalType::BOOLEAN);
 		// the inplace loops take the result as the last parameter
 		switch (left.GetType().InternalType()) {
 		case PhysicalType::BOOL:
@@ -276,6 +280,7 @@ public:
 		}
 	}
 };
+} // namespace
 
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result, idx_t count) {
 	ComparisonExecutor::Execute<duckdb::Equals>(left, right, result, count);

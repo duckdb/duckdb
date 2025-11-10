@@ -258,6 +258,13 @@
         "id": 201,
         "name": "expr",
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 202,
+        "name": "syntax_type",
+        "type": "LambdaSyntaxType",
+        "default": "LambdaSyntaxType::SINGLE_ARROW_STORAGE",
+        "version": "v1.3.0"
       }
     ]
   },
@@ -311,7 +318,8 @@
       {
         "id": 201,
         "name": "exclude_list",
-        "type": "case_insensitive_set_t"
+        "type": "case_insensitive_set_t",
+        "serialize_property": "SerializedExcludeList()"
       },
       {
         "id": 202,
@@ -327,13 +335,29 @@
         "id": 204,
         "name": "expr",
         "type": "ParsedExpression*"
-      },{
+      },
+      {
         "id": 205,
         "name": "unpacked",
         "type": "bool",
-        "default": "false"
+        "default": "false",
+        "status": "read_only"
+      },
+      {
+        "id": 206,
+        "name": "qualified_exclude_list",
+        "type": "qualified_column_set_t",
+        "default": "qualified_column_set_t()",
+        "serialize_property": "SerializedQualifiedExcludeList()"
+      },
+      {
+        "id": 207,
+        "name": "rename_list",
+        "type": "qualified_column_map_t<string>",
+        "default": "qualified_column_map_t<string>()"
       }
-    ]
+    ],
+    "constructor_method": "StarExpression::DeserializeStarExpression"
   },
   {
     "class": "SubqueryExpression",
@@ -447,6 +471,11 @@
         "id": 215,
         "name": "distinct",
         "type": "bool"
+      },
+      {
+        "id": 216,
+        "name": "arg_orders",
+        "type": "vector<OrderByNode>"
       }
     ],
     "constructor": ["type"]

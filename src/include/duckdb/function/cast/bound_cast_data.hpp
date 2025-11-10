@@ -48,21 +48,27 @@ struct ListCast {
 };
 
 struct StructBoundCastData : public BoundCastData {
-	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p, vector<idx_t> child_member_map_p)
+	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p, vector<idx_t> source_indexes_p,
+	                    vector<idx_t> target_indexes_p, vector<idx_t> target_null_indexes_p)
 	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)),
-	      child_member_map(std::move(child_member_map_p)) {
-		D_ASSERT(child_cast_info.size() == child_member_map.size());
+	      source_indexes(std::move(source_indexes_p)), target_indexes(std::move(target_indexes_p)),
+	      target_null_indexes(std::move(target_null_indexes_p)) {
+		D_ASSERT(child_cast_info.size() == source_indexes.size());
+		D_ASSERT(source_indexes.size() == target_indexes.size());
 	}
 	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p)
 	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)) {
 		for (idx_t i = 0; i < child_cast_info.size(); i++) {
-			child_member_map.push_back(i);
+			source_indexes.push_back(i);
+			target_indexes.push_back(i);
 		}
 	}
 
 	vector<BoundCastInfo> child_cast_info;
 	LogicalType target;
-	vector<idx_t> child_member_map;
+	vector<idx_t> source_indexes;
+	vector<idx_t> target_indexes;
+	vector<idx_t> target_null_indexes;
 
 	static unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
 	                                                        const LogicalType &target);
@@ -74,7 +80,8 @@ public:
 		for (auto &info : child_cast_info) {
 			copy_info.push_back(info.Copy());
 		}
-		return make_uniq<StructBoundCastData>(std::move(copy_info), target, child_member_map);
+		return make_uniq<StructBoundCastData>(std::move(copy_info), target, source_indexes, target_indexes,
+		                                      target_null_indexes);
 	}
 };
 
@@ -104,6 +111,34 @@ struct MapCastLocalState : public FunctionLocalState {
 public:
 	unique_ptr<FunctionLocalState> key_state;
 	unique_ptr<FunctionLocalState> value_state;
+};
+
+struct StructToMapBoundCastData : public BoundCastData {
+	StructToMapBoundCastData(BoundCastInfo key_cast, vector<BoundCastInfo> value_casts)
+	    : key_cast(std::move(key_cast)), value_casts(std::move(value_casts)) {
+	}
+
+	BoundCastInfo key_cast;
+	vector<BoundCastInfo> value_casts;
+
+	static unique_ptr<BoundCastData> BindStructToMapCast(BindCastInput &input, const LogicalType &source,
+	                                                     const LogicalType &target);
+	static unique_ptr<FunctionLocalState> InitStructToMapCastLocalState(CastLocalStateParameters &parameters);
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		vector<BoundCastInfo> copy_value_casts;
+		for (auto &value_cast : value_casts) {
+			copy_value_casts.push_back(value_cast.Copy());
+		}
+		return make_uniq<StructToMapBoundCastData>(key_cast.Copy(), std::move(copy_value_casts));
+	}
+};
+
+struct StructToMapCastLocalState : public FunctionLocalState {
+public:
+	unique_ptr<FunctionLocalState> key_state;
+	vector<unique_ptr<FunctionLocalState>> value_states;
 };
 
 struct UnionBoundCastData : public BoundCastData {

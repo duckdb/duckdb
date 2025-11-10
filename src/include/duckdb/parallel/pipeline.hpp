@@ -20,7 +20,6 @@
 namespace duckdb {
 
 class Executor;
-class Event;
 class MetaPipeline;
 class PipelineExecutor;
 class Pipeline;
@@ -33,6 +32,10 @@ public:
 
 	Pipeline &pipeline;
 	unique_ptr<PipelineExecutor> pipeline_executor;
+
+	string TaskType() const override {
+		return "PipelineTask";
+	}
 
 public:
 	const PipelineExecutor &GetPipelineExecutor() const;
@@ -97,11 +100,12 @@ public:
 	void PrintDependencies() const;
 
 	//! Returns query progress
-	bool GetProgress(double &current_percentage, idx_t &estimated_cardinality);
+	bool GetProgress(ProgressData &progress_data);
 
 	//! Returns a list of all operators (including source and sink) involved in this pipeline
 	vector<reference<PhysicalOperator>> GetOperators();
 	vector<const_reference<PhysicalOperator>> GetOperators() const;
+	const vector<reference<PhysicalOperator>> &GetIntermediateOperators() const;
 
 	optional_ptr<PhysicalOperator> GetSink() {
 		return sink;

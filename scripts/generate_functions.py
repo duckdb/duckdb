@@ -1,30 +1,19 @@
 import os
-import re
 import json
+from pathlib import Path
 
-aggregate_functions = ['algebraic', 'distributive', 'holistic', 'nested', 'regression']
-scalar_functions = [
-    'bit',
-    'blob',
-    'date',
-    'enum',
-    'generic',
-    'list',
-    'array',
-    'map',
-    'math',
-    'operators',
-    'random',
-    'string',
-    'debug',
-    'struct',
-    'union',
-]
 
-header = '''//===----------------------------------------------------------------------===//
+function_groups = {
+    ('src', 'include/duckdb', 'function'): ['scalar', 'aggregate'],
+    ('extension', 'core_functions/include', 'core_functions'): ['scalar', 'aggregate'],
+}
+
+
+def get_header():
+    return '''//===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/core_functions/{HEADER}_functions.hpp
+// {HEADER}_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -40,8 +29,26 @@ namespace duckdb {
 
 '''
 
-footer = '''} // namespace duckdb
+
+def get_footer():
+    return '''} // namespace duckdb
 '''
+
+
+def main():
+    function_type_set = {}
+    for (root, include_dir, group), function_types in sorted(function_groups.items()):
+        all_functions_group = []
+        group_dir = Path(group)
+        for function_type in function_types:
+            type_dir = Path(root).joinpath(group_dir.joinpath(function_type))
+            relative_function_paths = sorted(
+                [f'{group}/{function_type}/{f.name}' for f in type_dir.iterdir() if f.is_dir()]
+            )
+            for function_path in relative_function_paths:
+                if Path(normalize_path_separators(f'{root}/{function_path}/functions.json')).exists():
+                    create_header_file(root, include_dir, function_path, all_functions_group, function_type_set)
+        create_function_list_file(root, group, all_functions_group)
 
 
 def normalize_path_separators(x):
@@ -56,22 +63,69 @@ def get_struct_name(function_name):
     return function_name.replace('_', ' ').title().replace(' ', '') + 'Fun'
 
 
+def get_parameter_line(variants):
+    if not all(
+        isinstance(variant['parameters'], list)
+        and all(isinstance(param, dict) for param in variant['parameters'])
+        and all('name' in param.keys() for param in variant['parameters'])
+        for variant in variants
+    ):
+        raise ValueError(
+            f"invalid parameters for variants {variants}\nParameters should have format: \"parameters\": [{{\"name\": <param_name>, \"type\": <param_type>}}, ...]"
+        )
+    return "\\001".join(
+        ",".join(
+            param['name'] + "::" + param['type'] if ('type' in param) else param['name']
+            for param in variant['parameters']
+        )
+        for variant in variants
+    )
+
+
+def get_description_line(variants):
+    return "\\001".join([variant['description'] for variant in variants])
+
+
+def get_example_line(variants):
+    return "\\001".join([example_from_json(variant) for variant in variants])
+
+
+def example_from_json(json_record):
+    if 'example' in json_record:
+        example_line = sanitize_string(json_record['example'])
+    elif 'examples' in json_record:
+        example_line = examples_to_line(json_record['examples'])
+    else:
+        example_line = ''
+    return example_line
+
+
+def examples_to_line(example_list):
+    return "\\002".join([sanitize_string(example) for example in example_list])
+
+
+def get_category_line(variants):
+    return "\\001".join([categories_from_json(variant) for variant in variants])
+
+
+def categories_from_json(json_record):
+    if 'categories' in json_record:
+        category_line = ','.join([category.strip() for category in json_record['categories']])
+    else:
+        category_line = ''
+    return category_line
+
+
 def sanitize_string(text):
     return text.replace('\\', '\\\\').replace('"', '\\"')
 
 
-all_function_types = []
-all_function_types += [f'aggregate/{x}' for x in aggregate_functions]
-all_function_types += [f'scalar/{x}' for x in scalar_functions]
-
-function_type_set = {}
-all_function_list = []
-for path in all_function_types:
-    header_path = normalize_path_separators(f'src/include/duckdb/core_functions/{path}_functions.hpp')
-    json_path = normalize_path_separators(f'src/core_functions/{path}/functions.json')
+def create_header_file(root, include_dir, path, all_function_list, function_type_set):
+    header_path = normalize_path_separators(f'{root}/{include_dir}/{path}_functions.hpp')
+    json_path = normalize_path_separators(f'{root}/{path}/functions.json')
     with open(json_path, 'r') as f:
         parsed_json = json.load(f)
-    new_text = header.replace('{HEADER}', path)
+    new_text = get_header().replace('{HEADER}', path)
     for entry in parsed_json:
         function_text = ''
         if 'struct' in entry:
@@ -99,6 +153,16 @@ for path in all_function_types:
         else:
             print("Unknown entry type " + entry['type'] + ' for entry ' + struct_name)
             exit(1)
+        if 'variants' in entry:
+            parameter_line = get_parameter_line(entry['variants'])
+            description_line = get_description_line(entry['variants'])
+            example_line = get_example_line(entry['variants'])
+            category_line = get_category_line(entry['variants'])
+        else:
+            parameter_line = entry['parameters'].replace(' ', '') if 'parameters' in entry else ''
+            description_line = sanitize_string(entry['description'])
+            example_line = example_from_json(entry)
+            category_line = categories_from_json(entry)
         if 'extra_functions' in entry:
             for func_text in entry['extra_functions']:
                 function_text += '\n	' + func_text
@@ -108,6 +172,7 @@ for path in all_function_types:
 	static constexpr const char *Parameters = "{PARAMETERS}";
 	static constexpr const char *Description = "{DESCRIPTION}";
 	static constexpr const char *Example = "{EXAMPLE}";
+	static constexpr const char *Categories = "{CATEGORIES}";
 
 	{FUNCTION}
 };
@@ -116,9 +181,10 @@ for path in all_function_types:
                 '{STRUCT}', struct_name
             )
             .replace('{NAME}', entry['name'])
-            .replace('{PARAMETERS}', entry['parameters'] if 'parameters' in entry else '')
-            .replace('{DESCRIPTION}', sanitize_string(entry['description']))
-            .replace('{EXAMPLE}', sanitize_string(entry['example']))
+            .replace('{PARAMETERS}', parameter_line)
+            .replace('{DESCRIPTION}', description_line)
+            .replace('{EXAMPLE}', example_line)
+            .replace('{CATEGORIES}', category_line)
             .replace('{FUNCTION}', function_text)
         )
         alias_count = 1
@@ -157,31 +223,37 @@ for path in all_function_types:
                     .replace('{NAME}', alias)
                     .replace('{ALIAS}', struct_name)
                 )
-    new_text += footer
+    new_text += get_footer()
     with open(header_path, 'w+') as f:
         f.write(new_text)
 
-function_list_file = normalize_path_separators('src/core_functions/function_list.cpp')
-with open(function_list_file, 'r') as f:
-    text = f.read()
 
-static_function = 'static const StaticFunctionDefinition internal_functions[] = {'
-pos = text.find(static_function)
-header = text[:pos]
-footer_lines = text[pos:].split('\n')
-footer = ''
-for i in range(len(footer_lines)):
-    if len(footer_lines[i]) == 0:
-        footer = '\n'.join(footer_lines[i:])
-        break
+def create_function_list_file(root, group, all_function_list):
+    function_list_file = normalize_path_separators(f'{root}/{group}/function_list.cpp')
+    with open(function_list_file, 'r') as f:
+        text = f.read()
 
-new_text = header
-new_text += static_function + '\n'
-all_function_list = sorted(all_function_list, key=lambda x: x[0])
-for entry in all_function_list:
-    new_text += '\t' + entry[1] + ',\n'
-new_text += '\tFINAL_FUNCTION\n};\n'
-new_text += footer
+    static_function = f'static const StaticFunctionDefinition {group}[]' ' = {'
+    pos = text.find(static_function)
+    header = text[:pos]
+    footer_lines = text[pos:].split('\n')
+    footer = ''
+    for i in range(len(footer_lines)):
+        if len(footer_lines[i]) == 0:
+            footer = '\n'.join(footer_lines[i:])
+            break
 
-with open(function_list_file, 'w+') as f:
-    f.write(new_text)
+    new_text = header
+    new_text += static_function + '\n'
+    all_function_list = sorted(all_function_list, key=lambda x: x[0])
+    for entry in all_function_list:
+        new_text += '\t' + entry[1] + ',\n'
+    new_text += '\tFINAL_FUNCTION\n};\n'
+    new_text += footer
+
+    with open(function_list_file, 'w+') as f:
+        f.write(new_text)
+
+
+if __name__ == "__main__":
+    main()

@@ -8,10 +8,16 @@ START_MARKER = "// START OF {type} VERSION INFO"
 END_MARKER = "// END OF {type} VERSION INFO"
 
 
-def generate_version_info_array(storage_versions, type_and_name):
-
+def generate_version_info_array(storage_versions, type, name, default):
     result = []
-    result.append(f"static const {type_and_name}[] = {{")
+    name_upper = name.upper()
+    if 'latest' in storage_versions:
+        latest_value = storage_versions['latest']
+        result.append(f"const uint64_t LATEST_{name_upper} = {latest_value};")
+
+    result.append(f"const uint64_t DEFAULT_{name_upper} = {default};")
+
+    result.append(f"static const {type} {name}[] = {{")
 
     for version_name, storage_version in storage_versions.items():
         result.append(f'\t{{"{version_name}", {storage_version}}},')
@@ -26,21 +32,28 @@ def main():
 
     with open(VERSION_MAP_PATH, 'r') as json_file:
         version_map = json.load(json_file)
-    storage_version_info = generate_version_info_array(
-        version_map['storage'], 'StorageVersionInfo storage_version_info'
-    )
-    serialization_version_info = generate_version_info_array(
-        version_map['serialization'], 'SerializationVersionInfo serialization_version_info'
-    )
 
     with open(STORAGE_INFO_PATH, "r") as cpp_file:
         content = cpp_file.read()
 
+    for key in version_map['serialization']['values'].keys():
+        if key in ['latest']:
+            continue
+        if key not in version_map['storage']['values'].keys():
+            print(f'Key {key} found in serialization version but not in storage version')
+            exit(1)
+    types = ['storage', 'serialization']
     for type in version_map:
+        if type not in types:
+            print("Unexpected key {type}")
+            exit(1)
         capitalized_type = type.capitalize()
         upper_type = type.upper()
         array_code = generate_version_info_array(
-            version_map[type], f'{capitalized_type}VersionInfo {type}_version_info'
+            version_map[type]['values'],
+            f'{capitalized_type}VersionInfo',
+            f'{type}_version_info',
+            version_map[type]['default'],
         )
 
         start_marker = START_MARKER.format(type=upper_type)

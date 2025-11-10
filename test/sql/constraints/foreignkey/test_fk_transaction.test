@@ -2,7 +2,8 @@
 # description: Test foreign key in same transaction
 # group: [foreignkey]
 
-# insert a tuple in the main table and the referencing table that refers to that tuple
+# Insert a tuple in the main table and the referencing table.
+
 statement ok
 CREATE TABLE pkt(i INTEGER PRIMARY KEY)
 
@@ -33,6 +34,7 @@ INSERT INTO pkt VALUES (2)
 statement error
 INSERT INTO fkt VALUES (3)
 ----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
 ROLLBACK
@@ -44,18 +46,20 @@ statement ok
 INSERT INTO fkt VALUES (1)
 
 statement error
-DELETE FROM pkt WHERE i=1
+DELETE FROM pkt WHERE i = 1
 ----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
 ROLLBACK
 
-# delete a tuple in the referencing table and then delete that tuple in the main table
+# Delete a tuple in the referencing table and then delete that tuple in the main table.
+
 statement ok
 BEGIN TRANSACTION
 
 statement ok
-DELETE FROM pkt WHERE i=1
+DELETE FROM pkt WHERE i = 1
 
 statement ok
 INSERT INTO fkt VALUES (1)
@@ -73,25 +77,28 @@ statement ok
 INSERT INTO fkt VALUES (1), (2)
 
 statement ok
-DELETE FROM fkt WHERE j=1
+DELETE FROM fkt WHERE j = 1
 
 statement ok
-DELETE FROM pkt WHERE i=1
+DELETE FROM pkt WHERE i = 1
 
 statement ok
 COMMIT
 
 statement error
-DELETE FROM pkt WHERE i=2
+DELETE FROM pkt WHERE i = 2
 ----
+<REGEX>:Constraint Error.*Violates foreign key constraint.*
 
 statement ok
-DELETE FROM fkt WHERE j=2
+DELETE FROM fkt WHERE j = 2
 
 statement ok
-DELETE FROM pkt WHERE i=2
+DELETE FROM pkt WHERE i = 2
 
-# insert a tuple in the primary key table, delete it, and in the same transaction try to insert that tuple in the foreign key table
+# Insert a tuple in the primary key table, delete it,
+# and in the same transaction try to insert that tuple in the foreign key table.
+
 statement ok
 INSERT INTO pkt VALUES (3)
 
@@ -99,7 +106,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-DELETE FROM pkt WHERE i=3
+DELETE FROM pkt WHERE i = 3
 
 statement ok
 INSERT INTO fkt VALUES (3)
@@ -110,6 +117,7 @@ ROLLBACK
 statement error
 DROP TABLE pkt;
 ----
+<REGEX>:Catalog Error.*table is main key table of the table.*
 
 statement ok
 DROP TABLE fkt;
@@ -117,7 +125,8 @@ DROP TABLE fkt;
 statement ok
 DROP TABLE pkt;
 
-# test with MAX_ROW_ID when delete a tuple
+# Test with MAX_ROW_ID when deleting a tuple.
+
 statement ok
 BEGIN TRANSACTION
 

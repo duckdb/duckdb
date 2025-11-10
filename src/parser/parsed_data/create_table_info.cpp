@@ -30,23 +30,11 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 }
 
 string CreateTableInfo::ToString() const {
-	string ret = "";
-
-	ret += "CREATE";
-	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-		ret += " OR REPLACE";
-	}
-	if (temporary) {
-		ret += " TEMP";
-	}
-	ret += " TABLE ";
-
-	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
-		ret += " IF NOT EXISTS ";
-	}
+	string ret = GetCreatePrefix("TABLE");
 	ret += QualifierToString(temporary ? "" : catalog, schema, table);
 
 	if (query != nullptr) {
+		ret += TableCatalogEntry::ColumnNamesToSQL(columns);
 		ret += " AS " + query->ToString();
 	} else {
 		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints) + ";";

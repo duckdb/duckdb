@@ -1,0 +1,16 @@
+# name: benchmark/micro/index/insert/insert_art_pk.benchmark
+# description: Insert 10M integers into an ART PK
+# group: [insert]
+
+name Insert ART PK
+group art
+
+load
+CREATE TABLE temp AS SELECT range AS id, random() AS pos FROM range(10000000) ORDER BY pos;
+CREATE TABLE art (id INTEGER PRIMARY KEY);
+
+run
+INSERT INTO art (SELECT id FROM temp);
+
+cleanup
+DELETE FROM art;

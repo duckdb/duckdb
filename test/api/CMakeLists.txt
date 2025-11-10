@@ -27,8 +27,11 @@ set(TEST_API_OBJECTS
     test_relation_api.cpp
     test_query_profiler.cpp
     test_dbdir.cpp
+    test_pending_with_parameters.cpp
     test_progress_bar.cpp
     test_uuid.cpp
+    test_insertion_order_preserving_map.cpp
+    test_bignum.cpp
     test_threads.cpp
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp

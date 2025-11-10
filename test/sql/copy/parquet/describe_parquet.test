@@ -1,0 +1,14 @@
+# name: test/sql/copy/parquet/describe_parquet.test
+# description: Test DESCRIBE on a parquet file
+# group: [parquet]
+
+require parquet
+
+query IIIIII nosort describeresult
+DESCRIBE '{DATA_DIR}/parquet-testing/delta_byte_array.parquet'
+
+query IIIIII nosort describeresult
+DESCRIBE "{DATA_DIR}/parquet-testing/delta_byte_array.parquet"
+
+query IIIIII nosort describeresult
+DESCRIBE FROM read_parquet("{DATA_DIR}/parquet-testing/delta_byte_array.parquet")

@@ -27,7 +27,7 @@ Executor::Executor(ClientContext &context) : context(context), executor_tasks(0)
 }
 
 Executor::~Executor() {
-	D_ASSERT(executor_tasks == 0);
+	D_ASSERT(Exception::UncaughtException() || executor_tasks == 0);
 }
 
 Executor &Executor::Get(ClientContext &context) {
@@ -373,19 +373,12 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
-void Executor::Initialize(unique_ptr<PhysicalOperator> physical_plan_p) {
-	Reset();
-	owned_plan = std::move(physical_plan_p);
-	InitializeInternal(*owned_plan);
-}
-
 void Executor::Initialize(PhysicalOperator &plan) {
 	Reset();
 	InitializeInternal(plan);
 }
 
 void Executor::InitializeInternal(PhysicalOperator &plan) {
-
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	{
 		lock_guard<mutex> elock(executor_lock);
@@ -429,7 +422,6 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
-
 	{
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
@@ -469,17 +461,23 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
-	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
+	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
+	auto begin = std::chrono::high_resolution_clock::now();
 	std::unique_lock<mutex> l(executor_lock);
+	auto end = std::chrono::high_resolution_clock::now();
+	auto dur = end - begin;
+	auto ms = NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(dur).count());
 	if (to_be_rescheduled_tasks.empty()) {
+		blocked_thread_time += ms;
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
 		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
+		blocked_thread_time += ms;
 		return;
 	}
 
-	blocked_thread_time++;
+	blocked_thread_time += ms + WAIT_TIME_MS.count();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
 #endif
 }
@@ -584,11 +582,22 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 			} else if (result == TaskExecutionResult::TASK_FINISHED) {
 				// if the task is finished, clean it up
 				task.reset();
+			} else if (result == TaskExecutionResult::TASK_ERROR) {
+				if (!HasError()) {
+					// This is very much unexpected, TASK_ERROR means this executor should have an Error
+					throw InternalException("A task executed within Executor::ExecuteTask, from own producer, returned "
+					                        "TASK_ERROR without setting error on the Executor");
+				}
 			}
 		}
 		if (!HasError()) {
 			// we (partially) processed a task and no exceptions were thrown
 			// give back control to the caller
+			if (task && DBConfig::GetConfig(context).options.scheduler_process_partial) {
+				auto &token = *task->token;
+				TaskScheduler::GetScheduler(context).ScheduleTask(token, task);
+				task.reset();
+			}
 			return PendingExecutionResult::RESULT_NOT_READY;
 		}
 		execution_result = PendingExecutionResult::EXECUTION_ERROR;
@@ -616,7 +625,6 @@ void Executor::Reset() {
 	lock_guard<mutex> elock(executor_lock);
 	physical_plan = nullptr;
 	cancelled = false;
-	owned_plan.reset();
 	root_executor.reset();
 	root_pipelines.clear();
 	root_pipeline_idx = 0;
@@ -674,49 +682,30 @@ void Executor::ThrowException() {
 }
 
 void Executor::Flush(ThreadContext &thread_context) {
-	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
 	auto global_profiler = profiler;
 	if (global_profiler) {
 		global_profiler->Flush(thread_context.profiler);
 
 		auto blocked_time = blocked_thread_time.load();
-		global_profiler->SetInfo(double(blocked_time * WAIT_TIME_MS.count()) / 1000);
+		global_profiler->SetBlockedTime(double(blocked_time) / 1000.0 / 1000.0);
 	}
 }
 
-bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality,
-                                    uint64_t &total_cardinality) { // LCOV_EXCL_START
+idx_t Executor::GetPipelinesProgress(ProgressData &progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
-	vector<double> progress;
-	vector<idx_t> cardinality;
-	total_cardinality = 0;
-	current_cardinality = 0;
+	progress.done = 0;
+	progress.total = 0;
+	idx_t count_invalid = 0;
 	for (auto &pipeline : pipelines) {
-		double child_percentage;
-		idx_t child_cardinality;
-
-		if (!pipeline->GetProgress(child_percentage, child_cardinality)) {
-			return false;
+		ProgressData p;
+		if (!pipeline->GetProgress(p)) {
+			count_invalid++;
+		} else {
+			progress.Add(p);
 		}
-		progress.push_back(child_percentage);
-		cardinality.push_back(child_cardinality);
-		total_cardinality += child_cardinality;
 	}
-	if (total_cardinality == 0) {
-		return true;
-	}
-	current_progress = 0;
-
-	for (size_t i = 0; i < progress.size(); i++) {
-		progress[i] = MaxValue(0.0, MinValue(100.0, progress[i]));
-		current_cardinality = LossyNumericCast<idx_t>(static_cast<double>(
-		    static_cast<double>(current_cardinality) +
-		    static_cast<double>(progress[i]) * static_cast<double>(cardinality[i]) / static_cast<double>(100)));
-		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
-		D_ASSERT(current_cardinality <= total_cardinality);
-	}
-	return true;
+	return count_invalid;
 } // LCOV_EXCL_STOP
 
 bool Executor::HasResultCollector() {

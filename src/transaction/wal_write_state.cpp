@@ -22,14 +22,15 @@
 
 namespace duckdb {
 
-WALWriteState::WALWriteState(WriteAheadLog &log, optional_ptr<StorageCommitState> commit_state)
-    : log(log), commit_state(commit_state), current_table_info(nullptr) {
+WALWriteState::WALWriteState(DuckTransaction &transaction_p, WriteAheadLog &log,
+                             optional_ptr<StorageCommitState> commit_state)
+    : transaction(transaction_p), log(log), commit_state(commit_state), current_table_info(nullptr) {
 }
 
-void WALWriteState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
-	if (current_table_info != table_info) {
+void WALWriteState::SwitchTable(DataTableInfo &table_info, UndoFlags new_op) {
+	if (current_table_info != &table_info) {
 		// write the current table to the log
-		log.WriteSetTable(table_info->GetSchemaName(), table_info->GetTableName());
+		log.WriteSetTable(table_info.GetSchemaName(), table_info.GetTableName());
 		current_table_info = table_info;
 	}
 }
@@ -63,7 +64,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			deserializer.End();
 
 			auto &alter_info = parse_info->Cast<AlterInfo>();
-			log.WriteAlter(alter_info);
+			log.WriteAlter(entry, alter_info);
 		} else {
 			switch (parent.type) {
 			case CatalogType::TABLE_ENTRY:
@@ -170,7 +171,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 
 void WALWriteState::WriteDelete(DeleteInfo &info) {
 	// switch to the current table, if necessary
-	SwitchTable(info.table->GetDataTableInfo().get(), UndoFlags::DELETE_TUPLE);
+	SwitchTable(*info.table->GetDataTableInfo(), UndoFlags::DELETE_TUPLE);
 
 	if (!delete_chunk) {
 		delete_chunk = make_uniq<DataChunk>();
@@ -197,7 +198,7 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 	auto &column_data = info.segment->column_data;
 	auto &table_info = column_data.GetTableInfo();
 
-	SwitchTable(&table_info, UndoFlags::UPDATE_TUPLE);
+	SwitchTable(table_info, UndoFlags::UPDATE_TUPLE);
 
 	// initialize the update chunk
 	vector<LogicalType> update_types;
@@ -217,27 +218,28 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 	// write the row ids into the chunk
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
 	idx_t start = column_data.start + info.vector_index * STANDARD_VECTOR_SIZE;
+	auto tuples = info.GetTuples();
 	for (idx_t i = 0; i < info.N; i++) {
-		row_ids[info.tuples[i]] = UnsafeNumericCast<int64_t>(start + info.tuples[i]);
+		row_ids[tuples[i]] = UnsafeNumericCast<int64_t>(start + tuples[i]);
 	}
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		// zero-initialize the booleans
 		// FIXME: this is only required because of NullValue<T> in Vector::Serialize...
 		auto booleans = FlatVector::GetData<bool>(update_chunk->data[0]);
 		for (idx_t i = 0; i < info.N; i++) {
-			auto idx = info.tuples[i];
+			auto idx = tuples[i];
 			booleans[idx] = false;
 		}
 	}
-	SelectionVector sel(info.tuples);
+	SelectionVector sel(tuples);
 	update_chunk->Slice(sel, info.N);
 
 	// construct the column index path
 	vector<column_t> column_indexes;
-	reference<ColumnData> current_column_data = column_data;
-	while (current_column_data.get().parent) {
+	reference<const ColumnData> current_column_data = column_data;
+	while (current_column_data.get().HasParent()) {
 		column_indexes.push_back(current_column_data.get().column_index);
-		current_column_data = *current_column_data.get().parent;
+		current_column_data = current_column_data.get().Parent();
 	}
 	column_indexes.push_back(info.column_index);
 	std::reverse(column_indexes.begin(), column_indexes.end());
@@ -259,7 +261,7 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		if (!info->table->IsTemporary()) {
-			info->table->WriteToLog(log, info->start_row, info->count, commit_state.get());
+			info->table->WriteToLog(transaction, log, info->start_row, info->count, commit_state.get());
 		}
 		break;
 	}
@@ -279,6 +281,8 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		}
 		break;
 	}
+	case UndoFlags::ATTACHED_DATABASE:
+		break;
 	case UndoFlags::SEQUENCE_VALUE: {
 		auto info = reinterpret_cast<SequenceValue *>(data);
 		log.WriteSequenceValue(*info);

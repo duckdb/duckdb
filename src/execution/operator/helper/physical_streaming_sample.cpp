@@ -5,10 +5,11 @@
 
 namespace duckdb {
 
-PhysicalStreamingSample::PhysicalStreamingSample(vector<LogicalType> types, SampleMethod method, double percentage,
-                                                 int64_t seed, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::STREAMING_SAMPLE, std::move(types), estimated_cardinality), method(method),
-      percentage(percentage / 100), seed(seed) {
+PhysicalStreamingSample::PhysicalStreamingSample(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                                 unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::STREAMING_SAMPLE, std::move(types), estimated_cardinality),
+      sample_options(std::move(options)) {
+	percentage = sample_options->sample_size.GetValue<double>() / 100;
 }
 
 //===--------------------------------------------------------------------===//
@@ -49,13 +50,21 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 	}
 }
 
+bool PhysicalStreamingSample::ParallelOperator() const {
+	return !(sample_options->repeatable || sample_options->seed.IsValid());
+}
+
 unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ExecutionContext &context) const {
-	return make_uniq<StreamingSampleOperatorState>(seed);
+	if (!ParallelOperator()) {
+		return make_uniq<StreamingSampleOperatorState>(static_cast<int64_t>(sample_options->seed.GetIndex()));
+	}
+	RandomEngine random;
+	return make_uniq<StreamingSampleOperatorState>(static_cast<int64_t>(random.NextRandomInteger64()));
 }
 
 OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     GlobalOperatorState &gstate, OperatorState &state) const {
-	switch (method) {
+	switch (sample_options->method) {
 	case SampleMethod::BERNOULLI_SAMPLE:
 		BernoulliSample(input, chunk, state);
 		break;
@@ -70,7 +79,7 @@ OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, D
 
 InsertionOrderPreservingMap<string> PhysicalStreamingSample::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["Sample Method"] = EnumUtil::ToString(method) + ": " + to_string(100 * percentage) + "%";
+	result["Sample Method"] = EnumUtil::ToString(sample_options->method) + ": " + to_string(100 * percentage) + "%";
 	return result;
 }
 

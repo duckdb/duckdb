@@ -11,6 +11,10 @@ PRAGMA threads=4
 statement ok
 SET temp_directory='__TEST_DIR__/temp.tmp'
 
+# Force PhysicalAsOfJoin
+statement ok
+PRAGMA asof_loop_join_threshold = 0;
+
 query II
 WITH build AS (
 	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v

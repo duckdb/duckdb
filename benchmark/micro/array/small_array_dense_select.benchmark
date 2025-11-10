@@ -1,0 +1,16 @@
+# name: benchmark/micro/array/small_array_dense_select.benchmark
+# description: Array Dense Select: select 33% out of every 2000 large arrays
+# group: [array]
+
+name Small Array Dense Select
+group array
+
+load
+CREATE TABLE arrays AS SELECT i%3 as dense_id, [i + x for x in range(5)]::INT[5] arr FROM range(100000000) tbl(i);
+
+run
+SELECT SUM(LIST_SUM(arr)) FROM arrays WHERE dense_id=0
+
+result I
+8333333750000005
+

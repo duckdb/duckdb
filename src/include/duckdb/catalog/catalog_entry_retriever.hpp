@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/catalog/catalog_entry_retriever.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include <functional>
@@ -6,6 +14,8 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
 
 namespace duckdb {
 
@@ -24,49 +34,43 @@ public:
 	}
 
 public:
-	optional_ptr<CatalogEntry> GetEntry(CatalogType type, const string &catalog, const string &schema,
-	                                    const string &name,
-	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
-	                                    QueryErrorContext error_context = QueryErrorContext());
+	void Inherit(const CatalogEntryRetriever &parent);
+	ClientContext &GetContext() {
+		return context;
+	}
 
-	optional_ptr<CatalogEntry> GetEntry(CatalogType type, Catalog &catalog, const string &schema, const string &name,
-	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
-	                                    QueryErrorContext error_context = QueryErrorContext());
+	optional_ptr<CatalogEntry> GetEntry(const string &catalog, const string &schema, const EntryLookupInfo &lookup_info,
+	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
+
+	optional_ptr<CatalogEntry> GetEntry(Catalog &catalog, const string &schema, const EntryLookupInfo &lookup_info,
+	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
 	LogicalType GetType(const string &catalog, const string &schema, const string &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
 	LogicalType GetType(Catalog &catalog, const string &schema, const string &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
 
-	optional_ptr<SchemaCatalogEntry> GetSchema(const string &catalog, const string &name,
-	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
-	                                           QueryErrorContext error_context = QueryErrorContext());
+	optional_ptr<SchemaCatalogEntry> GetSchema(const string &catalog, const EntryLookupInfo &schema_lookup,
+	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
-	void SetCallback(catalog_entry_callback_t callback) {
-		this->callback = std::move(callback);
-	}
-	catalog_entry_callback_t GetCallback() {
-		return callback;
-	}
+	const CatalogSearchPath &GetSearchPath() const;
+	void SetSearchPath(vector<CatalogSearchEntry> entries);
 
-private:
-	using catalog_entry_retrieve_func_t = std::function<optional_ptr<CatalogEntry>()>;
-	optional_ptr<CatalogEntry> GetEntryInternal(const catalog_entry_retrieve_func_t &retriever) {
-		auto result = retriever();
-		if (!result) {
-			return result;
-		}
-		if (callback) {
-			// Call the callback if it's set
-			callback(*result);
-		}
-		return result;
-	}
+	void SetCallback(catalog_entry_callback_t callback);
+	catalog_entry_callback_t GetCallback();
+
+	optional_ptr<BoundAtClause> GetAtClause() const;
+	void SetAtClause(optional_ptr<BoundAtClause> at_clause);
 
 private:
-	//! (optional) callback, called on every succesful entry retrieval
+	optional_ptr<CatalogEntry> ReturnAndCallback(optional_ptr<CatalogEntry> result);
+
+private:
+	//! (optional) callback, called on every successful entry retrieval
 	catalog_entry_callback_t callback = nullptr;
 	ClientContext &context;
+	shared_ptr<CatalogSearchPath> search_path;
+	optional_ptr<BoundAtClause> at_clause;
 };
 
 } // namespace duckdb

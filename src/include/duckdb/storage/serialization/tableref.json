@@ -53,6 +53,11 @@
         "id": 203,
         "name": "catalog_name",
         "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "at_clause",
+        "type": "AtClause*"
       }
     ]
   },
@@ -101,6 +106,13 @@
         "id": 207,
         "name": "duplicate_eliminated_columns",
         "type": "vector<unique_ptr<ParsedExpression>>"
+      },
+      {
+        "id": 208,
+        "name": "is_implicit",
+        "type": "bool",
+        "default": "true",
+        "version": "v1.4.0"
       }
     ]
   },
@@ -135,6 +147,12 @@
         "id": 201,
         "name": "column_name_alias",
         "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "with_ordinality",
+        "type": "OrdinalityType",
+        "default": "OrdinalityType::WITHOUT_ORDINALITY"
       }
     ]
   },
@@ -180,7 +198,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "shared_ptr<ColumnDataCollection>"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["collection", "expected_names"]
@@ -246,7 +264,36 @@
         "id": 202,
         "name": "show_type",
         "type": "ShowType"
+      },
+      {
+        "id": 203,
+        "name": "catalog_name",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "schema_name",
+        "type": "string"
       }
     ]
+  },
+  {
+    "class": "AtClause",
+    "includes": [
+      "duckdb/parser/tableref/at_clause.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "unit",
+        "type": "string"
+      },
+      {
+        "id": 2,
+        "name": "expr",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "constructor": ["unit", "expr"]
   }
 ]

@@ -55,7 +55,8 @@ TEST_CASE("Test that hyperloglog works", "[hyperloglog]") {
 }
 
 TEST_CASE("Test different hyperloglog version serialization", "[hyperloglog]") {
-	MemoryStream stream;
+	Allocator allocator;
+	MemoryStream stream(allocator);
 	SerializationOptions options;
 	options.serialization_compatibility = SerializationCompatibility::FromString("v1.0.0");
 

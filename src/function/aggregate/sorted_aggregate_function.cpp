@@ -1,57 +1,103 @@
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
+namespace {
 struct SortedAggregateBindData : public FunctionData {
-	SortedAggregateBindData(ClientContext &context, BoundAggregateExpression &expr)
-	    : buffer_manager(BufferManager::GetBufferManager(context)), function(expr.function),
-	      bind_info(std::move(expr.bind_info)), threshold(ClientConfig::GetConfig(context).ordered_aggregate_threshold),
-	      external(ClientConfig::GetConfig(context).force_external) {
-		auto &children = expr.children;
-		arg_types.reserve(children.size());
-		arg_funcs.reserve(children.size());
+	using Expressions = vector<unique_ptr<Expression>>;
+	using BindInfoPtr = unique_ptr<FunctionData>;
+	using OrderBys = vector<BoundOrderByNode>;
+
+	SortedAggregateBindData(ClientContext &context, Expressions &children, AggregateFunction &aggregate,
+	                        BindInfoPtr &bind_info, OrderBys &order_bys)
+	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
+	      threshold(DBConfig::GetSetting<OrderedAggregateThresholdSetting>(context)) {
+		//	Describe the arguments.
 		for (const auto &child : children) {
-			arg_types.emplace_back(child->return_type);
+			buffered_cols.emplace_back(buffered_cols.size());
+			buffered_types.emplace_back(child->return_type);
+
+			//	Column 0 in the sort data is the group number
+			scan_cols.emplace_back(buffered_cols.size());
+		}
+		scan_types = buffered_types;
+
+		//	The first sort column is the group number. It is prefixed onto the buffered data
+		sort_types.emplace_back(LogicalType::USMALLINT);
+		orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
+		                                     make_uniq<BoundReferenceExpression>(sort_types.back(), 0U)));
+
+		// Determine whether we are sorted on all the arguments.
+		// Even if we are not, we want to share inputs for sorting.
+		for (idx_t ord_idx = 0; ord_idx < order_bys.size(); ++ord_idx) {
+			auto order = order_bys[ord_idx].Copy();
+			bool matched = false;
+			const auto &type = order.expression->return_type;
+
+			for (idx_t arg_idx = 0; arg_idx < children.size(); ++arg_idx) {
+				auto &child = children[arg_idx];
+				if (child->Equals(*order.expression)) {
+					order.expression = make_uniq<BoundReferenceExpression>(type, arg_idx + 1);
+					matched = true;
+					break;
+				}
+			}
+
+			if (!matched) {
+				sorted_on_args = false;
+				buffered_cols.emplace_back(children.size() + ord_idx);
+				buffered_types.emplace_back(type);
+				order.expression = make_uniq<BoundReferenceExpression>(type, buffered_cols.size());
+			}
+
+			orders.emplace_back(std::move(order));
+		}
+
+		// Look up all the linked list functions we need
+		for (auto &type : buffered_types) {
 			ListSegmentFunctions funcs;
-			GetSegmentDataFunctions(funcs, arg_types.back());
-			arg_funcs.emplace_back(funcs);
+			GetSegmentDataFunctions(funcs, type);
+			buffered_funcs.emplace_back(std::move(funcs));
+			sort_types.emplace_back(type);
 		}
-		auto &order_bys = *expr.order_bys;
-		sort_types.reserve(order_bys.orders.size());
-		sort_funcs.reserve(order_bys.orders.size());
-		for (auto &order : order_bys.orders) {
-			orders.emplace_back(order.Copy());
-			sort_types.emplace_back(order.expression->return_type);
-			ListSegmentFunctions funcs;
-			GetSegmentDataFunctions(funcs, sort_types.back());
-			sort_funcs.emplace_back(funcs);
-		}
-		sorted_on_args = (children.size() == order_bys.orders.size());
-		for (size_t i = 0; sorted_on_args && i < children.size(); ++i) {
-			sorted_on_args = children[i]->Equals(*order_bys.orders[i].expression);
-		}
+
+		//	Only scan the argument columns after sorting
+		sort = make_uniq<Sort>(context, orders, sort_types, scan_cols);
+	}
+
+	SortedAggregateBindData(ClientContext &context, BoundAggregateExpression &expr)
+	    : SortedAggregateBindData(context, expr.children, expr.function, expr.bind_info, expr.order_bys->orders) {
+	}
+
+	SortedAggregateBindData(ClientContext &context, BoundWindowExpression &expr)
+	    : SortedAggregateBindData(context, expr.children, *expr.aggregate, expr.bind_info, expr.arg_orders) {
 	}
 
 	SortedAggregateBindData(const SortedAggregateBindData &other)
-	    : buffer_manager(other.buffer_manager), function(other.function), arg_types(other.arg_types),
-	      arg_funcs(other.arg_funcs), sort_types(other.sort_types), sort_funcs(other.sort_funcs),
-	      sorted_on_args(other.sorted_on_args), threshold(other.threshold), external(other.external) {
+	    : context(other.context), function(other.function), sort_types(other.sort_types), scan_cols(other.scan_cols),
+	      scan_types(other.scan_types), buffered_cols(other.buffered_cols), buffered_types(other.buffered_types),
+	      buffered_funcs(other.buffered_funcs), sorted_on_args(other.sorted_on_args), threshold(other.threshold) {
 		if (other.bind_info) {
 			bind_info = other.bind_info->Copy();
 		}
 		for (auto &order : other.orders) {
 			orders.emplace_back(order.Copy());
 		}
+
+		sort = make_uniq<Sort>(context, orders, sort_types, scan_cols);
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -81,20 +127,32 @@ struct SortedAggregateBindData : public FunctionData {
 		return true;
 	}
 
-	BufferManager &buffer_manager;
+	ClientContext &context;
 	AggregateFunction function;
-	vector<LogicalType> arg_types;
 	unique_ptr<FunctionData> bind_info;
-	vector<ListSegmentFunctions> arg_funcs;
 
+	//! The sort expressions (all references as the expressions have been computed)
 	vector<BoundOrderByNode> orders;
+	//! The types of the sunk columns
 	vector<LogicalType> sort_types;
-	vector<ListSegmentFunctions> sort_funcs;
-	bool sorted_on_args;
+	//! The sorted columns that have the arguments
+	vector<column_t> scan_cols;
+	//! The types of the sunk columns
+	vector<LogicalType> scan_types;
+	//! The shared sort specification
+	unique_ptr<Sort> sort;
+
+	//! The mapping from inputs to buffered columns
+	vector<column_t> buffered_cols;
+	//! The schema of the buffered data
+	vector<LogicalType> buffered_types;
+	//! The linked list functions for the buffered data
+	vector<ListSegmentFunctions> buffered_funcs;
+	//! Can we just use the inputs for sorting?
+	bool sorted_on_args = true;
 
 	//! The sort flush threshold
 	const idx_t threshold;
-	const bool external;
 };
 
 struct SortedAggregateState {
@@ -116,25 +174,21 @@ struct SortedAggregateState {
 	}
 
 	inline void InitializeLinkedLists(const SortedAggregateBindData &order_bind) {
-		InitializeLinkedList(sort_linked, order_bind.sort_types);
-		if (!order_bind.sorted_on_args) {
-			InitializeLinkedList(arg_linked, order_bind.arg_types);
-		}
+		InitializeLinkedList(input_linked, order_bind.buffered_types);
 	}
 
-	static inline void InitializeChunk(unique_ptr<DataChunk> &chunk, const vector<LogicalType> &types) {
+	static inline void InitializeChunk(Allocator &allocator, unique_ptr<DataChunk> &chunk,
+	                                   const vector<LogicalType> &types) {
 		if (!chunk && !types.empty()) {
 			chunk = make_uniq<DataChunk>();
-			chunk->Initialize(Allocator::DefaultAllocator(), types);
+			chunk->Initialize(allocator, types);
 		}
 	}
 
 	void InitializeChunks(const SortedAggregateBindData &order_bind) {
 		// Lazy instantiation of the buffer chunks
-		InitializeChunk(sort_chunk, order_bind.sort_types);
-		if (!order_bind.sorted_on_args) {
-			InitializeChunk(arg_chunk, order_bind.arg_types);
-		}
+		auto &allocator = BufferManager::GetBufferManager(order_bind.context).GetBufferAllocator();
+		InitializeChunk(allocator, input_chunk, order_bind.buffered_types);
 	}
 
 	static inline void FlushLinkedList(const LinkedChunkFunctions &funcs, LinkedLists &linked, DataChunk &chunk) {
@@ -147,34 +201,19 @@ struct SortedAggregateState {
 
 	void FlushLinkedLists(const SortedAggregateBindData &order_bind) {
 		InitializeChunks(order_bind);
-		FlushLinkedList(order_bind.sort_funcs, sort_linked, *sort_chunk);
-		if (arg_chunk) {
-			FlushLinkedList(order_bind.arg_funcs, arg_linked, *arg_chunk);
-		}
+		FlushLinkedList(order_bind.buffered_funcs, input_linked, *input_chunk);
 	}
 
 	void InitializeCollections(const SortedAggregateBindData &order_bind) {
-		ordering = make_uniq<ColumnDataCollection>(order_bind.buffer_manager, order_bind.sort_types);
-		ordering_append = make_uniq<ColumnDataAppendState>();
-		ordering->InitializeAppend(*ordering_append);
-
-		if (!order_bind.sorted_on_args) {
-			arguments = make_uniq<ColumnDataCollection>(order_bind.buffer_manager, order_bind.arg_types);
-			arguments_append = make_uniq<ColumnDataAppendState>();
-			arguments->InitializeAppend(*arguments_append);
-		}
+		input_collection = make_uniq<ColumnDataCollection>(order_bind.context, order_bind.buffered_types);
+		input_append = make_uniq<ColumnDataAppendState>();
+		input_collection->InitializeAppend(*input_append);
 	}
 
 	void FlushChunks(const SortedAggregateBindData &order_bind) {
-		D_ASSERT(sort_chunk);
-		ordering->Append(*ordering_append, *sort_chunk);
-		sort_chunk->Reset();
-
-		if (arguments) {
-			D_ASSERT(arg_chunk);
-			arguments->Append(*arguments_append, *arg_chunk);
-			arg_chunk->Reset();
-		}
+		D_ASSERT(input_chunk);
+		input_collection->Append(*input_append, *input_chunk);
+		input_chunk->Reset();
 	}
 
 	void Resize(const SortedAggregateBindData &order_bind, idx_t n) {
@@ -185,11 +224,11 @@ struct SortedAggregateState {
 			InitializeLinkedLists(order_bind);
 		}
 
-		if (count > LIST_CAPACITY && !sort_chunk && !ordering) {
+		if (count > LIST_CAPACITY && !input_chunk && !input_collection) {
 			FlushLinkedLists(order_bind);
 		}
 
-		if (count > CHUNK_CAPACITY && !ordering) {
+		if (count > CHUNK_CAPACITY && !input_collection) {
 			InitializeCollections(order_bind);
 			FlushChunks(order_bind);
 		}
@@ -230,61 +269,43 @@ struct SortedAggregateState {
 		}
 	}
 
-	void Update(const AggregateInputData &aggr_input_data, DataChunk &sort_input, DataChunk &arg_input) {
+	void Update(const AggregateInputData &aggr_input_data, DataChunk &input) {
 		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
-		Resize(order_bind, count + sort_input.size());
+		Resize(order_bind, count + input.size());
 
 		sel.Initialize(nullptr);
-		nsel = sort_input.size();
+		nsel = input.size();
 
-		if (ordering) {
+		if (input_collection) {
 			//	Using collections
-			ordering->Append(*ordering_append, sort_input);
-			if (arguments) {
-				arguments->Append(*arguments_append, arg_input);
-			}
-		} else if (sort_chunk) {
+			input_collection->Append(*input_append, input);
+		} else if (input_chunk) {
 			//	Still using data chunks
-			sort_chunk->Append(sort_input);
-			if (arg_chunk) {
-				arg_chunk->Append(arg_input);
-			}
+			input_chunk->Append(input);
 		} else {
 			//	Still using linked lists
-			LinkedAppend(order_bind.sort_funcs, aggr_input_data.allocator, sort_input, sort_linked, sel, nsel);
-			if (!arg_linked.empty()) {
-				LinkedAppend(order_bind.arg_funcs, aggr_input_data.allocator, arg_input, arg_linked, sel, nsel);
-			}
+			LinkedAppend(order_bind.buffered_funcs, aggr_input_data.allocator, input, input_linked, sel, nsel);
 		}
 
 		nsel = 0;
 		offset = 0;
 	}
 
-	void UpdateSlice(const AggregateInputData &aggr_input_data, DataChunk &sort_input, DataChunk &arg_input) {
+	void UpdateSlice(const AggregateInputData &aggr_input_data, DataChunk &input) {
 		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		Resize(order_bind, count + nsel);
 
-		if (ordering) {
+		if (input_collection) {
 			//	Using collections
-			D_ASSERT(sort_chunk);
-			sort_chunk->Slice(sort_input, sel, nsel);
-			if (arg_chunk) {
-				arg_chunk->Slice(arg_input, sel, nsel);
-			}
+			D_ASSERT(input_chunk);
+			input_chunk->Slice(input, sel, nsel);
 			FlushChunks(order_bind);
-		} else if (sort_chunk) {
+		} else if (input_chunk) {
 			//	Still using data chunks
-			sort_chunk->Append(sort_input, true, &sel, nsel);
-			if (arg_chunk) {
-				arg_chunk->Append(arg_input, true, &sel, nsel);
-			}
+			input_chunk->Append(input, true, &sel, nsel);
 		} else {
 			//	Still using linked lists
-			LinkedAppend(order_bind.sort_funcs, aggr_input_data.allocator, sort_input, sort_linked, sel, nsel);
-			if (!arg_linked.empty()) {
-				LinkedAppend(order_bind.arg_funcs, aggr_input_data.allocator, arg_input, arg_linked, sel, nsel);
-			}
+			LinkedAppend(order_bind.buffered_funcs, aggr_input_data.allocator, input, input_linked, sel, nsel);
 		}
 
 		nsel = 0;
@@ -294,16 +315,12 @@ struct SortedAggregateState {
 	void Swap(SortedAggregateState &other) {
 		std::swap(count, other.count);
 
-		std::swap(arguments, other.arguments);
-		std::swap(arguments_append, other.arguments_append);
-		std::swap(ordering, other.ordering);
-		std::swap(ordering_append, other.ordering_append);
+		std::swap(input_collection, other.input_collection);
+		std::swap(input_append, other.input_append);
 
-		std::swap(sort_chunk, other.sort_chunk);
-		std::swap(arg_chunk, other.arg_chunk);
+		std::swap(input_chunk, other.input_chunk);
 
-		std::swap(sort_linked, other.sort_linked);
-		std::swap(arg_linked, other.arg_linked);
+		std::swap(input_linked, other.input_linked);
 	}
 
 	void Absorb(const SortedAggregateBindData &order_bind, SortedAggregateState &other) {
@@ -319,46 +336,31 @@ struct SortedAggregateState {
 
 		//	3x3 matrix.
 		//	We can simplify the logic a bit because the target is already set for the final capacity
-		if (!sort_chunk) {
+		if (!input_chunk) {
 			//	If the combined count is still linked lists,
 			//	then just move the pointers.
 			//	Note that this assumes ArenaAllocator is shared and the memory will not vanish under us.
-			LinkedAbsorb(other.sort_linked, sort_linked);
-			if (!arg_linked.empty()) {
-				LinkedAbsorb(other.arg_linked, arg_linked);
-			}
+			LinkedAbsorb(other.input_linked, input_linked);
 
 			other.Reset();
 			return;
 		}
 
-		if (!other.sort_chunk) {
+		if (!other.input_chunk) {
 			other.FlushLinkedLists(order_bind);
 		}
 
-		if (!ordering) {
+		if (!input_collection) {
 			//	Still using chunks, which means the source is using chunks or lists
-			D_ASSERT(sort_chunk);
-			D_ASSERT(other.sort_chunk);
-			sort_chunk->Append(*other.sort_chunk);
-			if (arg_chunk) {
-				D_ASSERT(other.arg_chunk);
-				arg_chunk->Append(*other.arg_chunk);
-			}
+			D_ASSERT(input_chunk);
+			D_ASSERT(other.input_chunk);
+			input_chunk->Append(*other.input_chunk);
 		} else {
 			// Using collections, so source could be using anything.
-			if (other.ordering) {
-				ordering->Combine(*other.ordering);
-				if (arguments) {
-					D_ASSERT(other.arguments);
-					arguments->Combine(*other.arguments);
-				}
+			if (other.input_collection) {
+				input_collection->Combine(*other.input_collection);
 			} else {
-				ordering->Append(*other.sort_chunk);
-				if (arguments) {
-					D_ASSERT(other.arg_chunk);
-					arguments->Append(*other.arg_chunk);
-				}
+				input_collection->Append(*other.input_chunk);
 			}
 		}
 
@@ -367,43 +369,30 @@ struct SortedAggregateState {
 	}
 
 	void PrefixSortBuffer(DataChunk &prefixed) {
-		for (column_t col_idx = 0; col_idx < sort_chunk->ColumnCount(); ++col_idx) {
-			prefixed.data[col_idx + 1].Reference(sort_chunk->data[col_idx]);
+		for (column_t col_idx = 0; col_idx < input_chunk->ColumnCount(); ++col_idx) {
+			prefixed.data[col_idx + 1].Reference(input_chunk->data[col_idx]);
 		}
-		prefixed.SetCardinality(*sort_chunk);
+		prefixed.SetCardinality(*input_chunk);
 	}
 
-	void Finalize(const SortedAggregateBindData &order_bind, DataChunk &prefixed, LocalSortState &local_sort) {
-		if (arguments) {
+	void Finalize(const SortedAggregateBindData &order_bind, DataChunk &prefixed, ExecutionContext &context,
+	              OperatorSinkInput &sink) {
+		auto &sort = *order_bind.sort;
+		if (input_collection) {
 			ColumnDataScanState sort_state;
-			ordering->InitializeScan(sort_state);
-			ColumnDataScanState arg_state;
-			arguments->InitializeScan(arg_state);
-			for (sort_chunk->Reset(); ordering->Scan(sort_state, *sort_chunk); sort_chunk->Reset()) {
+			input_collection->InitializeScan(sort_state);
+			for (input_chunk->Reset(); input_collection->Scan(sort_state, *input_chunk); input_chunk->Reset()) {
 				PrefixSortBuffer(prefixed);
-				arg_chunk->Reset();
-				arguments->Scan(arg_state, *arg_chunk);
-				local_sort.SinkChunk(prefixed, *arg_chunk);
-			}
-		} else if (ordering) {
-			ColumnDataScanState sort_state;
-			ordering->InitializeScan(sort_state);
-			for (sort_chunk->Reset(); ordering->Scan(sort_state, *sort_chunk); sort_chunk->Reset()) {
-				PrefixSortBuffer(prefixed);
-				local_sort.SinkChunk(prefixed, *sort_chunk);
+				sort.Sink(context, prefixed, sink);
 			}
 		} else {
 			//	Force chunks so we can sort
-			if (!sort_chunk) {
+			if (!input_chunk) {
 				FlushLinkedLists(order_bind);
 			}
 
 			PrefixSortBuffer(prefixed);
-			if (arg_chunk) {
-				local_sort.SinkChunk(prefixed, *arg_chunk);
-			} else {
-				local_sort.SinkChunk(prefixed, *sort_chunk);
-			}
+			sort.Sink(context, prefixed, sink);
 		}
 
 		Reset();
@@ -411,30 +400,19 @@ struct SortedAggregateState {
 
 	void Reset() {
 		//	Release all memory
-		ordering.reset();
-		arguments.reset();
-
-		sort_chunk.reset();
-		arg_chunk.reset();
-
-		sort_linked.clear();
-		arg_linked.clear();
+		input_collection.reset();
+		input_chunk.reset();
+		input_linked.clear();
 
 		count = 0;
 	}
 
 	idx_t count;
 
-	unique_ptr<ColumnDataCollection> arguments;
-	unique_ptr<ColumnDataAppendState> arguments_append;
-	unique_ptr<ColumnDataCollection> ordering;
-	unique_ptr<ColumnDataAppendState> ordering_append;
-
-	unique_ptr<DataChunk> sort_chunk;
-	unique_ptr<DataChunk> arg_chunk;
-
-	LinkedLists sort_linked;
-	LinkedLists arg_linked;
+	unique_ptr<ColumnDataCollection> input_collection;
+	unique_ptr<ColumnDataAppendState> input_append;
+	unique_ptr<DataChunk> input_chunk;
+	LinkedLists input_linked;
 
 	// Selection for scattering
 	SelectionVector sel;
@@ -454,33 +432,25 @@ struct SortedAggregateFunction {
 	}
 
 	static void ProjectInputs(Vector inputs[], const SortedAggregateBindData &order_bind, idx_t input_count,
-	                          idx_t count, DataChunk &arg_input, DataChunk &sort_input) {
-		idx_t col = 0;
-
-		if (!order_bind.sorted_on_args) {
-			arg_input.InitializeEmpty(order_bind.arg_types);
-			for (auto &dst : arg_input.data) {
-				dst.Reference(inputs[col++]);
-			}
-			arg_input.SetCardinality(count);
+	                          idx_t count, DataChunk &buffered) {
+		//	Only reference the buffered columns
+		buffered.InitializeEmpty(order_bind.buffered_types);
+		const auto &buffered_cols = order_bind.buffered_cols;
+		for (idx_t b = 0; b < buffered_cols.size(); ++b) {
+			D_ASSERT(buffered_cols[b] < input_count);
+			buffered.data[b].Reference(inputs[buffered_cols[b]]);
 		}
-
-		sort_input.InitializeEmpty(order_bind.sort_types);
-		for (auto &dst : sort_input.data) {
-			dst.Reference(inputs[col++]);
-		}
-		sort_input.SetCardinality(count);
+		buffered.SetCardinality(count);
 	}
 
 	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                         idx_t count) {
 		const auto order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		DataChunk arg_input;
-		DataChunk sort_input;
-		ProjectInputs(inputs, order_bind, input_count, count, arg_input, sort_input);
+		ProjectInputs(inputs, order_bind, input_count, count, arg_input);
 
 		const auto order_state = reinterpret_cast<SortedAggregateState *>(state);
-		order_state->Update(aggr_input_data, sort_input, arg_input);
+		order_state->Update(aggr_input_data, arg_input);
 	}
 
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
@@ -492,8 +462,7 @@ struct SortedAggregateFunction {
 		// Append the arguments to the two sub-collections
 		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		DataChunk arg_inputs;
-		DataChunk sort_inputs;
-		ProjectInputs(inputs, order_bind, input_count, count, arg_inputs, sort_inputs);
+		ProjectInputs(inputs, order_bind, input_count, count, arg_inputs);
 
 		// We have to scatter the chunks one at a time
 		// so build a selection vector for each one.
@@ -531,7 +500,7 @@ struct SortedAggregateFunction {
 				continue;
 			}
 
-			order_state->UpdateSlice(aggr_input_data, sort_inputs, arg_inputs);
+			order_state->UpdateSlice(aggr_input_data, arg_inputs);
 		}
 	}
 
@@ -551,13 +520,13 @@ struct SortedAggregateFunction {
 	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                     const idx_t offset) {
 		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
-		auto &buffer_manager = order_bind.buffer_manager;
-		RowLayout payload_layout;
-		payload_layout.Initialize(order_bind.arg_types);
-		DataChunk chunk;
-		chunk.Initialize(Allocator::DefaultAllocator(), order_bind.arg_types);
+		auto &client = order_bind.context;
+
+		auto &buffer_allocator = BufferManager::GetBufferManager(client).GetBufferAllocator();
+		DataChunk scanned;
+		scanned.Initialize(buffer_allocator, order_bind.scan_types);
 		DataChunk sliced;
-		sliced.Initialize(Allocator::DefaultAllocator(), order_bind.arg_types);
+		sliced.Initialize(buffer_allocator, order_bind.scan_types);
 
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
@@ -582,21 +551,15 @@ struct SortedAggregateFunction {
 			state_unprocessed[i] = sdata[i]->count;
 		}
 
-		// Sort the input payloads on (state_idx ASC, orders)
-		vector<BoundOrderByNode> orders;
-		orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
-		                                     make_uniq<BoundConstantExpression>(Value::USMALLINT(0))));
-		for (const auto &order : order_bind.orders) {
-			orders.emplace_back(order.Copy());
-		}
-
-		auto global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
-		global_sort->external = order_bind.external;
-		auto local_sort = make_uniq<LocalSortState>();
-		local_sort->Initialize(*global_sort, global_sort->buffer_manager);
+		ThreadContext thread(client);
+		ExecutionContext context(client, thread, nullptr);
+		InterruptState interrupt;
+		auto &sort = order_bind.sort;
+		auto global_sink = sort->GetGlobalSinkState(client);
+		auto local_sink = sort->GetLocalSinkState(context);
 
 		DataChunk prefixed;
-		prefixed.Initialize(Allocator::DefaultAllocator(), global_sort->sort_layout.logical_types);
+		prefixed.Initialize(buffer_allocator, order_bind.sort_types);
 
 		//	Go through the states accumulating values to sort until we hit the sort threshold
 		idx_t unsorted_count = 0;
@@ -606,7 +569,8 @@ struct SortedAggregateFunction {
 				auto state = sdata[finalized];
 				prefixed.Reset();
 				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)));
-				state->Finalize(order_bind, prefixed, *local_sort);
+				OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
+				state->Finalize(order_bind, prefixed, context, sink);
 				unsorted_count += state_unprocessed[finalized];
 
 				// Go to the next aggregate unless this is the last one
@@ -622,24 +586,26 @@ struct SortedAggregateFunction {
 			}
 
 			//	Sort all the data
-			global_sort->AddLocalState(*local_sort);
-			global_sort->PrepareMergePhase();
-			while (global_sort->sorted_blocks.size() > 1) {
-				global_sort->InitializeMergeRound();
-				MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
-				merge_sorter.PerformInMergeRound();
-				global_sort->CompleteMergeRound(false);
-			}
+			OperatorSinkCombineInput combine {*global_sink, *local_sink, interrupt};
+			order_bind.sort->Combine(context, combine);
 
-			auto scanner = make_uniq<PayloadScanner>(*global_sort);
+			OperatorSinkFinalizeInput finalize_input {*global_sink, interrupt};
+			order_bind.sort->Finalize(client, finalize_input);
+
+			auto global_source = sort->GetGlobalSourceState(client, *global_sink);
+			auto local_source = sort->GetLocalSourceState(context, *global_source);
+
 			initialize(aggr, agg_state.data());
-			while (scanner->Remaining()) {
-				chunk.Reset();
-				scanner->Scan(chunk);
+			for (;;) {
+				OperatorSourceInput source {*global_source, *local_source, interrupt};
+				scanned.Reset();
+				if (sort->GetData(context, scanned, source) == SourceResultType::FINISHED) {
+					break;
+				}
 				idx_t consumed = 0;
 
 				// Distribute the scanned chunk to the aggregates
-				while (consumed < chunk.size()) {
+				while (consumed < scanned.size()) {
 					//	Find the next aggregate that needs data
 					for (; !state_unprocessed[sorted]; ++sorted) {
 						// Finalize a single value at the next offset
@@ -651,9 +617,9 @@ struct SortedAggregateFunction {
 
 						initialize(aggr, agg_state.data());
 					}
-					const auto input_count = MinValue(state_unprocessed[sorted], chunk.size() - consumed);
-					for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
-						sliced.data[col_idx].Slice(chunk.data[col_idx], consumed, consumed + input_count);
+					const auto input_count = MinValue(state_unprocessed[sorted], scanned.size() - consumed);
+					for (column_t col_idx = 0; col_idx < scanned.ColumnCount(); ++col_idx) {
+						sliced.data[col_idx].Slice(scanned.data[col_idx], consumed, consumed + input_count);
 					}
 					sliced.SetCardinality(input_count);
 
@@ -686,11 +652,8 @@ struct SortedAggregateFunction {
 			}
 
 			//	Create a new sort
-			scanner.reset();
-			global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
-			global_sort->external = order_bind.external;
-			local_sort = make_uniq<LocalSortState>();
-			local_sort->Initialize(*global_sort, global_sort->buffer_manager);
+			global_sink = sort->GetGlobalSinkState(client);
+			local_sink = sort->GetLocalSinkState(context);
 			unsorted_count = 0;
 		}
 
@@ -709,6 +672,8 @@ struct SortedAggregateFunction {
 		result.Verify(count);
 	}
 };
+
+} // namespace
 
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
                                          const vector<unique_ptr<Expression>> &groups) {
@@ -743,17 +708,75 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    bound_function.name, arguments, bound_function.return_type, AggregateFunction::StateSize<SortedAggregateState>,
-	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction>,
+	    bound_function.name, arguments, bound_function.GetReturnType(),
+	    AggregateFunction::StateSize<SortedAggregateState>,
+	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
+	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, bound_function.null_handling, SortedAggregateFunction::SimpleUpdate, nullptr,
-	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
+	    SortedAggregateFunction::Finalize, bound_function.GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
+	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
 	expr.function = std::move(ordered_aggregate);
 	expr.bind_info = std::move(sorted_bind);
 	expr.order_bys.reset();
+}
+
+void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr) {
+	//	Make implicit orderings explicit
+	auto &aggregate = *expr.aggregate;
+	if (aggregate.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT && expr.arg_orders.empty()) {
+		for (auto &order : expr.orders) {
+			const auto type = order.type;
+			const auto null_order = order.null_order;
+			auto expression = order.expression->Copy();
+			expr.arg_orders.emplace_back(BoundOrderByNode(type, null_order, std::move(expression)));
+		}
+	}
+
+	if (expr.arg_orders.empty() || expr.children.empty()) {
+		// not a sorted aggregate: return
+		return;
+	}
+	// Remove unnecessary ORDER BY clauses and return if nothing remains
+	if (context.config.enable_optimizer) {
+		if (BoundOrderModifier::Simplify(expr.arg_orders, expr.partitions)) {
+			expr.arg_orders.clear();
+			return;
+		}
+	}
+	auto &children = expr.children;
+	auto &arg_orders = expr.arg_orders;
+	auto sorted_bind = make_uniq<SortedAggregateBindData>(context, expr);
+
+	if (!sorted_bind->sorted_on_args) {
+		// The arguments are the children plus the sort columns.
+		for (auto &order : arg_orders) {
+			children.emplace_back(std::move(order.expression));
+		}
+	}
+
+	vector<LogicalType> arguments;
+	arguments.reserve(children.size());
+	for (const auto &child : children) {
+		arguments.emplace_back(child->return_type);
+	}
+
+	// Replace the aggregate with the wrapper
+	AggregateFunction ordered_aggregate(
+	    aggregate.name, arguments, aggregate.GetReturnType(), AggregateFunction::StateSize<SortedAggregateState>,
+	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
+	                                       AggregateDestructorType::LEGACY>,
+	    SortedAggregateFunction::ScatterUpdate,
+	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
+	    SortedAggregateFunction::Finalize, aggregate.GetNullHandling(), SortedAggregateFunction::SimpleUpdate, nullptr,
+	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
+	    SortedAggregateFunction::Window);
+
+	aggregate = std::move(ordered_aggregate);
+	expr.bind_info = std::move(sorted_bind);
+	expr.arg_orders.clear();
 }
 
 } // namespace duckdb

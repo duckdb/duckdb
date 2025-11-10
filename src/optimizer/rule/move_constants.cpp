@@ -41,8 +41,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 	D_ASSERT(arithmetic.return_type.IsIntegral());
 	D_ASSERT(arithmetic.children[0]->return_type.IsIntegral());
 	if (inner_constant.value.IsNull() || outer_constant.value.IsNull()) {
-		if (comparison.type == ExpressionType::COMPARE_DISTINCT_FROM ||
-		    comparison.type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		if (comparison.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    comparison.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			return nullptr;
 		}
 		return make_uniq<BoundConstantExpression>(Value(comparison.return_type));
@@ -62,7 +62,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		}
 		auto result_value = Value::HUGEINT(outer_value);
 		if (!result_value.DefaultTryCastAs(constant_type)) {
-			if (comparison.type != ExpressionType::COMPARE_EQUAL) {
+			if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 				return nullptr;
 			}
 			// if the cast is not possible then the comparison is not possible
@@ -84,7 +84,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			auto result_value = Value::HUGEINT(outer_value);
 			if (!result_value.DefaultTryCastAs(constant_type)) {
 				// if the cast is not possible then an equality comparison is not possible
-				if (comparison.type != ExpressionType::COMPARE_EQUAL) {
+				if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 					return nullptr;
 				}
 				return ExpressionRewriter::ConstantOrNull(std::move(arithmetic.children[arithmetic_child_index]),
@@ -100,7 +100,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			auto result_value = Value::HUGEINT(inner_value);
 			if (!result_value.DefaultTryCastAs(constant_type)) {
 				// if the cast is not possible then an equality comparison is not possible
-				if (comparison.type != ExpressionType::COMPARE_EQUAL) {
+				if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 					return nullptr;
 				}
 				return ExpressionRewriter::ConstantOrNull(std::move(arithmetic.children[arithmetic_child_index]),
@@ -109,7 +109,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			outer_constant.value = std::move(result_value);
 			// in this case, we should also flip the comparison
 			// e.g. if we have [4 - x < 2] then we should have [x > 2]
-			comparison.type = FlipComparisonExpression(comparison.type);
+			comparison.SetExpressionTypeUnsafe(FlipComparisonExpression(comparison.GetExpressionType()));
 		}
 	} else {
 		D_ASSERT(op_type == "*");
@@ -126,8 +126,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		// HUGEINT is not cleanly divisible when outer_value == minimum and inner value == -1. (modulo overflow)
 		if ((outer_value == NumericLimits<hugeint_t>::Minimum() && inner_value == -1) ||
 		    outer_value % inner_value != 0) {
-			bool is_equality = comparison.type == ExpressionType::COMPARE_EQUAL;
-			bool is_inequality = comparison.type == ExpressionType::COMPARE_NOTEQUAL;
+			bool is_equality = comparison.GetExpressionType() == ExpressionType::COMPARE_EQUAL;
+			bool is_inequality = comparison.GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL;
 			if (is_equality || is_inequality) {
 				// we know the values are not equal
 				// the result will be either FALSE or NULL (if COMPARE_EQUAL)
@@ -141,7 +141,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		}
 		if (inner_value < 0) {
 			// multiply by negative value, need to flip expression
-			comparison.type = FlipComparisonExpression(comparison.type);
+			comparison.SetExpressionTypeUnsafe(FlipComparisonExpression(comparison.GetExpressionType()));
 		}
 		// else divide the RHS by the LHS
 		// we need to do a range check on the cast even though we do a division

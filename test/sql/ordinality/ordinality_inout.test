@@ -1,0 +1,116 @@
+# name: test/sql/ordinality/ordinality_inout.test
+# description: Tests with ordinality for correlated InOut-TVFs
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification;
+
+
+statement ok
+CREATE TABLE test(a int);
+
+
+statement ok
+INSERT INTO test VALUES (1),(3);
+
+
+query III
+SELECT a,my_range,my_ordinality FROM test AS t(a), LATERAL range(t.a) WITH ORDINALITY AS _(my_range,my_ordinality) ORDER BY a,my_range;
+----
+1	0	1
+3	0	1
+3	1	2
+3	2	3
+
+
+query III
+SELECT a,my_series,my_ordinality FROM test AS t(a), LATERAL generate_series(0,t.a,1) WITH ORDINALITY AS _(my_series,my_ordinality) ORDER BY t.a, my_series, my_ordinality;
+----
+1	0	1
+1	1	2
+3	0	1
+3	1	2
+3	2	3
+3	3	4
+
+
+query II
+WITH ordinalityCTE AS (
+    SELECT r AS range, o AS my_ordinality
+    FROM range((select 10)) WITH ORDINALITY AS _(r, o)
+    WHERE my_ordinality > 4
+) SELECT range, my_ordinality FROM ordinalityCTE ORDER BY range, my_ordinality;
+----
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+
+
+query I
+WITH RECURSIVE ordinalityCTE AS (
+    SELECT 1 AS ordinality
+    UNION
+    SELECT oCTE.ordinality + r.ordinality AS ordinality
+    FROM
+        ordinalityCTE AS oCTE,
+        LATERAL range(oCTE.ordinality) WITH ORDINALITY AS r(range,ordinality)
+    WHERE oCTE.ordinality < 5
+) SELECT ordinality FROM ordinalityCTE ORDER BY ordinality;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+
+
+query I
+WITH RECURSIVE ordinalityCTE AS (
+      SELECT 1 AS ordinality
+      UNION ALL
+      SELECT oCTE.ordinality + r.ordinality AS ordinality
+      FROM
+          ordinalityCTE AS oCTE,
+          LATERAL range(oCTE.ordinality) WITH ORDINALITY AS r(range,ordinality)
+      WHERE oCTE.ordinality <= 4
+  ) SELECT ordinality FROM ordinalityCTE order by ordinality;
+----
+1
+2
+3
+4
+4
+5
+5
+5
+6
+6
+6
+7
+7
+8
+8
+
+
+statement ok
+CREATE TABLE unnest_test(a char[]);
+
+
+statement ok
+INSERT INTO unnest_test VALUES (['a1','a2','a3']),(['b1','b2']);
+
+
+query III
+SELECT * FROM unnest_test AS t, LATERAL unnest(t.a) WITH ORDINALITY AS _(unnest,my_ordinality) ORDER BY unnest, my_ordinality;
+----
+[a1, a2, a3]	a1	1
+[a1, a2, a3]	a2	2
+[a1, a2, a3]	a3	3
+[b1, b2]	b1	1
+[b1, b2]	b2	2

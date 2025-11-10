@@ -8,7 +8,11 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-template <bool NO_MATCH_SEL, class T, class OP, bool LHS_ALL_VALID>
+#ifdef DUCKDB_SMALLER_BINARY
+template <bool NO_MATCH_SEL, class T, class OP>
+#else
+template <bool NO_MATCH_SEL, class T, class OP, bool LHS_ALL_VALID, bool RHS_ALL_VALID>
+#endif
 static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
                                 const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
                                 SelectionVector *no_match_sel, idx_t &no_match_count) {
@@ -19,26 +23,33 @@ static idx_t TemplatedMatchLoop(const TupleDataVectorFormat &lhs_format, Selecti
 	const auto lhs_data = UnifiedVectorFormat::GetData<T>(lhs_format.unified);
 	const auto &lhs_validity = lhs_format.unified.validity;
 
+#ifdef DUCKDB_SMALLER_BINARY
+	const auto LHS_ALL_VALID = lhs_validity.AllValid();
+	const auto RHS_ALL_VALID = rhs_layout.AllValid();
+#endif
+
 	// RHS
 	const auto rhs_locations = FlatVector::GetData<data_ptr_t>(rhs_row_locations);
 	const auto rhs_offset_in_row = rhs_layout.GetOffsets()[col_idx];
 	idx_t entry_idx;
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+	const auto rhs_column_count = rhs_layout.ColumnCount();
 
 	idx_t match_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		const auto idx = sel.get_index(i);
 
 		const auto lhs_idx = lhs_sel.get_index(idx);
-		const auto lhs_null = LHS_ALL_VALID ? false : !lhs_validity.RowIsValid(lhs_idx);
-
 		const auto &rhs_location = rhs_locations[idx];
-		const ValidityBytes rhs_mask(rhs_location);
-		const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
-		if (COMPARISON_OP::template Operation<T>(lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row), lhs_null,
-		                                         rhs_null)) {
+		if (COMPARISON_OP::template Operation<T>(
+		        lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row),
+		        LHS_ALL_VALID ? false : !lhs_validity.RowIsValidUnsafe(lhs_idx),
+		        RHS_ALL_VALID ? false
+		                      : !ValidityBytes::RowIsValid(
+		                            ValidityBytes(rhs_location, rhs_column_count).GetValidityEntryUnsafe(entry_idx),
+		                            idx_in_entry))) {
 			sel.set_index(match_count++, idx);
 		} else if (NO_MATCH_SEL) {
 			no_match_sel->set_index(no_match_count++, idx);
@@ -51,13 +62,28 @@ template <bool NO_MATCH_SEL, class T, class OP>
 static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
                             const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
                             const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+#ifdef DUCKDB_SMALLER_BINARY
+	return TemplatedMatchLoop<NO_MATCH_SEL, T, OP>(lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx,
+	                                               no_match_sel, no_match_count);
+#else
 	if (lhs_format.unified.validity.AllValid()) {
-		return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, true>(lhs_format, sel, count, rhs_layout, rhs_row_locations,
-		                                                     col_idx, no_match_sel, no_match_count);
+		if (rhs_layout.AllValid()) {
+			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, true, true>(
+			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
+		} else {
+			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, true, false>(
+			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
+		}
 	} else {
-		return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, false>(lhs_format, sel, count, rhs_layout, rhs_row_locations,
-		                                                      col_idx, no_match_sel, no_match_count);
+		if (rhs_layout.AllValid()) {
+			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, false, true>(
+			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
+		} else {
+			return TemplatedMatchLoop<NO_MATCH_SEL, T, OP, false, false>(
+			    lhs_format, sel, count, rhs_layout, rhs_row_locations, col_idx, no_match_sel, no_match_count);
+		}
 	}
+#endif
 }
 
 template <bool NO_MATCH_SEL, class OP>
@@ -85,8 +111,10 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 		const auto lhs_null = lhs_validity.AllValid() ? false : !lhs_validity.RowIsValid(lhs_idx);
 
 		const auto &rhs_location = rhs_locations[idx];
-		const ValidityBytes rhs_mask(rhs_location);
-		const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+		const auto rhs_null =
+		    !rhs_layout.AllValid() &&
+		    !ValidityBytes::RowIsValid(
+		        ValidityBytes(rhs_location, rhs_layout.ColumnCount()).GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
 		// For structs there is no value to compare, here we match NULLs and let recursion do the rest
 		// So we use the comparison only if rhs or LHS is NULL and COMPARE_NULL is true
@@ -204,15 +232,18 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	return SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
 }
 
-void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates) {
-	match_functions.reserve(predicates.size());
-	for (idx_t col_idx = 0; col_idx < predicates.size(); col_idx++) {
-		match_functions.push_back(GetMatchFunction(no_match_sel, layout.GetTypes()[col_idx], predicates[col_idx]));
-	}
-}
-
 void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates,
-                            vector<column_t> &columns) {
+                            vector<column_t> columns_p) {
+	if (columns_p.empty()) {
+		// Assume all columns
+		columns_p.reserve(predicates.size());
+		for (column_t col_idx = 0; col_idx < predicates.size(); col_idx++) {
+			columns_p.emplace_back(col_idx);
+		}
+	}
+
+	rhs_layout = &layout;
+	columns = columns_p;
 
 	// The columns must have the same size as the predicates vector
 	D_ASSERT(columns.size() == predicates.size());
@@ -222,27 +253,14 @@ void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layo
 
 	match_functions.reserve(predicates.size());
 	for (idx_t idx = 0; idx < predicates.size(); idx++) {
-		column_t col_idx = columns[idx];
+		const column_t col_idx = columns[idx];
 		match_functions.push_back(GetMatchFunction(no_match_sel, layout.GetTypes()[col_idx], predicates[idx]));
+		rhs_types.push_back(layout.GetTypes()[col_idx]);
 	}
 }
 
 idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
-                        idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                        SelectionVector *no_match_sel, idx_t &no_match_count) {
-	D_ASSERT(!match_functions.empty());
-	for (idx_t col_idx = 0; col_idx < match_functions.size(); col_idx++) {
-		const auto &match_function = match_functions[col_idx];
-		count =
-		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
-		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
-	}
-	return count;
-}
-
-idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
-                        idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                        SelectionVector *no_match_sel, idx_t &no_match_count, const vector<column_t> &columns) {
+                        idx_t count, Vector &rhs_row_locations, SelectionVector *no_match_sel, idx_t &no_match_count) {
 	D_ASSERT(!match_functions.empty());
 
 	// The column_ids must have the same size as the match_functions vector
@@ -258,7 +276,7 @@ idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs
 
 		const auto &match_function = match_functions[fun_idx];
 		count =
-		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
+		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, *rhs_layout, rhs_row_locations,
 		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
 	}
 	return count;

@@ -66,6 +66,10 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(214, "rotate", rotate);
 	serializer.WriteProperty(215, "return_type", return_type);
 	serializer.WritePropertyWithDefault(216, "write_partition_columns", write_partition_columns, true);
+	serializer.WritePropertyWithDefault(217, "write_empty_file", write_empty_file, true);
+	serializer.WritePropertyWithDefault(218, "preserve_order", preserve_order, PreserveOrderType::AUTOMATIC);
+	serializer.WritePropertyWithDefault(219, "hive_file_pattern", hive_file_pattern, true);
+	serializer.WritePropertyWithDefault(220, "file_size_bytes", file_size_bytes, optional_idx());
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -86,7 +90,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto name = deserializer.ReadProperty<string>(210, "function_name");
 
 	auto &func_catalog_entry =
-	    Catalog::GetEntry(context, CatalogType::COPY_FUNCTION_ENTRY, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
+	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
 	if (func_catalog_entry.type != CatalogType::COPY_FUNCTION_ENTRY) {
 		throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 	}
@@ -110,6 +114,11 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto return_type =
 	    deserializer.ReadPropertyWithExplicitDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
 	auto write_partition_columns = deserializer.ReadPropertyWithExplicitDefault(216, "write_partition_columns", true);
+	auto write_empty_file = deserializer.ReadPropertyWithExplicitDefault(217, "write_empty_file", true);
+	auto preserve_order =
+	    deserializer.ReadPropertyWithExplicitDefault(218, "preserve_order", PreserveOrderType::AUTOMATIC);
+	auto hive_file_pattern = deserializer.ReadPropertyWithExplicitDefault(219, "hive_file_pattern", true);
+	auto file_size_bytes = deserializer.ReadPropertyWithExplicitDefault(220, "file_size_bytes", optional_idx());
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -117,7 +126,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 			throw InternalException("Copy function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 
-		CopyFunctionBindInput function_bind_input(*copy_info);
+		CopyFunctionBindInput function_bind_input(*copy_info, function.function_info);
 		auto names_to_write = GetNamesWithoutPartitions(names, partition_columns, write_partition_columns);
 		auto types_to_write = GetTypesWithoutPartitions(expected_types, partition_columns, write_partition_columns);
 		bind_data = function.copy_to_bind(context, function_bind_input, names_to_write, types_to_write);
@@ -137,19 +146,21 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->rotate = rotate;
 	result->return_type = return_type;
 	result->write_partition_columns = write_partition_columns;
+	result->write_empty_file = write_empty_file;
+	result->preserve_order = preserve_order;
+	result->hive_file_pattern = hive_file_pattern;
+	result->file_size_bytes = file_size_bytes;
 
 	return std::move(result);
 }
 
 vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
-	switch (return_type) {
-	case CopyFunctionReturnType::CHANGED_ROWS:
-		return {ColumnBinding(0, 0)};
-	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
-		return {ColumnBinding(0, 0), ColumnBinding(0, 1)};
-	default:
-		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type).size();
+	vector<ColumnBinding> result;
+	for (idx_t i = 0; i < return_column_count; i++) {
+		result.emplace_back(0, i);
 	}
+	return result;
 }
 
 idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {

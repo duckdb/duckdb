@@ -1,0 +1,14 @@
+# name: test/sql/optimizer/plan/test_disable_build_side_probe_side.test
+# description: Test that disabling BuildProbeSideOptimizer does not swap RIGHT joins to LEFT
+# group: [plan]
+
+statement ok
+pragma explain_output='optimized_only'
+
+statement ok
+set disabled_optimizers to 'build_side_probe_side';
+
+query II
+explain from range(10) r1 right join range(10) r2 using (range)
+----
+logical_opt	<!REGEX>:.*LEFT.*

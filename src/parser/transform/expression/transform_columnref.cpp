@@ -6,17 +6,44 @@
 
 namespace duckdb {
 
+QualifiedColumnName TransformQualifiedColumnName(duckdb_libpgquery::PGList &list) {
+	QualifiedColumnName result;
+	switch (list.length) {
+	case 1:
+		result.column = const_char_ptr_cast(list.head->data.ptr_value);
+		break;
+	case 2:
+		result.table = const_char_ptr_cast(list.head->data.ptr_value);
+		result.column = const_char_ptr_cast(list.head->next->data.ptr_value);
+		break;
+	case 3:
+		result.schema = const_char_ptr_cast(list.head->data.ptr_value);
+		result.table = const_char_ptr_cast(list.head->next->data.ptr_value);
+		result.column = const_char_ptr_cast(list.head->next->next->data.ptr_value);
+		break;
+	case 4:
+		result.catalog = const_char_ptr_cast(list.head->data.ptr_value);
+		result.schema = const_char_ptr_cast(list.head->next->data.ptr_value);
+		result.table = const_char_ptr_cast(list.head->next->next->data.ptr_value);
+		result.column = const_char_ptr_cast(list.head->next->next->next->data.ptr_value);
+		break;
+	default:
+		throw ParserException("Qualified column name must have between 1 and 4 elements");
+	}
+	return result;
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgquery::PGAStar &star) {
 	auto result = make_uniq<StarExpression>(star.relation ? star.relation : string());
 	if (star.except_list) {
 		for (auto head = star.except_list->head; head; head = head->next) {
-			auto value = PGPointerCast<duckdb_libpgquery::PGValue>(head->data.ptr_value);
-			D_ASSERT(value->type == duckdb_libpgquery::T_PGString);
-			string exclude_entry = value->val.str;
-			if (result->exclude_list.find(exclude_entry) != result->exclude_list.end()) {
-				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", exclude_entry);
+			auto exclude_column_list = PGPointerCast<duckdb_libpgquery::PGList>(head->data.ptr_value);
+			auto exclude_column = TransformQualifiedColumnName(*exclude_column_list);
+			// qualified - add to exclude list
+			if (result->exclude_list.find(exclude_column) != result->exclude_list.end()) {
+				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", exclude_column.ToString());
 			}
-			result->exclude_list.insert(std::move(exclude_entry));
+			result->exclude_list.insert(std::move(exclude_column));
 		}
 	}
 	if (star.replace_list) {
@@ -27,14 +54,35 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			    TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(list->head->data.ptr_value));
 			auto value = PGPointerCast<duckdb_libpgquery::PGValue>(list->tail->data.ptr_value);
 			D_ASSERT(value->type == duckdb_libpgquery::T_PGString);
-			string exclude_entry = value->val.str;
-			if (result->replace_list.find(exclude_entry) != result->replace_list.end()) {
-				throw ParserException("Duplicate entry \"%s\" in REPLACE list", exclude_entry);
+			string replace_entry = value->val.str;
+			if (result->replace_list.find(replace_entry) != result->replace_list.end()) {
+				throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry);
 			}
-			if (result->exclude_list.find(exclude_entry) != result->exclude_list.end()) {
-				throw ParserException("Column \"%s\" cannot occur in both EXCEPT and REPLACE list", exclude_entry);
+			if (result->exclude_list.find(QualifiedColumnName(replace_entry)) != result->exclude_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list", replace_entry);
 			}
-			result->replace_list.insert(make_pair(std::move(exclude_entry), std::move(replace_expression)));
+			result->replace_list.insert(make_pair(std::move(replace_entry), std::move(replace_expression)));
+		}
+	}
+	if (star.rename_list) {
+		for (auto head = star.rename_list->head; head; head = head->next) {
+			auto list = PGPointerCast<duckdb_libpgquery::PGList>(head->data.ptr_value);
+			D_ASSERT(list->length == 2);
+			auto rename_column_list = PGPointerCast<duckdb_libpgquery::PGList>(list->head->data.ptr_value);
+			auto rename_column = TransformQualifiedColumnName(*rename_column_list);
+			string new_name = char_ptr_cast(list->tail->data.ptr_value);
+			if (result->rename_list.find(rename_column) != result->rename_list.end()) {
+				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", rename_column.ToString());
+			}
+			if (result->exclude_list.find(rename_column) != result->exclude_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and RENAME list",
+				                      rename_column.ToString());
+			}
+			if (result->replace_list.find(rename_column.column) != result->replace_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both REPLACE and RENAME list",
+				                      rename_column.ToString());
+			}
+			result->rename_list.insert(make_pair(std::move(rename_column), std::move(new_name)));
 		}
 	}
 	if (star.expr) {
@@ -48,8 +96,9 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			result->relation_name = child_star.relation_name;
 			result->exclude_list = std::move(child_star.exclude_list);
 			result->replace_list = std::move(child_star.replace_list);
+			result->rename_list = std::move(child_star.rename_list);
 			result->expr.reset();
-		} else if (result->expr->type == ExpressionType::LAMBDA) {
+		} else if (result->expr->GetExpressionType() == ExpressionType::LAMBDA) {
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(make_uniq<StarExpression>());
 			children.push_back(std::move(result->expr));
@@ -58,7 +107,6 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		}
 	}
 	result->columns = star.columns;
-	result->unpacked = star.unpacked;
 	SetQueryLocation(*result, star.location);
 	return std::move(result);
 }

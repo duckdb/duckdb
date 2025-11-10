@@ -12,14 +12,79 @@ void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
 }
 
 void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
-	for (auto &child : op.children) {
-		VisitOperator(*child);
+	if (op.HasProjectionMap()) {
+		VisitOperatorWithProjectionMapChildren(op);
+	} else {
+		for (auto &child : op.children) {
+			VisitOperator(*child);
+		}
 	}
+}
+
+void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOperator &op) {
+	D_ASSERT(op.HasProjectionMap());
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+		auto &join = op.Cast<LogicalJoin>();
+		VisitChildOfOperatorWithProjectionMap(*op.children[0], join.left_projection_map);
+		VisitChildOfOperatorWithProjectionMap(*op.children[1], join.right_projection_map);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+		auto &order = op.Cast<LogicalOrder>();
+		VisitChildOfOperatorWithProjectionMap(*op.children[0], order.projection_map);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		auto &filter = op.Cast<LogicalFilter>();
+		VisitChildOfOperatorWithProjectionMap(*op.children[0], filter.projection_map);
+		break;
+	}
+	default:
+		throw NotImplementedException("VisitOperatorWithProjectionMapChildren for %s", EnumUtil::ToString(op.type));
+	}
+}
+
+void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(LogicalOperator &child,
+                                                                   vector<idx_t> &projection_map) {
+	const auto child_bindings_before = child.GetColumnBindings();
+	VisitOperator(child);
+	if (projection_map.empty()) {
+		return; // Nothing to fix here
+	}
+	// Child binding order may have changed due to 'fun'.
+	const auto child_bindings_after = child.GetColumnBindings();
+	if (child_bindings_before == child_bindings_after) {
+		return; // Nothing changed
+	}
+	// The desired order is 'projection_map' applied to 'child_bindings_before'
+	// We create 'new_projection_map', which ensures this order even if 'child_bindings_after' is different
+	vector<idx_t> new_projection_map;
+	new_projection_map.reserve(projection_map.size());
+	for (const auto proj_idx_before : projection_map) {
+		auto &desired_binding = child_bindings_before[proj_idx_before];
+		idx_t proj_idx_after;
+		for (proj_idx_after = 0; proj_idx_after < child_bindings_after.size(); proj_idx_after++) {
+			if (child_bindings_after[proj_idx_after] == desired_binding) {
+				break;
+			}
+		}
+		if (proj_idx_after == child_bindings_after.size()) {
+			// VisitOperator has removed this binding, e.g., by replacing one binding with another
+			// Inside here we don't know how it has been replaced, and projection maps are positional: bail
+			new_projection_map.clear();
+			break;
+		}
+		new_projection_map.push_back(proj_idx_after);
+	}
+	projection_map = std::move(new_projection_map);
 }
 
 void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
                                                   const std::function<void(unique_ptr<Expression> *child)> &callback) {
-
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		auto &get = op.Cast<LogicalExpressionGet>();
@@ -56,19 +121,43 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
+
+		for (auto &target : rec.key_targets) {
+			callback(&target);
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
 		auto &insert = op.Cast<LogicalInsert>();
-		if (insert.on_conflict_condition) {
-			callback(&insert.on_conflict_condition);
+		if (insert.on_conflict_info.on_conflict_condition) {
+			callback(&insert.on_conflict_info.on_conflict_condition);
 		}
-		if (insert.do_update_condition) {
-			callback(&insert.do_update_condition);
+		if (insert.on_conflict_info.do_update_condition) {
+			callback(&insert.on_conflict_info.do_update_condition);
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
+		auto &join = op.Cast<LogicalDependentJoin>();
+		for (auto &expr : join.duplicate_eliminated_columns) {
+			callback(&expr);
+		}
+		for (auto &cond : join.conditions) {
+			callback(&cond.left);
+			callback(&cond.right);
+		}
+		for (auto &expr : join.arbitrary_expressions) {
+			callback(&expr);
+		}
+		for (auto &expr : join.expression_children) {
+			callback(&expr);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		for (auto &expr : join.duplicate_eliminated_columns) {
@@ -77,6 +166,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &cond : join.conditions) {
 			callback(&cond.left);
 			callback(&cond.right);
+		}
+		if (join.predicate) {
+			callback(&join.predicate);
 		}
 		break;
 	}
@@ -99,6 +191,20 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		auto &aggr = op.Cast<LogicalAggregate>();
 		for (auto &group : aggr.groups) {
 			callback(&group);
+		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_MERGE_INTO: {
+		auto &merge_into = op.Cast<LogicalMergeInto>();
+		for (auto &entry : merge_into.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					callback(&action->condition);
+				}
+				for (auto &expr : action->expressions) {
+					callback(&expr);
+				}
+			}
 		}
 		break;
 	}

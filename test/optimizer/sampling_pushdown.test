@@ -1,0 +1,52 @@
+# name: test/optimizer/sampling_pushdown.test
+# description: Test Sampling Pushdown optimization
+# group: [optimizer]
+
+statement ok
+CREATE TABLE integers1(i INTEGER, j INTEGER)
+
+statement ok
+CREATE TABLE integers2(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers1 VALUES (1,1), (2,2), (3, 3), (4,4)
+
+statement ok
+INSERT INTO integers2 VALUES (1,1), (2,2), (3, 3), (4,4)
+
+
+# tablesample system + seq scan becomes sample scan
+query II
+EXPLAIN SELECT i FROM integers1 tablesample system(0.1%)
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 0.1%.*
+
+# using sample system + seq scan becomes sample scan
+query II
+EXPLAIN SELECT i FROM integers1 using sample system(0.1%)
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 0.1%.*
+
+# tablesample system + seq scan with join becomes sample scan with join
+query II
+EXPLAIN SELECT * FROM integers1 tablesample system(0.1%), integers2 tablesample system(0.1%)
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 0.1%.*
+
+# tablesample bernoulli: no pushdown
+query II
+EXPLAIN SELECT i FROM integers1 tablesample bernoulli(0.1%)
+----
+physical_plan	<REGEX>:.*Bernoulli.*SEQ_SCAN.*
+
+# tablesample reservoir: no pushdown
+query II
+EXPLAIN SELECT i FROM integers1 tablesample reservoir(0.1%)
+----
+physical_plan	<REGEX>:.*RESERVOIR_SAMPLE.*SEQ_SCAN.*
+
+# tablesample system after a derived table: no pushdown
+query II
+EXPLAIN SELECT * FROM integers1, integers2 where integers1.i = integers2.i USING SAMPLE SYSTEM(25%)
+----
+physical_plan	<REGEX>:.*System.*SEQ_SCAN.*

@@ -36,6 +36,14 @@ bool BoundOrderByNode::Equals(const BoundOrderByNode &other) const {
 	return true;
 }
 
+string BoundOrderByNode::GetOrderModifier() const {
+	string modifier;
+	modifier += (type == OrderType::ASCENDING) ? "ASC" : "DESC";
+	modifier += " NULLS";
+	modifier += (null_order == OrderByNullType::NULLS_FIRST) ? " FIRST" : " LAST";
+	return modifier;
+}
+
 string BoundOrderByNode::ToString() const {
 	auto str = expression->ToString();
 	switch (type) {
@@ -93,7 +101,7 @@ bool BoundOrderModifier::Equals(const unique_ptr<BoundOrderModifier> &left,
 	return BoundOrderModifier::Equals(*left, *right);
 }
 
-bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups) {
+bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups) {
 	// for each ORDER BY - check if it is actually necessary
 	// expressions that are in the groups do not need to be ORDERED BY
 	// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
@@ -113,7 +121,11 @@ bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups) 
 	}
 	orders.swap(new_order_nodes);
 
-	return orders.empty();
+	return orders.empty(); // NOLINT
+}
+
+bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups) {
+	return Simplify(orders, groups);
 }
 
 BoundLimitNode::BoundLimitNode(LimitNodeType type, idx_t constant_integer, double constant_percentage,

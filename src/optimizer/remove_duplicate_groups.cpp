@@ -29,7 +29,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 	vector<pair<idx_t, idx_t>> duplicates;
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
 		const auto &group = groups[group_idx];
-		if (group->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (group->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue;
 		}
 		const auto &colref = group->Cast<BoundColumnRefExpression>();

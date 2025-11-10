@@ -168,7 +168,7 @@ CollationIterator::~CollationIterator() {
     delete skipped;
 }
 
-UBool
+bool
 CollationIterator::operator==(const CollationIterator &other) const {
     // Subclasses: Call this method and then add more specific checks.
     // Compare the iterator state but not the collation data (trie & data fields):

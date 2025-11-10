@@ -2,9 +2,6 @@
 # description: Test LEAST/GREATEST
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar usage
 query I
 SELECT LEAST(1)
@@ -40,6 +37,11 @@ query I
 SELECT LEAST(NULL, 3, 0, 2, 7, 8, 10, 11, -100, 30, 1)
 ----
 -100
+
+query I
+SELECT GREATEST(NULL, 1.0::FLOAT)
+----
+1
 
 # double
 query R

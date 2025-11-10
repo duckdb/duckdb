@@ -30,7 +30,8 @@ public:
 
 public:
 	//! Construct a new fixed-size allocator
-	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
+	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager,
+	                   MemoryTag memory_tag = MemoryTag::ART_INDEX);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
@@ -43,39 +44,57 @@ public:
 	//! Free the segment of the IndexPointer
 	void Free(const IndexPointer ptr);
 
+	//! Get a segment handle.
+	inline SegmentHandle GetHandle(const IndexPointer ptr) {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+
+		auto buffer_it = buffers.find(ptr.GetBufferId());
+		D_ASSERT(buffer_it != buffers.end());
+
+		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
+		auto &buffer = *buffer_it->second;
+		return SegmentHandle(buffer, offset);
+	}
+
 	//! Returns a pointer of type T to a segment. If dirty is false, then T must be a const class.
+	//! DEPRECATED. Use segment handles.
 	template <class T>
 	inline unsafe_optional_ptr<T> Get(const IndexPointer ptr, const bool dirty = true) {
 		return (T *)Get(ptr, dirty);
 	}
 
 	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment.
+	//! DEPRECATED. Use segment handles.
 	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
-		auto &buffer = buffers.find(ptr.GetBufferId())->second;
-		auto buffer_ptr = buffer.Get(dirty);
-		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+		auto buffer_it = buffers.find(ptr.GetBufferId());
+		D_ASSERT(buffer_it != buffers.end());
+
+		auto offset = ptr.GetOffset() * segment_size + bitmask_offset;
+		auto buffer_ptr = buffer_it->second->GetDeprecated(dirty);
+		return buffer_ptr + offset;
 	}
 
 	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
+	//! DEPRECATED. Use segment handles.
 	template <class T>
 	inline unsafe_optional_ptr<T> GetIfLoaded(const IndexPointer ptr) {
 		return (T *)GetIfLoaded(ptr);
 	}
 
 	//! Returns the data_ptr_t to a segment, or nullptr, if the buffer is not in memory.
+	//! DEPRECATED. Use segment handles.
 	inline data_ptr_t GetIfLoaded(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
 		auto &buffer = buffers.find(ptr.GetBufferId())->second;
-		if (!buffer.InMemory()) {
+		if (!buffer->InMemory()) {
 			return nullptr;
 		}
 
-		auto buffer_ptr = buffer.Get();
+		auto buffer_ptr = buffer->GetDeprecated();
 		auto raw_ptr = buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 		return raw_ptr;
 	}
@@ -123,14 +142,19 @@ public:
 	void Init(const FixedSizeAllocatorInfo &info);
 	//! Deserializes all metadata of older storage files
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
-	//! Removes empty buffers.
-	void RemoveEmptyBuffers();
+
 	//! Returns true, if the allocator does not contain any segments.
-	inline bool IsEmpty() {
+	inline bool Empty() {
 		return total_segment_count == 0;
 	}
+	//! Removes empty buffers.
+	void RemoveEmptyBuffers();
+	//! Verifies that the number of empty buffers does not exceed the empty buffer threshold.
+	void VerifyBuffers();
 
 private:
+	//! Memory tag of memory that is allocated through the allocator
+	MemoryTag memory_tag;
 	//! Allocation size of one segment in a buffer
 	//! We only need this value to calculate bitmask_count, bitmask_offset, and
 	//! available_segments_per_buffer
@@ -147,16 +171,23 @@ private:
 	//! We can recalculate this by iterating over all buffers
 	idx_t total_segment_count;
 
-	//! Buffers containing the segments
-	unordered_map<idx_t, FixedSizeBuffer> buffers;
-	//! Buffers with free space
+	//! Buffers containing the segments.
+	unordered_map<idx_t, unique_ptr<FixedSizeBuffer>> buffers;
+	//! Buffers with free space.
 	unordered_set<idx_t> buffers_with_free_space;
+	//! Caches the next buffer to be filled up.
+	//! Unordered sets make no guarantee that begin() returns the same element.
+	//! By caching one of the buffers with free space, we get more consistency when filling buffers.
+	optional_idx buffer_with_free_space;
+
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)
 	unordered_set<idx_t> vacuum_buffers;
 
 private:
 	//! Returns an available buffer id
 	idx_t GetAvailableBufferId() const;
+	//! Caches the next buffer that we're going to fill.
+	void NextBufferWithFreeSpace();
 };
 
 } // namespace duckdb

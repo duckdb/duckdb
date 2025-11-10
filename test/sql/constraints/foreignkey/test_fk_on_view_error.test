@@ -1,0 +1,14 @@
+# name: test/sql/constraints/foreignkey/test_fk_on_view_error.test
+# description: Test throwing a binder exception when creating a FK on a VIEW
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE vdata AS SELECT * FROM (VALUES ('v2',)) v(id);
+
+statement ok
+CREATE VIEW v AS SELECT * FROM vdata;
+
+statement error
+CREATE TABLE t(v_id TEXT, FOREIGN KEY (v_id) REFERENCES v(id));
+----
+<REGEX>:Binder Error.*cannot reference a VIEW with a FOREIGN KEY.*

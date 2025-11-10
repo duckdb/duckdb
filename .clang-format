@@ -1,5 +1,6 @@
 ---
 BasedOnStyle: LLVM
+SortIncludes: false
 TabWidth: 4
 IndentWidth: 4
 ColumnLimit: 120
@@ -26,6 +27,7 @@ AlwaysBreakTemplateDeclarations: Yes
 IncludeBlocks: Regroup
 Language: Cpp
 AccessModifierOffset: -4
+KeepEmptyLinesAtTheStartOfBlocks: false
 ---
 Language: Java
 SpaceAfterCStyleCast: true

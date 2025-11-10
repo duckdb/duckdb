@@ -1,15 +1,17 @@
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
+
+namespace {
 
 struct NFCNormalizeOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
-		if (StripAccentsFun::IsAscii(input_data, input_length)) {
+		if (IsAscii(input_data, input_length)) {
 			return input;
 		}
 		auto normalized_str = Utf8Proc::Normalize(input_data, input_length);
@@ -20,19 +22,17 @@ struct NFCNormalizeOperator {
 	}
 };
 
-static void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 
 	UnaryExecutor::ExecuteString<string_t, string_t, NFCNormalizeOperator>(args.data[0], result, args.size());
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 
+} // namespace
+
 ScalarFunction NFCNormalizeFun::GetFunction() {
 	return ScalarFunction("nfc_normalize", {LogicalType::VARCHAR}, LogicalType::VARCHAR, NFCNormalizeFunction);
-}
-
-void NFCNormalizeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(NFCNormalizeFun::GetFunction());
 }
 
 } // namespace duckdb

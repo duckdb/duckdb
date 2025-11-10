@@ -197,6 +197,8 @@ typedef enum PGNodeTag {
 	T_PGPivotExpr,
 	T_PGPivot,
 	T_PGPivotStmt,
+	T_PGAtClause,
+	T_PGSingleArrowFunction,
 
 	/*
 	 * TAGS FOR EXPRESSION STATE NODES (execnodes.h)
@@ -331,6 +333,7 @@ typedef enum PGNodeTag {
 	T_PGTruncateStmt,
 	T_PGCommentStmt,
 	T_PGCommentOnStmt,
+	T_PGMergeIntoStmt,
 	T_PGFetchStmt,
 	T_PGIndexStmt,
 	T_PGFunctionDefinition,
@@ -493,6 +496,8 @@ typedef enum PGNodeTag {
 	T_PGSampleOptions,
 	T_PGLimitPercent,
 	T_PGPositionalReference,
+	T_PGMatchEntry,
+	T_PGMatchAction,
 
 	/*
 	 * TAGS FOR REPLICATION GRAMMAR PARSE NODES (replnodes.h)

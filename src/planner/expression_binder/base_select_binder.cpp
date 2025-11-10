@@ -27,7 +27,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	if (group_index != DConstants::INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
 	}
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	case ExpressionClass::DEFAULT:
@@ -41,7 +41,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 
 idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	// first check the group alias map, if expr is a ColumnRefExpression
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
 			auto alias_entry = info.alias_map.find(colref.column_names[0]);
@@ -101,9 +101,9 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_
 	if (it != info.collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate
 		const auto &aggr_index = it->second;
-		auto uncollated_first_expression =
-		    make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,
-		                                        ColumnBinding(node.aggregate_index, aggr_index), depth);
+		const auto return_type = node.aggregates[aggr_index]->return_type;
+		auto uncollated_first_expression = make_uniq<BoundColumnRefExpression>(
+		    expr.GetName(), return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 
 		if (node.groups.grouping_sets.size() <= 1) {
 			// if there are no more than two grouping sets, you can return the uncollated first expression.
@@ -117,10 +117,10 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_
 		auto collated_group_expression = make_uniq<BoundColumnRefExpression>(
 		    expr.GetName(), group->return_type, ColumnBinding(node.group_index, group_index), depth);
 
-		auto sql_null = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+		auto sql_null = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
 		when_expr->children.push_back(std::move(collated_group_expression));
-		auto then_expr = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+		auto then_expr = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto else_expr = std::move(uncollated_first_expression);
 		auto case_expr =
 		    make_uniq<BoundCaseExpression>(std::move(when_expr), std::move(then_expr), std::move(else_expr));

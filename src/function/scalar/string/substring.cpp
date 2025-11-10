@@ -1,3 +1,4 @@
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/common/algorithm.hpp"
@@ -15,7 +16,6 @@ static const int64_t SUPPORTED_UPPER_BOUND = NumericLimits<uint32_t>::Maximum();
 static const int64_t SUPPORTED_LOWER_BOUND = -SUPPORTED_UPPER_BOUND - 1;
 
 static inline void AssertInSupportedRange(idx_t input_size, int64_t offset, int64_t length) {
-
 	if (input_size > (uint64_t)SUPPORTED_UPPER_BOUND) {
 		throw OutOfRangeException("Substring input size is too large (> %d)", SUPPORTED_UPPER_BOUND);
 	}
@@ -33,13 +33,13 @@ static inline void AssertInSupportedRange(idx_t input_size, int64_t offset, int6
 	}
 }
 
-string_t SubstringEmptyString(Vector &result) {
+static string_t SubstringEmptyString(Vector &result) {
 	auto result_string = StringVector::EmptyString(result, 0);
 	result_string.Finalize();
 	return result_string;
 }
 
-string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, int64_t length) {
+static string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, int64_t length) {
 	auto result_string = StringVector::EmptyString(result, UnsafeNumericCast<idx_t>(length));
 	auto result_data = result_string.GetDataWriteable();
 	memcpy(result_data, input_data + offset, UnsafeNumericCast<size_t>(length));
@@ -48,7 +48,7 @@ string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, 
 }
 
 // compute start and end characters from the given input size and offset/length
-bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length, int64_t &start, int64_t &end) {
+static bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length, int64_t &start, int64_t &end) {
 	if (length == 0) {
 		return false;
 	}
@@ -94,7 +94,7 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 	return SubstringSlice(result, input_data, start, UnsafeNumericCast<int64_t>(end - start));
 }
 
-string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
@@ -129,7 +129,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 		}
 		int64_t current_character = 0;
 		for (idx_t i = input_size; i > 0; i--) {
-			if (LengthFun::IsCharacter(input_data[i - 1])) {
+			if (IsCharacter(input_data[i - 1])) {
 				current_character++;
 				if (current_character == start) {
 					start_pos = i;
@@ -139,10 +139,10 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 				}
 			}
 		}
-		while (!LengthFun::IsCharacter(input_data[start_pos])) {
+		while (!IsCharacter(input_data[start_pos])) {
 			start_pos++;
 		}
-		while (end_pos < input_size && !LengthFun::IsCharacter(input_data[end_pos])) {
+		while (end_pos < input_size && !IsCharacter(input_data[end_pos])) {
 			end_pos++;
 		}
 
@@ -170,7 +170,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 
 		int64_t current_character = 0;
 		for (idx_t i = 0; i < input_size; i++) {
-			if (LengthFun::IsCharacter(input_data[i])) {
+			if (IsCharacter(input_data[i])) {
 				if (current_character == start) {
 					start_pos = i;
 				} else if (current_character == end) {
@@ -190,7 +190,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 	                      UnsafeNumericCast<int64_t>(end_pos - start_pos));
 }
 
-string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
@@ -249,20 +249,22 @@ string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t
 	                      UnsafeNumericCast<int64_t>(end_pos - start_pos));
 }
 
+namespace {
+
 struct SubstringUnicodeOp {
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringUnicode(result, input, offset, length);
+		return SubstringUnicode(result, input, offset, length);
 	}
 };
 
 struct SubstringGraphemeOp {
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
-		return SubstringFun::SubstringGrapheme(result, input, offset, length);
+		return SubstringGrapheme(result, input, offset, length);
 	}
 };
 
 template <class OP>
-static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
@@ -281,7 +283,7 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 }
 
-static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
+void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
@@ -300,7 +302,7 @@ static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	// can only propagate stats if the children have stats
@@ -311,7 +313,9 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 	return nullptr;
 }
 
-void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
+} // namespace
+
+ScalarFunctionSet SubstringFun::GetFunctions() {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
@@ -319,10 +323,10 @@ void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
 	                                  SubstringPropagateStats));
-	set.AddFunction(substr);
-	substr.name = "substr";
-	set.AddFunction(substr);
+	return (substr);
+}
 
+ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
@@ -330,7 +334,7 @@ void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                           SubstringFunction<SubstringGraphemeOp>, nullptr, nullptr,
 	                                           SubstringPropagateStats));
-	set.AddFunction(substr_grapheme);
+	return (substr_grapheme);
 }
 
 } // namespace duckdb

@@ -10,9 +10,77 @@
 
 #include "duckdb/common/adbc/adbc.h"
 
+#include "duckdb/main/capi/capi_internal.hpp"
+
 #include <string>
 
 namespace duckdb_adbc {
+
+class AppenderWrapper {
+public:
+	AppenderWrapper(duckdb_connection conn, const char *schema, const char *table) : appender(nullptr) {
+		if (duckdb_appender_create(conn, schema, table, &appender) != DuckDBSuccess) {
+			appender = nullptr;
+		}
+	}
+	~AppenderWrapper() {
+		if (appender) {
+			duckdb_appender_destroy(&appender);
+		}
+	}
+
+	duckdb_appender Get() const {
+		return appender;
+	}
+	bool Valid() const {
+		return appender != nullptr;
+	}
+
+private:
+	duckdb_appender appender;
+};
+
+class DataChunkWrapper {
+public:
+	DataChunkWrapper() : chunk(nullptr) {
+	}
+
+	~DataChunkWrapper() {
+		if (chunk) {
+			duckdb_destroy_data_chunk(&chunk);
+		}
+	}
+
+	explicit operator duckdb_data_chunk() const {
+		return chunk;
+	}
+
+	duckdb_data_chunk chunk;
+};
+
+class ConvertedSchemaWrapper {
+public:
+	ConvertedSchemaWrapper() : schema(nullptr) {
+	}
+	~ConvertedSchemaWrapper() {
+		if (schema) {
+			duckdb_destroy_arrow_converted_schema(&schema);
+		}
+	}
+	duckdb_arrow_converted_schema *GetPtr() {
+		return &schema;
+	}
+
+	explicit operator duckdb_arrow_converted_schema() const {
+		return schema;
+	}
+	duckdb_arrow_converted_schema Get() const {
+		return schema;
+	}
+
+private:
+	duckdb_arrow_converted_schema schema;
+};
 
 AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error);
 
@@ -90,4 +158,3 @@ void InitializeADBCError(AdbcError *error);
 
 //! This method should only be called when the string is guaranteed to not be NULL
 void SetError(struct AdbcError *error, const std::string &message);
-// void SetError(struct AdbcError *error, const char *message);

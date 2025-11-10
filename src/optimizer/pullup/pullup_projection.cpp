@@ -19,13 +19,13 @@ static void RevertFilterPullup(LogicalProjection &proj, vector<unique_ptr<Expres
 
 static void ReplaceExpressionBinding(vector<unique_ptr<Expression>> &proj_expressions, Expression &expr,
                                      idx_t proj_table_idx) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		bool found_proj_col = false;
 		BoundColumnRefExpression &colref = expr.Cast<BoundColumnRefExpression>();
 		// find the corresponding column index in the projection expressions
 		for (idx_t proj_idx = 0; proj_idx < proj_expressions.size(); proj_idx++) {
 			auto &proj_expr = *proj_expressions[proj_idx];
-			if (proj_expr.type == ExpressionType::BOUND_COLUMN_REF) {
+			if (proj_expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				if (colref.Equals(proj_expr)) {
 					colref.binding.table_index = proj_table_idx;
 					colref.binding.column_index = proj_idx;

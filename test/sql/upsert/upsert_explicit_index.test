@@ -1,40 +1,50 @@
 # name: test/sql/upsert/upsert_explicit_index.test
+# description: Test index UPSERTs.
 # group: [upsert]
 
 statement ok
 pragma enable_verification;
 
 statement ok
-create table tbl (i integer, j integer);
+CREATE TABLE tbl (i INT, j INT);
 
 statement ok
-insert into tbl values (5,3), (3,2);
+INSERT INTO tbl VALUES (5, 3), (3, 2);
 
 statement ok
-create unique index my_index on tbl(i);
+CREATE UNIQUE INDEX my_index ON tbl(i);
 
 statement ok
-insert into tbl values (5,2) on conflict (i) do update set j = 10;
+INSERT INTO tbl VALUES (5, 2) ON CONFLICT (i) DO UPDATE SET j = 10;
 
 query II
-select * from tbl;
+SELECT i, j FROM tbl ORDER BY ALL DESC;
 ----
 5	10
 3	2
 
 statement ok
-drop table tbl cascade;
+DROP TABLE tbl CASCADE;
 
 statement ok
-create table tbl (i integer PRIMARY KEY, j integer);
+CREATE TABLE tbl (i INT PRIMARY KEY, j INT);
 
 statement ok
-insert into tbl values (42, 21), (21, 42);
+INSERT INTO tbl VALUES (42, 21), (21, 42);
 
 statement ok
-create index my_index on tbl(j);
+CREATE INDEX my_index ON tbl(j);
 
-statement error
-insert into tbl values (42, 20) on conflict do update set j = 30
+statement ok
+INSERT INTO tbl VALUES (42, 20) ON CONFLICT DO UPDATE SET j = 30;
+
+query III
+SELECT i, j, rowid FROM tbl WHERE j = 30;
 ----
-Can not assign to column 'j' because it has a UNIQUE/PRIMARY KEY constraint or is referenced by an INDEX
+42	30	2
+
+query III
+SELECT i, j, rowid FROM tbl ORDER BY ALL;
+----
+21	42	1
+42	30	2

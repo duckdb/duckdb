@@ -2,8 +2,6 @@
 # description: The error messages suggest possible alternative
 # group: [catalog]
 
-require skip_reload
-
 statement ok
 CREATE TABLE hello(i INTEGER);
 
@@ -22,3 +20,35 @@ statement error
 SELECT * FROM bye;
 ----
 Did you mean "test.bye
+
+statement ok
+CREATE SCHEMA a;
+CREATE TABLE a.foo(name text);
+
+statement error
+SELECT * FROM foo;
+----
+Did you mean "a.foo"?
+
+statement ok
+CREATE SCHEMA b;
+CREATE TABLE b.foo(name text);
+
+statement error
+SELECT * FROM foo;
+----
+Did you mean "a.foo or b.foo"?
+
+statement ok
+CREATE SCHEMA c;
+CREATE TABLE c.foo(name text);
+
+statement error
+SELECT * FROM foo;
+----
+Did you mean "a.foo, b.foo, or c.foo"?
+
+statement error
+SELECT * FROM a.fooo;
+----
+Did you mean "foo"?

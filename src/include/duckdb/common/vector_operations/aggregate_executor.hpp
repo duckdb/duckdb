@@ -31,6 +31,7 @@ using SubFrames = vector<FrameBounds>;
 
 class AggregateExecutor {
 private:
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class OP>
 	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
 	                                   idx_t count) {
@@ -38,17 +39,25 @@ private:
 			OP::template Operation<STATE_TYPE, OP>(*states[i], aggr_input_data, i);
 		}
 	}
+#endif
 
 	template <class STATE_TYPE, class OP>
-	static inline void NullaryScatterLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
-	                                      const SelectionVector &ssel, idx_t count) {
-
-		for (idx_t i = 0; i < count; i++) {
-			auto sidx = ssel.get_index(i);
-			OP::template Operation<STATE_TYPE, OP>(*states[sidx], aggr_input_data, sidx);
+	static inline void NullaryScatterLoop(STATE_TYPE *__restrict const *__restrict const states,
+	                                      AggregateInputData &aggr_input_data, const SelectionVector &ssel,
+	                                      const idx_t count) {
+		if (ssel.IsSet()) {
+			for (idx_t i = 0; i < count; i++) {
+				auto sidx = ssel.get_index_unsafe(i);
+				OP::template Operation<STATE_TYPE, OP>(*states[sidx], aggr_input_data, sidx);
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				OP::template Operation<STATE_TYPE, OP>(*states[i], aggr_input_data, i);
+			}
 		}
 	}
 
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                 STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
@@ -88,18 +97,27 @@ private:
 			}
 		}
 	}
+#endif
 
+#ifndef DUCKDB_SMALLER_BINARY
+	template <class STATE_TYPE, class INPUT_TYPE, class OP, bool HAS_ISEL, bool HAS_SSEL>
+#else
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+#endif
 	static inline void UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                    STATE_TYPE **__restrict states, const SelectionVector &isel,
 	                                    const SelectionVector &ssel, ValidityMask &mask, idx_t count) {
+#ifdef DUCKDB_SMALLER_BINARY
+		const auto HAS_ISEL = isel.IsSet();
+		const auto HAS_SSEL = ssel.IsSet();
+#endif
 		if (OP::IgnoreNull() && !mask.AllValid()) {
 			// potential NULL values and NULL values are ignored
 			AggregateUnaryInput input(aggr_input_data, mask);
 			for (idx_t i = 0; i < count; i++) {
-				input.input_idx = isel.get_index(i);
-				auto sidx = ssel.get_index(i);
-				if (mask.RowIsValid(input.input_idx)) {
+				input.input_idx = HAS_ISEL ? isel.get_index_unsafe(i) : i;
+				auto sidx = HAS_SSEL ? ssel.get_index_unsafe(i) : i;
+				if (mask.RowIsValidUnsafe(input.input_idx)) {
 					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], idata[input.input_idx], input);
 				}
 			}
@@ -107,13 +125,14 @@ private:
 			// quick path: no NULL values or NULL values are not ignored
 			AggregateUnaryInput input(aggr_input_data, mask);
 			for (idx_t i = 0; i < count; i++) {
-				input.input_idx = isel.get_index(i);
-				auto sidx = ssel.get_index(i);
+				input.input_idx = HAS_ISEL ? isel.get_index_unsafe(i) : i;
+				auto sidx = HAS_SSEL ? ssel.get_index_unsafe(i) : i;
 				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], idata[input.input_idx], input);
 			}
 		}
 	}
 
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                       STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
@@ -144,6 +163,7 @@ private:
 			}
 		}
 	}
+#endif
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
@@ -230,9 +250,11 @@ public:
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<STATE_TYPE, OP>(**sdata, aggr_input_data, count);
+#ifndef DUCKDB_SMALLER_BINARY
 		} else if (states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			NullaryFlatLoop<STATE_TYPE, OP>(sdata, aggr_input_data, count);
+#endif
 		} else {
 			UnifiedVectorFormat sdata;
 			states.ToUnifiedFormat(count, sdata);
@@ -258,19 +280,46 @@ public:
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
 			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(**sdata, *idata, input_data, count);
+#ifndef DUCKDB_SMALLER_BINARY
 		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::Validity(input),
 			                                          count);
+#endif
 		} else {
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(count, idata);
 			states.ToUnifiedFormat(count, sdata);
+#ifdef DUCKDB_SMALLER_BINARY
 			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
 			                                             aggr_input_data, (STATE_TYPE **)sdata.data, *idata.sel,
 			                                             *sdata.sel, idata.validity, count);
+#else
+			if (idata.sel->IsSet()) {
+				if (sdata.sel->IsSet()) {
+					UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP, true, true>(
+					    UnifiedVectorFormat::GetData<INPUT_TYPE>(idata), aggr_input_data, (STATE_TYPE **)sdata.data,
+					    *idata.sel, *sdata.sel, idata.validity, count);
+				} else {
+					UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP, true, false>(
+					    UnifiedVectorFormat::GetData<INPUT_TYPE>(idata), aggr_input_data, (STATE_TYPE **)sdata.data,
+					    *idata.sel, *sdata.sel, idata.validity, count);
+				}
+			} else {
+				if (sdata.sel->IsSet()) {
+					UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP, false, true>(
+					    UnifiedVectorFormat::GetData<INPUT_TYPE>(idata), aggr_input_data, (STATE_TYPE **)sdata.data,
+					    *idata.sel, *sdata.sel, idata.validity, count);
+				} else {
+					UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP, false, false>(
+					    UnifiedVectorFormat::GetData<INPUT_TYPE>(idata), aggr_input_data, (STATE_TYPE **)sdata.data,
+					    *idata.sel, *sdata.sel, idata.validity, count);
+				}
+			}
+
+#endif
 		}
 	}
 
@@ -287,12 +336,14 @@ public:
 			                                                           input_data, count);
 			break;
 		}
+#ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			UnaryFlatUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, (STATE_TYPE *)state, count,
 			                                                FlatVector::Validity(input));
 			break;
 		}
+#endif
 		default: {
 			UnifiedVectorFormat idata;
 			input.ToUnifiedFormat(count, idata);
@@ -385,19 +436,6 @@ public:
 				OP::template Finalize<STATE_TYPE>(*sdata[i], finalize_data);
 			}
 		}
-	}
-
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(const Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
-	                        data_ptr_t state_p, const SubFrames &frames, Vector &result, idx_t ridx,
-	                        const_data_ptr_t gstate_p) {
-
-		auto idata = FlatVector::GetData<const INPUT_TYPE>(input);
-		const auto &ivalid = FlatVector::Validity(input);
-		auto &state = *reinterpret_cast<STATE *>(state_p);
-		auto gstate = reinterpret_cast<const STATE *>(gstate_p);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, state, frames,
-		                                                    result, ridx, gstate);
 	}
 
 	template <typename OP>

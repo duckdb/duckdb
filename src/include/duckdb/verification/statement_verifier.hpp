@@ -23,6 +23,7 @@ enum class VerificationType : uint8_t {
 	NO_OPERATOR_CACHING,
 	PREPARED,
 	EXTERNAL,
+	EXPLAIN,
 	FETCH_ROW_AS_SCAN,
 
 	INVALID
@@ -30,29 +31,29 @@ enum class VerificationType : uint8_t {
 
 class StatementVerifier {
 public:
-	StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p);
-	explicit StatementVerifier(unique_ptr<SQLStatement> statement_p);
-	static unique_ptr<StatementVerifier> Create(VerificationType type, const SQLStatement &statement_p);
+	StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p,
+	                  optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
+	explicit StatementVerifier(unique_ptr<SQLStatement> statement_p,
+	                           optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
+	static unique_ptr<StatementVerifier> Create(VerificationType type, const SQLStatement &statement_p,
+	                                            optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 	virtual ~StatementVerifier() noexcept;
 
+public:
 	//! Check whether expressions in this verifier and the other verifier match
 	void CheckExpressions(const StatementVerifier &other) const;
 	//! Check whether expressions within this verifier match
 	void CheckExpressions() const;
 
 	//! Run the select statement and store the result
-	virtual bool Run(ClientContext &context, const string &query,
-	                 const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>)> &run);
+	virtual bool
+	Run(ClientContext &context, const string &query,
+	    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>,
+	                                                optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run);
 	//! Compare this verifier's results with another verifier
 	string CompareResults(const StatementVerifier &other);
 
 public:
-	const VerificationType type;
-	const string name;
-	unique_ptr<SelectStatement> statement;
-	const vector<unique_ptr<ParsedExpression>> &select_list;
-	unique_ptr<MaterializedQueryResult> materialized_result;
-
 	virtual bool RequireEquality() const {
 		return true;
 	}
@@ -72,6 +73,20 @@ public:
 	virtual bool ForceFetchRow() const {
 		return false;
 	}
+
+public:
+	const VerificationType type;
+	const string name;
+	unique_ptr<SQLStatement> statement;
+	optional_ptr<SelectStatement> select_statement;
+	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
+	const vector<unique_ptr<ParsedExpression>> &select_list;
+	unique_ptr<MaterializedQueryResult> materialized_result;
+
+private:
+	const vector<unique_ptr<ParsedExpression>> empty_select_list = {};
+
+	const vector<unique_ptr<ParsedExpression>> &GetSelectList(QueryNode &node);
 };
 
 } // namespace duckdb

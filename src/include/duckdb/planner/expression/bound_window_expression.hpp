@@ -54,6 +54,11 @@ public:
 	unique_ptr<Expression> offset_expr;
 	unique_ptr<Expression> default_expr;
 
+	//! The set of argument ordering clauses
+	//! These are distinct from the frame ordering clauses e.g., the "x" in
+	//! FIRST_VALUE(a ORDER BY x) OVER (PARTITION BY p ORDER BY s)
+	vector<BoundOrderByNode> arg_orders;
+
 	//! Statistics belonging to the other expressions (start, end, offset, default)
 	vector<unique_ptr<BaseStatistics>> expr_stats;
 
@@ -68,6 +73,7 @@ public:
 	string ToString() const override;
 
 	//! The number of ordering clauses the functions share
+	static idx_t GetSharedOrders(const vector<BoundOrderByNode> &lhs, const vector<BoundOrderByNode> &rhs);
 	idx_t GetSharedOrders(const BoundWindowExpression &other) const;
 
 	bool PartitionsAreEquivalent(const BoundWindowExpression &other) const;

@@ -20,6 +20,7 @@ CREATE TYPE name_enum AS ENUM ('Pedro', 'Mark');
 statement error
 ALTER TABLE person ALTER name TYPE name_enum
 ----
+<REGEX>:.*Conversion Error.*Could not convert string.*
 
 statement ok
 DROP TYPE name_enum
@@ -52,6 +53,7 @@ mode skip
 statement error
 DROP TYPE name_enum
 ----
+<REGEX>:.*Conversion Error.*Could not convert string.*
 
 # We should be able to cast this back to string
 statement ok
@@ -76,3 +78,4 @@ VARCHAR
 statement error
 ALTER TABLE person ALTER name TYPE bogus_name
 ----
+<REGEX>:.*Conversion Error.*Could not convert string.*

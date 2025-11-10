@@ -1,6 +1,8 @@
 # name: test/sql/types/nested/array/array_large.test
 # group: [array]
 
+require ram 8gb
+
 # Test large arrays (> VECTOR_SIZE elements)
 
 statement ok

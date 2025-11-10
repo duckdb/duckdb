@@ -1,0 +1,28 @@
+# name: test/sql/upsert/test_big_insert_no_vector_verification.test
+# description: Test ON CONFLICT statement on the same conflicting row.
+# group: [upsert]
+
+require vector_size 2048
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+SET preserve_insertion_order = false;
+
+statement ok
+CREATE TABLE integers(
+	i INT UNIQUE,
+	j INT DEFAULT 0,
+	k INT DEFAULT 0
+);
+
+statement ok
+INSERT INTO integers(i) SELECT i FROM range(5000) tbl(i);
+
+statement ok
+INSERT INTO integers(i, j)
+SELECT i % 5, i
+FROM range(5000) tbl(i) ON CONFLICT DO UPDATE SET
+	j = excluded.j,
+	k = excluded.i;

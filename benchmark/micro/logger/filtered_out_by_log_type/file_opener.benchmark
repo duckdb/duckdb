@@ -1,0 +1,13 @@
+# name: benchmark/micro/logger/filtered_out_by_log_type/file_opener.benchmark
+# description: Benchmarking the File Opener logger filtering out disabled log types
+# group: [filtered_out_by_log_type]
+
+name FileOpener
+group logger
+
+load
+CALL enable_logging('FileSystem');
+
+# Note: this will call the Logger, but the log type is filtered out
+run
+SELECT write_log('hello world', level := 'warn', scope := 'file_opener', log_type := 'duckdb.SomeName.SomeOtherName.BlaBla' ) from range(0,10000000);

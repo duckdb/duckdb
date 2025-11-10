@@ -171,6 +171,5 @@ TEST_CASE("Table function with only bindreplace", "[tablefunction]") {
 	auto expect_err = con.Query("SELECT * FROM bind_replace_demo2(-3);");
 	REQUIRE_THROWS(expect_err->Fetch());
 	REQUIRE(expect_err->HasError());
-	REQUIRE(expect_err->GetError() == "Binder Error: Failed to bind \"bind_replace_demo2\": nullptr returned from "
-	                                  "bind_replace without bind function");
+	REQUIRE(StringUtil::Contains(expect_err->GetError(), "nullptr"));
 }

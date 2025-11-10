@@ -1,0 +1,114 @@
+# name: test/sql/select/test_select_alias_prefix_colon.test
+# description: Test selecting a view through a qualified reference
+# group: [select]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT j : 42;
+----
+42
+
+query I
+select column_name from (describe SELECT j : 42)
+----
+j
+
+query I
+SELECT "j" : 42;
+----
+42
+
+statement error
+SELECT 'j': 42
+----
+Parser Error
+
+query I
+SELECT "hel lo" : 42;
+----
+42
+
+query I
+select column_name from (describe SELECT "hel lo" : 42)
+----
+hel lo
+
+query III
+SELECT j1 : 42, 42 AS j2, 42 j3;
+----
+42	42	42
+
+statement ok
+CREATE TABLE a (i INTEGER);
+
+statement ok
+INSERT INTO a VALUES (42);
+
+query I
+SELECT j : i FROM a
+----
+42
+
+query I
+SELECT "j" : "i" FROM a
+----
+42
+
+query I
+SELECT * FROM b : a
+----
+42
+
+query I
+SELECT * FROM "b" : a
+----
+42
+
+query I
+SELECT i FROM b : a
+----
+42
+
+query I
+SELECT b.i FROM b : a
+----
+42
+
+statement error
+SELECT a.i FROM b : a
+----
+Binder Error: Referenced table "a" not found!
+Candidate tables: "b"
+
+statement error
+SELECT a : 42 AS b
+----
+syntax error
+
+query I
+from my_wonderful_values : (values(42))
+----
+42
+
+query I
+from 'my_wonderful_values' : (values(42))
+----
+42
+
+query I
+from "my_wonderful_values" : (values(42))
+----
+42
+
+query I
+from r : range(1)
+----
+0
+
+query I
+from "r" : range(1)
+----
+0
+

@@ -31,13 +31,67 @@ void Transformer::TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, Quer
 			node.modifiers.push_back(std::move(limit_percent_modifier));
 		} else {
 			auto limit_modifier = make_uniq<LimitModifier>();
-			if (stmt.limitCount) {
-				limit_modifier->limit = TransformExpression(stmt.limitCount);
-			}
-			if (stmt.limitOffset) {
-				limit_modifier->offset = TransformExpression(stmt.limitOffset);
+			if (stmt.offset_first) {
+				if (stmt.limitOffset) {
+					limit_modifier->offset = TransformExpression(stmt.limitOffset);
+				}
+				if (stmt.limitCount) {
+					limit_modifier->limit = TransformExpression(stmt.limitCount);
+				}
+			} else {
+				if (stmt.limitCount) {
+					limit_modifier->limit = TransformExpression(stmt.limitCount);
+				}
+				if (stmt.limitOffset) {
+					limit_modifier->offset = TransformExpression(stmt.limitOffset);
+				}
 			}
 			node.modifiers.push_back(std::move(limit_modifier));
+		}
+	}
+}
+
+bool Transformer::SetOperationsMatch(duckdb_libpgquery::PGSelectStmt &root, duckdb_libpgquery::PGNode &node) {
+	if (node.type != duckdb_libpgquery::T_PGSelectStmt) {
+		// not a select or set-op - set operations cannot match
+		return false;
+	}
+	auto &stmt = PGCast<duckdb_libpgquery::PGSelectStmt>(node);
+	if (root.op != stmt.op || root.all != stmt.all) {
+		// set operation type does not match
+		return false;
+	}
+	if (root.op != duckdb_libpgquery::PG_SETOP_UNION && root.op != duckdb_libpgquery::PG_SETOP_UNION_BY_NAME) {
+		// only generate multi-child nodes for UNION/UNION ALL
+		return false;
+	}
+	// check if this is a "simple" set operation
+	if (stmt.withClause || stmt.sortClause || stmt.limitCount || stmt.limitOffset || stmt.sampleOptions) {
+		// it is not - we need to unfold it
+		return false;
+	}
+	return true;
+}
+
+void Transformer::TransformSetOperationChildren(duckdb_libpgquery::PGSelectStmt &stmt, SetOperationNode &result) {
+	D_ASSERT(stmt.larg && stmt.rarg);
+	vector<reference<duckdb_libpgquery::PGNode>> set_operations;
+	set_operations.push_back(*stmt.larg);
+	set_operations.push_back(*stmt.rarg);
+
+	for (idx_t i = 0; i < set_operations.size(); i++) {
+		auto &node = set_operations[i].get();
+		// check if this set operation can be merged into the parents' set operation
+		if (!SetOperationsMatch(stmt, node)) {
+			// it cannot - transform the child
+			result.children.push_back(TransformSelectNode(node));
+		} else {
+			// it can - recurse into children
+			// note that we must process the children in a specific order - so we need to expand the children in-place
+			auto &select = PGCast<duckdb_libpgquery::PGSelectStmt>(node);
+			set_operations[i] = *select.larg;
+			set_operations.insert(set_operations.begin() + static_cast<int64_t>(i + 1), *select.rarg);
+			i--;
 		}
 	}
 }
@@ -120,13 +174,9 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		node = make_uniq<SetOperationNode>();
 		auto &result = node->Cast<SetOperationNode>();
 		if (stmt.withClause) {
-			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), node->cte_map);
+			TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result.cte_map);
 		}
-		result.left = TransformSelectNode(*stmt.larg);
-		result.right = TransformSelectNode(*stmt.rarg);
-		if (!result.left || !result.right) {
-			throw InternalException("Failed to transform setop children.");
-		}
+		TransformSetOperationChildren(stmt, result);
 
 		result.setop_all = stmt.all;
 		switch (stmt.op) {

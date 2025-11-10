@@ -13,32 +13,37 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
+#include "duckdb/common/table_column.hpp"
 
 namespace duckdb {
 
 class DataTable;
-struct CreateTableInfo;
-struct BoundCreateTableInfo;
 
 struct RenameColumnInfo;
+struct RenameFieldInfo;
 struct AddColumnInfo;
+struct AddFieldInfo;
 struct RemoveColumnInfo;
+struct RemoveFieldInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
 struct SetColumnCommentInfo;
+struct CreateTableInfo;
+struct BoundCreateTableInfo;
 
 class TableFunction;
 struct FunctionData;
+struct EntryLookupInfo;
 
 class Binder;
-class TableColumnInfo;
 struct ColumnSegmentInfo;
 class TableStorageInfo;
 
@@ -83,6 +88,8 @@ public:
 	//! Get statistics of a column (physical or virtual) within the table
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
 
+	virtual unique_ptr<BlockingSample> GetSample();
+
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
@@ -91,6 +98,8 @@ public:
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
+	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+	                                      const EntryLookupInfo &lookup_info);
 
 	virtual bool IsDuckTable() const {
 		return false;
@@ -98,14 +107,27 @@ public:
 
 	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
 
+	//! Returns the expression string list of the column names e.g. (col1, col2, col3)
+	static string ColumnNamesToSQL(const ColumnList &columns);
+
 	//! Returns a list of segment information for this table, if exists
-	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo();
+	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
 
 	virtual void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
 	                                   ClientContext &context);
+
+	//! Returns a pointer to the table's primary key, if exists, else nullptr.
+	optional_ptr<Constraint> GetPrimaryKey() const;
+	//! Returns true, if the table has a primary key, else false.
+	bool HasPrimaryKey() const;
+
+	//! Returns the virtual columns for this table
+	virtual virtual_column_map_t GetVirtualColumns() const;
+
+	virtual vector<column_t> GetRowIdColumns() const;
 
 protected:
 	//! A list of columns that are part of this table

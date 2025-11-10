@@ -248,6 +248,9 @@ io_file
 # IPython notebook checkpoints
 .ipynb_checkpoints
 
+# Python virtual env
+venv/
+
 # Editor temporaries
 *.swp
 *~
@@ -305,6 +308,8 @@ third_party/sqllogictest
 
 #imdb dataset
 third_party/imdb/data
+#taxi dataset
+benchmark/taxi/data/
 
 # Format timer
 .last_format

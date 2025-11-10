@@ -60,7 +60,6 @@ common/serializer/binary_serializer.cpp	11
 common/serializer/memory_stream.cpp	5
 common/sort/comparators.cpp	103
 common/sort/merge_sorter.cpp	100
-common/sort/partition_state.cpp	44
 common/sort/sort_state.cpp	10
 common/sort/sorted_block.cpp	20
 common/string_util.cpp	15
@@ -300,7 +299,7 @@ function/table/unnest.cpp	8
 function/table/version/pragma_version.cpp	3
 function/table_function.cpp	9
 function/udf_function.cpp	6
-extension/json/buffered_json_reader.cpp	35
+extension/json/json_reader.cpp	35
 extension/json/include/json_common.hpp	8
 extension/json/include/json_executors.hpp	3
 extension/json/json_deserializer.cpp	136
@@ -358,7 +357,7 @@ include/duckdb/common/field_writer.hpp	5
 include/duckdb/common/gzip_file_system.hpp	3
 include/duckdb/common/hive_partitioning.hpp	3
 include/duckdb/common/local_file_system.hpp	5
-include/duckdb/common/multi_file_reader_options.hpp	3
+include/duckdb/common/multi_file/multi_file_options.hpp	3
 include/duckdb/common/opener_file_system.hpp	21
 include/duckdb/common/arrow/appender/append_data.hpp	1
 include/duckdb/common/arrow/appender/scalar_data.hpp	2

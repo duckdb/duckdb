@@ -1,0 +1,15 @@
+# name: test/parquet/variant/variant_to_parquet_variant.test
+# group: [variant]
+
+require parquet
+
+query I
+select variant_to_parquet_variant(NULL)
+----
+{'metadata': \x11\x00\x00, 'value': \x00}
+
+# We don't expose the overload with a shredded type, only internally will we use that
+statement error
+select variant_to_parquet_variant(NULL, 'STRUCT(a VARCHAR)'::VARCHAR)
+----
+Binder Error

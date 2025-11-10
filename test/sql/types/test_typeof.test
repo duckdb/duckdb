@@ -1,0 +1,10 @@
+# name: test/sql/types/test_typeof.test
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT typeof(1)
+----
+INTEGER

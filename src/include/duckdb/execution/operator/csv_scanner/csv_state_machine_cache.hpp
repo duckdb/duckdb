@@ -11,7 +11,6 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/execution/operator/csv_scanner/state_machine_options.hpp"
-#include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 
 namespace duckdb {
@@ -19,7 +18,7 @@ namespace duckdb {
 //! Class to wrap the state machine matrix
 class StateMachine {
 public:
-	static constexpr uint32_t NUM_STATES = 13;
+	static constexpr uint32_t NUM_STATES = 19;
 	static constexpr uint32_t NUM_TRANSITIONS = 256;
 	CSVState state_machine[NUM_TRANSITIONS][NUM_STATES];
 	//! Transitions where we might skip processing
@@ -37,11 +36,11 @@ public:
 	uint64_t escape = 0;
 	uint64_t comment = 0;
 
-	const CSVState *operator[](idx_t i) const {
+	const CSVState *operator[](const idx_t i) const {
 		return state_machine[i];
 	}
 
-	CSVState *operator[](idx_t i) {
+	CSVState *operator[](const idx_t i) {
 		return state_machine[i];
 	}
 };
@@ -49,7 +48,7 @@ public:
 //! Hash function used in out state machine cache, it hashes and combines all options used to generate a state machine
 struct HashCSVStateMachineConfig {
 	size_t operator()(CSVStateMachineOptions const &config) const noexcept {
-		auto h_delimiter = Hash(config.delimiter.GetValue());
+		auto h_delimiter = Hash(config.delimiter.GetValue().c_str());
 		auto h_quote = Hash(config.quote.GetValue());
 		auto h_escape = Hash(config.escape.GetValue());
 		auto h_newline = Hash(static_cast<uint8_t>(config.new_line.GetValue()));
@@ -60,7 +59,7 @@ struct HashCSVStateMachineConfig {
 
 //! The CSVStateMachineCache caches state machines, although small ~2kb, the actual creation of multiple State Machines
 //! can become a bottleneck on sniffing, when reading very small csv files.
-//! Hence the cache stores State Machines based on their different delimiter|quote|escape options.
+//! Hence, the cache stores State Machines based on their different delimiter|quote|escape options.
 class CSVStateMachineCache : public ObjectCacheEntry {
 public:
 	CSVStateMachineCache();
@@ -85,7 +84,7 @@ private:
 	void Insert(const CSVStateMachineOptions &state_machine_options);
 	//! Cache on delimiter|quote|escape|newline
 	unordered_map<CSVStateMachineOptions, StateMachine, HashCSVStateMachineConfig> state_machine_cache;
-	//! Default value for options used to intialize CSV State Machine Cache
+	//! Default value for options used to initialize CSV State Machine Cache
 
 	//! Because the state machine cache can be accessed in Parallel we need a mutex.
 	mutex main_mutex;

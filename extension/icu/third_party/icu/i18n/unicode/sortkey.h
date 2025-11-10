@@ -145,7 +145,7 @@ public:
     * @return Returns true if two collation keys are equal, false otherwise.
     * @stable ICU 2.0
     */
-    UBool                   operator==(const CollationKey& source) const;
+    bool                   operator==(const CollationKey& source) const;
 
     /**
     * Compare if two collation keys are not the same.
@@ -153,7 +153,7 @@ public:
     * @return Returns TRUE if two collation keys are different, FALSE otherwise.
     * @stable ICU 2.0
     */
-    UBool                   operator!=(const CollationKey& source) const;
+    bool                   operator!=(const CollationKey& source) const;
 
 
     /**
@@ -316,7 +316,7 @@ private:
     } fUnion;
 };
 
-inline UBool
+inline bool
 CollationKey::operator!=(const CollationKey& other) const
 {
     return !(*this == other);

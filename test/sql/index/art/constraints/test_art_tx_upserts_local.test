@@ -1,0 +1,51 @@
+# name: test/sql/index/art/constraints/test_art_tx_upserts_local.test
+# description: Test multiple UPSERTs in a connection with LIST payload.
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl_local (id INT PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+INSERT INTO tbl_local VALUES (1, ['first payload']);
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+INSERT OR REPLACE INTO tbl_local VALUES (1, ['con1 payload']);
+
+statement ok con1
+INSERT OR REPLACE INTO tbl_local VALUES (1, ['local payload']);
+
+query III
+SELECT id, payload, rowid FROM tbl_local WHERE id = 1;
+----
+1	[first payload]	0
+
+statement ok con1
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl_local WHERE id = 1;
+----
+1	[local payload]	1
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+INSERT OR REPLACE INTO tbl_local VALUES (1, ['val2 payload']), (1, ['val2 payload']);
+
+statement ok con1
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl_local WHERE id = 1;
+----
+1	[val2 payload]	2

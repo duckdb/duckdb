@@ -4,16 +4,15 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
-#include "duckdb/common/types/varint.hpp"
+#include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
 
 template <class T>
-bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type,
-                        T *result_data, ValidityMask &result_mask, const LogicalType &result_type, idx_t count,
-                        VectorTryCastData &vector_cast_data, const SelectionVector *sel) {
+static bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type,
+                               T *result_data, ValidityMask &result_mask, const LogicalType &result_type, idx_t count,
+                               VectorTryCastData &vector_cast_data, const SelectionVector *sel) {
 	for (idx_t i = 0; i < count; i++) {
 		idx_t source_idx = i;
 		if (sel) {
@@ -35,7 +34,7 @@ bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, 
 }
 
 template <class T>
-bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
 	switch (source.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
@@ -160,9 +159,9 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 
 		list_data[i].offset = total;
 		if (!VectorStringToList::SplitStringList(source_data[idx], child_data, total, varchar_vector)) {
-			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
-			              "' can't be cast to the destination type LIST";
-			HandleVectorCastError::Operation<string_t>(text, result_mask, i, vector_cast_data);
+			auto error = StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type %s",
+			                                source_data[idx].GetString(), result.GetType().ToString());
+			HandleVectorCastError::Operation<string_t>(error, result_mask, i, vector_cast_data);
 		}
 		list_data[i].length = total - list_data[i].offset; // length is the amount of parts coming from this string
 	}
@@ -233,16 +232,13 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 			result_mask.SetInvalid(i);
 			continue;
 		}
-		if (is_unnamed) {
-			throw ConversionException("Casting strings to unnamed structs is unsupported");
-		}
 		if (!VectorStringToStruct::SplitStruct(source_data[idx], child_vectors, i, child_names, child_masks)) {
-			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
-			              "' can't be cast to the destination type STRUCT";
+			auto error = StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type %s",
+			                                source_data[idx].GetString(), result.GetType().ToString());
 			for (auto &child_mask : child_masks) {
 				child_mask.get().SetInvalid(i); // some values may have already been found and set valid
 			}
-			HandleVectorCastError::Operation<string_t>(text, result_mask, i, vector_cast_data);
+			HandleVectorCastError::Operation<string_t>(error, result_mask, i, vector_cast_data);
 		}
 	}
 
@@ -265,7 +261,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 //===--------------------------------------------------------------------===//
 // string -> map casting
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionLocalState> InitMapCastLocalState(CastLocalStateParameters &parameters) {
+static unique_ptr<FunctionLocalState> InitMapCastLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<MapBoundCastData>();
 	auto result = make_uniq<MapCastLocalState>();
 
@@ -319,10 +315,10 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 		list_data[i].offset = total;
 		if (!VectorStringToMap::SplitStringMap(source_data[idx], child_key_data, child_val_data, total,
 		                                       varchar_key_vector, varchar_val_vector)) {
-			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
-			              "' can't be cast to the destination type MAP";
+			auto error = StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type %s",
+			                                source_data[idx].GetString(), result.GetType().ToString());
 			FlatVector::SetNull(result, i, true);
-			HandleVectorCastError::Operation<string_t>(text, result_mask, i, vector_cast_data);
+			HandleVectorCastError::Operation<string_t>(error, result_mask, i, vector_cast_data);
 		}
 		list_data[i].length = total - list_data[i].offset;
 	}
@@ -342,8 +338,8 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 		vector_cast_data.all_converted = false;
 	}
 
-	auto &key_validity = FlatVector::Validity(result_key_child);
 	if (!vector_cast_data.all_converted) {
+		auto &key_validity = FlatVector::Validity(result_key_child);
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			if (!result_mask.RowIsValid(row_idx)) {
 				continue;
@@ -382,10 +378,9 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 		if (array_size != str_array_size) {
 			if (all_lengths_match) {
 				all_lengths_match = false;
-				auto msg =
-				    StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type ARRAY[%u]"
-				                       ", the size of the array must match the destination type",
-				                       source_data[idx].GetString(), array_size);
+				auto msg = StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type %s"
+				                              ", the size of the array must match the destination type",
+				                              source_data[idx].GetString(), result.GetType().ToString());
 				if (parameters.strict) {
 					throw ConversionException(msg);
 				}
@@ -421,9 +416,9 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 		}
 
 		if (!VectorStringToList::SplitStringList(source_data[idx], child_data, total, varchar_vector)) {
-			auto text = StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type ARRAY",
-			                               source_data[idx].GetString());
-			HandleVectorCastError::Operation<string_t>(text, result_mask, i, vector_cast_data);
+			auto error = StringUtil::Format("Type VARCHAR with value '%s' can't be cast to the destination type %s",
+			                                source_data[idx].GetString(), result.GetType().ToString());
+			HandleVectorCastError::Operation<string_t>(error, result_mask, i, vector_cast_data);
 		}
 	}
 	D_ASSERT(total == child_count);
@@ -437,7 +432,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 }
 
 template <class T>
-bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
 
 	switch (source.GetVectorType()) {
@@ -471,11 +466,15 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, date_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIME:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_t, duckdb::TryCastErrorMessage>);
+	case LogicalTypeId::TIME_NS:
+		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_ns_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIME_TZ:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, dtime_tz_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_t, duckdb::TryCastErrorMessage>);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return BoundCastInfo(
+		    &VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_tz_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return BoundCastInfo(
 		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCastToTimestampNS>);
@@ -491,6 +490,8 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToBit>);
 	case LogicalTypeId::UUID:
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, hugeint_t, duckdb::TryCastToUUID>);
+	case LogicalTypeId::GEOMETRY:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToGeometry>);
 	case LogicalTypeId::SQLNULL:
 		return &DefaultCasts::TryVectorNullCast;
 	case LogicalTypeId::VARCHAR:
@@ -516,8 +517,8 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                     MapBoundCastData::BindMapToMapCast(
 		                         input, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), target),
 		                     InitMapCastLocalState);
-	case LogicalTypeId::VARINT:
-		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, TryCastToVarInt>);
+	case LogicalTypeId::BIGNUM:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, bignum_t, TryCastToBignum>);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

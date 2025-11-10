@@ -15,6 +15,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
+#include "duckdb/execution/progress_data.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 #include <condition_variable>
@@ -51,7 +52,6 @@ public:
 	static Executor &Get(ClientContext &context);
 
 	void Initialize(PhysicalOperator &physical_plan);
-	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
@@ -86,7 +86,7 @@ public:
 	void AddToBeRescheduled(shared_ptr<Task> &task);
 
 	//! Returns the progress of the pipelines
-	bool GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality, uint64_t &total_cardinality);
+	idx_t GetPipelinesProgress(ProgressData &progress);
 
 	void CompletePipeline() {
 		completed_pipelines++;
@@ -147,7 +147,6 @@ private:
 
 private:
 	optional_ptr<PhysicalOperator> physical_plan;
-	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
 	//! All pipelines of the query plan

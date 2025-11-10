@@ -46,6 +46,11 @@ SELECT COLUMNS(*) + COLUMNS(*) FROM integers
 statement ok
 CREATE TABLE grouped_table AS SELECT  1 id, 42 index1, 84 index2 UNION ALL SELECT 2, 13, 14
 
+statement error
+SELECT COLUMNS('indxe.*') FROM grouped_table
+----
+"index1"
+
 query III
 SELECT id, MIN(COLUMNS('index[0-9]')) FROM grouped_table GROUP BY all ORDER BY ALL
 ----
@@ -85,7 +90,7 @@ SELECT (SELECT COLUMNS(*)) FROM integers
 ----
 
 statement error
-SELECT columns([a, null]) FROM values (42) t(a);
+SELECT columns(['a', null]) FROM values (42) t(a);
 ----
 does not support NULL input parameters
 

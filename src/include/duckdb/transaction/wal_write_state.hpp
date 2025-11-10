@@ -14,6 +14,7 @@
 namespace duckdb {
 class CatalogEntry;
 class DataChunk;
+class DuckTransaction;
 class WriteAheadLog;
 class ClientContext;
 
@@ -23,19 +24,21 @@ struct UpdateInfo;
 
 class WALWriteState {
 public:
-	explicit WALWriteState(WriteAheadLog &log, optional_ptr<StorageCommitState> commit_state);
+	explicit WALWriteState(DuckTransaction &transaction, WriteAheadLog &log,
+	                       optional_ptr<StorageCommitState> commit_state);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
 
 private:
-	void SwitchTable(DataTableInfo *table, UndoFlags new_op);
+	void SwitchTable(DataTableInfo &table, UndoFlags new_op);
 
 	void WriteCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data);
 	void WriteDelete(DeleteInfo &info);
 	void WriteUpdate(UpdateInfo &info);
 
 private:
+	DuckTransaction &transaction;
 	WriteAheadLog &log;
 	optional_ptr<StorageCommitState> commit_state;
 

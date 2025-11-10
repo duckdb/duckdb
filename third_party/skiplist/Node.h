@@ -488,8 +488,8 @@ Node<T, _Compare> *Node<T, _Compare>::remove(size_t call_level,
 }
 
 /*
- * This checks the internal concistency of a Node. It returns 0
- * if succesful, non-zero on error. The tests are:
+ * This checks the internal consistency of a Node. It returns 0
+ * if successful, non-zero on error. The tests are:
  *
  * - Height must be >= 1
  * - Height must not exceed HeadNode height.
@@ -497,8 +497,8 @@ Node<T, _Compare> *Node<T, _Compare>::remove(size_t call_level,
  * - Node pointers must not be self-referential.
  */
 /**
- * This checks the internal concistency of a Node. It returns 0
- * if succesful, non-zero on error. The tests are:
+ * This checks the internal consistency of a Node. It returns 0
+ * if successful, non-zero on error. The tests are:
  *
  * - Height must be >= 1
  * - Height must not exceed HeadNode height.

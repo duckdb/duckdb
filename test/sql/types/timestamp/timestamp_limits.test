@@ -20,6 +20,7 @@ select '290309-12-22 (BC) 00:00:00'::timestamp
 statement error
 select '290309-12-21 (BC) 12:59:59.999999'::timestamp
 ----
+Conversion Error: timestamp field value out of range
 
 query I
 select '290309-12-22 (BC) 00:00:00'::timestamp + interval (1) day
@@ -29,22 +30,27 @@ select '290309-12-22 (BC) 00:00:00'::timestamp + interval (1) day
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) microsecond
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) second
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) day
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) month
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) year
 ----
+Conversion Error: Date and time not in timestamp range
 
 # max date for timestamp micros is 294247-01-10 04:00:54.775806
 query I
@@ -55,41 +61,42 @@ select timestamp '294247-01-10 04:00:54.775806'
 statement error
 select timestamp '294247-01-10 04:00:54.775807'
 ----
+Conversion Error: timestamp field value out of range
+
+statement error
+select timestamp '294247-01-10 04:00:54.775808'
+----
+Conversion Error: timestamp field value out of range
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) microsecond
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) second
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) hour
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) day
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) month
 ----
+Conversion Error: Date and time not in timestamp range
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) year
 ----
-
-# Offset overflow
-statement error
-SELECT '290309-12-22 (BC) 00:00:00+07:00'::TIMESTAMP;
-----
-Conversion Error: timestamp field value out of range
-
-statement error
-SELECT '294247-01-10 04:00:54-07:00'::TIMESTAMP;
-----
-Conversion Error: timestamp field value out of range
+Conversion Error: Date and time not in timestamp range
 
 # functions on limits
 query II

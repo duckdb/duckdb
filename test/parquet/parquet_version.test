@@ -1,0 +1,69 @@
+# name: test/parquet/parquet_version.test
+# description: Test Parquet writer parquet_version parameter
+# group: [parquet]
+
+require parquet
+
+statement error
+copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version)
+----
+Invalid Input Error
+
+statement error
+copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v3)
+----
+Binder Error
+
+# defaults to V1
+statement ok
+copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet'
+
+query I
+select encodings from parquet_metadata('__TEST_DIR__/parquet_version.parquet')
+----
+PLAIN
+
+# we do PLAIN if we can't do dictionary for V1
+statement ok
+copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v1)
+
+query I
+select encodings from parquet_metadata('__TEST_DIR__/parquet_version.parquet')
+----
+PLAIN
+
+# we do DELTA_BINARY_PACKED for V2
+statement ok
+copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v2)
+
+query I
+select encodings from parquet_metadata('__TEST_DIR__/parquet_version.parquet')
+----
+DELTA_BINARY_PACKED
+
+# default format_version should be 1 (V1).
+statement ok
+copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet'
+
+query I
+select format_version from parquet_file_metadata('__TEST_DIR__/parquet_version.parquet')
+----
+1
+
+# format_version should be 1 (V1), when explicitly specify V1
+statement ok
+copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v1)
+
+query I
+select format_version from parquet_file_metadata('__TEST_DIR__/parquet_version.parquet')
+----
+1
+
+# format_version should be 2 (V2), when explicitly specify V2
+statement ok
+copy (select range i from range(20000)) to '__TEST_DIR__/parquet_version.parquet' (parquet_version v2)
+
+query I
+select format_version from parquet_file_metadata('__TEST_DIR__/parquet_version.parquet')
+----
+2

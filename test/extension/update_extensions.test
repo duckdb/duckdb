@@ -6,7 +6,7 @@
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: Test relies on explicit INSTALL and LOAD"
 
 statement ok
 PRAGMA enable_verification

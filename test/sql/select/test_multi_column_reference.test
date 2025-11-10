@@ -2,9 +2,6 @@
 # description: Test multi column reference
 # group: [select]
 
-require skip_reload
-
-
 statement ok
 PRAGMA enable_verification
 
@@ -48,10 +45,12 @@ SELECT test.tbl.col FROM test.tbl;
 statement error
 SELECT test.t.col FROM test.tbl t;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 statement error
 SELECT test.tbl.col FROM test.tbl t;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 # check how ties are resolved
 # we create a table called "t" in a schema called "t" with a column called "t" that has a field called "t"
@@ -142,7 +141,6 @@ statement ok
 DROP SCHEMA t CASCADE
 
 # test multiple tables with the same name but a different schema
-# we don't allow this (duplicate alias in query)
 statement ok
 CREATE SCHEMA s1
 
@@ -155,19 +153,38 @@ CREATE TABLE s1.t1 AS SELECT 42 t
 statement ok
 CREATE TABLE s2.t1 AS SELECT 84 t
 
-statement error
+query I
 SELECT s1.t1.t FROM s1.t1, s2.t1
 ----
+42
+
+query I
+SELECT * EXCLUDE (s1.t1.t) FROM s1.t1, s2.t1
+----
+84
+
+query I
+SELECT * EXCLUDE (S1.T1.T) FROM s1.t1, s2.t1
+----
+84
+
+query I
+SELECT s2.t1.t FROM s1.t1, s2.t1
+----
+84
 
 # test various failures
 statement error
 SELECT testX.tbl.col FROM test.tbl;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 statement error
 SELECT test.tblX.col FROM test.tbl;
 ----
+<REGEX>:.*Binder Error.*table.*not found.*
 
 statement error
 SELECT test.tbl.colX FROM test.tbl;
 ----
+<REGEX>:.*Binder Error.*does not have a column.*

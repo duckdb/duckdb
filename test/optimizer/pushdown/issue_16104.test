@@ -1,0 +1,15 @@
+# name: test/optimizer/pushdown/issue_16104.test
+# description: Test expressions in filter preserve the order in Push Down
+# group: [pushdown]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+WITH random_data AS (
+    SELECT random() * 2 AS col_double
+    FROM generate_series(1, 100)
+)
+SELECT *
+FROM random_data
+WHERE abs(col_double) < 1 AND acos(col_double) > 0;

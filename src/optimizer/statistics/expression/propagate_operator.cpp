@@ -19,7 +19,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 	if (!all_have_stats) {
 		return nullptr;
 	}
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::OPERATOR_COALESCE:
 		// COALESCE, merge stats of all children
 		for (idx_t i = 0; i < expr.children.size(); i++) {

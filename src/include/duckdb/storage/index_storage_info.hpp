@@ -62,6 +62,10 @@ struct IndexStorageInfo {
 	BlockPointer root_block_ptr;
 
 	//! Returns true, if IndexStorageInfo holds information to deserialize an index.
+	//! Note that the name can be misleading - any index that is empty (no nodes, etc.) might
+	//! also have neither a root_block_ptr nor allocator_infos.
+	//! Ensure that your index constructor initializes an empty index correctly without the
+	//! need for these fields.
 	bool IsValid() const {
 		return root_block_ptr.IsValid() || !allocator_infos.empty();
 	}

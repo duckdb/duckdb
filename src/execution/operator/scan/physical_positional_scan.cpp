@@ -10,25 +10,24 @@
 
 namespace duckdb {
 
-PhysicalPositionalScan::PhysicalPositionalScan(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-                                               unique_ptr<PhysicalOperator> right)
-    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_SCAN, std::move(types),
-                       MaxValue(left->estimated_cardinality, right->estimated_cardinality)) {
-
+PhysicalPositionalScan::PhysicalPositionalScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                               PhysicalOperator &left, PhysicalOperator &right)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::POSITIONAL_SCAN, std::move(types),
+                       MaxValue(left.estimated_cardinality, right.estimated_cardinality)) {
 	// Manage the children ourselves
-	if (left->type == PhysicalOperatorType::TABLE_SCAN) {
-		child_tables.emplace_back(std::move(left));
-	} else if (left->type == PhysicalOperatorType::POSITIONAL_SCAN) {
-		auto &left_scan = left->Cast<PhysicalPositionalScan>();
+	if (left.type == PhysicalOperatorType::TABLE_SCAN) {
+		child_tables.emplace_back(left);
+	} else if (left.type == PhysicalOperatorType::POSITIONAL_SCAN) {
+		auto &left_scan = left.Cast<PhysicalPositionalScan>();
 		child_tables = std::move(left_scan.child_tables);
 	} else {
 		throw InternalException("Invalid left input for PhysicalPositionalScan");
 	}
 
-	if (right->type == PhysicalOperatorType::TABLE_SCAN) {
-		child_tables.emplace_back(std::move(right));
-	} else if (right->type == PhysicalOperatorType::POSITIONAL_SCAN) {
-		auto &right_scan = right->Cast<PhysicalPositionalScan>();
+	if (right.type == PhysicalOperatorType::TABLE_SCAN) {
+		child_tables.emplace_back(right);
+	} else if (right.type == PhysicalOperatorType::POSITIONAL_SCAN) {
+		auto &right_scan = right.Cast<PhysicalPositionalScan>();
 		auto &right_tables = right_scan.child_tables;
 		child_tables.reserve(child_tables.size() + right_tables.size());
 		std::move(right_tables.begin(), right_tables.end(), std::back_inserter(child_tables));
@@ -41,7 +40,7 @@ class PositionalScanGlobalSourceState : public GlobalSourceState {
 public:
 	PositionalScanGlobalSourceState(ClientContext &context, const PhysicalPositionalScan &op) {
 		for (const auto &table : op.child_tables) {
-			global_states.emplace_back(table->GetGlobalSourceState(context));
+			global_states.emplace_back(table.get().GetGlobalSourceState(context));
 		}
 	}
 
@@ -119,7 +118,7 @@ public:
 		return source.ColumnCount();
 	}
 
-	double GetProgress(ClientContext &context) {
+	ProgressData GetProgress(ClientContext &context) {
 		return table.GetProgress(context, global_state);
 	}
 
@@ -136,7 +135,7 @@ public:
 	PositionalScanLocalSourceState(ExecutionContext &context, PositionalScanGlobalSourceState &gstate,
 	                               const PhysicalPositionalScan &op) {
 		for (size_t i = 0; i < op.child_tables.size(); ++i) {
-			auto &child = *op.child_tables[i];
+			auto &child = op.child_tables[i];
 			auto &global_state = *gstate.global_states[i];
 			scanners.emplace_back(make_uniq<PositionalTableScanner>(context, child, global_state));
 		}
@@ -179,15 +178,16 @@ SourceResultType PhysicalPositionalScan::GetData(ExecutionContext &context, Data
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-double PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+ProgressData PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<PositionalScanGlobalSourceState>();
 
-	double result = child_tables[0]->GetProgress(context, *gstate.global_states[0]);
-	for (size_t t = 1; t < child_tables.size(); ++t) {
-		result = MinValue(result, child_tables[t]->GetProgress(context, *gstate.global_states[t]));
+	ProgressData res;
+
+	for (size_t t = 0; t < child_tables.size(); ++t) {
+		res.Add(child_tables[t].get().GetProgress(context, *gstate.global_states[t]));
 	}
 
-	return result;
+	return res;
 }
 
 bool PhysicalPositionalScan::Equals(const PhysicalOperator &other_p) const {
@@ -200,12 +200,20 @@ bool PhysicalPositionalScan::Equals(const PhysicalOperator &other_p) const {
 		return false;
 	}
 	for (size_t i = 0; i < child_tables.size(); ++i) {
-		if (!child_tables[i]->Equals(*other.child_tables[i])) {
+		if (!child_tables[i].get().Equals(other.child_tables[i])) {
 			return false;
 		}
 	}
 
 	return true;
+}
+
+vector<const_reference<PhysicalOperator>> PhysicalPositionalScan::GetChildren() const {
+	auto result = PhysicalOperator::GetChildren();
+	for (auto &entry : child_tables) {
+		result.push_back(entry.get());
+	}
+	return result;
 }
 
 } // namespace duckdb

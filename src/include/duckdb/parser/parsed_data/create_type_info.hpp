@@ -15,18 +15,18 @@
 
 namespace duckdb {
 
-struct BindTypeModifiersInput {
+struct BindLogicalTypeInput {
 	ClientContext &context;
-	const LogicalType &type;
+	const LogicalType &base_type;
 	const vector<Value> &modifiers;
 };
 
 //! The type to bind type modifiers to a type
-typedef LogicalType (*bind_type_modifiers_function_t)(BindTypeModifiersInput &input);
+typedef LogicalType (*bind_logical_type_function_t)(const BindLogicalTypeInput &input);
 
 struct CreateTypeInfo : public CreateInfo {
 	CreateTypeInfo();
-	CreateTypeInfo(string name_p, LogicalType type_p, bind_type_modifiers_function_t bind_modifiers_p = nullptr);
+	CreateTypeInfo(string name_p, LogicalType type_p, bind_logical_type_function_t bind_function_p = nullptr);
 
 	//! Name of the Type
 	string name;
@@ -35,7 +35,7 @@ struct CreateTypeInfo : public CreateInfo {
 	//! Used by create enum from query
 	unique_ptr<SQLStatement> query;
 	//! Bind type modifiers to the type
-	bind_type_modifiers_function_t bind_modifiers;
+	bind_logical_type_function_t bind_function;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

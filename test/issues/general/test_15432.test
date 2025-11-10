@@ -1,0 +1,28 @@
+# name: test/issues/general/test_15432.test
+# description: Issue 15432 - Regression bug (V1.1.4 vs V1.0 and V1.0): binder error references non-existent call to sum()
+# group: [general]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE OR REPLACE function transpose(lst) AS (
+	SELECT list_transform(range(1, 1 + length(lst[1])),
+		lambda j: list_transform(range(1, length(lst) + 1),
+			lambda i: lst[i][j]
+		)
+	)
+);
+
+statement ok
+CREATE OR REPLACE function centroid(points) AS (
+	list_transform(transpose(points),
+		lambda x: list_sum(x) / length(points)
+	)
+);
+
+query II
+SELECT points, centroid(points)
+FROM UNNEST([[[1], [2], [3]]]) t(points);
+----
+[[1], [2], [3]]	[2.0]

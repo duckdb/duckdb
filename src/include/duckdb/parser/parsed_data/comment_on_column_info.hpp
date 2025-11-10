@@ -12,9 +12,9 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/catalog/catalog_entry_retriever.hpp"
 
 namespace duckdb {
+class CatalogEntryRetriever;
 class ClientContext;
 class CatalogEntry;
 

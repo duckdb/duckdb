@@ -26,6 +26,10 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {
 }
 
+VectorStringBuffer::VectorStringBuffer(Allocator &allocator)
+    : VectorBuffer(VectorBufferType::STRING_BUFFER), heap(allocator) {
+}
+
 VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : VectorBuffer(type) {
 }
 

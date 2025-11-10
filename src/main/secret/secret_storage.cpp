@@ -14,7 +14,8 @@
 
 namespace duckdb {
 
-SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const string &path, SecretMatch &current_best) {
+SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const string &path, int64_t offset,
+                                           SecretMatch &current_best) {
 	// Get secret match score
 	auto match_score = secret_entry.secret->MatchScore(path);
 
@@ -27,7 +28,7 @@ SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const stri
 	D_ASSERT(match_score >= 0);
 
 	// Apply storage tie-break offset
-	match_score = OffsetMatchScore(match_score);
+	match_score = 100 * match_score - offset;
 
 	// Choose the best matching score, tie-breaking on secret name when necessary
 	if (match_score > current_best.score) {
@@ -105,7 +106,7 @@ SecretMatch CatalogSetSecretStorage::LookupSecret(const string &path, const stri
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretCatalogEntry>();
 		if (StringUtil::CIEquals(cast_entry.secret->secret->GetType(), type)) {
-			best_match = SelectBestMatch(*cast_entry.secret, path, best_match);
+			best_match = SelectBestMatch(*cast_entry.secret, path, tie_break_offset, best_match);
 		}
 	};
 	secrets->Scan(GetTransactionOrDefault(transaction), callback);
@@ -131,7 +132,8 @@ unique_ptr<SecretEntry> CatalogSetSecretStorage::GetSecretByName(const string &n
 
 LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db_p, const string &name_p,
                                                const string &secret_path_p)
-    : CatalogSetSecretStorage(db_p, name_p), secret_path(FileSystem::ExpandPath(secret_path_p, nullptr)) {
+    : CatalogSetSecretStorage(db_p, name_p, LOCAL_FILE_STORAGE_OFFSET),
+      secret_path(FileSystem::ExpandPath(secret_path_p, nullptr)) {
 	persistent = true;
 
 	// Check existence of persistent secret dir
@@ -218,13 +220,9 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 	string temp_path = file_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
 
 	// If persistent file already exists remove
-	if (fs.FileExists(file_path)) {
-		fs.RemoveFile(file_path);
-	}
+	fs.TryRemoveFile(file_path);
 	// If temporary file already exists remove
-	if (fs.FileExists(temp_path)) {
-		fs.RemoveFile(temp_path);
-	}
+	fs.TryRemoveFile(temp_path);
 
 	WriteSecretFileToDisk(fs, temp_path, secret);
 

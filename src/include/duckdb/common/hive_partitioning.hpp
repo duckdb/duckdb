@@ -14,9 +14,10 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/open_file_info.hpp"
+#include "duckdb/original/std/sstream.hpp"
 
 #include <iostream>
-#include <sstream>
 
 namespace duckdb {
 struct MultiFilePushdownInfo;
@@ -34,7 +35,7 @@ public:
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
-	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
+	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<OpenFileInfo> &files,
 	                                              vector<unique_ptr<Expression>> &filters,
 	                                              const HivePartitioningFilterInfo &filter_info,
 	                                              MultiFilePushdownInfo &info);

@@ -19,6 +19,11 @@ SELECT cbl FROM (VALUES (42)) t(col)
 COLUMN_NOT_FOUND
 
 statement error
+SECT cbl FROM (VALUES (42)) t(col)
+----
+<REGEX>:.*Parser Error.*syntax error at or near.*
+
+statement error
 select corr('hello', 'world')
 ----
 NO_MATCHING_FUNCTION

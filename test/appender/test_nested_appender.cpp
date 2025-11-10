@@ -17,8 +17,8 @@ TEST_CASE("Test appender with lists", "[appender]") {
 	// append a value to the table
 	Appender appender(con, "lists");
 
-	auto list_value = Value::LIST({Value::INTEGER(3)});
-	auto empty_list_value = Value::EMPTYLIST(LogicalType::INTEGER);
+	auto list_value = Value::LIST(LogicalType::INTEGER, {Value::INTEGER(3)});
+	auto empty_list_value = Value::LIST(LogicalType::INTEGER, duckdb::vector<Value>());
 
 	appender.AppendRow(list_value);
 	appender.AppendRow(empty_list_value);
@@ -40,10 +40,13 @@ TEST_CASE("Test appender with nested lists", "[appender]") {
 	// append a value to the table
 	Appender appender(con, "lists");
 
+	auto int_list_type = LogicalType::LIST(LogicalType::INTEGER);
+	auto nested_int_list_type = LogicalType::LIST(int_list_type);
 	auto list_value =
-	    Value::LIST({Value::LIST({Value::INTEGER(1)}), Value::LIST({Value::INTEGER(2), Value::INTEGER(3)})});
-	auto empty_list_value = Value::EMPTYLIST(LogicalType::LIST(LogicalType::INTEGER));
-	auto null_list_value = Value(LogicalType::LIST(LogicalType::LIST(LogicalType::INTEGER)));
+	    Value::LIST(int_list_type, {Value::LIST(LogicalType::INTEGER, {Value::INTEGER(1)}),
+	                                Value::LIST(LogicalType::INTEGER, {Value::INTEGER(2), Value::INTEGER(3)})});
+	auto empty_list_value = Value::LIST(int_list_type, duckdb::vector<Value>());
+	auto null_list_value = Value(nested_int_list_type);
 	appender.AppendRow(list_value);
 	appender.AppendRow(empty_list_value);
 	appender.AppendRow(null_list_value);

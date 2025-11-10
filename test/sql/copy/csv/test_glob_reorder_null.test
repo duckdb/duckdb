@@ -28,7 +28,7 @@ copy t2  to '__TEST_DIR__/null_glob_reorder_2.csv';
 
 # Scan should work
 query II
-select * from read_csv(['__TEST_DIR__/null_glob_reorder_*.csv']) where b is not null;
+select a,b from read_csv(['__TEST_DIR__/null_glob_reorder_*.csv']) where b is not null order by all;
 ----
 1	1
 1	1

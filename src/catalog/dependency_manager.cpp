@@ -433,17 +433,87 @@ string DependencyManager::CollectDependents(CatalogTransaction transaction, cata
 	return result;
 }
 
-void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
-	if (IsSystemEntry(object)) {
-		// Don't do anything for this
-		return;
+void DependencyManager::VerifyExistence(CatalogTransaction transaction, DependencyEntry &object) {
+	auto &subject = object.Subject();
+
+	CatalogEntryInfo info;
+	if (subject.flags.IsOwnership()) {
+		info = object.SourceInfo();
+	} else {
+		info = object.EntryInfo();
 	}
 
-	auto info = GetLookupProperties(object);
-	// Check if there are any entries that block the DROP because they still depend on the object
-	catalog_entry_set_t to_drop;
+	auto &type = info.type;
+	auto &schema = info.schema;
+	auto &name = info.name;
 
+	auto &duck_catalog = catalog.Cast<DuckCatalog>();
+	auto &schema_catalog_set = duck_catalog.GetSchemaCatalogSet();
+
+	CatalogSet::EntryLookup lookup_result;
+	lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema);
+
+	if (type != CatalogType::SCHEMA_ENTRY && lookup_result.result) {
+		auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
+		EntryLookupInfo lookup_info(type, name);
+		lookup_result = schema_entry.LookupEntryDetailed(transaction, lookup_info);
+	}
+
+	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
+		throw DependencyException("Could not commit creation of dependency, subject \"%s\" has been deleted",
+		                          object.SourceInfo().name);
+	}
+}
+
+void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time,
+                                         CatalogEntry &object) {
+	if (IsSystemEntry(object)) {
+		return;
+	}
+	auto info = GetLookupProperties(object);
+	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
+		auto dep_committed_at = dep.timestamp.load();
+		if (dep_committed_at > start_time) {
+			// In the event of a CASCADE, the dependency drop has not committed yet
+			// so we would be halted by the existence of a dependency we are already dropping unless we check the
+			// timestamp
+			//
+			// Which differentiates between objects that we were already aware of (and will subsequently be dropped) and
+			// objects that were introduced inbetween, which should cause this error:
+			throw DependencyException(
+			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
+			    object.name);
+		}
+	});
+	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
+		auto dep_committed_at = dep.timestamp.load();
+		if (!dep.Dependent().flags.IsOwnedBy()) {
+			return;
+		}
+		D_ASSERT(dep.Subject().flags.IsOwnership());
+		if (dep_committed_at > start_time) {
+			// Same as above, objects that are owned by the object that is being dropped will be dropped as part of this
+			// transaction. Only objects that were introduced by other transactions, that this transaction could not
+			// see, should cause this error:
+			throw DependencyException(
+			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
+			    object.name);
+		}
+	});
+}
+
+catalog_entry_set_t DependencyManager::CheckDropDependencies(CatalogTransaction transaction, CatalogEntry &object,
+                                                             bool cascade) {
+	if (IsSystemEntry(object)) {
+		// Don't do anything for this
+		return catalog_entry_set_t();
+	}
+
+	catalog_entry_set_t to_drop;
 	catalog_entry_set_t blocking_dependents;
+
+	auto info = GetLookupProperties(object);
+	// Look through all the objects that depend on the 'object'
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
 		// It makes no sense to have a schema depend on anything
 		D_ASSERT(dep.EntryInfo().type != CatalogType::SCHEMA_ENTRY);
@@ -467,6 +537,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		throw DependencyException(error_string);
 	}
 
+	// Look through all the entries that 'object' depends on
 	ScanSubjects(transaction, info, [&](DependencyEntry &dep) {
 		auto flags = dep.Subject().flags;
 		if (flags.IsOwnership()) {
@@ -475,7 +546,17 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			to_drop.insert(*entry);
 		}
 	});
+	return to_drop;
+}
 
+void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade) {
+	if (IsSystemEntry(object)) {
+		// Don't do anything for this
+		return;
+	}
+
+	// Check if there are any entries that block the DROP because they still depend on the object
+	auto to_drop = CheckDropDependencies(transaction, object, cascade);
 	CleanupDependencies(transaction, object);
 
 	for (auto &entry : to_drop) {
@@ -483,6 +564,54 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		D_ASSERT(set);
 		set->DropEntry(transaction, entry.get().name, cascade);
 	}
+}
+
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context) {
+	auto transaction = catalog.GetCatalogTransaction(context);
+	// Read all the entries visible to this snapshot
+	ReorderEntries(entries, transaction);
+}
+
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries) {
+	// Read all committed entries
+	CatalogTransaction transaction(catalog.GetDatabase(), TRANSACTION_ID_START - 1, TRANSACTION_ID_START - 1);
+	ReorderEntries(entries, transaction);
+}
+
+void DependencyManager::ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
+                                     catalog_entry_vector_t &order) {
+	auto &catalog_entry = *LookupEntry(transaction, entry);
+	// We use this in CheckpointManager, it has the highest commit ID, allowing us to read any committed data
+	bool allow_internal = transaction.start_time == TRANSACTION_ID_START - 1;
+	if (visited.count(catalog_entry) || (!allow_internal && catalog_entry.internal)) {
+		// Already seen and ordered appropriately
+		return;
+	}
+
+	// Check if there are any entries that this entry depends on, those are written first
+	catalog_entry_vector_t dependents;
+	auto info = GetLookupProperties(entry);
+	ScanSubjects(transaction, info, [&](DependencyEntry &dep) { dependents.push_back(dep); });
+	for (auto &dep : dependents) {
+		ReorderEntry(transaction, dep, visited, order);
+	}
+
+	// Then write the entry
+	visited.insert(catalog_entry);
+	order.push_back(catalog_entry);
+}
+
+void DependencyManager::ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction) {
+	catalog_entry_vector_t reordered;
+	catalog_entry_set_t visited;
+	for (auto &entry : entries) {
+		ReorderEntry(transaction, entry, visited, reordered);
+	}
+	// If this would fail, that means there are more entries that we somehow reached through the dependency manager
+	// but those entries should not actually be visible to this transaction
+	D_ASSERT(entries.size() == reordered.size());
+	entries.clear();
+	entries = reordered;
 }
 
 void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,

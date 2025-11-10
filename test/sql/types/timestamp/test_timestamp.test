@@ -71,9 +71,10 @@ statement error
 SELECT SUM(t) FROM timestamp
 ----
 
-statement error
+query I
 SELECT AVG(t) FROM timestamp
 ----
+2007-11-14 11:44:19.142857
 
 statement error
 SELECT t+t FROM timestamp
@@ -158,4 +159,4 @@ SELECT TIMESTAMP '100000-01-01 00:00:01.5'::VARCHAR
 statement error
 SELECT CAST(REPEAT('1992-02-02 ', 100000) AS TIMESTAMP);
 ----
-Conversion Error: timestamp field value out of range
+Conversion Error: invalid timestamp field format

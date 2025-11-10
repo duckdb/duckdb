@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
@@ -20,17 +21,30 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
 
 public:
-	PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
-	                     unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
-	                     idx_t estimated_cardinality);
+	PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index, vector<LogicalType> types,
+	                     bool union_all, PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality);
 	~PhysicalRecursiveCTE() override;
 
 	string ctename;
 	idx_t table_index;
-
+	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
+	bool ref_recurring;
 	bool union_all;
 	shared_ptr<ColumnDataCollection> working_table;
 	shared_ptr<MetaPipeline> recursive_meta_pipeline;
+
+	//===--------------------------------------------------------------------===//
+	// Additionally required for using-key recursive CTE to normal CTE.
+	//===--------------------------------------------------------------------===//
+	bool using_key = false;
+	// Contains the result of the key variant
+	shared_ptr<ColumnDataCollection> recurring_table;
+	// Contains the types of the payload and key columns.
+	vector<LogicalType> payload_types, distinct_types;
+	// Contains the payload and key indices
+	vector<idx_t> payload_idx, distinct_idx;
+	// Contains the aggregates for the payload
+	vector<unique_ptr<BoundAggregateExpression>> payload_aggregates;
 
 public:
 	// Source interface

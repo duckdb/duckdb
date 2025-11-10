@@ -32,6 +32,10 @@ public:
 		return index != INVALID_INDEX;
 	}
 
+	void SetInvalid() {
+		index = INVALID_INDEX;
+	}
+
 	idx_t GetIndex() const {
 		if (index == INVALID_INDEX) {
 			throw InternalException("Attempting to get the index of an optional_idx that is not set");
@@ -41,6 +45,10 @@ public:
 
 	inline bool operator==(const optional_idx &rhs) const {
 		return index == rhs.index;
+	}
+
+	inline bool operator!=(const optional_idx &rhs) const {
+		return index != rhs.index;
 	}
 
 private:

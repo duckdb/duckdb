@@ -10,14 +10,16 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/settings.hpp"
+#include "duckdb/main/setting_info.hpp"
 
 namespace duckdb {
 
 struct CatalogTransaction;
 class SecretManager;
 class ClientContext;
+class HTTPUtil;
 class Value;
+class Logger;
 
 struct FileOpenerInfo {
 	string file_path;
@@ -34,7 +36,9 @@ public:
 	virtual SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) = 0;
 	virtual optional_ptr<ClientContext> TryGetClientContext() = 0;
 	virtual optional_ptr<DatabaseInstance> TryGetDatabase() = 0;
+	virtual shared_ptr<HTTPUtil> &GetHTTPUtil() = 0;
 
+	DUCKDB_API virtual Logger &GetLogger() const = 0;
 	DUCKDB_API static unique_ptr<CatalogTransaction> TryGetCatalogTransaction(optional_ptr<FileOpener> opener);
 	DUCKDB_API static optional_ptr<ClientContext> TryGetClientContext(optional_ptr<FileOpener> opener);
 	DUCKDB_API static optional_ptr<DatabaseInstance> TryGetDatabase(optional_ptr<FileOpener> opener);

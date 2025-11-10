@@ -53,6 +53,11 @@ SELECT true='1';
 true
 
 query T
+SELECT true='1'::VARCHAR;
+----
+true
+
+query T
 SELECT true='0';
 ----
 false

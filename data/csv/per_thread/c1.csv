@@ -1,0 +1,5 @@
+c_category,c_bool,c_float,c_int,c_string
+a,false,3.2,,"b,c"
+a,true,1.0,42.0,a
+b,true,3.0,123.0,e
+b,true,4.0,321.0,f

@@ -1,0 +1,36 @@
+# name: test/sql/settings/settings_icu.test
+# description: Test ICU settings friendliness
+# group: [settings]
+
+require icu
+
+statement ok
+SET Calendar='gregorian';
+
+# Time Zones are CamelCase
+statement ok
+SET TimeZone='pacific/honolulu';
+
+query IIIII
+SELECT name, value, description, input_type, scope FROM duckdb_settings() WHERE name = 'TimeZone';
+----
+TimeZone	Pacific/Honolulu	The current time zone	VARCHAR	LOCAL
+
+statement error
+SET TimeZone='Pacific/Honolooloo';
+----
+Pacific/Honolulu
+
+# Calendars are lowercase
+statement ok
+SET Calendar='Coptic';
+
+query IIIII
+SELECT name, value, description, input_type, scope FROM duckdb_settings() WHERE name = 'Calendar';
+----
+Calendar	coptic	The current calendar	VARCHAR	LOCAL
+
+statement error
+SET Calendar='muslim';
+----
+islamic

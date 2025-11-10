@@ -1,4 +1,5 @@
 add_subdirectory(buffer_manager)
+add_subdirectory(encode)
 add_subdirectory(scanner)
 add_subdirectory(sniffer)
 add_subdirectory(state_machine)

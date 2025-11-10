@@ -35,6 +35,9 @@ protected:
 	//! Automatically calls the Visit method for Expression children of the current operator. Can be overloaded to
 	//! change this behavior.
 	void VisitOperatorExpressions(LogicalOperator &op);
+	//! Alternatives for VisitOperatorChildren for operators that have a projection map
+	void VisitOperatorWithProjectionMapChildren(LogicalOperator &op);
+	void VisitChildOfOperatorWithProjectionMap(LogicalOperator &child, vector<idx_t> &projection_map);
 
 	// The VisitExpressionChildren method is called at the end of every call to VisitExpression to recursively visit all
 	// expressions in an expression tree. It can be overloaded to prevent automatically visiting the entire tree.

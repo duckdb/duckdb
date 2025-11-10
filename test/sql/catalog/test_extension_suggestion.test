@@ -4,9 +4,9 @@
 
 require skip_reload
 
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: This tests what happens when extension is not there"
 
 statement error
-SELECT get_substrait("select 1");
+SELECT from_json('{DATA_DIR}/json/array_of_empty_arrays.json');
 ----
-Catalog Error: Scalar Function with name "get_substrait" is not in the catalog, a function by this name exists in the substrait extension, but it's of a different type, namely Table Function
+Catalog Error: Scalar Function with name "from_json" is not in the catalog, but it exists in the json extension.

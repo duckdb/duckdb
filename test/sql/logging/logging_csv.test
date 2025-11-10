@@ -1,0 +1,208 @@
+# name: test/sql/logging/logging_csv.test
+# description: Test csv formatted log storages (stdout & file)
+# group: [logging]
+
+require noforcestorage
+
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
+# Enable FileSystem logging to single csv file  
+statement ok
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '{TEMP_DIR}/logging_csv_log.csv', 'normalize': false});
+
+# Read some data to trigger FileSystem log
+statement ok
+FROM "{DATA_DIR}/csv/big_number.csv"
+
+query IIIIII
+DESCRIBE FROM '{TEMP_DIR}/logging_csv_log.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+scope	VARCHAR	YES	NULL	NULL	NULL
+connection_id	BIGINT	YES	NULL	NULL	NULL
+transaction_id	BIGINT	YES	NULL	NULL	NULL
+query_id	BIGINT	YES	NULL	NULL	NULL
+thread_id	VARCHAR	YES	NULL	NULL	NULL
+timestamp	TIMESTAMP	YES	NULL	NULL	NULL
+type	VARCHAR	YES	NULL	NULL	NULL
+log_level	VARCHAR	YES	NULL	NULL	NULL
+message	VARCHAR	YES	NULL	NULL	NULL
+
+# Ensure we can reparse the structured log message from the csv
+query III
+SELECT 
+	scope, 
+	path: parse_duckdb_log_message('FileSystem', message)['path'],
+	op: parse_duckdb_log_message('FileSystem', message)['op'],
+FROM "{TEMP_DIR}/logging_csv_log.csv"
+WHERE path = '{DATA_DIR}/csv/big_number.csv';
+----
+CONNECTION	{DATA_DIR}/csv/big_number.csv	OPEN
+CONNECTION	{DATA_DIR}/csv/big_number.csv	READ
+CONNECTION	{DATA_DIR}/csv/big_number.csv	READ
+CONNECTION	{DATA_DIR}/csv/big_number.csv	CLOSE
+
+statement ok
+CALL disable_logging()
+
+# Truncating the logs will clear the csv log file
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+select count(*) FROM "{TEMP_DIR}/logging_csv_log.csv";
+----
+0
+
+# Enable FileSystem logging to normalized files  
+statement ok
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '{TEMP_DIR}/logging_csv_logs_normalized', 'normalize': true});
+
+# Read some data to trigger FileSystem log
+statement ok
+FROM "{DATA_DIR}/csv/big_number.csv"
+
+# Ensure we can reparse the structured log message from the csv
+query III
+SELECT 
+	context_id is not null, 
+	path: parse_duckdb_log_message('FileSystem', message)['path'],
+	op: parse_duckdb_log_message('FileSystem', message)['op'],
+FROM "{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_entries.csv"
+WHERE path = '{DATA_DIR}/csv/big_number.csv';
+----
+1	{DATA_DIR}/csv/big_number.csv	OPEN
+1	{DATA_DIR}/csv/big_number.csv	READ
+1	{DATA_DIR}/csv/big_number.csv	READ
+1	{DATA_DIR}/csv/big_number.csv	CLOSE
+
+# Contexts are now in a separate csv file
+# TODO: is this correct?
+query I
+SELECT scope
+FROM "{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_contexts.csv";
+----
+CONNECTION
+CONNECTION
+
+# Check schema
+query IIIIII
+DESCRIBE FROM '{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_entries.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+timestamp	TIMESTAMP	YES	NULL	NULL	NULL
+type	VARCHAR	YES	NULL	NULL	NULL
+log_level	VARCHAR	YES	NULL	NULL	NULL
+message	VARCHAR	YES	NULL	NULL	NULL
+
+# Check schema
+query IIIIII
+DESCRIBE FROM '{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_contexts.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+scope	VARCHAR	YES	NULL	NULL	NULL
+connection_id	BIGINT	YES	NULL	NULL	NULL
+transaction_id	BIGINT	YES	NULL	NULL	NULL
+query_id	BIGINT	YES	NULL	NULL	NULL
+thread_id	VARCHAR	YES	NULL	NULL	NULL
+
+statement ok
+CALL disable_logging();
+
+# Truncating the logs will clear both csv files
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+select count(*) FROM "{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_contexts.csv";
+----
+0
+
+query I
+select count(*) FROM "{TEMP_DIR}/logging_csv_logs_normalized/duckdb_log_entries.csv";
+----
+0
+
+statement ok
+CALL enable_logging(['FileSystem'], storage='stdout');
+
+# TODO: we can't nicely test logging to stdout without polluting test runner output
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL disable_logging();
+
+# Both stdout and file logging have a buffer size param which controls when the buffered csv data is written out. This is currently hard to test though since
+# we flush these buffers after every query anyways
+
+statement ok
+CALL enable_logging(['FileSystem'], storage='stdout', storage_config={'buffer_size': 1000000}); 
+
+statement ok
+CALL disable_logging();
+
+# Try some invalid configs ensuring they throw nice errors 
+
+statement error
+CALL enable_logging(['FileSystem'], storage='stdout', storage_config={'bla': 'bla'});
+----
+Invalid Input Error: Unrecognized log storage config option for storage: 'StdOutLogStorage': 'bla'
+
+statement error
+CALL enable_logging(['FileSystem'], storage='stdout', storage_config={'path': './file.csv'});
+----
+Invalid Input Error: Unrecognized log storage config option for storage: 'StdOutLogStorage': 'path'
+
+# Switching between normalized and denormalized logs will throw if the log is non-empty
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '{TEMP_DIR}/logging_csv_log.csv'});
+
+statement ok
+SELECT 1;
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# statement error
+# CALL enable_logging(['QueryLog'], storage='file', storage_config={'entries_path': '{TEMP_DIR}/logging_csv_log_entries.csv', 'contexts_path': '{TEMP_DIR}/logging_csv_log_contexts.csv'});
+# ----
+# Invalid Configuration Error: Cannot change between normalized and denormalized with a non-empty log. Please truncate the log first
+
+statement ok
+explain FROM duckdb_logs
+
+# This is not allowed
+statement error
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '{TEMP_DIR}/logging_csv_log.csv', 'normalize': true});
+----
+Invalid Configuration Error: Can not set path to '
+
+statement error
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '{TEMP_DIR}/logging_csv_log.csv', 'normalize': true});
+----
+' while normalize is true. Normalize will make DuckDB write multiple log files to more efficiently store log entries. Please specify a directory path instead of a csv file path, or set normalize to false.
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+CALL disable_logging();
+
+# Test switching CSV delimiters
+statement ok
+CALL enable_logging(['QueryLog'], storage='file', storage_config={'path': '{TEMP_DIR}/logging_csv_log_delim.csv', 'delim': ';'});
+
+statement ok
+SELECT 1;
+
+query I
+SELECT message FROM read_csv('{TEMP_DIR}/logging_csv_log_delim.csv', delim=';');
+----
+SELECT 1

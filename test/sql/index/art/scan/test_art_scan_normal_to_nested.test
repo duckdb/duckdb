@@ -1,0 +1,35 @@
+# name: test/sql/index/art/scan/test_art_scan_normal_to_nested.test
+# description: Test range scanning with an iterator moving from a normal leaf to a nested leaf.
+# group: [scan]
+
+statement ok
+CREATE TABLE integers (i BIGINT);
+
+statement ok
+CREATE INDEX idx_integers ON integers (i);
+
+statement ok
+INSERT INTO integers (i) VALUES ('1'), ('-1'), ('1');
+
+# The border is exactly when moving from a non-nested leaf to a nested leaf.
+
+query I
+SELECT i FROM integers WHERE i <= 0;
+----
+-1
+
+# Issue 16074.
+
+statement ok
+CREATE TABLE t0(c1 TIMESTAMP);
+
+statement ok
+INSERT INTO t0(c1) VALUES ('2020-02-29 12:00:00'), ('1969-12-09 09:26:38'), ('2020-02-29 12:00:00');
+
+statement ok
+CREATE INDEX i0 ON t0(c1);
+
+query I
+SELECT c1 FROM t0 WHERE c1 <= '2007-07-07 07:07:07';
+----
+1969-12-09 09:26:38

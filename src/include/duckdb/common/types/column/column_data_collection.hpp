@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 
 namespace duckdb {
+
 class BufferManager;
 class BlockHandle;
 class ClientContext;
@@ -30,10 +30,14 @@ public:
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
 	DUCKDB_API explicit ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
+	DUCKDB_API
+	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types,
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	//! Constructs either an in-memory or a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
-	                                ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	DUCKDB_API
+	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
+	                     ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
 	//! between multiple column data collections and prevents wasting space.
 	//! Note that after one CDC inherits blocks from another, the other
@@ -65,6 +69,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! The allocation size (in bytes) of this ColumnDataCollection - this property is cached
 	idx_t AllocationSize() const;
+	//! Sets the partition index of this ColumnDataCollection
+	void SetPartitionIndex(idx_t index);
 
 	//! Get the allocator
 	DUCKDB_API Allocator &GetAllocator() const;
@@ -76,6 +82,7 @@ public:
 
 	//! Initializes a chunk with the correct types that can be used to call Scan
 	DUCKDB_API void InitializeScanChunk(DataChunk &chunk) const;
+	DUCKDB_API void InitializeScanChunk(Allocator &allocator, DataChunk &chunk) const;
 	//! Initializes a chunk with the correct types for a given scan state
 	DUCKDB_API void InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
@@ -141,9 +148,16 @@ public:
 
 	//! Obtains the next scan index to scan from
 	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
+	//! Obtains the previous scan index to scan from
+	bool PrevScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
 	//! Scans at the indices (obtained from NextScanIndex)
 	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
 	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
+
+	//! Seeks to the chunk _containing_ the row. Returns false if it is past the end.
+	//! Note that the returned chunk will likely not be aligned to the given row
+	//! but the scan state will provide the actual range
+	bool Seek(idx_t row_idx, ColumnDataScanState &state, DataChunk &result) const;
 
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
@@ -152,6 +166,8 @@ public:
 	vector<shared_ptr<StringHeap>> GetHeapReferences();
 	//! Get the allocator type of this ColumnDataCollection
 	ColumnDataAllocatorType GetAllocatorType() const;
+	//! Get the buffer manager of the allocator
+	BufferManager &GetBufferManager() const;
 
 	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
@@ -178,20 +194,24 @@ private:
 	vector<ColumnDataCopyFunction> copy_functions;
 	//! When the column data collection is marked as finished - new tuples can no longer be appended to it
 	bool finished_append;
+	//! Partition index (optional, if partitioned)
+	optional_idx partition_index;
 };
 
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection);
+	DUCKDB_API explicit ColumnDataRowCollection(
+	    const ColumnDataCollection &collection,
+	    ColumnDataScanProperties properties = ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
 public:
 	// container API
-	bool empty() const { // NOLINT: match stl API
-		return rows.empty();
+	bool empty() const {     // NOLINT: match stl API
+		return rows.empty(); // NOLINT
 	}
 	idx_t size() const { // NOLINT: match stl API
 		return rows.size();

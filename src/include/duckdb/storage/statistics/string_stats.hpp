@@ -14,6 +14,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/array_ptr.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -53,6 +54,8 @@ struct StringStats {
 
 	//! Resets the max string length so HasMaxStringLength() is false
 	DUCKDB_API static void ResetMaxStringLength(BaseStatistics &stats);
+	//! Sets the max string length
+	DUCKDB_API static void SetMaxStringLength(BaseStatistics &stats, uint32_t length);
 	//! FIXME: make this part of Set on statistics
 	DUCKDB_API static void SetContainsUnicode(BaseStatistics &stats);
 
@@ -62,12 +65,14 @@ struct StringStats {
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-	                                                     const string &value);
+	                                                     array_ptr<const Value> constants);
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const_data_ptr_t min_data, idx_t min_len,
 	                                                     const_data_ptr_t max_data, idx_t max_len,
 	                                                     ExpressionType comparison_type, const string &value);
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
+	DUCKDB_API static void SetMin(BaseStatistics &stats, const string_t &value);
+	DUCKDB_API static void SetMax(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 

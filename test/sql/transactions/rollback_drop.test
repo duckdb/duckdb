@@ -1,0 +1,28 @@
+# name: test/sql/transactions/rollback_drop.test
+# description: Rollback a drop then try to delete
+# group: [transactions]
+
+load __TEST_DIR__/rollback_drop.db
+
+statement ok
+create or replace table original_table as from range(10) select 1 as col
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+BEGIN
+
+statement ok
+DROP TABLE original_table
+
+statement ok
+ROLLBACK
+
+statement ok
+delete from original_table where rowid % 2 = 0
+
+query I
+SELECT COUNT(*) FROM original_table;
+----
+5

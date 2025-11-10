@@ -1,0 +1,42 @@
+# name: test/sql/constraints/foreignkey/test_fk_create_type.test
+# group: [foreignkey]
+
+# Create a custom type
+
+statement ok
+create type custom_type as integer;
+
+statement ok
+create table parent (
+	id custom_type primary key
+);
+
+# Use the type alias in both the primary key table and the foreign key table
+
+statement ok
+create table child (
+	parent custom_type references parent
+);
+
+statement ok
+drop table child;
+
+# Also works with just 'integer'
+
+statement ok
+create table child (
+	parent integer references parent
+);
+
+statement ok
+drop table child;
+
+statement ok
+create type another_custom_type as integer;
+
+# And even with a different type alias that also resolves to 'integer'
+
+statement ok
+create table child (
+	parent another_custom_type references parent
+);

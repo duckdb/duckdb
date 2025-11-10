@@ -96,7 +96,7 @@ public:
         }
     }
 
-    virtual UBool operator==(const NFSubstitution& rhs) const;
+    virtual bool operator==(const NFSubstitution& rhs) const;
 
     virtual int64_t transformNumber(int64_t number) const {
         return number / divisor;
@@ -145,7 +145,7 @@ public:
         }
     }
 
-    virtual UBool operator==(const NFSubstitution& rhs) const;
+    virtual bool operator==(const NFSubstitution& rhs) const;
 
     virtual void doSubstitution(int64_t number, UnicodeString& toInsertInto, int32_t pos, int32_t recursionCount, UErrorCode& status) const;
     virtual void doSubstitution(double number, UnicodeString& toInsertInto, int32_t pos, int32_t recursionCount, UErrorCode& status) const;
@@ -213,7 +213,7 @@ public:
         UErrorCode& status);
     virtual ~FractionalPartSubstitution();
 
-    virtual UBool operator==(const NFSubstitution& rhs) const;
+    virtual bool operator==(const NFSubstitution& rhs) const;
 
     virtual void doSubstitution(double number, UnicodeString& toInsertInto, int32_t pos, int32_t recursionCount, UErrorCode& status) const;
     virtual void doSubstitution(int64_t /*number*/, UnicodeString& /*toInsertInto*/, int32_t /*_pos*/, int32_t /*recursionCount*/, UErrorCode& /*status*/) const {}
@@ -285,7 +285,7 @@ public:
     }
     virtual ~NumeratorSubstitution();
 
-    virtual UBool operator==(const NFSubstitution& rhs) const;
+    virtual bool operator==(const NFSubstitution& rhs) const;
 
     virtual int64_t transformNumber(int64_t number) const { return number * ldenominator; }
     virtual double transformNumber(double number) const { return uprv_round(number * denominator); }
@@ -515,7 +515,7 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(NFSubstitution)
  * @param The substitution to compare this one to
  * @return true if the two substitutions are functionally equivalent
  */
-UBool
+bool
 NFSubstitution::operator==(const NFSubstitution& rhs) const
 {
   // compare class and all of the fields all substitutions have
@@ -810,7 +810,7 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(SameValueSubstitution)
 
 UOBJECT_DEFINE_RTTI_IMPLEMENTATION(MultiplierSubstitution)
 
-UBool MultiplierSubstitution::operator==(const NFSubstitution& rhs) const
+bool MultiplierSubstitution::operator==(const NFSubstitution& rhs) const
 {
     return NFSubstitution::operator==(rhs) &&
         divisor == ((const MultiplierSubstitution*)&rhs)->divisor;
@@ -856,7 +856,7 @@ ModulusSubstitution::ModulusSubstitution(int32_t _pos,
 
 UOBJECT_DEFINE_RTTI_IMPLEMENTATION(ModulusSubstitution)
 
-UBool ModulusSubstitution::operator==(const NFSubstitution& rhs) const
+bool ModulusSubstitution::operator==(const NFSubstitution& rhs) const
 {
   return NFSubstitution::operator==(rhs) &&
   divisor == ((const ModulusSubstitution*)&rhs)->divisor &&
@@ -1195,7 +1195,7 @@ FractionalPartSubstitution::doParse(const UnicodeString& text,
     }
 }
 
-UBool
+bool
 FractionalPartSubstitution::operator==(const NFSubstitution& rhs) const
 {
   return NFSubstitution::operator==(rhs) &&
@@ -1325,7 +1325,7 @@ NumeratorSubstitution::doParse(const UnicodeString& text,
     return TRUE;
 }
 
-UBool
+bool
 NumeratorSubstitution::operator==(const NFSubstitution& rhs) const
 {
     return NFSubstitution::operator==(rhs) &&

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
@@ -18,6 +18,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
+#include "duckdb/common/csv_writer.hpp"
 
 namespace duckdb {
 class BaseScanner;
@@ -25,37 +26,29 @@ class StringValueScanner;
 
 class ReadCSV {
 public:
-	static unique_ptr<CSVFileHandle> OpenCSV(const string &file_path, FileCompressionType compression,
+	static unique_ptr<CSVFileHandle> OpenCSV(const OpenFileInfo &file, const CSVReaderOptions &options,
 	                                         ClientContext &context);
 };
 
 struct BaseCSVData : public TableFunctionData {
-	//! The file path of the CSV file to read or write
-	vector<string> files;
 	//! The CSV reader options
 	CSVReaderOptions options;
 	//! Offsets for generated columns
-	idx_t filename_col_idx;
-	idx_t hive_partition_col_idx;
+	idx_t filename_col_idx {};
+	idx_t hive_partition_col_idx {};
 
 	void Finalize();
 };
 
 struct WriteCSVData : public BaseCSVData {
-	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names)
-	    : sql_types(std::move(sql_types)) {
-		files.push_back(std::move(file_path));
+	explicit WriteCSVData(vector<string> names) {
 		options.name_list = std::move(names);
+		if (options.dialect_options.state_machine_options.escape == '\0') {
+			options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
+		}
 	}
-
-	//! The SQL types to write
-	vector<LogicalType> sql_types;
-	//! The newline string to write
-	string newline = "\n";
 	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
 	idx_t flush_size = 4096ULL * 8ULL;
-	//! For each byte whether or not the CSV file requires quotes when containing the byte
-	unsafe_unique_array<bool> requires_quotes;
 	//! Expressions used to convert the input into strings
 	vector<unique_ptr<Expression>> cast_expressions;
 };
@@ -76,38 +69,44 @@ struct ColumnInfo {
 
 struct ReadCSVData : public BaseCSVData {
 	ReadCSVData();
-	//! The expected SQL types to read from the file
-	vector<LogicalType> csv_types;
-	//! The expected SQL names to be read from the file
-	vector<string> csv_names;
 	//! If the sql types from the file were manually set
 	vector<bool> manually_set;
-	//! The expected SQL types to be returned from the read - including added constants (e.g. filename, hive partitions)
-	vector<LogicalType> return_types;
-	//! The expected SQL names to be returned from the read - including added constants (e.g. filename, hive partitions)
-	vector<string> return_names;
 	//! The buffer manager (if any): this is used when automatic detection is used during binding.
 	//! In this case, some CSV buffers have already been read and can be reused.
 	shared_ptr<CSVBufferManager> buffer_manager;
-	unique_ptr<CSVFileScan> initial_reader;
-	//! The union readers are created (when csv union_by_name option is on) during binding
-	//! Those readers can be re-used during ReadCSVFunction
-	vector<unique_ptr<CSVUnionData>> union_readers;
-	//! Reader bind data
-	MultiFileReaderBindData reader_bind;
-
+	//! Column info (used for union reader serialization)
 	vector<ColumnInfo> column_info;
+	//! The CSV schema, in case there is a unified schema that all files must read
+	CSVSchema csv_schema;
 
-	void Initialize(unique_ptr<CSVFileScan> &reader) {
-		this->initial_reader = std::move(reader);
-	}
-	void Initialize(ClientContext &, unique_ptr<CSVUnionData> &data) {
-		this->initial_reader = std::move(data->reader);
-	}
 	void FinalizeRead(ClientContext &context);
+};
+
+struct SerializedCSVReaderOptions {
+	SerializedCSVReaderOptions() = default;
+	SerializedCSVReaderOptions(CSVReaderOptions options, MultiFileOptions file_options);
+	SerializedCSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string> &multi_byte_delimiter);
+
+	CSVReaderOptions options;
+	MultiFileOptions file_options;
 
 	void Serialize(Serializer &serializer) const;
-	static unique_ptr<ReadCSVData> Deserialize(Deserializer &deserializer);
+	static SerializedCSVReaderOptions Deserialize(Deserializer &deserializer);
+};
+
+struct SerializedReadCSVData {
+	vector<string> files;
+	vector<LogicalType> csv_types;
+	vector<string> csv_names;
+	vector<LogicalType> return_types;
+	vector<string> return_names;
+	idx_t filename_col_idx;
+	SerializedCSVReaderOptions options;
+	MultiFileReaderBindData reader_bind;
+	vector<ColumnInfo> column_info;
+
+	void Serialize(Serializer &serializer) const;
+	static SerializedReadCSVData Deserialize(Deserializer &deserializer);
 };
 
 struct CSVCopyFunction {

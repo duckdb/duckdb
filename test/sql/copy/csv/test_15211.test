@@ -1,0 +1,15 @@
+# name: test/sql/copy/csv/test_15211.test
+# description: Test for issue 15211
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+set threads=1
+
+query I
+select count(*) FROM read_csv(['{DATA_DIR}/csv/drug_exposure.csv', '{DATA_DIR}/csv/drug_exposure.csv','{DATA_DIR}/csv/drug_exposure.csv', '{DATA_DIR}/csv/drug_exposure.csv','{DATA_DIR}/csv/drug_exposure.csv', '{DATA_DIR}/csv/drug_exposure.csv','{DATA_DIR}/csv/drug_exposure.csv', '{DATA_DIR}/csv/drug_exposure.csv','{DATA_DIR}/csv/drug_exposure.csv'], buffer_size = 500)
+----
+37017
+

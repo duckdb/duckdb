@@ -1,0 +1,57 @@
+# name: test/sql/storage/wal/wal_index_delete_gen.test
+# description: Test index delete replays with generated columns.
+# group: [wal]
+
+# load the DB from disk
+load __TEST_DIR__/index_delete_gen.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE tbl(a BIGINT, b INT AS (2*a), c VARCHAR, d DOUBLE, e as (d + 2), f TIMESTAMP);
+
+statement ok
+CREATE INDEX idx_cd ON tbl(c,d);
+
+statement ok
+CREATE INDEX idx_df ON tbl(d, f)
+
+statement ok
+INSERT INTO tbl VALUES (1, 'foo', 10.5, '2023-01-01 10:00:00'), (2, 'bar', 20.5, '2023-02-01 11:00:00'), (3, 'baz', 30.5, '2023-03-01 12:00:00');
+
+query IIIIII
+SELECT a, b, c, d, e, f FROM tbl ORDER BY a;
+----
+1	2	foo	10.5	12.5	2023-01-01 10:00:00
+2	4	bar	20.5	22.5	2023-02-01 11:00:00
+3	6	baz	30.5	32.5 	2023-03-01 12:00:00
+
+statement ok
+DELETE FROM tbl WHERE a in (2);
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (1, 'foo', 10.5, '2023-01-01 10:00:00')
+
+query II
+SELECT b, e FROM tbl WHERE (c,d) = ('baz', 30.5)
+----
+6
+32.5
+
+query IIIIII
+SELECT a, b, c, d, e, f FROM tbl ORDER BY a;
+----
+1	2	foo	10.5	12.5	2023-01-01 10:00:00
+1	2	foo	10.5	12.5	2023-01-01 10:00:00
+3	6	baz	30.5	32.5 	2023-03-01 12:00:00
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+3

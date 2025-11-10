@@ -5,6 +5,9 @@
 load __TEST_DIR__/reclaim_space_drop_column_overflow_strings.db
 
 statement ok
+PRAGMA force_compression='Uncompressed';
+
+statement ok
 PRAGMA force_checkpoint;
 
 statement ok
@@ -25,6 +28,16 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 # therefore, we need to compare to a range of total block counts.
 statement ok
 CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
+statement ok
+create type test_result as UNION(
+	ok BOOL,
+	err STRUCT(
+		old BIGINT,
+		allowed_max DECIMAL(21,1),
+		actual BIGINT
+	)
+);
 
 loop i 0 30
 
@@ -48,12 +61,20 @@ CHECKPOINT;
 # Ensure that the total blocks don't exceed the total blocks by more than 1.2.
 
 query I
-SELECT CASE WHEN ${i} < 10 THEN True
-	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
-	ELSE False END
+SELECT
+	CASE WHEN ${i} < 10
+		THEN True::test_result
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2
+		THEN True::test_result
+	ELSE {
+			'old': total_blocks_tbl.total_blocks,
+			'allowed_max': total_blocks_tbl.total_blocks * 1.2,
+			'actual': current.total_blocks
+		}::test_result
+	END
 FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
-1
+true
 
 # Adjust total_blocks_tbl to the count after 10 warm-up iterations.
 

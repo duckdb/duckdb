@@ -2,8 +2,6 @@
 # description: Test LIMIT keyword
 # group: [order]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -88,6 +86,9 @@ CREATE SEQUENCE seq START 3;
 
 statement ok
 PRAGMA disable_verification;
+
+statement ok
+PRAGMA disable_verify_fetch_row;
 
 query I
 SELECT * FROM integers LIMIT nextval('seq');

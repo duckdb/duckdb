@@ -14,6 +14,7 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/simplified_token.hpp"
 #include "duckdb/parser/parser_options.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb_libpgquery {
 struct PGNode;
@@ -44,6 +45,9 @@ public:
 	//! Tokenize a query, returning the raw tokens together with their locations
 	static vector<SimplifiedToken> Tokenize(const string &query);
 
+	//! Tokenize an error message, returning the raw tokens together with their locations
+	static vector<SimplifiedToken> TokenizeError(const string &error_msg);
+
 	//! Returns true if the given text matches a keyword of the parser
 	static KeywordCategory IsKeyword(const string &text);
 	//! Returns a list of all keywords in the parser
@@ -65,8 +69,13 @@ public:
 	                                                                    ParserOptions options = ParserOptions());
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
 	static ColumnList ParseColumnList(const string &column_list, ParserOptions options = ParserOptions());
+	static ColumnDefinition ParseColumnDefinition(const string &column_definition,
+	                                              ParserOptions options = ParserOptions());
 
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
+
+	StatementType GetStatementType(const string &query);
+	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
 	ParserOptions options;

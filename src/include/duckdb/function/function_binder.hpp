@@ -21,8 +21,10 @@ namespace duckdb {
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
 public:
+	DUCKDB_API explicit FunctionBinder(Binder &binder);
 	DUCKDB_API explicit FunctionBinder(ClientContext &context);
 
+	optional_ptr<Binder> binder;
 	ClientContext &context;
 
 public:
@@ -69,10 +71,15 @@ public:
 
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
 	                                           const vector<unique_ptr<Expression>> &groups);
+	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
-private:
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
+
+	void ResolveTemplateTypes(BaseScalarFunction &bound_function, const vector<unique_ptr<Expression>> &children);
+	void CheckTemplateTypesResolved(const BaseScalarFunction &bound_function);
+
+private:
 	optional_idx BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 
@@ -81,9 +88,9 @@ private:
 	                                         const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
-	optional_idx MultipleCandidateException(const string &name, FunctionSet<T> &functions,
-	                                        vector<idx_t> &candidate_functions, const vector<LogicalType> &arguments,
-	                                        ErrorData &error);
+	optional_idx MultipleCandidateException(const string &catalog_name, const string &schema_name, const string &name,
+	                                        FunctionSet<T> &functions, vector<idx_t> &candidate_functions,
+	                                        const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
 	optional_idx BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,

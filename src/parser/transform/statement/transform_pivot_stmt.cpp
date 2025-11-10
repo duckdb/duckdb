@@ -15,6 +15,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -94,7 +95,7 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 	}
 
 	auto select = make_uniq<SelectStatement>();
-	select->node = TransformMaterializedCTE(std::move(subselect));
+	select->node = std::move(subselect);
 	info->query = std::move(select);
 	info->type = LogicalType::INVALID;
 
@@ -124,6 +125,8 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 		}
 		result->statements.push_back(GenerateCreateEnumStmt(std::move(pivot)));
 	}
+	result->stmt_location = statement->stmt_location;
+	result->stmt_length = statement->stmt_length;
 	result->statements.push_back(std::move(statement));
 	// FIXME: drop the types again!?
 	//	for(auto &pivot : pivot_entries) {
@@ -162,13 +165,14 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		if (pivot->aggrs) {
 			TransformExpressionList(*pivot->aggrs, select_node->select_list);
 		}
+		// transform order by/limit modifiers
+		TransformModifiers(select, *select_node);
 		return std::move(select_node);
 	}
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
 	bool is_pivot = !pivot->unpivots;
 	auto columns = TransformPivotList(*pivot->columns, is_pivot);
-	auto pivot_idx = PivotEntryCount();
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
 		if (!col.pivot_enum.empty() || !col.entries.empty()) {
@@ -177,7 +181,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		if (col.pivot_expressions.size() != 1) {
 			throw InternalException("PIVOT statement with multiple names in pivot entry!?");
 		}
-		auto enum_name = "__pivot_enum_" + std::to_string(pivot_idx) + "_" + std::to_string(c);
+		auto enum_name = "__pivot_enum_" + UUID::ToString(UUID::GenerateRandomUUID());
 
 		auto new_select = make_uniq<SelectNode>();
 		ExtractCTEsRecursive(new_select->cte_map);

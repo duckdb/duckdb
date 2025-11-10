@@ -221,7 +221,7 @@ DateIntervalFormat::clone() const {
 }
 
 
-UBool
+bool
 DateIntervalFormat::operator==(const Format& other) const {
     if (typeid(*this) != typeid(other)) {return FALSE;}
     const DateIntervalFormat* fmt = (DateIntervalFormat*)&other;

@@ -3,9 +3,6 @@
 # group: [asof]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE events (begin DOUBLE, value INTEGER);
 
 statement ok
@@ -15,6 +12,12 @@ INSERT INTO events VALUES
 	(6, 2),
 	(8, 3)
 ;
+
+# Compare NLJ optimisation to operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
 
 query II
 SELECT begin, value IN (
@@ -34,3 +37,5 @@ ORDER BY ALL;
 3.0	true
 6.0	true
 8.0	true
+
+endloop

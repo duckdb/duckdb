@@ -2,7 +2,6 @@
 # description: Test RLE where we can emit ConstantVectors when scanning
 # group: [rle]
 
-# load the DB from disk
 load __TEST_DIR__/test_rle.db
 
 require vector_size 2048
@@ -58,6 +57,9 @@ select distinct on (types) vector_type(a) as types from test order by all;
 ----
 CONSTANT_VECTOR
 FLAT_VECTOR
+
+statement ok
+PRAGMA disable_optimizer
 
 # The first 4 vectors are constant
 query I

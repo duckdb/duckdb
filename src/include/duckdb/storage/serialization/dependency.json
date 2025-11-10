@@ -40,7 +40,8 @@
 				"type": "string"
 			}
 		],
-		"pointer_type": "none"
+		"pointer_type": "none",
+		"constructor": ["?Catalog", "entry", "catalog"]
 	},
 	{
 		"class": "LogicalDependencyList",

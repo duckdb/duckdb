@@ -45,6 +45,7 @@ public:
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
+	virtual idx_t GetRootIndex();
 	static string ColumnBindingsToString(const vector<ColumnBinding> &bindings);
 	void PrintColumnBindings();
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
@@ -79,6 +80,10 @@ public:
 	virtual bool SupportSerialization() const {
 		return true;
 	};
+
+	virtual bool HasProjectionMap() const {
+		return false;
+	}
 
 	//! Returns the set of table indexes of this operator
 	virtual vector<idx_t> GetTableIndex() const;

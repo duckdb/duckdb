@@ -9,12 +9,14 @@ IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const s
     : info(std::move(info_p)), index_name(index_name_p) {
 }
 
-IndexDataTableInfo::~IndexDataTableInfo() {
+void DuckIndexEntry::Rollback(CatalogEntry &) {
 	if (!info) {
 		return;
 	}
-	// FIXME: this should happen differently.
-	info->GetIndexes().RemoveIndex(index_name);
+	if (!info->info) {
+		return;
+	}
+	info->info->GetIndexes().RemoveIndex(name);
 }
 
 DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
@@ -54,7 +56,9 @@ DataTableInfo &DuckIndexEntry::GetDataTableInfo() const {
 
 void DuckIndexEntry::CommitDrop() {
 	D_ASSERT(info);
-	GetDataTableInfo().GetIndexes().CommitDrop(name);
+	auto &indexes = GetDataTableInfo().GetIndexes();
+	indexes.CommitDrop(name);
+	indexes.RemoveIndex(name);
 }
 
 } // namespace duckdb

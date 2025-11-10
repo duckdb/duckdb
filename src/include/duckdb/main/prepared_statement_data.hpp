@@ -19,7 +19,7 @@
 namespace duckdb {
 class CatalogEntry;
 class ClientContext;
-class PhysicalOperator;
+class PhysicalPlan;
 class SQLStatement;
 
 class PreparedStatementData {
@@ -30,8 +30,9 @@ public:
 	StatementType statement_type;
 	//! The unbound SQL statement that was prepared
 	unique_ptr<SQLStatement> unbound_statement;
-	//! The fully prepared physical plan of the prepared statement
-	unique_ptr<PhysicalOperator> plan;
+
+	//! The physical plan.
+	unique_ptr<PhysicalPlan> physical_plan;
 
 	//! The result names of the transaction
 	vector<string> names;
@@ -44,7 +45,9 @@ public:
 	//! The map of parameter index to the actual value entry
 	bound_parameter_map_t value_map;
 	//! Whether we are creating a streaming result or not
-	bool is_streaming = false;
+	QueryResultOutputType output_type;
+	//! Whether we are creating a buffer-managed result or not
+	QueryResultMemoryType memory_type;
 
 public:
 	void CheckParameterCount(idx_t parameter_count);

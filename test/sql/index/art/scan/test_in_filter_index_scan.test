@@ -1,0 +1,91 @@
+# name: test/sql/index/art/scan/test_in_filter_index_scan.test
+# description: Test using an index scan for IN filter pushdown.
+# group: [scan]
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS i FROM range(500000);
+
+statement ok
+ALTER TABLE tbl ADD PRIMARY KEY(i);
+
+query II
+EXPLAIN ANALYZE DELETE FROM tbl WHERE i IN (3, 50, 299, 123);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+499996
+
+# Test with duplicate values.
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) ORDER BY i;
+----
+2
+42
+100
+101
+
+# Test with different CONJUNCTION_AND removing values from the IN.
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i != 42 AND i <= 100;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i != 42 AND i <= 100 ORDER BY i;
+----
+2
+100
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i = 42 AND i <= 100;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i = 42 AND i <= 100 ORDER BY i;
+----
+42
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i < 101 AND i >= 42;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i < 101 AND i >= 42 ORDER BY i;
+----
+42
+100
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i >= 42;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i >= 42 ORDER BY i;
+----
+100
+101
+
+# Test with multiple IN filters.
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i IN (56, 200, 2, 100);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i IN (56, 200, 2, 100) ORDER BY i;
+----
+100

@@ -3,65 +3,110 @@
 # group: [optimizer]
 
 statement ok
-CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int)
+CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int);
 
 statement ok
-INSERT INTO t1 VALUES (1, 1, 1, 1)
+INSERT INTO t1 VALUES (1, 1, 1, 1);
 
 statement ok
-INSERT INTO t1 VALUES (1, 1, 1, 1)
+INSERT INTO t1 VALUES (1, 1, 1, 1);
 
 statement ok
-CREATE TABLE t2 AS SELECT * FROM t1
+CREATE TABLE t2 AS SELECT * FROM t1;
 
 statement ok
-INSERT INTO t2 VALUES (1, 1, 1, 1)
+INSERT INTO t2 VALUES (1, 1, 1, 1);
 
 statement ok
-CREATE TABLE t3 AS SELECT * FROM t2
+CREATE TABLE t3 AS SELECT * FROM t2;
 
 statement ok
-INSERT INTO t2 VALUES (1, 1, 1, 1)
+INSERT INTO t2 VALUES (1, 1, 1, 1);
 
 statement ok
-CREATE TABLE t4 AS SELECT * FROM t3
+CREATE TABLE t4 AS SELECT * FROM t3;
 
 statement ok
-INSERT INTO t2 VALUES (1, 1, 1, 1)
+INSERT INTO t2 VALUES (1, 1, 1, 1);
 
 statement ok
 PRAGMA debug_force_no_cross_product=true
 
 statement ok
-EXPLAIN 
-SELECT 
-  COUNT(*) 
-FROM 
-  t1, t2, t3, t4 
-WHERE 
-  t1.c1 = t2.c1 AND 
-  t2.c2 = t3.c2 AND 
+EXPLAIN
+SELECT
+  COUNT(*)
+FROM
+  t1, t2, t3, t4
+WHERE
+  t1.c1 = t2.c1 AND
+  t2.c2 = t3.c2 AND
   t3.c3 = t4.c3
 
 statement ok
-EXPLAIN 
-SELECT 
-  COUNT(*) 
-FROM 
-  t1, t2, t3, t4 
-WHERE 
-  t1.c1 = t2.c1 AND 
-  t2.c2 = t3.c2 AND 
-  t3.c3 = t4.c3 AND 
+EXPLAIN
+SELECT
+  COUNT(*)
+FROM
+  t1, t2, t3, t4
+WHERE
+  t1.c1 = t2.c1 AND
+  t2.c2 = t3.c2 AND
+  t3.c3 = t4.c3 AND
   t4.c4 = t1.c4
 
 statement ok
-EXPLAIN 
-SELECT 
-  COUNT(*) 
-FROM 
-  t1, t2, t3, t4 
-WHERE 
-  t1.c1 = t2.c1 AND 
-  t2.c2 = t3.c2 AND 
+EXPLAIN
+SELECT
+  COUNT(*)
+FROM
+  t1, t2, t3, t4
+WHERE
+  t1.c1 = t2.c1 AND
+  t2.c2 = t3.c2 AND
   t1.c1 + t2.c2 + t3.c3= 3 * t4.c4
+
+statement ok
+PRAGMA debug_force_no_cross_product=false
+
+statement ok
+with
+grid as (
+    from (values ('ABC'), ('DEF')) as v(data)
+    select
+        unnest(split(data, '')) as letter,
+        row_number() over () as row_id,
+        generate_subscripts(split(data, ''), 1) AS col_id,
+),
+search(row_i, col_i, letter_to_match) as (
+    values (0, 0, 'A'), (0, 1, 'B'),
+)
+from (from grid cross join search) as grid_searches
+select exists(
+    from grid as grid_to_search
+    where 1=1
+        and grid_searches.row_id = grid_to_search.row_id + grid_searches.row_i
+        and grid_searches.col_id = grid_to_search.col_id + grid_searches.col_i
+        and grid_searches.letter_to_match = grid_to_search.letter
+)
+
+statement ok
+with
+grid as (
+    from (values ('ABC', 39), ('DEF', 50)) as v(data, row_id)
+    select
+        unnest(split(data, '')) as letter,
+        row_id,
+        generate_subscripts(split(data, ''), 1) AS col_id,
+),
+search(row_i, col_i, letter_to_match) as (
+    values (0, 0, 'A'), (0, 1, 'B'),
+)
+from (from grid cross join search) as grid_searches
+select exists(
+    from grid as grid_to_search
+    where 1=1
+        and grid_searches.row_id = grid_to_search.row_id + grid_searches.row_i
+        and grid_searches.col_id = grid_to_search.col_id + grid_searches.col_i
+        and grid_searches.letter_to_match = grid_to_search.letter
+)

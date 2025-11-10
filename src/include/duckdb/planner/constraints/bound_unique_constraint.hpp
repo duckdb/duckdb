@@ -19,23 +19,28 @@ public:
 	static constexpr const ConstraintType TYPE = ConstraintType::UNIQUE;
 
 public:
-	BoundUniqueConstraint(vector<LogicalIndex> keys, logical_index_set_t key_set, bool is_primary_key)
-	    : BoundConstraint(ConstraintType::UNIQUE), keys(std::move(keys)), key_set(std::move(key_set)),
+	BoundUniqueConstraint(vector<PhysicalIndex> keys_p, physical_index_set_t key_set_p, const bool is_primary_key)
+	    : BoundConstraint(ConstraintType::UNIQUE), keys(std::move(keys_p)), key_set(std::move(key_set_p)),
 	      is_primary_key(is_primary_key) {
 #ifdef DEBUG
-		D_ASSERT(this->keys.size() == this->key_set.size());
-		for (auto &key : this->keys) {
-			D_ASSERT(this->key_set.find(key) != this->key_set.end());
+		D_ASSERT(keys.size() == key_set.size());
+		for (auto &key : keys) {
+			D_ASSERT(key_set.find(key) != key_set.end());
 		}
 #endif
 	}
 
-	//! The keys that define the unique constraint
-	vector<LogicalIndex> keys;
-	//! The same keys but stored as an unordered set
-	logical_index_set_t key_set;
-	//! Whether or not the unique constraint is a primary key
+	//! The keys that define the unique constraint.
+	vector<PhysicalIndex> keys;
+	//! The same keys but stored as an unordered set.
+	physical_index_set_t key_set;
+	//! Whether this is a PRIMARY KEY constraint, or a UNIQUE constraint.
 	bool is_primary_key;
+
+public:
+	unique_ptr<BoundConstraint> Copy() const override {
+		return make_uniq<BoundUniqueConstraint>(keys, key_set, is_primary_key);
+	}
 };
 
 } // namespace duckdb

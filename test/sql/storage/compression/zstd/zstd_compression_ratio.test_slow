@@ -1,0 +1,132 @@
+# name: test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow
+# description: Assert bitpacking compression ratio is within reasonable margins for each mode
+# group: [zstd]
+
+require block_size 262144
+
+statement ok
+SET storage_compatibility_version='v1.2.0'
+
+load __TEST_DIR__/test_zstd_compression_ratio.db
+
+statement ok
+set enable_logging=true;
+
+statement ok
+set logging_level='info';
+
+statement ok
+PRAGMA force_compression='zstd'
+
+set seed 0.42
+
+statement ok
+set variable dataset_size = 100_000;
+
+# strings of 4096 characters, created from uuid(), making them semi-random
+statement ok
+create table test_compressed as (
+	with cte as (
+		select list_reduce([uuid()::varchar for x in range(128)], lambda x, y: concat(x, y)) str
+		from range(getvariable('dataset_size'))
+	)
+	select
+		str
+	from cte
+);
+
+statement ok
+checkpoint
+
+# We analyzed the ZSTD compressed data to be 230.8 Mb
+query I
+SELECT message FROM duckdb_logs where message.starts_with('ColumnDataCheckpointer FinalAnalyze') and message.contains('test_compressed') and message.contains('VARCHAR') order by timestamp;
+----
+ColumnDataCheckpointer FinalAnalyze(COMPRESSION_ZSTD) result for main.test_compressed.0(VARCHAR): 230801376
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+set seed 0.42
+
+statement ok
+CREATE TABLE test_uncompressed as (
+	with cte as (
+		select list_reduce([uuid()::varchar for x in range(128)], lambda x, y: concat(x, y)) str
+		from range(getvariable('dataset_size'))
+	)
+	select
+		str
+	from cte
+);
+
+statement ok
+checkpoint
+
+# The Uncompressed data to would have been 462.4 Mb
+query I
+SELECT message FROM duckdb_logs where message.starts_with('ColumnDataCheckpointer FinalAnalyze') and message.contains('test_uncompressed') and message.contains('VARCHAR') order by timestamp;
+----
+ColumnDataCheckpointer FinalAnalyze(COMPRESSION_UNCOMPRESSED) result for main.test_uncompressed.0(VARCHAR): 462400000
+
+query I
+SELECT compression FROM pragma_storage_info('test_compressed') WHERE segment_type != 'VALIDITY' AND compression != 'ZSTD';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_type != 'VALIDITY' AND compression != 'Uncompressed';
+----
+
+statement ok
+CREATE TYPE test_result AS UNION (
+    ok BOOL,
+    err STRUCT(
+        uncompressed HUGEINT,
+        compressed HUGEINT,
+        allowed_minimum_ratio DECIMAL(2,1),
+        allowed_maximum_ratio DECIMAL(2,1),
+        actual_ratio FLOAT
+    )
+);
+
+# This roughly aligns with comparing Uncompressed/ZSTD FinalAnalyze results (which is ~2x)
+statement ok
+set variable min_ratio = 1.8;
+set variable max_ratio = 2.5;
+
+query I
+WITH compressed_intermediate AS (
+	SELECT
+		1 + sum(len(additional_block_ids)) as blocks
+	FROM
+		pragma_storage_info('test_compressed')
+	WHERE segment_type NOT IN ('VALIDITY')
+	GROUP BY block_id
+),
+uncompressed_intermediate AS (
+	SELECT
+		1 + sum(len(additional_block_ids)) as blocks
+	FROM
+		pragma_storage_info('test_uncompressed')
+	WHERE segment_type NOT IN ('VALIDITY')
+	GROUP BY block_id
+)
+SELECT
+    CASE 
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
+            THEN True::test_result
+        ELSE {
+            'uncompressed': uncompressed,
+            'compressed': compressed,
+            'allowed_minimum_ratio': getvariable('min_ratio'),
+            'allowed_maximum_ratio': getvariable('max_ratio'),
+            'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
+        }::test_result
+    END
+FROM (
+    SELECT
+        (SELECT sum(blocks) FROM compressed_intermediate) as compressed,
+        (SELECT sum(blocks) FROM uncompressed_intermediate) AS uncompressed
+) AS blocks_tbl;
+----
+true

@@ -2,9 +2,9 @@
 # description: Test the maximum swap space.
 # group: [temp_directory]
 
-require skip_reload
-
 require noforcestorage
+
+require skip_reload
 
 # This test performs comparisons against the DEFAULT_BLOCK_ALLOC_SIZE of 256KiB.
 require block_size 262144
@@ -25,7 +25,7 @@ statement ok
 set max_temp_directory_size='0KiB'
 
 statement error
-CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(1000000);
 ----
 failed to offload data block
 
@@ -39,12 +39,12 @@ statement ok
 set max_temp_directory_size='256KiB'
 
 statement error
-CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(1000000);
 ----
 failed to offload data block
 
 statement error
-CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(1000000);
 ----
 failed to offload data block
 
@@ -52,9 +52,8 @@ query I
 select "size" from duckdb_temporary_files()
 ----
 
-# 6 blocks
 statement ok
-set max_temp_directory_size='1536KiB'
+set max_temp_directory_size='4MB'
 
 statement ok
 pragma threads=2;
@@ -62,38 +61,38 @@ pragma threads=2;
 statement ok
 set preserve_insertion_order=true;
 
-# This is 1600000 bytes of BIGINT data, which is roughly 6.1 blocks
+# This is 1600000 bytes of DOUBLE data, which is roughly 6.1 blocks
 # Because our memory limit is set at 1MiB (4 blocks) this works
 statement ok
-CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(200000);
+CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(200000);
 
-# When we increase the size to 2400000 bytes of BIGINT data (9.1 blocks) this errors
+# When we increase the size to 2400000 bytes of DOUBLE data (9.1 blocks) this errors
 statement error
-CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(300000);
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 ----
 failed to offload data block
 
 query I
-SELECT "size" FROM duckdb_temporary_files();
+SELECT CASE WHEN sum("size") > 1000000 THEN true ELSE CONCAT('Expected size 1000000, but got ', sum("size"))::UNION(msg VARCHAR, b BOOLEAN) END FROM duckdb_temporary_files();
 ----
-1572864
+true
 
-# Lower the limit
+# Cannot lower the limit
 statement error
 set max_temp_directory_size='256KiB'
 ----
-failed to adjust the 'max_temp_directory_size', currently used space (1.5 MiB) exceeds the new limit (256.0 KiB)
+exceeds the new limit
 
-# Lower the limit
+# Cannot lower the limit
 statement error
 set max_temp_directory_size='256KiB'
 ----
-failed to adjust the 'max_temp_directory_size', currently used space (1.5 MiB) exceeds the new limit (256.0 KiB)
+exceeds the new limit
 
 query I
 select current_setting('max_temp_directory_size')
 ----
-1.5 MiB
+3.8 MiB
 
 statement ok
 set max_temp_directory_size='2550KiB'

@@ -137,13 +137,13 @@ SELECT l::utinyint[] FROM cast_table
 ----
 ^
 
-# struct cast
 statement error
-SELECT int_struct::row(x tinyint) FROM cast_table
+SELECT int_struct::ROW(x TINYINT) FROM cast_table
 ----
-^
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
-# double -> float
+# DOUBLE to FLOAT cast.
+
 statement error
 select dbl::float FROM cast_table
 ----
@@ -172,3 +172,33 @@ statement error
 SELECT invalid_blob_str::BYTEA FROM cast_table
 ----
 ^
+
+# inserts into a table
+statement ok
+CREATE TABLE int_tbl AS SELECT 42 my_integer
+
+statement ok
+CREATE TABLE str_tbl AS SELECT 'hello' my_str
+
+statement ok
+CREATE TABLE ts_tbl(ts TIMESTAMP)
+
+statement error
+INSERT INTO ts_tbl SELECT my_integer FROM int_tbl
+----
+^
+
+statement error
+INSERT INTO ts_tbl SELECT my_integer * 2 FROM int_tbl
+----
+^
+
+statement error
+INSERT INTO ts_tbl FROM int_tbl
+----
+my_integer
+
+statement error
+INSERT INTO ts_tbl FROM str_tbl
+----
+my_str

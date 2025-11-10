@@ -1,0 +1,60 @@
+# name: benchmark/realnest/micro/04_list_transform_and_list_aggregate.benchmark
+# description: select average from transformed list and group by, having
+# group: [micro]
+
+name list_transform plus list_aggregate
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT
+  list_aggregate(list_transform(Jet, lambda x: x.pt), 'avg') AS avg_pt,
+  list_aggregate(list_transform(Jet, lambda x: x.eta), 'avg') AS avg_eta,
+  list_aggregate(list_transform(Jet, lambda x: x.phi), 'avg') AS avg_phi,
+  list_aggregate(list_transform(Jet, lambda x: x.mass), 'avg') AS avg_mass,
+  list_aggregate(list_transform(Jet, lambda x: x.btag), 'avg') AS avg_btag,
+  list_aggregate(list_transform(Photon, lambda x: x.pt), 'avg') AS ph_avg_pt,
+  list_aggregate(list_transform(Photon, lambda x: x.eta), 'avg') AS ph_avg_eta,
+  list_aggregate(list_transform(Photon, lambda x: x.phi), 'avg') AS ph_avg_phi,
+  list_aggregate(list_transform(Photon, lambda x: x.mass), 'avg') AS ph_avg_mass,
+  list_aggregate(list_transform(Photon, lambda x: x.pfreliso03_all), 'avg') AS ph_avg_pf,
+  list_aggregate(list_transform(Photon, lambda x: x.jetidx), 'avg') AS ph_avg_jet,
+  list_aggregate(list_transform(Photon, lambda x: x.genpartidx), 'avg') AS ph_avg_gen,
+  list_aggregate(list_transform(Tau, lambda x: x.pt), 'avg') AS t_avg_pt,
+  list_aggregate(list_transform(Tau, lambda x: x.eta), 'avg') AS t_avg_eta,
+  list_aggregate(list_transform(Tau, lambda x: x.mass), 'avg') AS t_avg_mass,
+  list_aggregate(list_transform(Tau, lambda x: x.decaymode), 'avg') AS t_avg_dec,
+  list_aggregate(list_transform(Tau, lambda x: x.reliso_all), 'avg') AS t_avg_rel,
+  list_aggregate(list_transform(Tau, lambda x: x.jetidx), 'avg') AS t_avg_jet,
+  list_aggregate(list_transform(Tau, lambda x: x.genpartidx), 'avg') AS t_avg_gen,
+  list_aggregate(list_transform(Electron, lambda x: x.pt), 'avg') AS el_avg_pt,
+  list_aggregate(list_transform(Electron, lambda x: x.eta), 'avg') AS el_avg_eta,
+  list_aggregate(list_transform(Electron, lambda x: x.phi), 'avg') AS el_avg_phi,
+  list_aggregate(list_transform(Electron, lambda x: x.mass), 'avg') AS el_avg_mass,
+  list_aggregate(list_transform(Electron, lambda x: x.pfreliso03_all), 'avg') AS el_avg_pf,
+  list_aggregate(list_transform(Electron, lambda x: x.dxy), 'avg') AS el_avg_dxy,
+  list_aggregate(list_transform(Electron, lambda x: x.dxyerr), 'avg') AS el_avg_dxyer,
+  list_aggregate(list_transform(Electron, lambda x: x.dz), 'avg') AS el_avg_dz,
+  list_aggregate(list_transform(Electron, lambda x: x.dzerr), 'avg') AS el_avg_dzer,
+  list_aggregate(list_transform(Electron, lambda x: x.jetidx), 'avg') AS el_avg_jet,
+  list_aggregate(list_transform(Electron, lambda x: x.genpartidx), 'avg') AS el_avg_gen,
+  list_aggregate(list_transform(Muon, lambda x: x.pt), 'avg') AS mu_avg_pt,
+  list_aggregate(list_transform(Muon, lambda x: x.eta), 'avg') AS mu_avg_eta,
+  list_aggregate(list_transform(Muon, lambda x: x.phi), 'avg') AS mu_avg_phi,
+  list_aggregate(list_transform(Muon, lambda x: x.mass), 'avg') AS mu_avg_mas,
+  list_aggregate(list_transform(Muon, lambda x: x.pfreliso03_all), 'avg') AS mu_avg_pf3,
+  list_aggregate(list_transform(Muon, lambda x: x.pfreliso04_all), 'avg') AS mu_avg_pf4,
+  list_aggregate(list_transform(Muon, lambda x: x.dxy), 'avg') AS mu_avg_dxy,
+  list_aggregate(list_transform(Muon, lambda x: x.dxyerr), 'avg') AS mu_avg_dxyer,
+  list_aggregate(list_transform(Muon, lambda x: x.dz), 'avg') AS mu_avg_dz,
+  list_aggregate(list_transform(Muon, lambda x: x.dzerr), 'avg') AS mu_avg_dzer,
+  list_aggregate(list_transform(Muon, lambda x: x.jetidx), 'avg') AS mu_avg_jet,
+  list_aggregate(list_transform(Muon, lambda x: x.genpartidx), 'avg') AS mu_avg_get
+  FROM run2012B_singleMu;

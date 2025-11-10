@@ -72,7 +72,7 @@ NULL
 query I
 select regr_slope(1,1)
 ----
-NULL
+NAN
 
 statement error
 select regr_slope(*)

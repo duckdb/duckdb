@@ -163,7 +163,7 @@ inline size_t /* OUT: bytesize of the decompressed string. If > size, the decode
 duckdb_fsst_decompress(
    duckdb_fsst_decoder_t *decoder,  /* IN: use this symbol table for compression. */
    size_t lenIn,             /* IN: byte-length of compressed string. */
-   unsigned char *strIn,     /* IN: compressed string. */
+   const unsigned char *strIn,     /* IN: compressed string. */
    size_t size,              /* IN: byte-length of output buffer. */
    unsigned char *output     /* OUT: memory buffer to put the decompressed string in. */
 ) {
@@ -172,7 +172,7 @@ duckdb_fsst_decompress(
    unsigned long long*__restrict__ symbol = (unsigned long long* __restrict__) decoder->symbol; 
    size_t code, posOut = 0, posIn = 0;
 #ifndef FSST_MUST_ALIGN /* defining on platforms that require aligned memory access may help their performance */
-#define FSST_UNALIGNED_STORE(dst,src) memcpy((unsigned long long*) (dst), &(src), sizeof(unsigned long long))
+#define FSST_UNALIGNED_STORE(dst,src) memcpy((void*) (dst), &(src), sizeof(unsigned long long))
 #if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
    while (posOut+32 <= size && posIn+4 <= lenIn) {
       unsigned int nextBlock, escapeMask;
@@ -196,7 +196,7 @@ duckdb_fsst_decompress(
          }
       }
    }
-   if (posOut+24 <= size) { // handle the possibly 3 last bytes without a loop
+   if (posOut+32 <= size) { // handle the possibly 3 last bytes without a loop
       if (posIn+2 <= lenIn) { 
 	 strOut[posOut] = strIn[posIn+1]; 
          if (strIn[posIn] != FSST_ESC) {

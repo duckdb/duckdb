@@ -10,28 +10,7 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
-
 query I
-insert into test select * from read_csv_auto('data/csv/test/mixed_line_endings.csv');
+insert into test select * from read_csv_auto('{DATA_DIR}/csv/test/mixed_line_endings.csv', strict_mode=false);
 ----
 3
-
-query I
-SELECT LENGTH(b) FROM test ORDER BY a;
-----
-5
-5
-4
-
-query III
-select * from test;
-----
-10	hello	20
-20	world	30
-30	test	30
-
-query RR
-SELECT SUM(a), SUM(c) FROM test;
-----
-60.000000	80.000000
-

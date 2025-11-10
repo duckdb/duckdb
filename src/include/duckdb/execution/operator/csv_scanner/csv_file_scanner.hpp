@@ -13,76 +13,70 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
 
 namespace duckdb {
 struct ReadCSVData;
 class CSVFileScan;
 
-struct CSVUnionData {
-	~CSVUnionData();
-
-	string file_name;
-	vector<string> names;
-	vector<LogicalType> types;
-	CSVReaderOptions options;
-	unique_ptr<CSVFileScan> reader;
-
-	const string &GetFileName() {
-		return file_name;
+struct CSVUnionData : public BaseUnionData {
+	explicit CSVUnionData(OpenFileInfo file_p) : BaseUnionData(std::move(file_p)) {
 	}
+	~CSVUnionData() override;
+
+	CSVReaderOptions options;
 };
 
 //! Struct holding information over a CSV File we will scan
-class CSVFileScan {
+class CSVFileScan : public BaseFileReader {
 public:
-	using UNION_READER_DATA = unique_ptr<CSVUnionData>;
-
-public:
-	//! Constructor for when a CSV File Scan is being constructed over information acquired during sniffing
-	//! This means the options are alreadu set, and the buffer manager is already up and runinng.
-	CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager,
-	            shared_ptr<CSVStateMachine> state_machine, const CSVReaderOptions &options,
-	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVSchema &file_schema);
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
-	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, const idx_t file_idx,
-	            const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVSchema &file_schema,
-	            bool per_file_single_threaded);
+	CSVFileScan(ClientContext &context, const OpenFileInfo &file, CSVReaderOptions options,
+	            const MultiFileOptions &file_options, const vector<string> &names, const vector<LogicalType> &types,
+	            CSVSchema &file_schema, bool per_file_single_threaded,
+	            shared_ptr<CSVBufferManager> buffer_manager = nullptr, bool fixed_schema = false);
 
-	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options);
+	CSVFileScan(ClientContext &context, const OpenFileInfo &file, const CSVReaderOptions &options,
+	            const MultiFileOptions &file_options);
 
+public:
 	void SetStart();
-	const string &GetFileName() const;
+	void SetNamesAndTypes(const vector<string> &names, const vector<LogicalType> &types);
+
+public:
+	string GetReaderType() const override {
+		return "CSV";
+	}
+
+	bool UseCastMap() const override {
+		//! Whether or not to push casts into the cast map
+		return true;
+	}
+
+	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
+	void PrepareReader(ClientContext &context, GlobalTableFunctionState &) override;
+	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
+	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
+	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
+	double GetProgressInFile(ClientContext &context) override;
+
+public:
+	idx_t GetFileIndex() const {
+		return file_list_idx.GetIndex();
+	}
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
 	void InitializeProjection();
 	void Finish();
 
-	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
-		auto data = make_uniq<CSVUnionData>();
-		if (file_idx == 0) {
-			data->file_name = scan_p->file_path;
-			data->options = scan_p->options;
-			data->names = scan_p->names;
-			data->types = scan_p->types;
-			data->reader = std::move(scan_p);
-		} else {
-			data->file_name = scan_p->file_path;
-			data->options = std::move(scan_p->options);
-			data->names = std::move(scan_p->names);
-			data->types = std::move(scan_p->types);
-		}
-		data->options.auto_detect = false;
-		return data;
-	}
-
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();
 
 public:
-	const string file_path;
-	//! File Index
-	idx_t file_idx;
 	//! Buffer Manager for the CSV File
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! State Machine for this file
@@ -96,10 +90,6 @@ public:
 	//! Whether or not this is an on-disk file
 	bool on_disk_file = true;
 
-	vector<string> names;
-	vector<LogicalType> types;
-	MultiFileReaderData reader_data;
-
 	vector<LogicalType> file_types;
 
 	//! Variables to handle projection pushdown
@@ -110,5 +100,18 @@ public:
 	CSVReaderOptions options;
 
 	CSVIterator start_iterator;
+
+	CSVValidator validator;
+	idx_t skipped_rows = 0;
+
+	//! The started tasks and finished tasks allow us to track if all reads of the CSV file have completed
+	//! Note that the "started_tasks" starts at one - this is so we can track when the scheduling of all tasks for this
+	//! file has completed When the scheduling is finished we increment `finished_tasks` by one as well
+	atomic<idx_t> started_tasks {1};
+	atomic<idx_t> finished_tasks {0};
+
+private:
+	vector<string> names;
+	vector<LogicalType> types;
 };
 } // namespace duckdb

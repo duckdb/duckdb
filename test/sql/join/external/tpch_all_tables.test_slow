@@ -1,0 +1,37 @@
+# name: test/sql/join/external/tpch_all_tables.test_slow
+# description: Join all tables in TPC-H together under a tight memory limit
+# group: [external]
+
+load __TEST_DIR__/tpch_all_tables.db
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1)
+
+statement ok
+SET threads=4;
+
+statement ok
+SET memory_limit='1GB';
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+SELECT min(COLUMNS(*))
+FROM customer c,
+     lineitem l,
+     nation n,
+     orders o,
+     part p,
+     partsupp ps,
+     region r,
+     supplier s
+WHERE c.c_custkey = o.o_custkey
+  AND n.n_nationkey = c.c_nationkey
+  AND o.o_orderkey = l.l_orderkey
+  AND p.p_partkey = ps.ps_partkey
+  AND ps.ps_partkey = l.l_partkey
+  AND ps.ps_suppkey = l.l_suppkey
+  AND r.r_regionkey = n.n_regionkey
+  AND s.s_suppkey = ps.ps_suppkey
+----
+1	Customer#000000001	   2Ksa,hc rgy7p	0	10-100-106-1617	-999.98	AUTOMOBILE	 Tiresias about the quickly express ideas detect quickly regular dependencies. even requests wake across the	1	1	1	1	1.00	901.00	0.00	0.00	A	F	1992-01-02	1992-01-31	1992-01-04	COLLECT COD	AIR	 Tiresias 	0	ALGERIA	0	 beans after the carefully regular accounts r	1	1	F	857.71	1992-01-01	1-URGENT	Clerk#000000001	0	 Tiresias about the quickly express ideas detect quickly regular depen	1	almond antique blue royal burnished	Manufacturer#1	Brand#11	ECONOMY ANODIZED BRASS	1	JUMBO BAG	901.00	 Tires	1	1	1	1.00	 Tiresias about the carefully even packages detect quickly silent packages. ironic, pending ideas about the slyly unusual dolphins wake permanently package	0	AFRICA	 foxes boost furiously along the carefully dogged tithes. slyly regular orbits according to the special epit	1	Supplier#000000001	  3TLxhVMgyjeZyud	0	10-102-116-6785	-998.22	 Tiresias cajole final excuses. c

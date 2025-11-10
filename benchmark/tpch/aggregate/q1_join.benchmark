@@ -2,16 +2,11 @@
 # description: Perform TPC-H Q1 including a nop join (FK-PK join)
 # group: [aggregate]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Q1 + Nop Join
 group aggregate
 subgroup tpch
-
-require tpch
-
-cache tpch_sf1.duckdb
-
-load
-CALL dbgen(sf=1);
 
 run
 SELECT l_returnflag,
@@ -33,4 +28,6 @@ GROUP BY l_returnflag,
 ORDER BY l_returnflag,
          l_linestatus
 
-result extension/tpch/dbgen/answers/sf1/q01.csv
+result extension/tpch/dbgen/answers/sf1/q01.csv sf=1
+
+result extension/tpch/dbgen/answers/sf100/q01.csv sf=100

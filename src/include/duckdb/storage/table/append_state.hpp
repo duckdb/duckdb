@@ -24,12 +24,14 @@ class LocalTableStorage;
 class RowGroup;
 class UpdateSegment;
 class TableCatalogEntry;
+template <class T>
+struct SegmentNode;
 
 struct TableAppendState;
 
 struct ColumnAppendState {
 	//! The current segment of the append
-	ColumnSegment *current;
+	optional_ptr<SegmentNode<ColumnSegment>> current;
 	//! Child append states
 	vector<ColumnAppendState> child_appends;
 	//! The write lock that is held by the append
@@ -67,11 +69,13 @@ struct TableAppendState {
 	//! The total number of rows appended by the append operation
 	idx_t total_append_count;
 	//! The first row-group that has been appended to
-	RowGroup *start_row_group;
+	optional_ptr<SegmentNode<RowGroup>> start_row_group;
 	//! The transaction data
 	TransactionData transaction;
 	//! Table statistics
 	TableStatistics stats;
+	//! Cached hash vector
+	Vector hashes;
 };
 
 struct ConstraintState {

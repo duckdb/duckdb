@@ -39,16 +39,8 @@ jobs:
     - name: Build with cov-build
       run: cov-analysis-linux64/bin/cov-build --dir cov-int make
       env:
-        PYTHON_USER_SPACE: 1
-        BUILD_PYTHON: 1
-        BUILD_AUTOCOMPLETE: 1
-        BUILD_ICU: 1
-        BUILD_TPCDS: 1
-        BUILD_TCPE: 1
-        BUILD_FTS: 1
-        BUILD_HTTPFS: 1
-        BUILD_JSON: 1
-        CORE_EXTENSIONS: "inet"
+        BUILD_TPCE: 1
+        CORE_EXTENSIONS: "autocomplete;icu;tpcds;tpch;fts;httpfs;json;inet"
 
     - name: Upload the result
       run: |

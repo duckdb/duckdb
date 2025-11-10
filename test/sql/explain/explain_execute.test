@@ -1,0 +1,20 @@
+# name: test/sql/explain/explain_execute.test
+# description: Test explain
+# group: [explain]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (NULL, NULL)
+
+statement ok
+PREPARE query AS SELECT * FROM integers
+
+query II
+EXPLAIN EXECUTE query
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*

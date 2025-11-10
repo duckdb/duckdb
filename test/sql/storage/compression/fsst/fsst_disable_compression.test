@@ -1,0 +1,39 @@
+# name: test/sql/storage/compression/fsst/fsst_disable_compression.test
+# description: Test disabling compresison
+# group: [fsst]
+
+require no_latest_storage
+
+require skip_reload
+
+# load the DB from disk
+load __TEST_DIR__/test_disabled_compression_methods.db readwrite v1.0.0
+
+statement ok
+CREATE TABLE test AS SELECT concat('longprefix', i) FROM range(30000) t(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('test') where segment_type = 'VARCHAR';
+----
+FSST
+
+statement ok
+DROP TABLE test
+
+statement ok
+SET disabled_compression_methods='fsst'
+
+# verify FSST is disabled
+statement ok
+CREATE TABLE test AS SELECT concat('longprefix', i) FROM range(30000) t(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT BOOL_OR(compression ILIKE 'fsst%') FROM pragma_storage_info('test')
+----
+false

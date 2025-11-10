@@ -5,10 +5,12 @@
 namespace duckdb {
 
 IndexTypeSet::IndexTypeSet() {
-	// Register the ART index type
+	// Register the ART index type by default
 	IndexType art_index_type;
 	art_index_type.name = ART::TYPE_NAME;
 	art_index_type.create_instance = ART::Create;
+	art_index_type.create_plan = ART::CreatePlan;
+
 	RegisterIndexType(art_index_type);
 }
 

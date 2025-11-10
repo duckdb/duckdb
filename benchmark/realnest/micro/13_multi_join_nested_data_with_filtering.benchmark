@@ -1,0 +1,28 @@
+# name: benchmark/realnest/micro/13_multi_join_nested_data_with_filtering.benchmark
+# description: Multiple join conditions and filtering on merged and closed pull requests
+# group: [micro]
+
+name multi_join_nested_data_with_filtering
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT gh_pull.pull_request.base.repo.language AS language,
+    gh_issue.issue.user.login AS login,
+    gh_pull.pull_request.title AS title,
+    gh_pull.pull_request.html_url AS url
+FROM gh_issue, gh_pull 
+WHERE gh_pull.pull_request.base.repo.owner = gh_issue.issue.user
+    AND gh_pull.pull_request.user = gh_pull.pull_request.base.repo.owner
+    AND gh_issue.issue.assignee = gh_pull.pull_request.base.repo.owner
+    AND gh_pull.pull_request.assignee = gh_pull.pull_request.base.repo.owner
+    AND gh_pull.pull_request.merged = 'true'
+    AND gh_pull.pull_request.state = 'closed'
+ORDER BY language, title;

@@ -1,8 +1,6 @@
 # name: test/sql/storage/temp_directory/max_swap_space_inmemory.test
 # group: [temp_directory]
 
-require noforcestorage
-
 require skip_reload
 
 # In in-memory mode, the 'temp_directory' defaults to '.tmp'
@@ -14,14 +12,14 @@ statement ok
 set temp_directory='';
 
 statement ok
-PRAGMA memory_limit='2MB'
+PRAGMA memory_limit='3MB'
 
 # --- Set by default to 0 when temp_directory is empty ---
 
 query I
 select current_setting('max_temp_directory_size')
 ----
-0 bytes
+90% of available disk space
 
 # Set the max size explicitly
 statement ok
@@ -39,7 +37,7 @@ reset max_temp_directory_size;
 query I
 select current_setting('max_temp_directory_size')
 ----
-0 bytes
+90% of available disk space
 
 # --- Set by default to the available disk space when temp_directory exists ---
 
@@ -50,7 +48,7 @@ set temp_directory = '__TEST_DIR__';
 query I
 select current_setting('max_temp_directory_size')
 ----
-0 bytes
+90% of available disk space
 
 # --- Set explicitly by the user ---
 
@@ -69,7 +67,7 @@ select current_setting('max_temp_directory_size')
 
 # When we change the temp_directory to something that doesnt exist
 statement ok
-set temp_directory = '__TEST_DIR__/does_not_exist'
+set temp_directory = '__TEST_DIR__/does_not_exist3'
 
 query I nosort unchanged
 select current_setting('max_temp_directory_size')
@@ -99,12 +97,12 @@ reset max_temp_directory_size;
 
 # When we change the temp_directory to something that doesnt exist
 statement ok
-set temp_directory = '__TEST_DIR__/does_not_exist'
+set temp_directory = '__TEST_DIR__/does_not_exist4'
 
 query I
 select current_setting('max_temp_directory_size')
 ----
-0 bytes
+90% of available disk space
 
 statement ok
 CREATE TABLE t2 AS SELECT * FROM range(1000000);

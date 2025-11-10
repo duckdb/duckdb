@@ -19,8 +19,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RIGHT_DELIM_JOIN;
 
 public:
-	PhysicalRightDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-	                       vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality,
+	PhysicalRightDelimJoin(PhysicalPlan &physical_plan, PhysicalPlanGenerator &planner, vector<LogicalType> types,
+	                       PhysicalOperator &original_join, PhysicalOperator &distinct,
+	                       const vector<const_reference<PhysicalOperator>> &delim_scans, idx_t estimated_cardinality,
 	                       optional_idx delim_idx);
 
 public:

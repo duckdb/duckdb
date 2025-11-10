@@ -1,6 +1,9 @@
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -11,17 +14,24 @@ ColumnDataAllocator::ColumnDataAllocator(Allocator &allocator) : type(ColumnData
 	alloc.allocator = &allocator;
 }
 
-ColumnDataAllocator::ColumnDataAllocator(BufferManager &buffer_manager)
+ColumnDataAllocator::ColumnDataAllocator(BufferManager &buffer_manager, ColumnDataCollectionLifetime lifetime)
     : type(ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
 	alloc.buffer_manager = &buffer_manager;
+	if (lifetime == ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES) {
+		managed_result_set = ResultSetManager::Get(buffer_manager.GetDatabase()).Add(*this);
+	}
 }
 
-ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type)
+ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type,
+                                         ColumnDataCollectionLifetime lifetime)
     : type(allocator_type) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
 	case ColumnDataAllocatorType::HYBRID:
 		alloc.buffer_manager = &BufferManager::GetBufferManager(context);
+		if (lifetime == ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES) {
+			managed_result_set = ResultSetManager::Get(context).Add(*this);
+		}
 		break;
 	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
 		alloc.allocator = &Allocator::Get(context);
@@ -36,10 +46,13 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
 	case ColumnDataAllocatorType::HYBRID:
-		alloc.allocator = other.alloc.allocator;
+		alloc.buffer_manager = other.alloc.buffer_manager;
+		if (other.managed_result_set.IsValid()) {
+			ResultSetManager::Get(alloc.buffer_manager->GetDatabase()).Add(*this);
+		}
 		break;
 	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
-		alloc.buffer_manager = other.alloc.buffer_manager;
+		alloc.allocator = other.alloc.allocator;
 		break;
 	default:
 		throw InternalException("Unrecognized column data allocator type");
@@ -50,15 +63,18 @@ ColumnDataAllocator::~ColumnDataAllocator() {
 	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		return;
 	}
+	if (managed_result_set.IsValid()) {
+		D_ASSERT(type != ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
+		auto db = managed_result_set.GetDatabase();
+		if (db) {
+			ResultSetManager::Get(*db).Remove(*this);
+		}
+		return;
+	}
 	for (auto &block : blocks) {
-		block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+		block.GetHandle()->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 	}
-	const auto data_size = SizeInBytes();
 	blocks.clear();
-	if (Allocator::SupportsFlush() &&
-	    data_size > alloc.buffer_manager->GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
-		Allocator::FlushAll();
-	}
 }
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
@@ -68,9 +84,9 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 		// we only need to grab the lock when accessing the vector, because vector access is not thread-safe:
 		// the vector can be resized by another thread while we try to access it
 		lock_guard<mutex> guard(lock);
-		handle = blocks[block_id].handle;
+		handle = blocks[block_id].GetHandle();
 	} else {
-		handle = blocks[block_id].handle;
+		handle = blocks[block_id].GetHandle();
 	}
 	return alloc.buffer_manager->Pin(handle);
 }
@@ -82,8 +98,11 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	data.size = 0;
 	data.capacity = NumericCast<uint32_t>(max_size);
 	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false);
-	data.handle = pin.GetBlockHandle();
+	data.SetHandle(managed_result_set, pin.GetBlockHandle());
 	blocks.push_back(std::move(data));
+	if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
+		blocks.back().GetHandle()->SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+	}
 	allocated_size += max_size;
 	return pin;
 }
@@ -99,7 +118,6 @@ void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	BlockMetaData data;
 	data.size = 0;
 	data.capacity = NumericCast<uint32_t>(allocation_amount);
-	data.handle = nullptr;
 	blocks.push_back(std::move(data));
 	allocated_size += allocation_amount;
 }
@@ -132,7 +150,8 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 	block_id = NumericCast<uint32_t>(blocks.size() - 1);
 	if (chunk_state && chunk_state->handles.find(block_id) == chunk_state->handles.end()) {
 		// not guaranteed to be pinned already by this thread (if shared allocator)
-		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(blocks[block_id].handle);
+		auto handle = blocks[block_id].GetHandle();
+		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(handle);
 	}
 	offset = block.size;
 	block.size += size;
@@ -196,49 +215,58 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	return state.handles[block_id].Ptr() + offset;
 }
 
-void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result, idx_t v_offset, uint16_t count,
-                                            uint32_t block_id, uint32_t offset) {
+void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result,
+                                            SwizzleMetaData &swizzle_segment, const VectorMetaData &string_heap_segment,
+                                            const idx_t &v_offset, const bool &copied) {
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 	lock_guard<mutex> guard(lock);
-
-	auto &validity = FlatVector::Validity(result);
-	auto strings = FlatVector::GetData<string_t>(result);
-
-	// find first non-inlined string
-	auto i = NumericCast<uint32_t>(v_offset);
-	const uint32_t end = NumericCast<uint32_t>(v_offset + count);
-	for (; i < end; i++) {
-		if (!validity.RowIsValid(i)) {
-			continue;
-		}
-		if (!strings[i].IsInlined()) {
-			break;
-		}
-	}
-	// at least one string must be non-inlined, otherwise this function should not be called
-	D_ASSERT(i < end);
-
-	auto base_ptr = char_ptr_cast(GetDataPointer(state, block_id, offset));
-	if (strings[i].GetData() == base_ptr) {
-		// pointers are still valid
-		return;
+	const auto old_base_ptr = char_ptr_cast(swizzle_segment.ptr);
+	const auto new_base_ptr =
+	    char_ptr_cast(GetDataPointer(state, string_heap_segment.block_id, string_heap_segment.offset));
+	if (old_base_ptr == new_base_ptr) {
+		return; // pointers are still valid
 	}
 
-	// pointer mismatch! pointers are invalid, set them correctly
-	for (; i < end; i++) {
-		if (!validity.RowIsValid(i)) {
+	const auto &validity = FlatVector::Validity(result);
+	const auto strings = FlatVector::GetData<string_t>(result);
+
+	// recompute pointers
+	const auto start = NumericCast<idx_t>(v_offset + swizzle_segment.offset);
+	const auto end = start + NumericCast<idx_t>(swizzle_segment.count);
+	for (idx_t i = start; i < end; i++) {
+		auto &str = strings[i];
+		if (!validity.RowIsValid(i) || str.IsInlined()) {
 			continue;
 		}
-		if (strings[i].IsInlined()) {
-			continue;
+		const auto str_offset = str.GetPointer() - old_base_ptr;
+		D_ASSERT(str_offset >= 0);
+		str.SetPointer(new_base_ptr + str_offset);
+#ifdef D_ASSERT_IS_ENABLED
+		if (result.GetType() == LogicalType::VARCHAR) {
+			str.Verify();
 		}
-		strings[i].SetPointer(base_ptr);
-		base_ptr += strings[i].GetSize();
+#endif
+	}
+
+	if (!copied) {
+		// if the data was not copied, we modified data on the blocks. store the new base ptr
+		swizzle_segment.ptr = data_ptr_cast(new_base_ptr);
 	}
 }
 
 void ColumnDataAllocator::SetDestroyBufferUponUnpin(uint32_t block_id) {
-	blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	blocks[block_id].GetHandle()->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+}
+
+shared_ptr<DatabaseInstance> ColumnDataAllocator::GetDatabase() const {
+	if (!managed_result_set.IsValid()) {
+		return nullptr;
+	}
+	auto db = managed_result_set.GetDatabase();
+	if (!db) {
+		throw ConnectionException("Trying to access a query result after the database instance has been closed");
+	}
+	return db;
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {
@@ -282,6 +310,26 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 			continue;
 		}
 		state.handles[block_id] = Pin(block_id);
+	}
+}
+
+shared_ptr<BlockHandle> BlockMetaData::GetHandle() const {
+	if (handle) {
+		return handle;
+	}
+	auto res = weak_handle.lock();
+	if (!res) {
+		throw ConnectionException("Trying to access a query result after the database instance has been closed");
+	}
+	return res;
+}
+
+void BlockMetaData::SetHandle(ManagedResultSet &managed_result_set, shared_ptr<BlockHandle> handle_p) {
+	if (managed_result_set.IsValid()) {
+		managed_result_set.GetHandles().emplace_back(handle_p);
+		weak_handle = handle_p;
+	} else {
+		handle = std::move(handle_p);
 	}
 }
 

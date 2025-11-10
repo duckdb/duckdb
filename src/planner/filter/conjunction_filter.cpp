@@ -1,4 +1,5 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
@@ -6,7 +7,7 @@ namespace duckdb {
 ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
 }
 
-FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) const {
 	// the OR filter is true if ANY of the children is true
 	D_ASSERT(!child_filters.empty());
 	for (auto &filter : child_filters) {
@@ -20,7 +21,7 @@ FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats
 	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
-string ConjunctionOrFilter::ToString(const string &column_name) {
+string ConjunctionOrFilter::ToString(const string &column_name) const {
 	string result;
 	for (idx_t i = 0; i < child_filters.size(); i++) {
 		if (i > 0) {
@@ -66,7 +67,7 @@ unique_ptr<Expression> ConjunctionOrFilter::ToExpression(const Expression &colum
 ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
 }
 
-FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) const {
 	// the AND filter is true if ALL of the children is true
 	D_ASSERT(!child_filters.empty());
 	auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
@@ -81,7 +82,7 @@ FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stat
 	return result;
 }
 
-string ConjunctionAndFilter::ToString(const string &column_name) {
+string ConjunctionAndFilter::ToString(const string &column_name) const {
 	string result;
 	for (idx_t i = 0; i < child_filters.size(); i++) {
 		if (i > 0) {

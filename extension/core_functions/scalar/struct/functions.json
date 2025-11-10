@@ -1,0 +1,16 @@
+[
+    {
+        "name": "struct_insert",
+        "parameters": "struct,any",
+        "description": "Adds field(s)/value(s) to an existing STRUCT with the argument values. The entry name(s) will be the bound variable name(s)",
+        "example": "struct_insert({'a': 1}, b := 2)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "struct_update",
+        "parameters": "struct,any",
+        "description": "Changes field(s)/value(s) to an existing STRUCT with the argument values. The entry name(s) will be the bound variable name(s)",
+        "example": "struct_update({'a': 1}, a := 2)",
+        "type": "scalar_function"
+    }
+]

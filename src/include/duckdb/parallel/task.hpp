@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -50,6 +51,13 @@ public:
 	virtual bool TaskBlockedOnResult() const {
 		return false;
 	}
+
+	virtual string TaskType() const {
+		return "UnnamedTask";
+	}
+
+public:
+	optional_ptr<ProducerToken> token;
 };
 
 } // namespace duckdb

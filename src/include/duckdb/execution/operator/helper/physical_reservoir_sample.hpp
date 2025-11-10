@@ -18,8 +18,10 @@ namespace duckdb {
 
 class PhysicalReservoirSample : public PhysicalOperator {
 public:
-	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::RESERVOIR_SAMPLE, std::move(types), estimated_cardinality),
+	PhysicalReservoirSample(PhysicalPlan &physical_plan, vector<LogicalType> types, unique_ptr<SampleOptions> options,
+	                        idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::RESERVOIR_SAMPLE, std::move(types),
+	                       estimated_cardinality),
 	      options(std::move(options)) {
 	}
 
@@ -41,7 +43,7 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 	bool ParallelSink() const override {
-		return true;
+		return !options->repeatable;
 	}
 
 	bool IsSink() const override {

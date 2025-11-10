@@ -8,21 +8,23 @@
 
 #pragma once
 
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/extension.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
-#include "duckdb/main/extension_install_info.hpp"
-#include "duckdb/main/settings.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/extension.hpp"
+#include "duckdb/main/valid_checker.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_manager.hpp"
 
 namespace duckdb {
+
 class BufferManager;
 class DatabaseManager;
 class StorageManager;
 class Catalog;
 class TransactionManager;
 class ConnectionManager;
+class ExtensionManager;
 class FileSystem;
 class TaskScheduler;
 class ObjectCache;
@@ -30,12 +32,9 @@ struct AttachInfo;
 struct AttachOptions;
 class DatabaseFileSystem;
 struct DatabaseCacheEntry;
-
-struct ExtensionInfo {
-	bool is_loaded;
-	unique_ptr<ExtensionInstallInfo> install_info;
-	unique_ptr<ExtensionLoadedInfo> load_info;
-};
+class LogManager;
+class ExternalFileCache;
+class ResultSetManager;
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -53,29 +52,30 @@ public:
 	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
+	DUCKDB_API ExternalFileCache &GetExternalFileCache();
+	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
+	DUCKDB_API ExtensionManager &GetExtensionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
-	DUCKDB_API void SetExtensionLoaded(const string &extension_name, ExtensionInstallInfo &install_info);
+	DUCKDB_API LogManager &GetLogManager() const;
 
-	DUCKDB_API const duckdb_ext_api_v0 GetExtensionAPIV0();
+	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
 
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 
-	DUCKDB_API const unordered_map<string, ExtensionInfo> &GetExtensions();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
-	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-	                                                    const AttachOptions &options);
+	DUCKDB_API shared_ptr<EncryptionUtil> GetEncryptionUtil() const;
 
-	void AddExtensionInfo(const string &name, const ExtensionLoadedInfo &info);
-	void SetDatabaseCacheEntry(shared_ptr<DatabaseCacheEntry> entry);
+	shared_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
+	                                                    AttachOptions &options);
 
 private:
 	void Initialize(const char *path, DBConfig *config);
@@ -90,12 +90,14 @@ private:
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
-	unordered_map<string, ExtensionInfo> loaded_extensions_info;
+	unique_ptr<ExtensionManager> extension_manager;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
-	shared_ptr<DatabaseCacheEntry> db_cache_entry;
+	unique_ptr<LogManager> log_manager;
+	unique_ptr<ExternalFileCache> external_file_cache;
+	unique_ptr<ResultSetManager> result_set_manager;
 
-	duckdb_ext_api_v0 (*create_api_v0)();
+	duckdb_ext_api_v1 (*create_api_v1)();
 };
 
 //! The database object. This object holds the catalog and all the
@@ -116,24 +118,26 @@ public:
 	template <class T>
 	void LoadStaticExtension() {
 		T extension;
-		if (ExtensionIsLoaded(extension.Name())) {
+		auto &manager = ExtensionManager::Get(*instance);
+		auto load_info = manager.BeginLoad(extension.Name());
+		if (!load_info) {
+			// already loaded - return
 			return;
 		}
-		extension.Load(*this);
+
+		// Instantiate a new loader
+		ExtensionLoader loader(*load_info);
+
+		// Call the Load method of the extension
+		extension.Load(loader);
+
+		// Finalize the loading process
+		loader.FinalizeLoad();
+
 		ExtensionInstallInfo install_info;
 		install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
 		install_info.version = extension.Version();
-		instance->SetExtensionLoaded(extension.Name(), install_info);
-	}
-
-	// DEPRECATED function that some extensions may still use to call their own Load method from the
-	// _init function of their loadable extension. Don't use this. Instead opt for a static LoadInternal function called
-	// from both the _init function and the Extension::Load. (see autocomplete extension)
-	// TODO: when to remove this function?
-	template <class T>
-	void LoadExtension() {
-		T extension;
-		extension.Load(*this);
+		load_info->FinishLoad(install_info);
 	}
 
 	DUCKDB_API FileSystem &GetFileSystem();
@@ -141,6 +145,7 @@ public:
 	DUCKDB_API idx_t NumberOfThreads();
 	DUCKDB_API static const char *SourceID();
 	DUCKDB_API static const char *LibraryVersion();
+	DUCKDB_API static const char *ReleaseCodename();
 	DUCKDB_API static idx_t StandardVectorSize();
 	DUCKDB_API static string Platform();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);

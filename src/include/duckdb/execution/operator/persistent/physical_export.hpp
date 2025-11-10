@@ -14,6 +14,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/catalog/catalog_entry_map.hpp"
 
 namespace duckdb {
 
@@ -33,18 +34,15 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXPORT;
 
 public:
-	PhysicalExport(vector<LogicalType> types, CopyFunction function, unique_ptr<CopyInfo> info,
-	               idx_t estimated_cardinality, BoundExportData exported_tables)
-	    : PhysicalOperator(PhysicalOperatorType::EXPORT, std::move(types), estimated_cardinality),
-	      function(std::move(function)), info(std::move(info)), exported_tables(std::move(exported_tables)) {
-	}
+	PhysicalExport(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
+	               unique_ptr<CopyInfo> info, idx_t estimated_cardinality, unique_ptr<BoundExportData> exported_tables);
 
 	//! The copy function to use to read the file
 	CopyFunction function;
 	//! The binding info containing the set of options for reading the file
 	unique_ptr<CopyInfo> info;
 	//! The table info for each table that will be exported
-	BoundExportData exported_tables;
+	unique_ptr<BoundExportData> exported_tables;
 
 public:
 	// Source interface

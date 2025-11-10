@@ -83,7 +83,53 @@ end
         (; col_name = :nothingval, duck_type = "INTEGER", append_value = nothing, ref_value = missing),
         (; col_name = :largeval, duck_type = "INTEGER", append_value = Int32(2^16)),
         (; col_name = :uuid, duck_type = "UUID", append_value = uuid),
-        (; col_name = :varchar, duck_type = "VARCHAR", append_value = "Foo")
+        (; col_name = :varchar, duck_type = "VARCHAR", append_value = "Foo"),
+        # lists
+        (; col_name = :list_bool, duck_type = "BOOLEAN[]", append_value = Vector{Bool}([true, false, true])),
+        (; col_name = :list_int8, duck_type = "TINYINT[]", append_value = Vector{Int8}([1, -2, 3])),
+        (; col_name = :list_int16, duck_type = "SMALLINT[]", append_value = Vector{Int16}([1, -2, 3])),
+        (; col_name = :list_int32, duck_type = "INTEGER[]", append_value = Vector{Int32}([1, -2, 3])),
+        (; col_name = :list_int64, duck_type = "BIGINT[]", append_value = Vector{Int64}([1, -2, 3])),
+        (;
+            col_name = :list_int128,
+            duck_type = "HUGEINT[]",
+            append_value = Vector{Int128}([Int128(1), Int128(-2), Int128(3)])
+        ),
+        # (; col_name = :list_uint8, duck_type = "UTINYINT[]", append_value = Vector{UInt8}([1, 2, 3])),
+        (; col_name = :list_uint16, duck_type = "USMALLINT[]", append_value = Vector{UInt16}([1, 2, 3])),
+        (; col_name = :list_uint32, duck_type = "UINTEGER[]", append_value = Vector{UInt32}([1, 2, 3])),
+        (; col_name = :list_uint64, duck_type = "UBIGINT[]", append_value = Vector{UInt64}([1, 2, 3])),
+        (;
+            col_name = :list_uint128,
+            duck_type = "UHUGEINT[]",
+            append_value = Vector{UInt128}([UInt128(1), UInt128(2), UInt128(3)])
+        ),
+        (; col_name = :list_float, duck_type = "FLOAT[]", append_value = Vector{Float32}([1.0, 2.0, 3.0])),
+        (; col_name = :list_double, duck_type = "DOUBLE[]", append_value = Vector{Float64}([1.0, 2.0, 3.0])),
+        (; col_name = :list_string, duck_type = "VARCHAR[]", append_value = Vector{String}(["a", "bb", "ccc"])),
+        (;
+            col_name = :list_date,
+            duck_type = "DATE[]",
+            append_value = Vector{Dates.Date}([
+                Dates.Date("1970-01-01"),
+                Dates.Date("1970-01-02"),
+                Dates.Date("1970-01-03")
+            ])
+        ),
+        (;
+            col_name = :list_time,
+            duck_type = "TIME[]",
+            append_value = Vector{Dates.Time}([Dates.Time(1), Dates.Time(1, 2), Dates.Time(1, 2, 3)])
+        ),
+        (;
+            col_name = :list_timestamp,
+            duck_type = "TIMESTAMP[]",
+            append_value = Vector{Dates.DateTime}([
+                Dates.DateTime("1970-01-01T00:00:00"),
+                Dates.DateTime("1970-01-02T00:00:00"),
+                Dates.DateTime("1970-01-03T00:00:00")
+            ])
+        )
     ]
 
     sql = """CREATE TABLE dtypes(

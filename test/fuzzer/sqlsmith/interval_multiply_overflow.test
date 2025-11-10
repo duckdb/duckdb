@@ -11,4 +11,4 @@ statement error
 SELECT multiply("interval", "bigint") 
 FROM all_types;
 ----
-the value is out of range for the destination type INT32
+can't be cast because the value is out of range for the destination type INT32

@@ -4,25 +4,22 @@
 
 load __TEST_DIR__/test_art_names.db
 
-statement ok
-PRAGMA enable_verification;
-
-# test PKs and UNIQUE
+# Test PKs and UNIQUE constraints.
 
 statement ok
 CREATE TABLE tbl (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
 
-# names match the internal constraint names
+# Test that index names match the internal constraints.
 
 statement error
 CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*An index with the name PRIMARY_tbl_0 already exists.*
 
 statement error
 CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
 ----
-already exists
+<REGEX>:Catalog Error.*An index with the name UNIQUE_tbl_1 already exists.*
 
 statement ok
 INSERT INTO tbl SELECT range, range FROM range (3000);
@@ -30,46 +27,46 @@ INSERT INTO tbl SELECT range, range FROM range (3000);
 statement error
 INSERT INTO tbl VALUES (4000, 20);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 statement error
 INSERT INTO tbl VALUES (20, 4000);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 restart
 
-# test that we deserialized the index names correctly
+# Test index name deserialization.
 
 statement error
 INSERT INTO tbl VALUES (4000, 20);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 statement error
 INSERT INTO tbl VALUES (20, 4000);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement error
 CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*An index with the name PRIMARY_tbl_0 already exists.*
 
 statement error
 CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
 ----
-already exists
+<REGEX>:Catalog Error.*An index with the name UNIQUE_tbl_1 already exists.*
 
 statement error
 INSERT INTO tbl VALUES (20, 4000);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement error
 INSERT INTO tbl VALUES (4000, 20);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 restart
 
@@ -78,7 +75,7 @@ DROP TABLE tbl;
 
 restart
 
-# test PKs, FKs, and UNIQUE
+# Test PKs, FKs, and UNIQUE constraints.
 
 statement ok
 CREATE TABLE tbl (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
@@ -94,124 +91,124 @@ INSERT INTO tbl SELECT range, range FROM range (3000);
 statement ok
 INSERT INTO fk_tbl SELECT range, range FROM range (3000);
 
-# check all constraints
+# Check all constraint violations and catalog errors.
 
 statement error
 INSERT INTO tbl VALUES (4000, 20);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 statement error
 INSERT INTO tbl VALUES (20, 4000);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement error
 INSERT INTO fk_tbl VALUES (4000, 20);
 ----
-foreign key constraint
+<REGEX>:Constraint Error.*Violates foreign key constraint because key.*does not exist in the referenced table.*
 
 statement error
 INSERT INTO fk_tbl VALUES (20, 4000);
 ----
-foreign key constraint
+<REGEX>:Constraint Error.*Violates foreign key constraint because key.*does not exist in the referenced table.*
 
 statement error
 CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name PRIMARY_tbl_0 already exists.*
 
 statement error
 CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name UNIQUE_tbl_1 already exists.*
 
-# fails on the FK table
+# Fails on the FK table.
 
 statement error
 CREATE INDEX FOREIGN_fk_tbl_0 ON fk_tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name FOREIGN_fk_tbl_0 already exists.*
 
 statement error
 CREATE INDEX FOREIGN_fk_tbl_1 ON fk_tbl(j);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name FOREIGN_fk_tbl_1 already exists.*
 
-# check all constraints
+# Check all constraint violations and catalog errors.
 
 statement error
 INSERT INTO tbl VALUES (4000, 20);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 statement error
 INSERT INTO tbl VALUES (20, 4000);
 ----
-constraint violation
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement error
 INSERT INTO fk_tbl VALUES (4000, 20);
 ----
-foreign key constraint
+<REGEX>:Constraint Error.*Violates foreign key constraint because key.*does not exist in the referenced table.*
 
 statement error
 INSERT INTO fk_tbl VALUES (20, 4000);
 ----
-foreign key constraint
+<REGEX>:Constraint Error.*Violates foreign key constraint because key.*does not exist in the referenced table.*
 
 statement error
 CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name PRIMARY_tbl_0 already exists.*
 
 statement error
 CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name UNIQUE_tbl_1 already exists.*
 
 restart
 
 statement error
 CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name PRIMARY_tbl_0 already exists.*
 
 statement error
 CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name UNIQUE_tbl_1 already exists.*
 
-# fails on the FK table
+# Fails on the FK table.
 
 statement error
 CREATE INDEX FOREIGN_fk_tbl_0 ON fk_tbl(i);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name FOREIGN_fk_tbl_0 already exists.*
 
 statement error
 CREATE INDEX FOREIGN_fk_tbl_1 ON fk_tbl(j);
 ----
-already exists
+<REGEX>:Catalog Error.*index with the name FOREIGN_fk_tbl_1 already exists.*
 
-# check all constraints
+# Check all constraint errors.
 
 statement error
 INSERT INTO tbl VALUES (4000, 20);
 ----
-constraint violation
+<REGEX>:Constraint Error.*Duplicate key "j: 20" violates unique constraint.*
 
 statement error
 INSERT INTO tbl VALUES (20, 4000);
 ----
-constraint violation
+<REGEX>:Constraint Error.*Duplicate key "i: 20" violates primary key constraint.*
 
 statement error
 INSERT INTO fk_tbl VALUES (4000, 20);
 ----
-foreign key constraint
+<REGEX>:Constraint Error.*Violates foreign key constraint because key "i: 4000" does not exist in the referenced table.*
 
 statement error
 INSERT INTO fk_tbl VALUES (20, 4000);
 ----
-foreign key constraint
+<REGEX>:Constraint Error.*Violates foreign key constraint because key "j: 4000" does not exist in the referenced table.*

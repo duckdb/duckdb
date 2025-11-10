@@ -17,10 +17,11 @@ LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-                       vector<LogicalType> returned_types, vector<string> returned_names)
+                       vector<LogicalType> returned_types, vector<string> returned_names,
+                       virtual_column_map_t virtual_columns_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
       bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)),
-      extra_info() {
+      virtual_columns(std::move(virtual_columns_p)), extra_info() {
 }
 
 optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
@@ -48,6 +49,10 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	}
 	result["Filters"] = filters_info;
 
+	if (extra_info.sample_options) {
+		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+	}
+
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;
 		if (extra_info.filtered_files.IsValid() && extra_info.total_files.IsValid()) {
@@ -57,29 +62,33 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	}
 
 	if (function.to_string) {
-		result["__text__"] = function.to_string(bind_data.get());
+		TableFunctionToStringInput input(function, bind_data.get());
+		auto to_string_result = function.to_string(input);
+		for (const auto &it : to_string_result) {
+			result[it.first] = it.second;
+		}
 	}
 	SetParamsEstimatedCardinality(result);
 	return result;
 }
 
-void LogicalGet::SetColumnIds(vector<column_t> &&column_ids) {
+void LogicalGet::SetColumnIds(vector<ColumnIndex> &&column_ids) {
 	this->column_ids = std::move(column_ids);
 }
 
 void LogicalGet::AddColumnId(column_t column_id) {
-	column_ids.push_back(column_id);
+	column_ids.emplace_back(column_id);
 }
 
 void LogicalGet::ClearColumnIds() {
 	column_ids.clear();
 }
 
-const vector<column_t> &LogicalGet::GetColumnIds() const {
+const vector<ColumnIndex> &LogicalGet::GetColumnIds() const {
 	return column_ids;
 }
 
-vector<column_t> &LogicalGet::GetMutableColumnIds() {
+vector<ColumnIndex> &LogicalGet::GetMutableColumnIds() {
 	return column_ids;
 }
 
@@ -110,27 +119,57 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	return result;
 }
 
+const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
+	if (index.IsVirtualColumn()) {
+		auto entry = virtual_columns.find(index.GetPrimaryIndex());
+		if (entry == virtual_columns.end()) {
+			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
+		}
+		return entry->second.type;
+	}
+	return returned_types[index.GetPrimaryIndex()];
+}
+
+const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
+	if (index.IsVirtualColumn()) {
+		auto entry = virtual_columns.find(index.GetPrimaryIndex());
+		if (entry == virtual_columns.end()) {
+			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
+		}
+		return entry->second.name;
+	}
+	return names[index.GetPrimaryIndex()];
+}
+
+column_t LogicalGet::GetAnyColumn() const {
+	auto entry = virtual_columns.find(COLUMN_IDENTIFIER_EMPTY);
+	if (entry != virtual_columns.end()) {
+		// return the empty column if the projection supports it
+		return COLUMN_IDENTIFIER_EMPTY;
+	}
+	entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
+	if (entry != virtual_columns.end()) {
+		// return the rowid column if the projection supports it
+		return COLUMN_IDENTIFIER_ROW_ID;
+	}
+	// otherwise return the first column
+	return 0;
+}
+
 void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
-		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+		// no projection - we need to push a column
+		column_ids.emplace_back(GetAnyColumn());
 	}
 	types.clear();
 	if (projection_ids.empty()) {
 		for (auto &index : column_ids) {
-			if (index == COLUMN_IDENTIFIER_ROW_ID) {
-				types.emplace_back(LogicalType::ROW_TYPE);
-			} else {
-				types.push_back(returned_types[index]);
-			}
+			types.push_back(GetColumnType(index));
 		}
 	} else {
 		for (auto &proj_index : projection_ids) {
 			auto &index = column_ids[proj_index];
-			if (index == COLUMN_IDENTIFIER_ROW_ID) {
-				types.emplace_back(LogicalType::ROW_TYPE);
-			} else {
-				types.push_back(returned_types[index]);
-			}
+			types.push_back(GetColumnType(index));
 		}
 	}
 	if (!projected_input.empty()) {
@@ -166,7 +205,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
 	serializer.WriteProperty(202, "names", names);
-	serializer.WriteProperty(203, "column_ids", column_ids);
+	/* [Deleted] (vector<column_t>) "column_ids" */
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
 	FunctionSerializer::Serialize(serializer, function, bind_data.get());
@@ -179,14 +218,19 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 		serializer.WriteProperty(209, "input_table_names", input_table_names);
 	}
 	serializer.WriteProperty(210, "projected_input", projected_input);
+	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
+	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
+	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", ordinality_idx);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
+	vector<column_t> legacy_column_ids;
+
 	auto result = unique_ptr<LogicalGet>(new LogicalGet());
 	deserializer.ReadProperty(200, "table_index", result->table_index);
 	deserializer.ReadProperty(201, "returned_types", result->returned_types);
 	deserializer.ReadProperty(202, "names", result->names);
-	deserializer.ReadProperty(203, "column_ids", result->column_ids);
+	deserializer.ReadPropertyWithDefault(203, "column_ids", legacy_column_ids);
 	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
 	auto entry = FunctionSerializer::DeserializeBase<TableFunction, TableFunctionCatalogEntry>(
@@ -194,13 +238,31 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	result->function = entry.first;
 	auto &function = result->function;
 	auto has_serialize = entry.second;
-
 	unique_ptr<FunctionData> bind_data;
 	if (!has_serialize) {
 		deserializer.ReadProperty(206, "parameters", result->parameters);
 		deserializer.ReadProperty(207, "named_parameters", result->named_parameters);
 		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
 		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
+	} else {
+		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
+	}
+	deserializer.ReadProperty(210, "projected_input", result->projected_input);
+	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
+	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
+	deserializer.ReadPropertyWithDefault<optional_idx>(213, "ordinality_idx", result->ordinality_idx);
+	if (!legacy_column_ids.empty()) {
+		if (!result->column_ids.empty()) {
+			throw SerializationException(
+			    "LogicalGet::Deserialize - either column_ids or column_indexes should be set - not both");
+		}
+		for (auto &col_id : legacy_column_ids) {
+			result->column_ids.emplace_back(col_id);
+		}
+	}
+	auto &context = deserializer.Get<ClientContext &>();
+	virtual_column_map_t virtual_columns;
+	if (!has_serialize) {
 		TableFunctionRef empty_ref;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
@@ -211,27 +273,40 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		if (!function.bind) {
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
-		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
-
+		bind_data = function.bind(context, input, bind_return_types, bind_names);
+		if (result->ordinality_idx.IsValid()) {
+			auto ordinality_pos = bind_return_types.begin() + NumericCast<int64_t>(result->ordinality_idx.GetIndex());
+			bind_return_types.emplace(ordinality_pos, LogicalType::BIGINT);
+		}
+		if (function.get_virtual_columns) {
+			virtual_columns = function.get_virtual_columns(context, bind_data.get());
+		}
 		for (auto &col_id : result->column_ids) {
-			if (IsRowIdColumnId(col_id)) {
-				// rowid
-				continue;
-			}
-			auto &ret_type = result->returned_types[col_id];
-			auto &col_name = result->names[col_id];
-			if (bind_return_types[col_id] != ret_type) {
-				throw SerializationException("Table function deserialization failure in function \"%s\" - column with "
-				                             "name %s was serialized with type %s, but now has type %s",
-				                             function.name, col_name, ret_type, bind_return_types[col_id]);
+			if (col_id.IsVirtualColumn()) {
+				auto idx = col_id.GetPrimaryIndex();
+				auto ventry = virtual_columns.find(idx);
+				if (ventry == virtual_columns.end()) {
+					throw SerializationException(
+					    "Table function deserialization failure - could not find virtual column with id %d", idx);
+				}
+			} else {
+				auto idx = col_id.GetPrimaryIndex();
+				auto &ret_type = result->returned_types[idx];
+				auto &col_name = result->names[idx];
+				if (bind_return_types[idx] != ret_type) {
+					throw SerializationException(
+					    "Table function deserialization failure in function \"%s\" - column with "
+					    "name %s was serialized with type %s, but now has type %s",
+					    function.name, col_name, ret_type, bind_return_types[idx]);
+				}
 			}
 		}
 		result->returned_types = std::move(bind_return_types);
-	} else {
-		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
+	} else if (function.get_virtual_columns) {
+		virtual_columns = function.get_virtual_columns(context, bind_data.get());
 	}
+	result->virtual_columns = std::move(virtual_columns);
 	result->bind_data = std::move(bind_data);
-	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	return std::move(result);
 }
 

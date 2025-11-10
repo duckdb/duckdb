@@ -1,0 +1,30 @@
+# name: test/optimizer/joins/join_bug.test
+# description: unsure yet
+# group: [joins]
+
+statement ok
+CREATE TABLE v00 (c01 INT, c02 STRING);
+
+# don't delete numerator relations
+statement ok
+SELECT 1
+FROM
+v00 AS t
+INNER JOIN
+(
+	v00 AS t2
+	SEMI JOIN v00 AS t3
+	USING (c02)
+)
+USING (c01)
+SEMI JOIN v00 AS t4
+USING (c02, c01)
+NATURAL JOIN v00 AS t5;
+
+statement ok
+CREATE or replace TABLE v00 (c01 STRING);
+
+# Asof joins should swap
+statement ok
+FROM v00 AS ta02 NATURAL JOIN v00 AS ta03 ASOF JOIN v00 AS ta04 USING ( c01 );
+

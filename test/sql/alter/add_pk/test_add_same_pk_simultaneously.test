@@ -1,0 +1,47 @@
+# name: test/sql/alter/add_pk/test_add_same_pk_simultaneously.test
+# description: Test adding the same PRIMARY KEY in two different transactions.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok tran1
+BEGIN TRANSACTION
+
+statement ok tran1
+ALTER TABLE test ADD PRIMARY KEY (j)
+
+statement ok tran2
+BEGIN TRANSACTION
+
+# We trigger a Catalog write-write conflict.
+
+statement error tran2
+ALTER TABLE test ADD PRIMARY KEY (j)
+----
+<REGEX>:TransactionContext Error.*cannot add an index to a table that has been altered.*
+
+statement ok tran3
+BEGIN TRANSACTION
+
+statement ok tran1
+ROLLBACK
+
+statement ok tran2
+ROLLBACK
+
+statement ok tran3
+ALTER TABLE test ADD PRIMARY KEY (j)
+
+statement ok tran3
+COMMIT
+
+statement error
+INSERT INTO test VALUES (1, 1), (1, 1)
+----
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
+
+

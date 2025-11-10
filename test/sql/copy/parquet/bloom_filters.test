@@ -1,0 +1,293 @@
+# name: test/sql/copy/parquet/bloom_filters.test
+# group: [parquet]
+
+require parquet
+
+statement ok
+copy (select
+    (r1.range*10)::BIGINT r,
+    r::smallint r_int16,
+    r::integer r_int32,
+    r::double r_double,
+    r::float r_float,
+    'string_' || r::VARCHAR r_string,
+    ('blob_' || r::VARCHAR)::BLOB r_blob
+from range(100) r1, range(1000) order by r) to '__TEST_DIR__/bloom1.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000);
+
+# we don't check the actual offsets since they might change due to filters being moved around
+query III
+select column_id, BOOL_AND(bloom_filter_offset > 4), BOOL_AND(bloom_filter_length > 1)  from parquet_metadata('__TEST_DIR__/bloom1.parquet') group by column_id order by column_id;
+----
+0	true	true
+1	true	true
+2	true	true
+3	true	true
+4	true	true
+5	true	true
+6	true	true
+
+# this value is not in the domain but within min/max
+query I
+SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('__TEST_DIR__/bloom1.parquet', 'r', '201');
+----
+true
+
+# this value is outside min/max
+query I
+SELECT BOOL_AND(bloom_filter_excludes) FROM parquet_bloom_probe('__TEST_DIR__/bloom1.parquet', 'r', '112121212');
+----
+true
+
+statement ok
+CREATE MACRO assert_bloom_filter_hit(file, col, val) AS TABLE
+    SELECT COUNT(*) > 0 AND COUNT(*) < MAX(row_group_id+1) FROM parquet_bloom_probe(file, col, val) WHERE NOT bloom_filter_excludes;
+
+# this in-domain should only be in a subset of row groups since its ordered
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r', '200');
+----
+true
+
+# same dance but with probe not being a string
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r', 200);
+----
+true
+
+# non-existent file
+statement error
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom10000.parquet', 'r', '200');
+----
+No files found
+
+# non-existent column
+statement error
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r2', '200');
+----
+Column r2 not found
+
+# NULL colname
+statement error
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', NULL, '200');
+----
+Can't have NULL parameters
+
+# NULL probe
+statement error
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r', NULL);
+----
+Can't have NULL parameters
+
+statement error
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r', 'a');
+----
+Failed to cast value
+
+# more types
+
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_int16', 200);
+----
+true
+
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_int32', 200);
+----
+true
+
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_float', 200);
+----
+true
+
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_double', 200);
+----
+true
+
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_string', 'string_200');
+----
+true
+
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_blob', 'blob_200'::BLOB);
+----
+true
+
+
+
+# some tests for dictionary_size_limit
+
+# no bloom filter, dict limit too low
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom2.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 10);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('__TEST_DIR__/bloom2.parquet') order by row_group_id;
+----
+0	false	false
+
+# no bloom filter - disabled explicitly
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/disable_bloom_filter.parquet' (format parquet, ROW_GROUP_SIZE 10000, write_bloom_filter false);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('__TEST_DIR__/disable_bloom_filter.parquet') order by row_group_id;
+----
+0	false	false
+
+# still no bloom filter, limit off-by-one
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom3.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 99);
+
+query III
+select row_group_id, bloom_filter_offset  IS NOT NULL, bloom_filter_length  IS NOT NULL  from parquet_metadata('__TEST_DIR__/bloom3.parquet') order by row_group_id;
+----
+0	false	false
+
+
+# should have a filter here!
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom4.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 100);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length  IS NOT NULL  from parquet_metadata('__TEST_DIR__/bloom4.parquet') order by row_group_id;
+----
+0	true	true
+
+
+# should have a filter here, too
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom5.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length  IS NOT NULL  from parquet_metadata('__TEST_DIR__/bloom5.parquet') order by row_group_id;
+----
+0	true	true
+
+
+# lets mess with the false positive ratio and measue bf size
+
+# the default 0.01
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom6.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0.01);
+
+
+query II
+select row_group_id, bloom_filter_length from parquet_metadata('__TEST_DIR__/bloom6.parquet') order by row_group_id;
+----
+0	144
+
+
+# higher prob: 0.5 should lead to a smaller filter
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom7.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0.5);
+
+
+query II
+select row_group_id, bloom_filter_length from parquet_metadata('__TEST_DIR__/bloom7.parquet') order by row_group_id;
+----
+0	80
+
+
+# lower prob: 0.001 should lead to a bigger filter
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0.001);
+
+
+query II
+select row_group_id, bloom_filter_length from parquet_metadata('__TEST_DIR__/bloom8.parquet') order by row_group_id;
+----
+0	272
+
+
+# even lower prob: 0.0001 should lead to an even bigger filter
+statement ok
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0.0001);
+
+
+query II
+select row_group_id, bloom_filter_length from parquet_metadata('__TEST_DIR__/bloom8.parquet') order by row_group_id;
+----
+0	528
+
+
+# some error cases for the new parameters
+
+statement error
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit -1, bloom_filter_false_positive_ratio 0.0001);
+----
+dictionary_size_limit must be greater than 0
+
+
+statement error
+copy (select (r1.range*10)::BIGINT r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0);
+----
+bloom_filter_false_positive_ratio must be greater than 0
+
+# some tests for string_dictionary_page_size_limit
+
+# no bloom filter, limit too low
+statement ok
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 10);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('__TEST_DIR__/bloom9.parquet') order by row_group_id;
+----
+0	false	false
+
+# big enough
+statement ok
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 100000);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('__TEST_DIR__/bloom9.parquet') order by row_group_id;
+----
+0	true	true
+
+# too big
+statement error
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 4294967295);
+----
+Binder Error
+
+# cannot be 0
+statement error
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 0);
+----
+Binder Error
+
+# test some repeated large strings
+# this should give dictionary
+statement ok
+copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet';
+
+query I
+select encodings from parquet_metadata('__TEST_DIR__/my.parquet');
+----
+RLE_DICTIONARY
+
+# this cannot do dictionary because the strings exceed the limit
+statement ok
+copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet' (STRING_DICTIONARY_PAGE_SIZE_LIMIT 4_000_000);
+
+query I
+select encodings = 'RLE_DICTIONARY' from parquet_metadata('__TEST_DIR__/my.parquet');
+----
+false

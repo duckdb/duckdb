@@ -3,11 +3,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_context_state.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -29,7 +27,8 @@ void TransactionContext::BeginTransaction() {
 		throw TransactionException("cannot start a transaction within a transaction");
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
-	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp);
+	auto global_transaction_id = context.db->GetDatabaseManager().GetNewTransactionNumber();
+	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, global_transaction_id);
 
 	// Notify any registered state of transaction begin
 	for (auto &state : context.registered_state->States()) {
@@ -74,10 +73,20 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	}
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
-	transaction->Rollback();
+	context.client_data->profiler->Reset();
+
+	ErrorData rollback_error;
+	try {
+		transaction->Rollback();
+	} catch (std::exception &ex) {
+		rollback_error = ErrorData(ex);
+	}
 	// Notify any registered state of transaction rollback
 	for (auto const &s : context.registered_state->States()) {
 		s->TransactionRollback(*transaction, context, error);
+	}
+	if (rollback_error.HasError()) {
+		rollback_error.Throw();
 	}
 }
 

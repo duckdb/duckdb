@@ -38,7 +38,7 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 		} else {
 			Vector intermediate(LogicalType::BOOLEAN);
 			// AND/OR together
-			switch (expr.type) {
+			switch (expr.GetExpressionType()) {
 			case ExpressionType::CONJUNCTION_AND:
 				VectorOperations::And(current_result, result, intermediate, count);
 				break;
@@ -58,7 +58,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
                                  SelectionVector *false_sel) {
 	auto &state = state_p->Cast<ConjunctionState>();
 
-	if (expr.type == ExpressionType::CONJUNCTION_AND) {
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// get runtime statistics
 		auto filter_state = state.adaptive_filter->BeginFilter();
 		const SelectionVector *current_sel = sel;
@@ -129,6 +129,9 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 				current_count -= tcount;
 				current_sel = false_sel;
 			}
+		}
+		if (true_sel) {
+			true_sel->Sort(result_count);
 		}
 
 		// adapt runtime statistics

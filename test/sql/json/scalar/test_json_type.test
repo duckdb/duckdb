@@ -158,7 +158,7 @@ select json_type(json, ['str', '/nested/val']) from test
 ----
 [VARCHAR, UBIGINT]
 [VARCHAR, UBIGINT]
-[NULL, NULL]
+['NULL', NULL]
 
 # test with columnref input and columnref query
 query T
@@ -218,3 +218,19 @@ query T
 SELECT json_type('{"a":[2,3.5,true,false,null,"x"]}','$.a[6]');
 ----
 NULL
+
+# test LIST(JSON) compatibility
+query T
+select json_type(json_extract('{"duck":[1,2,3]}', '$..duck'))
+----
+ARRAY
+
+query T
+select json_type(json_extract('{"a":{"duck":[1]},"b":{"duck":[2,3]}}', '$..duck'))
+----
+ARRAY
+
+query T
+select json_type(json_extract('{"duck":[1,2,3]}', '$.duck[*]'))
+----
+ARRAY

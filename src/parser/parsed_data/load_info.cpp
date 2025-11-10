@@ -11,6 +11,7 @@ unique_ptr<LoadInfo> LoadInfo::Copy() const {
 	result->repository = repository;
 	result->load_type = load_type;
 	result->repo_is_alias = repo_is_alias;
+	result->version = version;
 	return result;
 }
 

@@ -1,0 +1,12 @@
+# name: test/sql/copy/csv/test_unquoted_csv.test_slow
+# description: Tests rejects tables on max line size parameter
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+FROM read_csv('{DATA_DIR}/csv/click_mini.tsv.gz')
+
+statement ok
+FROM read_csv('{DATA_DIR}/csv/click_mini.tsv.gz', quote = '')

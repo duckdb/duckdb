@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-# Nested keys (list) succesfull
+# Nested keys (list) successful
 query I
 SELECT MAP(
 	[
@@ -37,7 +37,7 @@ SELECT MAP(a, b) from tbl;
 {[5]=d, [6]=e, [7]=f}
 {[8]=g, [9]=h, [10]=i}
 
-# Nested keys (list) not succesfull (duplicate)
+# Nested keys (list) not successful (duplicate)
 statement error
 SELECT MAP(
 	[
@@ -48,8 +48,9 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
-# Nested keys (list) not succesfull (nulls)
+# Nested keys (list) not successful (nulls)
 statement error
 SELECT MAP(
 	[
@@ -60,8 +61,9 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys can not be NULL.*
 
-# Nested keys (struct) succesfull
+# Nested keys (struct) successful
 query I
 SELECT MAP(
 	[
@@ -74,7 +76,7 @@ SELECT MAP(
 ----
 {{'foo': true}=4, {'foo': false}=2, {'foo': NULL}=0}
 
-# Nested keys (struct) not succesfull (duplicate)
+# Nested keys (struct) not successful (duplicate)
 statement error
 SELECT MAP(
 	[
@@ -85,8 +87,9 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
-# Nested keys (struct) not succesfull (null)
+# Nested keys (struct) not successful (null)
 statement error
 SELECT MAP(
 	[
@@ -97,8 +100,9 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys can not be NULL.*
 
-# Nested keys (map) succesfull
+# Nested keys (map) successful
 query I
 SELECT MAP(
 	[
@@ -111,7 +115,7 @@ SELECT MAP(
 ----
 {{5=4}=0, {10=2}=1, {2=3, 3=2}=2, {10=3}=3, {3=2, 2=3}=4}
 
-# Nested keys (map) not succesfull (duplicate)
+# Nested keys (map) not successful (duplicate)
 statement error
 SELECT MAP(
 	[
@@ -122,8 +126,9 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
-# Nested keys (map) not succesfull (null)
+# Nested keys (map) not successful (null)
 statement error
 SELECT MAP(
 	[
@@ -134,3 +139,4 @@ SELECT MAP(
 	]
 );
 ----
+<REGEX>:.*Invalid Input Error.*Map keys can not be NULL.*

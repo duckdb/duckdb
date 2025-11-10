@@ -32,6 +32,28 @@ enum class PipelineExecuteResult {
 	INTERRUPTED
 };
 
+class ExecutionBudget {
+public:
+	explicit ExecutionBudget(idx_t maximum) : processed(0), maximum_to_process(maximum) {
+	}
+
+public:
+	bool Next() {
+		if (IsDepleted()) {
+			return false;
+		}
+		processed++;
+		return true;
+	}
+	bool IsDepleted() const {
+		return processed >= maximum_to_process;
+	}
+
+private:
+	idx_t processed;
+	idx_t maximum_to_process;
+};
+
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
 public:
@@ -43,10 +65,6 @@ public:
 	//! Returns true if execution is finished, false if Execute should be called again
 	PipelineExecuteResult Execute(idx_t max_chunks);
 
-	//! Push a single input DataChunk into the pipeline.
-	//! Returns either OperatorResultType::NEED_MORE_INPUT or OperatorResultType::FINISHED
-	//! If OperatorResultType::FINISHED is returned, more input will not change the result anymore
-	OperatorResultType ExecutePush(DataChunk &input);
 	//! Called after depleting the source: finalizes the execution of this pipeline executor
 	//! This should only be called once per PipelineExecutor.
 	PipelineExecuteResult PushFinalize();
@@ -91,8 +109,8 @@ private:
 	bool finalized = false;
 	//! Whether or not the pipeline has finished processing
 	int32_t finished_processing_idx = -1;
-	//! Whether or not this pipeline requires keeping track of the batch index of the source
-	bool requires_batch_index = false;
+	//! Partition info that is used by this executor
+	OperatorPartitionInfo required_partition_info;
 
 	//! Source has indicated it is exhausted
 	bool exhausted_source = false;
@@ -128,17 +146,17 @@ private:
 	SourceResultType GetData(DataChunk &chunk, OperatorSourceInput &input);
 	SinkResultType Sink(DataChunk &chunk, OperatorSinkInput &input);
 
-	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0);
+	OperatorResultType ExecutePushInternal(DataChunk &input, ExecutionBudget &chunk_budget, idx_t initial_idx = 0);
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
 	//! Notifies the sink that a new batch has started
-	SinkNextBatchType NextBatch(DataChunk &source_chunk);
+	SinkNextBatchType NextBatch(DataChunk &source_chunk, const bool have_more_output);
 
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.
-	bool TryFlushCachingOperators();
+	bool TryFlushCachingOperators(ExecutionBudget &chunk_budget);
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);

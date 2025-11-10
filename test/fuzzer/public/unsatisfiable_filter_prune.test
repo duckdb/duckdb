@@ -1,0 +1,20 @@
+# name: test/fuzzer/public/unsatisfiable_filter_prune.test
+# description: Test SEMI JOIN with USING clause
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE  t0(c0 INT, c1 INT);
+
+statement ok
+INSERT INTO t0( c0, c1) VALUES ( -1, -1);
+
+query I
+SELECT c0 FROM t0 WHERE (((CASE t0.c0 WHEN t0.c0 THEN t0.c0 END ) BETWEEN 1 AND t0.c0)AND(t0.c0 <= 0)) ;
+----
+
+query II
+SELECT * FROM t0 WHERE c0 >= 1 AND c0 <= t0.c1 AND t0.c1 <= 0;
+----

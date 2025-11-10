@@ -1,0 +1,13 @@
+# name: benchmark/tpch/join/join_or_filter_range.benchmark
+# description: Join filter pushdown
+# group: [join]
+
+include benchmark/tpch/tpch_load.benchmark.in
+
+name Join Or Filter Pushdown
+group join
+subgroup tpch
+
+run
+SELECT * from lineitem WHERE l_orderkey IN (SELECT * FROM range(50)) ORDER BY ALL
+

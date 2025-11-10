@@ -47,7 +47,6 @@ bool AreMatchesPossible(LogicalType &left, LogicalType &right) {
 }
 unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                  bool &changes_made, bool is_root) {
-
 	auto &root = bindings[0].get().Cast<BoundComparisonExpression>();
 	auto &left_child = bindings[1].get().Cast<BoundCastExpression>();
 	auto &right_child = bindings[3].get().Cast<BoundCastExpression>();
@@ -65,7 +64,8 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<ref
 
 	auto cast_left_to_right =
 	    BoundCastExpression::AddDefaultCastToType(std::move(left_child.child), right_child.child->return_type, true);
-	return make_uniq<BoundComparisonExpression>(root.type, std::move(cast_left_to_right), std::move(right_child.child));
+	return make_uniq<BoundComparisonExpression>(root.GetExpressionType(), std::move(cast_left_to_right),
+	                                            std::move(right_child.child));
 }
 
 } // namespace duckdb

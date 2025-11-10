@@ -24,7 +24,8 @@ class PhysicalHashAggregate;
 struct HashAggregateGroupingData {
 public:
 	HashAggregateGroupingData(GroupingSet &grouping_set_p, const GroupedAggregateData &grouped_aggregate_data,
-	                          unique_ptr<DistinctAggregateCollectionInfo> &info);
+	                          unique_ptr<DistinctAggregateCollectionInfo> &info, TupleDataValidityType group_validity,
+	                          TupleDataValidityType distinct_validity);
 
 public:
 	RadixPartitionedHashTable table_data;
@@ -62,13 +63,16 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_GROUP_BY;
 
 public:
-	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+	PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	                      vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality);
+	PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	                      vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups,
 	                      idx_t estimated_cardinality);
-	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality);
-	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
-	                      vector<unsafe_vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
+	PhysicalHashAggregate(PhysicalPlan &physical_plan, ClientContext &context, vector<LogicalType> types,
+	                      vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> groups,
+	                      vector<GroupingSet> grouping_sets, vector<unsafe_vector<idx_t>> grouping_functions,
+	                      idx_t estimated_cardinality, TupleDataValidityType group_validity,
+	                      TupleDataValidityType distinct_validity);
 
 	//! The grouping sets
 	GroupedAggregateData grouped_aggregate_data;
@@ -80,7 +84,7 @@ public:
 	//! A recreation of the input chunk, with nulls for everything that isnt a group
 	vector<LogicalType> input_group_types;
 
-	// Filters given to Sink and friends
+	//! Filters given to Sink and friends
 	unsafe_vector<idx_t> non_distinct_filter;
 	unsafe_vector<idx_t> distinct_filter;
 
@@ -93,7 +97,7 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
-	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	bool IsSource() const override {
 		return true;

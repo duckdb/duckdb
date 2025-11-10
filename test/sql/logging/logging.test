@@ -1,0 +1,64 @@
+# name: test/sql/logging/logging.test
+# description: Test basic logging functionality
+# group: [logging]
+
+require noforcestorage
+
+query IIIIIIIIII
+FROM duckdb_logs
+----
+
+query IIIIII
+DESCRIBE FROM duckdb_logs
+----
+context_id	UBIGINT	YES	NULL	NULL	NULL
+scope	VARCHAR	YES	NULL	NULL	NULL
+connection_id	UBIGINT	YES	NULL	NULL	NULL
+transaction_id	UBIGINT	YES	NULL	NULL	NULL
+query_id	UBIGINT	YES	NULL	NULL	NULL
+thread_id	UBIGINT	YES	NULL	NULL	NULL
+timestamp	TIMESTAMP WITH TIME ZONE	YES	NULL	NULL	NULL
+type	VARCHAR	YES	NULL	NULL	NULL
+log_level	VARCHAR	YES	NULL	NULL	NULL
+message	VARCHAR	YES	NULL	NULL	NULL
+
+statement ok
+set logging_level='debug';
+
+statement ok
+set enable_logging=true;
+
+statement ok
+SELECT 1;
+
+query IIIII
+SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+----
+CONNECTION	NULL	QueryLog	INFO	SELECT 1;
+
+statement ok
+set enable_logging=false;
+
+# With logging disabled, the log will persist
+query IIIII
+SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs where type = 'QueryLog'
+----
+CONNECTION	NULL	QueryLog	INFO	SELECT 1;
+CONNECTION	NULL	QueryLog	INFO	SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+CONNECTION	NULL	QueryLog	INFO	set enable_logging=false;
+
+statement ok
+set logging_storage='stdout';
+
+statement ok
+set logging_storage='memory';
+
+statement error
+set logging_storage='quack';
+----
+Invalid Input Error: Log storage 'quack' is not yet registered
+
+# Storage is now cleared because switching storage will clear it
+query IIIIII
+SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+----

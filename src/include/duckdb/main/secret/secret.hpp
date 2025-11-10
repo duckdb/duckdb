@@ -12,11 +12,13 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/main/setting_info.hpp"
 
 namespace duckdb {
 class BaseSecret;
 struct SecretEntry;
 struct FileOpenerInfo;
+struct CreateSecretInfo;
 
 //! Whether a secret is persistent or temporary
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
@@ -35,10 +37,13 @@ struct CreateSecretInput {
 	vector<string> scope;
 	//! (optional) named parameter map, each create secret function has defined it's own set of these
 	case_insensitive_map_t<Value> options;
+	//! how to handle conflicts
+	OnCreateConflict on_conflict;
+	//! persistence of secret
+	SecretPersistType persist_type;
 };
 
-typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret,
-                                                        const named_parameter_type_map_t &options);
+typedef unique_ptr<BaseSecret> (*secret_deserializer_t)(Deserializer &deserializer, BaseSecret base_secret);
 typedef unique_ptr<BaseSecret> (*create_secret_function_t)(ClientContext &context, CreateSecretInput &input);
 
 //! A CreateSecretFunction is a function adds a provider for a secret type.
@@ -79,6 +84,15 @@ struct SecretType {
 	secret_deserializer_t deserializer;
 	//! Provider to use when non is specified
 	string default_provider;
+	//! The extension that registered this secret type
+	string extension;
+};
+
+enum class SecretSerializationType : uint8_t {
+	//! The secret is serialized with a custom serialization function
+	CUSTOM = 0,
+	//! The secret has been serialized as a KeyValueSecret
+	KEY_VALUE_SECRET = 1
 };
 
 //! Base class from which BaseSecret classes can be made.
@@ -181,30 +195,14 @@ public:
 
 	// FIXME: use serialization scripts
 	template <class TYPE>
-	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret,
-	                                          const named_parameter_type_map_t &options) {
+	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {
 		auto result = make_uniq<TYPE>(base_secret);
 		Value secret_map_value;
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);
 
 		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
 			auto kv_struct = StructValue::GetChildren(entry);
-			auto key = kv_struct[0].ToString();
-			auto raw_value = kv_struct[1].ToString();
-
-			auto it = options.find(key);
-			if (it == options.end()) {
-				throw IOException("Failed to deserialize secret '%s', it contains an unexpected key: '%s'",
-				                  base_secret.GetName(), key);
-			}
-			auto &logical_type = it->second;
-			Value value;
-			if (logical_type.id() == LogicalTypeId::VARCHAR) {
-				value = Value(raw_value);
-			} else {
-				value = Value(raw_value).DefaultCastAs(logical_type);
-			}
-			result->secret_map[key] = value;
+			result->secret_map[kv_struct[0].ToString()] = kv_struct[1];
 		}
 
 		Value redact_set_value;
@@ -298,7 +296,9 @@ public:
 		Value result;
 		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
 		if (lookup_result) {
-			value_out = result.GetValue<TYPE>();
+			if (!result.IsNull()) {
+				value_out = result.GetValue<TYPE>();
+			}
 		}
 		return lookup_result;
 	}

@@ -94,7 +94,7 @@ bool ParsedExpression::Equals(const BaseExpression &other) const {
 }
 
 hash_t ParsedExpression::Hash() const {
-	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+	hash_t hash = duckdb::Hash<uint32_t>(static_cast<uint32_t>(type));
 	ParsedExpressionIterator::EnumerateChildren(
 	    *this, [&](const ParsedExpression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;

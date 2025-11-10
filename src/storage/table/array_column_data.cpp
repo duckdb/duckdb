@@ -85,14 +85,93 @@ idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state,
 	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	// Scan validity
-	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
+	auto scan_count = validity.ScanCount(state.child_states[0], result, count, result_offset);
 	auto array_size = ArrayType::GetSize(type);
 	// Scan child column
 	auto &child_vec = ArrayVector::GetEntry(result);
-	child_column->ScanCount(state.child_states[1], child_vec, count * array_size);
+	child_column->ScanCount(state.child_states[1], child_vec, count * array_size, result_offset * array_size);
 	return scan_count;
+}
+
+void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             SelectionVector &sel, idx_t sel_count) {
+	bool is_supported = !child_column->type.IsNested() && child_column->type.InternalType() != PhysicalType::VARCHAR;
+	if (!is_supported) {
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
+	// the below specialized Select implementation selects only the required arrays, and skips over non-required data
+	// note that this implementation is not necessarily faster than the naive implementation of scanning + slicing
+	// this optimization is better:
+	// (1) the fewer consecutive ranges we are scanning
+	// (2) the larger the arrays are
+	// below we try to select the optimal variant
+
+	// first count the number of consecutive requests we must make
+	idx_t consecutive_ranges = 0;
+	for (idx_t i = 0; i < sel_count; i++) {
+		idx_t start_idx = sel.get_index(i);
+		idx_t end_idx = start_idx + 1;
+		for (; i + 1 < sel_count; i++) {
+			auto next_idx = sel.get_index(i + 1);
+			if (next_idx > end_idx) {
+				// not consecutive - break
+				break;
+			}
+			end_idx = next_idx + 1;
+		}
+		consecutive_ranges++;
+	}
+
+	auto target_count = GetVectorCount(vector_index);
+
+	// experimentally, we want to allow around one consecutive range every ~2 array size
+	// for array size = 10, we allow 5 consecutive ranges
+	// for array size = 100, we allow 50 consecutive ranges
+	auto array_size = ArrayType::GetSize(type);
+	auto allowed_ranges = array_size / 2;
+	if (allowed_ranges < consecutive_ranges) {
+		// fallback to select + filter
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
+
+	idx_t current_offset = 0;
+	idx_t current_position = 0;
+	auto &child_vec = ArrayVector::GetEntry(result);
+	for (idx_t i = 0; i < sel_count; i++) {
+		idx_t start_idx = sel.get_index(i);
+		idx_t end_idx = start_idx + 1;
+		for (; i + 1 < sel_count; i++) {
+			auto next_idx = sel.get_index(i + 1);
+			if (next_idx > end_idx) {
+				// not consecutive - break
+				break;
+			}
+			end_idx = next_idx + 1;
+		}
+		if (start_idx > current_position) {
+			// skip forward
+			idx_t skip_amount = start_idx - current_position;
+			validity.Skip(state.child_states[0], skip_amount);
+			child_column->Skip(state.child_states[1], skip_amount * array_size);
+		}
+		// scan into the result array
+		idx_t scan_count = end_idx - start_idx;
+		validity.ScanCount(state.child_states[0], result, scan_count, current_offset);
+		child_column->ScanCount(state.child_states[1], child_vec, scan_count * array_size, current_offset * array_size);
+		// move the current position forward
+		current_offset += scan_count;
+		current_position = end_idx;
+	}
+	// if there is any remaining at the end - skip any trailing rows
+	if (current_position < target_count) {
+		idx_t skip_amount = target_count - current_position;
+		validity.Skip(state.child_states[0], skip_amount);
+		child_column->Skip(state.child_states[1], skip_amount * array_size);
+	}
 }
 
 void ArrayColumnData::Skip(ColumnScanState &state, idx_t count) {
@@ -114,7 +193,13 @@ void ArrayColumnData::InitializeAppend(ColumnAppendState &state) {
 }
 
 void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
-	vector.Flatten(count);
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+		Vector append_vector(vector);
+		append_vector.Flatten(count);
+		Append(stats, state, append_vector, count);
+		return;
+	}
+
 	// Append validity
 	validity.Append(stats, state.child_appends[0], vector, count);
 	// Append child column
@@ -139,13 +224,14 @@ idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 	throw NotImplementedException("Array Fetch");
 }
 
-void ArrayColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                             idx_t update_count) {
+void ArrayColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                             Vector &update_vector, row_t *row_ids, idx_t update_count) {
 	throw NotImplementedException("Array Update is not supported.");
 }
 
-void ArrayColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                   Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void ArrayColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+                                   const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                                   idx_t update_count, idx_t depth) {
 	throw NotImplementedException("Array Update Column is not supported");
 }
 
@@ -155,7 +241,6 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 
 void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                idx_t result_idx) {
-
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());
@@ -171,7 +256,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
 	auto child_state = make_uniq<ColumnScanState>();
-	child_state->Initialize(child_type, nullptr);
+	child_state->Initialize(state.context, child_type, nullptr);
 
 	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
 
@@ -217,8 +302,8 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(RowGrou
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_group,
                                                               ColumnCheckpointInfo &checkpoint_info) {
-
-	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
 	return std::move(checkpoint_state);
@@ -226,6 +311,10 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
 
 bool ArrayColumnData::IsPersistent() {
 	return validity.IsPersistent() && child_column->IsPersistent();
+}
+
+bool ArrayColumnData::HasAnyChanges() const {
+	return child_column->HasAnyChanges() || validity.HasAnyChanges();
 }
 
 PersistentColumnData ArrayColumnData::Serialize() {
@@ -243,12 +332,12 @@ void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSt
 	this->count = validity.count.load();
 }
 
-void ArrayColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                            vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 }
 
 void ArrayColumnData::Verify(RowGroup &parent) {

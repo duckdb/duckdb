@@ -138,13 +138,10 @@ spades
 
 
 # create macro with non existing table
-statement ok
-CREATE MACRO card_no_tbl() as TABLE SELECT * FROM suit_tbl;
-
 statement error
-SELECT * FROM card_no_tbl();
+CREATE MACRO card_no_tbl() as TABLE SELECT * FROM suit_tbl;
 ----
-
+Catalog Error
 
 # wrong arg order
 statement error
@@ -154,6 +151,7 @@ as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name
 
 
 # positional parameter repeated
-# should give error but is parsed !!!
-statement ok
+statement error
 CREATE MACRO card_select_val(_val_min, _val_min) as TABLE SELECT * FROM cards_tbl WHERE val>=_val_min AND val<=_val_max;
+----
+Parser Error: Duplicate parameter

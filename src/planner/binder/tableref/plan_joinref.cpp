@@ -1,22 +1,21 @@
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
-#include "duckdb/planner/tableref/bound_joinref.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/tableref/bound_joinref.hpp"
 
 namespace duckdb {
 
@@ -50,13 +49,13 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &le
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		JoinCondition condition;
-		condition.comparison = expr.type;
+		condition.comparison = expr.GetExpressionType();
 		auto left = std::move(comparison.left);
 		auto right = std::move(comparison.right);
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);
-			condition.comparison = FlipComparisonExpression(expr.type);
+			condition.comparison = FlipComparisonExpression(expr.GetExpressionType());
 		}
 		condition.left = std::move(left);
 		condition.right = std::move(right);
@@ -71,7 +70,6 @@ void LogicalComparisonJoin::ExtractJoinConditions(
     unique_ptr<LogicalOperator> &right_child, const unordered_set<idx_t> &left_bindings,
     const unordered_set<idx_t> &right_bindings, vector<unique_ptr<Expression>> &expressions,
     vector<JoinCondition> &conditions, vector<unique_ptr<Expression>> &arbitrary_expressions) {
-
 	for (auto &expr : expressions) {
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
@@ -98,19 +96,20 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 					continue;
 				}
 			}
-		} else if (expr->type == ExpressionType::COMPARE_EQUAL || expr->type == ExpressionType::COMPARE_NOTEQUAL ||
-		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
-		           expr->type == ExpressionType::COMPARE_LESSTHAN ||
-		           expr->type == ExpressionType::COMPARE_GREATERTHAN ||
-		           expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-		           expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
-		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
-		           expr->type == ExpressionType::COMPARE_DISTINCT_FROM)
+		} else if (expr->GetExpressionType() == ExpressionType::COMPARE_EQUAL ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_LESSTHAN ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM)
 
 		{
 			// comparison, check if we can create a comparison JoinCondition
-			if (IsJoinTypeCondition(ref_type, expr->type) &&
+			if (IsJoinTypeCondition(ref_type, expr->GetExpressionType()) &&
 			    CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				// successfully created the join condition
 				continue;
@@ -154,10 +153,10 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
                                                               vector<unique_ptr<Expression>> arbitrary_expressions) {
 	// Validate the conditions
 	bool need_to_consider_arbitrary_expressions = true;
-	switch (reftype) {
-	case JoinRefType::ASOF: {
-		need_to_consider_arbitrary_expressions = false;
-		auto asof_idx = conditions.size();
+	const bool is_asof = reftype == JoinRefType::ASOF;
+	if (is_asof) {
+		// Handle case of zero conditions
+		auto asof_idx = conditions.size() + 1;
 		for (size_t c = 0; c < conditions.size(); ++c) {
 			auto &cond = conditions[c];
 			switch (cond.comparison) {
@@ -177,13 +176,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 				throw BinderException("Invalid ASOF JOIN comparison");
 			}
 		}
-		if (asof_idx == conditions.size()) {
+		if (asof_idx >= conditions.size()) {
 			throw BinderException("Missing ASOF JOIN inequality");
 		}
-		break;
-	}
-	default:
-		break;
 	}
 
 	if (type == JoinType::INNER && reftype == JoinRefType::REGULAR) {
@@ -197,12 +192,26 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 		need_to_consider_arbitrary_expressions = false;
 	}
 	if ((need_to_consider_arbitrary_expressions && !arbitrary_expressions.empty()) || conditions.empty()) {
+		if (is_asof) {
+			D_ASSERT(!conditions.empty());
+			// We still need to produce an ASOF join here, but it will have to evaluate the arbitrary conditions itself
+			auto asof_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_ASOF_JOIN);
+			asof_join->conditions = std::move(conditions);
+			asof_join->children.push_back(std::move(left_child));
+			asof_join->children.push_back(std::move(right_child));
+			// AND all the arbitrary expressions together
+			asof_join->predicate = std::move(arbitrary_expressions[0]);
+			for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
+				asof_join->predicate = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                             std::move(asof_join->predicate),
+				                                                             std::move(arbitrary_expressions[i]));
+			}
+			return std::move(asof_join);
+		}
+
 		if (arbitrary_expressions.empty()) {
 			// all conditions were pushed down, add TRUE predicate
 			arbitrary_expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
-		}
-		for (auto &condition : conditions) {
-			arbitrary_expressions.push_back(JoinCondition::CreateExpression(std::move(condition)));
 		}
 		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join
@@ -212,8 +221,21 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 		any_join->children.push_back(std::move(right_child));
 		// AND all the arbitrary expressions together
 		// do the same with any remaining conditions
-		any_join->condition = std::move(arbitrary_expressions[0]);
-		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
+		idx_t start_idx = 0;
+		if (conditions.empty()) {
+			// no conditions, just use the arbitrary expressions
+			any_join->condition = std::move(arbitrary_expressions[0]);
+			start_idx = 1;
+		} else {
+			// we have some conditions as well
+			any_join->condition = JoinCondition::CreateExpression(std::move(conditions[0]));
+			for (idx_t i = 1; i < conditions.size(); i++) {
+				any_join->condition = make_uniq<BoundConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition),
+				    JoinCondition::CreateExpression(std::move(conditions[i])));
+			}
+		}
+		for (idx_t i = start_idx; i < arbitrary_expressions.size(); i++) {
 			any_join->condition = make_uniq<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(arbitrary_expressions[i]));
 		}
@@ -222,7 +244,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 		// we successfully converted expressions into JoinConditions
 		// create a LogicalComparisonJoin
 		auto logical_type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
-		if (reftype == JoinRefType::ASOF) {
+		if (is_asof) {
 			logical_type = LogicalOperatorType::LOGICAL_ASOF_JOIN;
 		}
 		auto comp_join = make_uniq<LogicalComparisonJoin>(type, logical_type);
@@ -244,19 +266,14 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	}
 }
 
-static bool HasCorrelatedColumns(Expression &expression) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		if (colref.depth > 0) {
-			return true;
-		}
-	}
+static bool HasCorrelatedColumns(const Expression &root_expr) {
 	bool has_correlated_columns = false;
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
-		if (HasCorrelatedColumns(child)) {
-			has_correlated_columns = true;
-		}
-	});
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
+	                                                              [&](const BoundColumnRefExpression &colref) {
+		                                                              if (colref.depth > 0) {
+			                                                              has_correlated_columns = true;
+		                                                              }
+	                                                              });
 	return has_correlated_columns;
 }
 
@@ -280,8 +297,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// Set the flag to ensure that children do not flatten before the root
 		is_outside_flattened = false;
 	}
-	auto left = CreatePlan(*ref.left);
-	auto right = CreatePlan(*ref.right);
+	auto left = std::move(ref.left.plan);
+	auto right = std::move(ref.right.plan);
 	is_outside_flattened = old_is_outside_flattened;
 
 	// For joins, depth of the bindings will be one higher on the right because of the lateral binder
@@ -292,29 +309,21 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
-	    ClientConfig::GetConfig(context).enable_optimizer) {
+	    ClientConfig::GetConfig(context).enable_optimizer &&
+	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
 	}
 	if (ref.lateral) {
-		if (!is_outside_flattened) {
-			// If outer dependent joins is yet to be flattened, only plan the lateral
-			has_unplanned_dependent_joins = true;
-			return LogicalDependentJoin::Create(std::move(left), std::move(right), ref.correlated_columns, ref.type,
-			                                    std::move(ref.condition));
-		} else {
-			// All outer dependent joins have been planned and flattened, so plan and flatten lateral and recursively
-			// plan the children
-			auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
-			                                std::move(ref.condition));
-			if (has_unplanned_dependent_joins) {
-				RecursiveDependentJoinPlanner plan(*this);
-				plan.VisitOperator(*new_plan);
-			}
-			return new_plan;
+		auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
+		                                std::move(ref.condition));
+		if (has_unplanned_dependent_joins) {
+			RecursiveDependentJoinPlanner plan(*this);
+			plan.VisitOperator(*new_plan);
 		}
+		return new_plan;
 	}
 	switch (ref.ref_type) {
 	case JoinRefType::CROSS:

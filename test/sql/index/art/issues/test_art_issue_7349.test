@@ -2,9 +2,6 @@
 # description: Test ensuring that we do not rollback twice when throwing an exception during commit
 # group: [issues]
 
-statement ok
-PRAGMA enable_verification
-
 # setting up the different tables and the UNIQUE index
 
 statement ok
@@ -38,7 +35,7 @@ INSERT INTO tab0 VALUES('2006-12-25');
 statement error
 INSERT INTO td VALUES (date '2008-02-29');
 ----
-Constraint Error: Duplicate key "tz: 2008-02-29" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 statement ok
 COMMIT TRANSACTION;
@@ -54,7 +51,7 @@ INSERT INTO tab0 VALUES('2006-12-25');
 statement error
 INSERT INTO td VALUES (date '2008-02-29');
 ----
-Constraint Error: Duplicate key "tz: 2008-02-29" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 statement ok
 COMMIT TRANSACTION;

@@ -42,6 +42,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 		} else {
 			over_expr.expr_stats.push_back(nullptr);
 		}
+		for (auto &bound_order : over_expr.arg_orders) {
+			bound_order.stats = PropagateExpression(bound_order.expression);
+		}
 	}
 	return std::move(node_stats);
 }

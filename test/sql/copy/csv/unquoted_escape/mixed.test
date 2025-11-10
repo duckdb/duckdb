@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/unquoted_escape/mixed.test
+# description: Test the parsing of escaped values within and without quote in the same file
+# group: [unquoted_escape]
+
+statement ok
+PRAGMA enable_verification
+
+# replace CRLF with LF to pass the test on Windows
+query III
+SELECT
+    hamming(replace(string_agg(w, '|' ORDER BY y), E'\r\n', E'\n'), E'\\|,|"|\n'),
+    hamming(string_agg(z, '|' ORDER BY y), '"|"a"|"b|c"'),
+    bool_and(x = concat(w, '"', w))::int
+FROM read_csv('{DATA_DIR}/csv/unquoted_escape/mixed.csv', quote = '"', escape = '\', sep = ',', strict_mode = false);
+----
+0	0	1

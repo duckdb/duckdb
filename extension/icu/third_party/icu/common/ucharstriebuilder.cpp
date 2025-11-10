@@ -290,7 +290,7 @@ UCharsTrieBuilder::UCTLinearMatchNode::UCTLinearMatchNode(const UChar *units, in
     hash=hash*37u+ustr_hashUCharsN(units, len);
 }
 
-UBool
+bool
 UCharsTrieBuilder::UCTLinearMatchNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;

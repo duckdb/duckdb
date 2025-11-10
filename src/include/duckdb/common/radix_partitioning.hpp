@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 
@@ -30,15 +30,15 @@ public:
 		return idx_t(1) << radix_bits;
 	}
 
+	template <class T>
+	static inline idx_t RadixBits(T n) {
+		return sizeof(T) * 8 - CountZeros<T>::Leading(n);
+	}
+
 	//! Inverse of NumberOfPartitions, given a number of partitions, get the number of radix bits
-	static inline idx_t RadixBits(idx_t n_partitions) {
+	static inline idx_t RadixBitsOfPowerOfTwo(idx_t n_partitions) {
 		D_ASSERT(IsPowerOfTwo(n_partitions));
-		for (idx_t r = 0; r < sizeof(idx_t) * 8; r++) {
-			if (n_partitions == NumberOfPartitions(r)) {
-				return r;
-			}
-		}
-		throw InternalException("RadixPartitioning::RadixBits unable to find partition count!");
+		return RadixBits(n_partitions) - 1;
 	}
 
 	//! Radix bits begin after uint16_t because these bits are used as salt in the aggregate HT
@@ -52,8 +52,8 @@ public:
 	}
 
 	//! Select using a cutoff on the radix bits of the hash
-	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
-	                    SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits,
+	                    const ValidityMask &partition_mask, SelectionVector *true_sel, SelectionVector *false_sel);
 };
 
 //! RadixPartitionedColumnData is a PartitionedColumnData that partitions input based on the radix of a hash
@@ -107,9 +107,9 @@ private:
 //! RadixPartitionedTupleData is a PartitionedTupleData that partitions input based on the radix of a hash
 class RadixPartitionedTupleData : public PartitionedTupleData {
 public:
-	RadixPartitionedTupleData(BufferManager &buffer_manager, const TupleDataLayout &layout, idx_t radix_bits_p,
+	RadixPartitionedTupleData(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, idx_t radix_bits_p,
 	                          idx_t hash_col_idx_p);
-	RadixPartitionedTupleData(const RadixPartitionedTupleData &other);
+	RadixPartitionedTupleData(RadixPartitionedTupleData &other);
 	~RadixPartitionedTupleData() override;
 
 	idx_t GetRadixBits() const {
@@ -127,14 +127,12 @@ protected:
 	                                   TupleDataPinProperties properties) const override;
 	void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input,
 	                             const SelectionVector &append_sel, const idx_t append_count) override;
-	void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices) const override;
+	void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices,
+	                             unique_ptr<Vector> &utility_vector) const override;
 	idx_t MaxPartitionIndex() const override {
 		return RadixPartitioning::NumberOfPartitions(radix_bits) - 1;
 	}
 
-	bool RepartitionReverseOrder() const override {
-		return true;
-	}
 	void RepartitionFinalizeStates(PartitionedTupleData &old_partitioned_data,
 	                               PartitionedTupleData &new_partitioned_data, PartitionedTupleDataAppendState &state,
 	                               idx_t finished_partition_idx) const override;

@@ -3,12 +3,10 @@
 #include "mbedtls_wrapper.hpp"
 #include "thrift_tools.hpp"
 
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
-#endif
 
 namespace duckdb {
 
@@ -41,12 +39,13 @@ string ParquetKeys::GetObjectType() {
 	return ObjectType();
 }
 
-ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context_p) : context(context_p) {
+ParquetEncryptionConfig::ParquetEncryptionConfig() {
 }
 
-ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context_p, const Value &arg)
-    : ParquetEncryptionConfig(context_p) {
+ParquetEncryptionConfig::ParquetEncryptionConfig(string footer_key_p) : footer_key(std::move(footer_key_p)) {
+}
 
+ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const Value &arg) {
 	if (arg.type().id() != LogicalTypeId::STRUCT) {
 		throw BinderException("Parquet encryption_config must be of type STRUCT");
 	}
@@ -62,7 +61,11 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context_p, const
 				    "No key with name \"%s\" exists. Add it with PRAGMA add_parquet_key('<key_name>','<key>');",
 				    footer_key_name);
 			}
-			footer_key = footer_key_name;
+			// footer key name provided - read the key from the config
+			const auto &keys = ParquetKeys::Get(context);
+			footer_key = keys.GetKey(footer_key_name);
+		} else if (StringUtil::Lower(struct_key) == "footer_key_value") {
+			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
 		} else if (StringUtil::Lower(struct_key) == "column_keys") {
 			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
 		} else {
@@ -76,10 +79,7 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Create(ClientContex
 }
 
 const string &ParquetEncryptionConfig::GetFooterKey() const {
-	const auto &keys = ParquetKeys::Get(context);
-	D_ASSERT(!footer_key.empty());
-	D_ASSERT(keys.HasKey(footer_key));
-	return keys.GetKey(footer_key);
+	return footer_key;
 }
 
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
@@ -89,7 +89,8 @@ using duckdb_apache::thrift::transport::TTransport;
 class EncryptionTransport : public TTransport {
 public:
 	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
+	    : prot(prot_p), trans(*prot.getTransport()),
+	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 		Initialize(key);
 	}
@@ -148,7 +149,8 @@ private:
 		// Generate Nonce
 		aes->GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 		// Initialize Encryption
-		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
+		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
+		                          key.size());
 	}
 
 private:
@@ -170,8 +172,9 @@ private:
 class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
-	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
-	      read_buffer_size(0), read_buffer_offset(0) {
+	    : prot(prot_p), trans(*prot.getTransport()),
+	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
+	      read_buffer_offset(0) {
 		Initialize(key);
 	}
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
@@ -195,7 +198,6 @@ public:
 	}
 
 	uint32_t Finalize() {
-
 		if (read_buffer_offset != read_buffer_size) {
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer: \n"
 			                        "read buffer offset: %d, read buffer size: %d",
@@ -203,22 +205,8 @@ public:
 		}
 
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
-
-		if (aes->IsOpenSSL()) {
-			// For OpenSSL, the obtained tag is an input argument for aes->Finalize()
-			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
-			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-				throw InternalException(
-				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
-			}
-		} else {
-			// For mbedtls, computed_tag is an output argument for aes->Finalize()
-			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-				throw InternalException(
-				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
-			}
-			VerifyTag(computed_tag);
-		}
+		transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
+		aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES);
 
 		if (transport_remaining != 0) {
 			throw InvalidInputException("Encoded ciphertext length differs from actual ciphertext length");
@@ -245,7 +233,8 @@ private:
 		// Read nonce and initialize AES
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
 		// check whether context is initialized
-		aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
+		aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
+		                          key.size());
 	}
 
 	void ReadBlock(uint8_t *buf) {
@@ -263,14 +252,6 @@ private:
 		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
 #endif
 		read_buffer_offset = 0;
-	}
-
-	void VerifyTag(data_t *computed_tag) {
-		data_t read_tag[ParquetCrypto::TAG_BYTES];
-		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
-		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
-			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
-		}
 	}
 
 private:
@@ -318,14 +299,15 @@ private:
 uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
                              const EncryptionUtil &encryption_util_p) {
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
+	auto dprot =
+	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// We have to read the whole thing otherwise thrift throws an error before we realize we're decryption is wrong
 	auto all = dtrans.ReadAll();
 	TCompactProtocolFactoryT<SimpleReadTransport> tsimple_proto_factory;
 	auto simple_prot =
-	    tsimple_proto_factory.getProtocol(std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
+	    tsimple_proto_factory.getProtocol(duckdb_base_std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
 
 	// Read the object
 	object.read(simple_prot.get());
@@ -337,7 +319,8 @@ uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const strin
                               const EncryptionUtil &encryption_util_p) {
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
-	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
+	auto eprot =
+	    tproto_factory.getProtocol(duckdb_base_std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
 	auto &etrans = reinterpret_cast<EncryptionTransport &>(*eprot->getTransport());
 
 	// Write the object in memory
@@ -351,7 +334,8 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
                                  const string &key, const EncryptionUtil &encryption_util_p) {
 	// Create decryption protocol
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
+	auto dprot =
+	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// Read buffer
@@ -366,7 +350,8 @@ uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffe
 	// FIXME: we know the size upfront so we could do a streaming write instead of this
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
-	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
+	auto eprot =
+	    tproto_factory.getProtocol(duckdb_base_std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
 	auto &etrans = reinterpret_cast<EncryptionTransport &>(*eprot->getTransport());
 
 	// Write the data in memory
@@ -387,7 +372,7 @@ bool ParquetCrypto::ValidKey(const std::string &key) {
 	}
 }
 
-string Base64Decode(const string &key) {
+static string Base64Decode(const string &key) {
 	auto result_size = Blob::FromBase64Size(key);
 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
 	Blob::FromBase64(key, output.get(), result_size);

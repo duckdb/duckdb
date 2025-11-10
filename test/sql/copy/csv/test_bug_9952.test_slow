@@ -5,12 +5,13 @@
 statement ok
 PRAGMA enable_verification
 
-# This will fail because by default we will use " as quote if none is found.
 statement error
-FROM 'data/csv/num.tsv.gz'
+FROM read_csv('{DATA_DIR}/csv/num.tsv.gz',quote = '"')
 ----
-Value with unterminated quote found.
+* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
-# This works because we are sampling the whole thing
 statement ok
-FROM read_csv('data/csv/num.tsv.gz', sample_size=-1)
+FROM read_csv('{DATA_DIR}/csv/num.tsv.gz',quote = '"', strict_mode = false)
+
+statement ok
+FROM read_csv('{DATA_DIR}/csv/num.tsv.gz')

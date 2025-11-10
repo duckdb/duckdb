@@ -1,0 +1,22 @@
+# name: test/fuzzer/pedro/in_clause_setop_rewrite.test
+# description: "Type mismatch for SET OPERATION", with IN with more than 4 elements, and UNION
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t0(id int);
+
+statement ok
+insert into t0 values(1);
+
+query I
+SELECT c1 FROM ((SELECT 1 AS c1) UNION (SELECT id AS c1 FROM t0 limit 1)) A where c1 IN (1, 2, 3, 4);
+----
+1
+
+query I
+SELECT c1 FROM ((SELECT 1 AS c1) UNION (SELECT id AS c1 FROM t0 limit 1)) A where c1 IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+----
+1

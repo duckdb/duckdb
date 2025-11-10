@@ -2,13 +2,10 @@
 # description: Test IEJoin projection mapping
 # group: [iejoin]
 
-require skip_reload
-
 statement ok
 PRAGMA threads=1
 
-statement ok
-SELECT SETSEED(0.8765309);
+set seed 0.8765309
 
 statement ok
 CREATE TABLE df (id INTEGER, id2 INTEGER, id3 INTEGER, value_double DOUBLE, value as (value_double::DECIMAL(4,3)), one_min_value as ((1.0 - value_double)::DECIMAL(4,3)))
@@ -27,7 +24,7 @@ query IIIIII
 SELECT SUM(id) AS id, SUM(id2) AS id2, SUM(id3) AS id3, SUM(value) AS sum_value, SUM(one_min_value) AS sum_one_min_value, sum_value + sum_one_min_value AS sum
 FROM df
 ----
-256630	29499	17606	2500.532	2499.468	5000.000
+252652	29774	17657	2498.192	2502.191	5000.383
 
 statement ok
 PRAGMA enable_verification
@@ -37,6 +34,8 @@ foreach prefer False True
 
 statement ok
 PRAGMA prefer_range_joins=${prefer};
+
+# mode output_hash
 
 query I
 SELECT id2, id3, id3_right, sum(value * value_right) as value
@@ -51,7 +50,7 @@ FROM (
 GROUP BY ALL
 ORDER BY ALL
 ----
-660 values hashing to 0acad7a6a360d48246479ab35572ecce
+660 values hashing to fe2237dbeb18fe3400d5323bcab26dd2
 
 endloop
 

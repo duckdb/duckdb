@@ -1,0 +1,337 @@
+name: Cross Version DB test
+on:
+  workflow_call:
+    inputs:
+      git_ref:
+        type: string
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        type: string
+  repository_dispatch:
+  push:
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/CrossVersion.yml'
+
+concurrency:
+  group: crossversion-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  osx-step-1:
+    # Builds binaries for osx
+    name: OSX Release
+    runs-on: macos-14
+    strategy:
+      matrix:
+        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.2', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
+    env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ matrix.version }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ninja
+        run: brew install ninja file
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+      - name: Build
+        shell: bash
+        run: make
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - name: Unit Test
+        shell: bash
+        run: |
+          ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
+          rm -rf my_local_folder/hive
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: files-osx-${{ matrix.version }}
+          path: |
+            my_local_folder/*
+
+  osx-step-2:
+    # Builds binaries for linux
+    name: OSX Release test
+    runs-on: macos-14
+    needs:
+      - osx-step-1
+      - linux-step-1
+    strategy:
+      matrix:
+        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.2', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
+    env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ matrix.version }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+      - name: Build
+        shell: bash
+        run: make
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-v1.0.0
+          path: osx_v1_0_0
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-v1.1.3
+          path: osx_v1_1_3
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-v1.2.2
+          path: osx_v1_2_2
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-v1.3-ossivalis
+          path: osx_v1_3-ossivalis
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-main
+          path: osx_main
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-v1.0.0
+          path: linux_v1_0_0
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-v1.1.3
+          path: linux_v1_1_3
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-v1.2.2
+          path: linux_v1_2_2
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-v1.3-ossivalis
+          path: linux_v1_3-ossivalis
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-main
+          path: linux_main
+
+      - name: Cross test
+        shell: bash
+        run: |
+          touch report
+          for folder in osx_v1_0_0 osx_v1_1_3 osx_main linux_main linux_v1_0_0 linux_v1_1_3 linux_v1_2_2 linux_v1_2 osx_v1_2_2 osx_v1_2; do
+            for filename in $folder/*; do
+              touch $filename.wal && cp $filename.wal a.db.wal 2>/dev/null && cp $filename a.db 2>/dev/null && (./build/release/duckdb a.db -c "ATTACH 'b.db'; COPY FROM DATABASE a TO b;" 2>out || (grep "but it is not a valid DuckDB database file!" out 2>/dev/null || ( echo "--> " $filename && cat out && echo "" && (grep -i "internal error" out && echo "--> " $filename >> report && cat out >> report && echo "" >> report)))) || true
+              rm -f b.db a.db b.db.wal a.db.wal
+            done
+          done
+
+      - name: Internal error report
+        shell: bash
+        run: |
+            cat report
+
+  linux-step-1:
+    # Builds binaries for linux
+    name: Linux Release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.2', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
+    env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ matrix.version }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+      - name: Build
+        shell: bash
+        run: make
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - name: Unit Test
+        shell: bash
+        run: |
+          ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
+          rm -rf my_local_folder/hive
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: files-linux-${{ matrix.version }}
+          path: |
+            my_local_folder/*
+
+  linux-step-2:
+    # Builds binaries for linux
+    name: Linux Release Test
+    runs-on: ubuntu-latest
+    needs:
+      - osx-step-1
+      - linux-step-1
+    strategy:
+      matrix:
+        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.2', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
+    env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ matrix.version }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+      - name: Build
+        shell: bash
+        run: make
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-v1.0.0
+          path: osx_v1_0_0
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-v1.1.3
+          path: osx_v1_1_3
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-v1.2.2
+          path: osx_v1_2_2
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-v1.3-ossivalis
+          path: osx_v1_3-ossivalis
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-osx-main
+          path: osx_main
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-v1.0.0
+          path: linux_v1_0_0
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-v1.1.3
+          path: linux_v1_1_3
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-v1.2.2
+          path: linux_v1_2_2
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-v1.3-ossivalis
+          path: linux_v1_3-ossivalis
+      - uses: actions/download-artifact@v4
+        with:
+          name: files-linux-main
+          path: linux_main
+
+      - name: Cross test
+        shell: bash
+        run: |
+          touch report
+          for folder in osx_v1_0_0 osx_v1_1_3 osx_main osx_v1_3-ossivalis linux_main linux_v1_3-ossivalis linux_v1_0_0 linux_v1_1_3 linux_v1_2_2 linux_v1_2 osx_v1_2_2 osx_v1_2; do
+            for filename in $folder/*; do
+              touch $filename.wal && cp $filename.wal a.db.wal 2>/dev/null && cp $filename a.db 2>/dev/null && (./build/release/duckdb a.db -c "ATTACH 'b.db'; COPY FROM DATABASE a TO b;" 2>out || (grep "but it is not a valid DuckDB database file!" out 2>/dev/null || ( echo "--> " $filename && cat out && echo "" && (grep -i "internal error" out && echo "--> " $filename >> report && cat out >> report && echo "" >> report)))) || true
+              rm -f b.db a.db b.db.wal a.db.wal
+            done
+          done
+
+      - name: Internal error report
+        shell: bash
+        run: |
+            cat report

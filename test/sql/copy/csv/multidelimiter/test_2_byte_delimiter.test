@@ -1,0 +1,128 @@
+# name: test/sql/copy/csv/multidelimiter/test_2_byte_delimiter.test
+# description: Test CSVs delimiter with two bytes
+# group: [multidelimiter]
+
+statement ok
+PRAGMA enable_verification
+
+
+query II
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_small.csv', delim = 'aa', header = False,  buffer_size = 8)
+----
+1	2
+1	a2
+1ab	2
+
+
+loop buffer_size 9 13
+
+query II
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = False, buffer_size = ${buffer_size})
+----
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1a	2
+1a	b2
+1	2
+1	2
+1	2
+1	2
+1a	2
+1a	b2
+
+query II
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = False,  buffer_size = ${buffer_size})
+----
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	a2
+1	ab2
+1	2
+1	2
+1	2
+1	2
+1	a2
+1ab	2
+
+endloop
+
+loop buffer_size 13 17
+
+query II
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', header = False,  buffer_size = ${buffer_size})
+----
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	a2
+1	aa2
+1	2
+1	2
+1	2
+1	2
+1a	2
+1a	a2
+
+query II
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted_2.csv', delim = 'aa', header = False,  buffer_size = ${buffer_size})
+----
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	a2
+1	aa2
+1	2
+1	2
+1	2
+1	2
+1a	2
+1a	a2
+
+endloop
+
+
+query IIII
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/many_bytes.csv', delim = '\|', header = False)
+----
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL

@@ -1,0 +1,30 @@
+# name: test/sql/optimizer/test_rowid_pushdown_deletes.test
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl_grow_shrink (id_var VARCHAR, id_int INTEGER, id_point BIGINT);
+
+
+# growing
+loop i 0 29
+
+statement ok
+INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, ${i});
+
+endloop
+
+# shrinking
+loop i 0 29
+
+query II
+SELECT id_int, id_point = ${i} FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+2	true
+
+statement ok
+DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+endloop

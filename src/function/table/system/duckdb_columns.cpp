@@ -80,7 +80,7 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	return nullptr;
 }
 
-unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -115,7 +115,7 @@ public:
 	explicit TableColumnHelper(TableCatalogEntry &entry) : entry(entry) {
 		for (auto &constraint : entry.GetConstraints()) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
-				auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
+				auto &not_null = constraint->Cast<NotNullConstraint>();
 				not_null_cols.insert(not_null.index.index);
 			}
 		}
@@ -196,7 +196,8 @@ unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry &entry) {
 	case CatalogType::VIEW_ENTRY:
 		return make_uniq<ViewColumnHelper>(entry.Cast<ViewCatalogEntry>());
 	default:
-		throw NotImplementedException("Unsupported catalog type for duckdb_columns");
+		throw NotImplementedException({{"catalog_type", CatalogTypeToString(entry.type)}},
+		                              "Unsupported catalog type for duckdb_columns");
 	}
 }
 
@@ -302,7 +303,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 	}
 }
 
-void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBColumnsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

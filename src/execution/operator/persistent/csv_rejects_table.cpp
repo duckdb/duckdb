@@ -38,10 +38,10 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	    "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(rejects_scan) + "_" + StringUtil::Upper(rejects_error);
 	auto &cache = ObjectCache::GetObjectCache(context);
 	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto rejects_scan_exist = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, DEFAULT_SCHEMA, rejects_scan,
-	                                           OnEntryNotFound::RETURN_NULL) != nullptr;
-	auto rejects_error_exist = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, DEFAULT_SCHEMA, rejects_error,
-	                                            OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto rejects_scan_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_scan,
+	                                                              OnEntryNotFound::RETURN_NULL) != nullptr;
+	auto rejects_error_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_error,
+	                                                               OnEntryNotFound::RETURN_NULL) != nullptr;
 	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(key)) {
 		std::ostringstream error;
 		if (rejects_scan_exist) {
@@ -63,14 +63,17 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 
 	// Create CSV_ERROR_TYPE ENUM
 	string enum_name = "CSV_ERROR_TYPE";
-	Vector order_errors(LogicalType::VARCHAR, 6);
+	constexpr uint8_t number_of_accepted_errors = 7;
+	Vector order_errors(LogicalType::VARCHAR, number_of_accepted_errors);
 	order_errors.SetValue(0, "CAST");
 	order_errors.SetValue(1, "MISSING COLUMNS");
 	order_errors.SetValue(2, "TOO MANY COLUMNS");
 	order_errors.SetValue(3, "UNQUOTED VALUE");
 	order_errors.SetValue(4, "LINE SIZE OVER MAXIMUM");
-	order_errors.SetValue(5, "INVALID UNICODE");
-	LogicalType enum_type = LogicalType::ENUM(enum_name, order_errors, 6);
+	order_errors.SetValue(5, "INVALID ENCODING");
+	order_errors.SetValue(6, "INVALID STATE");
+
+	LogicalType enum_type = LogicalType::ENUM(enum_name, order_errors, number_of_accepted_errors);
 	auto type_info = make_uniq<CreateTypeInfo>(enum_name, enum_type);
 	type_info->temporary = true;
 	type_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;

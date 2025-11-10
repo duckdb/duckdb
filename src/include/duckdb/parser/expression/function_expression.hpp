@@ -61,8 +61,8 @@ public:
 
 	void Verify() const override;
 
-	//! Returns true, if the function has a lambda expression as a child.
-	bool IsLambdaFunction() const;
+	//! Returns a pointer to the lambda expression, if the function has a lambda expression as a child, else nullptr.
+	optional_ptr<ParsedExpression> IsLambdaFunction() const;
 
 public:
 	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>
@@ -98,9 +98,9 @@ public:
 			result += "DISTINCT ";
 		}
 		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
-			return child->alias.empty() || !add_alias
+			return child->GetAlias().empty() || !add_alias
 			           ? child->ToString()
-			           : StringUtil::Format("%s := %s", SQLIdentifier(child->alias), child->ToString());
+			           : StringUtil::Format("%s := %s", SQLIdentifier(child->GetAlias()), child->ToString());
 		});
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {

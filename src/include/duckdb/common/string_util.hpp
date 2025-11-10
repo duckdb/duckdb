@@ -14,7 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
-
+#include "duckdb/common/complex_json.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -86,6 +86,9 @@ public:
 	static bool CharacterIsAlpha(char c) {
 		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 	}
+	static bool CharacterIsAlphaNumeric(char c) {
+		return CharacterIsAlpha(c) || CharacterIsDigit(c);
+	}
 	static bool CharacterIsOperator(char c) {
 		if (c == '_') {
 			return false;
@@ -124,6 +127,10 @@ public:
 
 	//! Returns true if the needle string exists in the haystack
 	DUCKDB_API static bool Contains(const string &haystack, const string &needle);
+	DUCKDB_API static bool Contains(const string &haystack, const char &needle_char);
+
+	//! Returns the position of needle string within the haystack
+	DUCKDB_API static optional_idx Find(const string &haystack, const string &needle);
 
 	//! Returns true if the target string starts with the given prefix
 	DUCKDB_API static bool StartsWith(string str, string prefix);
@@ -136,6 +143,10 @@ public:
 
 	//! Split the input string based on newline char
 	DUCKDB_API static vector<string> Split(const string &str, char delimiter);
+
+	//! Split the input string, ignore delimiters within parentheses. Note: leading/trailing spaces are NOT stripped
+	DUCKDB_API static vector<string> SplitWithParentheses(const string &str, char delimiter = ',', char par_open = '(',
+	                                                      char par_close = ')');
 
 	//! Split the input string allong a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
@@ -153,6 +164,11 @@ public:
 	DUCKDB_API static idx_t URLDecodeSize(const char *input, idx_t input_size, bool plus_to_space = false);
 	DUCKDB_API static void URLDecodeBuffer(const char *input, idx_t input_size, char *output,
 	                                       bool plus_to_space = false);
+
+	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
+	DUCKDB_API static void SkipBOM(const char *buffer_ptr, const idx_t &buffer_size, idx_t &buffer_pos);
+
+	DUCKDB_API static idx_t ToUnsigned(const string &str);
 
 	template <class T>
 	static string ToString(const vector<T> &input, const string &separator) {
@@ -197,12 +213,17 @@ public:
 	DUCKDB_API static string Title(const string &str);
 
 	DUCKDB_API static bool IsLower(const string &str);
+	DUCKDB_API static bool IsUpper(const string &str);
 
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);
+	DUCKDB_API static uint64_t CIHash(const char *str, idx_t size);
 
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
+
+	//! Case insensitive equals (null-terminated strings)
+	DUCKDB_API static bool CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size);
 
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
@@ -279,23 +300,52 @@ public:
 		}
 		return strcmp(s1, s2) == 0;
 	}
+	static bool Equals(const string &s1, const char *s2) {
+		return Equals(s1.c_str(), s2);
+	}
+	static bool Equals(const char *s1, const string &s2) {
+		return Equals(s1, s2.c_str());
+	}
+	static bool Equals(const string &s1, const string &s2) {
+		return s1 == s2;
+	}
 
 	//! JSON method that parses a { string: value } JSON blob
-	//! NOTE: this method ONLY parses a JSON {"key": "value"} object, it does not support ANYTHING else
 	//! NOTE: this method is not efficient
 	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
 	//! empty map is returned
-	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json);
+	//! Parses complex (i.e., nested) Json maps, it also parses invalid JSONs, as a pure string.
+	DUCKDB_API static unique_ptr<ComplexJSON> ParseJSONMap(const string &json, bool ignore_errors = false);
+
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
 	//! NOTE: this method is not efficient
-	DUCKDB_API static string ToJSONMap(ExceptionType type, const string &message,
-	                                   const unordered_map<string, string> &map);
+	DUCKDB_API static string ExceptionToJSONMap(ExceptionType type, const string &message,
+	                                            const unordered_map<string, string> &map);
+
+	//! Transforms an unordered map to a JSON string
+	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
+	//! Transforms an complex JSON to a JSON string
+	DUCKDB_API static string ToComplexJSONMap(const ComplexJSON &complex_json);
+
+	DUCKDB_API static string ValidateJSON(const char *data, const idx_t &len);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);
 	DUCKDB_API static string GetFileStem(const string &file_name);
 	DUCKDB_API static string GetFilePath(const string &file_path);
+
+	struct EnumStringLiteral {
+		uint32_t number;
+		const char *string;
+	};
+
+	DUCKDB_API static uint32_t StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count,
+	                                        const char *enum_name, const char *str_value);
+	DUCKDB_API static const char *EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count,
+	                                           const char *enum_name, uint32_t enum_value);
+	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
+	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
 };
 
 } // namespace duckdb

@@ -2,16 +2,21 @@ add_library_unity(
   test_sql_capi
   OBJECT
   capi_aggregate_functions.cpp
+  capi_config_options.cpp
+  capi_copy_function.cpp
   capi_custom_type.cpp
+  capi_file_system.cpp
   capi_scalar_functions.cpp
   capi_table_functions.cpp
   test_capi.cpp
   test_capi_any_invalid_type.cpp
+  test_capi_append_data_chunk.cpp
   test_starting_database.cpp
   test_capi_appender.cpp
   test_capi_arrow.cpp
   test_capi_data_chunk.cpp
   test_capi_extract.cpp
+  test_capi_instance_cache.cpp
   test_capi_pending.cpp
   test_capi_prepared.cpp
   test_capi_profiling.cpp
@@ -19,6 +24,7 @@ add_library_unity(
   test_capi_complex_types.cpp
   test_capi_to_decimal.cpp
   test_capi_values.cpp
+  test_capi_vector.cpp
   test_capi_replacement_scan.cpp
   test_capi_streaming.cpp
   test_capi_table_description.cpp

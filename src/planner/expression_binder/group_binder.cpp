@@ -18,7 +18,7 @@ GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &nod
 BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = *expr_ptr;
 	if (root_expression && depth == 0) {
-		switch (expr.expression_class) {
+		switch (expr.GetExpressionClass()) {
 		case ExpressionClass::COLUMN_REF:
 			return BindColumnRef(expr.Cast<ColumnRefExpression>());
 		case ExpressionClass::CONSTANT:
@@ -29,7 +29,7 @@ BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 			break;
 		}
 	}
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindUnsupportedExpression(expr, depth, "GROUP BY clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:

@@ -1,7 +1,11 @@
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 
 using duckdb::LogicalTypeId;
@@ -115,6 +119,43 @@ duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val) {
 	auto res = CAPIGetValue<duckdb::uhugeint_t, LogicalTypeId::UHUGEINT>(val);
 	return {res.lower, res.upper};
 }
+duckdb_value duckdb_create_bignum(duckdb_bignum input) {
+	return WrapValue(new duckdb::Value(
+	    duckdb::Value::BIGNUM(duckdb::Bignum::FromByteArray(input.data, input.size, input.is_negative))));
+}
+duckdb_bignum duckdb_get_bignum(duckdb_value val) {
+	auto v = UnwrapValue(val).DefaultCastAs(duckdb::LogicalType::BIGNUM);
+	auto &str = duckdb::StringValue::Get(v);
+	duckdb::vector<uint8_t> byte_array;
+	bool is_negative;
+	duckdb::Bignum::GetByteArray(byte_array, is_negative, duckdb::string_t(str));
+	auto size = byte_array.size();
+	auto data = reinterpret_cast<uint8_t *>(malloc(size));
+	memcpy(data, byte_array.data(), size);
+	return {data, size, is_negative};
+}
+duckdb_value duckdb_create_decimal(duckdb_decimal input) {
+	duckdb::hugeint_t hugeint(input.value.upper, input.value.lower);
+	int64_t int64;
+	if (duckdb::Hugeint::TryCast<int64_t>(hugeint, int64)) {
+		// The int64 DECIMAL value constructor will select the appropriate physical type based on width.
+		return WrapValue(new duckdb::Value(duckdb::Value::DECIMAL(int64, input.width, input.scale)));
+	} else {
+		// The hugeint DECIMAL value constructor always uses a physical hugeint, and requires width >= MAX_WIDTH_INT64.
+		return WrapValue(new duckdb::Value(duckdb::Value::DECIMAL(hugeint, input.width, input.scale)));
+	}
+}
+duckdb_decimal duckdb_get_decimal(duckdb_value val) {
+	auto &v = UnwrapValue(val);
+	auto &type = v.type();
+	if (type.id() != LogicalTypeId::DECIMAL) {
+		return {0, 0, {0, 0}};
+	}
+	auto width = duckdb::DecimalType::GetWidth(type);
+	auto scale = duckdb::DecimalType::GetScale(type);
+	duckdb::hugeint_t hugeint = duckdb::IntegralValue::Get(v);
+	return {width, scale, {hugeint.lower, hugeint.upper}};
+}
 duckdb_value duckdb_create_float(float input) {
 	return CAPICreateValue(input);
 }
@@ -145,12 +186,73 @@ duckdb_value duckdb_create_time_tz_value(duckdb_time_tz input) {
 duckdb_time_tz duckdb_get_time_tz(duckdb_value val) {
 	return {CAPIGetValue<duckdb::dtime_tz_t, LogicalTypeId::TIME_TZ>(val).bits};
 }
-duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
-	return CAPICreateValue(duckdb::timestamp_t(input.micros));
+duckdb_value duckdb_create_time_ns(duckdb_time_ns input) {
+	return CAPICreateValue(duckdb::dtime_ns_t(input.nanos));
 }
+duckdb_time_ns duckdb_get_time_ns(duckdb_value val) {
+	return {CAPIGetValue<duckdb::dtime_ns_t, LogicalTypeId::TIME_NS>(val).micros};
+}
+
+duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
+	duckdb::timestamp_t ts(input.micros);
+	return CAPICreateValue(ts);
+}
+
 duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
 	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP>(val).value};
 }
+
+duckdb_value duckdb_create_timestamp_tz(duckdb_timestamp input) {
+	duckdb::timestamp_tz_t ts(input.micros);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_tz_t, LogicalTypeId::TIMESTAMP_TZ>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_s(duckdb_timestamp_s input) {
+	duckdb::timestamp_sec_t ts(input.seconds);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp_s duckdb_get_timestamp_s(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_sec_t, LogicalTypeId::TIMESTAMP_SEC>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_ms(duckdb_timestamp_ms input) {
+	duckdb::timestamp_ms_t ts(input.millis);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp_ms duckdb_get_timestamp_ms(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_ms_t, LogicalTypeId::TIMESTAMP_MS>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_ns(duckdb_timestamp_ns input) {
+	duckdb::timestamp_ns_t ts(input.nanos);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp_ns duckdb_get_timestamp_ns(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_ns_t, LogicalTypeId::TIMESTAMP_NS>(val).value};
+}
+
 duckdb_value duckdb_create_interval(duckdb_interval input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
 }
@@ -168,6 +270,27 @@ duckdb_blob duckdb_get_blob(duckdb_value val) {
 	auto result = reinterpret_cast<void *>(malloc(sizeof(char) * str.size()));
 	memcpy(result, str.c_str(), str.size());
 	return {result, str.size()};
+}
+duckdb_value duckdb_create_bit(duckdb_bit input) {
+	return WrapValue(new duckdb::Value(duckdb::Value::BIT(input.data, input.size)));
+}
+duckdb_bit duckdb_get_bit(duckdb_value val) {
+	auto v = UnwrapValue(val).DefaultCastAs(duckdb::LogicalType::BIT);
+	auto &str = duckdb::StringValue::Get(v);
+	auto size = str.size();
+	auto data = reinterpret_cast<uint8_t *>(malloc(size));
+	memcpy(data, str.c_str(), size);
+	return {data, size};
+}
+duckdb_value duckdb_create_uuid(duckdb_uhugeint input) {
+	// uhugeint_t has a constexpr ctor with upper first
+	return WrapValue(new duckdb::Value(duckdb::Value::UUID(duckdb::UUID::FromUHugeint({input.upper, input.lower}))));
+}
+duckdb_uhugeint duckdb_get_uuid(duckdb_value val) {
+	auto hugeint = CAPIGetValue<duckdb::hugeint_t, LogicalTypeId::UUID>(val);
+	auto uhugeint = duckdb::UUID::ToUHugeint(hugeint);
+	// duckdb_uhugeint has no constexpr ctor; struct is lower first
+	return {uhugeint.lower, uhugeint.upper};
 }
 
 duckdb_logical_type duckdb_get_value_type(duckdb_value val) {
@@ -235,7 +358,7 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 		}
 		unwrapped_values.push_back(UnwrapValue(value));
 	}
-	duckdb::Value *list_value = new duckdb::Value;
+	auto list_value = new duckdb::Value;
 	try {
 		*list_value = duckdb::Value::LIST(logical_type, std::move(unwrapped_values));
 	} catch (...) {
@@ -276,13 +399,79 @@ duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *v
 	return WrapValue(array_value);
 }
 
+duckdb_value duckdb_create_map_value(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
+                                     idx_t entry_count) {
+	if (!map_type || !keys || !values) {
+		return nullptr;
+	}
+	const auto &map_logical_type = UnwrapType(map_type);
+	if (map_logical_type.id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	if (duckdb::TypeVisitor::Contains(map_logical_type, duckdb::LogicalTypeId::INVALID) ||
+	    duckdb::TypeVisitor::Contains(map_logical_type, duckdb::LogicalTypeId::ANY)) {
+		return nullptr;
+	}
+
+	const auto &key_logical_type = duckdb::MapType::KeyType(map_logical_type);
+	const auto &value_logical_type = duckdb::MapType::ValueType(map_logical_type);
+	duckdb::vector<duckdb::Value> unwrapped_keys;
+	duckdb::vector<duckdb::Value> unwrapped_values;
+	for (idx_t i = 0; i < entry_count; i++) {
+		const auto key = keys[i];
+		const auto value = values[i];
+		if (!key || !value) {
+			return nullptr;
+		}
+		unwrapped_keys.emplace_back(UnwrapValue(key));
+		unwrapped_values.emplace_back(UnwrapValue(value));
+	}
+	duckdb::Value *map_value = new duckdb::Value;
+	try {
+		*map_value = duckdb::Value::MAP(key_logical_type, value_logical_type, std::move(unwrapped_keys),
+		                                std::move(unwrapped_values));
+	} catch (...) {
+		delete map_value;
+		return nullptr;
+	}
+	return WrapValue(map_value);
+}
+
+duckdb_value duckdb_create_union_value(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value) {
+	if (!union_type || !value) {
+		return nullptr;
+	}
+	const auto &union_logical_type = UnwrapType(union_type);
+	if (union_logical_type.id() != duckdb::LogicalTypeId::UNION) {
+		return nullptr;
+	}
+	idx_t member_count = duckdb::UnionType::GetMemberCount(union_logical_type);
+	if (tag_index >= member_count) {
+		return nullptr;
+	}
+	const auto &member_type = duckdb::UnionType::GetMemberType(union_logical_type, tag_index);
+	const auto &unwrapped_value = UnwrapValue(value);
+	if (unwrapped_value.type() != member_type) {
+		return nullptr;
+	}
+	const auto member_types = duckdb::UnionType::CopyMemberTypes(union_logical_type);
+	duckdb::Value *union_value = new duckdb::Value;
+	try {
+		*union_value = duckdb::Value::UNION(member_types, duckdb::NumericCast<uint8_t>(tag_index), unwrapped_value);
+	} catch (...) {
+		delete union_value;
+		return nullptr;
+	}
+	return WrapValue(union_value);
+}
+
 idx_t duckdb_get_map_size(duckdb_value value) {
 	if (!value) {
 		return 0;
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP || val.IsNull()) {
 		return 0;
 	}
 
@@ -296,7 +485,7 @@ duckdb_value duckdb_get_map_key(duckdb_value value, idx_t index) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP || val.IsNull()) {
 		return nullptr;
 	}
 
@@ -316,7 +505,7 @@ duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP || val.IsNull()) {
 		return nullptr;
 	}
 
@@ -328,4 +517,109 @@ duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
 	auto &child = children[index];
 	auto &child_struct = duckdb::StructValue::GetChildren(child);
 	return WrapValue(new duckdb::Value(child_struct[1]));
+}
+
+bool duckdb_is_null_value(duckdb_value value) {
+	if (!value) {
+		return false;
+	}
+	return UnwrapValue(value).IsNull();
+}
+
+duckdb_value duckdb_create_null_value() {
+	return WrapValue(new duckdb::Value());
+}
+
+idx_t duckdb_get_list_size(duckdb_value value) {
+	if (!value) {
+		return 0;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::LIST || val.IsNull()) {
+		return 0;
+	}
+
+	auto &children = duckdb::ListValue::GetChildren(val);
+	return children.size();
+}
+
+duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index) {
+	if (!value) {
+		return nullptr;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::LIST || val.IsNull()) {
+		return nullptr;
+	}
+
+	auto &children = duckdb::ListValue::GetChildren(val);
+	if (index >= children.size()) {
+		return nullptr;
+	}
+
+	return WrapValue(new duckdb::Value(children[index]));
+}
+
+duckdb_value duckdb_create_enum_value(duckdb_logical_type type, uint64_t value) {
+	if (!type) {
+		return nullptr;
+	}
+
+	auto &logical_type = UnwrapType(type);
+	if (logical_type.id() != LogicalTypeId::ENUM) {
+		return nullptr;
+	}
+
+	if (value >= duckdb::EnumType::GetSize(logical_type)) {
+		return nullptr;
+	}
+
+	return WrapValue(new duckdb::Value(duckdb::Value::ENUM(value, logical_type)));
+}
+
+uint64_t duckdb_get_enum_value(duckdb_value value) {
+	if (!value) {
+		return 0;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::ENUM || val.IsNull()) {
+		return 0;
+	}
+
+	return val.GetValue<uint64_t>();
+}
+
+duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index) {
+	if (!value) {
+		return nullptr;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::STRUCT || val.IsNull()) {
+		return nullptr;
+	}
+
+	auto &children = duckdb::StructValue::GetChildren(val);
+	if (index >= children.size()) {
+		return nullptr;
+	}
+
+	return WrapValue(new duckdb::Value(children[index]));
+}
+
+char *duckdb_value_to_string(duckdb_value val) {
+	if (!val) {
+		return nullptr;
+	}
+
+	auto v = UnwrapValue(val);
+	auto str = v.ToSQLString();
+
+	auto result = reinterpret_cast<char *>(malloc(sizeof(char) * (str.size() + 1)));
+	memcpy(result, str.c_str(), str.size());
+	result[str.size()] = '\0';
+	return result;
 }

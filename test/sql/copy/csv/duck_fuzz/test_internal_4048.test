@@ -1,0 +1,20 @@
+# name: test/sql/copy/csv/duck_fuzz/test_internal_4048.test
+# description: Test Fuzz Issue 4048
+# group: [duck_fuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM sniff_csv('{DATA_DIR}/csv/14512.csv', names := [NULL]);
+----
+Binder Error: read_csv names parameter cannot have a NULL value
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+statement error
+SELECT DISTINCT NULL, c3, (c4 <= c1), (c3 BETWEEN c4 AND c2)
+FROM sniff_csv('1a616242-1dcd-4914-99d1-16119d9b6e4c', "names" := ['1970-01-01'::DATE, 'infinity'::DATE, '-infinity'::DATE, NULL, '2022-05-12'::DATE], filename := '9be2bc9d-d49f-4564-bfa4-6336b211a874') AS t5(c1, c2, c3, c4) WHERE c1 GROUP BY c3 LIMIT ('c4000757-69ca-400e-b58a-1dac73b85595' IS NULL);
+----
+Binder Error: read_csv names parameter cannot have a NULL value

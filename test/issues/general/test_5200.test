@@ -21,3 +21,4 @@ where t.n<9 and f.n<=t.n+1
 )
 select sum(f.f/t.f) from t,f where t.n=4 and t.s>0 and t.s=f.n;
 ----
+Out of Range Error: Overflow in multiplication of INT64 (2432902008176640000 * 21)

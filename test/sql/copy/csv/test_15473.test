@@ -1,0 +1,47 @@
+# name: test/sql/copy/csv/test_15473.test
+# description: Test for issue 15473
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select columns from sniff_csv('{DATA_DIR}/csv/15473.csv');
+----
+[{'name': name, 'type': VARCHAR}, {'name': Date, 'type': VARCHAR}, {'name': height, 'type': BIGINT}]
+
+query I
+select columns from sniff_csv('{DATA_DIR}/csv/15473_time.csv');
+----
+[{'name': a, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('{DATA_DIR}/csv/15473_timestamp.csv');
+----
+[{'name': a, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('{DATA_DIR}/csv/15473_date_timestamp.csv');
+----
+[{'name': a, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('{DATA_DIR}/csv/15473_time_timestamp.csv');
+----
+[{'name': a, 'type': VARCHAR}]
+
+
+# Test over 10000 rows
+statement ok
+CREATE TABLE t1 AS select '2024/12/12' as a, '01:02:03' as b, '2020/01/01 01:02:03' as c from range(0,10000) ;
+
+statement ok
+insert into t1  values ('1','1','1');
+
+statement ok
+COPY t1 TO '{TEMP_DIR}/date_int.csv' (FORMAT CSV);
+
+query I
+select columns from sniff_csv('{TEMP_DIR}/date_int.csv');
+----
+[{'name': a, 'type': VARCHAR}, {'name': b, 'type': VARCHAR}, {'name': c, 'type': VARCHAR}]

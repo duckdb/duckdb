@@ -103,5 +103,62 @@
       }
     ],
     "constructor": ["child_idx", "child_name", "child_filter"]
+  },
+  {
+    "class": "OptionalFilter",
+    "base": "TableFilter",
+    "enum": "OPTIONAL_FILTER",
+    "includes": [
+      "duckdb/planner/filter/optional_filter.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "child_filter",
+        "type": "unique_ptr<TableFilter>"
+      }
+    ]
+  },
+  {
+    "class": "InFilter",
+    "base": "TableFilter",
+    "enum": "IN_FILTER",
+    "includes": [
+      "duckdb/planner/filter/in_filter.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "values",
+        "type": "vector<Value>"
+      }
+    ],
+    "constructor": ["values"]
+  },
+  {
+    "class": "DynamicFilter",
+    "base": "TableFilter",
+    "includes": [
+      "duckdb/planner/filter/dynamic_filter.hpp"
+    ],
+    "enum": "DYNAMIC_FILTER",
+    "members": [
+    ]
+  },
+  {
+    "class": "ExpressionFilter",
+    "base": "TableFilter",
+    "includes": [
+      "duckdb/planner/filter/expression_filter.hpp"
+    ],
+    "enum": "EXPRESSION_FILTER",
+    "members": [
+      {
+        "id": 200,
+        "name": "expr",
+        "type": "Expression*"
+      }
+    ],
+    "constructor": ["expr"]
   }
 ]

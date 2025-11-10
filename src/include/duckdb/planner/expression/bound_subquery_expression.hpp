@@ -29,18 +29,18 @@ public:
 	//! The binder used to bind the subquery node
 	shared_ptr<Binder> binder;
 	//! The bound subquery node
-	unique_ptr<BoundQueryNode> subquery;
+	BoundStatement subquery;
 	//! The subquery type
 	SubqueryType subquery_type;
-	//! the child expression to compare with (in case of IN, ANY, ALL operators)
-	unique_ptr<Expression> child;
+	//! the child expressions to compare with (in case of IN, ANY, ALL operators)
+	vector<unique_ptr<Expression>> children;
 	//! The comparison type of the child expression with the subquery (in case of ANY, ALL operators)
 	ExpressionType comparison_type;
-	//! The LogicalType of the subquery result. Only used for ANY expressions.
-	LogicalType child_type;
+	//! The LogicalTypes of the subquery result. Only used for ANY expressions.
+	vector<LogicalType> child_types;
 	//! The target LogicalType of the subquery result (i.e. to which type it should be casted, if child_type <>
 	//! child_target). Only used for ANY expressions.
-	LogicalType child_target;
+	vector<LogicalType> child_targets;
 
 public:
 	bool HasSubquery() const override {

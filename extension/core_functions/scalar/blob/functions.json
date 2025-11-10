@@ -1,0 +1,35 @@
+[
+    {
+        "name": "decode",
+        "parameters": "blob",
+        "description": "Converts `blob` to `VARCHAR`. Fails if `blob` is not valid UTF-8.",
+        "example": "decode('\\xC3\\xBC'::BLOB)",
+        "type": "scalar_function",
+        "categories": ["blob"]
+    },
+    {
+        "name": "encode",
+        "parameters": "string",
+        "description": "Converts the `string` to `BLOB`. Converts UTF-8 characters into literal encoding.",
+        "example": "encode('my_string_with_\u00fc')",
+        "type": "scalar_function",
+        "categories": ["blob"]
+    },
+    {
+        "name": "from_base64",
+        "parameters": "string",
+        "description": "Converts a base64 encoded `string` to a character string (`BLOB`).",
+        "example": "from_base64('QQ==')",
+        "type": "scalar_function",
+        "categories": ["string", "blob"]
+    },
+    {
+        "name": "to_base64",
+        "parameters": "blob",
+        "description": "Converts a `blob` to a base64 encoded string.",
+        "example": "to_base64('A'::BLOB)",
+        "type": "scalar_function",
+        "categories": ["string", "blob"],
+        "aliases": ["base64"]
+    }
+]

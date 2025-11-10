@@ -1,0 +1,157 @@
+# name: test/sql/cast/string_to_map_escapes.test
+# group: [cast]
+
+# Valid: key and value with escaped space
+query I
+SELECT $${"key\ with\ space" = "value\ with\ space"}$$::MAP(VARCHAR, VARCHAR);
+----
+{key with space=value with space}
+
+# Valid: key with escaped quote and value with escaped quote
+query I
+SELECT $${\"key\" = \"value\"}$$::MAP(VARCHAR, VARCHAR);
+----
+{'"key"'='"value"'}
+
+# Valid: key with escaped backslash, value with escaped backslash
+query I
+SELECT $${"key\ with\ backslash" = "value\ with\ backslash"}$$::MAP(VARCHAR, VARCHAR);
+----
+{key with backslash=value with backslash}
+
+# Valid: key with escaped comma, value with escaped comma
+query I
+SELECT $${"key\ with\, comma" = "value\ with\, comma"}$$::MAP(VARCHAR, VARCHAR);
+----
+{'key with, comma'='value with, comma'}
+
+# Valid: key and value with escaped colon
+query I
+SELECT $${"key\ with\ colon\:" = "value\ with\ colon\:"}$$::MAP(VARCHAR, VARCHAR);
+----
+{'key with colon:'='value with colon:'}
+
+## FIXME: not sure what to do here, maybe we shouldn't "respect scopes" if the child type is not nested
+## Valid: key and value with parentheses
+#query I
+#SELECT $${key\ (with\ parens) = value\ (with\ parens)}$$::MAP(VARCHAR, VARCHAR);
+#----
+#{key (with parens)=value (with parens)}
+
+# Valid: key contains unescaped space
+query I
+SELECT $${key with space = value with space}$$::MAP(VARCHAR, VARCHAR);
+----
+{key with space=value with space}
+
+# Invalid: key input contains quotes
+query I
+SELECT $${key"with"quote = value}$$::MAP(VARCHAR, VARCHAR);
+----
+{keywithquote=value}
+
+# Valid: value input contains quotes
+query I
+SELECT $${key = value"with"quote}$$::MAP(VARCHAR, VARCHAR);
+----
+{key=valuewithquote}
+
+# Valid: key contains unescaped comma
+query I
+SELECT $${key,with,comma = value}$$::MAP(VARCHAR, VARCHAR);
+----
+{'key,with,comma'=value}
+
+# Invalid: value contains unescaped comma
+statement error
+SELECT $${key = value,with,comma}$$::MAP(VARCHAR, VARCHAR);
+----
+can't be cast to the destination type MAP
+
+# Valid: key contains unescaped curly bracket
+query I
+SELECT $${key{with}bracket = value}$$::MAP(VARCHAR, VARCHAR);
+----
+{'key{with}bracket'=value}
+
+# Invalid: value contains unescaped curly bracket
+query I
+SELECT $${key = value{with}bracket}$$::MAP(VARCHAR, VARCHAR);
+----
+{key='value{with}bracket'}
+
+# Valid: key contains useless backslashes
+query I
+SELECT $${"key\with\backslash" = value}$$::MAP(VARCHAR, VARCHAR);
+----
+{keywithbackslash=value}
+
+# Valid: value contains useless backslashes
+query I
+SELECT $${key = "value\with\backslash"}$$::MAP(VARCHAR, VARCHAR);
+----
+{key=valuewithbackslash}
+
+# Valid: key/value contains unescaped equal sign
+query II
+SELECT $${key=with=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key'];
+----
+{key='with=equals = value'}	with=equals = value
+
+# Valid: key/value contains unescaped equal sign
+query II
+SELECT $${"key\=with" = equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with'];
+----
+{'key=with'='equals = value'}	equals = value
+
+# Valid: key/value contains unescaped equal sign
+query II
+SELECT $${"key\=with\=equals" = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with=equals'];
+----
+{'key=with=equals'=value}	value
+
+# Edge Case: Empty MAP with no keys/values
+query I
+SELECT $${}$$::MAP(VARCHAR, VARCHAR);
+----
+{}
+
+# Valid: MAP with empty key and value
+query I
+SELECT $${=}$$::MAP(VARCHAR, VARCHAR);
+----
+{''=''}
+
+# Edge Case: MAP with special characters only (escaped)
+statement error
+SELECT $${\{escaped\brace\} = \}escaped\brace\\}$$::MAP(VARCHAR, VARCHAR);
+----
+can't be cast to the destination type MAP(VARCHAR, VARCHAR)
+
+# Edge Case: MAP with special characters only (escaped)
+query I
+SELECT $${"\{escaped\brace\}" = "\}escaped\brace\\"}$$::MAP(VARCHAR, VARCHAR);
+----
+{'{escapedbrace}'='}escapedbrace\\'}
+
+# Edge Case: MAP with only a key and no value
+query I
+SELECT $${key=}$$::MAP(VARCHAR, VARCHAR);
+----
+{key=''}
+
+# Valid: MAP with an empty key
+query I
+SELECT $${=value}$$::MAP(VARCHAR, VARCHAR);
+----
+{''=value}
+
+query III
+select $${'NULL'=true}$$::MAP(VARCHAR, VARCHAR) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b
+----
+{'NULL'=true}	{'NULL'=true}	true
+
+query III
+select $${'a'='NULL'}$$::MAP(VARCHAR, VARCHAR) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b
+----
+{a='NULL'}	{a='NULL'}	true

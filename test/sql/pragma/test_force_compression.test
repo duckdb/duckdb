@@ -2,7 +2,7 @@
 # description: Test PRAGMA force_compression
 # group: [pragma]
 
-foreach compression none uncompressed rle dictionary pfor bitpacking fsst
+foreach compression none uncompressed rle dictionary pfor bitpacking fsst dict_fsst
 
 statement ok
 PRAGMA force_compression='${compression}'
@@ -12,3 +12,4 @@ endloop
 statement error
 PRAGMA force_compression='unknown'
 ----
+<REGEX>:.*Parser Error.*Unrecognized option for PRAGMA force_compression.*

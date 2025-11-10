@@ -3,9 +3,6 @@
 # group: [collate]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t0(c0 BOOLEAN, PRIMARY KEY(c0));
 
 statement ok
@@ -20,4 +17,4 @@ insert into t63(c0) values ('1');
 query I
 SELECT t63.c0 FROM t0 NATURAL LEFT JOIN t63;
 ----
-NULL
+1

@@ -38,6 +38,8 @@ public:
 	bool convert_mark_to_semi = true;
 	//! Scans where we should push generated filters into (if any)
 	unique_ptr<JoinFilterPushdownInfo> filter_pushdown;
+	//! Filtering predicate from the ON clause with expressions that don't reference both sides
+	unique_ptr<Expression> predicate;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -70,6 +72,8 @@ public:
 	                                  const unordered_set<idx_t> &right_bindings,
 	                                  vector<unique_ptr<Expression>> &expressions, vector<JoinCondition> &conditions,
 	                                  vector<unique_ptr<Expression>> &arbitrary_expressions);
+
+	bool HasEquality(idx_t &range_count) const;
 };
 
 } // namespace duckdb

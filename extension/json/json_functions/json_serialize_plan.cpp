@@ -63,33 +63,34 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, Sc
 		if (!arg->IsFoldable()) {
 			throw BinderException("json_serialize_plan: arguments must be constant");
 		}
-		if (arg->alias == "skip_null") {
+		auto &alias = arg->GetAlias();
+		if (alias == "skip_null") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_null' argument must be a boolean");
 			}
 			skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "skip_empty") {
+		} else if (alias == "skip_empty") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_empty' argument must be a boolean");
 			}
 			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "skip_default") {
+		} else if (alias == "skip_default") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_default' argument must be a boolean");
 			}
 			skip_if_default = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "format") {
+		} else if (alias == "format") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'format' argument must be a boolean");
 			}
 			format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "optimize") {
+		} else if (alias == "optimize") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'optimize' argument must be a boolean");
 			}
 			optimize = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else {
-			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument '%s'", arg->alias.c_str()));
+			throw BinderException(StringUtil::Format("json_serialize_plan: Unknown argument '%s'", alias));
 		}
 	}
 	return make_uniq<JsonSerializePlanBindData>(skip_if_null, skip_if_empty, skip_if_default, format, optimize);
@@ -110,7 +111,7 @@ static bool OperatorSupportsSerialization(LogicalOperator &op, string &operator_
 
 static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = local_state.json_allocator.GetYYAlc();
+	auto alc = local_state.json_allocator->GetYYAlc();
 	auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -161,10 +162,11 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 			yyjson_mut_obj_add_false(doc, result_obj, "error");
 			yyjson_mut_obj_add_val(doc, result_obj, "plans", plans_arr);
 
-			idx_t len;
+			size_t len_size_t;
 			auto data = yyjson_mut_val_write_opts(result_obj,
 			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
-			                                      alc, reinterpret_cast<size_t *>(&len), nullptr);
+			                                      alc, &len_size_t, nullptr);
+			idx_t len = len_size_t;
 			if (data == nullptr) {
 				throw SerializationException(
 				    "Failed to serialize json, perhaps the query contains invalid utf8 characters?");
@@ -184,10 +186,11 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				yyjson_mut_obj_add_strcpy(doc, result_obj, entry.first.c_str(), entry.second.c_str());
 			}
 
-			idx_t len;
+			size_t len_size_t;
 			auto data = yyjson_mut_val_write_opts(result_obj,
 			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
-			                                      alc, reinterpret_cast<size_t *>(&len), nullptr);
+			                                      alc, &len_size_t, nullptr);
+			idx_t len = len_size_t;
 			return StringVector::AddString(result, data, len);
 		}
 	});

@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
+static idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME:
 	case StrTimeSpecifier::ABBREVIATED_MONTH_NAME:
@@ -46,6 +46,14 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	default:
 		return 0;
 	}
+}
+
+static void StrfTimeSplitOffset(int offset, int &hh, int &mm, int &ss) {
+	hh = offset / Interval::SECS_PER_HOUR;
+	offset = offset % Interval::SECS_PER_HOUR;
+
+	mm = offset / Interval::SECS_PER_MINUTE;
+	ss = offset % Interval::SECS_PER_MINUTE;
 }
 
 void StrTimeFormat::AddLiteral(string literal) {
@@ -93,9 +101,12 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		len += month >= 10;
 		return len;
 	}
-	case StrTimeSpecifier::UTC_OFFSET:
-		// ±HH or ±HH:MM
-		return (data[7] % 60) ? 6 : 3;
+	case StrTimeSpecifier::UTC_OFFSET: {
+		// ±HH or ±HH:MM or ±HH:MM:SS
+		int hh, mm, ss;
+		StrfTimeSplitOffset(data[7], hh, mm, ss);
+		return ss ? 9 : (mm ? 6 : 3);
+	}
 	case StrTimeSpecifier::TZ_NAME:
 		if (tz_name) {
 			return strlen(tz_name);
@@ -295,7 +306,7 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 
 char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name,
                                              size_t tz_len, char *target) const {
-	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] ns, [7] utc
+	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] ns, [7] utc (secs)
 	switch (specifier) {
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 		target = WritePadded2(target, UnsafeNumericCast<uint32_t>(data[2]));
@@ -365,12 +376,16 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		*target++ = (data[7] < 0) ? '-' : '+';
 
 		auto offset = abs(data[7]);
-		auto offset_hours = offset / Interval::MINS_PER_HOUR;
-		auto offset_minutes = offset % Interval::MINS_PER_HOUR;
-		target = WritePadded2(target, UnsafeNumericCast<uint32_t>(offset_hours));
-		if (offset_minutes) {
+		int hh, mm, ss;
+		StrfTimeSplitOffset(offset, hh, mm, ss);
+		target = WritePadded2(target, UnsafeNumericCast<uint32_t>(hh));
+		if (mm || ss) {
 			*target++ = ':';
-			target = WritePadded2(target, UnsafeNumericCast<uint32_t>(offset_minutes));
+			target = WritePadded2(target, UnsafeNumericCast<uint32_t>(mm));
+		}
+		if (ss) {
+			*target++ = ':';
+			target = WritePadded2(target, UnsafeNumericCast<uint32_t>(ss));
 		}
 		break;
 	}
@@ -906,11 +921,13 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 		if (numeric_width[i] > 0) {
 			// numeric specifier: parse a number
 			uint64_t number = 0;
+			int digits = 0;
 			size_t start_pos = pos;
 			size_t end_pos = start_pos + UnsafeNumericCast<size_t>(numeric_width[i]);
 			while (pos < size && pos < end_pos && StringUtil::CharacterIsDigit(data[pos])) {
 				number = number * 10 + UnsafeNumericCast<uint64_t>(data[pos]) - '0';
 				pos++;
+				++digits;
 			}
 			if (pos == start_pos) {
 				// expected a number here
@@ -1018,7 +1035,6 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 					error_message = "Incompatible ISO year offset specified";
 					error_position = start_pos;
 					return false;
-					break;
 				}
 				if (number > 9999) {
 					// %G only supports numbers between [0..9999]
@@ -1069,16 +1085,25 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				result_data[5] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::NANOSECOND_PADDED:
+				for (; digits < numeric_width[i]; ++digits) {
+					number *= 10;
+				}
 				D_ASSERT(number < Interval::NANOS_PER_SEC); // enforced by the length of the number
 				// nanoseconds
 				result_data[6] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
+				for (; digits < numeric_width[i]; ++digits) {
+					number *= 10;
+				}
 				D_ASSERT(number < Interval::MICROS_PER_SEC); // enforced by the length of the number
 				// nanoseconds
 				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::NANOS_PER_MICRO);
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
+				for (; digits < numeric_width[i]; ++digits) {
+					number *= 10;
+				}
 				D_ASSERT(number < Interval::MSECS_PER_SEC); // enforced by the length of the number
 				// nanoseconds
 				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::NANOS_PER_MSEC);
@@ -1123,15 +1148,17 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				weekday = number;
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_ISO:
-				// y/m/d overrides G/V/u but does not conflict
 				switch (offset_specifier) {
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+				case StrTimeSpecifier::YEAR_DECIMAL:
+					error_message = "ISO week offsets are incompatible with non-ISO year specifiers. Use '%G' instead";
+					error_position = start_pos;
+					return false;
 				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 				case StrTimeSpecifier::DAY_OF_MONTH:
 				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 				case StrTimeSpecifier::MONTH_DECIMAL:
-				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
-				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
-				case StrTimeSpecifier::YEAR_DECIMAL:
 					// Just validate, don't use
 					break;
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:
@@ -1185,8 +1212,7 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
 				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
 				case StrTimeSpecifier::YEAR_DECIMAL:
-					// Part of the offset
-					break;
+					// Switch to offset parsing
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:
 					// First offset specifier
 					offset_specifier = specifiers[i];
@@ -1271,13 +1297,13 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				break;
 			}
 			case StrTimeSpecifier::UTC_OFFSET: {
-				int hour_offset, minute_offset;
-				if (!Timestamp::TryParseUTCOffset(data, pos, size, hour_offset, minute_offset)) {
-					error_message = "Expected +HH[MM] or -HH[MM]";
+				int hh, mm, ss;
+				if (!Timestamp::TryParseUTCOffset(data, pos, size, hh, mm, ss)) {
+					error_message = "Expected ±HH[MM] or -HH[:MM[:SS]]";
 					error_position = pos;
 					return false;
 				}
-				result_data[7] = hour_offset * Interval::MINS_PER_HOUR + minute_offset;
+				result_data[7] = (hh * Interval::MINS_PER_HOUR + mm) * Interval::SECS_PER_MINUTE + ss;
 				break;
 			}
 			case StrTimeSpecifier::TZ_NAME: {
@@ -1413,6 +1439,16 @@ StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, c
 	return result;
 }
 
+bool StrpTimeFormat::TryParse(const string &format_string, const string &text, ParseResult &result) {
+	StrpTimeFormat format;
+	format.format_specifier = format_string;
+	string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+	if (!error.empty()) {
+		throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
+	}
+	return format.Parse(text, result);
+}
+
 bool StrTimeFormat::Empty() const {
 	return format_specifier.empty();
 }
@@ -1440,15 +1476,15 @@ int32_t StrpTimeFormat::ParseResult::GetMicros() const {
 }
 
 dtime_t StrpTimeFormat::ParseResult::ToTime() {
-	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	return Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], GetMicros());
+	int hh, mm, ss;
+	StrfTimeSplitOffset(data[7], hh, mm, ss);
+	return Time::FromTime(data[3] - hh, data[4] - mm, data[5] - ss, GetMicros());
 }
 
 int64_t StrpTimeFormat::ParseResult::ToTimeNS() {
-	const int32_t hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const int32_t mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	return Time::ToNanoTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+	int hh, mm, ss;
+	StrfTimeSplitOffset(data[7], hh, mm, ss);
+	return Time::ToNanoTime(data[3] - hh, data[4] - mm, data[5] - ss, data[6]);
 }
 
 bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {

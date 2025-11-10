@@ -27,6 +27,7 @@ enum class PhysicalOperatorType : uint8_t {
 	UNGROUPED_AGGREGATE,
 	HASH_GROUP_BY,
 	PERFECT_HASH_GROUP_BY,
+	PARTITIONED_AGGREGATE,
 	FILTER,
 	PROJECTION,
 	COPY_TO_FILE,
@@ -45,6 +46,7 @@ enum class PhysicalOperatorType : uint8_t {
 	COLUMN_DATA_SCAN,
 	CHUNK_SCAN,
 	RECURSIVE_CTE_SCAN,
+	RECURSIVE_RECURRING_CTE_SCAN,
 	CTE_SCAN,
 	DELIM_SCAN,
 	EXPRESSION_SCAN,
@@ -67,6 +69,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	UNION,
 	RECURSIVE_CTE,
+	RECURSIVE_KEY_CTE,
 	CTE,
 
 	// -----------------------------
@@ -76,6 +79,7 @@ enum class PhysicalOperatorType : uint8_t {
 	BATCH_INSERT,
 	DELETE_OPERATOR,
 	UPDATE,
+	MERGE_INTO,
 
 	// -----------------------------
 	// Schema

@@ -77,7 +77,7 @@ NULL
 
 # all types function
 query I nosort alltypes
-SELECT * EXCLUDE (varint) FROM test_all_types();
+SELECT * FROM test_all_types();
 
 query I nosort alltypes
 SELECT * FROM all_types

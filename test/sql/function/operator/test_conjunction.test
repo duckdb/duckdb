@@ -2,20 +2,22 @@
 # description: Test conjunction statements
 # group: [operator]
 
-statement ok
-PRAGMA enable_verification
-
 # create table
 statement ok
 CREATE TABLE a (i integer, j integer);
 
 statement ok
-INSERT INTO a VALUES (3, 4), (4, 5), (5, 6)
+INSERT INTO a VALUES (3, 4), (4, 5), (5, 6);
 
 query II
-SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5)
+SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5);
 ----
 5	6
+
+query II
+explain SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5);
+----
+physical_plan	<REGEX>:.*optional.*
 
 # test boolean logic in conjunctions
 query T

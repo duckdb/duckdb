@@ -1,0 +1,97 @@
+# name: test/sql/index/art/storage/test_upsert_reclaim_space.test_slow
+# description: Test that the block manager reclaims index memory after UPSERT.
+# group: [storage]
+
+load __TEST_DIR__/test_reclaim_upsert_space.db
+
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(10000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+# Block count and used block count before index creation.
+
+statement ok
+CREATE TABLE blocks_tbl AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+statement ok
+CREATE UNIQUE INDEX idx ON tbl(i);
+
+query I
+SELECT i FROM tbl WHERE i = 5000;
+----
+5000
+
+statement ok
+CHECKPOINT;
+
+# Block count and used block count after index creation.
+
+statement ok
+CREATE TABLE blocks_idx AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+statement ok
+DELETE FROM tbl;
+
+statement ok
+CHECKPOINT;
+
+# Block count and used block count after deleting from the table.
+
+statement ok
+CREATE TABLE blocks_del_tbl AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+
+statement ok
+INSERT INTO tbl SELECT i FROM range(10000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+# Loop while DELETE + INSERT in tx.
+
+loop i 0 10
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+DELETE FROM tbl;
+
+# We should not have significantly move blocks than in previous iterations.
+
+query I
+SELECT current.total_blocks < blocks_del_tbl.total_blocks + 6
+FROM pragma_database_size() AS current, blocks_del_tbl;
+----
+1
+
+statement ok con1
+INSERT INTO tbl SELECT i FROM range(10000) tbl(i);
+
+statement ok con1
+COMMIT;
+
+statement ok con1
+CHECKPOINT;
+
+# We should not have significantly move blocks than in previous iterations.
+
+query I
+SELECT current.total_blocks < blocks_idx.total_blocks + 6
+FROM pragma_database_size() AS current, blocks_idx;
+----
+1
+
+endloop
+
+statement ok
+DROP INDEX idx;
+
+# Same block count as before the index creation.
+
+query I
+SELECT current.total_blocks < blocks_tbl.total_blocks + 4
+FROM pragma_database_size() AS current, blocks_tbl;
+----
+1

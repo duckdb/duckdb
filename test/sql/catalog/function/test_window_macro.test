@@ -1,0 +1,46 @@
+# name: test/sql/catalog/function/test_window_macro.test
+# description: Test macro expansion for window functions
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+# Windowed aggregate macro
+statement ok
+CREATE OR REPLACE MACRO my_agg(x) AS SUM(CASE WHEN x THEN 1 END);
+
+statement ok
+select my_agg(range) 
+from range(2);
+
+statement ok
+select my_agg(range) OVER () 
+from range(2);
+
+# Windowed non-aggregate function macro
+statement ok
+CREATE OR REPLACE MACRO my_func(x) AS mod(x, 2);
+
+statement ok
+select my_func(range) 
+from range(2);
+
+statement error
+select my_func(range) OVER () 
+from range(2);
+----
+mod is not an aggregate function
+
+# Windowed non-aggregate expression macro
+statement ok
+CREATE OR REPLACE MACRO my_case(x) AS (CASE WHEN x THEN 1 END);
+
+statement ok
+select my_case(range) 
+from range(2);
+
+statement error
+select my_case(range) OVER () 
+from range(2);
+----
+Window function macros must be functions

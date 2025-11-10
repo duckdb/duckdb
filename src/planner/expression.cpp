@@ -58,11 +58,17 @@ bool Expression::IsConsistent() const {
 	return is_consistent;
 }
 
+bool Expression::CanThrow() const {
+	bool can_throw = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { can_throw |= child.CanThrow(); });
+	return can_throw;
+}
+
 bool Expression::PropagatesNullValues() const {
 	if (type == ExpressionType::OPERATOR_IS_NULL || type == ExpressionType::OPERATOR_IS_NOT_NULL ||
 	    type == ExpressionType::COMPARE_NOT_DISTINCT_FROM || type == ExpressionType::COMPARE_DISTINCT_FROM ||
 	    type == ExpressionType::CONJUNCTION_OR || type == ExpressionType::CONJUNCTION_AND ||
-	    type == ExpressionType::OPERATOR_COALESCE) {
+	    type == ExpressionType::OPERATOR_COALESCE || type == ExpressionType::CASE_EXPR) {
 		return false;
 	}
 	bool propagate_null_values = true;
@@ -98,7 +104,7 @@ bool Expression::HasSubquery() const {
 }
 
 hash_t Expression::Hash() const {
-	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+	hash_t hash = duckdb::Hash<uint32_t>(static_cast<uint32_t>(type));
 	hash = CombineHash(hash, return_type.Hash());
 	ExpressionIterator::EnumerateChildren(*this,
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });

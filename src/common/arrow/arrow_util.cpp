@@ -1,14 +1,17 @@
+#include <utility>
+
 #include "duckdb/common/arrow/arrow_util.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 namespace duckdb {
 
 bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t batch_size, ArrowArray *out,
-                              idx_t &count, ErrorData &error) {
+                              idx_t &count, ErrorData &error,
+                              unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_type_cast) {
 	count = 0;
-	ArrowAppender appender(scan_state.Types(), batch_size, std::move(options));
-	auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
+	ArrowAppender appender(scan_state.Types(), batch_size, std::move(options), std::move(extension_type_cast));
+	const auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
 	if (remaining_tuples_in_chunk) {
 		// We start by scanning the non-finished current chunk
 		idx_t cur_consumption = MinValue(remaining_tuples_in_chunk, batch_size);
@@ -48,10 +51,11 @@ bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ClientProperties optio
 	return true;
 }
 
-idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out) {
+idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,
+                            const unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> &extension_type_cast) {
 	ErrorData error;
 	idx_t result_count;
-	if (!TryFetchChunk(scan_state, std::move(options), chunk_size, out, result_count, error)) {
+	if (!TryFetchChunk(scan_state, std::move(options), chunk_size, out, result_count, error, extension_type_cast)) {
 		error.Throw();
 	}
 	return result_count;

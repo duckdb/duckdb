@@ -2,8 +2,6 @@
 # description: Test ATTACH of reserved names
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 PRAGMA enable_verification
 

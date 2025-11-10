@@ -4,13 +4,18 @@
 
 name Dictionary Compression Scan
 group dictionary
-storage persistent
+storage persistent v1.4.0
 
 load
 DROP TABLE IF EXISTS test;
-PRAGMA force_compression='dictionary';
-CREATE TABLE test AS SELECT (100 + (i%2))::VARCHAR AS i FROM range(0, 200000000) tbl(i);
+PRAGMA force_compression='dict_fsst';
+CREATE TABLE test AS SELECT (100 + (i%2))::VARCHAR AS i FROM range(0, 200) tbl(i);
 checkpoint;
+
+assert I
+select compression from pragma_storage_info('test') where segment_type in ('VARCHAR')
+----
+DICT_FSST
 
 run
 select avg(i::INT) from test;

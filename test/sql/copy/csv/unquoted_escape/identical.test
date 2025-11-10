@@ -1,0 +1,15 @@
+# name: test/sql/copy/csv/unquoted_escape/identical.test
+# description: Ensure that the identical quote & escape case works as before and is not affected by the handling of unquoted escaped values.
+# group: [unquoted_escape]
+
+statement ok
+PRAGMA enable_verification
+
+query TT
+SELECT concat('#', columns(*), '#') FROM read_csv('{DATA_DIR}/csv/unquoted_escape/identical.csv', quote = '"', escape = '"', sep = ',', strict_mode = false);
+----
+##	#a""b#
+#c""d#	##
+#ef,"gh"#	##
+##	#"ij",kl#
+#mn"#	#op""#

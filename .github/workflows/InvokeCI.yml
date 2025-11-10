@@ -1,5 +1,6 @@
 name: InvokeCI
 on:
+  repository_dispatch:
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -8,12 +9,25 @@ on:
         type: string
       skip_tests:
         type: string
+      run_all:
+        type: string
+      twine_upload:
+        type: string
 
 concurrency:
   group: invokeci-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}-${{ inputs.git_ref }}-${{ inputs.skip_tests }}
   cancel-in-progress: true
 
 jobs:
+  extensions:
+    uses: ./.github/workflows/Extensions.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
+
   osx:
     uses: ./.github/workflows/OSX.yml
     secrets: inherit
@@ -21,6 +35,7 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
 
   linux-release:
     uses: ./.github/workflows/LinuxRelease.yml
@@ -37,27 +52,50 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
 
-  python:
-    uses: ./.github/workflows/Python.yml
+  static-libraries:
+    uses: ./.github/workflows/BundleStaticLibs.yml
     secrets: inherit
     with:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
 
-  pyodide:
-    uses: ./.github/workflows/Pyodide.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
+  prepare-status:
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - extensions
+      - osx
+      - linux-release
+      - windows
+      - static-libraries
+    outputs:
+      is-success: ${{ steps.set-output.outputs.success }}
+    steps:
+      - id: set-output
+        shell: bash
+        run: |
+          if [[ "${{ needs.extensions.result }}" == "success" && \
+                "${{ needs.osx.result }}" == "success" && \
+                "${{ needs.linux-release.result }}" == "success" && \
+                "${{ needs.windows.result }}" == "success" && \
+                "${{ needs.static-libraries.result }}" == "success" ]]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+          fi
 
-  R:
-    uses: ./.github/workflows/R.yml
+  notify-external-repos:
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
     secrets: inherit
+    needs: prepare-status
+    if: ${{ always() }}
     with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
+      is-success: ${{ needs.prepare-status.outputs.is-success }}
+      target-branch: ${{ inputs.git_ref == '' && github.ref || inputs.git_ref }}
+      duckdb-sha: ${{ github.sha }}
+      triggering-event: ${{ github.event_name }}
+      should-publish: 'true'
+      override-git-describe: ${{ inputs.override_git_describe }}

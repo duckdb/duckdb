@@ -1,0 +1,13 @@
+# name: benchmark/micro/logger/filtered_out_by_log_type/global.benchmark
+# description: Benchmarking the Global logger filtering out disabled log types
+# group: [filtered_out_by_log_type]
+
+name Global Logger Filtering out log types
+group case
+
+load
+CALL enable_logging('FileSystem');
+
+# Note: this will call the Logger, but the log type is filtered out
+run
+SELECT write_log('hello world', level := 'warn', scope := 'database', log_type := 'duckdb.SomeName.SomeOtherName.BlaBla' ) from range(0,10000000);

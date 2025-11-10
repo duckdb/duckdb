@@ -10,22 +10,27 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
 class BoundColumnRefExpression;
 
-//! The IndexBinder is responsible for binding indexes, as well as expressions within an index statement
+//! The IndexBinder binds indexes and expressions within index statements.
 class IndexBinder : public ExpressionBinder {
 public:
 	IndexBinder(Binder &binder, ClientContext &context, optional_ptr<TableCatalogEntry> table = nullptr,
 	            optional_ptr<CreateIndexInfo> info = nullptr);
 
 	unique_ptr<BoundIndex> BindIndex(const UnboundIndex &index);
+	unique_ptr<LogicalOperator> BindCreateIndex(ClientContext &context, unique_ptr<CreateIndexInfo> create_index_info,
+	                                            TableCatalogEntry &table_entry, unique_ptr<LogicalOperator> plan,
+	                                            unique_ptr<AlterTableInfo> alter_table_info);
+
+	static void InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const string &schema);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
@@ -33,7 +38,7 @@ protected:
 	string UnsupportedAggregateMessage() override;
 
 private:
-	// only for WAL replay
+	// Only for WAL replay.
 	optional_ptr<TableCatalogEntry> table;
 	optional_ptr<CreateIndexInfo> info;
 };

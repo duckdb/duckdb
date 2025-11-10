@@ -48,7 +48,7 @@ CollationSettings::~CollationSettings() {
     }
 }
 
-UBool
+bool
 CollationSettings::operator==(const CollationSettings &other) const {
     if(options != other.options) { return FALSE; }
     if((options & ALTERNATE_MASK) != 0 && variableTop != other.variableTop) { return FALSE; }

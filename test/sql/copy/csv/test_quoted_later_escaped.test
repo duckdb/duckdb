@@ -1,0 +1,35 @@
+# name: test/sql/copy/csv/test_quoted_later_escaped.test
+# description: Test quoted file, with escapes only happening much later.
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE T as select '1, "Oogie Boogie"' from range (100000)
+
+statement ok
+insert into T values ('2, """sir"" Oogie Boogie"')
+
+statement ok
+COPY T to '__TEST_DIR__/out.csv' (FORMAT CSV, HEADER 0, QUOTE '');
+
+query II
+SELECT quote, escape FROM sniff_csv('__TEST_DIR__/out.csv');
+----
+"	"
+
+# Test we always give preference to escaped options
+statement ok
+CREATE TABLE T_2 as select '1, "Oogie Boogie"' from range (5000)
+
+statement ok
+insert into T_2 values ('2, "\"sir\" Oogie Boogie"')
+
+statement ok
+COPY T_2 to '__TEST_DIR__/out_2.csv' (FORMAT CSV, HEADER 0, QUOTE '');
+
+query II
+SELECT quote, escape FROM sniff_csv('__TEST_DIR__/out_2.csv');
+----
+"	\

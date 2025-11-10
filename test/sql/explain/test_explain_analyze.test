@@ -39,6 +39,11 @@ EXPLAIN (ANALYZE, FORMAT JSON) SELECT SUM(i) FROM (SELECT * FROM integers i1, in
 ----
 analyzed_plan	<REGEX>:.*"operator_type": "CROSS_PRODUCT".*
 
+query II
+EXPLAIN (ANALYZE, FORMAT JSON) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+analyzed_plan	<REGEX>:.*"operator_name": "CROSS_PRODUCT".*
+
 statement ok
 PRAGMA profiling_output='__TEST_DIR__/test.json'
 
@@ -51,16 +56,9 @@ SELECT 42
 statement ok
 PRAGMA disable_profiling
 
-statement ok
-PRAGMA profiling_output='__TEST_DIR__/test_2.json'
-
-statement error
+query I nosort json_output
 SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
 ----
-The delimiter option cannot exceed a size of 1 byte.
-
-statement ok
-PRAGMA profiling_output='__TEST_DIR__/test.json'
 
 statement ok
 PRAGMA enable_profiling='json'
@@ -76,7 +74,30 @@ PRAGMA disable_profiling
 statement ok
 PRAGMA profiling_output='__TEST_DIR__/test_2.json'
 
-statement error
+query I nosort json_output
 SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
 ----
-The delimiter option cannot exceed a size of 1 byte.
+
+query II
+EXPLAIN (ANALYZE, FORMAT graphviz) SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.+EXPLAIN_ANALYZE.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT html) SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.+<div class="title">EXPLAIN_ANALYZE</div>.*
+
+query II
+EXPLAIN (ANALYZE, FORMAT mermaid) SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.+\*\*EXPLAIN_ANALYZE\*\*.*
+
+# Make sure that EXPLAIN ANALYZE still works when no output is specified
+statement ok
+PRAGMA enable_profiling = 'no_output';
+
+query II
+EXPLAIN ANALYZE SELECT 42;
+----
+analyzed_plan	<REGEX>:.+EXPLAIN_ANALYZE.*

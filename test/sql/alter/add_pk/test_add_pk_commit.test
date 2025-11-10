@@ -1,0 +1,27 @@
+# name: test/sql/alter/add_pk/test_add_pk_commit.test
+# description: Test committing the transaction-local ADD PRIMARY KEY command.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test VALUES (1, 1)
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (j)
+
+statement ok
+COMMIT
+
+statement error
+INSERT INTO test VALUES (2, 1)
+----
+<REGEX>:Constraint Error.*Duplicate key "j: 1" violates primary key constraint.*
+

@@ -9,15 +9,15 @@ ${EXT_LOADER_BODY}
     return false;
 }
 
-const vector<string>& LinkedExtensions(){
-    static vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
+vector<string> LinkedExtensions(){
+    vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
     };
     return VEC;
 }
 
 
-const vector<string>& LoadedExtensionTestPaths(){
-    static vector<string> VEC = {${EXT_TEST_PATH_INITIALIZER}
+vector<string> LoadedExtensionTestPaths(){
+    vector<string> VEC = {${EXT_TEST_PATH_INITIALIZER}
     };
     return VEC;
 }

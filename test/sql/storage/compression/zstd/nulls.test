@@ -1,0 +1,33 @@
+# name: test/sql/storage/compression/zstd/nulls.test
+# group: [zstd]
+
+load __TEST_DIR__/zstd_nulls.db readwrite v1.2.0
+
+statement ok
+create table tbl (
+	a varchar
+);
+
+statement ok
+set variable my_string = (
+	select concat(range(0,1000)::VARCHAR)
+);
+
+statement ok
+INSERT INTO tbl (a)
+SELECT CASE
+	WHEN (i % 7) = 0 THEN NULL
+	ELSE getvariable('my_string') || i
+END
+FROM range(5000) t(i);
+
+statement ok
+pragma force_compression='zstd'
+
+statement ok
+checkpoint
+
+query I
+select count(*) from tbl where a IS NULL;
+----
+715

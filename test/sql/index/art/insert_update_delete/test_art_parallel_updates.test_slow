@@ -1,0 +1,36 @@
+# name: test/sql/index/art/insert_update_delete/test_art_parallel_updates.test_slow
+# description: Test concurrent updates causing index scans.
+# group: [insert_update_delete]
+
+unzip data/storage/artupdates.db.gz __TEST_DIR__/artupdates.db
+
+statement ok
+ATTACH '__TEST_DIR__/artupdates.db' AS db;
+
+statement ok
+USE db;
+
+statement ok
+BEGIN TRANSACTION;
+
+loop i 0 100
+
+statement ok
+UPDATE test SET importId = 725 WHERE id = 34165;
+
+statement ok
+UPDATE test SET importId = 663 WHERE id = 42638;
+
+statement ok
+UPDATE test SET importId = 210 WHERE id = 11288;
+
+statement ok
+UPDATE test SET importId = 805 WHERE id = 764;
+
+statement ok
+UPDATE test SET importId = 782 WHERE id = 10151;
+
+statement ok
+UPDATE test SET importId = 53 WHERE id = 3229;
+
+endloop

@@ -1,0 +1,123 @@
+# name: test/sql/attach/attach_multi_identifiers.test
+# description: Test ATTACH with complex identifiers
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH ':memory:' AS db1;
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+CREATE SCHEMA db1.s1;
+
+statement ok
+CREATE SCHEMA db2.s1;
+
+statement ok
+CREATE TABLE db1.s1.t(c INT);
+
+statement ok
+CREATE TABLE db2.s1.t(c INT);
+
+statement ok
+INSERT INTO db1.s1.t VALUES (42);
+
+statement ok
+INSERT INTO db2.s1.t SELECT c * 2 FROM db1.s1.t
+
+query II
+SELECT * FROM db1.s1.t, db2.s1.t
+----
+42	84
+
+query II
+SELECT db1.t.c, db2.t.c FROM db1.s1.t, db2.s1.t
+----
+42	84
+
+query II
+SELECT db1.s1.t.c, db2.s1.t.c FROM db1.s1.t, db2.s1.t
+----
+42	84
+
+query I
+SELECT * EXCLUDE (db1.s1.t.c) FROM db1.s1.t, db2.s1.t
+----
+84
+
+query I
+SELECT * EXCLUDE (DB1.S1.T.C) FROM db1.s1.t, db2.s1.t
+----
+84
+
+query I
+SELECT * EXCLUDE (s1.t.c) FROM db1.s1.t, (SELECT 42) t
+----
+42
+
+# rename
+query I
+SELECT * EXCLUDE (new_col) FROM (SELECT * RENAME (db1.s1.t.c AS new_col) FROM db1.s1.t, db2.s1.t)
+----
+84
+
+query I
+SELECT * EXCLUDE (new_col) FROM (SELECT * RENAME (DB1.S1.T.C AS new_col) FROM db1.s1.t, db2.s1.t)
+----
+84
+
+query I
+SELECT * EXCLUDE (new_col) FROM (SELECT * RENAME (s1.t.c AS new_col) FROM db1.s1.t, (SELECT 42) t)
+----
+42
+
+# struct pack
+query II
+SELECT db1.s1.t, db2.s1.t FROM db1.s1.t, db2.s1.t
+----
+{'c': 42}	{'c': 84}
+
+query II
+SELECT db1.t, db2.t FROM db1.s1.t, db2.s1.t
+----
+{'c': 42}	{'c': 84}
+
+# conflicting identifiers
+statement error
+SELECT c FROM db1.s1.t, db2.s1.t
+----
+<REGEX>:.*Ambiguous reference to column name.*db1.s1.t.c.*db2.s1.t.c.*
+
+statement error
+SELECT t.c FROM db1.s1.t, db2.s1.t
+----
+Ambiguous reference to table
+
+statement error
+SELECT s1.t.c FROM db1.s1.t, db2.s1.t
+----
+Ambiguous reference to table
+
+query I
+SELECT db1.s1.t.c FROM db1.s1.t, db2.s1.t
+----
+42
+
+# generated columns
+statement ok
+CREATE OR REPLACE TABLE db1.s1.t (
+	c INT,
+	c_squared AS (c * c),
+);
+
+statement ok
+INSERT INTO db1.s1.t VALUES (42);
+
+query III
+SELECT * FROM db1.s1.t, db2.s1.t
+----
+42	1764	84

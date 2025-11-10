@@ -15,7 +15,7 @@ DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewr
 }
 
 void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &set) {
-	if (expr.type == ExpressionType::CONJUNCTION_AND) {
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &and_expr = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : and_expr.children) {
 			set.insert(*child);
@@ -29,7 +29,7 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
                                                              Expression &expr) {
 	auto &child = conj.children[idx];
 	unique_ptr<Expression> result;
-	if (child->type == ExpressionType::CONJUNCTION_AND) {
+	if (child->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// AND, remove expression from the list
 		auto &and_expr = child->Cast<BoundConjunctionExpression>();
 		for (idx_t i = 0; i < and_expr.children.size(); i++) {
@@ -42,9 +42,10 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 		if (and_expr.children.size() == 1) {
 			conj.children[idx] = std::move(and_expr.children[0]);
 		}
-	} else {
-		// not an AND node! remove the entire expression
-		// this happens in the case of e.g. (X AND B) OR X
+	}
+	// not an AND node(e.g. (X AND B) OR X) or this is the last expr,
+	// remove the entire expression
+	if (!result) {
 		D_ASSERT(child->Equals(expr));
 		result = std::move(child);
 		conj.children[idx] = nullptr;

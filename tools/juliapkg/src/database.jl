@@ -5,19 +5,20 @@ mutable struct DuckDBHandle
     file::String
     handle::duckdb_database
     functions::Vector{Any}
+    scalar_functions::Dict{String, Any}
     registered_objects::Dict{Any, Any}
 
     function DuckDBHandle(f::AbstractString, config::Config)
         f = String(isempty(f) ? f : expanduser(f))
         handle = Ref{duckdb_database}()
-        error = Ref{Ptr{UInt8}}()
+        error = Ref{Cstring}()
         if duckdb_open_ext(f, handle, config.handle, error) != DuckDBSuccess
             error_message = unsafe_string(error[])
-            duckdb_free(error[])
+            duckdb_free(pointer(error[]))
             throw(ConnectionException(error_message))
         end
 
-        db = new(f, handle[], Vector(), Dict())
+        db = new(f, handle[], Vector(), Dict(), Dict())
         finalizer(_close_database, db)
         return db
     end
@@ -77,8 +78,8 @@ mutable struct DB <: DBInterface.Connection
     main_connection::Connection
 
     function DB(f::AbstractString, config::Config)
-        set_config(config, "threads", string(Threads.nthreads()))
-        set_config(config, "external_threads", string(Threads.nthreads())) # all threads are external
+        config["threads"] = string(Threads.nthreads())
+        config["external_threads"] = string(Threads.nthreads()) # all threads are external
         handle = DuckDBHandle(f, config)
         main_connection = Connection(handle)
 
@@ -86,8 +87,13 @@ mutable struct DB <: DBInterface.Connection
         _add_table_scan(db)
         return db
     end
-    function DB(f::AbstractString)
-        return DB(f, Config())
+
+    function DB(f::AbstractString; config = [], readonly = false)
+        config = Config(config)
+        if readonly
+            config["access_mode"] = "READ_ONLY"
+        end
+        return DB(f, config)
     end
 end
 
@@ -100,9 +106,9 @@ end
 const VECTOR_SIZE = duckdb_vector_size()
 const ROW_GROUP_SIZE = VECTOR_SIZE * 100
 
-DB() = DB(":memory:")
-DBInterface.connect(::Type{DB}) = DB()
-DBInterface.connect(::Type{DB}, f::AbstractString) = DB(f)
+DB(; kwargs...) = DB(":memory:"; kwargs...)
+DBInterface.connect(::Type{DB}; kwargs...) = DB(; kwargs...)
+DBInterface.connect(::Type{DB}, f::AbstractString; kwargs...) = DB(f; kwargs...)
 DBInterface.connect(::Type{DB}, f::AbstractString, config::Config) = DB(f, config)
 DBInterface.connect(db::DB) = Connection(db.handle)
 DBInterface.close!(db::DB) = close_database(db)

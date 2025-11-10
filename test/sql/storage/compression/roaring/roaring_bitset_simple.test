@@ -1,0 +1,35 @@
+# name: test/sql/storage/compression/roaring/roaring_bitset_simple.test
+# description: Test bitpacking with NULLs.
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.2.0
+
+statement ok
+PRAGMA force_compression='roaring'
+
+# Simple compression with a few values.
+statement ok
+CREATE TABLE test (a BIGINT);
+
+statement ok
+INSERT INTO test SELECT CASE WHEN i % 3 = 0 THEN 1337 ELSE NULL END FROM range(0, 10000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' AND compression != 'Roaring';
+----
+
+query I
+SELECT COUNT(*) FROM test WHERE a IS NOT NULL;
+----
+3334
+
+query III
+SELECT SUM(a), MIN(a), MAX(a) FROM test;
+----
+4457558	1337	1337
+
+statement ok
+DROP TABLE test;

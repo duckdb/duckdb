@@ -140,32 +140,21 @@ unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOper
 	if (nodes.empty()) {
 		return nullptr;
 	}
-	while (nodes.size() > 1) {
-		vector<unique_ptr<LogicalOperator>> new_nodes;
-		for (idx_t i = 0; i < nodes.size(); i += 2) {
-			if (i + 1 == nodes.size()) {
-				new_nodes.push_back(std::move(nodes[i]));
-			} else {
-				auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes[i]),
-				                                                 std::move(nodes[i + 1]),
-				                                                 LogicalOperatorType::LOGICAL_UNION, true, false);
-				new_nodes.push_back(std::move(copy_union));
-			}
-		}
-		nodes = std::move(new_nodes);
+	if (nodes.size() == 1) {
+		return std::move(nodes[0]);
 	}
-	return std::move(nodes[0]);
+	return make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes),
+	                                      LogicalOperatorType::LOGICAL_UNION, true, false);
 }
 
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("COPY TO is disabled through configuration");
-	}
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
+
+	// bind copy options
+	BindCopyOptions(*stmt.info);
 
 	// lookup the format in the catalog
 	auto &copy_function =
@@ -192,7 +181,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	BoundExportData exported_tables;
+	auto exported_tables = make_uniq<BoundExportData>();
 
 	unordered_set<string> table_name_index;
 	vector<unique_ptr<LogicalOperator>> export_nodes;
@@ -245,7 +234,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		exported_data.file_path = info->file_path;
 
 		ExportedTableInfo table_info(table, std::move(exported_data), not_null_columns);
-		exported_tables.data.push_back(table_info);
+		exported_tables->data.push_back(table_info);
 		id++;
 
 		// generate the copy statement and bind it
@@ -269,8 +258,42 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	stmt.info->catalog = catalog;
+	// prepare the options for export
+	auto &format = stmt.info->format;
+	auto &options = stmt.info->options;
+	if (format == "csv") {
+		// insert default csv options, if not specified
+		if (options.find("header") == options.end()) {
+			options["header"].push_back(Value::INTEGER(1));
+		}
+		if (options.find("delimiter") == options.end() && options.find("sep") == options.end() &&
+		    options.find("delim") == options.end()) {
+			options["delimiter"].push_back(Value(","));
+		}
+		if (options.find("quote") == options.end()) {
+			options["quote"].push_back(Value("\""));
+		}
+		options.erase("force_quote");
+	}
+	// for any options that are write-only, use them for writing but don't put them in the COPY statements we generate
+	// for reading
+	auto &function = copy_function.function;
+	if (function.copy_options) {
+		auto copy_options = GetFullCopyOptionsList(function, CopyOptionMode::READ_ONLY);
+		vector<string> erased_options;
+		for (auto &entry : options) {
+			if (copy_options.find(entry.first) == copy_options.end()) {
+				erased_options.push_back(entry.first);
+			}
+		}
+		for (auto &erased : erased_options) {
+			options.erase(erased);
+		}
+	}
+
 	// create the export node
-	auto export_node = make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), exported_tables);
+	auto export_node =
+	    make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), std::move(exported_tables));
 
 	if (child_operator) {
 		export_node->children.push_back(std::move(child_operator));
@@ -279,7 +302,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.plan = std::move(export_node);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

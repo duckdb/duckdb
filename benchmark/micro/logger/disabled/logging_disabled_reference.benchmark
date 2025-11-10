@@ -1,0 +1,10 @@
+# name: benchmark/micro/logger/disabled/logging_disabled_reference.benchmark
+# description: Logger disabled benchmark without Logger calls (for reference)
+# group: [disabled]
+
+name Disabled logger reference
+group case
+
+# Note: this will NOT call any logger code, it's simply for reference for the other benchmarks
+run
+SELECT write_log('hello world', scope := 'database', disable_logging := true) from range(0,50000000);

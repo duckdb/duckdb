@@ -32,8 +32,8 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id, idx_t catalog_version_p)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), catalog_version(catalog_version_p), transaction_manager(manager), undo_buffer(context_p),
-      storage(make_uniq<LocalStorage>(context_p, *this)) {
+      catalog_version(catalog_version_p), awaiting_cleanup(false), transaction_manager(manager),
+      undo_buffer(*this, context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -61,22 +61,31 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 		alloc_size += extra_data_size + sizeof(idx_t);
 	}
 
-	auto baseptr = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
+	auto ptr = undo_entry.Ptr();
 	// store the pointer to the catalog entry
-	Store<CatalogEntry *>(&entry, baseptr);
+	Store<CatalogEntry *>(&entry, ptr);
 	if (extra_data_size > 0) {
 		// copy the extra data behind the catalog entry pointer (if any)
-		baseptr += sizeof(CatalogEntry *);
+		ptr += sizeof(CatalogEntry *);
 		// first store the extra data size
-		Store<idx_t>(extra_data_size, baseptr);
-		baseptr += sizeof(idx_t);
+		Store<idx_t>(extra_data_size, ptr);
+		ptr += sizeof(idx_t);
 		// then copy over the actual data
-		memcpy(baseptr, extra_data, extra_data_size);
+		memcpy(ptr, extra_data, extra_data_size);
 	}
+}
+
+void DuckTransaction::PushAttach(AttachedDatabase &db) {
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::ATTACHED_DATABASE, sizeof(AttachedDatabase *));
+	auto ptr = undo_entry.Ptr();
+	// store the pointer to the database
+	Store<CatalogEntry *>(&db, ptr);
 }
 
 void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
                                  idx_t base_row) {
+	ModifyTable(table);
 	bool is_consecutive = true;
 	// check if the rows are consecutive
 	for (idx_t i = 0; i < count; i++) {
@@ -91,7 +100,8 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
 		alloc_size += sizeof(uint16_t) * count;
 	}
 
-	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, alloc_size));
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, alloc_size);
+	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_entry.Ptr());
 	delete_info->version_info = &info;
 	delete_info->vector_idx = vector_idx;
 	delete_info->table = &table;
@@ -108,30 +118,28 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
 }
 
 void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {
-	auto append_info =
-	    reinterpret_cast<AppendInfo *>(undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo)));
+	ModifyTable(table);
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
+	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.Ptr());
 	append_info->table = &table;
 	append_info->start_row = start_row;
 	append_info->count = row_count;
 }
 
-UpdateInfo *DuckTransaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
-	data_ptr_t base_info = undo_buffer.CreateEntry(
-	    UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
-	auto update_info = reinterpret_cast<UpdateInfo *>(base_info);
-	update_info->max = STANDARD_VECTOR_SIZE;
-	update_info->tuples = reinterpret_cast<sel_t *>(base_info + sizeof(UpdateInfo));
-	update_info->tuple_data = base_info + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
-	update_info->version_number = transaction_id;
-	return update_info;
+UndoBufferReference DuckTransaction::CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries) {
+	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
+	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
+	auto &update_info = UpdateInfo::Get(undo_entry);
+	UpdateInfo::Initialize(update_info, data_table, transaction_id);
+	return undo_entry;
 }
 
 void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const SequenceData &data) {
 	lock_guard<mutex> l(sequence_lock);
 	auto entry = sequence_usage.find(sequence);
 	if (entry == sequence_usage.end()) {
-		auto sequence_ptr = undo_buffer.CreateEntry(UndoFlags::SEQUENCE_VALUE, sizeof(SequenceValue));
-		auto sequence_info = reinterpret_cast<SequenceValue *>(sequence_ptr);
+		auto undo_entry = undo_buffer.CreateEntry(UndoFlags::SEQUENCE_VALUE, sizeof(SequenceValue));
+		auto sequence_info = reinterpret_cast<SequenceValue *>(undo_entry.Ptr());
 		sequence_info->entry = &sequence;
 		sequence_info->usage_count = data.usage_count;
 		sequence_info->counter = data.counter;
@@ -144,14 +152,15 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	}
 }
 
-void DuckTransaction::UpdateCollection(shared_ptr<RowGroupCollection> &collection) {
-	auto collection_ref = reference<RowGroupCollection>(*collection);
-	auto entry = updated_collections.find(collection_ref);
-	if (entry != updated_collections.end()) {
+void DuckTransaction::ModifyTable(DataTable &tbl) {
+	lock_guard<mutex> guard(modified_tables_lock);
+	auto table_ref = reference<DataTable>(tbl);
+	auto entry = modified_tables.find(table_ref);
+	if (entry != modified_tables.end()) {
 		// already exists
 		return;
 	}
-	updated_collections.insert(make_pair(collection_ref, collection));
+	modified_tables.insert(make_pair(table_ref, tbl.shared_from_this()));
 }
 
 bool DuckTransaction::ChangesMade() {
@@ -159,7 +168,9 @@ bool DuckTransaction::ChangesMade() {
 }
 
 UndoBufferProperties DuckTransaction::GetUndoProperties() {
-	return undo_buffer.GetProperties();
+	auto properties = undo_buffer.GetProperties();
+	properties.estimated_size += storage->EstimatedSize();
+	return properties;
 }
 
 bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties) {
@@ -174,7 +185,7 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db, const UndoBuffer
 		return false;
 	}
 	auto &storage_manager = db.GetStorageManager();
-	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + properties.estimated_size);
+	return storage_manager.AutomaticCheckpoint(properties.estimated_size);
 }
 
 bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
@@ -193,13 +204,14 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 }
 
 ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state) noexcept {
+	ErrorData error_data;
 	try {
 		D_ASSERT(ShouldWriteToWAL(db));
 		auto &storage_manager = db.GetStorageManager();
-		auto log = storage_manager.GetWAL();
-		commit_state = storage_manager.GenStorageCommitState(*log);
+		auto wal = storage_manager.GetWAL();
+		commit_state = storage_manager.GenStorageCommitState(*wal);
 		storage->Commit(commit_state.get());
-		undo_buffer.WriteToWAL(*log, commit_state.get());
+		undo_buffer.WriteToWAL(*wal, commit_state.get());
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
 			// optimistically written blocks
@@ -207,13 +219,20 @@ ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCo
 			storage_manager.GetBlockManager().FileSync();
 		}
 	} catch (std::exception &ex) {
-		if (commit_state) {
+		// Call RevertCommit() outside this try-catch as it itself may throw
+		error_data = ErrorData(ex);
+	}
+
+	if (commit_state && error_data.HasError()) {
+		try {
 			commit_state->RevertCommit();
 			commit_state.reset();
+		} catch (std::exception &) {
+			// Ignore this error. If we fail to RevertCommit(), just return the original exception
 		}
-		return ErrorData(ex);
 	}
-	return ErrorData();
+
+	return error_data;
 }
 
 ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id,
@@ -248,9 +267,14 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	}
 }
 
-void DuckTransaction::Rollback() noexcept {
-	storage->Rollback();
-	undo_buffer.Rollback();
+ErrorData DuckTransaction::Rollback() {
+	try {
+		storage->Rollback();
+		undo_buffer.Rollback();
+		return ErrorData();
+	} catch (std::exception &ex) {
+		return ErrorData(ex);
+	}
 }
 
 void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {

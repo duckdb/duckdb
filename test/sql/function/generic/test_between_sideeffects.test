@@ -4,11 +4,7 @@
 
 require icu
 
-# FIXME: Make icu properly autoloadable
-require no_extension_autoloading
-
-statement ok
-PRAGMA enable_verification
+require no_extension_autoloading "FIXME: ICU is not autoloaded on '-(TIMESTAMP WITH TIME ZONE, INTERVAL)"
 
 # prepared statement with BETWEEN
 statement ok

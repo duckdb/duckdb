@@ -2,20 +2,20 @@
 # description: blob tests
 # group: [string]
 
-# FIXME: fails for VERIFY_VECTOR=constant_operator
-require no_vector_verification
-
-load __TEST_DIR__/test_string_compression.db
+statement ok
+ATTACH '__TEST_DIR__/test_blob_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
 
 statement ok
-pragma verify_fetch_row
+ATTACH '__TEST_DIR__/test_blob_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
 
-foreach enable_fsst_vector true false
+foreach compression fsst dictionary dict_fsst
 
 statement ok
-SET enable_fsst_vectors='${enable_fsst_vector}'
+USE db_v1
 
-foreach compression fsst dictionary
+onlyif compression=dict_fsst
+statement ok
+USE db_v13
 
 statement ok
 PRAGMA force_compression='${compression}'
@@ -127,7 +127,5 @@ DROP TABLE blobs;
 
 statement ok
 DROP TABLE blob_empty;
-
-endloop
 
 endloop

@@ -18,6 +18,8 @@ struct PragmaCollations {
 };
 
 struct PragmaTableInfo {
+	static void GetColumnInfo(TableCatalogEntry &table, const ColumnDefinition &column, DataChunk &output, idx_t index);
+
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -42,6 +44,14 @@ struct PragmaDatabaseSize {
 };
 
 struct DuckDBSchemasFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBConnectionCountFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBApproxDatabaseCountFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -73,11 +83,23 @@ struct DuckDBExtensionsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBPreparedStatementsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBFunctionsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct DuckDBKeywordsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBLogFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBLogContextFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -89,7 +111,15 @@ struct DuckDBMemoryFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBExternalFileCacheFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBOptimizersFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBSecretTypesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -102,6 +132,10 @@ struct DuckDBSettingsFun {
 };
 
 struct DuckDBTablesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBTableSample {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -118,6 +152,10 @@ struct DuckDBVariablesFun {
 };
 
 struct DuckDBViewsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct EnableLoggingFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -138,7 +176,7 @@ struct TestType {
 
 struct TestAllTypesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static vector<TestType> GetTestTypes(bool large_enum = false);
+	static vector<TestType> GetTestTypes(bool large_enum = false, bool large_bignum = false);
 };
 
 struct TestVectorTypesFun {

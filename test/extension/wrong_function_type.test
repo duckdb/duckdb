@@ -6,7 +6,7 @@ FROM json("['item':'phasers','year':2155','count':1035]");
 ----
 Catalog Error: Table Function with name "json" is not in the catalog, a function by this name exists in the json extension, but it's of a different type, namely Macro Function
 
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: Test relies on autoloading being disabled"
 
 # Multiple options exist, none are scalar
 statement error

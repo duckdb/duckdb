@@ -1,6 +1,15 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/arrow/appender/list_data.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/arrow/appender/append_data.hpp"
+#include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
 
@@ -19,7 +28,7 @@ public:
 		input.ToUnifiedFormat(input_size, format);
 		idx_t size = to - from;
 		vector<sel_t> child_indices;
-		AppendValidity(append_data, format, from, to);
+		append_data.AppendValidity(format, from, to);
 		AppendOffsets(append_data, format, from, to, child_indices);
 
 		// append the child vector of the list
@@ -74,7 +83,8 @@ public:
 			    (uint64_t)last_offset + list_length > NumericLimits<int32_t>::Maximum()) {
 				throw InvalidInputException(
 				    "Arrow Appender: The maximum combined list offset for regular list buffers is "
-				    "%u but the offset of %lu exceeds this.",
+				    "%u but the offset of %lu exceeds this.\n* SET arrow_large_buffer_size=true to use large list "
+				    "buffers",
 				    NumericLimits<int32_t>::Maximum(), last_offset);
 			}
 			last_offset += list_length;

@@ -1,0 +1,142 @@
+# name: test/sql/index/art/constraints/test_art_compound_key_changes.test
+# description: Tests various changes to compound indexes with out-of-order columns.
+# group: [constraints]
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl_comp (
+	a INT,
+	b VARCHAR UNIQUE,
+	gen AS (2 * a),
+	c INT,
+	d VARCHAR,
+	PRIMARY KEY (c, b));
+
+statement ok
+CREATE UNIQUE INDEX unique_idx ON tbl_comp((d || 'hello'), (a + 42));
+
+statement ok
+CREATE INDEX normal_idx ON tbl_comp(d, a, c);
+
+statement ok
+CREATE UNIQUE INDEX lookup_idx ON tbl_comp(c);
+
+statement ok
+INSERT INTO tbl_comp VALUES (1, 'hello', 1, 'hello');
+
+statement ok
+INSERT INTO tbl_comp VALUES (2, 'hello', 1, 'world')
+ON CONFLICT (c, b) DO UPDATE SET a = excluded.a, d = excluded.d;
+
+query IIIII
+SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 1;
+----
+2	hello	4	1	world
+
+# Trigger unique_idx.
+
+statement error
+INSERT INTO tbl_comp VALUES (2, 'hola', 5, 'world');
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+# Trigger lookup_idx.
+
+statement error
+INSERT INTO tbl_comp VALUES (3, 'hoi', 1, 'wereld');
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+statement ok
+INSERT INTO tbl_comp VALUES (3, 'hoi', 2, 'wereld');
+
+query IIIII
+SELECT a, b, gen, c, d FROM tbl_comp ORDER BY ALL;
+----
+2	hello	4	1	world
+3	hoi	6	2	wereld
+
+# Trigger the primary key.
+
+statement error
+INSERT INTO tbl_comp VALUES (42, 'hoi', 2, 'welt');
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+# Keep one connection open to ensure we still have the old value in the ART.
+
+statement ok old
+BEGIN;
+
+statement ok old
+INSERT INTO tbl_comp VALUES (42, 'hoii', 22, 'welt');
+
+# con1 open.
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+DELETE FROM tbl_comp;
+
+statement ok con1
+INSERT INTO tbl_comp VALUES (200, 'hello', 1, 'world'), (300, 'hoi', 2, 'wereld');
+
+# Ensure that we can still see the old value.
+
+query IIIII
+SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 2;
+----
+3	hoi	6	2	wereld
+
+query IIIII
+SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 1;
+----
+2	hello	4	1	world
+
+# Now commit the changes.
+
+statement ok con1
+COMMIT;
+
+query IIIII
+SELECT a, b, gen, c, d FROM tbl_comp ORDER BY ALL;
+----
+200	hello	400	1	world
+300	hoi	600	2	wereld
+
+query IIIII
+SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 2;
+----
+300	hoi	600	2	wereld
+
+query IIIII
+SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 1;
+----
+200	hello	400	1	world
+
+# Ensure that the old transaction can still see the old storage.
+
+query IIIII old
+SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 2;
+----
+3	hoi	6	2	wereld
+
+query IIIII old
+SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 1;
+----
+2	hello	4	1	world
+
+statement ok old
+COMMIT;
+
+# Final results.
+
+query IIIII
+SELECT a, b, gen, c, d FROM tbl_comp ORDER BY ALL;
+----
+42	hoii	84	22	welt
+200	hello	400	1	world
+300	hoi	600	2	wereld

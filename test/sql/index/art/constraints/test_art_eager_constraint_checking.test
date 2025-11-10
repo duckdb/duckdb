@@ -1,109 +1,266 @@
 # name: test/sql/index/art/constraints/test_art_eager_constraint_checking.test
-# description: Contains different tests triggering the eager ART constraint violation
+# description: Contains tests previously triggering the eager constraint checking limitation.
 # group: [constraints]
 
 statement ok
-PRAGMA enable_verification
+SET immediate_transaction_mode = true;
 
-# issue 7182
-
-statement ok
-CREATE TABLE t (it INTEGER PRIMARY KEY, jt INTEGER);
+# Original issue: 7182
 
 statement ok
-CREATE TABLE u (iu INTEGER PRIMARY KEY, ju INTEGER REFERENCES t (it));
+CREATE TABLE t_7182 (it INTEGER PRIMARY KEY, jt INTEGER);
 
 statement ok
-INSERT INTO t VALUES (1, 1);
+CREATE TABLE u_7182 (iu INTEGER PRIMARY KEY, ju INTEGER REFERENCES t_7182 (it));
 
 statement ok
-INSERT INTO u VALUES (1, NULL);
+INSERT INTO t_7182 VALUES (1, 1);
 
-statement error
-UPDATE u SET ju = 1 WHERE iu = 1;
+statement ok
+INSERT INTO u_7182 VALUES (1, NULL);
+
+statement ok
+UPDATE u_7182 SET ju = 1 WHERE iu = 1;
+
+query III
+SELECT iu, ju, rowid FROM u_7182 WHERE iu = 1;
 ----
-Constraint Error: Duplicate key "iu: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+1	1	1
 
-# issue #5807
-
-statement ok
-CREATE TABLE tunion (
-  id INTEGER PRIMARY KEY,
-  u UNION (i int));
+# Original issue: 5807
 
 statement ok
-INSERT INTO tunion
-SELECT 1, 41;
+CREATE TABLE tunion_5807 (id INTEGER PRIMARY KEY, u UNION (i int));
 
-statement error
-UPDATE tunion SET u = 42 WHERE id = 1;
+statement ok
+INSERT INTO tunion_5807 SELECT 1, 41;
+
+statement ok
+UPDATE tunion_5807 SET u = 42 WHERE id = 1;
+
+query III
+SELECT id, u, rowid FROM tunion_5807 WHERE id = 1;
 ----
-Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+1	42	1
 
-# issue #5771
+# Original issue: 5771
 
 statement ok
-CREATE TABLE IF NOT EXISTS workers (
+CREATE TABLE IF NOT EXISTS workers_5771 (
     id INTEGER PRIMARY KEY NOT NULL,
     worker VARCHAR(150) UNIQUE NOT NULL,
     phone VARCHAR(20) NOT NULL);
 
 statement ok
-INSERT INTO workers VALUES (1, 'wagner', '123');
+INSERT INTO workers_5771 VALUES (1, 'wagner', '123');
 
 statement ok
-UPDATE workers SET phone = '345' WHERE id = 1;
+UPDATE workers_5771 SET phone = '345' WHERE id = 1;
 
-statement error
-UPDATE workers SET worker = 'leo' WHERE id = 1;
+statement ok
+UPDATE workers_5771 SET worker = 'leo' WHERE id = 1;
+
+query IIII
+SELECT id, worker, phone, rowid FROM workers_5771 WHERE id = 1;
 ----
-Constraint Error: Duplicate key "id: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+1	leo	345	1
 
-# issue #4886
-
-statement ok
-CREATE TABLE test (i INTEGER PRIMARY KEY);
+# Original issue: 4886
 
 statement ok
-INSERT INTO test VALUES (1);
+CREATE TABLE test_4886 (i INTEGER PRIMARY KEY);
 
 statement ok
-START TRANSACTION;
+INSERT INTO test_4886 VALUES (1);
 
-# we locally insert another value (4) into the ART, but do
-# not update the global ART yet (no COMMIT)
 statement ok
-UPDATE test SET i = 4 WHERE i = 1;
+BEGIN;
 
-# global ART still contains the value 1, and we do not keep track of
-# deletions from indexes during tx yet
-statement error
-INSERT INTO test VALUES (1);
+statement ok
+UPDATE test_4886 SET i = 4 WHERE i = 1;
+
+statement ok
+INSERT INTO test_4886 VALUES (1);
+
+statement ok
+COMMIT
+
+query II
+SELECT i, rowid FROM test_4886 ORDER BY ALL;
 ----
-Constraint Error: Duplicate key "i: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+1	2
+4	1
+
+query II
+SELECT i, rowid FROM test_4886 WHERE i = 1;
+----
+1	2
+
+query II
+SELECT i, rowid FROM test_4886 WHERE i = 4;
+----
+4	1
+
+# Original issue: 1631
 
 statement ok
-ROLLBACK
-
-# issue #1631
-
-statement ok
-DROP TABLE IF EXISTS tbl;
-
-statement ok
-CREATE TABLE tbl (
+CREATE TABLE tbl_1631 (
 	id INTEGER PRIMARY KEY,
-	sometext text NOT NULL UNIQUE,
-	someothertext text NOT NULL);
+	c1 text NOT NULL UNIQUE,
+	c2 text NOT NULL);
 
 statement ok
-INSERT INTO tbl VALUES (1, 'abc', 'def'), (2, 'ghi', 'jkl');
+INSERT INTO tbl_1631 VALUES (1, 'abc', 'def'), (2, 'asdf', 'jkl');
 
-statement error
-UPDATE tbl
-SET sometext = 'ghi', someothertext = 'mno'
-WHERE id = 2;
+statement ok
+UPDATE tbl_1631 SET c1 = 'ghi', c2 = 'mno' WHERE id = 2;
+
+query IIII
+SELECT id, c1, c2, rowid FROM tbl_1631 ORDER BY ALL;
 ----
-Constraint Error: Duplicate key "id: 2" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+1	abc	def	0
+2	ghi	mno	2
 
+# Original issue: 4214
 
+statement ok
+CREATE TABLE c_4214 (id INTEGER NOT NULL PRIMARY KEY);
+
+statement ok
+CREATE TABLE a_4214 (
+	id INTEGER NOT NULL PRIMARY KEY,
+	c_id INTEGER NOT NULL,
+	FOREIGN KEY(c_id) REFERENCES c_4214 (id)
+);
+
+statement ok
+INSERT INTO c_4214 (id) VALUES (1), (2);
+
+statement ok
+INSERT INTO a_4214 (id, c_id) VALUES (1, 1);
+
+statement ok
+UPDATE a_4214 SET c_id = 2 WHERE id = 1;
+
+query III
+SELECT id, c_id, rowid FROM a_4214 WHERE id = 1;
+----
+1	2	1
+
+# Original issue: 8764 (altered)
+
+statement ok
+CREATE TABLE tag_8764 (
+  key VARCHAR(65535) NOT NULL,
+  name VARCHAR(65535) NULL,
+  value VARCHAR(65535) NOT NULL,
+  PRIMARY KEY (key, name)
+);
+
+statement ok
+CREATE UNIQUE INDEX idx_name_8764 ON tag_8764(name);
+
+statement ok
+CREATE UNIQUE INDEX idx_value_8764 ON tag_8764(value);
+
+statement ok
+INSERT INTO tag_8764 (key, name, value) VALUES ('key1', 'name1', 'value1');
+
+statement ok
+UPDATE tag_8764 SET value = 'new_value' WHERE key = 'key1' AND name = 'name1';
+
+query IIII
+SELECT key, name, value, rowid FROM tag_8764;
+----
+key1	name1	new_value	1
+
+# Original issue: 11288
+
+statement ok
+CREATE TABLE t_11288 (i INT PRIMARY KEY, j MAP(VARCHAR, VARCHAR));
+
+statement ok
+INSERT INTO t_11288 VALUES (1, MAP(['a'], ['b']));
+
+statement ok
+UPDATE t_11288 SET j = MAP(['c'], ['d']) WHERE i = 1;
+
+query II
+SELECT i, j FROM t_11288 WHERE i = 1;
+----
+1	{c=d}
+
+# Original issue: 4807
+
+statement ok
+CREATE TABLE t_4807 (id INT PRIMARY KEY, u UNION (i INT));
+
+statement ok
+INSERT INTO t_4807 SELECT 1, 41;
+
+statement ok
+UPDATE t_4807 SET u = 42 WHERE id = 1;
+
+query III
+SELECT id, u, rowid FROM t_4807;
+----
+1	42	1
+
+# Original issue: 14133
+
+statement ok
+CREATE TABLE t_14133 (i INT PRIMARY KEY, s VARCHAR);
+
+statement ok
+INSERT INTO t_14133 SELECT i, i::string FROM generate_series(1, 100) s(i);
+
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM t_14133 WHERE i IN (SELECT i FROM generate_series(1, 20) s(i));
+
+statement ok
+INSERT OR REPLACE INTO t_14133 SELECT i, (i * 2)::string FROM generate_series(1, 20) s(i);
+
+statement ok
+COMMIT;
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM t_14133;
+----
+100	1	100
+
+# Original issue: 6500
+
+load __TEST_DIR__/eager_constraint_issue.db
+
+statement ok
+CREATE TABLE tbl_6500 (i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO tbl_6500 VALUES (1, 100), (2, 200);
+
+statement ok
+CREATE UNIQUE INDEX idx_6500 ON tbl_6500 (i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT OR IGNORE INTO tbl_6500 VALUES (1, 101), (2, 201);
+
+query II
+SELECT i, j FROM tbl_6500 ORDER BY ALL;
+----
+1	100
+2	200
+
+statement ok
+INSERT INTO tbl_6500 VALUES (1,101), (2,201) ON CONFLICT DO NOTHING;
+
+query II
+SELECT i, j FROM tbl_6500 ORDER BY ALL;
+----
+1	100
+2	200

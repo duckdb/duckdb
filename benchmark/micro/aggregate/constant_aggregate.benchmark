@@ -1,0 +1,13 @@
+# name: benchmark/micro/aggregate/constant_aggregate.benchmark
+# description: Aggregate Over Constant Groups
+# group: [aggregate]
+
+name Aggregate Over Constant Vectors
+group aggregate
+storage persistent
+
+load
+CREATE TABLE t AS SELECT DATE '1900-01-01' + INTERVAL (i // 50000) MONTH grp, i FROM range(100_000_000) tbl(i);
+
+run
+SELECT grp, SUM(i) FROM t GROUP BY ALL ORDER BY ALL

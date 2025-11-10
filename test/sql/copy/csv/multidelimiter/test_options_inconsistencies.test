@@ -1,0 +1,18 @@
+# name: test/sql/copy/csv/multidelimiter/test_options_inconsistencies.test
+# description: Test dialect inconsisntecies throw
+# group: [multidelimiter]
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '"\', quote ='"')
+----
+QUOTE must not appear in the DELIMITER specification and vice versa
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '\\', escape ='\')
+----
+ESCAPE must not appear in the DELIMITER specification and vice versa
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '|#', comment ='#', auto_detect = false, columns = {'a': 'varchar'})
+----
+COMMENT must not appear in the DELIMITER specification and vice versa

@@ -35,6 +35,7 @@ with cte1 as MATERIALIZED (with b as MATERIALIZED (Select i as j from a) select 
 statement error
 with cte1 as MATERIALIZED (select 42), cte1 as MATERIALIZED (select 42) select * FROM cte1;
 ----
+<REGEX>:.*Parser Error: Duplicate CTE name.*
 
 # refer to CTE in subquery tableref
 query I
@@ -48,20 +49,22 @@ with cte1 as MATERIALIZED (Select i as j from a) select * from cte1 where j = (w
 ----
 42
 
-require noalternativeverify
+require no_alternative_verify
 
-# same name, both get materialized with ALTERNATIVE_VERIFY, so we need 'noalternativeverify'
+# same name, both get materialized with ALTERNATIVE_VERIFY, so we need 'no_alternative_verify'
 query I
 with cte as materialized (Select i as j from a) select * from cte where j = (with cte as (select max(j) as j from cte) select j from cte);
 ----
 42
 
 # refer to same-named CTE in a subquery expression
-statement error
+query I
 with cte as MATERIALIZED (Select i as j from a) select * from cte where j = (with cte as MATERIALIZED (select max(j) as j from cte) select j from cte);
 ----
+42
 
 # self-refer to non-existent cte
 statement error
 with cte as MATERIALIZED (select * from cte) select * from cte
 ----
+<REGEX>:.*Binder Error.*Circular reference to CTE.*

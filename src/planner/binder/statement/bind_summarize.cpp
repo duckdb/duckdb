@@ -9,7 +9,6 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 
 namespace duckdb {
 
@@ -19,7 +18,7 @@ static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<Parsed
 	vector<unique_ptr<ParsedExpression>> unnest_children;
 	unnest_children.push_back(std::move(list_function));
 	auto unnest_function = make_uniq<FunctionExpression>("unnest", std::move(unnest_children));
-	unnest_function->alias = alias;
+	unnest_function->SetAlias(alias);
 	return std::move(unnest_function);
 }
 
@@ -78,7 +77,7 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(case_expr));
 }
 
-unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
+BoundStatement Binder::BindSummarize(ShowRef &ref) {
 	unique_ptr<QueryNode> query;
 	if (ref.query) {
 		query = std::move(ref.query);
@@ -120,11 +119,14 @@ unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
 		max_children.push_back(SummarizeCreateAggregate("max", plan.names[i]));
 		unique_children.push_back(make_uniq<CastExpression>(
 		    LogicalType::BIGINT, SummarizeCreateAggregate("approx_count_distinct", plan.names[i])));
-		if (plan.types[i].IsNumeric()) {
+		if (plan.types[i].IsNumeric() || plan.types[i].IsTemporal()) {
 			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i]));
-			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
 		} else {
 			avg_children.push_back(make_uniq<ConstantExpression>(Value()));
+		}
+		if (plan.types[i].IsNumeric()) {
+			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
+		} else {
 			std_children.push_back(make_uniq<ConstantExpression>(Value()));
 		}
 		if (plan.types[i].IsNumeric() || plan.types[i].IsTemporal()) {

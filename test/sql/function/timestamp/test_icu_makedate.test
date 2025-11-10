@@ -201,6 +201,7 @@ CREATE TABLE timeparts AS (
 		tz
 	FROM timestamps t
 	LEFT JOIN timezones z ON (month(t.ts) = z.mm)
+	ORDER BY ts
 );
 
 query IIIIIIII
@@ -394,3 +395,13 @@ SELECT make_timestamptz(
 FROM all_types a;
 ----
 Overflow in subtraction
+
+statement error
+SELECT make_timestamptz(9223372036854775807); -- Infinity
+----
+Conversion Error: Timestamp microseconds out of range
+
+statement error
+SELECT make_timestamptz(294248, 1, 10, 4, 0, 54.775807);
+----
+Conversion Error: ICU date overflows timestamp range

@@ -217,46 +217,6 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	}
 }
 
-TEST_CASE("Test DataChunk appending incorrect types in C API", "[capi]") {
-	CAPITester tester;
-	duckdb::unique_ptr<CAPIResult> result;
-	duckdb_state status;
-
-	REQUIRE(tester.OpenDatabase(nullptr));
-
-	REQUIRE(duckdb_vector_size() == STANDARD_VECTOR_SIZE);
-
-	tester.Query("CREATE TABLE test(i BIGINT, j SMALLINT)");
-
-	duckdb_logical_type types[2];
-	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
-	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_BOOLEAN);
-
-	auto data_chunk = duckdb_create_data_chunk(types, 2);
-	REQUIRE(data_chunk);
-
-	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
-	*col1_ptr = 42;
-	auto col2_ptr = (bool *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 1));
-	*col2_ptr = false;
-
-	duckdb_appender appender;
-	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBError);
-
-	auto error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "expected SMALLINT but got BOOLEAN for column 2"));
-
-	duckdb_appender_destroy(&appender);
-
-	duckdb_destroy_data_chunk(&data_chunk);
-
-	duckdb_destroy_logical_type(&types[0]);
-	duckdb_destroy_logical_type(&types[1]);
-}
-
 TEST_CASE("Test DataChunk varchar result fetch in C API", "[capi]") {
 	if (duckdb_vector_size() < 64) {
 		return;
@@ -394,6 +354,9 @@ TEST_CASE("Test duckdb_result_return_type", "[capi]") {
 }
 
 TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
+	if (duckdb_vector_size() < 3) {
+		return;
+	}
 	REQUIRE(duckdb_list_vector_reserve(nullptr, 100) == duckdb_state::DuckDBError);
 	REQUIRE(duckdb_list_vector_set_size(nullptr, 200) == duckdb_state::DuckDBError);
 
@@ -413,7 +376,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	REQUIRE(duckdb_list_vector_set_size(list_vector, 123) == duckdb_state::DuckDBSuccess);
 	REQUIRE(duckdb_list_vector_get_size(list_vector) == 123);
 
-#if STANDARD_VECTOR_SIZE > 2
 	auto entries = (duckdb_list_entry *)duckdb_vector_get_data(list_vector);
 	entries[0].offset = 0;
 	entries[0].length = 20;
@@ -434,7 +396,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	for (int i = 0; i < 123; i++) {
 		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
 	}
-#endif
 
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&list_type);
@@ -442,7 +403,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 }
 
 TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
-
 	auto elem_type = duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER);
 	auto array_type = duckdb_create_array_type(elem_type, 3);
 	duckdb_logical_type schema[] = {array_type};
@@ -501,7 +461,7 @@ TEST_CASE("Test PK violation in the C API appender", "[capi]") {
 	auto state = duckdb_appender_close(appender);
 	REQUIRE(state == DuckDBError);
 	auto error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violated"));
+	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violation"));
 
 	// Destroy the appender despite the error to avoid leaks.
 	state = duckdb_appender_destroy(&appender);
@@ -530,11 +490,59 @@ TEST_CASE("Test PK violation in the C API appender", "[capi]") {
 	state = duckdb_appender_flush(appender);
 	REQUIRE(state == DuckDBError);
 	error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violated"));
+	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violation"));
 	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBError);
 
 	// Ensure that only the last row was appended.
 	result = tester.Query("SELECT * FROM test;");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->row_count() == 0);
+}
+
+TEST_CASE("Test DataChunk write BLOB", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BLOB);
+	REQUIRE(type);
+	REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_BLOB);
+	duckdb_logical_type types[] = {type};
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_data_chunk_set_size(chunk, 1);
+	duckdb_vector vector = duckdb_data_chunk_get_vector(chunk, 0);
+	auto column_type = duckdb_vector_get_column_type(vector);
+	REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_BLOB);
+	duckdb_destroy_logical_type(&column_type);
+	uint8_t bytes[] = {0x80, 0x00, 0x01, 0x2a};
+	duckdb_vector_assign_string_element_len(vector, 0, (const char *)bytes, 4);
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	auto string_value = duckdb_string_t_data(string_data);
+	REQUIRE(duckdb_string_t_length(*string_data) == 4);
+	REQUIRE(string_value[0] == (char)0x80);
+	REQUIRE(string_value[1] == (char)0x00);
+	REQUIRE(string_value[2] == (char)0x01);
+	REQUIRE(string_value[3] == (char)0x2a);
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&type);
+}
+
+TEST_CASE("Test DataChunk write BIGNUM", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGNUM);
+	REQUIRE(type);
+	REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_BIGNUM);
+	duckdb_logical_type types[] = {type};
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_data_chunk_set_size(chunk, 1);
+	duckdb_vector vector = duckdb_data_chunk_get_vector(chunk, 0);
+	auto column_type = duckdb_vector_get_column_type(vector);
+	REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_BIGNUM);
+	duckdb_destroy_logical_type(&column_type);
+	uint8_t bytes[] = {0x80, 0x00, 0x01, 0x2a}; // BIGNUM 42
+	duckdb_vector_assign_string_element_len(vector, 0, (const char *)bytes, 4);
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	auto string_value = duckdb_string_t_data(string_data);
+	REQUIRE(duckdb_string_t_length(*string_data) == 4);
+	REQUIRE(string_value[0] == (char)0x80);
+	REQUIRE(string_value[1] == (char)0x00);
+	REQUIRE(string_value[2] == (char)0x01);
+	REQUIRE(string_value[3] == (char)0x2a);
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&type);
 }

@@ -2,9 +2,6 @@
 # description: Test flatten function
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # basic functionality
 query T
 SELECT flatten([[1, 2, 3, 4]])
@@ -150,3 +147,12 @@ query I
 select flatten(NULL);
 ----
 NULL
+
+query IIII rowsort
+with v_data (col, list) as ( select * FROM (VALUES ('a', [1,2,3]), ('b', [4,5]), ('a', [2,6])) ),
+        v_list_of_lists ( col, list, list_of_lists ) as ( select v.*, array_agg(v.list) over (partition by v.col order by v.list) from v_data v )
+select v.*, flatten(v.list_of_lists) from v_list_of_lists v;
+----
+a	[1, 2, 3]	[[1, 2, 3]]	[1, 2, 3]
+a	[2, 6]	[[1, 2, 3], [2, 6]]	[1, 2, 3, 2, 6]
+b	[4, 5]	[[4, 5]]	[4, 5]

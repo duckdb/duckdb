@@ -57,13 +57,12 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 
 	// scan all the schemas and collect them
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
-	if (catalog.IsDuckCatalog()) {
-		auto &duck_catalog = catalog.Cast<DuckCatalog>();
-		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		dependency_manager.Scan(context,
-		                        [&](CatalogEntry &obj, CatalogEntry &dependent, const DependencyDependentFlags &flags) {
-			                        result->entries.emplace_back(obj, dependent, flags);
-		                        });
+	auto dependency_manager = catalog.GetDependencyManager();
+	if (dependency_manager) {
+		dependency_manager->Scan(
+		    context, [&](CatalogEntry &obj, CatalogEntry &dependent, const DependencyDependentFlags &flags) {
+			    result->entries.emplace_back(obj, dependent, flags);
+		    });
 	}
 
 	return std::move(result);

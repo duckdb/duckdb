@@ -2,7 +2,13 @@
 #include "highlighting.hpp"
 #include "history.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "shell_highlight.hpp"
+#include "shell_state.hpp"
+#if defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace duckdb {
 static const char *continuationPrompt = "> ";
@@ -41,7 +47,7 @@ struct AppendBuffer {
 	}
 
 	void Write(int fd) {
-		if (write(fd, buffer.c_str(), buffer.size()) == -1) {
+		if (!Linenoise::Write(fd, buffer.c_str(), buffer.size())) {
 			/* Can't recover from write error. */
 			Linenoise::Log("%s", "Failed to write buffer\n");
 		}
@@ -230,7 +236,7 @@ void Linenoise::RefreshSearch() {
 			search_prompt += "> ";
 		}
 	}
-	auto oldHighlighting = Highlighting::IsEnabled();
+	auto old_highlighting = duckdb_shell::ShellHighlight::IsEnabled();
 	Linenoise clone = *this;
 	prompt = search_prompt.c_str();
 	plen = search_prompt.size();
@@ -240,7 +246,7 @@ void Linenoise::RefreshSearch() {
 		len = no_matches_text.size();
 		pos = 0;
 		// don't highlight the "no_matches" text
-		Highlighting::Disable();
+		duckdb_shell::ShellHighlight::SetHighlighting(false);
 	} else {
 		// if there are matches render the current history item
 		auto search_match = search_matches[search_index];
@@ -252,8 +258,8 @@ void Linenoise::RefreshSearch() {
 	}
 	RefreshLine();
 
-	if (oldHighlighting) {
-		Highlighting::Enable();
+	if (old_highlighting) {
+		duckdb_shell::ShellHighlight::SetHighlighting(true);
 	}
 	buf = clone.buf;
 	len = clone.len;
@@ -332,7 +338,7 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, 
 }
 
 // insert a token of length 1 of the specified type
-void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken> &tokens) {
+static void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken> &tokens) {
 	vector<highlightToken> new_tokens;
 	new_tokens.reserve(tokens.size() + 1);
 	idx_t i;
@@ -717,7 +723,7 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 	}
 }
 
-bool IsCompletionCharacter(char c) {
+static bool IsCompletionCharacter(char c) {
 	if (c >= 'A' && c <= 'Z') {
 		return true;
 	}
@@ -777,7 +783,7 @@ bool Linenoise::AddCompletionMarker(const char *buf, idx_t len, string &result_b
 		if (!IsCompletionCharacter(buf[cpos])) {
 			break;
 		}
-		if (completion.completions[0].completion[cpos] != buf[cpos]) {
+		if (tolower(completion.completions[0].completion[cpos]) != tolower(buf[cpos])) {
 			return false;
 		}
 	}
@@ -807,7 +813,7 @@ void Linenoise::RefreshMultiLine() {
 	int rows, cols;
 	int new_cursor_row, new_cursor_x;
 	PositionToColAndRow(pos, new_cursor_row, new_cursor_x, rows, cols);
-	int col; /* colum position, zero-based. */
+	int col; /* column position, zero-based. */
 	int old_rows = maxrows ? maxrows : 1;
 	int fd = ofd;
 	std::string highlight_buffer;
@@ -940,7 +946,112 @@ void Linenoise::RefreshMultiLine() {
 	Linenoise::Log("pos %d", pos);
 	Linenoise::Log("max cols %d", ws.ws_col);
 
-	/* Go up till we reach the expected positon. */
+	if (rendered_completion_lines > 0 || (render_completion_suggestion && !completion_list.completions.empty())) {
+		// if we are tab-completing - write the list of completions one line below
+		if (rendered_completion_lines == 0) {
+			// move to the next line if we haven't rendered completions yet
+			append_buffer.Append("\n");
+		} else {
+			// if we have already rendered then just jump down to the last line that contains the completions
+			Linenoise::Log("go down %d", int(rendered_completion_lines));
+			snprintf(seq, 64, "\x1b[%dB", int(rendered_completion_lines));
+			append_buffer.Append(seq);
+
+			/* Now for every row clear it, go up. */
+			for (idx_t j = 0; j < rendered_completion_lines - 1; j++) {
+				Linenoise::Log("clear+up");
+				append_buffer.Append("\r\x1b[0K\x1b[1A");
+			}
+		}
+
+		/* Clean the top line. */
+		Linenoise::Log("clear");
+		append_buffer.Append("\r\x1b[0K");
+
+		if (!completion_list.completions.empty()) {
+			string completion_text;
+			for (idx_t i = 0; i < completion_list.completions.size(); i++) {
+				if (i > 0) {
+					completion_text += " ";
+				}
+				auto &completion = completion_list.completions[i];
+				auto &rendered_text = completion.original_completion;
+				auto element_type = duckdb_shell::HighlightElementType::NONE;
+				switch (completion.completion_type) {
+				case CompletionType::KEYWORD:
+				case CompletionType::TYPE_NAME:
+					element_type = duckdb_shell::HighlightElementType::KEYWORD;
+					break;
+				case CompletionType::CATALOG_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_CATALOG_NAME;
+					break;
+				case CompletionType::SCHEMA_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_SCHEMA_NAME;
+					break;
+				case CompletionType::TABLE_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_TABLE_NAME;
+					break;
+				case CompletionType::COLUMN_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_COLUMN_NAME;
+					break;
+				case CompletionType::FILE_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_FILE_NAME;
+					break;
+				case CompletionType::DIRECTORY_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_DIRECTORY_NAME;
+					break;
+				case CompletionType::SCALAR_FUNCTION:
+				case CompletionType::TABLE_FUNCTION:
+				case CompletionType::PRAGMA_FUNCTION:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_FUNCTION_NAME;
+					break;
+				case CompletionType::SETTING_NAME:
+					element_type = duckdb_shell::HighlightElementType::SUGGESTION_SETTING_NAME;
+					break;
+				default:
+					break;
+				}
+				auto &element = duckdb_shell::ShellHighlight::GetHighlightElement(element_type);
+				auto color = element.color;
+				auto intensity = element.intensity;
+				if (i == completion_idx) {
+					// underline selected completion
+					if (intensity == duckdb_shell::PrintIntensity::BOLD) {
+						intensity = duckdb_shell::PrintIntensity::BOLD_UNDERLINE;
+					} else {
+						intensity = duckdb_shell::PrintIntensity::UNDERLINE;
+					}
+				}
+				auto terminal_text = duckdb_shell::ShellHighlight::TerminalCode(color, intensity);
+				completion_text += terminal_text;
+				completion_text += rendered_text;
+				if (!terminal_text.empty()) {
+					completion_text += duckdb_shell::ShellHighlight::ResetTerminalCode();
+				}
+			}
+
+			// write the set of tab completions
+			int completion_rows, completion_cols;
+			int unused_row, unused_x;
+			PositionToColAndRow(0, completion_text.c_str(), completion_text.size(), 0, unused_row, unused_x,
+			                    completion_rows, completion_cols);
+			append_buffer.Append(completion_text.c_str(), completion_text.size());
+			rendered_completion_lines = completion_rows;
+
+			// jump back up the amount of rendered lines
+			snprintf(seq, 64, "\x1b[%dA", int(rendered_completion_lines));
+			append_buffer.Append(seq);
+		} else {
+			// we are just clearing the completion lines - reset to 0
+			rendered_completion_lines = 0;
+
+			// jump back up one last line
+			snprintf(seq, 64, "\x1b[1A");
+			append_buffer.Append(seq);
+		}
+	}
+
+	/* Go up till we reach the expected position. */
 	if (rows - new_cursor_row > 0) {
 		Linenoise::Log("go-up %d", rows - new_cursor_row);
 		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);

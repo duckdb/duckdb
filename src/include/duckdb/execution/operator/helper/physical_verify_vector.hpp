@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/enums/debug_vector_verification.hpp"
 
 namespace duckdb {
 
@@ -36,7 +37,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::VERIFY_VECTOR;
 
 public:
-	explicit PhysicalVerifyVector(unique_ptr<PhysicalOperator> child);
+	PhysicalVerifyVector(PhysicalPlan &physical_plan, PhysicalOperator &child, DebugVectorVerification verification);
+
+	DebugVectorVerification verification;
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;

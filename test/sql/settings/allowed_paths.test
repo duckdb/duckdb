@@ -1,0 +1,57 @@
+# name: test/sql/settings/allowed_paths.test
+# description: Test allowed_paths setting together with enable_external_access = false
+# group: [settings]
+
+require skip_reload
+
+# enable_external_access = false disables extension loading
+require no_extension_autoloading "EXPECTED: Test disable loading of extensions"
+
+# we can set allowed_directories as much as we want
+statement ok
+SET allowed_paths=['{DATA_DIR}/csv/glob/f_1.csv']
+
+statement ok
+RESET allowed_paths
+
+statement ok
+SET allowed_paths=['{DATA_DIR}/csv/glob/f_1.csv', '{TEMP_DIR}/allowed_file.csv']
+
+statement ok
+SET enable_external_access=false
+
+# ...until enable_external_access is false
+statement error
+RESET allowed_paths
+----
+Cannot change allowed_paths when enable_external_access is disabled
+
+statement error
+SET allowed_paths=[]
+----
+Cannot change allowed_paths when enable_external_access is disabled
+
+# we can read our allowed files
+query III
+SELECT * FROM '{DATA_DIR}/csv/glob/f_1.csv'
+----
+1	alice	alice@email.com
+2	eve	eve@email.com
+3r	bob	NULL
+
+# but not files that are not allowed
+statement error
+SELECT * FROM '{DATA_DIR}/csv/glob/a1/a1.csv'
+----
+Permission Error
+
+# we can also write to our allowed file
+statement ok
+COPY (SELECT 42 i) TO '{TEMP_DIR}/allowed_file.csv'
+
+# but not to not-allowed files
+statement error
+COPY (SELECT 42 i) TO '{TEMP_DIR}/not_allowed_file.csv'
+----
+Permission Error
+

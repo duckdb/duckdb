@@ -38,7 +38,8 @@ EqualOrNullSimplification::EqualOrNullSimplification(ExpressionRewriter &rewrite
 
 // a=b OR (a IS NULL AND b IS NULL) to a IS NOT DISTINCT FROM b
 static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Expression &and_expr) {
-	if (equal_expr.type != ExpressionType::COMPARE_EQUAL || and_expr.type != ExpressionType::CONJUNCTION_AND) {
+	if (equal_expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL ||
+	    and_expr.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
 		return nullptr;
 	}
 
@@ -58,7 +59,7 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 	for (const auto &item : and_cast.children) {
 		auto &next_exp = *item;
 
-		if (next_exp.type == ExpressionType::OPERATOR_IS_NULL) {
+		if (next_exp.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL) {
 			auto &next_exp_cast = next_exp.Cast<BoundOperatorExpression>();
 			auto &child = *next_exp_cast.children[0];
 
@@ -85,7 +86,7 @@ unique_ptr<Expression> EqualOrNullSimplification::Apply(LogicalOperator &op, vec
                                                         bool &changes_made, bool is_root) {
 	const Expression &or_exp = bindings[0].get();
 
-	if (or_exp.type != ExpressionType::CONJUNCTION_OR) {
+	if (or_exp.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
 		return nullptr;
 	}
 

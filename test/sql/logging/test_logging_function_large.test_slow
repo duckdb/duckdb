@@ -1,0 +1,43 @@
+# name: test/sql/logging/test_logging_function_large.test_slow
+# description: Use test_logging function with 1 million log entries
+# group: [logging]
+
+require noforcestorage  
+
+query IIIIIIIIII
+from duckdb_logs
+----
+
+statement ok
+CALL enable_logging();
+
+statement ok
+set logging_level='debug';
+
+loop i 0 100
+
+statement ok
+SELECT write_log('hi_global', level := 'info', scope := 'database') from range(0,2500);
+
+statement ok
+SELECT write_log('hi_client', level := 'info', scope := 'connection') from range(0,2500);
+
+statement ok
+SELECT write_log('hi_file', level := 'info', scope := 'file_opener') from range(0,2500);
+
+endloop
+
+query II
+SELECT count(*), message FROM duckdb_logs where starts_with(message, 'hi_') group by message order by message
+----
+250000	hi_client
+250000	hi_file
+250000	hi_global
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+SELECT count(*) FROM duckdb_logs;
+----
+0

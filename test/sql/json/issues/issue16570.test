@@ -1,0 +1,17 @@
+# name: test/sql/json/issues/issue16570.test
+# description: Test issue 16570 - JSON type: string slice operation results in result value with JSON type, expected VARCHAR
+# group: [issues]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query II
+with cte as (
+    select '{"a":1}'::JSON as j
+)
+select typeof(j[2:3]), typeof(substring(j, 2, 3))
+from cte
+----
+VARCHAR	VARCHAR

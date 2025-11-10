@@ -210,46 +210,46 @@ SELECT list_zip(['2021-08-20'::DATE])
 [(2021-08-20)]
 
 # time
-query I
-SELECT list_zip(['14:59:37'::TIME])
+query III
+SELECT list_zip(['14:59:37'::TIME]) a, a::VARCHAR::STRUCT("time" TIME)[] b, a == b
 ----
-[(14:59:37)]
+[('14:59:37')]	[{'time': '14:59:37'}]	true
 
 # timestamp
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMP])
 ----
-[(2021-08-20 00:00:00)]
+[('2021-08-20 00:00:00')]
 
 # timestamp s
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMP_S])
 ----
-[(2021-08-20 00:00:00)]
+[('2021-08-20 00:00:00')]
 
 # timestamp ms
 query I
 SELECT list_zip(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
 ----
-[(2021-08-20 00:00:00.123)]
+[('2021-08-20 00:00:00.123')]
 
 # timestamp ns
 query I
 SELECT list_zip(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
 ----
-[(2021-08-20 00:00:00.123456)]
+[('2021-08-20 00:00:00.123456')]
 
 # time with time zone
 query I
 SELECT list_zip(['14:59:37'::TIMETZ])
 ----
-[(14:59:37+00)]
+[('14:59:37+00')]
 
 # timestamp with time zone
 query I
 SELECT list_zip(['2021-08-20'::TIMESTAMPTZ])
 ----
-[(2021-08-20 00:00:00+00)]
+[('2021-08-20 00:00:00+00')]
 
 # interval
 query I
@@ -271,7 +271,13 @@ endloop
 query I
 SELECT list_zip(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
 ----
-[({a: 1}), ({a: 3})]
+[('{a: 1}'), ('{a: 3}')]
+
+query III
+SELECT list_zip(['{a: 1'::BLOB, '{a: 3'::BLOB]) a, a::VARCHAR::STRUCT(a BLOB)[] b, a == b
+----
+[('{a: 1'), ('{a: 3')]	[{'a': '{a: 1'}, {'a': '{a: 3'}]	true
+
 
 query I
 SELECT list_zip([NULL::BLOB])
@@ -315,3 +321,12 @@ SELECT list_zip('')
 statement error
 SELECT list_zip(3, 4)
 ----
+
+statement error
+SELECT list_zip(FALSE)
+----
+
+statement error
+SELECT list_zip(TRUE)
+----
+

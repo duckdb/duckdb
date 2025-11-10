@@ -3,15 +3,99 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 static void create_dummy_file(string fname) {
-	ofstream outfile(fname);
+	string normalized_string;
+	if (StringUtil::StartsWith(fname, "file:///")) {
+#ifdef _WIN32
+		normalized_string = fname.substr(8);
+#else
+		normalized_string = fname.substr(7);
+#endif
+
+	} else if (StringUtil::StartsWith(fname, "file://localhost/")) {
+#ifdef _WIN32
+		normalized_string = fname.substr(18);
+#else
+		normalized_string = fname.substr(18);
+#endif
+	} else {
+		normalized_string = fname;
+	}
+
+	ofstream outfile(normalized_string);
 	outfile << "I_AM_A_DUMMY" << endl;
 	outfile.close();
+}
+
+TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto dname = fs->JoinPath(fs->GetWorkingDirectory(), TestCreatePath("TEST_DIR"));
+	auto dname_converted_slashes = StringUtil::Replace(dname, "\\", "/");
+
+	// handle differences between windows and linux
+	if (StringUtil::StartsWith(dname_converted_slashes, "/")) {
+		dname_converted_slashes = dname_converted_slashes.substr(1);
+	}
+
+	// Path of format file:///bla/bla on 'nix and file:///X:/bla/bla on Windows
+	auto dname_triple_slash = fs->JoinPath("file://", dname_converted_slashes);
+	// Path of format file://localhost/bla/bla on 'nix and file://localhost/X:/bla/bla on Windows
+	auto dname_localhost = fs->JoinPath("file://localhost", dname_converted_slashes);
+	auto dname_no_host = fs->JoinPath("file:", dname_converted_slashes);
+
+	string fname = "TEST_FILE";
+	string fname2 = "TEST_FILE_TWO";
+
+	if (fs->DirectoryExists(dname_triple_slash)) {
+		fs->RemoveDirectory(dname_triple_slash);
+	}
+
+	fs->CreateDirectory(dname_triple_slash);
+	REQUIRE(fs->DirectoryExists(dname_triple_slash));
+	REQUIRE(!fs->FileExists(dname_triple_slash));
+
+	// we can call this again and nothing happens
+	fs->CreateDirectory(dname_triple_slash);
+
+	auto fname_in_dir = fs->JoinPath(dname_triple_slash, fname);
+	auto fname_in_dir2 = fs->JoinPath(dname_localhost, fname2);
+	auto fname_in_dir3 = fs->JoinPath(dname_no_host, fname2);
+
+	create_dummy_file(fname_in_dir);
+	REQUIRE(fs->FileExists(fname_in_dir));
+	REQUIRE(!fs->DirectoryExists(fname_in_dir));
+
+	size_t n_files = 0;
+	REQUIRE(fs->ListFiles(dname_triple_slash, [&n_files](const string &path, bool) { n_files++; }));
+
+	REQUIRE(n_files == 1);
+
+	REQUIRE(fs->FileExists(fname_in_dir));
+	REQUIRE(!fs->FileExists(fname_in_dir2));
+
+	auto file_listing = fs->Glob(fs->JoinPath(dname_triple_slash, "*"));
+	REQUIRE(file_listing[0].path == fname_in_dir);
+
+	fs->MoveFile(fname_in_dir, fname_in_dir2);
+
+	REQUIRE(!fs->FileExists(fname_in_dir));
+	REQUIRE(fs->FileExists(fname_in_dir2));
+
+	auto file_listing_after_move = fs->Glob(fs->JoinPath(dname_no_host, "*"));
+	REQUIRE(file_listing_after_move[0].path == fname_in_dir3);
+
+	fs->RemoveDirectory(dname_triple_slash);
+
+	REQUIRE(!fs->DirectoryExists(dname_triple_slash));
+	REQUIRE(!fs->FileExists(fname_in_dir));
+	REQUIRE(!fs->FileExists(fname_in_dir2));
 }
 
 TEST_CASE("Make sure file system operators work as advertised", "[file_system]") {
@@ -78,7 +162,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// open file for writing
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE));
 	// write 10 integers
-	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
+	REQUIRE_NOTHROW(handle->Write(QueryContext(), (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// close the file
 	handle.reset();
 
@@ -88,7 +172,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// now open the file for reading
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ));
 	// read the 10 integers back
-	REQUIRE_NOTHROW(handle->Read((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
+	REQUIRE_NOTHROW(handle->Read(QueryContext(), (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// check the values of the integers
 	for (int i = 0; i < 10; i++) {
 		REQUIRE(test_data[i] == i);
@@ -115,4 +199,40 @@ TEST_CASE("absolute paths", "[file_system]") {
 	REQUIRE(fs.NormalizeAbsolutePath(network) == network);
 	REQUIRE(fs.NormalizeAbsolutePath(long_path) == "\\\\?\\d:\\very long network\\");
 #endif
+}
+
+TEST_CASE("extract subsystem", "[file_system]") {
+	duckdb::VirtualFileSystem vfs;
+	auto local_filesystem = FileSystem::CreateLocal();
+	auto *local_filesystem_ptr = local_filesystem.get();
+	vfs.RegisterSubSystem(std::move(local_filesystem));
+
+	// Extract a non-existent filesystem gets nullptr.
+	REQUIRE(vfs.ExtractSubSystem("non-existent") == nullptr);
+
+	// Extract an existing filesystem.
+	auto extracted_filesystem = vfs.ExtractSubSystem(local_filesystem_ptr->GetName());
+	REQUIRE(extracted_filesystem.get() == local_filesystem_ptr);
+
+	// Re-extraction gets nullptr.
+	REQUIRE(vfs.ExtractSubSystem("non-existent") == nullptr);
+
+	// Register a subfilesystem and disable, which is not allowed to extract.
+	const ::duckdb::string target_fs = extracted_filesystem->GetName();
+	const ::duckdb::vector<string> disabled_subfilesystems {target_fs};
+	vfs.RegisterSubSystem(std::move(extracted_filesystem));
+	vfs.SetDisabledFileSystems(disabled_subfilesystems);
+	REQUIRE(vfs.ExtractSubSystem(target_fs) == nullptr);
+}
+
+TEST_CASE("re-register subsystem", "[file_system]") {
+	duckdb::VirtualFileSystem vfs;
+
+	// First time registration should succeed.
+	auto local_filesystem = FileSystem::CreateLocal();
+	vfs.RegisterSubSystem(std::move(local_filesystem));
+
+	// Re-register an already registered subfilesystem should throw.
+	auto second_local_filesystem = FileSystem::CreateLocal();
+	REQUIRE_THROWS(vfs.RegisterSubSystem(std::move(second_local_filesystem)));
 }

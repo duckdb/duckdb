@@ -1,11 +1,9 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -29,9 +27,45 @@ void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef &window_spec
 		TransformOrderBy(window_spec.orderClause, expr.orders);
 		for (auto &order : expr.orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::STAR) {
-				throw ParserException("Cannot ORDER BY ALL in a window expression");
+				auto &star = order.expression->Cast<StarExpression>();
+				if (!star.expr) {
+					throw ParserException("Cannot ORDER BY ALL in a window expression");
+				}
 			}
 		}
+	}
+}
+
+static inline WindowBoundary TransformFrameOption(const int frameOptions, const WindowBoundary rows,
+                                                  const WindowBoundary range, const WindowBoundary groups) {
+	if (frameOptions & FRAMEOPTION_RANGE) {
+		return range;
+	} else if (frameOptions & FRAMEOPTION_GROUPS) {
+		return groups;
+	} else {
+		return rows;
+	}
+}
+
+static bool IsExcludableWindowFunction(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_AGGREGATE:
+		return true;
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_CUME_DIST:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
+		return false;
+	default:
+		throw InternalException("Unknown excludable window type %s", ExpressionTypeToString(type).c_str());
 	}
 }
 
@@ -46,28 +80,30 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 		    "Window frames starting with unbounded following or ending in unbounded preceding make no sense");
 	}
 
-	if (window_spec.frameOptions & FRAMEOPTION_GROUPS) {
-		throw ParserException("GROUPS mode for window functions is not implemented yet");
-	}
-	const bool rangeMode = (window_spec.frameOptions & FRAMEOPTION_RANGE) != 0;
 	if (window_spec.frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) {
 		expr.start = WindowBoundary::UNBOUNDED_PRECEDING;
 	} else if (window_spec.frameOptions & FRAMEOPTION_START_OFFSET_PRECEDING) {
-		expr.start = rangeMode ? WindowBoundary::EXPR_PRECEDING_RANGE : WindowBoundary::EXPR_PRECEDING_ROWS;
+		expr.start = TransformFrameOption(window_spec.frameOptions, WindowBoundary::EXPR_PRECEDING_ROWS,
+		                                  WindowBoundary::EXPR_PRECEDING_RANGE, WindowBoundary::EXPR_PRECEDING_GROUPS);
 	} else if (window_spec.frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING) {
-		expr.start = rangeMode ? WindowBoundary::EXPR_FOLLOWING_RANGE : WindowBoundary::EXPR_FOLLOWING_ROWS;
+		expr.start = TransformFrameOption(window_spec.frameOptions, WindowBoundary::EXPR_FOLLOWING_ROWS,
+		                                  WindowBoundary::EXPR_FOLLOWING_RANGE, WindowBoundary::EXPR_FOLLOWING_GROUPS);
 	} else if (window_spec.frameOptions & FRAMEOPTION_START_CURRENT_ROW) {
-		expr.start = rangeMode ? WindowBoundary::CURRENT_ROW_RANGE : WindowBoundary::CURRENT_ROW_ROWS;
+		expr.start = TransformFrameOption(window_spec.frameOptions, WindowBoundary::CURRENT_ROW_ROWS,
+		                                  WindowBoundary::CURRENT_ROW_RANGE, WindowBoundary::CURRENT_ROW_GROUPS);
 	}
 
 	if (window_spec.frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING) {
 		expr.end = WindowBoundary::UNBOUNDED_FOLLOWING;
 	} else if (window_spec.frameOptions & FRAMEOPTION_END_OFFSET_PRECEDING) {
-		expr.end = rangeMode ? WindowBoundary::EXPR_PRECEDING_RANGE : WindowBoundary::EXPR_PRECEDING_ROWS;
+		expr.end = TransformFrameOption(window_spec.frameOptions, WindowBoundary::EXPR_PRECEDING_ROWS,
+		                                WindowBoundary::EXPR_PRECEDING_RANGE, WindowBoundary::EXPR_PRECEDING_GROUPS);
 	} else if (window_spec.frameOptions & FRAMEOPTION_END_OFFSET_FOLLOWING) {
-		expr.end = rangeMode ? WindowBoundary::EXPR_FOLLOWING_RANGE : WindowBoundary::EXPR_FOLLOWING_ROWS;
+		expr.end = TransformFrameOption(window_spec.frameOptions, WindowBoundary::EXPR_FOLLOWING_ROWS,
+		                                WindowBoundary::EXPR_FOLLOWING_RANGE, WindowBoundary::EXPR_FOLLOWING_GROUPS);
 	} else if (window_spec.frameOptions & FRAMEOPTION_END_CURRENT_ROW) {
-		expr.end = rangeMode ? WindowBoundary::CURRENT_ROW_RANGE : WindowBoundary::CURRENT_ROW_ROWS;
+		expr.end = TransformFrameOption(window_spec.frameOptions, WindowBoundary::CURRENT_ROW_ROWS,
+		                                WindowBoundary::CURRENT_ROW_RANGE, WindowBoundary::CURRENT_ROW_GROUPS);
 	}
 
 	D_ASSERT(expr.start != WindowBoundary::INVALID && expr.end != WindowBoundary::INVALID);
@@ -87,10 +123,15 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 	} else {
 		expr.exclude_clause = WindowExcludeMode::NO_OTHER;
 	}
+
+	if (expr.exclude_clause != WindowExcludeMode::NO_OTHER && !expr.arg_orders.empty() &&
+	    !IsExcludableWindowFunction(expr.type)) {
+		throw ParserException("EXCLUDE is not supported for the window function \"%s\"", expr.function_name.c_str());
+	}
 }
 
 bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
-	if (expr.expression_class != ExpressionClass::STAR) {
+	if (expr.GetExpressionClass() != ExpressionClass::STAR) {
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
@@ -108,6 +149,28 @@ bool Transformer::InWindowDefinition() {
 		return parent->InWindowDefinition();
 	}
 	return false;
+}
+
+static bool IsOrderableWindowFunction(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_CUME_DIST:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_FILL:
+	case ExpressionType::WINDOW_AGGREGATE:
+		return true;
+	case ExpressionType::WINDOW_RANK_DENSE:
+		return false;
+	default:
+		throw InternalException("Unknown orderable window type %s", ExpressionTypeToString(type).c_str());
+	}
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall &root) {
@@ -157,8 +220,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("DISTINCT is not implemented for non-aggregate window functions!");
 		}
 
-		if (root.agg_order) {
-			throw ParserException("ORDER BY is not implemented for window functions!");
+		if (root.agg_order && !IsOrderableWindowFunction(win_fun_type)) {
+			throw ParserException("ORDER BY is not supported for the window function \"%s\"", lowercase_name.c_str());
 		}
 
 		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root.agg_filter) {
@@ -180,6 +243,12 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		if (root.agg_filter) {
 			auto filter_expr = TransformExpression(root.agg_filter);
 			expr->filter_expr = std::move(filter_expr);
+		}
+
+		if (root.agg_order) {
+			auto order_bys = make_uniq<OrderModifier>();
+			TransformOrderBy(root.agg_order, order_bys->orders);
+			expr->arg_orders = std::move(order_bys->orders);
 		}
 
 		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
@@ -300,6 +369,20 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		expr->case_checks.push_back(std::move(check));
 		expr->else_expr = std::move(children[2]);
 		return std::move(expr);
+	} else if (lowercase_name == "unpack") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to the UNPACK operator");
+		}
+		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+		expr->children = std::move(children);
+		return std::move(expr);
+	} else if (lowercase_name == "try") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to TRY expression");
+		}
+		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+		try_expression->children = std::move(children);
+		return std::move(try_expression);
 	} else if (lowercase_name == "construct_array") {
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(children);
@@ -344,6 +427,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			children.emplace_back(std::move(sense));
 			children.emplace_back(std::move(nulls));
 		}
+	} else if (lowercase_name == "date") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to DATE function");
+		}
+		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(children[0])));
 	}
 
 	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),

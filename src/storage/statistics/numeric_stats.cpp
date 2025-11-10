@@ -143,13 +143,11 @@ bool ConstantValueInRange(T min, T max, T constant) {
 }
 
 template <class T>
-FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
-                                            const Value &constant_value) {
-	T min_value = NumericStats::GetMinUnsafe<T>(stats);
-	T max_value = NumericStats::GetMaxUnsafe<T>(stats);
-	T constant = constant_value.GetValueUnsafe<T>();
+FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type, T min_value,
+                                            T max_value, T constant) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		if (ConstantExactRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
@@ -158,6 +156,7 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 		}
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
 		if (!ConstantValueInRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		} else if (ConstantExactRange(min_value, max_value, constant)) {
@@ -214,40 +213,55 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 	}
 }
 
-FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                 const Value &constant) {
-	D_ASSERT(constant.type() == stats.GetType());
-	if (constant.IsNull()) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+template <class T>
+FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
+                                            array_ptr<const Value> constants) {
+	T min_value = NumericStats::GetMinUnsafe<T>(stats);
+	T max_value = NumericStats::GetMaxUnsafe<T>(stats);
+	for (auto &constant_value : constants) {
+		D_ASSERT(constant_value.type() == stats.GetType());
+		D_ASSERT(!constant_value.IsNull());
+		T constant = constant_value.GetValueUnsafe<T>();
+		auto prune_result = CheckZonemapTemplated(stats, comparison_type, min_value, max_value, constant);
+		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
 	}
+	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+}
+
+FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+                                                 array_ptr<const Value> constants) {
 	if (!NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	switch (stats.GetType().InternalType()) {
 	case PhysicalType::INT8:
-		return CheckZonemapTemplated<int8_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<int8_t>(stats, comparison_type, constants);
 	case PhysicalType::INT16:
-		return CheckZonemapTemplated<int16_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<int16_t>(stats, comparison_type, constants);
 	case PhysicalType::INT32:
-		return CheckZonemapTemplated<int32_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<int32_t>(stats, comparison_type, constants);
 	case PhysicalType::INT64:
-		return CheckZonemapTemplated<int64_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<int64_t>(stats, comparison_type, constants);
 	case PhysicalType::UINT8:
-		return CheckZonemapTemplated<uint8_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<uint8_t>(stats, comparison_type, constants);
 	case PhysicalType::UINT16:
-		return CheckZonemapTemplated<uint16_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<uint16_t>(stats, comparison_type, constants);
 	case PhysicalType::UINT32:
-		return CheckZonemapTemplated<uint32_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<uint32_t>(stats, comparison_type, constants);
 	case PhysicalType::UINT64:
-		return CheckZonemapTemplated<uint64_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<uint64_t>(stats, comparison_type, constants);
 	case PhysicalType::INT128:
-		return CheckZonemapTemplated<hugeint_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<hugeint_t>(stats, comparison_type, constants);
 	case PhysicalType::UINT128:
-		return CheckZonemapTemplated<uhugeint_t>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<uhugeint_t>(stats, comparison_type, constants);
 	case PhysicalType::FLOAT:
-		return CheckZonemapTemplated<float>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<float>(stats, comparison_type, constants);
 	case PhysicalType::DOUBLE:
-		return CheckZonemapTemplated<double>(stats, comparison_type, constant);
+		return CheckZonemapTemplated<double>(stats, comparison_type, constants);
 	default:
 		throw InternalException("Unsupported type for NumericStats::CheckZonemap");
 	}
@@ -361,7 +375,8 @@ Value NumericValueUnionToValue(const LogicalType &type, const NumericValueUnion 
 }
 
 bool NumericStats::HasMinMax(const BaseStatistics &stats) {
-	return NumericStats::HasMin(stats) && NumericStats::HasMax(stats);
+	return NumericStats::HasMin(stats) && NumericStats::HasMax(stats) &&
+	       NumericStats::Min(stats) <= NumericStats::Max(stats);
 }
 
 bool NumericStats::HasMin(const BaseStatistics &stats) {

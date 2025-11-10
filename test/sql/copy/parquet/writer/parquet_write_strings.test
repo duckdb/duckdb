@@ -26,7 +26,7 @@ COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
 query I
 SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
 ----
-PLAIN, RLE_DICTIONARY
+RLE_DICTIONARY
 
 query I
 SELECT * FROM '__TEST_DIR__/strings.parquet'
@@ -158,7 +158,7 @@ SELECT * FROM '__TEST_DIR__/strings.parquet'
 ----
 
 
-# non-dictionary table
+# non-dictionary table, also no distinct count
 statement ok
 DELETE FROM strings
 

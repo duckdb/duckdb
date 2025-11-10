@@ -1,0 +1,11 @@
+# name: test/sql/copy/partitioned/hive_partition_case_insensitive_column.test
+# description: Test when columns in the hive partitioned files differ only in case from the partitions themselves
+# group: [partitioned]
+
+require parquet
+
+query II
+SELECT * FROM  '{DATA_DIR}/parquet-testing/hive-partitioning/ci-column-names/**/*.parquet' ORDER BY ALL
+----
+Hannes	2
+Mark	1

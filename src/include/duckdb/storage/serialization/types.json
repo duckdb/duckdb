@@ -1,5 +1,40 @@
 [
   {
+    "class": "LogicalTypeModifier",
+    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "members": [
+      {
+        "id": 100,
+        "name": "value",
+        "type": "Value"
+      },
+      {
+        "id": 101,
+        "name": "label",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["value"]
+  },
+  {
+    "class": "ExtensionTypeInfo",
+    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "members": [
+      {
+        "id": 100,
+        "name": "modifiers",
+        "type": "vector<LogicalTypeModifier>"
+      },
+      {
+        "id": 101,
+        "name": "properties",
+        "type": "unordered_map<string, Value>",
+        "default": "unordered_map<string, Value>()"
+      }
+    ]
+  },
+  {
     "class": "ExtraTypeInfo",
     "class_type": "type",
     "includes": [
@@ -20,7 +55,12 @@
         "id": 102,
         "name": "modifiers",
         "type": "vector<Value>",
-        "default": "vector<Value>()"
+        "status": "deleted"
+      },
+      {
+        "id": 103,
+        "name": "extension_info",
+        "type": "unique_ptr<ExtensionTypeInfo>"
       }
     ],
     "pointer_type": "shared_ptr"
@@ -146,8 +186,7 @@
       {
         "id": 203,
         "name": "user_type_modifiers",
-        "type": "vector<Value>",
-        "default": "vector<Value>()"
+        "type": "vector<Value>"
       }
     ]
   },
@@ -196,6 +235,25 @@
         "name": "constant_value",
         "type": "Value"
       }
+    ]
+  },
+  {
+    "class": "TemplateTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "TEMPLATE_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "GeoTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "GEO_TYPE_INFO",
+    "members": [
     ]
   }
 ]

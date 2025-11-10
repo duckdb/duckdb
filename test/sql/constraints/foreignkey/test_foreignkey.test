@@ -182,7 +182,11 @@ statement ok
 INSERT INTO pkt VALUES (1, 11), (2, 12), (3, 13)
 
 statement ok
-CREATE TABLE fkt(j INTEGER, l INTEGER UNIQUE, FOREIGN KEY (j) REFERENCES pkt(i))
+CREATE TABLE fkt(
+	j INTEGER,
+	l INTEGER UNIQUE,
+	FOREIGN KEY (j) REFERENCES pkt(i)
+)
 
 statement ok
 CREATE INDEX k_index ON pkt(k)
@@ -287,3 +291,18 @@ CREATE TABLE fkt(j INTEGER, FOREIGN KEY (j) REFERENCES pkt(i))
 
 statement ok
 INSERT INTO fkt VALUES (NULL)
+
+# Truncate on self-reference is not yet supported.
+statement ok
+CREATE TABLE t (id INT PRIMARY KEY, parent INT REFERENCES t (id));
+
+statement ok
+INSERT INTO t VALUES (1, NULL);
+
+statement ok
+INSERT INTO t VALUES (2, 1), (3, 1);
+
+statement error
+TRUNCATE t;
+----
+Violates foreign key constraint

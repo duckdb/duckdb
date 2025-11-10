@@ -1,0 +1,19 @@
+add_subdirectory(array)
+add_subdirectory(bit)
+add_subdirectory(blob)
+add_subdirectory(date)
+add_subdirectory(debug)
+add_subdirectory(enum)
+add_subdirectory(generic)
+add_subdirectory(list)
+add_subdirectory(map)
+add_subdirectory(math)
+add_subdirectory(operators)
+add_subdirectory(random)
+add_subdirectory(string)
+add_subdirectory(struct)
+add_subdirectory(union)
+
+set(CORE_FUNCTION_FILES
+    ${CORE_FUNCTION_FILES}
+    PARENT_SCOPE)

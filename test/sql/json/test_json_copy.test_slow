@@ -1,21 +1,27 @@
 # name: test/sql/json/test_json_copy.test_slow
-# description: Test JSON COPY using TPC-H
+# description: Test JSON COPY
 # group: [json]
 
 require json
+
+require parquet
+
+require no_extension_autoloading "FIXME: Autoloading on zstd compression (parquet) not yet there"
 
 # test automatic detection even with .gz
 statement ok
 create table integers as select 42 i
 
 statement ok
-copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
+copy integers to '{TEMP_DIR}/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
 
 statement ok
 delete from integers
 
-statement ok
-copy integers from '__TEST_DIR__/integers.json.gz'
+query I
+copy integers from '{TEMP_DIR}/integers.json.gz'
+----
+1
 
 query T
 select i from integers
@@ -27,27 +33,27 @@ statement ok
 create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
 
 query I nosort q0
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 ----
 
 statement ok
 copy (
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
-) to '__TEST_DIR__/all_types.ndjson'
+) to '{TEMP_DIR}/all_types.ndjson'
 
 statement ok
 create table roundtrip as
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 limit 0
 
 statement ok
-copy roundtrip from '__TEST_DIR__/all_types.ndjson'
+copy roundtrip from '{TEMP_DIR}/all_types.ndjson'
 
 query I nosort q0
 select * from roundtrip
@@ -58,18 +64,29 @@ delete from roundtrip
 
 statement ok
 copy (
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, varint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint, bignum)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
-) to '__TEST_DIR__/all_types.json' (array true)
+) to '{TEMP_DIR}/all_types.json' (array true)
 
 statement ok
-copy roundtrip from '__TEST_DIR__/all_types.json' (array true)
+copy roundtrip from '{TEMP_DIR}/all_types.json' (array true)
 
 query I nosort q0
 select * from roundtrip
 ----
 
+
+# test issue 18816
+statement ok
+copy (select 42 i)
+to '{TEMP_DIR}/json_batch'
+(format json, per_thread_output true, overwrite true);
+
+statement ok
+copy (select 42 i)
+to '{TEMP_DIR}/json_batch'
+(format json, per_thread_output true, append true);
 
 # test issue #6305
 statement ok
@@ -80,10 +97,10 @@ copy (
     (uuid(), 15),
     (uuid(), 5)
     v (order_id, revenue)
-) to '__TEST_DIR__/query.json' (format json)
+) to '{TEMP_DIR}/query.json' (format json)
 
 query II
-select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+select typeof(order_id), revenue from '{TEMP_DIR}/query.json'
 ----
 UUID	10
 UUID	10
@@ -99,10 +116,10 @@ copy (
     ({order_id: uuid(), revenue: 15}),
     ({order_id: uuid(), revenue: 5}),
     t (v)
-) to '__TEST_DIR__/query.json' (format json)
+) to '{TEMP_DIR}/query.json' (format json)
 
 query II
-select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+select typeof(order_id), revenue from '{TEMP_DIR}/query.json'
 ----
 UUID	10
 UUID	10
@@ -118,10 +135,10 @@ copy (
     (uuid(), 15),
     (uuid(), 5)
     v (order_id, revenue)
-) to '__TEST_DIR__/query.json' (format json)
+) to '{TEMP_DIR}/query.json' (format json)
 
 query II
-select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+select typeof(order_id), revenue from '{TEMP_DIR}/query.json'
 ----
 UUID	10
 UUID	10
@@ -137,10 +154,10 @@ copy (
     (uuid(), 15),
     (uuid(), 5)
     v (order_id, revenue)
-) to '__TEST_DIR__/query.json' (format json)
+) to '{TEMP_DIR}/query.json' (format json)
 
 query II
-select typeof(order_id), revenue from '__TEST_DIR__/query.json'
+select typeof(order_id), revenue from '{TEMP_DIR}/query.json'
 ----
 UUID	11
 UUID	11
@@ -148,31 +165,32 @@ UUID	16
 UUID	6
 
 statement ok
-copy (select 42 as a, a + 1) to '__TEST_DIR__/out.json' (format json);
+copy (select 42 as a, a + 1) to '{TEMP_DIR}/out.json' (format json);
 
 query II
-select * from '__TEST_DIR__/out.json'
+select * from '{TEMP_DIR}/out.json'
 ----
 42	43
 
 statement ok
 create table conclusions (conclusion varchar)
 
-# this doesn't work because we assume NDJSON records
-statement error
-copy conclusions from 'data/json/top_level_array.json'
-----
-
-# but works if we tell it to auto-detect
+# works because we auto-detect by default
 statement ok
-copy conclusions from 'data/json/top_level_array.json' (AUTO_DETECT TRUE)
+copy conclusions from '{DATA_DIR}/json/top_level_array.json'
+
+# doesn't work if we disable auto-detection
+statement error
+copy conclusions from '{DATA_DIR}/json/top_level_array.json' (AUTO_DETECT FALSE)
+----
+Invalid Input Error
 
 statement ok
 delete from conclusions;
 
 # and also if we say it's an array
 statement ok
-copy conclusions from 'data/json/top_level_array.json' (ARRAY TRUE)
+copy conclusions from '{DATA_DIR}/json/top_level_array.json' (ARRAY TRUE)
 
 query I
 select * from conclusions
@@ -182,16 +200,16 @@ cancelled
 
 # same with ARRAY FALSE
 statement error
-copy conclusions from 'data/json/top_level_array.json' (ARRAY FALSE)
+copy conclusions from '{DATA_DIR}/json/top_level_array.json' (ARRAY FALSE)
 ----
 Invalid Input Error
 
 # we can also write JSON arrays instead of newline-delimited
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (ARRAY TRUE)
+copy (select range as i from range(10)) to '{TEMP_DIR}/my.json' (ARRAY TRUE)
 
 query T
-select * from read_json_auto('__TEST_DIR__/my.json', format='array')
+select * from read_json_auto('{TEMP_DIR}/my.json', format='array')
 ----
 0
 1
@@ -206,34 +224,32 @@ select * from read_json_auto('__TEST_DIR__/my.json', format='array')
 
 # compression stuff (cannot be empty)
 statement error
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
+copy (select range as i from range(10)) to '{TEMP_DIR}/my.json' (COMPRESSION)
 ----
-Binder Error
+Invalid Input Error
 
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
+copy (select range as i from range(10)) to '{TEMP_DIR}/my.json.gz' (COMPRESSION GZIP)
 
 statement ok
 create table my_range (i bigint)
 
 statement ok
-copy my_range from '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
+copy my_range from '{TEMP_DIR}/my.json.gz' (COMPRESSION GZIP)
 
 # we can auto-detect even though we have compressed
 statement ok
-select * from '__TEST_DIR__/my.json.gz'
+select * from '{TEMP_DIR}/my.json.gz'
 
 # works with zstd too, but we skip this test for now
 # it works in CLI, but not in unittest for some reason (ZSTD is not in VirtualFileSystem::compressed_fs)
-mode skip
+require parquet
 
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json.zst' (COMPRESSION ZSTD)
+copy (select range as i from range(10)) to '{TEMP_DIR}/my.json.zst' (COMPRESSION ZSTD)
 
 statement ok
-select * from '__TEST_DIR__/my.json.zst'
-
-mode unskip
+select * from '{TEMP_DIR}/my.json.zst'
 
 query I
 select * from my_range
@@ -248,214 +264,3 @@ select * from my_range
 7
 8
 9
-
-# and now for the grand benchmark
-require tpch
-
-statement ok
-start transaction
-
-statement ok
-call dbgen(sf=1)
-
-# export lineitem as array (ARRAY does not need TRUE to be passed)
-statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem.json' (ARRAY)
-
-# also export the whole thing
-statement ok
-EXPORT DATABASE '__TEST_DIR__/export_json_test' (FORMAT JSON)
-
-statement ok
-rollback
-
-# test the array first
-statement ok
-start transaction
-
-statement ok
-call dbgen(sf=0)
-
-# lineitem json is ~2GB so this test that we can do streaming reads of json arrays
-statement ok
-set memory_limit='1gb'
-
-statement ok
-COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY)
-
-# 4gb should be enough for the rest
-statement ok
-set memory_limit='4gb'
-
-query I
-PRAGMA tpch(1)
-----
-<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv
-
-statement ok
-rollback
-
-statement ok
-start transaction
-
-# test the import
-statement ok
-import database '__TEST_DIR__/export_json_test'
-
-loop i 1 9
-
-query I
-PRAGMA tpch(${i})
-----
-<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
-
-endloop
-
-loop i 10 23
-
-query I
-PRAGMA tpch(${i})
-----
-<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
-
-endloop
-
-# we can also run straight on JSON by creating views
-# this also tests projection pushdown well
-statement ok
-rollback
-
-statement ok
-CREATE VIEW lineitem AS SELECT * FROM read_ndjson(
-	'__TEST_DIR__/export_json_test/lineitem.json',
-	columns={
-		l_orderkey: 'INTEGER',
-		l_partkey: 'INTEGER',
-		l_suppkey: 'INTEGER',
-		l_linenumber: 'INTEGER',
-		l_quantity: 'INTEGER',
-		l_extendedprice: 'DECIMAL(15,2)',
-		l_discount: 'DECIMAL(15,2)',
-		l_tax: 'DECIMAL(15,2)',
-		l_returnflag: 'VARCHAR',
-		l_linestatus: 'VARCHAR',
-		l_shipdate: 'DATE',
-		l_commitdate: 'DATE',
-		l_receiptdate: 'DATE',
-		l_shipinstruct: 'VARCHAR',
-		l_shipmode: 'VARCHAR',
-		l_comment: 'VARCHAR'
-	}
-);
-
-statement ok
-CREATE VIEW orders AS SELECT * FROM read_ndjson(
-	'__TEST_DIR__/export_json_test/orders.json',
-	columns={
-	    o_orderkey: 'INTEGER',
-		o_custkey: 'INTEGER',
-		o_orderstatus: 'VARCHAR',
-		o_totalprice: 'DECIMAL(15,2)',
-		o_orderdate: 'DATE',
-		o_orderpriority: 'VARCHAR',
-		o_clerk: 'VARCHAR',
-		o_shippriority: 'INTEGER',
-		o_comment: 'VARCHAR'
-    }
-);
-
-statement ok
-CREATE VIEW partsupp AS SELECT * FROM read_ndjson(
-	'__TEST_DIR__/export_json_test/partsupp.json',
-	columns={
-		ps_partkey: 'INTEGER',
-		ps_suppkey: 'INTEGER',
-		ps_availqty: 'INTEGER',
-		ps_supplycost: 'DECIMAL(15,2)',
-		ps_comment: 'VARCHAR'
-	}
-);
-
-statement ok
-CREATE VIEW part AS SELECT * FROM read_ndjson(
-	'__TEST_DIR__/export_json_test/part.json',
-	columns={
-		p_partkey: 'INTEGER',
-		p_name: 'VARCHAR',
-		p_mfgr: 'VARCHAR',
-		p_brand: 'VARCHAR',
-		p_type: 'VARCHAR',
-		p_size: 'INTEGER',
-		p_container: 'VARCHAR',
-		p_retailprice: 'DECIMAL(15,2)',
-		p_comment: 'VARCHAR'
-	}
-);
-
-statement ok
-CREATE VIEW customer AS SELECT * FROM read_ndjson(
-	'__TEST_DIR__/export_json_test/customer.json',
-	columns={
-		c_custkey: 'INTEGER',
-		c_name: 'VARCHAR',
-		c_address: 'VARCHAR',
-		c_nationkey: 'INTEGER',
-		c_phone: 'VARCHAR',
-		c_acctbal: 'DECIMAL(15,2)',
-		c_mktsegment: 'VARCHAR',
-		c_comment: 'VARCHAR'
-	}
-);
-
-statement ok
-CREATE VIEW supplier AS SELECT * FROM read_ndjson(
-	'__TEST_DIR__/export_json_test/supplier.json',
-	columns={
-		s_suppkey: 'INTEGER',
-		s_name: 'VARCHAR',
-		s_address: 'VARCHAR',
-		s_nationkey: 'INTEGER',
-		s_phone: 'VARCHAR',
-		s_acctbal: 'DECIMAL(15,2)',
-		s_comment: 'VARCHAR'
-	}
-);
-
-statement ok
-CREATE VIEW nation AS SELECT * FROM read_ndjson(
-	'__TEST_DIR__/export_json_test/nation.json',
-	columns={
-		n_nationkey: 'INTEGER',
-		n_name: 'VARCHAR',
-		n_regionkey: 'INTEGER',
-		n_comment: 'VARCHAR'
-	}
-);
-
-statement ok
-CREATE VIEW region AS SELECT * FROM read_ndjson(
-	'__TEST_DIR__/export_json_test/region.json',
-	columns={
-		r_regionkey: 'INTEGER',
-		r_name: 'VARCHAR',
-		r_comment: 'VARCHAR'
-	}
-);
-
-loop i 1 9
-
-query I
-PRAGMA tpch(${i})
-----
-<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
-
-endloop
-
-loop i 10 23
-
-query I
-PRAGMA tpch(${i})
-----
-<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
-
-endloop

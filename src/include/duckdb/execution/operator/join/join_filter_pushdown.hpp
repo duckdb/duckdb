@@ -8,19 +8,20 @@
 
 #pragma once
 
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 class DataChunk;
 class DynamicTableFilterSet;
+class LogicalGet;
+class JoinHashTable;
+class PhysicalComparisonJoin;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
 
 struct JoinFilterPushdownColumn {
-	//! The join condition from which this filter pushdown is generated
-	idx_t join_condition;
 	//! The probe column index to which this filter should be applied
 	ColumnBinding probe_column_index;
 };
@@ -39,11 +40,27 @@ struct JoinFilterLocalState {
 	unique_ptr<LocalUngroupedAggregateState> local_aggregate_state;
 };
 
-struct JoinFilterPushdownInfo {
+struct JoinFilterPushdownFilter {
 	//! The dynamic table filter set where to push filters into
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
-	//! The filters that we should generate
-	vector<JoinFilterPushdownColumn> filters;
+	//! The columns for which we should generate filters
+	vector<JoinFilterPushdownColumn> columns;
+};
+
+struct PushdownFilterTarget {
+	PushdownFilterTarget(LogicalGet &get, vector<JoinFilterPushdownColumn> columns_p)
+	    : get(get), columns(std::move(columns_p)) {
+	}
+
+	LogicalGet &get;
+	vector<JoinFilterPushdownColumn> columns;
+};
+
+struct JoinFilterPushdownInfo {
+	//! The join condition indexes for which we compute the min/max aggregates
+	vector<idx_t> join_condition;
+	//! The probes to push the filter into
+	vector<JoinFilterPushdownFilter> probe_info;
 	//! Min/Max aggregates
 	vector<unique_ptr<Expression>> min_max_aggregates;
 
@@ -53,7 +70,12 @@ public:
 
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
-	void PushFilters(JoinFilterGlobalState &gstate, const PhysicalOperator &op) const;
+	unique_ptr<DataChunk> Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
+	                               JoinFilterGlobalState &gstate, const PhysicalComparisonJoin &op) const;
+
+private:
+	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
+	                  idx_t filter_idx, idx_t filter_col_idx) const;
 };
 
 } // namespace duckdb

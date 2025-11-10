@@ -28,35 +28,42 @@ WindowExpression::WindowExpression(ExpressionType type, string catalog_name, str
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
 	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_FILL:
 		break;
 	default:
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
 	}
 }
 
+static const WindowFunctionDefinition internal_window_functions[] = {
+    {"rank", ExpressionType::WINDOW_RANK},
+    {"rank_dense", ExpressionType::WINDOW_RANK_DENSE},
+    {"dense_rank", ExpressionType::WINDOW_RANK_DENSE},
+    {"percent_rank", ExpressionType::WINDOW_PERCENT_RANK},
+    {"row_number", ExpressionType::WINDOW_ROW_NUMBER},
+    {"first_value", ExpressionType::WINDOW_FIRST_VALUE},
+    {"first", ExpressionType::WINDOW_FIRST_VALUE},
+    {"last_value", ExpressionType::WINDOW_LAST_VALUE},
+    {"last", ExpressionType::WINDOW_LAST_VALUE},
+    {"nth_value", ExpressionType::WINDOW_NTH_VALUE},
+    {"cume_dist", ExpressionType::WINDOW_CUME_DIST},
+    {"lead", ExpressionType::WINDOW_LEAD},
+    {"lag", ExpressionType::WINDOW_LAG},
+    {"ntile", ExpressionType::WINDOW_NTILE},
+    {"fill", ExpressionType::WINDOW_FILL},
+    {nullptr, ExpressionType::INVALID}};
+
+const WindowFunctionDefinition *WindowExpression::WindowFunctions() {
+	return internal_window_functions;
+}
+
 ExpressionType WindowExpression::WindowToExpressionType(string &fun_name) {
-	if (fun_name == "rank") {
-		return ExpressionType::WINDOW_RANK;
-	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
-		return ExpressionType::WINDOW_RANK_DENSE;
-	} else if (fun_name == "percent_rank") {
-		return ExpressionType::WINDOW_PERCENT_RANK;
-	} else if (fun_name == "row_number") {
-		return ExpressionType::WINDOW_ROW_NUMBER;
-	} else if (fun_name == "first_value" || fun_name == "first") {
-		return ExpressionType::WINDOW_FIRST_VALUE;
-	} else if (fun_name == "last_value" || fun_name == "last") {
-		return ExpressionType::WINDOW_LAST_VALUE;
-	} else if (fun_name == "nth_value") {
-		return ExpressionType::WINDOW_NTH_VALUE;
-	} else if (fun_name == "cume_dist") {
-		return ExpressionType::WINDOW_CUME_DIST;
-	} else if (fun_name == "lead") {
-		return ExpressionType::WINDOW_LEAD;
-	} else if (fun_name == "lag") {
-		return ExpressionType::WINDOW_LAG;
-	} else if (fun_name == "ntile") {
-		return ExpressionType::WINDOW_NTILE;
+	D_ASSERT(StringUtil::IsLower(fun_name));
+	auto functions = WindowFunctions();
+	for (idx_t i = 0; functions[i].name != nullptr; i++) {
+		if (fun_name == functions[i].name) {
+			return functions[i].expression_type;
+		}
 	}
 	return ExpressionType::WINDOW_AGGREGATE;
 }
@@ -82,11 +89,27 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	if (a.exclude_clause != b.exclude_clause) {
 		return false;
 	}
-	// check if the framing expressions are equivalentbind_
+	// check if the framing expressions are equivalent
 	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr) ||
 	    !ParsedExpression::Equals(a.offset_expr, b.offset_expr) ||
 	    !ParsedExpression::Equals(a.default_expr, b.default_expr)) {
 		return false;
+	}
+
+	// check if the argument orderings are equivalent
+	if (a.arg_orders.size() != b.arg_orders.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < a.arg_orders.size(); i++) {
+		if (a.arg_orders[i].type != b.arg_orders[i].type) {
+			return false;
+		}
+		if (a.arg_orders[i].null_order != b.arg_orders[i].null_order) {
+			return false;
+		}
+		if (!a.arg_orders[i].expression->Equals(*b.arg_orders[i].expression)) {
+			return false;
+		}
 	}
 
 	// check if the partitions are equivalent
@@ -99,6 +122,9 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	}
 	for (idx_t i = 0; i < a.orders.size(); i++) {
 		if (a.orders[i].type != b.orders[i].type) {
+			return false;
+		}
+		if (a.orders[i].null_order != b.orders[i].null_order) {
 			return false;
 		}
 		if (!a.orders[i].expression->Equals(*b.orders[i].expression)) {
@@ -127,6 +153,10 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 
 	for (auto &o : orders) {
 		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
+	}
+
+	for (auto &o : arg_orders) {
+		new_window->arg_orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
 
 	new_window->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;

@@ -1,0 +1,28 @@
+# name: test/sql/topn/test_top_n_nested_struct.test
+# description: Test Top-N on nested structs
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE nested_struct(cik BIGINT, entityName VARCHAR, a STRUCT(b STRUCT(c INT, d INT), c STRUCT(e INT, f INT)));
+
+statement ok
+INSERT INTO nested_struct VALUES (42, 'entity', {'b': {'c': 42, 'd': 43}, 'c': {'e': 44, 'f': 45}}),
+                                 (142, 'entity2', {'b': {'c': 142, 'd': 143}, 'c': {'e': 144, 'f': 145}});
+
+query IIII
+select unnest(a, recursive:=true) from nested_struct limit 1
+----
+42	43	44	45
+
+query IIII
+SELECT unnest(a, recursive := true) FROM nested_struct ORDER BY a.b.c LIMIT 1
+----
+42	43	44	45
+
+query IIII
+SELECT unnest(a, recursive := true) FROM nested_struct ORDER BY a.b.c DESC LIMIT 1
+----
+142	143	144	145

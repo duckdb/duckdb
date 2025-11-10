@@ -24,6 +24,12 @@
         "id": 104,
         "name": "default_value",
         "type": "Value"
+      },
+      {
+        "id": 105,
+        "name": "identifier",
+        "type": "Value",
+        "default": "Value()"
       }
     ],
     "pointer_type": "none"
@@ -45,11 +51,10 @@
         "type": "unordered_map<string, string>"
       }
     ],
-    "pointer_type": "shared_ptr",
-    "constructor": ["$ClientContext"]
+    "pointer_type": "shared_ptr"
   },
   {
-    "class": "ParquetOptions",
+    "class": "ParquetOptionsSerialization",
     "includes": [
       "parquet_reader.hpp"
     ],
@@ -57,34 +62,53 @@
       {
         "id": 100,
         "name": "binary_as_string",
-        "type": "bool"
+        "type": "bool",
+        "property": "parquet_options.binary_as_string"
       },
       {
         "id": 101,
         "name": "file_row_number",
-        "type": "bool"
+        "type": "bool",
+        "property": "parquet_options.file_row_number"
       },
       {
         "id": 102,
         "name": "file_options",
-        "type": "MultiFileReaderOptions"
+        "type": "MultiFileOptions"
       },
       {
         "id": 103,
         "name": "schema",
-        "type": "vector<ParquetColumnDefinition>"
+        "type": "vector<ParquetColumnDefinition>",
+        "property": "parquet_options.schema"
       },
       {
         "id": 104,
         "name": "encryption_config",
         "type": "shared_ptr<ParquetEncryptionConfig>",
-        "default": "nullptr"
+        "default": "nullptr",
+        "property": "parquet_options.encryption_config"
       },
       {
         "id": 105,
         "name": "debug_use_openssl",
         "type": "bool",
-        "default": "true"
+        "default": "true",
+        "property": "parquet_options.debug_use_openssl"
+      },
+      {
+        "id": 106,
+        "name": "explicit_cardinality",
+        "type": "idx_t",
+        "default": "0",
+        "property": "parquet_options.explicit_cardinality"
+      },
+      {
+        "id": 107,
+        "name": "can_have_nan",
+        "type": "bool",
+        "default": "false",
+        "property": "parquet_options.can_have_nan"
       }
     ],
     "pointer_type": "none"
@@ -92,7 +116,7 @@
   {
     "class": "FieldID",
     "includes": [
-      "parquet_writer.hpp"
+      "parquet_field_id.hpp"
     ],
     "members": [
       {
@@ -116,7 +140,7 @@
   {
     "class": "ChildFieldIDs",
     "includes": [
-      "parquet_writer.hpp"
+      "parquet_field_id.hpp"
     ],
     "members": [
       {
@@ -125,6 +149,46 @@
         "type": "case_insensitive_map_t<FieldID>",
         "serialize_property": "ids.operator*()",
         "deserialize_property": "ids.operator*()"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ShreddingType",
+    "includes": [
+      "parquet_shredding.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "set",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 102,
+        "name": "children",
+        "type": "ChildShreddingTypes"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ChildShreddingTypes",
+    "includes": [
+      "parquet_shredding.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "types",
+        "type": "case_insensitive_map_t<ShreddingType>",
+        "serialize_property": "types.operator*()",
+        "deserialize_property": "types.operator*()"
       }
     ],
     "pointer_type": "none"

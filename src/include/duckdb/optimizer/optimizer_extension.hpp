@@ -29,14 +29,20 @@ struct OptimizerExtensionInput {
 };
 
 typedef void (*optimize_function_t)(OptimizerExtensionInput &input, unique_ptr<LogicalOperator> &plan);
+typedef void (*pre_optimize_function_t)(OptimizerExtensionInput &input, unique_ptr<LogicalOperator> &plan);
 
 class OptimizerExtension {
 public:
-	//! The parse function of the parser extension.
-	//! Takes a query string as input and returns ParserExtensionParseData (on success) or an error
-	optimize_function_t optimize_function;
+	//! The optimize function of the optimizer extension.
+	//! Takes a logical query plan as an input, which it can modify in place
+	//! This runs, after the DuckDB optimizers have run
+	optimize_function_t optimize_function = nullptr;
+	//! The pre-optimize function of the optimizer extension.
+	//! Takes a logical query plan as an input, which it can modify in place
+	//! This runs, before the DuckDB optimizers have run
+	pre_optimize_function_t pre_optimize_function = nullptr;
 
-	//! Additional parser info passed to the parse function
+	//! Additional optimizer info passed to the optimize functions
 	shared_ptr<OptimizerExtensionInfo> optimizer_info;
 };
 

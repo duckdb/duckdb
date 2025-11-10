@@ -5,10 +5,10 @@ tables, both local and remote.
 
 # Supported platforms
 The supported platforms are:
-- `linux_amd64` and `linux_amd64_gcc4`
+- `linux_amd64`
 - `osx_amd64` and `osx_arm64`
 
-Support for the [other](https://duckdb.org/docs/extensions/working_with_extensions#platforms) DuckDB platforms is
+Support for the [other](https://duckdb.org/docs/stable/extensions/extension_distribution#platforms) DuckDB platforms is
 work-in-progress
 
 # How to use
@@ -19,7 +19,7 @@ This extension is distributed as a binary extension. To use it, simply use one o
 FROM delta_scan('s3://some/delta/table');
 ```
 
-Note that using DuckDB [Secrets](https://duckdb.org/docs/configuration/secrets_manager.html) for S3 authentication is supported:
+Note that using DuckDB [Secrets](https://duckdb.org/docs/stable/configuration/secrets_manager) for S3 authentication is supported:
 
 ```SQL
 CREATE SECRET (TYPE S3, provider credential_chain);

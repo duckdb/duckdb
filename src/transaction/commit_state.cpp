@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -16,10 +17,12 @@
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
-CommitState::CommitState(transaction_t commit_id) : commit_id(commit_id) {
+CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id)
+    : transaction(transaction_p), commit_id(commit_id) {
 }
 
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
@@ -133,29 +136,41 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
-		// set the commit timestamp of the catalog entry to the given id
-		auto catalog_entry = Load<CatalogEntry *>(data);
-		D_ASSERT(catalog_entry->HasParent());
+		auto &old_entry = *Load<CatalogEntry *>(data);
+		D_ASSERT(old_entry.HasParent());
 
-		auto &catalog = catalog_entry->ParentCatalog();
+		auto &catalog = old_entry.ParentCatalog();
 		D_ASSERT(catalog.IsDuckCatalog());
 
+		auto &new_entry = old_entry.Parent();
+		if (new_entry.type == CatalogType::DEPENDENCY_ENTRY) {
+			auto &dep = new_entry.Cast<DependencyEntry>();
+			if (dep.Side() == DependencyEntryType::SUBJECT) {
+				new_entry.set->VerifyExistenceOfDependency(commit_id, new_entry);
+			}
+		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
+			old_entry.set->CommitDrop(commit_id, transaction.start_time, old_entry);
+		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
-		lock_guard<mutex> read_lock(catalog_entry->set->GetCatalogLock());
-		catalog_entry->set->UpdateTimestamp(catalog_entry->Parent(), commit_id);
-		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
-			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
-		}
+		lock_guard<mutex> read_lock(old_entry.set->GetCatalogLock());
+		// Set the timestamp of the catalog entry to the given commit_id, marking it as committed
+		CatalogSet::UpdateTimestamp(old_entry.Parent(), commit_id);
 
 		// drop any blocks associated with the catalog entry if possible (e.g. in case of a DROP or ALTER)
-		CommitEntryDrop(*catalog_entry, data + sizeof(CatalogEntry *));
+		CommitEntryDrop(old_entry, data + sizeof(CatalogEntry *));
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
+		if (!info->table->IsMainTable()) {
+			auto table_name = info->table->GetTableName();
+			auto table_modification = info->table->TableModification();
+			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
+			                           table_name, table_modification);
+		}
 		// mark the tuples as committed
 		info->table->CommitAppend(commit_id, info->start_row, info->count);
 		break;
@@ -163,6 +178,12 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
+		if (!info->table->IsMainTable()) {
+			auto table_name = info->table->GetTableName();
+			auto table_modification = info->table->TableModification();
+			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
+			                           table_name, table_modification);
+		}
 		// mark the tuples as committed
 		info->version_info->CommitDelete(info->vector_idx, commit_id, *info);
 		break;
@@ -170,9 +191,16 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
+		if (!info->table->IsMainTable()) {
+			auto table_name = info->table->GetTableName();
+			auto table_modification = info->table->TableModification();
+			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
+			                           table_name, table_modification);
+		}
 		info->version_number = commit_id;
 		break;
 	}
+	case UndoFlags::ATTACHED_DATABASE:
 	case UndoFlags::SEQUENCE_VALUE: {
 		break;
 	}
@@ -188,16 +216,16 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->HasParent());
-		catalog_entry->set->UpdateTimestamp(catalog_entry->Parent(), transaction_id);
+		CatalogSet::UpdateTimestamp(catalog_entry->Parent(), transaction_id);
 		if (catalog_entry->name != catalog_entry->Parent().name) {
-			catalog_entry->set->UpdateTimestamp(*catalog_entry, transaction_id);
+			CatalogSet::UpdateTimestamp(*catalog_entry, transaction_id);
 		}
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert this append
-		info->table->RevertAppend(info->start_row, info->count);
+		info->table->RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
@@ -213,6 +241,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		info->version_number = transaction_id;
 		break;
 	}
+	case UndoFlags::ATTACHED_DATABASE:
 	case UndoFlags::SEQUENCE_VALUE: {
 		break;
 	}

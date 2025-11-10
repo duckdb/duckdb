@@ -7,6 +7,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
@@ -91,6 +92,12 @@ void StringStats::ResetMaxStringLength(BaseStatistics &stats) {
 	StringStats::GetDataUnsafe(stats).has_max_string_length = false;
 }
 
+void StringStats::SetMaxStringLength(BaseStatistics &stats, uint32_t length) {
+	auto &data = StringStats::GetDataUnsafe(stats);
+	data.has_max_string_length = true;
+	data.max_string_length = length;
+}
+
 void StringStats::SetContainsUnicode(BaseStatistics &stats) {
 	StringStats::GetDataUnsafe(stats).has_unicode = true;
 }
@@ -154,13 +161,21 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 	}
 	if (stats.GetType().id() == LogicalTypeId::VARCHAR && !string_data.has_unicode) {
 		auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(data), size);
-		if (unicode == UnicodeType::UNICODE) {
+		if (unicode == UnicodeType::UTF8) {
 			string_data.has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
 			throw ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size),
 			                                        "segment statistics update");
 		}
 	}
+}
+
+void StringStats::SetMin(BaseStatistics &stats, const string_t &value) {
+	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).min);
+}
+
+void StringStats::SetMax(BaseStatistics &stats, const string_t &value) {
+	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).max);
 }
 
 void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
@@ -184,10 +199,21 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                const string &constant) {
+                                                array_ptr<const Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	return CheckZonemap(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max,
-	                    StringStatsData::MAX_STRING_MINMAX_SIZE, comparison_type, constant);
+	for (auto &constant_value : constants) {
+		D_ASSERT(constant_value.type() == stats.GetType());
+		D_ASSERT(!constant_value.IsNull());
+		auto &constant = StringValue::Get(constant_value);
+		auto prune_result = CheckZonemap(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max,
+		                                 StringStatsData::MAX_STRING_MINMAX_SIZE, comparison_type, constant);
+		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+	}
+	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
 FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t min_len, const_data_ptr_t max_data,
@@ -199,12 +225,14 @@ FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t
 	int max_comp = StringValueComparison(data, MinValue(max_len, size), max_data);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		if (min_comp >= 0 && max_comp <= 0) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
 		if (min_comp < 0 || max_comp > 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
@@ -228,12 +256,9 @@ FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t
 	}
 }
 
-static idx_t GetValidMinMaxSubstring(const_data_ptr_t data) {
-	for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
+static uint32_t GetValidMinMaxSubstring(const_data_ptr_t data) {
+	for (uint32_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
 		if (data[i] == '\0') {
-			return i;
-		}
-		if ((data[i] & 0x80) != 0) {
 			return i;
 		}
 	}
@@ -242,11 +267,11 @@ static idx_t GetValidMinMaxSubstring(const_data_ptr_t data) {
 
 string StringStats::ToString(const BaseStatistics &stats) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	idx_t min_len = GetValidMinMaxSubstring(string_data.min);
-	idx_t max_len = GetValidMinMaxSubstring(string_data.max);
+	uint32_t min_len = GetValidMinMaxSubstring(string_data.min);
+	uint32_t max_len = GetValidMinMaxSubstring(string_data.max);
 	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]",
-	                          string(const_char_ptr_cast(string_data.min), min_len),
-	                          string(const_char_ptr_cast(string_data.max), max_len),
+	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.min), min_len)),
+	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.max), max_len)),
 	                          string_data.has_unicode ? "true" : "false",
 	                          string_data.has_max_string_length ? to_string(string_data.max_string_length) : "?");
 }
@@ -274,7 +299,7 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 		}
 		if (stats.GetType().id() == LogicalTypeId::VARCHAR && !string_data.has_unicode) {
 			auto unicode = Utf8Proc::Analyze(data, len);
-			if (unicode == UnicodeType::UNICODE) {
+			if (unicode == UnicodeType::UTF8) {
 				throw InternalException("Statistics mismatch: string value contains unicode, but statistics says it "
 				                        "shouldn't.\nStatistics: %s\nVector: %s",
 				                        stats.ToString(), vector.ToString(count));

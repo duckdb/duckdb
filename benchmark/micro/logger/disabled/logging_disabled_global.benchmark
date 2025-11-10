@@ -1,0 +1,10 @@
+# name: benchmark/micro/logger/disabled/logging_disabled_global.benchmark
+# description: Benchmarking the Global logger
+# group: [disabled]
+
+name Global NopLogger
+group case
+
+# Note: this will call the Logger, but logging is disabled so this will call the NopLogger
+run
+SELECT write_log('hello world', scope := 'database') from range(0,50000000);

@@ -5,7 +5,7 @@
 name Q${QUERY_NUMBER_PADDED}
 group imdb
 
-require httpfs
+require httpfs load_only
 
 require parquet
 

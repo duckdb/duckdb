@@ -32,9 +32,10 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientProperties properties,
                                 struct ArrowArray *out) {
 	auto &types = res.types;
+	unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
 	if (big) {
 		// Combine all chunks into a single ArrowArray
-		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties);
+		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties, extension_type_cast);
 		idx_t count = 0;
 		while (true) {
 			auto chunk = res.Fetch();
@@ -52,7 +53,7 @@ static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientPr
 		if (!chunk || chunk->size() == 0) {
 			return 0;
 		}
-		ArrowConverter::ToArrowArray(*chunk, out, properties);
+		ArrowConverter::ToArrowArray(*chunk, out, properties, extension_type_cast);
 	}
 	return 0;
 }
@@ -161,6 +162,26 @@ bool ArrowTestHelper::CompareResults(Connection &con, unique_ptr<QueryResult> ar
 	auto duck_collection = duck->TakeCollection();
 	auto duck_rel = make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection), duck->names, "duck");
 
+	if (materialized_arrow.types != duck->types) {
+		bool mismatch_error = false;
+		std::ostringstream error_msg;
+		error_msg << "-------------------------------------\n";
+		error_msg << "Arrow round-trip type comparison failed\n";
+		error_msg << "-------------------------------------\n";
+		error_msg << "Query: " << query.c_str() << "\n";
+		for (idx_t i = 0; i < materialized_arrow.types.size(); i++) {
+			if (materialized_arrow.types[i] != duck->types[i] && duck->types[i].id() != LogicalTypeId::ENUM) {
+				mismatch_error = true;
+				error_msg << "Column " << i << "mismatch. DuckDB: '" << duck->types[i].ToString() << "'. Arrow '"
+				          << materialized_arrow.types[i].ToString() << "'\n";
+			}
+		}
+		error_msg << "-------------------------------------\n";
+		if (mismatch_error) {
+			printf("%s", error_msg.str().c_str());
+			return false;
+		}
+	}
 	// We perform a SELECT * FROM "duck_rel" EXCEPT ALL SELECT * FROM "arrow_rel"
 	// this will tell us if there are tuples missing from 'arrow_rel' that are present in 'duck_rel'
 	auto except_rel = make_shared_ptr<SetOpRelation>(duck_rel, arrow_rel, SetOperationType::EXCEPT, /*setop_all=*/true);
@@ -207,15 +228,17 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		auto &config = ClientConfig::GetConfig(*con.context);
 		// we can't have a too large number here because a multiple of this batch size is passed into an allocation
 		idx_t batch_size = big_result ? 1000000 : 10000;
+
 		// Set up the result collector to use
 		ScopedConfigSetting setting(
 		    config,
 		    [&batch_size](ClientConfig &config) {
-			    config.result_collector = [&batch_size](ClientContext &context, PreparedStatementData &data) {
+			    config.get_result_collector = [&batch_size](ClientContext &context,
+			                                                PreparedStatementData &data) -> PhysicalOperator & {
 				    return PhysicalArrowCollector::Create(context, data, batch_size);
 			    };
 		    },
-		    [](ClientConfig &config) { config.result_collector = nullptr; });
+		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
 
 		// run the query
 		initial_result = con.context->Query(query, false);
@@ -231,7 +254,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	auto names = initial_result->names;
 	// We create an "arrow object" that consists of the arrays from our ArrowQueryResult
 	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result,
-	                         client_properties);
+	                         client_properties, *con.context);
 	// And construct a `arrow_scan` to read the created "arrow object"
 	auto params = ConstructArrowScan(factory);
 

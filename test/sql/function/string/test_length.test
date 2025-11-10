@@ -30,3 +30,9 @@ NULL
 7
 7
 
+# aliases work
+query II
+SELECT char_length('asdf'), CHARACTER_LENGTH('asdf')
+----
+4
+4

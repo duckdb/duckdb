@@ -11,15 +11,19 @@
 #include "duckdb/common/bitset.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/type_util.hpp"
 
 namespace duckdb {
 
 class VectorCache;
+class VectorChildBuffer;
+class VectorStringBuffer;
 class VectorStructBuffer;
 class VectorListBuffer;
 struct SelCache;
@@ -37,13 +41,36 @@ struct UnifiedVectorFormat {
 	data_ptr_t data;
 	ValidityMask validity;
 	SelectionVector owned_sel;
+	PhysicalType physical_type;
 
 	template <class T>
-	static inline const T *GetData(const UnifiedVectorFormat &format) {
+	void VerifyVectorType() const {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(StorageTypeCompatible<T>(physical_type));
+#else
+		if (!StorageTypeCompatible<T>(physical_type)) {
+			throw InternalException("Expected unified vector format of type %s, but found type %s", GetTypeId<T>(),
+			                        physical_type);
+		}
+#endif
+	}
+
+	template <class T>
+	static inline const T *GetDataUnsafe(const UnifiedVectorFormat &format) {
 		return reinterpret_cast<const T *>(format.data);
 	}
 	template <class T>
+	static inline const T *GetData(const UnifiedVectorFormat &format) {
+		return format.GetData<T>();
+	}
+	template <class T>
+	inline const T *GetData() const {
+		VerifyVectorType<T>();
+		return GetDataUnsafe<T>(*this);
+	}
+	template <class T>
 	static inline T *GetDataNoConst(UnifiedVectorFormat &format) {
+		format.VerifyVectorType<T>();
 		return reinterpret_cast<T *>(format.data);
 	}
 };
@@ -52,6 +79,27 @@ struct RecursiveUnifiedVectorFormat {
 	UnifiedVectorFormat unified;
 	vector<RecursiveUnifiedVectorFormat> children;
 	LogicalType logical_type;
+};
+
+struct UnifiedVariantVector {
+	//! The 'keys' list (dictionary)
+	DUCKDB_API static const UnifiedVectorFormat &GetKeys(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'keys' list entry
+	DUCKDB_API static const UnifiedVectorFormat &GetKeysEntry(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'children' list
+	DUCKDB_API static const UnifiedVectorFormat &GetChildren(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'keys_index' inside the 'children' list
+	DUCKDB_API static const UnifiedVectorFormat &GetChildrenKeysIndex(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'values_index' inside the 'children' list
+	DUCKDB_API static const UnifiedVectorFormat &GetChildrenValuesIndex(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'values' list
+	DUCKDB_API static const UnifiedVectorFormat &GetValues(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'type_id' inside the 'values' list
+	DUCKDB_API static const UnifiedVectorFormat &GetValuesTypeId(const RecursiveUnifiedVectorFormat &vec);
+	//! The 'byte_offset' inside the 'values' list
+	DUCKDB_API static const UnifiedVectorFormat &GetValuesByteOffset(const RecursiveUnifiedVectorFormat &vec);
+	//! The binary blob 'data' encoding the Variant for the row
+	DUCKDB_API static const UnifiedVectorFormat &GetData(const RecursiveUnifiedVectorFormat &vec);
 };
 
 //! This is a helper data structure. It contains all fields necessary to resize a vector.
@@ -109,9 +157,10 @@ public:
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
-	    If zero_data is true, the allocated data will be zero-initialized.
+	    If initialize_to_zero is true, the allocated data will be zero-initialized.
 	*/
-	DUCKDB_API Vector(LogicalType type, bool create_data, bool zero_data, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API Vector(LogicalType type, bool create_data, bool initialize_to_zero,
+	                  idx_t capacity = STANDARD_VECTOR_SIZE);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
@@ -144,10 +193,16 @@ public:
 	DUCKDB_API void Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
 	DUCKDB_API void Slice(const SelectionVector &sel, idx_t count, SelCache &cache);
+	//! Turn this vector into a dictionary vector
+	DUCKDB_API void Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count);
+	//! Creates a reference to a dictionary of the other vector
+	DUCKDB_API void Dictionary(Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
+	//! Creates a dictionary on the reusable dict
+	DUCKDB_API void Dictionary(buffer_ptr<VectorChildBuffer> reusable_dict, const SelectionVector &sel);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	DUCKDB_API void Initialize(bool zero_data = false, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(bool initialize_to_zero = false, idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	//! Converts this Vector to a printable string representation
 	DUCKDB_API string ToString(idx_t count) const;
@@ -178,6 +233,7 @@ public:
 	//! Asserts that the CheckMapValidity returns MapInvalidReason::VALID
 	DUCKDB_API static void VerifyMap(Vector &map, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void VerifyUnion(Vector &map, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void VerifyVariant(Vector &map, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
 	DUCKDB_API void UTFVerify(idx_t count);
 	DUCKDB_API void UTFVerify(const SelectionVector &sel, idx_t count);
@@ -201,7 +257,7 @@ public:
 	//! Returns a vector of ResizeInfo containing each (nested) vector to resize.
 	DUCKDB_API void FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier);
 
-	DUCKDB_API void Serialize(Serializer &serializer, idx_t count);
+	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
 	idx_t GetAllocationSize(idx_t cardinality) const;
@@ -213,7 +269,7 @@ public:
 	inline const LogicalType &GetType() const {
 		return type;
 	}
-	inline data_ptr_t GetData() {
+	inline data_ptr_t GetData() const {
 		return data;
 	}
 
@@ -256,18 +312,37 @@ protected:
 	buffer_ptr<VectorBuffer> auxiliary;
 };
 
-//! The DictionaryBuffer holds a selection vector
+//! The VectorChildBuffer holds a child Vector
 class VectorChildBuffer : public VectorBuffer {
 public:
 	explicit VectorChildBuffer(Vector vector)
-	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
+	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)),
+	      cached_hashes(LogicalType::HASH, nullptr) {
 	}
 
 public:
 	Vector data;
+	//! Optional size/id to uniquely identify re-occurring dictionaries
+	optional_idx size;
+	string id;
+	//! For caching the hashes of a child buffer
+	mutex cached_hashes_lock;
+	Vector cached_hashes;
 };
 
 struct ConstantVector {
+	template <class T>
+	static void VerifyVectorType(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(StorageTypeCompatible<T>(vector.GetType().InternalType()));
+#else
+		if (!StorageTypeCompatible<T>(vector.GetType().InternalType())) {
+			throw InternalException("Expected vector of type %s, but found vector of type %s", GetTypeId<T>(),
+			                        vector.GetType().InternalType());
+		}
+#endif
+	}
+
 	static inline const_data_ptr_t GetData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
 		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -279,12 +354,22 @@ struct ConstantVector {
 		return vector.data;
 	}
 	template <class T>
+	static inline const T *GetDataUnsafe(const Vector &vector) {
+		return reinterpret_cast<const T *>(GetData(vector));
+	}
+	template <class T>
+	static inline T *GetDataUnsafe(Vector &vector) {
+		return reinterpret_cast<T *>(GetData(vector));
+	}
+	template <class T>
 	static inline const T *GetData(const Vector &vector) {
-		return (const T *)ConstantVector::GetData(vector);
+		VerifyVectorType<T>(vector);
+		return GetDataUnsafe<T>(vector);
 	}
 	template <class T>
 	static inline T *GetData(Vector &vector) {
-		return (T *)ConstantVector::GetData(vector);
+		VerifyVectorType<T>(vector);
+		return GetDataUnsafe<T>(vector);
 	}
 	static inline bool IsNull(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -304,22 +389,56 @@ struct ConstantVector {
 };
 
 struct DictionaryVector {
-	static inline const SelectionVector &SelVector(const Vector &vector) {
+	static void VerifyDictionary(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			throw InternalException(
+			    "Operation requires a dictionary vector but a non-dictionary vector was encountered");
+		}
+#endif
+	}
+	static inline const SelectionVector &SelVector(const Vector &vector) {
+		VerifyDictionary(vector);
 		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline SelectionVector &SelVector(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionary(vector);
 		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline const Vector &Child(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionary(vector);
 		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 	static inline Vector &Child(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionary(vector);
 		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
+	static inline optional_idx DictionarySize(const Vector &vector) {
+		VerifyDictionary(vector);
+		const auto &child_buffer = vector.auxiliary->Cast<VectorChildBuffer>();
+		if (child_buffer.size.IsValid()) {
+			return child_buffer.size;
+		}
+		return vector.buffer->Cast<DictionaryBuffer>().GetDictionarySize();
+	}
+	static inline const string &DictionaryId(const Vector &vector) {
+		VerifyDictionary(vector);
+		const auto &child_buffer = vector.auxiliary->Cast<VectorChildBuffer>();
+		if (!child_buffer.id.empty()) {
+			return child_buffer.id;
+		}
+		return vector.buffer->Cast<DictionaryBuffer>().GetDictionaryId();
+	}
+	static inline bool CanCacheHashes(const LogicalType &type) {
+		return type.InternalType() == PhysicalType::VARCHAR;
+	}
+	static inline bool CanCacheHashes(const Vector &vector) {
+		return DictionarySize(vector).IsValid() && CanCacheHashes(vector.GetType());
+	}
+	static buffer_ptr<VectorChildBuffer> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
+	static const Vector &GetCachedHashes(Vector &input);
 };
 
 struct FlatVector {
@@ -343,6 +462,14 @@ struct FlatVector {
 	template <class T>
 	static inline T *GetData(Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
+	}
+	template <class T>
+	static inline const T *GetDataUnsafe(const Vector &vector) {
+		return ConstantVector::GetDataUnsafe<T>(vector);
+	}
+	template <class T>
+	static inline T *GetDataUnsafe(Vector &vector) {
+		return ConstantVector::GetDataUnsafe<T>(vector);
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -374,6 +501,13 @@ struct FlatVector {
 };
 
 struct ListVector {
+	static inline const list_entry_t *GetData(const Vector &v) {
+		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(v);
+			return GetData(child);
+		}
+		return FlatVector::GetData<const list_entry_t>(v);
+	}
 	static inline list_entry_t *GetData(Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			auto &child = DictionaryVector::Child(v);
@@ -429,6 +563,8 @@ struct StringVector {
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
 	DUCKDB_API static string_t EmptyString(Vector &vector, idx_t len);
+	//! Returns a reference to the underlying VectorStringBuffer - throws an error if vector is not of type VARCHAR
+	DUCKDB_API static VectorStringBuffer &GetStringBuffer(Vector &vector);
 	//! Adds a reference to a handle that stores strings of this vector
 	DUCKDB_API static void AddHandle(Vector &vector, BufferHandle handle);
 	//! Adds a reference to an unspecified vector buffer that stores strings of this vector
@@ -510,6 +646,33 @@ struct ArrayVector {
 private:
 	template <class T>
 	static T &GetEntryInternal(T &vector);
+};
+
+struct VariantVector {
+	//! Gets a reference to the 'keys' list (dictionary) of a Variant
+	DUCKDB_API static Vector &GetKeys(Vector &vec);
+	DUCKDB_API static Vector &GetKeys(const Vector &vec);
+	//! Gets a reference to the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildren(Vector &vec);
+	DUCKDB_API static Vector &GetChildren(const Vector &vec);
+	//! Gets a reference to the 'keys_index' inside the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildrenKeysIndex(Vector &vec);
+	DUCKDB_API static Vector &GetChildrenKeysIndex(const Vector &vec);
+	//! Gets a reference to the 'values_index' inside the 'children' list of a Variant
+	DUCKDB_API static Vector &GetChildrenValuesIndex(Vector &vec);
+	DUCKDB_API static Vector &GetChildrenValuesIndex(const Vector &vec);
+	//! Gets a reference to the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValues(Vector &vec);
+	DUCKDB_API static Vector &GetValues(const Vector &vec);
+	//! Gets a reference to the 'type_id' inside the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValuesTypeId(Vector &vec);
+	DUCKDB_API static Vector &GetValuesTypeId(const Vector &vec);
+	//! Gets a reference to the 'byte_offset' inside the 'values' list of a Variant
+	DUCKDB_API static Vector &GetValuesByteOffset(Vector &vec);
+	DUCKDB_API static Vector &GetValuesByteOffset(const Vector &vec);
+	//! Gets a reference to the binary blob 'value', which encodes the data of the row
+	DUCKDB_API static Vector &GetData(Vector &vec);
+	DUCKDB_API static Vector &GetData(const Vector &vec);
 };
 
 enum class UnionInvalidReason : uint8_t {

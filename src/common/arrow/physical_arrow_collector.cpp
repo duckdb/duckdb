@@ -8,17 +8,23 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalResultCollector> PhysicalArrowCollector::Create(ClientContext &context, PreparedStatementData &data,
-                                                                   idx_t batch_size) {
-	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.plan)) {
-		// the plan is not order preserving, so we just use the parallel materialized collector
-		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, true, batch_size);
-	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, *data.plan)) {
-		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
-		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, false, batch_size);
-	} else {
-		return make_uniq_base<PhysicalResultCollector, PhysicalArrowBatchCollector>(data, batch_size);
+PhysicalOperator &PhysicalArrowCollector::Create(ClientContext &context, PreparedStatementData &data,
+                                                 idx_t batch_size) {
+	auto &physical_plan = *data.physical_plan;
+	auto &root = physical_plan.Root();
+
+	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, root)) {
+		// Not an order-preserving plan: use the parallel materialized collector.
+		return physical_plan.Make<PhysicalArrowCollector>(data, true, batch_size);
 	}
+
+	if (!PhysicalPlanGenerator::UseBatchIndex(context, root)) {
+		// Order-preserving plan, and we cannot use the batch index: use single-threaded result collector.
+		return physical_plan.Make<PhysicalArrowCollector>(data, false, batch_size);
+	}
+
+	// Order-preserving plan, and we can use the batch index: use a batch collector.
+	return physical_plan.Make<PhysicalArrowBatchCollector>(data, batch_size);
 }
 
 SinkResultType PhysicalArrowCollector::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -37,7 +43,8 @@ SinkResultType PhysicalArrowCollector::Sink(ExecutionContext &context, DataChunk
 			auto properties = context.client.GetClientProperties();
 			D_ASSERT(processed < count);
 			auto initial_capacity = MinValue(record_batch_size, count - processed);
-			appender = make_uniq<ArrowAppender>(types, initial_capacity, properties);
+			appender = make_uniq<ArrowAppender>(types, initial_capacity, properties,
+			                                    ArrowTypeExtensionData::GetExtensionTypes(context.client, types));
 		}
 
 		// Figure out how much we can still append to this chunk
@@ -81,7 +88,7 @@ SinkCombineResultType PhysicalArrowCollector::Combine(ExecutionContext &context,
 	return SinkCombineResultType::FINISHED;
 }
 
-unique_ptr<QueryResult> PhysicalArrowCollector::GetResult(GlobalSinkState &state_p) {
+unique_ptr<QueryResult> PhysicalArrowCollector::GetResult(GlobalSinkState &state_p) const {
 	auto &gstate = state_p.Cast<ArrowCollectorGlobalState>();
 	return std::move(gstate.result);
 }

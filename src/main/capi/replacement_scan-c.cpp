@@ -58,7 +58,7 @@ void duckdb_add_replacement_scan(duckdb_database db, duckdb_replacement_callback
 	if (!db || !replacement) {
 		return;
 	}
-	auto wrapper = reinterpret_cast<duckdb::DatabaseData *>(db);
+	auto wrapper = reinterpret_cast<duckdb::DatabaseWrapper *>(db);
 	auto scan_info = duckdb::make_uniq<duckdb::CAPIReplacementScanData>();
 	scan_info->callback = replacement;
 	scan_info->extra_data = extra_data;

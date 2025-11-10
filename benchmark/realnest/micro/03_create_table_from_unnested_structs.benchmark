@@ -1,0 +1,43 @@
+# name: benchmark/realnest/micro/03_create_table_from_unnested_structs.benchmark
+# description: Create a table by unnesting and joining the structs in a JSON file
+# group: [micro]
+
+name create_table_from_unnested_structs
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+CREATE OR REPLACE TABLE combined AS 
+(SELECT unnested_hlt.*,
+    unnested_pv.*,
+    unnested_met.*,
+    unnested_muon.*,
+    unnested_electron.*,
+    unnested_tau.*,
+    unnested_photon.*,
+    unnested_jet.*
+FROM 
+    (SELECT rowid, UNNEST(HLT) AS hlt FROM run2012B_singleMu) AS unnested_hlt
+    LEFT JOIN
+    (SELECT rowid, UNNEST(PV) AS pv FROM run2012B_singleMu) AS unnested_pv ON unnested_hlt.rowid = unnested_pv.rowid
+    LEFT JOIN
+    (SELECT rowid, UNNEST(MET) AS met FROM run2012B_singleMu) AS unnested_met ON unnested_hlt.rowid = unnested_met.rowid
+    LEFT JOIN
+    (SELECT rowid, UNNEST(Muon, recursive:=true) AS muon FROM run2012B_singleMu) AS unnested_muon ON unnested_hlt.rowid = unnested_muon.rowid
+    LEFT JOIN
+    (SELECT rowid, UNNEST(Electron, recursive:=true) AS electron FROM run2012B_singleMu) AS unnested_electron ON unnested_hlt.rowid = unnested_electron.rowid
+    LEFT JOIN
+    (SELECT rowid, UNNEST(Tau, recursive:=true) AS tau FROM run2012B_singleMu) AS unnested_tau ON unnested_hlt.rowid = unnested_tau.rowid
+    LEFT JOIN
+    (SELECT rowid, UNNEST(Photon, recursive:=true) AS photon FROM run2012B_singleMu) AS unnested_photon ON unnested_hlt.rowid = unnested_photon.rowid
+    LEFT JOIN
+    (SELECT rowid, UNNEST(Jet, recursive:=true) AS jet FROM run2012B_singleMu) AS unnested_jet ON unnested_hlt.rowid = unnested_jet.rowid
+LIMIT 100000
+);

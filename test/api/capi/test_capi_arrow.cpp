@@ -6,7 +6,6 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test arrow in C API", "[capi][arrow]") {
-
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
@@ -17,7 +16,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	SECTION("test rows changed") {
-
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test(a INTEGER);"));
 		auto state = duckdb_query_arrow(tester.connection, "INSERT INTO test VALUES (1), (2);", &arrow_result);
 		REQUIRE(state == DuckDBSuccess);
@@ -27,7 +25,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test query arrow") {
-
 		auto state = duckdb_query_arrow(tester.connection, "SELECT 42 AS VALUE, [1,2,3,4,5] AS LST;", &arrow_result);
 		REQUIRE(state == DuckDBSuccess);
 		REQUIRE(duckdb_arrow_row_count(arrow_result) == 1);
@@ -67,7 +64,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test multiple chunks") {
-
 		// create a table that consists of multiple chunks
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test(a INTEGER);"));
 		REQUIRE_NO_FAIL(
@@ -88,7 +84,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		int total_count = 0;
 		while (true) {
-
 			// query array data
 			ArrowArray arrow_array;
 			arrow_array.Init();
@@ -115,7 +110,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test prepare query arrow") {
-
 		auto state = duckdb_prepare(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmt);
 		REQUIRE(state == DuckDBSuccess);
 		REQUIRE(stmt != nullptr);
@@ -160,7 +154,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test scan") {
-
 		const auto logical_types = duckdb::vector<LogicalType> {LogicalType(LogicalTypeId::INTEGER)};
 		const auto column_names = duckdb::vector<string> {"value"};
 
@@ -177,7 +170,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		auto arrow_array_ptr = &arrow_array;
 
 		SECTION("empty array") {
-
 			// Create an empty view with a `value` column.
 			string view_name = "foo_empty_table";
 
@@ -212,10 +204,10 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		}
 
 		SECTION("big array") {
-
 			// Create a view with a `value` column containing 4096 values.
 			int num_buffers = 2, size = STANDARD_VECTOR_SIZE * num_buffers;
-			ArrowAppender appender(logical_types, size, options);
+			unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
+			ArrowAppender appender(logical_types, size, options, extension_type_cast);
 			Allocator allocator;
 
 			auto data_chunks = std::vector<DataChunk>(num_buffers);
@@ -303,4 +295,160 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 	// FIXME: needs test for scanning a fixed size list
 	// this likely requires nanoarrow to create the array to scan
+}
+
+TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	SECTION("roundtrip: duckdb table -> arrow -> duckdb chunk, validate correctness") {
+		// 1. Create and populate table
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE big_table(i INTEGER);"));
+		REQUIRE_NO_FAIL(tester.Query("INSERT INTO big_table SELECT i FROM range(10000) tbl(i);"));
+
+		// 2. Query the table and fetch all results as data chunks
+		duckdb_result result;
+		REQUIRE(duckdb_query(tester.connection, "SELECT i FROM big_table ORDER BY i", &result) == DuckDBSuccess);
+		idx_t chunk_count = duckdb_result_chunk_count(result);
+		idx_t total_rows = 0;
+		std::vector<ArrowArray> arrow_arrays;
+		std::vector<duckdb_data_chunk> duckdb_chunks;
+		std::vector<int32_t> all_duckdb_values;
+		std::vector<int32_t> all_arrow_values;
+
+		// 3. For each chunk, convert to Arrow Array and collect values
+		for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx++) {
+			duckdb_data_chunk chunk = duckdb_result_get_chunk(result, chunk_idx);
+			duckdb_chunks.push_back(chunk); // for later roundtrip
+			idx_t chunk_size = duckdb_data_chunk_get_size(chunk);
+			total_rows += chunk_size;
+			auto vec = duckdb_data_chunk_get_vector(chunk, 0);
+			auto data = static_cast<int32_t *>(duckdb_vector_get_data(vec));
+			for (idx_t i = 0; i < chunk_size; i++) {
+				all_duckdb_values.push_back(data[i]);
+			}
+
+			ArrowArray duckdb_arrow_array;
+			duckdb_arrow_options arrow_options;
+			duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+			duckdb_error_data err = duckdb_data_chunk_to_arrow(arrow_options, chunk, &duckdb_arrow_array);
+			duckdb_destroy_arrow_options(&arrow_options);
+			REQUIRE(err == nullptr);
+			arrow_arrays.push_back(duckdb_arrow_array);
+		}
+		REQUIRE(total_rows == 10000);
+		REQUIRE(all_duckdb_values.size() == 10000);
+
+		// 4. Prepare Arrow schema for roundtrip
+		duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		duckdb_logical_type types[1] = {type};
+		const char *names[1] = {strdup("i")};
+		ArrowSchemaWrapper arrow_schema_wrapper;
+		duckdb_arrow_options arrow_options;
+		duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+		duckdb_error_data err =
+		    duckdb_to_arrow_schema(arrow_options, types, names, 1, &arrow_schema_wrapper.arrow_schema);
+		duckdb_destroy_arrow_options(&arrow_options);
+		REQUIRE(err == nullptr);
+		duckdb_arrow_converted_schema converted_schema = nullptr;
+		// Convert schema (simulate real use)
+
+		err = duckdb_schema_from_arrow(tester.connection, &arrow_schema_wrapper.arrow_schema, &converted_schema);
+		REQUIRE(err == nullptr);
+		// 5. For each Arrow array, convert back to DuckDB chunk and validate
+		for (size_t idx = 0, offset = 0; idx < arrow_arrays.size(); idx++) {
+			ArrowArray *duckdb_arrow_array = &arrow_arrays[idx];
+			// Prepare output chunk
+			duckdb_data_chunk out_chunk;
+			// Convert Arrow array to DuckDB chunk
+			err = duckdb_data_chunk_from_arrow(tester.connection, duckdb_arrow_array, converted_schema, &out_chunk);
+			REQUIRE(err == nullptr);
+			idx_t chunk_size = duckdb_data_chunk_get_size(out_chunk);
+			auto vec = duckdb_data_chunk_get_vector(out_chunk, 0);
+			auto data = static_cast<int32_t *>(duckdb_vector_get_data(vec));
+			for (idx_t i = 0; i < chunk_size; i++, offset++) {
+				REQUIRE(data[i] == all_duckdb_values[offset]);
+				all_arrow_values.push_back(data[i]);
+			}
+			duckdb_destroy_data_chunk(&out_chunk);
+		}
+		REQUIRE(all_arrow_values.size() == 10000);
+		REQUIRE(all_arrow_values == all_duckdb_values);
+
+		// 6. Cleanup
+		free((void *)names[0]);
+		duckdb_destroy_arrow_converted_schema(&converted_schema);
+		for (auto arrow_array : arrow_arrays) {
+			if (arrow_array.release) {
+				arrow_array.release(&arrow_array);
+			}
+		}
+		for (auto chunk : duckdb_chunks) {
+			duckdb_destroy_data_chunk(&chunk);
+		}
+		duckdb_destroy_logical_type(&type);
+		duckdb_destroy_result(&result);
+	}
+
+	SECTION("C-API Arrow Tess Null pointer inputs") {
+		duckdb_error_data err;
+		duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+		const char *names[1] = {strdup("i")};
+		// Test duckdb_to_arrow_schema
+		ArrowSchema duckdb_arrow_schema;
+		err = duckdb_to_arrow_schema(nullptr, &type, names, 1, &duckdb_arrow_schema);
+		duckdb_arrow_options arrow_options;
+		duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_to_arrow_schema(arrow_options, nullptr, names, 1, &duckdb_arrow_schema);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_to_arrow_schema(arrow_options, &type, nullptr, 1, &duckdb_arrow_schema);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		// Zero columns
+		err = duckdb_to_arrow_schema(arrow_options, &type, names, 0, &duckdb_arrow_schema);
+		REQUIRE(err == nullptr); // zero columns is allowed, but produces an empty schema
+		if (duckdb_arrow_schema.release) {
+			duckdb_arrow_schema.release(&duckdb_arrow_schema);
+		}
+		duckdb_destroy_logical_type(&type);
+
+		// Test duckdb_data_chunk_to_arrow
+		ArrowArray duckdb_arrow_array;
+
+		duckdb_destroy_error_data(&err);
+		err = duckdb_data_chunk_to_arrow(arrow_options, nullptr, &duckdb_arrow_array);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_data_chunk_to_arrow(nullptr, nullptr, &duckdb_arrow_array);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+
+		// Test duckdb_schema_from_arrow
+		ArrowSchema schema;
+		duckdb_arrow_converted_schema converted_schema = nullptr;
+		err = duckdb_schema_from_arrow(nullptr, &schema, &converted_schema);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_schema_from_arrow(tester.connection, &schema, nullptr);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+
+		// Test duckdb_data_chunk_from_arrow
+		ArrowArray arr;
+		duckdb_data_chunk out_chunk = nullptr;
+		err = duckdb_data_chunk_from_arrow(nullptr, &arr, converted_schema, &out_chunk);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_data_chunk_from_arrow(tester.connection, &arr, nullptr, &out_chunk);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		err = duckdb_data_chunk_from_arrow(tester.connection, &arr, converted_schema, nullptr);
+		REQUIRE(err != nullptr);
+		duckdb_destroy_error_data(&err);
+		duckdb_destroy_arrow_options(&arrow_options);
+		free((void *)names[0]);
+	}
 }

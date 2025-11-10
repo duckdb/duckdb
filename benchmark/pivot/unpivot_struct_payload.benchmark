@@ -1,0 +1,14 @@
+# name: benchmark/pivot/unpivot_struct_payload.benchmark
+# description: Unpivot with a struct column as input column as payload
+# group: [pivot]
+
+name Nested Unpivot
+group csv
+
+load
+CREATE TABLE structs AS
+SELECT i AS id, {'id': i} AS "2020", {'id': i + 10} AS "2021", {'id': i + 100} AS "2022", {'id': i + 1000} AS "2023", {'id': i + 10000} AS "2024"
+FROM range(10000000) t(i)
+
+run
+UNPIVOT structs ON "2020", "2021", "2022", "2023", "2024"

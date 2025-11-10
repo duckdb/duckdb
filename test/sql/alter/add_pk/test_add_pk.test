@@ -1,0 +1,82 @@
+# name: test/sql/alter/add_pk/test_add_pk.test
+# description: Test adding a PRIMARY KEY to a table.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1)
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (j)
+
+query II
+SELECT * FROM test
+----
+1	1
+
+statement ok
+INSERT INTO test VALUES (1, 2)
+
+statement error
+INSERT INTO test VALUES (2, 1)
+----
+<REGEX>:Constraint Error.*Duplicate key "j: 1" violates primary key constraint.*
+
+statement error
+INSERT INTO test VALUES (2, NULL)
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*
+
+# FIXME: Perform duplicate verification before building the index.
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (i)
+----
+<REGEX>:Constraint Error.*contains duplicates on indexed column.*
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (j)
+----
+<REGEX>:Catalog Error.*an index with that name already exists for this table: PRIMARY_test_j.*
+
+# Reverse the column order in the index.
+
+statement ok
+CREATE TABLE reverse (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO reverse VALUES (1, 2)
+
+statement ok
+ALTER TABLE reverse ADD PRIMARY KEY (j, i)
+
+statement error
+INSERT INTO reverse VALUES (1, 2)
+----
+<REGEX>:Constraint Error.*Duplicate key "j: 2, i: 1" violates primary key constraint.*
+
+statement error
+INSERT INTO reverse (j, i) VALUES (2, 1)
+----
+<REGEX>:Constraint Error.*Duplicate key "j: 2, i: 1" violates primary key constraint.*
+
+# Use an index scan.
+
+statement ok
+CREATE TABLE scan (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO scan SELECT range, range + 1 FROM range(30000);
+
+statement ok
+ALTER TABLE scan ADD PRIMARY KEY (i)
+
+query II
+SELECT * FROM scan WHERE i = 2
+----
+2	3

@@ -2,12 +2,9 @@
 # description: topN
 # group: [topn]
 
-require skip_reload
-
 require vector_size 1024
 
-statement ok
-SELECT SETSEED(0.42);
+set seed 0.42
 
 statement ok
 create table CUSTOMERVIEW as select range customer_id, range*random()::INT % 3 as customer_priority from range(1000, 4000); 
@@ -44,7 +41,7 @@ LEFT JOIN (
   LEFT JOIN ORDERITEMVIEW ON ORDERVIEW.ORDER_ID = ORDERITEM_ORDERID
 ) AS Q3J ON (Q3J.Q3P = CTE.CUSTOMER_ID) order by all;
 ----
-285 values hashing to 9b1c4d195c0e3c4de5b190b1ab7b357b
+351 values hashing to 4cba82d74d151aef44c26dc8693f5dca
 
 query II
 explain WITH CTE AS (

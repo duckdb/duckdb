@@ -16,7 +16,6 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator> op) {
-
 	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
 		op->children[child_idx] = Rewrite(std::move(op->children[child_idx]));
 	}
@@ -28,7 +27,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 	auto new_filter = make_uniq<LogicalFilter>();
 
 	for (auto &expr : op->expressions) {
-		if (expr->type == ExpressionType::BOUND_FUNCTION) {
+		if (expr->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 			auto &func = expr->Cast<BoundFunctionExpression>();
 			if (func.function.name != "regexp_full_match" || func.children.size() != 2) {
 				continue;

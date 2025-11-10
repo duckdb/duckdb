@@ -13,22 +13,18 @@
 
 namespace duckdb {
 
-//! An aggregate function in the catalog
+//! A function in the catalog
 class FunctionEntry : public StandardEntry {
 public:
 	FunctionEntry(CatalogType type, Catalog &catalog, SchemaCatalogEntry &schema, CreateFunctionInfo &info)
 	    : StandardEntry(type, schema, catalog, info.name) {
-		description = std::move(info.description);
-		parameter_names = std::move(info.parameter_names);
-		example = std::move(info.example);
+		descriptions = std::move(info.descriptions);
+		alias_of = std::move(info.alias_of);
 		this->dependencies = info.dependencies;
+		this->internal = info.internal;
 	}
 
-	//! The description (if any)
-	string description;
-	//! Parameter names (if any)
-	vector<string> parameter_names;
-	//! The example (if any)
-	string example;
+	string alias_of;
+	vector<FunctionDescription> descriptions;
 };
 } // namespace duckdb

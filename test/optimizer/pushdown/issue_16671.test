@@ -1,0 +1,18 @@
+# name: test/optimizer/pushdown/issue_16671.test
+# description: Test keeping alias in filter pushdown
+# group: [pushdown]
+
+require json
+
+statement ok
+set variable W to '{"a":[1,2], "b":[2,4]}';
+
+query II
+from (values (1,2),(2,3),(3,1),(1,2),(2,3),(2,4), (3,2))  test (a,b)
+select *
+where (getvariable('W') -> '/'||alias(columns(getvariable('W').json_keys())))
+    .json_contains(columns(getvariable('W').json_keys()));
+----
+1	2
+1	2
+2	4

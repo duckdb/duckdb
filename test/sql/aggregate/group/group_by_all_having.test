@@ -3,7 +3,7 @@
 # group: [group]
 
 statement ok
-PRAGMA enable_verification
+PRAGMA enable_verification;
 
 query I
 SELECT * FROM (SELECT 1) t0(c0) GROUP BY c0 HAVING c0>0

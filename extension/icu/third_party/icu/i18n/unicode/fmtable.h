@@ -182,7 +182,7 @@ public:
      * @return        TRUE if other are equal to this, FALSE otherwise.
      * @stable ICU 2.0
      */
-    UBool          operator==(const Formattable &other) const;
+    bool          operator==(const Formattable &other) const;
 
     /**
      * Equality operator.
@@ -190,7 +190,7 @@ public:
      * @return        TRUE if other are unequal to this, FALSE otherwise.
      * @stable ICU 2.0
      */
-    UBool          operator!=(const Formattable& other) const
+    bool          operator!=(const Formattable& other) const
       { return !operator==(other); }
 
     /**

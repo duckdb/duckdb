@@ -1,0 +1,25 @@
+# name: benchmark/realnest/micro/11_list_sort_reduce_transform.benchmark
+# description: Transform, aggregate, reduce and sort a list
+# group: [micro]
+
+name list_sort_reduce_transform
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT list_sort(
+    array_agg(
+        list_reduce(
+            list_transform(Photon, lambda x: x.pt),
+        lambda x, y, z: (x + y)^z)
+        )
+    ) AS List
+FROM run2012B_singleMu
+WHERE len(Photon) != 0;

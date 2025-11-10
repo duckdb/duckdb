@@ -2,13 +2,11 @@
 # description: Test COPY DATABASE with indexes
 # group: [copy_database]
 
-require noforcestorage
-
 statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH DATABASE ':memory:' AS db1;
+ATTACH '__TEST_DIR__/copy_database_index.db' AS db1;
 
 statement ok
 USE db1
@@ -17,36 +15,44 @@ statement ok
 CREATE TABLE test(a INTEGER, b INTEGER, c VARCHAR(10));
 
 statement ok
-CREATE INDEX i_index ON test(a)
+CREATE INDEX i_index ON test(a);
 
 statement ok
-INSERT INTO test VALUES (42, 88, 'hello');
+INSERT INTO test SELECT range, 88, 'hello' FROM range(10000);
 
 query II
-explain SELECT * FROM db1.test WHERE a=42
+EXPLAIN ANALYZE SELECT a, b, c FROM db1.test WHERE a = 42;
 ----
-physical_plan	<REGEX>:.*INDEX_SCAN.*
-
-statement ok
-COPY FROM DATABASE db1 TO memory
-
-statement ok
-USE memory
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query III
-SELECT * FROM test WHERE a=42
+SELECT a, b, c FROM db1.test WHERE a = 42;
+----
+42	88	hello
+
+statement ok
+ATTACH '__TEST_DIR__/other_copy_database_index.db' AS db2;
+
+statement ok
+COPY FROM DATABASE db1 TO db2
+
+statement ok
+USE db2
+
+query III
+SELECT * FROM test WHERE a = 42;
 ----
 42	88	hello
 
 query II
-explain SELECT * FROM test WHERE a=42
+EXPLAIN ANALYZE SELECT * FROM test WHERE a = 42;
 ----
-physical_plan	<!REGEX>:.*INDEX_SCAN.*
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 statement ok
-DROP INDEX i_index
+DROP INDEX i_index;
 
 query II
-explain SELECT * FROM test WHERE a=42
+EXPLAIN ANALYZE SELECT * FROM test WHERE a = 42;
 ----
-physical_plan	<!REGEX>:.*INDEX_SCAN.*
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*

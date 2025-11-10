@@ -1,0 +1,84 @@
+# name: test/sql/topn/tpch_top_n.test_slow
+# description: Test Top N NULLS FIRST/LAST with few rows
+# group: [topn]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+query IIIIIIIIIIIIIIII
+select * from lineitem order by l_extendedprice desc, l_shipdate limit 2;
+----
+2513090	199999	5038	4	50.00	104949.50	0.02	0.04	A	F	1993-10-05	1993-10-17	1993-10-28	TAKE BACK RETURN	FOB	- ironic, pending pinto be
+82823	199998	5037	2	50.00	104899.50	0.04	0.05	A	F	1992-04-30	1992-07-05	1992-05-29	COLLECT COD	SHIP	orbits. bold fox
+
+query I
+select l_quantity
+from lineitem
+where l_linestatus = 'O'
+order by l_quantity limit 10 offset 100;
+----
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+
+query I
+select l_quantity
+from lineitem
+where l_linestatus = 'O'
+order by l_quantity limit 10 offset 1000000;
+----
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+
+query I
+select sum(l_quantity)
+from lineitem
+group by l_orderkey
+order by sum(l_quantity) desc
+limit 10 offset 100;
+----
+297.00
+296.00
+296.00
+296.00
+296.00
+296.00
+296.00
+296.00
+295.00
+295.00
+
+query I
+select sum(l_quantity)
+from lineitem
+group by l_orderkey
+order by sum(l_quantity) desc
+limit 10 offset 100000;
+----
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00

@@ -1,0 +1,23 @@
+# name: benchmark/realnest/micro/08_count_map_keys.benchmark
+# description: Count map keys and aggregate them
+# group: [micro]
+
+name count_map_keys
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT keys, count(*) mentions 
+FROM (
+    SELECT UNNEST(map_keys(tags)) AS keys 
+    FROM open_street_map
+)
+GROUP BY keys
+ORDER BY mentions DESC;

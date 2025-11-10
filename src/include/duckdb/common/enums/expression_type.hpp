@@ -26,6 +26,8 @@ enum class ExpressionType : uint8_t {
 	OPERATOR_IS_NULL = 14,
 	// is not null operator
 	OPERATOR_IS_NOT_NULL = 15,
+	// unpack operator
+	OPERATOR_UNPACK = 16,
 
 	// -----------------------------
 	// Comparison Operators
@@ -100,6 +102,7 @@ enum class ExpressionType : uint8_t {
 	WINDOW_LEAD = 132,
 	WINDOW_LAG = 133,
 	WINDOW_NTH_VALUE = 134,
+	WINDOW_FILL = 135,
 
 	// -----------------------------
 	// Functions
@@ -118,6 +121,7 @@ enum class ExpressionType : uint8_t {
 	STRUCT_EXTRACT = 155,
 	ARRAY_CONSTRUCTOR = 156,
 	ARROW = 157,
+	OPERATOR_TRY = 158,
 
 	// -----------------------------
 	// Subquery IN/EXISTS

@@ -1,0 +1,78 @@
+# name: test/sql/attach/attach_view_search_path.test
+# description: Test ATTACH with search path
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE '__TEST_DIR__/view_search_path.db' AS view_search_path;
+
+statement ok
+USE view_search_path
+
+statement ok
+CREATE TABLE my_tbl(i INTEGER)
+
+statement ok
+INSERT INTO my_tbl VALUES (42)
+
+statement ok
+CREATE VIEW my_view AS FROM my_tbl
+
+query I
+FROM my_view
+----
+42
+
+statement ok
+CREATE SCHEMA my_schema
+
+statement ok
+USE my_schema
+
+statement ok
+CREATE TABLE my_tbl(i INTEGER)
+
+statement ok
+INSERT INTO my_tbl VALUES (84)
+
+statement ok
+CREATE VIEW my_view AS FROM my_tbl
+
+query I
+FROM my_view
+----
+84
+
+statement ok
+ATTACH DATABASE '__TEST_DIR__/view_search_path_other.db';
+
+statement ok
+USE view_search_path_other;
+
+query I
+FROM view_search_path.my_view
+----
+42
+
+query I
+FROM view_search_path.my_schema.my_view
+----
+84
+
+statement ok
+DETACH view_search_path
+
+statement ok
+ATTACH DATABASE '__TEST_DIR__/view_search_path.db' AS view_search_path;
+
+query I
+FROM view_search_path.my_view
+----
+42
+
+query I
+FROM view_search_path.my_schema.my_view
+----
+84

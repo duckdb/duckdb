@@ -2,8 +2,6 @@
 # description: Test ATTACH of a database with all types
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 ATTACH '__TEST_DIR__/attach_all_types.db' AS db1
 

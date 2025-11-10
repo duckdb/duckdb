@@ -38,6 +38,11 @@ struct DictionaryCompressionFun {
 	static bool TypeIsSupported(const PhysicalType physical_type);
 };
 
+struct DictFSSTCompressionFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(const PhysicalType physical_type);
+};
+
 struct ChimpCompressionFun {
 	static CompressionFunction GetFunction(PhysicalType type);
 	static bool TypeIsSupported(const PhysicalType physical_type);
@@ -59,6 +64,21 @@ struct AlpRDCompressionFun {
 };
 
 struct FSSTFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(const PhysicalType physical_type);
+};
+
+struct ZSTDFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(PhysicalType type);
+};
+
+struct RoaringCompressionFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(const PhysicalType physical_type);
+};
+
+struct EmptyValidityCompressionFun {
 	static CompressionFunction GetFunction(PhysicalType type);
 	static bool TypeIsSupported(const PhysicalType physical_type);
 };

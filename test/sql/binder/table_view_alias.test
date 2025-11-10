@@ -1,0 +1,46 @@
+# name: test/sql/binder/table_view_alias.test
+# description: Test table/view aliasing
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE VIEW s1.v AS SELECT 42 c;
+
+statement ok
+CREATE TABLE s1.t AS SELECT 42 c
+
+query III
+SELECT s1.v.c, v.c, c FROM s1.v
+----
+42	42	42
+
+query III
+SELECT s1.t.c, t.c, c FROM s1.t
+----
+42	42	42
+
+# explicitly aliasing the table, even if it is to the same name, should make the schema reference no longer work
+statement error
+SELECT s1.t.c, t.c, c FROM s1.t AS t
+----
+Referenced table "s1.t" not found
+
+statement error
+SELECT s1.x.c FROM s1.v AS x
+----
+Referenced table "s1.x" not found
+
+statement error
+SELECT s1.v.c FROM s1.v AS x
+----
+Referenced table "s1.v" not found
+
+statement error
+SELECT s1.v.c FROM s1.v AS v
+----
+Referenced table "s1.v" not found

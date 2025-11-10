@@ -18,26 +18,16 @@ CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> fun
 }
 
 string CreateMacroInfo::ToString() const {
-	string result;
+	auto prefix = GetCreatePrefix("MACRO");
+	prefix += QualifierToString(temporary ? "" : catalog, schema, name) + " ";
+	string definitions;
 	for (auto &function : macros) {
-		if (!result.empty()) {
-			result += ", ";
+		if (!definitions.empty()) {
+			definitions += ", ";
 		}
-		result += function->ToSQL();
+		definitions += function->ToSQL();
 	}
-	// prefix with CREATE MACRO
-	string prefix = "CREATE MACRO ";
-	if (!catalog.empty()) {
-		prefix += KeywordHelper::WriteOptionallyQuoted(catalog);
-		prefix += ".";
-	}
-	if (!schema.empty()) {
-		prefix += KeywordHelper::WriteOptionallyQuoted(schema);
-		prefix += ".";
-	}
-	prefix += KeywordHelper::WriteOptionallyQuoted(name);
-	result = prefix + " " + result + ";";
-	return result;
+	return prefix + definitions + ";";
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
@@ -46,7 +36,7 @@ unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
 		result->macros.push_back(macro->Copy());
 	}
 	result->name = name;
-	CopyProperties(*result);
+	CopyFunctionProperties(*result);
 	return std::move(result);
 }
 

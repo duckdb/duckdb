@@ -20,6 +20,24 @@ class SecretManager;
 struct DBConfig;
 class SchemaCatalogEntry;
 
+//! A Secret Entry in the secret manager
+struct SecretEntry {
+public:
+	explicit SecretEntry(unique_ptr<const BaseSecret> secret) : secret(secret != nullptr ? secret->Clone() : nullptr) {
+	}
+	SecretEntry(const SecretEntry &other)
+	    : persist_type(other.persist_type), storage_mode(other.storage_mode),
+	      secret((other.secret != nullptr) ? other.secret->Clone() : nullptr) {
+	}
+
+	//! Whether the secret is persistent
+	SecretPersistType persist_type;
+	//! The storage backend of the secret
+	string storage_mode;
+	//! The secret pointer
+	unique_ptr<const BaseSecret> secret;
+};
+
 //! Return value of a Secret Lookup
 struct SecretMatch {
 public:
@@ -50,24 +68,6 @@ public:
 
 	unique_ptr<SecretEntry> secret_entry;
 	int64_t score;
-};
-
-//! A Secret Entry in the secret manager
-struct SecretEntry {
-public:
-	explicit SecretEntry(unique_ptr<const BaseSecret> secret) : secret(secret != nullptr ? secret->Clone() : nullptr) {
-	}
-	SecretEntry(const SecretEntry &other)
-	    : persist_type(other.persist_type), storage_mode(other.storage_mode),
-	      secret((other.secret != nullptr) ? other.secret->Clone() : nullptr) {
-	}
-
-	//! Whether the secret is persistent
-	SecretPersistType persist_type;
-	//! The storage backend of the secret
-	string storage_mode;
-	//! The secret pointer
-	unique_ptr<const BaseSecret> secret;
 };
 
 struct SecretManagerConfig {
@@ -119,9 +119,9 @@ public:
 	                                                  unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
 	                                                  SecretPersistType persist_type, const string &storage = "");
 	//! Create a secret from a CreateSecretInfo
-	DUCKDB_API unique_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info);
+	DUCKDB_API unique_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInput &info);
 	//! The Bind for create secret is done by the secret manager
-	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info);
+	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInput &info);
 	//! Lookup the best matching secret by matching the secret scopes to the path
 	DUCKDB_API SecretMatch LookupSecret(CatalogTransaction transaction, const string &path, const string &type);
 	//! Get a secret by name, optionally from a specific storage
@@ -134,6 +134,9 @@ public:
 	                                 const string &storage = "");
 	//! List all secrets from all secret storages
 	DUCKDB_API vector<SecretEntry> AllSecrets(CatalogTransaction transaction);
+
+	//! List all secret types
+	DUCKDB_API vector<SecretType> AllSecretTypes();
 
 	//! Secret Manager settings
 	DUCKDB_API virtual void SetEnablePersistentSecrets(bool enabled);
@@ -219,6 +222,7 @@ protected:
 	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);
 
 	SecretManager &secret_manager;
+	mutex lock;
 	case_insensitive_set_t persistent_secrets;
 };
 

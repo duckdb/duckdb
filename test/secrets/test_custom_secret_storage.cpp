@@ -5,7 +5,8 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,14 +29,17 @@ struct DemoSecretType {
 	}
 
 	static void RegisterDemoSecret(DatabaseInstance &instance, const string &type_name) {
+		ExtensionInfo extension_info {};
+		ExtensionActiveLoad load_info {instance, extension_info, "demo_secret_type_" + type_name};
+		ExtensionLoader loader {load_info};
 		SecretType secret_type;
 		secret_type.name = type_name;
 		secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
 		secret_type.default_provider = "config";
-		ExtensionUtil::RegisterSecretType(instance, secret_type);
+		loader.RegisterSecretType(secret_type);
 
 		CreateSecretFunction secret_fun = {type_name, "config", CreateDemoSecret};
-		ExtensionUtil::RegisterFunction(instance, secret_fun);
+		loader.RegisterFunction(secret_fun);
 	}
 };
 
@@ -43,7 +47,7 @@ struct DemoSecretType {
 class TestSecretStorage : public CatalogSetSecretStorage {
 public:
 	TestSecretStorage(const string &name_p, DatabaseInstance &db, TestSecretLog &logger_p, int64_t tie_break_offset_p)
-	    : CatalogSetSecretStorage(db, name_p), tie_break_offset(tie_break_offset_p), logger(logger_p) {
+	    : CatalogSetSecretStorage(db, name_p, tie_break_offset_p), logger(logger_p) {
 		secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
 		persistent = true;
 		include_in_lookups = true;
@@ -52,11 +56,6 @@ public:
 		return include_in_lookups;
 	}
 
-	int64_t GetTieBreakOffset() override {
-		return tie_break_offset;
-	}
-
-	int64_t tie_break_offset;
 	bool include_in_lookups;
 
 protected:

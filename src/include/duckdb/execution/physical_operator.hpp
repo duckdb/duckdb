@@ -9,54 +9,60 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/arena_linked_list.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/operator_result_type.hpp"
-#include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/enums/physical_operator_type.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/execution/partition_info.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
-#include "duckdb/common/enums/order_preservation_type.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/execution/progress_data.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
 
 namespace duckdb {
+
 class Event;
 class Executor;
 class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
+class PhysicalPlan;
 
-//! PhysicalOperator is the base class of the physical operators present in the
-//! execution plan
+//! PhysicalOperator is the base class of the physical operators present in the execution plan.
 class PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
 
 public:
-	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
-	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
-	}
-
+	PhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
+	                 idx_t estimated_cardinality);
 	virtual ~PhysicalOperator() {
 	}
 
-	//! The physical operator type
+	//! Deleted copy constructors.
+	PhysicalOperator(const PhysicalOperator &other) = delete;
+	PhysicalOperator &operator=(const PhysicalOperator &) = delete;
+
+	//! The child operators.
+	ArenaLinkedList<reference<PhysicalOperator>> children;
+	//! The physical operator type.
 	PhysicalOperatorType type;
-	//! The set of children of the operator
-	vector<unique_ptr<PhysicalOperator>> children;
-	//! The types returned by this physical operator
+	//! The return types.
 	vector<LogicalType> types;
-	//! The estimated cardinality of this physical operator
+	//! The estimated cardinality.
 	idx_t estimated_cardinality;
 
-	//! The global sink state of this operator
+	//! The global sink state.
 	unique_ptr<GlobalSinkState> sink_state;
-	//! The global state of this operator
+	//! The global operator state.
 	unique_ptr<GlobalOperatorState> op_state;
-	//! Lock for (re)setting any of the operator states
+	//! Lock for (re)setting any of the operator states.
 	mutex lock;
 
 public:
@@ -92,12 +98,18 @@ public:
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
 	                                                GlobalOperatorState &gstate, OperatorState &state) const;
+	virtual OperatorFinalResultType OperatorFinalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                                                 OperatorFinalizeInput &input) const;
 
 	virtual bool ParallelOperator() const {
 		return false;
 	}
 
 	virtual bool RequiresFinalExecute() const {
+		return false;
+	}
+
+	virtual bool RequiresOperatorFinalize() const {
 		return false;
 	}
 
@@ -113,8 +125,9 @@ public:
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 
-	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                            LocalSourceState &lstate) const;
+	virtual OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+	                                               GlobalSourceState &gstate, LocalSourceState &lstate,
+	                                               const OperatorPartitionInfo &partition_info) const;
 
 	virtual bool IsSource() const {
 		return false;
@@ -124,8 +137,11 @@ public:
 		return false;
 	}
 
-	virtual bool SupportsBatchIndex() const {
-		return false;
+	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+		if (partition_info.AnyRequired()) {
+			return false;
+		}
+		return true;
 	}
 
 	//! The type of order emitted by the operator (as a source)
@@ -134,11 +150,17 @@ public:
 	}
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
-	virtual double GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+	virtual ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
-	virtual double GetSinkProgress(ClientContext &context, GlobalSinkState &gstate, double source_progress) const {
+	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+	                                     const ProgressData source_progress) const {
 		return source_progress;
+	}
+
+	virtual InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
+	                                                              LocalSourceState &lstate) const {
+		return InsertionOrderPreservingMap<string>();
 	}
 
 public:
@@ -157,7 +179,7 @@ public:
 	virtual void PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
-	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
+	//! If Finalize returns SinkResultType::Finished, the sink is marked as finished
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  OperatorSinkFinalizeInput &input) const;
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
@@ -181,8 +203,8 @@ public:
 		return false;
 	}
 
-	virtual bool RequiresBatchIndex() const {
-		return false;
+	virtual OperatorPartitionInfo RequiredPartitionInfo() const {
+		return OperatorPartitionInfo::NoPartitionInfo();
 	}
 
 	//! Whether or not the sink operator depends on the order of the input chunks
@@ -236,13 +258,18 @@ public:
 class CachingPhysicalOperator : public PhysicalOperator {
 public:
 	static constexpr const idx_t CACHE_THRESHOLD = 64;
-	CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality);
+	CachingPhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
+	                        idx_t estimated_cardinality);
 
 	bool caching_supported;
 
 public:
+	//! This Execute will prevent small chunks from entering the pipeline, buffering them until a bigger chunk is
+	//! created.
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const final;
+	//! FinalExecute is used here to send out the remainder of the chunk (< STANDARD_VECTOR_SIZE) that we still had
+	//! cached.
 	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
 	                                        OperatorState &state) const final;
 

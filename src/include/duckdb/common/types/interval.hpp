@@ -17,6 +17,7 @@ struct dtime_t;     // NOLINT: literal casing
 struct date_t;      // NOLINT: literal casing
 struct dtime_tz_t;  // NOLINT: literal casing
 struct timestamp_t; // NOLINT: literal casing
+struct TimestampComponents;
 
 class Serializer;
 class Deserializer;
@@ -27,6 +28,11 @@ struct interval_t { // NOLINT
 	int64_t micros;
 
 	inline void Normalize(int64_t &months, int64_t &days, int64_t &micros) const;
+
+	// Normalize to interval bounds.
+	inline static void Borrow(const int64_t msf, int64_t &lsf, int32_t &f, const int64_t scale);
+	inline interval_t Normalize() const;
+
 	inline bool operator==(const interval_t &right) const {
 		//	Quick equality check
 		const auto &left = *this;
@@ -134,13 +140,16 @@ public:
 	static int64_t GetMilli(const interval_t &val);
 
 	//! Get Interval in microseconds
+	static bool TryGetMicro(const interval_t &val, int64_t &micros);
 	static int64_t GetMicro(const interval_t &val);
 
 	//! Get Interval in Nanoseconds
 	static int64_t GetNanoseconds(const interval_t &val);
 
-	//! Returns the age between two timestamps (including 30 day months)
+	//! Returns the age between two timestamps (including months)
 	static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);
+	//! Returns the age between two timestamp components
+	static interval_t GetAge(TimestampComponents ts1, TimestampComponents ts2, bool is_negative);
 
 	//! Returns the exact difference between two timestamps (days and seconds)
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
@@ -165,19 +174,62 @@ public:
 		return left > right;
 	}
 };
+
 void interval_t::Normalize(int64_t &months, int64_t &days, int64_t &micros) const {
-	auto input = *this;
-	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
-	int64_t extra_months_micros = input.micros / Interval::MICROS_PER_MONTH;
-	input.days -= UnsafeNumericCast<int32_t>(extra_months_d * Interval::DAYS_PER_MONTH);
-	input.micros -= extra_months_micros * Interval::MICROS_PER_MONTH;
+	auto &input = *this;
 
-	int64_t extra_days_micros = input.micros / Interval::MICROS_PER_DAY;
-	input.micros -= extra_days_micros * Interval::MICROS_PER_DAY;
-
-	months = input.months + extra_months_d + extra_months_micros;
-	days = input.days + extra_days_micros;
+	//  Carry left
 	micros = input.micros;
+	int64_t carry_days = micros / Interval::MICROS_PER_DAY;
+	micros -= carry_days * Interval::MICROS_PER_DAY;
+
+	days = input.days;
+	days += carry_days;
+	int64_t carry_months = days / Interval::DAYS_PER_MONTH;
+	days -= carry_months * Interval::DAYS_PER_MONTH;
+
+	months = input.months;
+	months += carry_months;
+}
+
+void interval_t::Borrow(const int64_t msf, int64_t &lsf, int32_t &f, const int64_t scale) {
+	if (msf > NumericLimits<int32_t>::Maximum()) {
+		f = NumericLimits<int32_t>::Maximum();
+		lsf += (msf - f) * scale;
+	} else if (msf < NumericLimits<int32_t>::Minimum()) {
+		f = NumericLimits<int32_t>::Minimum();
+		lsf += (msf - f) * scale;
+	} else {
+		f = UnsafeNumericCast<int32_t>(msf);
+	}
+}
+
+interval_t interval_t::Normalize() const {
+	interval_t result;
+
+	int64_t mm;
+	int64_t dd;
+	Normalize(mm, dd, result.micros);
+
+	//  Borrow right on overflow
+	Borrow(mm, dd, result.months, Interval::DAYS_PER_MONTH);
+	Borrow(dd, result.micros, result.days, Interval::MICROS_PER_DAY);
+
+	return result;
 }
 
 } // namespace duckdb
+
+namespace std {
+template <>
+struct hash<duckdb::interval_t> {
+	size_t operator()(const duckdb::interval_t &val) const {
+		int64_t months, days, micros;
+		val.Normalize(months, days, micros);
+		using std::hash;
+
+		return hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(days)) ^
+		       hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(months)) ^ hash<int64_t> {}(micros);
+	}
+};
+} // namespace std

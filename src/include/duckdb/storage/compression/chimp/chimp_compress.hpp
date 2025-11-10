@@ -33,7 +33,7 @@ struct ChimpCompressionState : public CompressionState {};
 // Compression Functions
 
 template <class T>
-unique_ptr<CompressionState> ChimpInitCompression(ColumnDataCheckpointer &checkpointer,
+unique_ptr<CompressionState> ChimpInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                   unique_ptr<AnalyzeState> state) {
 	throw InternalException("Chimp has been deprecated, can no longer be used to compress data");
 	return nullptr;

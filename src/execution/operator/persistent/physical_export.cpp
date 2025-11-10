@@ -9,15 +9,24 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 #include <algorithm>
 #include <sstream>
 
 namespace duckdb {
 
-using std::stringstream;
-
 void ReorderTableEntries(catalog_entry_vector_t &tables);
+
+using duckdb::stringstream;
+
+PhysicalExport::PhysicalExport(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
+                               unique_ptr<CopyInfo> info, idx_t estimated_cardinality,
+                               unique_ptr<BoundExportData> exported_tables)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXPORT, std::move(types), estimated_cardinality),
+      function(std::move(function)), info(std::move(info)), exported_tables(std::move(exported_tables)) {
+}
 
 static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entries) {
 	for (auto &entry : entries) {
@@ -33,7 +42,7 @@ static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entrie
 		} catch (const NotImplementedException &) {
 			ss << entry.get().ToSQL();
 		}
-		ss << '\n';
+		ss << ";\n";
 	}
 	ss << '\n';
 }
@@ -46,8 +55,7 @@ static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const stri
 	handle.reset();
 }
 
-static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info, ExportedTableData &exported_table,
-                               CopyFunction const &function) {
+static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info, ExportedTableData &exported_table) {
 	ss << "COPY ";
 
 	//! NOTE: The catalog is explicitly not set here
@@ -60,26 +68,12 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {
-		// insert default csv options, if not specified
-		if (info.options.find("header") == info.options.end()) {
-			info.options["header"].push_back(Value::INTEGER(1));
-		}
-		if (info.options.find("delimiter") == info.options.end() && info.options.find("sep") == info.options.end() &&
-		    info.options.find("delim") == info.options.end()) {
-			info.options["delimiter"].push_back(Value(","));
-		}
-		if (info.options.find("quote") == info.options.end()) {
-			info.options["quote"].push_back(Value("\""));
-		}
 		info.options.erase("force_not_null");
 		for (auto &not_null_column : exported_table.not_null_columns) {
 			info.options["force_not_null"].push_back(not_null_column);
 		}
 	}
 	for (auto &copy_option : info.options) {
-		if (copy_option.first == "force_quote") {
-			continue;
-		}
 		if (copy_option.second.empty()) {
 			// empty options are interpreted as TRUE
 			copy_option.second.push_back(true);
@@ -121,6 +115,10 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
                                     ExportEntries &result) {
 	for (auto &schema_p : schema_list) {
 		auto &schema = schema_p.get();
+		auto &catalog = schema.ParentCatalog();
+		if (catalog.IsSystemCatalog() || catalog.IsTemporaryCatalog()) {
+			continue;
+		}
 		if (!schema.internal) {
 			result.schemas.push_back(schema);
 		}
@@ -217,44 +215,26 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 
-	// gather all catalog types to export
-	ExportEntries entries;
+	auto &catalog = Catalog::GetCatalog(ccontext, info->catalog);
 
-	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
-	ExtractEntries(context.client, schema_list, entries);
-
-	// consider the order of tables because of foreign key constraint
-	entries.tables.clear();
-	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
-		entries.tables.push_back(exported_tables.data[i].entry);
+	catalog_entry_vector_t catalog_entries;
+	catalog_entries = GetNaiveExportOrder(context.client, catalog);
+	auto dependency_manager = catalog.GetDependencyManager();
+	if (dependency_manager) {
+		dependency_manager->ReorderEntries(catalog_entries, ccontext);
 	}
 
-	// order macro's by timestamp so nested macro's are imported nicely
-	sort(entries.macros.begin(), entries.macros.end(),
-	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
-		     return lhs.get().oid < rhs.get().oid;
-	     });
-
 	// write the schema.sql file
-	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
-
 	stringstream ss;
-	WriteCatalogEntries(ss, entries.schemas);
-	WriteCatalogEntries(ss, entries.custom_types);
-	WriteCatalogEntries(ss, entries.sequences);
-	WriteCatalogEntries(ss, entries.tables);
-	WriteCatalogEntries(ss, entries.views);
-	WriteCatalogEntries(ss, entries.indexes);
-	WriteCatalogEntries(ss, entries.macros);
-
+	WriteCatalogEntries(ss, catalog_entries);
 	WriteStringStreamToFile(fs, ss, fs.JoinPath(info->file_path, "schema.sql"));
 
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
-		auto exported_table_info = exported_tables.data[i].table_data;
-		WriteCopyStatement(fs, load_ss, *info, exported_table_info, function);
+	for (idx_t i = 0; i < exported_tables->data.size(); i++) {
+		auto exported_table_info = exported_tables->data[i].table_data;
+		WriteCopyStatement(fs, load_ss, *info, exported_table_info);
 	}
 	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state.finished = true;

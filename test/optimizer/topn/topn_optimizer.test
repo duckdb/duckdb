@@ -44,7 +44,7 @@ EXPLAIN SELECT * FROM (SELECT * FROM range(100000000) AS _(x) ORDER BY x) AS cte
 ----
 logical_opt	<REGEX>:.*TOP_N.*
 
-require noalternativeverify
+require no_alternative_verify
 
 # top n optimization with more complex projection pull up
 query II
@@ -59,3 +59,17 @@ WITH cte1 AS (SELECT range%2000 a,
 SELECT * FROM cte3 LIMIT 4;
 ----
 logical_opt	<REGEX>:.*TOP_N.*
+
+
+statement ok
+create table large_table as select range a from range(100000);
+
+query II
+EXPLAIN select * from large_table order by a limit 100;
+----
+logical_opt	<REGEX>:.*TOP_N.*
+
+query II
+EXPLAIN select * from large_table order by a limit 10000;
+----
+logical_opt	<!REGEX>:.*TOP_N.*

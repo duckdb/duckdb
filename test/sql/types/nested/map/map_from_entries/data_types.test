@@ -20,12 +20,12 @@ select * from string_key;
 query I
 select col['a'] from string_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table string_key_dup as select MAP_FROM_ENTRIES(ARRAY[('a', 'x'), ('a', 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- TINYINT --
 # Valid
@@ -40,12 +40,12 @@ select * from tinyint_key;
 query I
 select col[123] from tinyint_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table tinyint_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- SMALLINT --
 # Valid
@@ -60,12 +60,12 @@ select * from smallint_key;
 query I
 select col[123] from smallint_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table smallint_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- INTEGER --
 # Valid
@@ -80,12 +80,12 @@ select * from integer_key;
 query I
 select col[123] from integer_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table integer_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- BIGINT --
 # Valid
@@ -100,12 +100,12 @@ select * from bigint_key;
 query I
 select col[123] from bigint_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table bigint_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- HUGEINT --
 # Valid
@@ -120,12 +120,12 @@ select * from hugeint_key;
 query I
 select col[123] from hugeint_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table hugeint_key as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
 ----
+<REGEX>:.*Catalog Error.*Table with name "hugeint_key" already exists.*
 
 # -- BOOLEAN --
 # Valid
@@ -140,12 +140,12 @@ select * from boolean_key;
 query I
 select col[True] from boolean_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table boolean_key_dup as select MAP_FROM_ENTRIES(ARRAY[(True, 'x'), (True, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- BLOB --
 # Valid
@@ -160,12 +160,12 @@ select * from blob_key;
 query I
 select col['\xF0\x9F\xA6\x86'::BLOB] from blob_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table blob_key_dup as select MAP_FROM_ENTRIES(ARRAY[('\xF0\x9F\xA6\x86'::BLOB, 'x'), ('\xF0\x9F\xA6\x86'::BLOB, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- DATE --
 # Valid
@@ -180,12 +180,12 @@ select * from date_key;
 query I
 select col['1992-09-20'::DATE] from date_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table date_key_dup as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20'::DATE, 'x'), ('1992-09-20'::DATE, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- DOUBLE --
 # Valid
@@ -200,12 +200,12 @@ select * from double_key;
 query I
 select col['12.3'::DOUBLE] from double_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table double_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::DOUBLE, 'x'), ('12.3'::DOUBLE, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- REAL --
 # Valid
@@ -220,12 +220,12 @@ select * from real_key;
 query I
 select col['12.3'::REAL] from real_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table real_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::REAL, 'x'), ('12.3'::REAL, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- DECIMAL --
 # Valid
@@ -240,12 +240,12 @@ select * from decimal_key;
 query I
 select col['12.3'::DECIMAL] from decimal_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table decimal_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::DECIMAL, 'x'), ('12.3'::DECIMAL, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- INTERVAL --
 # Valid
@@ -255,17 +255,17 @@ create table interval_key as select MAP_FROM_ENTRIES(ARRAY[(('2022-01-02 01:00:0
 query I
 select * from interval_key;
 ----
-{1 day 01:00:00=x, 366 days 01:00:00=y}
+{'1 day 01:00:00'=x, '366 days 01:00:00'=y}
 
 query I
 select col[('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP)] from interval_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table interval_key_dup as select MAP_FROM_ENTRIES(ARRAY[(('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP), 'x'), (('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP), 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- TIME --
 # Valid
@@ -275,17 +275,17 @@ create table time_key as select MAP_FROM_ENTRIES(ARRAY[('12:30:00'::TIME, 'x'), 
 query I
 select * from time_key;
 ----
-{12:30:00=x, 00:30:00=y}
+{'12:30:00'=x, '00:30:00'=y}
 
 query I
 select col['12:30:00'::TIME] from time_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table time_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12:30:00'::TIME, 'x'), ('12:30:00'::TIME, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- TIMESTAMP --
 # Valid
@@ -295,17 +295,17 @@ create table timestamp_key as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20 11:30:0
 query I
 select * from timestamp_key;
 ----
-{1992-09-20 11:30:00=x, 1992-10-20 11:30:00=y}
+{'1992-09-20 11:30:00'=x, '1992-10-20 11:30:00'=y}
 
 query I
 select col['1992-09-20 11:30:00'::TIMESTAMP] from timestamp_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table timestamp_key_dup as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20 11:30:00'::TIMESTAMP, 'x'), ('1992-09-20 11:30:00'::TIMESTAMP, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*
 
 # -- UUID --
 # Valid
@@ -320,9 +320,9 @@ select * from uuid_key;
 query I
 select col['eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID] from uuid_key;
 ----
-[x]
+x
 
-# Invalid
 statement error
 create table uuid_key_dup as select MAP_FROM_ENTRIES(ARRAY[('eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID, 'x'), ('eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID, 'y')]) col;
 ----
+<REGEX>:.*Invalid Input Error.*Map keys must be unique.*

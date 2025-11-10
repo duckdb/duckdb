@@ -16,7 +16,6 @@ class TableCatalogEntry;
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
 struct IndexDataTableInfo {
 	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p);
-	~IndexDataTableInfo();
 
 	//! Pointer to the DataTableInfo
 	shared_ptr<DataTableInfo> info;
@@ -34,6 +33,7 @@ public:
 	               shared_ptr<IndexDataTableInfo> storage_info);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+	void Rollback(CatalogEntry &prev_entry) override;
 
 	//! The indexed table information
 	shared_ptr<IndexDataTableInfo> info;

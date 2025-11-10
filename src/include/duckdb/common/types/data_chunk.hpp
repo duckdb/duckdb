@@ -63,6 +63,9 @@ public:
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}
+	inline idx_t GetCapacity() const {
+		return capacity;
+	}
 	inline void SetCapacity(idx_t capacity_p) {
 		this->capacity = capacity_p;
 	}
@@ -106,7 +109,7 @@ public:
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 
-	//! Copies the data from this vector to another vector.
+	//! Copies the data from this chunk to another chunk.
 	DUCKDB_API void Copy(DataChunk &other, idx_t offset = 0) const;
 	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count,
 	                     const idx_t offset = 0) const;
@@ -136,11 +139,11 @@ public:
 	DUCKDB_API void Slice(idx_t offset, idx_t count);
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
-	//! function was called. This sets the count to 0, and resets each member
+	//! function was called. This sets the count to 0, the capacity to initial_capacity and resets each member
 	//! Vector to point back to the data owned by this DataChunk.
 	DUCKDB_API void Reset();
 
-	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API void Serialize(Serializer &serializer, bool compressed_serialization = true) const;
 	DUCKDB_API void Deserialize(Deserializer &source);
 
 	//! Hashes the DataChunk to the target vector
@@ -166,6 +169,8 @@ private:
 	idx_t count;
 	//! The amount of tuples that can be stored in the data chunk
 	idx_t capacity;
+	//! The initial capacity of this chunk set during ::Initialize, used when resetting
+	idx_t initial_capacity;
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
 };

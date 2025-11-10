@@ -1,0 +1,63 @@
+# name: test/issues/general/test_16662.test
+# description: Issue 16662 - Unexpected binder error when using a CTE multiple times
+# group: [general]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE VIEW
+  "tbl1" AS
+  -- End of EXAMPLE 4 (pt1)
+WITH
+  data_infra as (
+    select
+      'a' as AMES,
+      'b' as TONG
+      -- Example 6: Unomment out the following line to see it work
+      -- If there is more than one resulting row in the group by then there is not error
+      -- union all
+      -- select
+      --   'c' as AMES,
+      --   'b' as TONG
+      --End Example 6
+      -- Example 5: Comment out the following line to see it work
+      -- If there is no group by then there is an error
+    group by
+      1
+      -- End of Example 5
+  )
+SELECT
+  -- Example 1: Comment the following lines to see it work
+  -- If the CTE is used only once then there is no error
+  case
+    when 'b' in (
+      select
+        TONG
+      from
+        data_infra
+    ) then 'tong'
+    else 'Various'
+  end as collapsed_TONG,
+  --- End of Example 1
+  -- Example 2: Comment the following lines to see it work
+  -- If the CTE is used only once then there is no error
+  case
+    when 'ba' in (
+      select
+        TONG
+      from
+        data_infra
+    ) then 'ames'
+    else null
+  end as collapsed_AMES,
+  --- End of Example 2
+  -- Example 3: Delete this line to see it work
+  -- If there is no null column there is no error
+  NULL AS NULL_COL;
+
+statement ok
+SELECT
+  *
+FROM
+  "tbl1";

@@ -45,8 +45,8 @@ public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 public:
-	static idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &filter,
-	                                   BaseStatistics &base_stats);
+	static idx_t InspectTableFilter(idx_t cardinality, idx_t column_index, TableFilter &filter,
+	                                BaseStatistics &base_stats);
 	//	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
 	//	                                  BaseStatistics &base_stats);
 	//! Extract Statistics from a LogicalGet.
@@ -65,10 +65,12 @@ public:
 	static RelationStats CombineStatsOfReorderableOperator(vector<ColumnBinding> &bindings,
 	                                                       vector<RelationStats> relation_stats);
 	//! Called after reordering a query plan with potentially 2+ relations.
-	static RelationStats CombineStatsOfNonReorderableOperator(LogicalOperator &op, vector<RelationStats> child_stats);
+	static RelationStats CombineStatsOfNonReorderableOperator(LogicalOperator &op,
+	                                                          const vector<RelationStats> &child_stats);
 	static void CopyRelationStats(RelationStats &to, const RelationStats &from);
 
 private:
+	static idx_t GetDistinctCount(LogicalGet &get, ClientContext &context, idx_t column_id);
 };
 
 } // namespace duckdb

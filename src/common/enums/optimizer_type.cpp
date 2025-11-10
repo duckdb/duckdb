@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"expression_rewriter", OptimizerType::EXPRESSION_REWRITER},
     {"filter_pullup", OptimizerType::FILTER_PULLUP},
     {"filter_pushdown", OptimizerType::FILTER_PUSHDOWN},
+    {"empty_result_pullup", OptimizerType::EMPTY_RESULT_PULLUP},
     {"cte_filter_pusher", OptimizerType::CTE_FILTER_PUSHER},
     {"regex_range", OptimizerType::REGEX_RANGE},
     {"in_clause", OptimizerType::IN_CLAUSE},
@@ -28,13 +30,19 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
     {"limit_pushdown", OptimizerType::LIMIT_PUSHDOWN},
     {"top_n", OptimizerType::TOP_N},
+    {"top_n_window_elimination", OptimizerType::TOP_N_WINDOW_ELIMINATION},
     {"build_side_probe_side", OptimizerType::BUILD_SIDE_PROBE_SIDE},
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
     {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},
     {"reorder_filter", OptimizerType::REORDER_FILTER},
+    {"sampling_pushdown", OptimizerType::SAMPLING_PUSHDOWN},
     {"join_filter_pushdown", OptimizerType::JOIN_FILTER_PUSHDOWN},
     {"extension", OptimizerType::EXTENSION},
     {"materialized_cte", OptimizerType::MATERIALIZED_CTE},
+    {"sum_rewriter", OptimizerType::SUM_REWRITER},
+    {"late_materialization", OptimizerType::LATE_MATERIALIZATION},
+    {"cte_inlining", OptimizerType::CTE_INLINING},
+    {"common_subplan", OptimizerType::COMMON_SUBPLAN},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

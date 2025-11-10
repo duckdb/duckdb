@@ -1,0 +1,29 @@
+# name: test/sql/window/test_wide_orderby.test
+# description: Verify 32 and 64 bit tree construction
+# group: [window]
+
+foreach forced false true 
+
+# This forces 64 bit trees when true
+statement ok
+PRAGMA debug_force_external=${forced}
+
+# SelectNth
+statement ok
+SELECT last_value(i ORDER BY i DESC) OVER w AS crash
+FROM range(5_000) tbl(i)
+WINDOW w AS (ORDER BY i ASC)
+
+# Rank
+statement ok
+SELECT rank(ORDER BY i DESC) OVER w AS crash
+FROM range(5_000) tbl(i)
+WINDOW w AS (ORDER BY i ASC)
+
+# Peer End
+statement ok
+SELECT cume_dist(ORDER BY i DESC) OVER w AS crash
+FROM range(5_000) tbl(i)
+WINDOW w AS (ORDER BY i ASC)
+
+endloop

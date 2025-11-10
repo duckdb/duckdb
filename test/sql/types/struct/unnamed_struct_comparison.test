@@ -25,7 +25,7 @@ select 1 from values (struct_pack(k := NULL)) t(a) where 1 <> a.k;
 query I
 select [NULL, 6] <> [6, 5];
 ----
-NULL
+true
 
 
 query I

@@ -13,8 +13,12 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/storage/storage_index.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -36,6 +40,10 @@ class RowGroupSegmentTree;
 class TableFilter;
 struct AdaptiveFilterState;
 struct TableScanOptions;
+struct ScanSamplingInfo;
+struct TableFilterState;
+template <class T>
+struct SegmentNode;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -72,8 +80,10 @@ struct IndexScanState {
 typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
 struct ColumnScanState {
+	//! The query context for this scan
+	QueryContext context;
 	//! The column segment that is currently being scanned
-	ColumnSegment *current = nullptr;
+	optional_ptr<SegmentNode<ColumnSegment>> current;
 	//! Column segment tree
 	ColumnSegmentTree *segment_tree = nullptr;
 	//! The current row index of the scan
@@ -93,11 +103,15 @@ struct ColumnScanState {
 	vector<unique_ptr<SegmentScanState>> previous_states;
 	//! The last read offset in the child state (used for LIST columns only)
 	idx_t last_offset = 0;
+	//! Whether or not we should scan a specific child column
+	vector<bool> scan_child_column;
 	//! Contains TableScan level config for scanning
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
-	void Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options);
+	void Initialize(const QueryContext &context_p, const LogicalType &type, const vector<StorageIndex> &children,
+	                optional_ptr<TableScanOptions> options);
+	void Initialize(const QueryContext &context_p, const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
@@ -105,6 +119,8 @@ public:
 };
 
 struct ColumnFetchState {
+	//! The query context for this fetch
+	QueryContext context;
 	//! The set of pinned block handles for this set of fetches
 	buffer_handle_set_t handles;
 	//! Any child states of the fetch
@@ -114,12 +130,13 @@ struct ColumnFetchState {
 };
 
 struct ScanFilter {
-	ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter);
+	ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
 
 	idx_t scan_column_index;
 	idx_t table_column_index;
 	TableFilter &filter;
 	bool always_true;
+	unique_ptr<TableFilterState> filter_state;
 
 	bool IsAlwaysTrue() const {
 		return always_true;
@@ -130,7 +147,7 @@ class ScanFilterInfo {
 public:
 	~ScanFilterInfo();
 
-	void Initialize(TableFilterSet &filters, const vector<column_t> &column_ids);
+	void Initialize(ClientContext &context, TableFilterSet &filters, const vector<StorageIndex> &column_ids);
 
 	const vector<ScanFilter> &GetFilterList() const {
 		return filter_list;
@@ -167,12 +184,36 @@ private:
 	idx_t always_true_filters = 0;
 };
 
+enum class OrderByStatistics { MIN, MAX };
+enum class RowGroupOrderType { ASC, DESC };
+enum class OrderByColumnType { NUMERIC, STRING };
+
+class RowGroupReorderer {
+public:
+	explicit RowGroupReorderer(const RowGroupOrderOptions &options);
+	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups);
+	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
+
+private:
+	const column_t column_idx;
+	const OrderByStatistics order_by;
+	const RowGroupOrderType order_type;
+	const OrderByColumnType column_type;
+
+	idx_t offset;
+	bool initialized;
+	vector<reference<SegmentNode<RowGroup>>> ordered_row_groups;
+
+private:
+	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
 
 	//! The current row_group we are scanning
-	RowGroup *row_group;
+	optional_ptr<SegmentNode<RowGroup>> row_group;
 	//! The vector index within the row_group
 	idx_t vector_index;
 	//! The maximum row within the row group
@@ -188,17 +229,33 @@ public:
 	//! The valid selection
 	SelectionVector valid_sel;
 
+	RandomEngine random;
+
+	//! Optional state for custom row group ordering
+	unique_ptr<RowGroupReorderer> reorderer;
+
 public:
-	void Initialize(const vector<LogicalType> &types);
-	const vector<storage_t> &GetColumnIds();
+	void Initialize(const QueryContext &context, const vector<LogicalType> &types);
+	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
+	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
+	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group) const;
+	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const;
+	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
 
 private:
 	TableScanState &parent;
+};
+
+struct ScanSamplingInfo {
+	//! Whether or not to do a system sample during scanning
+	bool do_system_sample = false;
+	//! The sampling rate to use
+	double sample_rate;
 };
 
 struct TableScanOptions {
@@ -230,30 +287,42 @@ public:
 	shared_ptr<CheckpointLock> checkpoint_lock;
 	//! Filter info
 	ScanFilterInfo filters;
+	//! Sampling info
+	ScanSamplingInfo sampling_info;
 
 public:
-	void Initialize(vector<storage_t> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr);
+	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
+	                optional_ptr<TableFilterSet> table_filters = nullptr,
+	                optional_ptr<SampleOptions> table_sampling = nullptr);
 
-	const vector<storage_t> &GetColumnIds();
+	const vector<StorageIndex> &GetColumnIds();
 
 	ScanFilterInfo &GetFilterInfo();
 
+	ScanSamplingInfo &GetSamplingInfo();
+
 private:
 	//! The column identifiers of the scan
-	vector<storage_t> column_ids;
+	vector<StorageIndex> column_ids;
 };
 
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
+	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups) const;
+	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(RowGroupSegmentTree &row_groups,
+	                                                    SegmentNode<RowGroup> &row_group) const;
 
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
-	RowGroup *current_row_group;
+	optional_ptr<SegmentNode<RowGroup>> current_row_group;
 	idx_t vector_index;
 	idx_t max_row;
 	idx_t batch_index;
 	atomic<idx_t> processed_rows;
 	mutex lock;
+
+	//! Optional state for custom row group ordering
+	unique_ptr<RowGroupReorderer> reorderer;
 };
 
 struct ParallelTableScanState {

@@ -1,0 +1,23 @@
+# name: test/sql/pragma/test_disabled_compression.test
+# description: Test PRAGMA force_compression
+# group: [pragma]
+
+foreach compression rle dictionary bitpacking fsst
+
+statement ok
+PRAGMA disabled_compression_methods='${compression}'
+
+endloop
+
+statement error
+PRAGMA disabled_compression_methods='uncompressed,rle'
+----
+Uncompressed compression cannot be disabled
+
+statement ok
+PRAGMA disabled_compression_methods='dictionary,rle'
+
+statement error
+PRAGMA disabled_compression_methods='xzx'
+----
+Unrecognized compression method

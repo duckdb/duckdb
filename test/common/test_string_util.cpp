@@ -145,6 +145,85 @@ TEST_CASE("Test join vector items", "[string_util]") {
 	}
 }
 
+TEST_CASE("Test SplitWithParentheses", "[string_util]") {
+	SECTION("Standard split") {
+		REQUIRE(StringUtil::SplitWithParentheses("") == duckdb::vector<string> {});
+		REQUIRE(StringUtil::SplitWithParentheses("x") == duckdb::vector<string> {"x"});
+		REQUIRE(StringUtil::SplitWithParentheses("hello") == duckdb::vector<string> {"hello"});
+		REQUIRE(StringUtil::SplitWithParentheses("hello,world") == duckdb::vector<string> {"hello", "world"});
+	}
+
+	SECTION("Single item with parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("STRUCT(year BIGINT, month BIGINT, day BIGINT)") ==
+		        duckdb::vector<string> {"STRUCT(year BIGINT, month BIGINT, day BIGINT)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple)") == duckdb::vector<string> {"(apple)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple, pear)") == duckdb::vector<string> {"(apple, pear)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple, pear) banana") ==
+		        duckdb::vector<string> {"(apple, pear) banana"});
+		REQUIRE(StringUtil::SplitWithParentheses("banana (apple, pear)") ==
+		        duckdb::vector<string> {"banana (apple, pear)"});
+		REQUIRE(StringUtil::SplitWithParentheses("banana (apple, pear) banana") ==
+		        duckdb::vector<string> {"banana (apple, pear) banana"});
+	}
+
+	SECTION("Multiple items with parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("map::MAP(ANY,ANY),key::ANY") ==
+		        duckdb::vector<string> {"map::MAP(ANY,ANY)", "key::ANY"});
+		REQUIRE(StringUtil::SplitWithParentheses("extra,STRUCT(year BIGINT, month BIGINT, day BIGINT)") ==
+		        duckdb::vector<string> {"extra", "STRUCT(year BIGINT, month BIGINT, day BIGINT)"});
+		REQUIRE(StringUtil::SplitWithParentheses("extra,STRUCT(year BIGINT, month BIGINT, day BIGINT),extra") ==
+		        duckdb::vector<string> {"extra", "STRUCT(year BIGINT, month BIGINT, day BIGINT)", "extra"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa(bb)cc,dd(ee)ff") ==
+		        duckdb::vector<string> {"aa(bb)cc", "dd(ee)ff"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa(bb cc,dd),ee(f,,f)gg") ==
+		        duckdb::vector<string> {"aa(bb cc,dd)", "ee(f,,f)gg"});
+	}
+
+	SECTION("Leading and trailing separators") {
+		REQUIRE(StringUtil::SplitWithParentheses(",") == duckdb::vector<string> {""});
+		REQUIRE(StringUtil::SplitWithParentheses(",,") == duckdb::vector<string> {"", ""});
+		REQUIRE(StringUtil::SplitWithParentheses("aa,") == duckdb::vector<string> {"aa"});
+		REQUIRE(StringUtil::SplitWithParentheses(",aa") == duckdb::vector<string> {"", "aa"});
+		REQUIRE(StringUtil::SplitWithParentheses(",(aa,),") == duckdb::vector<string> {"", "(aa,)"});
+	}
+
+	SECTION("Leading and trailing spaces") {
+		REQUIRE(StringUtil::SplitWithParentheses(" ") == duckdb::vector<string> {" "});
+		REQUIRE(StringUtil::SplitWithParentheses("   ") == duckdb::vector<string> {"   "});
+		REQUIRE(StringUtil::SplitWithParentheses("   , ") == duckdb::vector<string> {"   ", " "});
+		REQUIRE(StringUtil::SplitWithParentheses("aa, bb") == duckdb::vector<string> {"aa", " bb"});
+		REQUIRE(StringUtil::SplitWithParentheses(" aa,(bb, cc) ") == duckdb::vector<string> {" aa", "(bb, cc) "});
+	}
+
+	SECTION("Nested parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("STRUCT(aa BIGINT, bb STRUCT(cc BIGINT, dd BIGINT, BIGINT))") ==
+		        duckdb::vector<string> {"STRUCT(aa BIGINT, bb STRUCT(cc BIGINT, dd BIGINT, BIGINT))"});
+		REQUIRE(StringUtil::SplitWithParentheses("(((aa)))") == duckdb::vector<string> {"(((aa)))"});
+		REQUIRE(StringUtil::SplitWithParentheses("((aa, bb))") == duckdb::vector<string> {"((aa, bb))"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa,(bb,(cc,dd)),ee") ==
+		        duckdb::vector<string> {"aa", "(bb,(cc,dd))", "ee"});
+	}
+
+	SECTION("other parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses(" aa,[bb, cc] )", ',', '[', ']') ==
+		        duckdb::vector<string> {" aa", "[bb, cc] )"});
+	}
+
+	SECTION("other separators") {
+		REQUIRE(StringUtil::SplitWithParentheses(" aa|(bb| cc),dd", '|') ==
+		        duckdb::vector<string> {" aa", "(bb| cc),dd"});
+	}
+
+	SECTION("incongruent parentheses") {
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("("));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses(")"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("aa(bb"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("aa)bb"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("(aa)bb)"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("(aa(bb)"));
+	}
+}
+
 TEST_CASE("Test split quoted strings", "[string_util]") {
 	SECTION("Empty string") {
 		REQUIRE(StringUtil::SplitWithQuote("") == duckdb::vector<string> {});
@@ -289,4 +368,132 @@ TEST_CASE("Test path utilities", "[string_util]") {
 		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp//test.txt"));
 		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\\\test.txt"));
 	}
+}
+
+TEST_CASE("Test JSON Parsing", "[string_util]") {
+	auto complex_json = StringUtil::ParseJSONMap(R"JSON_LITERAL(
+	{
+    "crs": {
+        "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+        "type": "GeographicCRS",
+        "name": "WGS 84",
+        "datum_ensemble": {
+            "name": "World Geodetic System 1984 ensemble",
+            "members": [
+                {
+                    "name": "World Geodetic System 1984 (Transit)",
+                    "id": {
+                        "authority": "EPSG",
+                        "code": 1166
+                    }
+                },
+                {
+                    "name": "World Geodetic System 1984 (G730)",
+                    "id": {
+                        "authority": "EPSG",
+                        "code": 1152
+                    }
+                },
+                {
+                    "name": "World Geodetic System 1984 (G873)",
+                    "id": {
+                        "authority": "EPSG",
+                        "code": 1153
+                    }
+                },
+                {
+                    "name": "World Geodetic System 1984 (G1150)",
+                    "id": {
+                        "authority": "EPSG",
+                        "code": 1154
+                    }
+                },
+                {
+                    "name": "World Geodetic System 1984 (G1674)",
+                    "id": {
+                        "authority": "EPSG",
+                        "code": 1155
+                    }
+                },
+                {
+                    "name": "World Geodetic System 1984 (G1762)",
+                    "id": {
+                        "authority": "EPSG",
+                        "code": 1156
+                    }
+                },
+                {
+                    "name": "World Geodetic System 1984 (G2139)",
+                    "id": {
+                        "authority": "EPSG",
+                        "code": 1309
+                    }
+                },
+                {
+                    "name": "World Geodetic System 1984 (G2296)",
+                    "id": {
+                        "authority": "EPSG",
+                        "code": 1383
+                    }
+                }
+            ],
+            "ellipsoid": {
+                "name": "WGS 84",
+                "semi_major_axis": 6378137,
+                "inverse_flattening": 298.257223563
+            },
+            "accuracy": "2.0",
+            "id": {
+                "authority": "EPSG",
+                "code": 6326
+            }
+        },
+        "coordinate_system": {
+            "subtype": "ellipsoidal",
+            "axis": [
+                {
+                    "name": "Geodetic latitude",
+                    "abbreviation": "Lat",
+                    "direction": "north",
+                    "unit": "degree"
+                },
+                {
+                    "name": "Geodetic longitude",
+                    "abbreviation": "Lon",
+                    "direction": "east",
+                    "unit": "degree"
+                }
+            ]
+        },
+        "scope": "Horizontal component of 3D system.",
+        "area": "World.",
+        "bbox": {
+            "south_latitude": -90,
+            "west_longitude": -180,
+            "north_latitude": 90,
+            "east_longitude": 180
+        },
+        "id": {
+            "authority": "EPSG",
+            "code": 4326
+        }
+    },
+    "crs_type": "projjson"
+}	)JSON_LITERAL");
+
+	complex_json = StringUtil::ParseJSONMap(R"JSON_LITERAL(
+	{
+		"int": 42,
+		"signed_int": -42,
+		"real": 1.5,
+		"null_val": null,
+		"arr": [1, 2, 3],
+		"obj": {
+			"str_val": "val"
+		},
+		"empty_arr": [],
+		"bool_t": true,
+		"bool_f": false
+	}
+	)JSON_LITERAL");
 }

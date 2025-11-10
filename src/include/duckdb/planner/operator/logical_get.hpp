@@ -23,7 +23,8 @@ public:
 
 public:
 	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-	           vector<LogicalType> returned_types, vector<string> returned_names);
+	           vector<LogicalType> returned_types, vector<string> returned_names,
+	           virtual_column_map_t virtual_columns = virtual_column_map_t());
 
 	//! The table index in the current bind context
 	idx_t table_index;
@@ -35,6 +36,8 @@ public:
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
 	vector<string> names;
+	//! A mapping of column index -> type/name for all virtual columns
+	virtual_column_map_t virtual_columns;
 	//! Columns that are used outside the scan
 	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
@@ -49,23 +52,32 @@ public:
 	vector<string> input_table_names;
 	//! For a table-in-out function, the set of projected input columns
 	vector<column_t> projected_input;
-	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
-	//! Stored so they can be included in explain output
+	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown and sample rate
+	//! pushed down into the table scan
+	//! Stored so the can be included in explain output
 	ExtraOperatorInfo extra_info;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
+	//! Information for WITH ORDINALITY
+	optional_idx ordinality_idx;
 
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none
 	optional_ptr<TableCatalogEntry> GetTable() const;
+	//! Returns any column to query - preferably the cheapest column
+	//! This is used when we are running e.g. a COUNT(*) and don't care about the contents of any columns in the table
+	column_t GetAnyColumn() const;
+
+	const LogicalType &GetColumnType(const ColumnIndex &column_index) const;
+	const string &GetColumnName(const ColumnIndex &column_index) const;
 
 public:
-	void SetColumnIds(vector<column_t> &&column_ids);
+	void SetColumnIds(vector<ColumnIndex> &&column_ids);
 	void AddColumnId(column_t column_id);
 	void ClearColumnIds();
-	const vector<column_t> &GetColumnIds() const;
-	vector<column_t> &GetMutableColumnIds();
+	const vector<ColumnIndex> &GetColumnIds() const;
+	vector<ColumnIndex> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 
@@ -86,6 +98,6 @@ private:
 
 private:
 	//! Bound column IDs
-	vector<column_t> column_ids;
+	vector<ColumnIndex> column_ids;
 };
 } // namespace duckdb

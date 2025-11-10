@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/arrow/appender/append_data.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/types.hpp"
@@ -6,6 +14,7 @@
 #include "duckdb/common/arrow/arrow_buffer.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/common/array.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
@@ -28,11 +37,12 @@ typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type
 // FIXME: we should separate the append state variables from the variables required by the ArrowArray into
 // ArrowAppendState
 struct ArrowAppendData {
-	explicit ArrowAppendData(ClientProperties &options_p) : options(options_p) {
+	explicit ArrowAppendData(const ClientProperties &options_p) : options(options_p) {
 		dictionary.release = nullptr;
 		arrow_buffers.resize(3);
 	}
 
+public:
 	//! Getters for the Buffers
 	ArrowBuffer &GetValidityBuffer() {
 		return arrow_buffers[0];
@@ -54,12 +64,44 @@ struct ArrowAppendData {
 		return arrow_buffers[3];
 	}
 
+public:
+	static void GetBitPosition(idx_t row_idx, idx_t &current_byte, uint8_t &current_bit) {
+		current_byte = row_idx / 8;
+		current_bit = row_idx % 8;
+	}
+
+	static void UnsetBit(uint8_t *data, idx_t current_byte, uint8_t current_bit) {
+		data[current_byte] &= ~((uint64_t)1 << current_bit);
+	}
+
+	static void NextBit(idx_t &current_byte, uint8_t &current_bit) {
+		current_bit++;
+		if (current_bit == 8) {
+			current_byte++;
+			current_bit = 0;
+		}
+	}
+
+	static void ResizeValidity(ArrowBuffer &buffer, idx_t row_count) {
+		auto byte_count = (row_count + 7) / 8;
+		buffer.resize(byte_count, 0xFF);
+	}
+
+	void SetNull(uint8_t *validity_data, idx_t current_byte, uint8_t current_bit) {
+		UnsetBit(validity_data, current_byte, current_bit);
+		null_count++;
+	}
+	void AppendValidity(UnifiedVectorFormat &format, idx_t from, idx_t to);
+
+public:
 	idx_t row_count = 0;
 	idx_t null_count = 0;
 
 	//! function pointers for construction
 	initialize_t initialize = nullptr;
 	append_vector_t append_vector = nullptr;
+	//! Arrow Extension Type information
+	shared_ptr<ArrowTypeExtensionData> extension_data = nullptr;
 	finalize_t finalize = nullptr;
 
 	//! child data (if any)
@@ -81,60 +123,5 @@ private:
 	//! The buffers of the arrow vector
 	vector<ArrowBuffer> arrow_buffers;
 };
-
-//===--------------------------------------------------------------------===//
-// Append Helper Functions
-//===--------------------------------------------------------------------===//
-
-static void GetBitPosition(idx_t row_idx, idx_t &current_byte, uint8_t &current_bit) {
-	current_byte = row_idx / 8;
-	current_bit = row_idx % 8;
-}
-
-static void UnsetBit(uint8_t *data, idx_t current_byte, uint8_t current_bit) {
-	data[current_byte] &= ~((uint64_t)1 << current_bit);
-}
-
-static void NextBit(idx_t &current_byte, uint8_t &current_bit) {
-	current_bit++;
-	if (current_bit == 8) {
-		current_byte++;
-		current_bit = 0;
-	}
-}
-
-static void ResizeValidity(ArrowBuffer &buffer, idx_t row_count) {
-	auto byte_count = (row_count + 7) / 8;
-	buffer.resize(byte_count, 0xFF);
-}
-
-static void SetNull(ArrowAppendData &append_data, uint8_t *validity_data, idx_t current_byte, uint8_t current_bit) {
-	UnsetBit(validity_data, current_byte, current_bit);
-	append_data.null_count++;
-}
-
-static void AppendValidity(ArrowAppendData &append_data, UnifiedVectorFormat &format, idx_t from, idx_t to) {
-	// resize the buffer, filling the validity buffer with all valid values
-	idx_t size = to - from;
-	ResizeValidity(append_data.GetValidityBuffer(), append_data.row_count + size);
-	if (format.validity.AllValid()) {
-		// if all values are valid we don't need to do anything else
-		return;
-	}
-
-	// otherwise we iterate through the validity mask
-	auto validity_data = (uint8_t *)append_data.GetValidityBuffer().data();
-	uint8_t current_bit;
-	idx_t current_byte;
-	GetBitPosition(append_data.row_count, current_byte, current_bit);
-	for (idx_t i = from; i < to; i++) {
-		auto source_idx = format.sel->get_index(i);
-		// append the validity mask
-		if (!format.validity.RowIsValid(source_idx)) {
-			SetNull(append_data, validity_data, current_byte, current_bit);
-		}
-		NextBit(current_byte, current_bit);
-	}
-}
 
 } // namespace duckdb

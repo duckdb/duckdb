@@ -5,16 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-statement ok
+# not allowed
+statement error
 create macro information_schema.foo(a) as a;
-
-statement ok
-create table information_schema.integers(i int);
-
-query I
-select information_schema.foo(42)
 ----
-42
-
-statement ok
-select * from information_schema.integers
+<REGEX>:.*Binder Error: Cannot create entry.*

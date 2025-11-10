@@ -40,7 +40,8 @@ protected:
 public:
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
-	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
+	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);
+	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size);
 	virtual PersistentColumnData ToPersistentData();
 
 	PartialBlockManager &GetPartialBlockManager() {
@@ -84,9 +85,9 @@ public:
 
 public:
 	bool IsFlushed();
-	void Flush(const idx_t free_space_left) override;
+	void Flush(QueryContext context, const idx_t free_space_left) override;
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
-	void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block);
+	void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) override;
 	void Clear() override;
 };
 

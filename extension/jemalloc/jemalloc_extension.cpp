@@ -1,13 +1,18 @@
-#define DUCKDB_EXTENSION_MAIN
 #include "jemalloc_extension.hpp"
 
 #include "duckdb/common/allocator.hpp"
 #include "jemalloc/jemalloc.h"
+#include "malloc_ncpus.h"
+
+#include <thread>
 
 namespace duckdb {
 
-void JemallocExtension::Load(DuckDB &db) {
+static void LoadInternal(ExtensionLoader &) {
 	// NOP: This extension can only be loaded statically
+}
+void JemallocExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string JemallocExtension::Name() {
@@ -99,7 +104,9 @@ void JemallocExtension::FlushAll() {
 }
 
 void JemallocExtension::SetBackgroundThreads(bool enable) {
+#ifndef __APPLE__
 	SetJemallocCTL("background_thread", enable);
+#endif
 }
 
 std::string JemallocExtension::Version() const {
@@ -114,16 +121,16 @@ std::string JemallocExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void jemalloc_init(duckdb::DatabaseInstance &db) {
-	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::JemallocExtension>();
-}
-
-DUCKDB_EXTENSION_API const char *jemalloc_version() {
-	return duckdb::DuckDB::LibraryVersion();
-}
-}
-
-#ifndef DUCKDB_EXTENSION_MAIN
-#error DUCKDB_EXTENSION_MAIN not defined
+unsigned duckdb_malloc_ncpus() {
+#ifdef DUCKDB_NO_THREADS
+	return 1
+#else
+	unsigned concurrency = duckdb::NumericCast<unsigned>(std::thread::hardware_concurrency());
+	return std::max(concurrency, 1u);
 #endif
+}
+
+DUCKDB_CPP_EXTENSION_ENTRY(jemalloc, loader) {
+	duckdb::LoadInternal(loader);
+}
+}

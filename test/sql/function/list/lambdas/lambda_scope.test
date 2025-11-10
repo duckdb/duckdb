@@ -2,13 +2,16 @@
 # description: Test the scoping of lambda variables.
 # group: [lambdas]
 
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
 # Lambda parameters have precedence over columns.
 
 statement ok
 CREATE TABLE t1 AS SELECT [1, 2, 3] AS x;
 
 query I
-SELECT list_apply(['hello'], x -> x) FROM t1;
+SELECT list_apply(['hello'], lambda x: x) FROM t1;
 ----
 [hello]
 
@@ -16,7 +19,7 @@ statement ok
 CREATE TABLE t2 AS SELECT [[1], [2], [3]] AS x;
 
 query I
-SELECT list_transform([[1], [2], [3]], x -> x[1]) FROM t2;
+SELECT list_transform([[1], [2], [3]], lambda x: x[1]) FROM t2;
 ----
 [1, 2, 3]
 
@@ -27,7 +30,7 @@ statement ok
 INSERT INTO l_test VALUES ([1, 2, 3]);
 
 query II
-SELECT l, list_transform(l, l -> l + 1) FROM l_test;
+SELECT l, list_transform(l, lambda l: l + 1) FROM l_test;
 ----
 [1, 2, 3]	[2, 3, 4]
 
@@ -38,16 +41,16 @@ statement ok
 INSERT INTO l_filter_test VALUES ([1, 2]);
 
 query II
-SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test;
+SELECT l, list_filter(l, lambda l: l > 1) FROM l_filter_test;
 ----
 [1, 2]	[2]
 
 # don't allow qualified lambda parameters (LHS parameters)
 
 statement error
-SELECT list_apply(i, a.x -> a.x + 1) FROM (VALUES (list_value(1, 2, 3))) tbl(i);
+SELECT list_apply(i, lambda a.x: a.x + 1) FROM (VALUES (list_value(1, 2, 3))) tbl(i);
 ----
-Invalid lambda parameters
+<REGEX>:Parser Error.*syntax error at or near.*
 
 statement ok
 CREATE TABLE qualified_tbl (x INTEGER[]);
@@ -56,20 +59,20 @@ statement ok
 INSERT INTO qualified_tbl VALUES ([1, 2]);
 
 query I
-SELECT list_transform(qualified_tbl.x, x -> (qualified_tbl.x)[1] + 1 + x) FROM qualified_tbl;
+SELECT list_transform(qualified_tbl.x, lambda x: (qualified_tbl.x)[1] + 1 + x) FROM qualified_tbl;
 ----
 [3, 4]
 
 statement error
-SELECT list_transform(qualified_tbl.x, qualified_tbl.x -> qualified_tbl.x + 1) FROM qualified_tbl;
+SELECT list_transform(qualified_tbl.x, lambda qualified_tbl.x: qualified_tbl.x + 1) FROM qualified_tbl;
 ----
-Invalid lambda parameters
+<REGEX>:Parser Error.*syntax error at or near.*
 
 # previously ambiguous lambda parameters
 # issue #9970
 
 query I
-SELECT list_transform([1, 2], x -> list_transform([3, 4], x -> x));
+SELECT list_transform([1, 2], lambda x: list_transform([3, 4], lambda x: x));
 ----
 [[3, 4], [3, 4]]
 
@@ -79,12 +82,12 @@ SELECT list_has_all([variable_has_all FOR variable_has_all IN ['a']], ['b']) AS 
 false
 
 query I
-SELECT list_has_all(list_transform(['a'], variable_has_all -> variable_has_all), ['b']) AS list_transform_result;
+SELECT list_has_all(list_transform(['a'], lambda variable_has_all: variable_has_all), ['b']) AS list_transform_result;
 ----
 false
 
 query I
-SELECT list_has_any(['b'], list_transform(['a'], variable_has_any -> variable_has_any)) AS list_transform_result;
+SELECT list_has_any(['b'], list_transform(['a'], lambda variable_has_any: variable_has_any)) AS list_transform_result;
 ----
 false
 
@@ -144,23 +147,23 @@ statement ok
 CREATE TABLE tbl_qualified AS SELECT 42 AS x;
 
 query II
-SELECT x, list_transform([1], x -> x) FROM tbl_qualified;
+SELECT x, list_transform([1], lambda x: x) FROM tbl_qualified;
 ----
 42	[1]
 
 statement error
-SELECT list_transform([1,2,3], sqrt(xxx.z) -> xxx.z + 1) AS l ;
+SELECT list_transform([1,2,3], lambda sqrt(xxx.z): xxx.z + 1) AS l ;
 ----
-Invalid lambda parameters
+<REGEX>:Parser Error.*syntax error at or near.*
 
 query I
-SELECT list_transform([1, 2, 3], "x.y" -> "x.y" + x.y) AS l FROM (VALUES (42), (84)) x(y);
+SELECT list_transform([1, 2, 3], lambda "x.y" : "x.y" + x.y) AS l FROM (VALUES (42), (84)) x(y);
 ----
 [43, 44, 45]
 [85, 86, 87]
 
 statement error
-SELECT list_reduce([1, 2, 3, 4], x *++++++++* y -> x - y) AS l;
+SELECT list_reduce([1, 2, 3, 4], lambda x *++++++++* y: x - y) AS l;
 ----
-Invalid lambda parameters
+<REGEX>:Parser Error.*syntax error at or near.*
 

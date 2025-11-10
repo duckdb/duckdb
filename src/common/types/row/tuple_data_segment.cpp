@@ -15,39 +15,18 @@ void TupleDataChunkPart::SetHeapEmpty() {
 	base_heap_ptr = nullptr;
 }
 
-void SwapTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
-	std::swap(a.row_block_index, b.row_block_index);
-	std::swap(a.row_block_offset, b.row_block_offset);
-	std::swap(a.heap_block_index, b.heap_block_index);
-	std::swap(a.heap_block_offset, b.heap_block_offset);
-	std::swap(a.base_heap_ptr, b.base_heap_ptr);
-	std::swap(a.total_heap_size, b.total_heap_size);
-	std::swap(a.count, b.count);
-	std::swap(a.lock, b.lock);
-}
-
-TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept : lock((other.lock)) {
-	SwapTupleDataChunkPart(*this, other);
-}
-
-TupleDataChunkPart &TupleDataChunkPart::operator=(TupleDataChunkPart &&other) noexcept {
-	SwapTupleDataChunkPart(*this, other);
-	return *this;
-}
-
-TupleDataChunk::TupleDataChunk() : count(0), lock(make_unsafe_uniq<mutex>()) {
-	parts.reserve(2);
+TupleDataChunk::TupleDataChunk(mutex &lock_p) : count(0), lock(lock_p) {
 }
 
 static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noexcept {
-	std::swap(a.parts, b.parts);
+	std::swap(a.part_ids, b.part_ids);
 	std::swap(a.row_block_ids, b.row_block_ids);
 	std::swap(a.heap_block_ids, b.heap_block_ids);
 	std::swap(a.count, b.count);
 	std::swap(a.lock, b.lock);
 }
 
-TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept {
+TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept : count(0), lock(other.lock) {
 	SwapTupleDataChunk(*this, other);
 }
 
@@ -56,46 +35,54 @@ TupleDataChunk &TupleDataChunk::operator=(TupleDataChunk &&other) noexcept {
 	return *this;
 }
 
-void TupleDataChunk::AddPart(TupleDataChunkPart &&part, const TupleDataLayout &layout) {
+TupleDataChunkPart &TupleDataChunk::AddPart(TupleDataSegment &segment, unsafe_arena_ptr<TupleDataChunkPart> part_ptr) {
+	auto &part = *part_ptr;
 	count += part.count;
-	row_block_ids.insert(part.row_block_index);
-	if (!layout.AllConstant() && part.total_heap_size > 0) {
-		heap_block_ids.insert(part.heap_block_index);
+	row_block_ids.Insert(part.row_block_index);
+	if (!segment.layout.AllConstant() && part.total_heap_size > 0) {
+		heap_block_ids.Insert(part.heap_block_index);
 	}
-	part.lock = *lock;
-	parts.emplace_back(std::move(part));
+	part.lock = lock;
+	part_ids.Insert(UnsafeNumericCast<uint32_t>(segment.chunk_parts.size()));
+	segment.chunk_parts.emplace_back(std::move(part_ptr));
+	return part;
 }
 
-void TupleDataChunk::Verify() const {
-#ifdef DEBUG
+void TupleDataChunk::Verify(const TupleDataSegment &segment) const {
+#ifdef D_ASSERT_IS_ENABLED
 	idx_t total_count = 0;
-	for (const auto &part : parts) {
-		total_count += part.count;
+	for (auto part_id = part_ids.Start(); part_id < part_ids.End(); part_id++) {
+		total_count += segment.chunk_parts[part_id]->count;
 	}
 	D_ASSERT(this->count == total_count);
 	D_ASSERT(this->count <= STANDARD_VECTOR_SIZE);
 #endif
 }
 
-void TupleDataChunk::MergeLastChunkPart(const TupleDataLayout &layout) {
-	if (parts.size() < 2) {
+void TupleDataChunk::MergeLastChunkPart(TupleDataSegment &segment) {
+	if (part_ids.Size() < 2) {
 		return;
 	}
 
-	auto &second_to_last = parts[parts.size() - 2];
-	auto &last = parts[parts.size() - 1];
+	auto &second_to_last = *segment.chunk_parts[part_ids.End() - 2];
+	auto &last = *segment.chunk_parts[part_ids.End() - 1];
 
 	auto rows_align =
 	    last.row_block_index == second_to_last.row_block_index &&
-	    last.row_block_offset == second_to_last.row_block_offset + second_to_last.count * layout.GetRowWidth();
+	    last.row_block_offset == second_to_last.row_block_offset + second_to_last.count * segment.layout.GetRowWidth();
 
 	if (!rows_align) { // If rows don't align we can never merge
 		return;
 	}
 
-	if (layout.AllConstant()) { // No heap and rows align - merge
+	if (segment.layout.AllConstant()) { // No heap and rows align - merge
 		second_to_last.count += last.count;
-		parts.pop_back();
+		if (segment.chunk_parts.size() == part_ids.End()) {
+			// Can only remove if the part we're merging was the last added chunk part
+			// If not, we just leave it there (no chunk will reference it anyway)
+			segment.chunk_parts.pop_back();
+		}
+		part_ids.DecrementMax();
 		return;
 	}
 
@@ -104,12 +91,16 @@ void TupleDataChunk::MergeLastChunkPart(const TupleDataLayout &layout) {
 	    last.base_heap_ptr == second_to_last.base_heap_ptr) { // There is a heap and it aligns - merge
 		second_to_last.total_heap_size += last.total_heap_size;
 		second_to_last.count += last.count;
-		parts.pop_back();
+		if (segment.chunk_parts.size() == part_ids.End()) {
+			segment.chunk_parts.pop_back(); // Same as above
+		}
+		part_ids.DecrementMax();
 	}
 }
 
 TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
-    : allocator(std::move(allocator_p)), count(0), data_size(0) {
+    : allocator(std::move(allocator_p)), layout(allocator->GetLayout()), count(0), data_size(0),
+      pinned_row_handles(allocator->GetStlAllocator()), pinned_heap_handles(allocator->GetStlAllocator()) {
 }
 
 TupleDataSegment::~TupleDataSegment() {
@@ -119,29 +110,6 @@ TupleDataSegment::~TupleDataSegment() {
 	}
 	pinned_row_handles.clear();
 	pinned_heap_handles.clear();
-	if (Allocator::SupportsFlush() && allocator &&
-	    data_size > allocator->GetBufferManager().GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
-		Allocator::FlushAll();
-	}
-	allocator.reset();
-}
-
-void SwapTupleDataSegment(TupleDataSegment &a, TupleDataSegment &b) {
-	std::swap(a.allocator, b.allocator);
-	std::swap(a.chunks, b.chunks);
-	std::swap(a.count, b.count);
-	std::swap(a.data_size, b.data_size);
-	std::swap(a.pinned_row_handles, b.pinned_row_handles);
-	std::swap(a.pinned_heap_handles, b.pinned_heap_handles);
-}
-
-TupleDataSegment::TupleDataSegment(TupleDataSegment &&other) noexcept {
-	SwapTupleDataSegment(*this, other);
-}
-
-TupleDataSegment &TupleDataSegment::operator=(TupleDataSegment &&other) noexcept {
-	SwapTupleDataSegment(*this, other);
-	return *this;
 }
 
 idx_t TupleDataSegment::ChunkCount() const {
@@ -159,19 +127,20 @@ void TupleDataSegment::Unpin() {
 }
 
 void TupleDataSegment::Verify() const {
-#ifdef DEBUG
-	const auto &layout = allocator->GetLayout();
+#ifdef D_ASSERT_IS_ENABLED
+	const auto &allocator_layout = allocator->GetLayout();
 
 	idx_t total_count = 0;
 	idx_t total_size = 0;
-	for (const auto &chunk : chunks) {
-		chunk.Verify();
+	for (const auto &chunk_ptr : chunks) {
+		const auto &chunk = *chunk_ptr;
+		chunk.Verify(*this);
 		total_count += chunk.count;
 
-		total_size += chunk.count * layout.GetRowWidth();
-		if (!layout.AllConstant()) {
-			for (const auto &part : chunk.parts) {
-				total_size += part.total_heap_size;
+		total_size += chunk.count * allocator_layout.GetRowWidth();
+		if (!allocator_layout.AllConstant()) {
+			for (auto part_id = chunk.part_ids.Start(); part_id < chunk.part_ids.End(); part_id++) {
+				total_size += chunk_parts[part_id]->total_heap_size;
 			}
 		}
 	}
@@ -181,7 +150,7 @@ void TupleDataSegment::Verify() const {
 }
 
 void TupleDataSegment::VerifyEverythingPinned() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
 	D_ASSERT(pinned_row_handles.size() == allocator->RowBlockCount());
 	D_ASSERT(pinned_heap_handles.size() == allocator->HeapBlockCount());
 #endif

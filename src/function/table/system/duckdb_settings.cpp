@@ -7,10 +7,15 @@ namespace duckdb {
 
 struct DuckDBSettingValue {
 	string name;
-	string value;
+	Value value;
 	string description;
 	string input_type;
 	string scope;
+	vector<Value> aliases;
+
+	inline bool operator<(const DuckDBSettingValue &rhs) const {
+		return name < rhs.name;
+	};
 };
 
 struct DuckDBSettingsData : public GlobalTableFunctionState {
@@ -38,11 +43,20 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("scope");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("aliases");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBSettingsData>();
+
+	unordered_map<idx_t, vector<Value>> aliases;
+	for (idx_t i = 0; i < DBConfig::GetAliasCount(); i++) {
+		auto alias = DBConfig::GetAliasByIndex(i);
+		aliases[alias->option_index].emplace_back(alias->alias);
+	}
 
 	auto &config = DBConfig::GetConfig(context);
 	auto options_count = DBConfig::GetOptionCount();
@@ -52,31 +66,48 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		DuckDBSettingValue value;
 		auto scope = option->set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
 		value.name = option->name;
-		value.value = option->get_setting(context).ToString();
+		if (option->get_setting) {
+			value.value = option->get_setting(context);
+		} else {
+			auto lookup_result = context.TryGetCurrentSetting(value.name, value.value);
+			if (lookup_result) {
+				scope = lookup_result.GetScope();
+			} else {
+				value.value = option->default_value;
+			}
+		}
 		value.description = option->description;
-		value.input_type = EnumUtil::ToString(option->parameter_type);
+		value.input_type = option->parameter_type;
 		value.scope = EnumUtil::ToString(scope);
-
+		auto entry = aliases.find(i);
+		if (entry != aliases.end()) {
+			value.aliases = std::move(entry->second);
+		}
+		for (auto &alias : value.aliases) {
+			DuckDBSettingValue alias_value = value;
+			alias_value.name = StringValue::Get(alias);
+			alias_value.aliases.clear();
+			result->settings.push_back(std::move(alias_value));
+		}
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.extension_parameters) {
 		Value setting_val;
-		string setting_str_val;
 		auto scope = SettingScope::GLOBAL;
 		auto lookup_result = context.TryGetCurrentSetting(ext_param.first, setting_val);
 		if (lookup_result) {
-			setting_str_val = setting_val.ToString();
 			scope = lookup_result.GetScope();
 		}
 		DuckDBSettingValue value;
 		value.name = ext_param.first;
-		value.value = std::move(setting_str_val);
+		value.value = std::move(setting_val);
 		value.description = ext_param.second.description;
 		value.input_type = ext_param.second.type.ToString();
 		value.scope = EnumUtil::ToString(scope);
 
 		result->settings.push_back(std::move(value));
 	}
+	std::sort(result->settings.begin(), result->settings.end());
 	return std::move(result);
 }
 
@@ -96,13 +127,15 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		// name, LogicalType::VARCHAR
 		output.SetValue(0, count, Value(entry.name));
 		// value, LogicalType::VARCHAR
-		output.SetValue(1, count, Value(entry.value));
+		output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
 		// description, LogicalType::VARCHAR
 		output.SetValue(2, count, Value(entry.description));
 		// input_type, LogicalType::VARCHAR
 		output.SetValue(3, count, Value(entry.input_type));
 		// scope, LogicalType::VARCHAR
 		output.SetValue(4, count, Value(entry.scope));
+		// aliases, LogicalType::VARCHAR[]
+		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
 		count++;
 	}
 	output.SetCardinality(count);

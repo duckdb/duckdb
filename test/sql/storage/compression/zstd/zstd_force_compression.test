@@ -1,0 +1,18 @@
+# name: test/sql/storage/compression/zstd/zstd_force_compression.test
+# group: [zstd]
+
+load __TEST_DIR__/zstd_force.test readwrite v1.2.0
+
+statement ok
+SET force_compression='zstd';
+
+statement ok
+CREATE TABLE zstd_data AS SELECT concat('thisisalongstring', i) str FROM range(1000) t(i);
+
+statement ok
+checkpoint;
+
+query I
+select count(*) from pragma_storage_info('zstd_data') where compression='ZSTD';
+----
+1

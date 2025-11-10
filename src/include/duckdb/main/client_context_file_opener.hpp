@@ -21,6 +21,7 @@ public:
 	explicit ClientContextFileOpener(ClientContext &context_p) : context(context_p) {
 	}
 
+	Logger &GetLogger() const override;
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) override;
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override;
 
@@ -28,6 +29,7 @@ public:
 		return &context;
 	}
 	optional_ptr<DatabaseInstance> TryGetDatabase() override;
+	shared_ptr<HTTPUtil> &GetHTTPUtil() override;
 
 private:
 	ClientContext &context;

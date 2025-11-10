@@ -2,23 +2,33 @@
 # description: Test concurrent alter and rename of tables
 # group: [dependencies]
 
+mode skip
+
 require skip_reload
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_index_creation.db' AS source;
 
 concurrentloop i 0 10
 
-# Create the table
 statement maybe
-create table if not exists tbl (i integer);
+CREATE TABLE IF NOT EXISTS source.tbl (i INT);
 ----
 
-# Create an index on the table
+# Create an index on the table.
 statement maybe
-create index index${i} on tbl (i);
+CREATE INDEX index${i} ON source.tbl (i);
 ----
 
-# Drop the table (implicitly dropping the index)
+# Drop the table and its indexes.
 statement maybe
-drop table tbl;
+DROP TABLE source.tbl;
 ----
 
 endloop
+
+statement ok
+DETACH source;
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_index_creation.db' AS source;

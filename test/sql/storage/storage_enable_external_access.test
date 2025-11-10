@@ -1,0 +1,25 @@
+# name: test/sql/storage/storage_enable_external_access.test
+# description: enable_external_access with persistent databases
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/external_access_test.db
+
+statement ok
+SET enable_external_access=false
+
+# verify that we can still modify the currently attached database if enable_external_access is disabled
+statement ok
+CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22);
+
+query II
+SELECT * FROM test ORDER BY a
+----
+11	22
+13	22
+
+statement ok
+CHECKPOINT

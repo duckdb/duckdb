@@ -1,0 +1,22 @@
+# name: benchmark/realnest/micro/09_array_agg.benchmark
+# description: Aggregate nested structs
+# group: [micro]
+
+name aggregate_nested_structs
+group real_nest
+
+require json
+
+require httpfs
+
+cache real_nest.duckdb
+
+load benchmark/realnest/micro/load.sql
+
+run
+SELECT array_agg(data.entities.hashtags), 
+    array_agg(data.entities.mentions),
+    array_agg(data.entities.urls),
+    array_agg(data.entities.annotations),
+    array_agg(data.entities.cashtags) 
+FROM twitter;

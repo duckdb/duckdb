@@ -1,6 +1,5 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
@@ -35,8 +34,39 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-		auto entry = Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema, stmt.info->name,
-		                               stmt.info->if_not_found);
+		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->catalog);
+		if (catalog) {
+			// mark catalog as accessed
+			properties.RegisterDBRead(*catalog, context);
+		}
+		optional_ptr<CatalogEntry> entry;
+		if (stmt.info->type == CatalogType::MACRO_ENTRY) {
+			// We also support "DROP MACRO" (instead of "DROP MACRO TABLE") for table macros
+			// First try to drop a scalar macro
+			EntryLookupInfo macro_entry_lookup(stmt.info->type, stmt.info->name);
+			entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, macro_entry_lookup,
+			                          OnEntryNotFound::RETURN_NULL);
+			if (!entry) {
+				// Unable to find a scalar macro, try to drop a table macro
+				EntryLookupInfo table_macro_entry_lookup(CatalogType::TABLE_MACRO_ENTRY, stmt.info->name);
+				entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, table_macro_entry_lookup,
+				                          OnEntryNotFound::RETURN_NULL);
+				if (entry) {
+					// Change type to table macro so future lookups get the correct one
+					stmt.info->type = CatalogType::TABLE_MACRO_ENTRY;
+				}
+			}
+
+			if (!entry) {
+				// Unable to find table macro, try again with original OnEntryNotFound to ensure we throw if necessary
+				entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, macro_entry_lookup,
+				                          stmt.info->if_not_found);
+			}
+		} else {
+			EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->name);
+			entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, entry_lookup,
+			                          stmt.info->if_not_found);
+		}
 		if (!entry) {
 			break;
 		}
@@ -63,7 +93,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

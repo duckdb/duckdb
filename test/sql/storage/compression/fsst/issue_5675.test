@@ -2,7 +2,7 @@
 # description: fix for issue #5675
 # group: [fsst]
 
-load __TEST_DIR__/issue_5675.db
+load __TEST_DIR__/issue_5675.db readwrite v1.0.0
 
 require parquet
 

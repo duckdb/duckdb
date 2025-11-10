@@ -1,0 +1,74 @@
+# name: test/sql/storage/parallel/reclaim_space_insert_unique_idx_optimistic.test_slow
+# description: Test space reclamation of optimistic writing with a UNIQUE constraint violation.
+# group: [parallel]
+
+load __TEST_DIR__/reclaim_space_unique_index.db
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(1_000_000) t(i);
+
+statement ok
+CREATE TABLE integers2 (i INTEGER);
+
+statement ok
+INSERT INTO integers2 VALUES (9999999);
+
+statement ok
+CREATE UNIQUE INDEX idx ON integers2(i);
+
+# For smaller block sizes (16KB) the total blocks increase (to twice the original amount) in the first
+# iteration, and then stay mostly constant.
+
+statement ok
+CREATE TABLE total_blocks_tbl (total_blocks UBIGINT);
+
+loop i 0 20
+
+statement ok
+BEGIN;
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO integers2 VALUES (999_998);
+
+# Invalidate the transaction.
+
+statement error
+INSERT INTO integers2 SELECT * FROM integers WHERE i <= 999_998;
+----
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
+
+statement ok
+ROLLBACK
+
+# Track the block count of each iteration.
+
+statement ok
+INSERT INTO total_blocks_tbl SELECT current.total_blocks FROM pragma_database_size() AS current
+
+endloop
+
+# Ensure that the blocks don't grow between iterations.
+
+query I
+WITH tbl(w) AS (
+	SELECT struct_pack(
+		total_blocks := total_blocks,
+		sum := SUM (total_blocks) OVER (ROWS BETWEEN 0 PRECEDING AND 1 FOLLOWING)
+	) AS w
+	FROM total_blocks_tbl
+	LIMIT 19)
+SELECT list_filter(LIST(w), lambda x: x.total_blocks * 2.5 < x.sum) FROM tbl;
+----
+[]
+
+# Ensure that the blocks don't grow 'quietly' between iterations.
+
+query I
+WITH tbl(l) AS (
+	SELECT LIST(total_blocks) AS l FROM total_blocks_tbl)
+SELECT list_sum(l) < (list_count(l) * l[3] + 2 * l[3]) FROM tbl;
+----
+True

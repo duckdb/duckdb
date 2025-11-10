@@ -9,7 +9,7 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view
                                        bool temporary_p)
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(std::move(child_p)),
       view_name(std::move(view_name_p)), replace(replace_p), temporary(temporary_p) {
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string schema_name_p, string view_name_p,
@@ -17,7 +17,7 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string sche
     : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(std::move(child_p)),
       schema_name(std::move(schema_name_p)), view_name(std::move(view_name_p)), replace(replace_p),
       temporary(temporary_p) {
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {
@@ -33,6 +33,14 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = std::move(info);
 	return binder.Bind(stmt.Cast<SQLStatement>());
+}
+
+unique_ptr<QueryNode> CreateViewRelation::GetQueryNode() {
+	throw InternalException("Cannot create a query node from an update relation");
+}
+
+string CreateViewRelation::GetQuery() {
+	return string();
 }
 
 const vector<ColumnDefinition> &CreateViewRelation::Columns() {

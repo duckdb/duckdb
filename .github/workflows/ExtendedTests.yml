@@ -2,10 +2,10 @@ name: ExtendedTests
 on:
   workflow_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**'
       - '!.github/workflows/ExtendedTests.yml'
@@ -32,9 +32,7 @@ jobs:
        CXX: clang++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
      - uses: actions/checkout@v4
@@ -53,7 +51,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+         save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - name: Build
        shell: bash
@@ -73,38 +71,38 @@ jobs:
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv  --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv  --threads 2
 
      - name: Regression Test TPCH
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --threads 2
      - name: Regression Test TPCH-PARQUET
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_parquet.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --threads 2
 
 
      - name: Regression Test TPCDS
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --threads 2
 
 
      - name: Regression Test H2OAI
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --threads 2
 
      - name: Regression Test IMDB
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --threads 2
 
   regression-clang16-vs-clang14-benchmark-runner:
      name: Benchmark runner clang-16 vs clang-14 (OSX)
@@ -114,9 +112,7 @@ jobs:
        CXX: clang++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
      - uses: actions/checkout@v4
@@ -135,7 +131,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+         save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - name: Build
        shell: bash
@@ -155,37 +151,37 @@ jobs:
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv  --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv  --threads 2
 
      - name: Regression Test TPCH
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --threads 2
 
      - name: Regression Test TPCH-PARQUET
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_parquet.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --threads 2
 
      - name: Regression Test TPCDS
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --threads 2
 
      - name: Regression Test H2OAI
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --threads 2
 
      - name: Regression Test IMDB
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --threads=2
+         python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --threads 2
 
   regression-clang-benchmark-runner:
      name: Benchmark runner clang vs gcc
@@ -195,10 +191,8 @@ jobs:
        CXX: g++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
        BUILD_JEMALLOC: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
        - uses: actions/checkout@v4
@@ -217,7 +211,7 @@ jobs:
          uses: hendrikmuhs/ccache-action@main
          with:
            key: ${{ github.job }}
-           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+           save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
        - name: Build
          shell: bash
@@ -242,37 +236,37 @@ jobs:
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --threads 2
 
        - name: Regression Test TPCH
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --threads 2
 
        - name: Regression Test TPCH-PARQUET
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_parquet.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --threads 2
 
        - name: Regression Test TPCDS
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --threads 2
 
        - name: Regression Test H2OAI
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --threads 2
 
        - name: Regression Test IMDB
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --threads 2
 
   regression-flto-gcc-benchmark-runner:
      name: Benchmark runner gcc flto vs gcc
@@ -282,10 +276,8 @@ jobs:
        CXX: g++
        GEN: ninja
        BUILD_BENCHMARK: 1
-       BUILD_TPCH: 1
-       BUILD_TPCDS: 1
-       BUILD_HTTPFS: 1
        BUILD_JEMALLOC: 1
+       CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
        - uses: actions/checkout@v4
@@ -304,7 +296,7 @@ jobs:
          uses: hendrikmuhs/ccache-action@main
          with:
            key: ${{ github.job }}
-           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+           save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
        - name: Build
          shell: bash
@@ -324,34 +316,34 @@ jobs:
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --threads 2
 
        - name: Regression Test TPCH
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --threads 2
 
        - name: Regression Test TPCH-PARQUET
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_parquet.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --threads 2
 
        - name: Regression Test TPCDS
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --threads 2
 
        - name: Regression Test H2OAI
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --threads 2
 
        - name: Regression Test IMDB
          if: always()
          shell: bash
          run: |
-           python scripts/regression_test_runner.py --nofail --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --threads=2
+           python scripts/regression/test_runner.py --nofail --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --threads 2

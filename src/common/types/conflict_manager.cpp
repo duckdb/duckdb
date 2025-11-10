@@ -1,192 +1,138 @@
 #include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/execution/index/art/art.hpp"
+
 #include "duckdb/common/types/constraint_conflict_info.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
-ConflictManager::ConflictManager(VerifyExistenceType lookup_type, idx_t input_size,
+ConflictManager::ConflictManager(const VerifyExistenceType verify_existence_type, const idx_t chunk_size,
                                  optional_ptr<ConflictInfo> conflict_info)
-    : lookup_type(lookup_type), input_size(input_size), conflict_info(conflict_info), conflicts(input_size, false),
+    : verify_existence_type(verify_existence_type), chunk_size(chunk_size), conflict_info(conflict_info),
       mode(ConflictManagerMode::THROW) {
-}
-
-ManagedSelection &ConflictManager::InternalSelection() {
-	if (!conflicts.Initialized()) {
-		conflicts.Initialize(input_size);
-	}
-	return conflicts;
-}
-
-const unordered_set<idx_t> &ConflictManager::InternalConflictSet() const {
-	D_ASSERT(conflict_set);
-	return *conflict_set;
-}
-
-Vector &ConflictManager::InternalRowIds() {
-	if (!row_ids) {
-		row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, input_size);
-	}
-	return *row_ids;
-}
-
-Vector &ConflictManager::InternalIntermediate() {
-	if (!intermediate_vector) {
-		intermediate_vector = make_uniq<Vector>(LogicalType::BOOLEAN, true, true, input_size);
-	}
-	return *intermediate_vector;
-}
-
-const ConflictInfo &ConflictManager::GetConflictInfo() const {
-	D_ASSERT(conflict_info);
-	return *conflict_info;
 }
 
 void ConflictManager::FinishLookup() {
 	if (mode == ConflictManagerMode::THROW) {
 		return;
 	}
-	if (!SingleIndexTarget()) {
+	if (!conflict_info->SingleIndexTarget()) {
 		return;
 	}
-	if (conflicts.Count() != 0) {
-		// We have recorded conflicts from the one index we're interested in
-		// We set this so we don't duplicate the conflicts when there are duplicate indexes
-		// that also match our conflict target
-		single_index_finished = true;
-	}
-}
 
-void ConflictManager::SetMode(ConflictManagerMode mode) {
-	// Only allow SCAN when we have conflict info
-	D_ASSERT(mode != ConflictManagerMode::SCAN || conflict_info != nullptr);
-	this->mode = mode;
-}
-
-void ConflictManager::AddToConflictSet(idx_t chunk_index) {
-	if (!conflict_set) {
-		conflict_set = make_uniq<unordered_set<idx_t>>();
-	}
-	auto &set = *conflict_set;
-	set.insert(chunk_index);
-}
-
-void ConflictManager::AddConflictInternal(idx_t chunk_index, row_t row_id) {
-	D_ASSERT(mode == ConflictManagerMode::SCAN);
-
-	// Only when we should not throw on conflict should we get here
-	D_ASSERT(!ShouldThrow(chunk_index));
-	AddToConflictSet(chunk_index);
-	if (SingleIndexTarget()) {
-		// If we have identical indexes, only the conflicts of the first index should be recorded
-		// as the other index(es) would produce the exact same conflicts anyways
-		if (single_index_finished) {
-			return;
-		}
-
-		// We can be more efficient because we don't need to merge conflicts of multiple indexes
-		auto &selection = InternalSelection();
-		auto &row_ids = InternalRowIds();
-		auto data = FlatVector::GetData<row_t>(row_ids);
-		data[selection.Count()] = row_id;
-		selection.Append(chunk_index);
-	} else {
-		auto &intermediate = InternalIntermediate();
-		auto data = FlatVector::GetData<bool>(intermediate);
-		// Mark this index in the chunk as producing a conflict
-		data[chunk_index] = true;
-		if (row_id_map.empty()) {
-			row_id_map.resize(input_size);
-		}
-		row_id_map[chunk_index] = row_id;
-	}
+	// We recorded conflicts of one of the indexes.
+	// We can skip any duplicate indexes matching the same conflict target.
+	finished = HasConflicts();
 }
 
 bool ConflictManager::IsConflict(LookupResultType type) {
 	switch (type) {
-	case LookupResultType::LOOKUP_NULL: {
-		if (ShouldIgnoreNulls()) {
+	case LookupResultType::LOOKUP_NULL:
+		if (IgnoreNulls()) {
 			return false;
 		}
-		// If nulls are not ignored, treat this as a hit instead
+		// If we ignore NULL, then we treat this as a hit.
 		return IsConflict(LookupResultType::LOOKUP_HIT);
-	}
-	case LookupResultType::LOOKUP_HIT: {
+	case LookupResultType::LOOKUP_HIT:
 		return true;
-	}
-	case LookupResultType::LOOKUP_MISS: {
-		// FIXME: If we record a miss as a conflict when the verify type is APPEND_FK, then we can simplify the checks
-		// in VerifyForeignKeyConstraint This also means we should not record a hit as a conflict when the verify type
-		// is APPEND_FK
+	case LookupResultType::LOOKUP_MISS:
 		return false;
-	}
-	default: {
+	default:
 		throw NotImplementedException("Type not implemented for LookupResultType");
-	}
 	}
 }
 
-bool ConflictManager::AddHit(idx_t chunk_index, row_t row_id) {
-	D_ASSERT(chunk_index < input_size);
-	// First check if this causes a conflict
-	if (!IsConflict(LookupResultType::LOOKUP_HIT)) {
-		return false;
-	}
-
-	// Then check if we should throw on a conflict
-	if (ShouldThrow(chunk_index)) {
+bool ConflictManager::AddHit(const idx_t index_in_chunk, const std::function<void()> &callback) {
+	D_ASSERT(index_in_chunk < chunk_size);
+	if (ShouldThrow(index_in_chunk)) {
 		return true;
 	}
+
 	if (mode == ConflictManagerMode::THROW) {
-		// When our mode is THROW, and the chunk index is part of the previously scanned conflicts
-		// then we ignore the conflict instead
-		D_ASSERT(!ShouldThrow(chunk_index));
+		// On THROW, and if the index is part of the previously scanned conflicts,
+		// we ignore the conflict.
+		D_ASSERT(!ShouldThrow(index_in_chunk));
 		return false;
 	}
 	D_ASSERT(conflict_info);
-	// Because we don't throw, we need to register the conflict
-	AddConflictInternal(chunk_index, row_id);
+
+	// Add the conflict and don't throw.
+	D_ASSERT(mode == ConflictManagerMode::SCAN);
+	D_ASSERT(!ShouldThrow(index_in_chunk));
+	if (finished) {
+		return false;
+	}
+	callback();
 	return false;
 }
 
-bool ConflictManager::AddMiss(idx_t chunk_index) {
-	D_ASSERT(chunk_index < input_size);
-	return IsConflict(LookupResultType::LOOKUP_MISS);
+bool ConflictManager::AddHit(const idx_t index_in_chunk, const row_t row_id) {
+	return AddHit(index_in_chunk, [&]() { AddRowId(index_in_chunk, row_id); });
 }
 
-bool ConflictManager::AddNull(idx_t chunk_index) {
-	D_ASSERT(chunk_index < input_size);
+bool ConflictManager::AddSecondHit(const idx_t index_in_chunk, const row_t row_id) {
+	return AddHit(index_in_chunk, [&]() { AddSecondRowId(index_in_chunk, row_id); });
+}
+
+bool ConflictManager::AddNull(const idx_t index_in_chunk) {
+	D_ASSERT(index_in_chunk < chunk_size);
 	if (!IsConflict(LookupResultType::LOOKUP_NULL)) {
 		return false;
 	}
-	return AddHit(chunk_index, static_cast<row_t>(DConstants::INVALID_INDEX));
+	auto row_id = static_cast<row_t>(DConstants::INVALID_INDEX);
+	return AddHit(index_in_chunk, row_id);
 }
 
-bool ConflictManager::SingleIndexTarget() const {
-	D_ASSERT(conflict_info);
-	// We are only interested in a specific index
-	return !conflict_info->column_ids.empty();
+optional_idx ConflictManager::GetFirstInvalidIndex(const idx_t count, const bool negate) {
+	auto &validity = GetFirstValidity();
+	for (idx_t i = 0; i < count; i++) {
+		if (negate && !validity.RowIsValid(i)) {
+			return i;
+		} else if (validity.RowIsValid(i)) {
+			return i;
+		}
+	}
+	return optional_idx();
 }
 
-bool ConflictManager::ShouldThrow(idx_t chunk_index) const {
+void ConflictManager::Finalize(const std::function<bool(const row_t row_id)> &callback) {
+	if (!GetConflictData(SECOND).sel) {
+		return;
+	}
+
+	for (idx_t i = 0; i < GetConflictData(SECOND).count; i++) {
+		auto row_id = GetConflictData(SECOND).row_ids_data[i];
+		if (callback(row_id)) {
+			// Replace the primary row ID with the secondary row ID.
+			auto index = GetConflictData(SECOND).inverted_sel->get_index(i);
+			auto count = GetConflictData(FIRST).sel->get_index(index);
+			GetConflictData(FIRST).row_ids_data[count] = row_id;
+		}
+	}
+
+	GetConflictData(SECOND).Reset();
+}
+
+void ConflictManager::FinalizeGlobal(DuckTransaction &transaction, DataTable &table) {
+	Finalize([&](const row_t row_id) { return table.CanFetch(transaction, row_id); });
+}
+
+void ConflictManager::FinalizeLocal(DataTable &table, LocalStorage &storage) {
+	Finalize([&](const row_t row_id) { return storage.CanFetch(table, row_id); });
+}
+
+bool ConflictManager::ShouldThrow(const idx_t index_in_chunk) const {
+	// Never throw on scans.
 	if (mode == ConflictManagerMode::SCAN) {
 		return false;
 	}
+
+	// If we have already seen a conflict for this index, then we don't throw.
 	D_ASSERT(mode == ConflictManagerMode::THROW);
-	if (conflict_set == nullptr) {
-		// No conflicts were scanned, so this conflict is not in the set
-		return true;
-	}
-	auto &set = InternalConflictSet();
-	if (set.count(chunk_index)) {
-		return false;
-	}
-	// None of the scanned conflicts arose from this insert tuple
-	return true;
+	return conflict_rows.find(index_in_chunk) == conflict_rows.end();
 }
 
-bool ConflictManager::ShouldIgnoreNulls() const {
-	switch (lookup_type) {
+bool ConflictManager::IgnoreNulls() const {
+	switch (verify_existence_type) {
 	case VerifyExistenceType::APPEND:
 		return true;
 	case VerifyExistenceType::APPEND_FK:
@@ -196,63 +142,6 @@ bool ConflictManager::ShouldIgnoreNulls() const {
 	default:
 		throw InternalException("Type not implemented for VerifyExistenceType");
 	}
-}
-
-Vector &ConflictManager::RowIds() {
-	D_ASSERT(finalized);
-	return *row_ids;
-}
-
-const ManagedSelection &ConflictManager::Conflicts() const {
-	D_ASSERT(finalized);
-	return conflicts;
-}
-
-idx_t ConflictManager::ConflictCount() const {
-	return conflicts.Count();
-}
-
-void ConflictManager::Finalize() {
-	D_ASSERT(!finalized);
-	if (SingleIndexTarget()) {
-		// Selection vector has been directly populated already, no need to finalize
-		finalized = true;
-		return;
-	}
-	finalized = true;
-	if (!intermediate_vector) {
-		// No conflicts were found, we're done
-		return;
-	}
-	auto &intermediate = InternalIntermediate();
-	auto data = FlatVector::GetData<bool>(intermediate);
-	auto &selection = InternalSelection();
-	// Create the selection vector from the encountered conflicts
-	for (idx_t i = 0; i < input_size; i++) {
-		if (data[i]) {
-			selection.Append(i);
-		}
-	}
-	// Now create the row_ids Vector, aligned with the selection vector
-	auto &row_ids = InternalRowIds();
-	auto row_id_data = FlatVector::GetData<row_t>(row_ids);
-
-	for (idx_t i = 0; i < selection.Count(); i++) {
-		D_ASSERT(!row_id_map.empty());
-		auto index = selection[i];
-		D_ASSERT(index < row_id_map.size());
-		auto row_id = row_id_map[index];
-		row_id_data[i] = row_id;
-	}
-	intermediate_vector.reset();
-}
-
-VerifyExistenceType ConflictManager::LookupType() const {
-	return this->lookup_type;
-}
-
-void ConflictManager::SetIndexCount(idx_t count) {
-	index_count = count;
 }
 
 } // namespace duckdb

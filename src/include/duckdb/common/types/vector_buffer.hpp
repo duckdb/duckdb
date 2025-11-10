@@ -72,10 +72,10 @@ public:
 	}
 	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER) {
 		if (data_size > 0) {
-			data = make_unsafe_uniq_array_uninitialized<data_t>(data_size);
+			data = Allocator::DefaultAllocator().Allocate(data_size);
 		}
 	}
-	explicit VectorBuffer(unsafe_unique_array<data_t> data_p)
+	explicit VectorBuffer(AllocatedData &&data_p)
 	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(std::move(data_p)) {
 	}
 	virtual ~VectorBuffer() {
@@ -88,7 +88,7 @@ public:
 		return data.get();
 	}
 
-	void SetData(unsafe_unique_array<data_t> new_data) {
+	void SetData(AllocatedData &&new_data) {
 		data = std::move(new_data);
 	}
 
@@ -102,6 +102,10 @@ public:
 
 	void MoveAuxiliaryData(VectorBuffer &source_buffer) {
 		SetAuxiliaryData(std::move(source_buffer.aux_data));
+	}
+
+	virtual optional_ptr<Allocator> GetAllocator() const {
+		return data.GetAllocator();
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
@@ -121,7 +125,7 @@ public:
 protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
-	unsafe_unique_array<data_t> data;
+	AllocatedData data;
 
 public:
 	template <class TARGET>
@@ -159,14 +163,30 @@ public:
 	void SetSelVector(const SelectionVector &vector) {
 		this->sel_vector.Initialize(vector);
 	}
+	void SetDictionarySize(idx_t dict_size) {
+		dictionary_size = dict_size;
+	}
+	optional_idx GetDictionarySize() const {
+		return dictionary_size;
+	}
+	void SetDictionaryId(string id) {
+		dictionary_id = std::move(id);
+	}
+	const string &GetDictionaryId() const {
+		return dictionary_id;
+	}
 
 private:
 	SelectionVector sel_vector;
+	optional_idx dictionary_size;
+	//! A unique identifier for the dictionary that can be used to check if two dictionaries are equivalent
+	string dictionary_id;
 };
 
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
+	explicit VectorStringBuffer(Allocator &allocator);
 	explicit VectorStringBuffer(VectorBufferType type);
 
 public:
@@ -183,6 +203,28 @@ public:
 		return heap.EmptyString(len);
 	}
 
+	ArenaAllocator &GetStringAllocator() {
+		return heap.GetAllocator();
+	}
+	//! Allocate a buffer to store up to "len" bytes for a string
+	//! This can be turned into a proper string by using FinalizeBuffer afterwards
+	//! Note that alloc_len only has to be an upper bound, the final string may be smaller
+	data_ptr_t AllocateShrinkableBuffer(idx_t alloc_len) {
+		auto &allocator = heap.GetAllocator();
+		return allocator.Allocate(alloc_len);
+	}
+	//! Finalize a buffer allocated with AllocateShrinkableBuffer into a string of size str_len
+	//! str_len must be <= alloc_len
+	string_t FinalizeShrinkableBuffer(data_ptr_t buffer, idx_t alloc_len, idx_t str_len) {
+		auto &allocator = heap.GetAllocator();
+		D_ASSERT(str_len <= alloc_len);
+		D_ASSERT(buffer == allocator.GetHead()->data.get() + allocator.GetHead()->current_position - alloc_len);
+		bool is_not_inlined = str_len > string_t::INLINE_LENGTH;
+		idx_t shrink_count = alloc_len - (str_len * is_not_inlined);
+		allocator.ShrinkHead(shrink_count);
+		return string_t(const_char_ptr_cast(buffer), UnsafeNumericCast<uint32_t>(str_len));
+	}
+
 	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {
 		references.push_back(std::move(heap));
 	}
@@ -190,7 +232,7 @@ public:
 private:
 	//! The string heap of this buffer
 	StringHeap heap;
-	// References to additional vector buffers referenced by this string buffer
+	//! References to additional vector buffers referenced by this string buffer
 	vector<buffer_ptr<VectorBuffer>> references;
 };
 

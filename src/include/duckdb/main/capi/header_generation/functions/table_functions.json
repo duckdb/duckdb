@@ -1,6 +1,7 @@
 {
     "group": "table_functions",
     "deprecated": false,
+    "description": "Functions to create, execute, and register custom table functions. Table functions take one or more input parameters, and return one or more output parameters.",
     "entries": [
         {
             "name": "duckdb_create_table_function",
@@ -117,7 +118,7 @@
                 "param_comments": {
                     "table_function": "The table function",
                     "extra_info": "The extra information",
-                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                    "destroy": "The callback that will be called to destroy the extra information (if any)"
                 }
             }
         },

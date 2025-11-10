@@ -799,12 +799,12 @@ UnicodeString AlphabeticIndex::separated(const UnicodeString &item) {
 }
 
 
-UBool AlphabeticIndex::operator==(const AlphabeticIndex& /* other */) const {
+bool AlphabeticIndex::operator==(const AlphabeticIndex& /* other */) const {
     return FALSE;
 }
 
 
-UBool AlphabeticIndex::operator!=(const AlphabeticIndex& /* other */) const {
+bool AlphabeticIndex::operator!=(const AlphabeticIndex& /* other */) const {
     return FALSE;
 }
 

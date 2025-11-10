@@ -53,7 +53,7 @@ private:
 class CatalogSet {
 public:
 	struct EntryLookup {
-		enum class FailureReason { SUCCESS, DELETED, NOT_PRESENT };
+		enum class FailureReason { SUCCESS, DELETED, NOT_PRESENT, INVISIBLE };
 		optional_ptr<CatalogEntry> result;
 		FailureReason reason;
 	};
@@ -75,6 +75,10 @@ public:
 	                          bool allow_drop_internal = false);
 	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade,
 	                          bool allow_drop_internal = false);
+	//! Verify that the entry referenced by the dependency is still alive
+	DUCKDB_API void VerifyExistenceOfDependency(transaction_t commit_id, CatalogEntry &entry);
+	//! Verify we can still drop the entry while committing
+	DUCKDB_API void CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry);
 
 	DUCKDB_API DuckCatalog &GetCatalog();
 
@@ -101,7 +105,9 @@ public:
 	DUCKDB_API void ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
 	                               const string &prefix);
 	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
+	DUCKDB_API void ScanWithReturn(CatalogTransaction transaction, const std::function<bool(CatalogEntry &)> &callback);
 	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
+	DUCKDB_API void ScanWithReturn(ClientContext &context, const std::function<bool(CatalogEntry &)> &callback);
 
 	template <class T>
 	vector<reference<T>> GetEntries(CatalogTransaction transaction) {
@@ -114,8 +120,9 @@ public:
 	DUCKDB_API bool CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool HasConflict(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
+	static bool IsCommitted(transaction_t timestamp);
 
-	void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
+	static void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
 
 	mutex &GetCatalogLock() {
 		return catalog_lock;
@@ -123,9 +130,15 @@ public:
 
 	void Verify(Catalog &catalog);
 
+	//! Override the default generator - this should not be used after the catalog set has been used
+	void SetDefaultGenerator(unique_ptr<DefaultGenerator> defaults);
+
 private:
 	bool DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
 	                      bool allow_drop_internal = false);
+	//! Given a root entry, gets the entry valid for this transaction, 'visible' is used to indicate whether the entry
+	//! is actually visible to the transaction
+	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current, bool &visible);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);

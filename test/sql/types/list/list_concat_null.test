@@ -1,10 +1,8 @@
 # name: test/sql/types/list/list_concat_null.test
-# description: Issue #6656 - Segmentation Fault on Select query on table with column of array type
+# description: list_concat with NULLS
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
+#Issue #6656 - Segmentation Fault on Select query on table with column of array type
 statement ok
 CREATE table x1 (b INT[]);
 
@@ -13,6 +11,12 @@ SELECT b || NULL from x1;
 
 statement ok
 SELECT NULL || NULL from x1;
+
+statement ok
+SELECT NULL || b || NULL from x1;
+
+statement ok
+SELECT b || NULL || b from x1;
 
 query I
 select concat([42]);
@@ -28,3 +32,54 @@ query I
 select concat([42]::INT[1], [43]::INT[1], NULL::INT[1], [44]::INT[1], NULL::INT[1], [45]::INT[1]);
 ----
 [42, 43, 44, 45]
+
+query I
+select list_concat([42]);
+----
+[42]
+
+query I
+select list_concat([42], [43], [], [44], [], [45]);
+----
+[42, 43, 44, 45]
+
+query I
+select list_concat([42]::INT[1], [43]::INT[1], NULL::INT[1], [44]::INT[1], NULL::INT[1], [45]::INT[1]);
+----
+[42, 43, 44, 45]
+
+query I
+select list_concat([1]::INT[1], [2, 3]::INT[2]);
+----
+[1, 2, 3]
+
+# [duckdb-fuzzer/#4296] When args are all NULL return NULL
+
+query I
+SELECT list_concat(NULL)
+----
+NULL
+
+query I
+SELECT list_concat(NULL, NULL)
+----
+NULL
+
+# test operator
+
+query I
+SELECT NULL || NULL
+----
+NULL
+
+# test 'string' concat
+
+query I
+SELECT concat(NULL)
+----
+NULL
+
+query I
+SELECT concat(NULL, NULL)
+----
+NULL

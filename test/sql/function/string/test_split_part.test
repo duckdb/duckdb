@@ -73,27 +73,35 @@ select split_part('',',',1)
 query T
 select split_part(NULL,NULL,1)
 ----
-(empty)
+NULL
 
 query T
 select split_part('a,b,c',NULL,1)
 ----
-a,b,c
+NULL
 
 query T
 select split_part(NULL,',',1)
 ----
-(empty)
+NULL
+
+query T
+select split_part('a,b,c', ',',  NULL)
+----
+NULL
 
 # test incorrect usage
 statement error
 select split_part()
 ----
+<REGEX>:.*Binder Error.*does not support the supplied arguments.*
 
 statement error
 select split_part('a')
 ----
+<REGEX>:.*Binder Error.*does not support the supplied arguments.*
 
 statement error
 select split_part('a','a')
 ----
+<REGEX>:.*Binder Error.*does not support the supplied arguments.*

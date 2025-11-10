@@ -285,7 +285,7 @@ NumberFormat::operator=(const NumberFormat& rhs)
 
 // -------------------------------------
 
-UBool
+bool
 NumberFormat::operator==(const Format& that) const
 {
     // Format::operator== guarantees this cast is safe

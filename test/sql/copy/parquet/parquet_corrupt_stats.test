@@ -1,0 +1,10 @@
+# name: test/sql/copy/parquet/parquet_corrupt_stats.test
+# description: Test reading a Parquet file with stats that are out-of-range of the type
+# group: [parquet]
+
+require parquet
+
+query I
+FROM '{DATA_DIR}/parquet-testing/out_of_range_stats.parquet'
+----
+255

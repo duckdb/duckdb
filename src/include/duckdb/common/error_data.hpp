@@ -22,14 +22,14 @@ public:
 	//! From std::exception
 	DUCKDB_API ErrorData(const std::exception &ex); // NOLINT: allow implicit construction from exception
 	//! From a raw string and exception type
-	DUCKDB_API explicit ErrorData(ExceptionType type, const string &raw_message);
+	DUCKDB_API ErrorData(ExceptionType type, const string &raw_message);
 	//! From a raw string
 	DUCKDB_API explicit ErrorData(const string &raw_message);
 
 public:
 	//! Throw the error
 	[[noreturn]] DUCKDB_API void Throw(const string &prepended_message = "") const;
-	//! Get the internal exception type of the error
+	//! Get the internal exception type of the error.
 	DUCKDB_API const ExceptionType &Type() const;
 	//! Used in clients like C-API, creates the final message and returns a reference to it
 	DUCKDB_API const string &Message() const {
@@ -38,8 +38,10 @@ public:
 	DUCKDB_API const string &RawMessage() const {
 		return raw_message;
 	}
+	DUCKDB_API void Merge(const ErrorData &other);
 	DUCKDB_API bool operator==(const ErrorData &other) const;
 
+	//! Returns true, if this error data contains an exception, else false.
 	inline bool HasError() const {
 		return initialized;
 	}
@@ -47,6 +49,7 @@ public:
 		return extra_info;
 	}
 
+	DUCKDB_API void FinalizeError();
 	DUCKDB_API void AddErrorLocation(const string &query);
 	DUCKDB_API void ConvertErrorToJSON();
 

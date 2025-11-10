@@ -10,27 +10,27 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
-		return make_uniq<PhysicalCreateSequence>(unique_ptr_cast<CreateInfo, CreateSequenceInfo>(std::move(op.info)),
-		                                         op.estimated_cardinality);
+		return Make<PhysicalCreateSequence>(unique_ptr_cast<CreateInfo, CreateSequenceInfo>(std::move(op.info)),
+		                                    op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
-		return make_uniq<PhysicalCreateView>(unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(op.info)),
-		                                     op.estimated_cardinality);
+		return Make<PhysicalCreateView>(unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(op.info)),
+		                                op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
-		return make_uniq<PhysicalCreateSchema>(unique_ptr_cast<CreateInfo, CreateSchemaInfo>(std::move(op.info)),
-		                                       op.estimated_cardinality);
+		return Make<PhysicalCreateSchema>(unique_ptr_cast<CreateInfo, CreateSchemaInfo>(std::move(op.info)),
+		                                  op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
-		return make_uniq<PhysicalCreateFunction>(unique_ptr_cast<CreateInfo, CreateMacroInfo>(std::move(op.info)),
-		                                         op.estimated_cardinality);
+		return Make<PhysicalCreateFunction>(unique_ptr_cast<CreateInfo, CreateMacroInfo>(std::move(op.info)),
+		                                    op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE: {
-		unique_ptr<PhysicalOperator> create = make_uniq<PhysicalCreateType>(
-		    unique_ptr_cast<CreateInfo, CreateTypeInfo>(std::move(op.info)), op.estimated_cardinality);
+		auto &create = Make<PhysicalCreateType>(unique_ptr_cast<CreateInfo, CreateTypeInfo>(std::move(op.info)),
+		                                        op.estimated_cardinality);
 		if (!op.children.empty()) {
 			D_ASSERT(op.children.size() == 1);
-			auto plan = CreatePlan(*op.children[0]);
-			create->children.push_back(std::move(plan));
+			auto &plan = CreatePlan(*op.children[0]);
+			create.children.push_back(plan);
 		}
 		return create;
 	}

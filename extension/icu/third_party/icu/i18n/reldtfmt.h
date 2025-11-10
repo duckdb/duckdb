@@ -80,7 +80,7 @@ public:
      * @return         true if the given Format objects are semantically equal.
      * @internal ICU 3.8
      */
-    virtual UBool operator==(const Format& other) const;
+    virtual bool operator==(const Format& other) const;
 
 
     using DateFormat::format;

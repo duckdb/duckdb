@@ -1,0 +1,39 @@
+# name: test/sql/index/art/constraints/test_art_tx_deletes_rollback.test
+# description: Test DELETE + INSERT, then ROLLBACK due to a constraint violation.
+# group: [constraints]
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl_rollback (id INT PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+INSERT INTO tbl_rollback VALUES (1, ['first payload']);
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+DELETE FROM tbl_rollback;
+
+statement ok con1
+INSERT INTO tbl_rollback VALUES (1, ['con1 payload']);
+
+statement error con1
+INSERT INTO tbl_rollback VALUES (1, ['con1 payload']);
+----
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
+
+statement error con1
+SELECT 42;
+----
+<REGEX>:TransactionContext Error.*Current transaction is aborted.*
+
+statement ok con1
+ROLLBACK;
+
+query III
+SELECT id, payload, rowid FROM tbl_rollback ORDER BY ALL;
+----
+1	[first payload]	0

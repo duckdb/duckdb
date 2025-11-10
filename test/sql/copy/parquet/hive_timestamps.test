@@ -4,16 +4,13 @@
 
 require parquet
 
-require skip_reload
-
 # requires notwindows for embedded spaces in the path
 require notwindows
 
 statement ok
 PRAGMA enable_verification
 
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 statement ok
 CREATE TABLE raw_data (
@@ -39,11 +36,11 @@ FROM timeseries
 ORDER BY ALL
 LIMIT 5
 ----
-2023-11-01 00:00:00	15134
-2023-11-01 01:00:00	16968
-2023-11-01 02:00:00	13882
-2023-11-01 03:00:00	14317
-2023-11-01 04:00:00	14905
+2023-11-01 00:00:00	15127
+2023-11-01 01:00:00	16634
+2023-11-01 02:00:00	14676
+2023-11-01 03:00:00	14493
+2023-11-01 04:00:00	13288
 
 statement ok
 COPY (
@@ -58,8 +55,8 @@ FROM read_parquet('__TEST_DIR__/hive/*/*.parquet')
 ORDER BY ALL
 LIMIT 5
 ----
-2023-11-01 00:00:00	15134
-2023-11-01 01:00:00	16968
-2023-11-01 02:00:00	13882
-2023-11-01 03:00:00	14317
-2023-11-01 04:00:00	14905
+2023-11-01 00:00:00	15127
+2023-11-01 01:00:00	16634
+2023-11-01 02:00:00	14676
+2023-11-01 03:00:00	14493
+2023-11-01 04:00:00	13288

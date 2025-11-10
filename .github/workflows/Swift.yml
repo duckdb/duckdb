@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
   repository_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -16,9 +16,11 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
-
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
+  merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -28,32 +30,41 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
-
+      - '.github/config/extensions/*.cmake'
+      - '.github/patches/extensions/**/*.patch'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 jobs:
+  check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI 
+        run: echo "Event name is ${{ github.event_name }}"
 
   test-apple-platforms:
     name: Test Apple Platforms
+    needs: check-draft
     strategy:
       matrix:
         # destinations need to match selected version of Xcode
-        # https://github.com/actions/runner-images/blob/main/images/macos/macos-12-Readme.md#installed-simulators
+        # https://github.com/actions/runner-images/blob/main/images/macos/macos-14-Readme.md#installed-simulators
         destination:
           - 'macOS'
-          - 'iOS Simulator,name=iPhone 14'
-          - 'tvOS Simulator,name=Apple TV 4K (at 1080p) (2nd generation)'
+          - 'iOS Simulator,name=iPhone 16'
+          - 'tvOS Simulator,name=Apple TV 4K (at 1080p) (3nd generation)'
         isRelease:
           - ${{ github.ref == 'refs/heads/main' }}
         exclude:
           - isRelease: false
-            destination: 'iOS Simulator,name=iPhone 14'
+            destination: 'iOS Simulator,name=iPhone 16'
           - isRelease: false
-            destination: 'tvOS Simulator,name=Apple TV 4K (at 1080p) (2nd generation)'
-    runs-on: macos-12
+            destination: 'tvOS Simulator,name=Apple TV 4K (at 1080p) (3nd generation)'
+    runs-on: macos-14
     steps:
 
       - name: Checkout
@@ -66,7 +77,7 @@ jobs:
         run: python3 tools/swift/create_package.py tools/swift
 
       - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_14.2.app && /usr/bin/xcodebuild -version
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app && /usr/bin/xcodebuild -version
 
       - name: Run Tests
         run: |

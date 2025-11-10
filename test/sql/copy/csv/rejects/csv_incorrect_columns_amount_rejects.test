@@ -9,7 +9,7 @@ require notwindows
 
 statement ok
 SELECT * FROM read_csv(
-    'data/csv/rejects/incorrect_columns/few_columns.csv',
+    '{DATA_DIR}/csv/rejects/incorrect_columns/few_columns.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
     store_rejects=true, auto_detect=false, header = 1);
 
@@ -34,9 +34,9 @@ DROP TABLE reject_scans;
 
 statement ok
 SELECT * FROM read_csv(
-    'data/csv/rejects/incorrect_columns/many_columns.csv',
+    '{DATA_DIR}/csv/rejects/incorrect_columns/many_columns.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-    store_rejects=true, auto_detect=false, header = 1);
+    store_rejects=true, auto_detect=false, header = 1, strict_mode=True);
 
 query IIIIIIIII rowsort
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
@@ -56,9 +56,9 @@ DROP TABLE reject_scans;
 
 statement ok
 SELECT * FROM read_csv(
-    'data/csv/rejects/incorrect_columns/mix_columns.csv',
+    '{DATA_DIR}/csv/rejects/incorrect_columns/mix_columns.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-    store_rejects=true, auto_detect=false, header = 1);
+    store_rejects=true, auto_detect=false, header = 1, strict_mode=True);
 
 query IIIIIIIII rowsort
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
@@ -85,9 +85,9 @@ DROP TABLE reject_scans;
 
 statement ok
 SELECT * FROM read_csv(
-    'data/csv/rejects/incorrect_columns/small_mix.csv',
+    '{DATA_DIR}/csv/rejects/incorrect_columns/small_mix.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-    store_rejects=true, auto_detect=false, header = 1);
+    store_rejects=true, auto_detect=false, header = 1, strict_mode=True);
 
 query IIIIIIIII rowsort
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all
@@ -106,9 +106,9 @@ DROP TABLE reject_scans;
 
 statement ok
 SELECT * FROM read_csv(
-    'data/csv/rejects/incorrect_columns/*.csv',
+    '{DATA_DIR}/csv/rejects/incorrect_columns/*.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
-   store_rejects=true, auto_detect=false, header = 1);
+   store_rejects=true, auto_detect=false, header = 1, strict_mode=True);
 
 query IIIIIIIII rowsort
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all

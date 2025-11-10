@@ -1,0 +1,39 @@
+# name: test/sql/alter/struct/drop_col_nested_struct.test
+# description: Test ALTER TABLE DROP COLUMN: drop column from a nested struct
+# group: [struct]
+
+statement ok
+CREATE TABLE test(s STRUCT(i INT, s2 STRUCT(v1 INT, v2 INT)))
+
+statement ok
+INSERT INTO test VALUES (ROW(42, ROW(1, 1))), (ROW(84, ROW(2, 2)))
+
+# add a column to a nested struct
+statement ok
+ALTER TABLE test DROP s.s2.v1
+
+query I
+SELECT * FROM test
+----
+{'i': 42, 's2': {'v2': 1}}
+{'i': 84, 's2': {'v2': 2}}
+
+# does not exists
+statement error
+ALTER TABLE test DROP COLUMN s.s2.v1
+----
+does not exist
+
+# this just gets ignored
+statement ok
+ALTER TABLE test DROP COLUMN IF EXISTS s.s2.v1
+
+# we can drop the struct in its entirety
+statement ok
+ALTER TABLE test DROP COLUMN s.s2
+
+query I
+SELECT * FROM test
+----
+{'i': 42}
+{'i': 84}

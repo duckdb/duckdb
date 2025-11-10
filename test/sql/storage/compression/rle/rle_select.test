@@ -1,0 +1,75 @@
+# name: test/sql/storage/compression/rle/rle_select.test
+# description: Test selecting from RLE compression
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle_select.db
+
+statement ok
+pragma enable_verification
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+CREATE TABLE tbl AS SELECT i id, i // 50 rle_val, case when i%8=0 then null else i // 50 end rle_val_null FROM range(100000) t(i);
+
+query III
+SELECT * FROM tbl WHERE id >= 75 and id <= 125 and id%4=0
+----
+76	1	1
+80	1	NULL
+84	1	1
+88	1	NULL
+92	1	1
+96	1	NULL
+100	2	2
+104	2	NULL
+108	2	2
+112	2	NULL
+116	2	2
+120	2	NULL
+124	2	2
+
+query III
+SELECT * FROM tbl WHERE id >= 75 and id <= 125 and id%4=0
+----
+76	1	1
+80	1	NULL
+84	1	1
+88	1	NULL
+92	1	1
+96	1	NULL
+100	2	2
+104	2	NULL
+108	2	2
+112	2	NULL
+116	2	2
+120	2	NULL
+124	2	2
+
+query III
+SELECT * FROM tbl WHERE id >= 33380 and id <= 33410 and id%4=0
+----
+33380	667	667
+33384	667	NULL
+33388	667	667
+33392	667	NULL
+33396	667	667
+33400	668	NULL
+33404	668	668
+33408	668	NULL
+
+# non-consecutive select
+statement ok
+CREATE TABLE tbl2 AS SELECT i id, i%5 id_modulo, i // 50 rle_val, case when i%8=0 then null else i // 50 end rle_val_null FROM range(100000) t(i);
+
+query IIIIII
+SELECT COUNT(*), SUM(rle_val), MIN(rle_val), MAX(rle_val), SUM(rle_val_null), COUNT(rle_val_null) FROM tbl2 WHERE id >= 1500 and id <= 2500 AND id_modulo=3;
+----
+200	7900	30	49	6910	175
+
+query IIIIII
+SELECT COUNT(*), SUM(rle_val), MIN(rle_val), MAX(rle_val), SUM(rle_val_null), COUNT(rle_val_null) FROM tbl2 WHERE id >= 1500 and id <= 19500 AND id_modulo<=2;
+----
+10801	2262990	30	390	1980030	9451

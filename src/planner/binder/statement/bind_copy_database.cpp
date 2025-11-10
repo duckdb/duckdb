@@ -21,7 +21,6 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_database, const string &target_database_name) {
-
 	catalog_entry_vector_t catalog_entries;
 	catalog_entries = PhysicalExport::GetNaiveExportOrder(context, from_database);
 
@@ -43,7 +42,6 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 		info->entries.push_back(std::move(create_info));
 	}
 
-	// FIXME: copy indexes
 	return make_uniq<LogicalCopyDatabase>(std::move(info));
 }
 
@@ -126,7 +124,7 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	result.plan = std::move(plan);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	properties.RegisterDBModify(target_catalog, context);
 	return result;

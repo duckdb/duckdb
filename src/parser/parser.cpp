@@ -1,5 +1,6 @@
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
@@ -164,33 +165,75 @@ end:
 	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
-vector<string> SplitQueryStringIntoStatements(const string &query) {
-	// Break sql string down into sql statements using the tokenizer
-	vector<string> query_statements;
-	auto tokens = Parser::Tokenize(query);
-	idx_t next_statement_start = 0;
-	for (idx_t i = 1; i < tokens.size(); ++i) {
-		auto &t_prev = tokens[i - 1];
-		auto &t = tokens[i];
-		if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
-			// LCOV_EXCL_START
-			for (idx_t c = t_prev.start; c <= t.start; ++c) {
-				if (query.c_str()[c] == ';') {
-					query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
-					next_statement_start = tokens[i].start;
-				}
+vector<string> SplitQueries(const string &input_query) {
+	vector<string> queries;
+	auto tokenized_input = Parser::Tokenize(input_query);
+	size_t last_split = 0;
+
+	for (const auto &token : tokenized_input) {
+		if (token.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR && input_query[token.start] == ';') {
+			string segment = input_query.substr(last_split, token.start - last_split);
+			StringUtil::Trim(segment);
+			if (!segment.empty()) {
+				segment.append(";");
+				queries.push_back(std::move(segment));
 			}
-			// LCOV_EXCL_STOP
+			last_split = token.start + 1;
 		}
 	}
-	query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
-	return query_statements;
+	string final_segment = input_query.substr(last_split);
+	StringUtil::Trim(final_segment);
+	if (!final_segment.empty()) {
+		final_segment.append(";");
+		queries.push_back(std::move(final_segment));
+	}
+	return queries;
+}
+
+StatementType Parser::GetStatementType(const string &query) {
+	Transformer transformer(options);
+	vector<unique_ptr<SQLStatement>> statements;
+	PostgresParser parser;
+	parser.Parse(query);
+	if (parser.success) {
+		if (!parser.parse_tree) {
+			// empty statement
+			return StatementType::INVALID_STATEMENT;
+		}
+		transformer.TransformParseTree(parser.parse_tree, statements);
+		return statements[0]->type;
+	} else {
+		return StatementType::INVALID_STATEMENT;
+	}
+}
+
+void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
+	if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
+		throw ParserException("Parser override failed to return a valid statement: %s\n\nConsider restarting the "
+		                      "database and "
+		                      "using the setting \"set allow_parser_override_extension=fallback\" to fallback to the "
+		                      "default parser.",
+		                      result.error.RawMessage());
+	}
+	if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+		if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
+			throw NotImplementedException("Parser override has not yet implemented this "
+			                              "transformer rule. (Original error: %s)",
+			                              result.error.RawMessage());
+		}
+		if (result.error.Type() == ExceptionType::PARSER) {
+			throw ParserException("Parser override could not parse this query. (Original error: %s)",
+			                      result.error.RawMessage());
+		}
+		result.error.Throw();
+	}
 }
 
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
 	optional_idx parser_error_location;
+	string parser_override_option = StringUtil::Lower(options.parser_override_setting);
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
@@ -201,6 +244,47 @@ void Parser::ParseQuery(const string &query) {
 		}
 	}
 	{
+		if (options.extensions) {
+			for (auto &ext : *options.extensions) {
+				if (!ext.parser_override) {
+					continue;
+				}
+				if (StringUtil::CIEquals(parser_override_option, "default")) {
+					continue;
+				}
+				auto result = ext.parser_override(ext.parser_info.get(), query);
+				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+					statements = std::move(result.statements);
+					return;
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict")) {
+					ThrowParserOverrideError(result);
+				}
+				if (StringUtil::CIEquals(parser_override_option, "strict_when_supported")) {
+					auto statement_type = GetStatementType(query);
+					bool is_supported = false;
+					switch (statement_type) {
+					case StatementType::CALL_STATEMENT:
+					case StatementType::TRANSACTION_STATEMENT:
+					case StatementType::VARIABLE_SET_STATEMENT:
+					case StatementType::LOAD_STATEMENT:
+					case StatementType::ATTACH_STATEMENT:
+					case StatementType::DETACH_STATEMENT:
+					case StatementType::DELETE_STATEMENT:
+						is_supported = true;
+						break;
+					default:
+						is_supported = false;
+						break;
+					}
+					if (is_supported) {
+						ThrowParserOverrideError(result);
+					}
+				} else if (StringUtil::CIEquals(parser_override_option, "fallback")) {
+					continue;
+				}
+			}
+		}
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
 		bool parsing_succeed = false;
 		// Creating a new scope to prevent multiple PostgresParser destructors being called
@@ -235,9 +319,9 @@ void Parser::ParseQuery(const string &query) {
 			throw ParserException::SyntaxError(query, parser_error, parser_error_location);
 		} else {
 			// split sql string into statements and re-parse using extension
-			auto query_statements = SplitQueryStringIntoStatements(query);
+			auto queries = SplitQueries(query);
 			idx_t stmt_loc = 0;
-			for (auto const &query_statement : query_statements) {
+			for (auto const &query_statement : queries) {
 				ErrorData another_parser_error;
 				// Creating a new scope to allow extensions to use PostgresParser, which is not reentrant
 				{
@@ -269,7 +353,9 @@ void Parser::ParseQuery(const string &query) {
 				bool parsed_single_statement = false;
 				for (auto &ext : *options.extensions) {
 					D_ASSERT(!parsed_single_statement);
-					D_ASSERT(ext.parse_function);
+					if (!ext.parse_function) {
+						continue;
+					}
 					auto result = ext.parse_function(ext.parser_info.get(), query_statement);
 					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 						auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
@@ -295,10 +381,12 @@ void Parser::ParseQuery(const string &query) {
 		auto &last_statement = statements.back();
 		last_statement->stmt_length = query.size() - last_statement->stmt_location;
 		for (auto &statement : statements) {
-			statement->query = query;
+			statement->query = query.substr(statement->stmt_location, statement->stmt_length);
+			statement->stmt_location = 0;
+			statement->stmt_length = statement->query.size();
 			if (statement->type == StatementType::CREATE_STATEMENT) {
 				auto &create = statement->Cast<CreateStatement>();
-				create.info->sql = query.substr(statement->stmt_location, statement->stmt_length);
+				create.info->sql = statement->query;
 			}
 		}
 	}
@@ -337,6 +425,134 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 		result.push_back(token);
 	}
 	return result;
+}
+
+vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
+	idx_t error_start = 0;
+	idx_t error_end = error_msg.size();
+
+	vector<SimplifiedToken> tokens;
+	// find "XXX Error:" - this marks the start of the error message
+	auto error = StringUtil::Find(error_msg, "Error: ");
+	if (error.IsValid()) {
+		SimplifiedToken token;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+		token.start = 0;
+		tokens.push_back(token);
+
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		token.start = error.GetIndex() + 6;
+		tokens.push_back(token);
+
+		error_start = error.GetIndex() + 7;
+	}
+
+	// find "LINE (number)" - this marks the end of the message
+	auto line_pos = StringUtil::Find(error_msg, "\nLINE ");
+	if (line_pos.IsValid()) {
+		// tokenize between
+		error_end = line_pos.GetIndex();
+	}
+
+	// now iterate over the
+	bool in_quotes = false;
+	char quote_char = '\0';
+	for (idx_t i = error_start; i < error_end; i++) {
+		if (in_quotes) {
+			// in a quote - look for the quote character
+			if (error_msg[i] == quote_char) {
+				SimplifiedToken token;
+				token.start = i;
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+				tokens.push_back(token);
+				in_quotes = false;
+			}
+			if (StringUtil::CharacterIsNewline(error_msg[i])) {
+				// found a newline in a quote, abort the quoted state entirely
+				tokens.pop_back();
+				in_quotes = false;
+			}
+		} else if (error_msg[i] == '"' || error_msg[i] == '\'') {
+			// not quoted and found a quote - enter the quoted state
+			SimplifiedToken token;
+			token.start = i;
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
+			token.start++;
+			tokens.push_back(token);
+			quote_char = error_msg[i];
+			in_quotes = true;
+		}
+	}
+	if (in_quotes) {
+		// unterminated quotes at the end of the error - pop back the quoted state
+		tokens.pop_back();
+	}
+	if (line_pos.IsValid()) {
+		SimplifiedToken token;
+		token.start = line_pos.GetIndex() + 1;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
+		tokens.push_back(token);
+
+		// tokenize the LINE part
+		idx_t query_start;
+		for (query_start = line_pos.GetIndex() + 6; query_start < error_msg.size(); query_start++) {
+			if (error_msg[query_start] != ':' && !StringUtil::CharacterIsDigit(error_msg[query_start])) {
+				break;
+			}
+		}
+		if (query_start < error_msg.size()) {
+			token.start = query_start;
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+			tokens.push_back(token);
+
+			idx_t query_end;
+			for (query_end = query_start; query_end < error_msg.size(); query_end++) {
+				if (error_msg[query_end] == '\n') {
+					break;
+				}
+			}
+			// after LINE XXX: comes a caret - look for it
+			idx_t caret_position = error_msg.size();
+			bool place_caret = false;
+			idx_t caret_start = query_end + 1;
+			if (caret_start < error_msg.size()) {
+				for (idx_t i = caret_start; i < error_msg.size(); i++) {
+					if (error_msg[i] == '^') {
+						// found the caret
+						// to get the caret position in the query we need to
+						caret_position = i - caret_start - ((query_start - line_pos.GetIndex()) - 1);
+						place_caret = true;
+						break;
+					}
+				}
+			}
+			// tokenize the actual query
+			string query = error_msg.substr(query_start, query_end - query_start);
+			auto query_tokens = Tokenize(query);
+			for (auto &query_token : query_tokens) {
+				if (place_caret) {
+					if (query_token.start >= caret_position) {
+						// we need to place the caret here
+						query_token.start = query_start + caret_position;
+						query_token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+						tokens.push_back(query_token);
+
+						place_caret = false;
+						continue;
+					}
+				}
+				query_token.start += query_start;
+				tokens.push_back(query_token);
+			}
+			// FIXME: find the caret position and highlight/bold the identifier it points to
+			if (query_end < error_msg.size()) {
+				token.start = query_end;
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+				tokens.push_back(token);
+			}
+		}
+	}
+	return tokens;
 }
 
 KeywordCategory ToKeywordCategory(duckdb_libpgquery::PGKeywordCategory type) {
@@ -478,6 +694,11 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 	}
 	auto &info = create.info->Cast<CreateTableInfo>();
 	return std::move(info.columns);
+}
+
+ColumnDefinition Parser::ParseColumnDefinition(const string &column_definition, ParserOptions options) {
+	auto column_list = ParseColumnList(column_definition, options);
+	return column_list.GetColumn(LogicalIndex(0)).Copy();
 }
 
 } // namespace duckdb

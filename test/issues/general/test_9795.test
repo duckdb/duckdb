@@ -29,6 +29,11 @@ select arg_max(a, a collate noaccent) from tbl;
 p
 
 query I
+select arg_max([a], a collate noaccent) from tbl;
+----
+[p]
+
+query I
 select min(a) from tbl;
 ----
 o

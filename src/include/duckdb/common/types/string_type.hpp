@@ -13,6 +13,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 #include <cstring>
 #include <algorithm>
@@ -94,6 +95,18 @@ public:
 
 	idx_t GetSize() const {
 		return value.inlined.length;
+	}
+
+	void SetSizeAndFinalize(uint32_t size, idx_t allocated_size) {
+		value.inlined.length = size;
+		if (allocated_size > INLINE_LENGTH && IsInlined()) {
+			//! Data was written to the 'value.pointer.ptr', has to be copied to the inlined bytes
+			D_ASSERT(value.pointer.ptr);
+			auto ptr = value.pointer.ptr;
+			memcpy(GetDataWriteable(), ptr, size);
+		}
+		Finalize();
+		VerifyCharacters();
 	}
 
 	bool Empty() const {
@@ -234,3 +247,12 @@ private:
 };
 
 } // namespace duckdb
+
+namespace std {
+template <>
+struct hash<duckdb::string_t> {
+	size_t operator()(const duckdb::string_t &val) const {
+		return Hash(val);
+	}
+};
+} // namespace std

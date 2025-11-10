@@ -1,0 +1,22 @@
+# name: test/sql/copy/csv/test_big_line.test_slow
+# description: Test big lines
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+copy (select 1 as one, repeat('a', 40000000) r from generate_series(1,3)) to '__TEST_DIR__/bigval.csv';
+
+statement error
+create table t as FROM '__TEST_DIR__/bigval.csv'
+----
+Possible Solution: Change the maximum length size, e.g., max_line_size=31999996
+
+statement ok
+create table t as FROM read_csv('__TEST_DIR__/bigval.csv', max_line_size = 40000010)
+
+query I
+SELECT count(*) from t
+----
+3

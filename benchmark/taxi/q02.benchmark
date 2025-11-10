@@ -1,0 +1,8 @@
+# name: benchmark/taxi/q02.benchmark
+# description: Run query 02 from the taxi benchmark
+# group: [taxi]
+
+template benchmark/taxi/taxi.benchmark.in
+QUERY_NUMBER=2
+QUERY_NUMBER_PADDED=02
+RESULT_QUERY=SELECT passenger_count, AVG(total_amount) as avg_total_amount FROM trips GROUP BY passenger_count order by passenger_count, avg_total_amount;

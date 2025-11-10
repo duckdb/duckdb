@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/arrow/appender/fixed_size_list_data.hpp
+//
+//
+//===----------------------------------------------------------------------===/
+
 #pragma once
 
 #include "duckdb/common/arrow/appender/append_data.hpp"

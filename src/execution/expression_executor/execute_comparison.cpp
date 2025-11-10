@@ -29,7 +29,7 @@ void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, Expressi
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::COMPARE_EQUAL:
 		VectorOperations::Equals(left, right, result, count);
 		break;
@@ -209,7 +209,6 @@ idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &ri
 static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count, const SelectionVector &sel,
                                   SelectionVector &maybe_vec, OptionalSelection &false_opt,
                                   optional_ptr<ValidityMask> null_mask) {
-
 	UnifiedVectorFormat lvdata, rvdata;
 	left.ToUnifiedFormat(count, lvdata);
 	right.ToUnifiedFormat(count, rvdata);
@@ -357,7 +356,7 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::COMPARE_EQUAL:
 		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOTEQUAL:

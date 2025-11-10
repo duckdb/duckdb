@@ -1104,7 +1104,7 @@ TimeZoneNamesImpl::cleanup() {
     }
 }
 
-UBool
+bool
 TimeZoneNamesImpl::operator==(const TimeZoneNames& other) const {
     if (this == &other) {
         return TRUE;
@@ -2156,7 +2156,7 @@ TZDBTimeZoneNames::TZDBTimeZoneNames(const Locale& locale)
 TZDBTimeZoneNames::~TZDBTimeZoneNames() {
 }
 
-UBool
+bool
 TZDBTimeZoneNames::operator==(const TimeZoneNames& other) const {
     if (this == &other) {
         return TRUE;

@@ -22,11 +22,10 @@ SELECT {'a': ['1', '2', '3'], 'b': 84}::STRUCT(b INT, A INT[])
 ----
 {'b': 84, 'A': [1, 2, 3]}
 
-# name mismatch
-statement error
+query I
 SELECT {'a': ['1', '2', '3'], 'b': 84}::STRUCT(b INT, c INT[])
 ----
-element "a" in source struct was not found in target struct
+{'b': 84, 'c': NULL}
 
 # unnamed struct cast
 query I

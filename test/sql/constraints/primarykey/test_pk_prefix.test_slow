@@ -1,12 +1,10 @@
 # name: test/sql/constraints/primarykey/test_pk_prefix.test_slow
-# description: PRIMARY KEY prefix stress test multiple columns
+# description: PRIMARY KEY prefix tests with compound indexes.
 # group: [primarykey]
 
-# create a table with a primary key on (a, b) (int + varchar)
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));
 
-# insert 300 values
 loop i 1 300
 
 statement ok
@@ -14,20 +12,22 @@ INSERT INTO test VALUES (${i}, 'hello');
 
 endloop
 
-# now inserting the same values should fail
+# Try to insert again - this must throw a constraint violation.
+
 loop i 1 300
 
 statement error
 INSERT INTO test VALUES (${i}, 'hello');
 ----
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 endloop
 
-# Update integer a to a+ 1000 should work since there are no duplicates
 statement ok
-UPDATE test SET a=a+1000;
+UPDATE test SET a = a + 1000;
 
-# Now inserting the original 300 values should work again
+# Insert the original values again.
+
 loop i 1 300
 
 statement ok
@@ -35,16 +35,12 @@ INSERT INTO test VALUES (${i}, 'hello');
 
 endloop
 
-# This update should fail and stress test the deletes on hello_ prefixes
-statement error
-UPDATE test SET a=a+1000;
+# Increment one more time.
+
+statement ok
+UPDATE test SET a = a + 1000;
+
+query II
+SELECT MIN(a), MAX(a) FROM test;
 ----
-
-# Should fail for same reason as above, just checking element per element to see if no one is escaping
-loop i 1 300
-
-statement error
-INSERT INTO test VALUES (1000+${i}, 'hello');
-----
-
-endloop
+1001	2299

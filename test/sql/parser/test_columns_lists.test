@@ -22,7 +22,7 @@ SELECT COLUMNS([x for x in (*) if x <> 'i']) FROM integers
 
 # short-hand, allow directly specifying the lambda
 query I
-SELECT COLUMNS(x -> x <> 'i') FROM integers
+SELECT COLUMNS(lambda x: x <> 'i') FROM integers
 ----
 84
 14
@@ -59,12 +59,11 @@ SELECT COLUMNS(['i']) + COLUMNS(['i']) FROM integers
 84
 26
 
-# columns are turned into strings
-query II
+# columns must be returned as strings
+statement error
 SELECT COLUMNS([i, j]) FROM integers
 ----
-42	84
-13	14
+COLUMNS expression can only contain lambda parameters
 
 # nested columns
 statement error
@@ -80,7 +79,7 @@ COLUMNS expression is not allowed inside another COLUMNS expression
 statement error
 SELECT * + 42 FROM integers
 ----
-STAR expression is only allowed as the root element of an expression
+cannot be applied to a star expression
 
 # empty lambda
 statement error

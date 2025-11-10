@@ -15,6 +15,21 @@ UpdateSetInfo::UpdateSetInfo(const UpdateSetInfo &other) : columns(other.columns
 	}
 }
 
+string UpdateSetInfo::ToString() const {
+	string result;
+	result += "SET ";
+	D_ASSERT(columns.size() == expressions.size());
+	for (idx_t i = 0; i < columns.size(); i++) {
+		if (i > 0) {
+			result += ", ";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(columns[i]);
+		result += " = ";
+		result += expressions[i]->ToString();
+	}
+	return result;
+}
+
 unique_ptr<UpdateSetInfo> UpdateSetInfo::Copy() const {
 	return unique_ptr<UpdateSetInfo>(new UpdateSetInfo(*this));
 }
@@ -34,30 +49,17 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 }
 
 string UpdateStatement::ToString() const {
-	D_ASSERT(set_info);
-	auto &condition = set_info->condition;
-	auto &columns = set_info->columns;
-	auto &expressions = set_info->expressions;
-
 	string result;
 	result = cte_map.ToString();
 	result += "UPDATE ";
 	result += table->ToString();
-	result += " SET ";
-	D_ASSERT(columns.size() == expressions.size());
-	for (idx_t i = 0; i < columns.size(); i++) {
-		if (i > 0) {
-			result += ", ";
-		}
-		result += KeywordHelper::WriteOptionallyQuoted(columns[i]);
-		result += " = ";
-		result += expressions[i]->ToString();
-	}
+	result += " ";
+	result += set_info->ToString();
 	if (from_table) {
 		result += " FROM " + from_table->ToString();
 	}
-	if (condition) {
-		result += " WHERE " + condition->ToString();
+	if (set_info->condition) {
+		result += " WHERE " + set_info->condition->ToString();
 	}
 	if (!returning_list.empty()) {
 		result += " RETURNING ";
@@ -65,7 +67,12 @@ string UpdateStatement::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += returning_list[i]->ToString();
+			auto column = returning_list[i]->ToString();
+			if (!returning_list[i]->GetAlias().empty()) {
+				column +=
+				    StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->GetAlias()));
+			}
+			result += column;
 		}
 	}
 	return result;

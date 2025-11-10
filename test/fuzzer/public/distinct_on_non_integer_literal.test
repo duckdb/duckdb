@@ -1,0 +1,14 @@
+# name: test/fuzzer/public/distinct_on_non_integer_literal.test
+# description: Test DISTINCT ON non-integer literal
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+SET order_by_non_integer_literal=true;
+
+query I
+SELECT DISTINCT ON ('string') 'x' AS c02;
+----
+x

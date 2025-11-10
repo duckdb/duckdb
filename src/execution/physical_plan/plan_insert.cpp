@@ -2,15 +2,17 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
-static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op) {
+OrderPreservationType PhysicalPlanGenerator::OrderPreservationRecursive(PhysicalOperator &op) {
 	if (op.IsSource()) {
 		return op.SourceOrder();
 	}
@@ -19,9 +21,10 @@ static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op) {
 	for (auto &child : op.children) {
 		// Do not take the materialization phase of physical CTEs into account
 		if (op.type == PhysicalOperatorType::CTE && child_idx == 0) {
+			child_idx++;
 			continue;
 		}
-		auto child_preservation = OrderPreservationRecursive(*child);
+		auto child_preservation = OrderPreservationRecursive(child);
 		if (child_preservation != OrderPreservationType::INSERTION_ORDER) {
 			return child_preservation;
 		}
@@ -31,8 +34,6 @@ static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op) {
 }
 
 bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan) {
-	auto &config = DBConfig::GetConfig(context);
-
 	auto preservation_type = OrderPreservationRecursive(plan);
 	if (preservation_type == OrderPreservationType::FIXED_ORDER) {
 		// always need to maintain preservation order
@@ -43,7 +44,7 @@ bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, Physi
 		return false;
 	}
 	// preserve insertion order - check flags
-	if (!config.options.preserve_insertion_order) {
+	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(context)) {
 		// preserving insertion order is disabled by config
 		return false;
 	}
@@ -55,7 +56,6 @@ bool PhysicalPlanGenerator::PreserveInsertionOrder(PhysicalOperator &plan) {
 }
 
 bool PhysicalPlanGenerator::UseBatchIndex(ClientContext &context, PhysicalOperator &plan) {
-	// TODO: always preserve order if query contains ORDER BY
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	if (scheduler.NumberOfThreads() == 1) {
 		// batch index usage only makes sense if we are using multiple threads
@@ -72,8 +72,33 @@ bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
 	return UseBatchIndex(context, plan);
 }
 
-unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, LogicalInsert &op,
-                                                     unique_ptr<PhysicalOperator> plan) {
+PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child) {
+	if (op.column_index_map.empty()) {
+		throw InternalException("No defaults to push");
+	}
+	// columns specified by the user, push a projection
+	vector<LogicalType> types;
+	vector<unique_ptr<Expression>> select_list;
+	for (auto &col : op.table.GetColumns().Physical()) {
+		auto storage_idx = col.StorageOid();
+		auto mapped_index = op.column_index_map[col.Physical()];
+		if (mapped_index == DConstants::INVALID_INDEX) {
+			// push default value
+			select_list.push_back(std::move(op.bound_defaults[storage_idx]));
+		} else {
+			// push reference
+			select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
+		}
+		types.push_back(col.Type());
+	}
+	auto &proj = Make<PhysicalProjection>(std::move(types), std::move(select_list), child.estimated_cardinality);
+	proj.children.push_back(child);
+	return proj;
+}
+
+PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
+                                          optional_ptr<PhysicalOperator> plan) {
+	D_ASSERT(plan);
 	bool parallel_streaming_insert = !PhysicalPlanGenerator::PreserveInsertionOrder(context, *plan);
 	bool use_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, *plan);
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -82,40 +107,44 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 		parallel_streaming_insert = false;
 		use_batch_index = false;
 	}
-	if (op.action_type != OnConflictAction::THROW) {
+	if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
 		// We don't support ON CONFLICT clause in batch insertion operation currently
 		use_batch_index = false;
 	}
-	if (op.action_type == OnConflictAction::UPDATE) {
+	if (op.on_conflict_info.action_type == OnConflictAction::UPDATE) {
 		// When we potentially need to perform updates, we have to check that row is not updated twice
 		// that currently needs to be done for every chunk, which would add a huge bottleneck to parallelized insertion
 		parallel_streaming_insert = false;
 	}
-	unique_ptr<PhysicalOperator> insert;
-	if (use_batch_index && !parallel_streaming_insert) {
-		insert = make_uniq<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
-		                                        std::move(op.bound_constraints), op.estimated_cardinality);
-	} else {
-		insert = make_uniq<PhysicalInsert>(
-		    op.types, op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.bound_constraints),
-		    std::move(op.expressions), std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality,
-		    op.return_chunk, parallel_streaming_insert && num_threads > 1, op.action_type,
-		    std::move(op.on_conflict_condition), std::move(op.do_update_condition), std::move(op.on_conflict_filter),
-		    std::move(op.columns_to_fetch));
+	if (!op.column_index_map.empty()) {
+		plan = planner.ResolveDefaultsProjection(op, *plan);
 	}
-	D_ASSERT(plan);
-	insert->children.push_back(std::move(plan));
+	if (use_batch_index && !parallel_streaming_insert) {
+		auto &insert = planner.Make<PhysicalBatchInsert>(op.types, op.table, std::move(op.bound_constraints),
+		                                                 op.estimated_cardinality);
+		insert.children.push_back(*plan);
+		return insert;
+	}
+
+	auto &insert = planner.Make<PhysicalInsert>(
+	    op.types, op.table, std::move(op.bound_constraints), std::move(op.expressions),
+	    std::move(op.on_conflict_info.set_columns), std::move(op.on_conflict_info.set_types), op.estimated_cardinality,
+	    op.return_chunk, parallel_streaming_insert && num_threads > 1, op.on_conflict_info.action_type,
+	    std::move(op.on_conflict_info.on_conflict_condition), std::move(op.on_conflict_info.do_update_condition),
+	    std::move(op.on_conflict_info.on_conflict_filter), std::move(op.on_conflict_info.columns_to_fetch),
+	    op.on_conflict_info.update_is_del_and_insert);
+	insert.children.push_back(*plan);
 	return insert;
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op) {
-	unique_ptr<PhysicalOperator> plan;
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalInsert &op) {
+	optional_ptr<PhysicalOperator> plan;
 	if (!op.children.empty()) {
 		D_ASSERT(op.children.size() == 1);
 		plan = CreatePlan(*op.children[0]);
 	}
 	dependencies.AddDependency(op.table);
-	return op.table.catalog.PlanInsert(context, op, std::move(plan));
+	return op.table.catalog.PlanInsert(context, *this, op, plan);
 }
 
 } // namespace duckdb

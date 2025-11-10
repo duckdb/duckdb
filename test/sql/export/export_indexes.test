@@ -1,0 +1,49 @@
+# name: test/sql/export/export_indexes.test
+# description: Test export of macro's
+# group: [export]
+
+statement ok
+BEGIN TRANSACTION
+
+# scalar macro
+statement ok
+CREATE MACRO elaborate_macro(x, y := 7) AS x + y;
+
+statement ok
+CREATE TABLE tbl (x integer, y varchar);
+
+# Index that depends on the 'elaborate_macro' macro function
+statement ok
+CREATE UNIQUE INDEX my_index on tbl (elaborate_macro(tbl.x));
+
+query I
+select index_name from duckdb_indexes();
+----
+my_index
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_macros' (FORMAT CSV);
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_macros'
+
+query I
+select index_name from duckdb_indexes();
+----
+my_index
+
+query T
+SELECT elaborate_macro(28, y := 5)
+----
+33
+
+statement ok
+insert into tbl VALUES (10, 'hello');
+
+statement error
+insert into tbl VALUES (10, 'world');
+----
+Constraint Error: Duplicate key "(x + 7): 17" violates unique constraint.

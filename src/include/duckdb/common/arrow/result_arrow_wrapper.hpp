@@ -11,6 +11,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/chunk_scan_state.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 class ResultArrowArrayStreamWrapper {
@@ -25,6 +26,7 @@ public:
 	vector<LogicalType> column_types;
 	vector<string> column_names;
 	unique_ptr<ChunkScanState> scan_state;
+	unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_types;
 
 private:
 	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);

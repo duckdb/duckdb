@@ -15,6 +15,8 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/attached_database.hpp"
 
+#include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+
 namespace duckdb {
 
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
@@ -39,16 +41,13 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	bool parameters_resolved = true;
 	try {
 		profiler.StartPhase(MetricsType::PLANNER_BINDING);
-		binder->parameters = &bound_parameters;
+		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
 		profiler.EndPhase();
 
 		this->names = bound_statement.names;
 		this->types = bound_statement.types;
 		this->plan = std::move(bound_statement.plan);
-
-		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
-		CheckTreeDepth(*plan, max_tree_depth);
 	} catch (const std::exception &ex) {
 		ErrorData error(ex);
 		this->plan = nullptr;
@@ -76,6 +75,12 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		} else {
 			throw;
 		}
+	}
+	if (this->plan) {
+		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
+		CheckTreeDepth(*plan, max_tree_depth);
+
+		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 	}
 	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
@@ -139,6 +144,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::DETACH_STATEMENT:
 	case StatementType::COPY_DATABASE_STATEMENT:
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+	case StatementType::MERGE_INTO_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -184,7 +190,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 	// format (de)serialization of this operator
 	try {
-		MemoryStream stream;
+		MemoryStream stream(Allocator::Get(context));
 
 		SerializationOptions options;
 		if (config.options.serialization_compatibility.manually_set) {

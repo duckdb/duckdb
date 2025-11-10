@@ -46,7 +46,7 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 	unique_ptr<AlterInfo> info;
 
 	auto expr = TransformExpression(stmt.value);
-	if (expr->expression_class != ExpressionClass::CONSTANT) {
+	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw NotImplementedException("Can only use constants as comments");
 	}
 	auto comment_value = expr->Cast<ConstantExpression>().value;

@@ -1,0 +1,17 @@
+# name: test/fuzzer/duckfuzz/late_materialization_filter.test
+# description: NULL input to json_extract_string - found by fuzzer
+# group: [duckfuzz]
+
+statement ok
+create table tbl(z int, i bool, j bool, k uhugeint);
+
+statement ok
+insert into tbl (i, j, k) values (true, 'true', 3), (NULL, NULL, NULL), (false, 'false', 1);
+
+query I
+select k
+from tbl
+where i and j
+limit 30;
+----
+3

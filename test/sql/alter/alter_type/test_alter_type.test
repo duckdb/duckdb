@@ -1,6 +1,9 @@
 # name: test/sql/alter/alter_type/test_alter_type.test
-# description: Test ALTER TABLE ALTER TYPE
+# description: Test ALTER TABLE ALTER TYPE.
 # group: [alter_type]
+
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
@@ -12,14 +15,14 @@ statement ok
 ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
 
 query TI
-SELECT * FROM test
+SELECT * FROM test ORDER BY ALL
 ----
 1	1
 2	2
 
-# filter on an altered column
+# Filter on an altered column.
 query TI
-SELECT * FROM test WHERE i='1'
+SELECT * FROM test WHERE i = '1'
 ----
 1	1
 
@@ -27,16 +30,49 @@ statement ok
 ALTER TABLE test ALTER i SET DATA TYPE INTEGER
 
 query II
-SELECT * FROM test WHERE i=1
+SELECT * FROM test WHERE i = 1
 ----
 1	1
+
+statement ok
+PRAGMA disable_verification
 
 query I
 SELECT stats(i) FROM test LIMIT 1
 ----
 <REGEX>:.*1.*2.*
 
-# fail when column does not exist
+statement ok
+PRAGMA enable_verification
+
+# Fail on non-existent column.
 statement error
-ALTER TABLE test ALTER nonexistingcolumn SET DATA TYPE INTEGER
+ALTER TABLE test ALTER not_a_column SET DATA TYPE INTEGER
 ----
+<REGEX>:Binder Error.*does not have a column with name.*
+
+# Test ALTER TYPE USING
+
+statement ok
+CREATE TABLE tbl (col STRUCT(i INT));
+
+statement ok
+INSERT INTO tbl SELECT {'i': range} FROM range(5000);
+
+statement ok
+ALTER TABLE tbl ALTER col TYPE USING struct_insert(col, a := 42, b := NULL::VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES ({'i': 10000, 'a': NULL, 'b': 'hello'});
+
+query I
+SELECT col FROM tbl ORDER BY col DESC LIMIT 3;
+----
+{'i': 10000, 'a': NULL, 'b': hello}
+{'i': 4999, 'a': 42, 'b': NULL}
+{'i': 4998, 'a': 42, 'b': NULL}
+
+statement error
+ALTER TABLE tbl ALTER col TYPE;
+----
+<REGEX>:Parser Error.*Omitting the type is only possible in combination with USING.*

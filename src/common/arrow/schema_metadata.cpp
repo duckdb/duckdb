@@ -1,6 +1,7 @@
 #include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
+
 ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 	if (metadata) {
 		// Read the number of key-value pairs (int32)
@@ -27,45 +28,65 @@ ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 			// Read the value
 			const std::string value(metadata, static_cast<idx_t>(value_length));
 			metadata += value_length;
-			metadata_map[key] = value;
+			schema_metadata_map[key] = value;
 		}
 	}
+	// We ignore errors of the metadata parsing if the extension is different from arrow.opaque
+	const bool ignore_errors =
+	    schema_metadata_map[ARROW_EXTENSION_NAME] != ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL;
+	extension_metadata_map = StringUtil::ParseJSONMap(schema_metadata_map[ARROW_METADATA_KEY], ignore_errors);
+}
+
+ArrowSchemaMetadata::ArrowSchemaMetadata() {
+	// Always initialize out metadata map
+	extension_metadata_map = make_uniq<ComplexJSON>();
 }
 
 void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
-	metadata_map[key] = value;
+	schema_metadata_map[key] = value;
 }
+
 string ArrowSchemaMetadata::GetOption(const string &key) const {
-	auto it = metadata_map.find(key);
-	if (it != metadata_map.end()) {
+	auto it = schema_metadata_map.find(key);
+	if (it != schema_metadata_map.end()) {
 		return it->second;
 	} else {
 		return "";
 	}
 }
 
-string ArrowSchemaMetadata::GetExtensionName() const {
-	return GetOption(ARROW_EXTENSION_NAME);
-}
-
-ArrowSchemaMetadata ArrowSchemaMetadata::MetadataFromName(const string &extension_name) {
+ArrowSchemaMetadata ArrowSchemaMetadata::ArrowCanonicalType(const string &extension_name) {
 	ArrowSchemaMetadata metadata;
-	metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, extension_name);
-	metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
+	metadata.AddOption(ARROW_EXTENSION_NAME, extension_name);
+	metadata.AddOption(ARROW_METADATA_KEY, "");
 	return metadata;
 }
 
-bool ArrowSchemaMetadata::HasExtension() {
+ArrowSchemaMetadata ArrowSchemaMetadata::NonCanonicalType(const string &type_name, const string &vendor_name) {
+	ArrowSchemaMetadata metadata;
+	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL);
+	// We have to set the metadata key with type_name and vendor_name.
+	metadata.extension_metadata_map->AddObjectEntry("vendor_name", make_uniq<ComplexJSON>(vendor_name));
+	metadata.extension_metadata_map->AddObjectEntry("type_name", make_uniq<ComplexJSON>(type_name));
+	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToComplexJSONMap(*metadata.extension_metadata_map));
+	return metadata;
+}
+
+bool ArrowSchemaMetadata::HasExtension() const {
 	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
-	// FIXME: We are currently ignoring the ogc extensions
-	return !arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc");
+	return !arrow_extension.empty();
+}
+
+ArrowExtensionMetadata ArrowSchemaMetadata::GetExtensionInfo(string format) {
+	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map->GetValue("vendor_name"),
+	        extension_metadata_map->GetValue("type_name"), std::move(format)};
 }
 
 unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {
 	// First we have to figure out the total size:
 	// 1. number of key-value pairs (int32)
 	idx_t total_size = sizeof(int32_t);
-	for (const auto &option : metadata_map) {
+	for (const auto &option : schema_metadata_map) {
 		// 2. Length of the key and value (2 * int32)
 		total_size += 2 * sizeof(int32_t);
 		// 3. Length of key
@@ -76,11 +97,11 @@ unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {
 	auto metadata_array_ptr = make_unsafe_uniq_array<char>(total_size);
 	auto metadata_ptr = metadata_array_ptr.get();
 	// 1. number of key-value pairs (int32)
-	const idx_t map_size = metadata_map.size();
+	const idx_t map_size = schema_metadata_map.size();
 	memcpy(metadata_ptr, &map_size, sizeof(int32_t));
 	metadata_ptr += sizeof(int32_t);
 	// Iterate through each key-value pair in the map
-	for (const auto &pair : metadata_map) {
+	for (const auto &pair : schema_metadata_map) {
 		const std::string &key = pair.first;
 		idx_t key_size = key.size();
 		// Length of the key (int32)

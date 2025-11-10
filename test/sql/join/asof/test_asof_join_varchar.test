@@ -2,9 +2,6 @@
 # description: Test As-Of joins for strings
 # group: [asof]
 
-statement ok
-PRAGMA enable_verification
-
 # Join on a string range
 
 statement ok
@@ -25,6 +22,12 @@ CREATE TABLE probe0 AS
 	SELECT range::VARCHAR AS begin
 	FROM range(0,10)
 ;
+
+# Compare NLJ optimisation to operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
 
 # INNER ON inequality only
 query II
@@ -131,3 +134,5 @@ ORDER BY ALL
 9	3
 NULL	-1
 NULL	9
+
+endloop

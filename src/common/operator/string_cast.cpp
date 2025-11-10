@@ -2,8 +2,6 @@
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -88,9 +86,9 @@ duckdb::string_t StringCast::Operation(uhugeint_t input, Vector &vector) {
 template <>
 duckdb::string_t StringCast::Operation(date_t input, Vector &vector) {
 	if (input == date_t::infinity()) {
-		return StringVector::AddString(vector, Date::PINF);
+		return StringVector::AddString(vector, Date::PINF.str);
 	} else if (input == date_t::ninfinity()) {
-		return StringVector::AddString(vector, Date::NINF);
+		return StringVector::AddString(vector, Date::NINF.str);
 	}
 	int32_t date[3];
 	Date::Convert(input, date[0], date[1], date[2]);
@@ -108,30 +106,63 @@ duckdb::string_t StringCast::Operation(date_t input, Vector &vector) {
 	return result;
 }
 
-template <>
-duckdb::string_t StringCast::Operation(dtime_t input, Vector &vector) {
+template <bool HAS_NANOS>
+duckdb::string_t StringAsTime(dtime_t input, Vector &vector) {
+	int32_t picos = 0;
+	if (HAS_NANOS) {
+		picos = UnsafeNumericCast<int32_t>(input.micros % 1000);
+		picos *= 1000;
+		input.micros /= 1000;
+	}
 	int32_t time[4];
 	Time::Convert(input, time[0], time[1], time[2], time[3]);
 
 	char micro_buffer[10] = {};
-	idx_t length = TimeToStringCast::Length(time, micro_buffer);
+	char nano_buffer[6] = {};
+	idx_t time_length = TimeToStringCast::Length(time, micro_buffer);
+	idx_t nano_length = 0;
+	if (picos) {
+		//	If there are ps, we need all the µs
+		if (!time[3]) {
+			TimeToStringCast::FormatMicros(time[3], micro_buffer);
+		}
+		time_length = 15;
+		nano_length = 6;
+		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(picos, nano_buffer));
+	}
+	const idx_t length = time_length + nano_length;
 
 	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetDataWriteable();
 
-	TimeToStringCast::Format(data, length, time, micro_buffer);
+	TimeToStringCast::Format(data, time_length, time, micro_buffer);
+	data += time_length;
+	memcpy(data, nano_buffer, nano_length);
+	D_ASSERT(data + nano_length <= result.GetDataWriteable() + length);
 
 	result.Finalize();
 	return result;
 }
 
+template <>
+duckdb::string_t StringCast::Operation(dtime_t input, Vector &vector) {
+	return StringAsTime<false>(input, vector);
+}
+
+template <>
+duckdb::string_t StringCast::Operation(dtime_ns_t input, Vector &vector) {
+	return StringAsTime<true>(input, vector);
+}
+
 template <bool HAS_NANOS>
 duckdb::string_t StringFromTimestamp(timestamp_t input, Vector &vector) {
 	if (input == timestamp_t::infinity()) {
-		return StringVector::AddString(vector, Date::PINF);
-	} else if (input == timestamp_t::ninfinity()) {
-		return StringVector::AddString(vector, Date::NINF);
+		return StringVector::AddString(vector, Date::PINF.str);
 	}
+	if (input == timestamp_t::ninfinity()) {
+		return StringVector::AddString(vector, Date::NINF.str);
+	}
+
 	date_t date_entry;
 	dtime_t time_entry;
 	int32_t picos = 0;
@@ -159,6 +190,9 @@ duckdb::string_t StringFromTimestamp(timestamp_t input, Vector &vector) {
 	idx_t nano_length = 0;
 	if (picos) {
 		//	If there are ps, we need all the µs
+		if (!time[3]) {
+			TimeToStringCast::FormatMicros(time[3], micro_buffer);
+		}
 		time_length = 15;
 		nano_length = 6;
 		nano_length -= NumericCast<idx_t>(TimeToStringCast::FormatMicros(picos, nano_buffer));
@@ -259,10 +293,12 @@ string_t StringCastTZ::Operation(dtime_tz_t input, Vector &vector) {
 template <>
 string_t StringCastTZ::Operation(timestamp_t input, Vector &vector) {
 	if (input == timestamp_t::infinity()) {
-		return StringVector::AddString(vector, Date::PINF);
-	} else if (input == timestamp_t::ninfinity()) {
-		return StringVector::AddString(vector, Date::NINF);
+		return StringVector::AddString(vector, Date::PINF.str);
 	}
+	if (input == timestamp_t::ninfinity()) {
+		return StringVector::AddString(vector, Date::NINF.str);
+	}
+
 	date_t date_entry;
 	dtime_t time_entry;
 	Timestamp::Convert(input, date_entry, time_entry);

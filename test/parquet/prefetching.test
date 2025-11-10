@@ -1,0 +1,33 @@
+# name: test/parquet/prefetching.test
+# description: Test parquet files using the prefetching mechanism
+# group: [parquet]
+
+require parquet
+
+# Normally, local files do not use the prefetching mechanism, however this debugging options will force the mechanism
+statement ok
+set prefetch_all_parquet_files=true;
+
+# With default settings, this query will fail: the incorrectly set index page offsets mess with duckdb's prefetching mechanism
+statement error
+FROM '{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet'
+----
+IO Error: The parquet file '{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet' seems to have incorrectly set page offsets. This interferes with DuckDB's prefetching optimization. DuckDB may still be able to scan this file by manually disabling the prefetching mechanism using: 'SET disable_parquet_prefetching=true'.
+
+# Now we disable prefetching
+statement ok
+set disable_parquet_prefetching=true;
+
+query IIIIIIIIIII
+FROM '{DATA_DIR}/parquet-testing/incorrect_index_page_offsets.parquet'
+----
+0.23	Ideal	E	SI2	61.5	55.0	326	3.95	3.98	2.43	0
+0.21	Premium	E	SI1	59.8	61.0	326	3.89	3.84	2.31	1
+0.23	Good	E	VS1	56.9	65.0	327	4.05	4.07	2.31	2
+0.29	Premium	I	VS2	62.4	58.0	334	4.2	4.23	2.63	3
+0.31	Good	J	SI2	63.3	58.0	335	4.34	4.35	2.75	4
+0.24	Very Good	J	VVS2	62.8	57.0	336	3.94	3.96	2.48	5
+0.24	Very Good	I	VVS1	62.3	57.0	336	3.95	3.98	2.47	6
+0.26	Very Good	H	SI1	61.9	55.0	337	4.07	4.11	2.53	7
+0.22	Fair	E	VS2	65.1	61.0	337	3.87	3.78	2.49	8
+0.23	Very Good	H	VS1	59.4	61.0	338	4.0	4.05	2.39	9

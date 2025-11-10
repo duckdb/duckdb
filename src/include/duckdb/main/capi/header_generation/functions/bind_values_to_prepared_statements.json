@@ -1,6 +1,7 @@
 {
     "group": "bind_values_to_prepared_statements",
     "deprecated": false,
+    "description": "Functions to bind values to prepared statements. Try to use `duckdb_bind_value` and the `duckdb_create_...` interface for all types.",
     "entries": [
         {
             "name": "duckdb_bind_value",
@@ -188,7 +189,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds an duckdb_uhugeint value to the prepared statement at the specified index.\n"
+                "description": "Binds a duckdb_uhugeint value to the prepared statement at the specified index.\n"
             }
         },
         {
@@ -230,7 +231,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds an uint8_t value to the prepared statement at the specified index.\n"
+                "description": "Binds a uint8_t value to the prepared statement at the specified index.\n"
             }
         },
         {
@@ -251,7 +252,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds an uint16_t value to the prepared statement at the specified index.\n"
+                "description": "Binds a uint16_t value to the prepared statement at the specified index.\n"
             }
         },
         {
@@ -272,7 +273,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds an uint32_t value to the prepared statement at the specified index.\n"
+                "description": "Binds a uint32_t value to the prepared statement at the specified index.\n"
             }
         },
         {
@@ -293,7 +294,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds an uint64_t value to the prepared statement at the specified index.\n"
+                "description": "Binds a uint64_t value to the prepared statement at the specified index.\n"
             }
         },
         {

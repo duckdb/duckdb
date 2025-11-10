@@ -1,0 +1,158 @@
+# name: test/sql/function/autocomplete/tpch.test
+# description: Test sql_auto_complete
+# group: [autocomplete]
+
+require autocomplete
+
+require tpch
+
+# column names
+statement ok
+CALL dbgen(sf=0);
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_ord') LIMIT 1;
+----
+l_orderkey	7
+
+# arithmetic
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT 1 + l_ord') LIMIT 1;
+----
+l_orderkey	11
+
+# function calls
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT min(l_ord') LIMIT 1;
+----
+l_orderkey	11
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT min(42, l_ord') LIMIT 1;
+----
+l_orderkey	15
+
+# like
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT ''test_string'' LIKE l_c') LIMIT 1;
+----
+l_comment	26
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_orderkey FROM lin') LIMIT 1;
+----
+lineitem	23
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_orderkey FROM lineitem, ord') LIMIT 1;
+----
+orders	33
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_orderkey FROM lineitem JOIN ord') LIMIT 1;
+----
+orders	37
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT (SELECT SUM(l_orderkey) FROM lineit') LIMIT 1;
+----
+lineitem	36
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM (FROM lineit') LIMIT 1;
+----
+lineitem	20
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
+----
+lineitem	12
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE lin') LIMIT 1;
+----
+lineitem	11
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('COPY lin') LIMIT 1;
+----
+lineitem	5
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE na') LIMIT 1;
+----
+nation	11
+
+query III
+SELECT suggestion, suggestion_start, suggestion_type FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_su') LIMIT 1;
+----
+ps_suppkey	44	column
+
+# more complex queries
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete($$
+SELECT
+    nation,
+    o_year,
+    sum(amount) AS sum_profit
+FROM (
+    SELECT
+        n_name AS nation,
+        extract(year FROM o_orderdate) AS o_year,
+        l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity AS amount
+    FROM
+        part,
+        supplier,
+        lineitem,
+        partsupp,
+        orders,
+        nation
+    WHERE
+        s_suppkey = l_suppkey
+        AND ps_suppkey = l_suppkey
+        AND ps_partkey = l_partkey
+        AND p_partkey = l_partkey
+        AND o_orderkey = l_orderkey
+        AND s_nationkey = n_nat$$) LIMIT 1;
+----
+n_nationkey	552
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete($$
+SELECT
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) AS sum_qty,
+    sum(l_extendedprice) AS sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+    avg(l_quantity) AS avg_qty,
+    avg(l_extendedprice) AS avg_price,
+    avg(l_discount) AS avg_disc,
+    count(*) AS count_order
+FROM
+    lineitem
+WHERE
+    l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    l_ret$$) LIMIT 1;
+----
+l_returnflag	470
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete($$
+SELECT
+    nation,
+    o_year,
+    sum(amount) AS sum_profit
+FROM (
+    SELECT
+        n_name AS nation,
+        extract(year FROM o_orderdate) AS o_year,
+        l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity AS amount
+    FROM
+        part,
+        supplier,
+        line$$) LIMIT 1;
+----
+lineitem	287

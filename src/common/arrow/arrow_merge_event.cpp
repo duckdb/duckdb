@@ -21,8 +21,9 @@ void ArrowBatchTask::ProduceRecordBatches() {
 	for (auto &index : record_batch_indices) {
 		auto &array = arrays[index];
 		D_ASSERT(array);
-		idx_t count;
-		count = ArrowUtil::FetchChunk(scan_state, arrow_options, batch_size, &array->arrow_array);
+		const idx_t count = ArrowUtil::FetchChunk(
+		    scan_state, arrow_options, batch_size, &array->arrow_array,
+		    ArrowTypeExtensionData::GetExtensionTypes(event->GetClientContext(), scan_state.Types()));
 		(void)count;
 		D_ASSERT(count != 0);
 	}
@@ -87,7 +88,7 @@ void ArrowMergeEvent::Schedule() {
 		idx_t tuples_for_task = 0;
 		idx_t start_index = transformer.GetIndex();
 		idx_t end_index = start_index;
-		while (tuples_for_task < Storage::ROW_GROUP_SIZE) {
+		while (tuples_for_task < DEFAULT_ROW_GROUP_SIZE) {
 			idx_t batch_size;
 			if (!transformer.TryGetNextBatchSize(batch_size)) {
 				finished = true;

@@ -7,6 +7,7 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/list.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
@@ -14,10 +15,17 @@ namespace duckdb {
 // ArrowAppender
 //===--------------------------------------------------------------------===//
 
-ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options)
-    : types(std::move(types_p)) {
-	for (auto &type : types) {
-		auto entry = InitializeChild(type, initial_capacity, options);
+ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options,
+                             unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_type_cast)
+    : types(std::move(types_p)), options(options) {
+	for (idx_t i = 0; i < types.size(); i++) {
+		unique_ptr<ArrowAppendData> entry;
+		bool bitshift_boolean = types[i].id() == LogicalTypeId::BOOLEAN && !options.arrow_lossless_conversion;
+		if (extension_type_cast.find(i) != extension_type_cast.end() && !bitshift_boolean) {
+			entry = InitializeChild(types[i], initial_capacity, options, extension_type_cast[i]);
+		} else {
+			entry = InitializeChild(types[i], initial_capacity, options);
+		}
 		root_data.push_back(std::move(entry));
 	}
 }
@@ -26,11 +34,18 @@ ArrowAppender::~ArrowAppender() {
 }
 
 //! Append a data chunk to the underlying arrow array
-void ArrowAppender::Append(DataChunk &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, const idx_t input_size) {
 	D_ASSERT(types == input.GetTypes());
 	D_ASSERT(to >= from);
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
-		root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
+		if (root_data[i]->extension_data && root_data[i]->extension_data->duckdb_to_arrow) {
+			Vector input_data(root_data[i]->extension_data->GetInternalType());
+			root_data[i]->extension_data->duckdb_to_arrow(*options.client_context, input.data[i], input_data,
+			                                              input_size);
+			root_data[i]->append_vector(*root_data[i], input_data, from, to, input_size);
+		} else {
+			root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
+		}
 	}
 	row_count += to - from;
 }
@@ -129,6 +144,9 @@ static void InitializeAppenderForType(ArrowAppendData &append_data) {
 static void InitializeFunctionPointers(ArrowAppendData &append_data, const LogicalType &type) {
 	// handle special logical types
 	switch (type.id()) {
+	case LogicalTypeId::SQLNULL:
+		InitializeAppenderForType<ArrowNullData>(append_data);
+		break;
 	case LogicalTypeId::BOOLEAN:
 		InitializeAppenderForType<ArrowBoolData>(append_data);
 		break;
@@ -197,13 +215,25 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int16_t>>(append_data);
+			if (append_data.options.arrow_output_version > ArrowFormatVersion::V1_4) {
+				InitializeAppenderForType<ArrowScalarData<int32_t, int16_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int16_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT32:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int32_t>>(append_data);
+			if (append_data.options.arrow_output_version > ArrowFormatVersion::V1_4) {
+				InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int32_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT64:
-			InitializeAppenderForType<ArrowScalarData<hugeint_t, int64_t>>(append_data);
+			if (append_data.options.arrow_output_version > ArrowFormatVersion::V1_4) {
+				InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowScalarData<hugeint_t, int64_t>>(append_data);
+			}
 			break;
 		case PhysicalType::INT128:
 			InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
@@ -213,7 +243,11 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
-		if (append_data.options.produce_arrow_string_view) {
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::BIGNUM:
+		if ((append_data.options.produce_arrow_string_view || type.id() != LogicalTypeId::VARCHAR) &&
+		    append_data.options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 			InitializeAppenderForType<ArrowVarcharToStringViewData>(append_data);
 		} else {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -223,25 +257,16 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 			}
 		}
 		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-	case LogicalTypeId::VARINT:
-		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			InitializeAppenderForType<ArrowVarcharData<>>(append_data);
-		} else {
-			InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, int32_t>>(append_data);
-		}
-		break;
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			InitializeAppenderForType<ArrowEnumData<int8_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint8_t>>(append_data);
 			break;
 		case PhysicalType::UINT16:
-			InitializeAppenderForType<ArrowEnumData<int16_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint16_t>>(append_data);
 			break;
 		case PhysicalType::UINT32:
-			InitializeAppenderForType<ArrowEnumData<int32_t>>(append_data);
+			InitializeAppenderForType<ArrowEnumData<uint32_t>>(append_data);
 			break;
 		default:
 			throw InternalException("Unsupported internal enum type");
@@ -260,7 +285,8 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowFixedSizeListData>(append_data);
 		break;
 	case LogicalTypeId::LIST: {
-		if (append_data.options.arrow_use_list_view) {
+		if (append_data.options.arrow_use_list_view &&
+		    append_data.options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				InitializeAppenderForType<ArrowListViewData<>>(append_data);
 			} else {
@@ -285,13 +311,19 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 }
 
 unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &type, const idx_t capacity,
-                                                           ClientProperties &options) {
+                                                           ClientProperties &options,
+                                                           const shared_ptr<ArrowTypeExtensionData> &extension_type) {
 	auto result = make_uniq<ArrowAppendData>(options);
-	InitializeFunctionPointers(*result, type);
+	LogicalType array_type = type;
+	if (extension_type) {
+		array_type = extension_type->GetInternalType();
+	}
+	InitializeFunctionPointers(*result, array_type);
+	result->extension_data = extension_type;
 
 	const auto byte_count = (capacity + 7) / 8;
 	result->GetValidityBuffer().reserve(byte_count);
-	result->initialize(*result, type, capacity);
+	result->initialize(*result, array_type, capacity);
 	return result;
 }
 

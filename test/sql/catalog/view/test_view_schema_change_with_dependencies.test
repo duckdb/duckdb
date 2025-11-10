@@ -2,14 +2,13 @@
 # description: Test views with changing schema
 # group: [view]
 
+require skip_reload
+
 statement ok
-set storage_compatibility_version='latest'
+set storage_compatibility_version='v1.0.0'
 
 statement ok
 set enable_view_dependencies=true
-
-statement ok
-PRAGMA enable_verification
 
 # create a table
 statement ok

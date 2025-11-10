@@ -21,7 +21,7 @@ idx_t BufferedFileWriter::GetFileSize() {
 	return NumericCast<idx_t>(fs.GetFileSize(*handle)) + offset;
 }
 
-idx_t BufferedFileWriter::GetTotalWritten() {
+idx_t BufferedFileWriter::GetTotalWritten() const {
 	return total_written + offset;
 }
 
@@ -90,6 +90,10 @@ void BufferedFileWriter::Truncate(idx_t size) {
 		handle->Truncate(NumericCast<int64_t>(size));
 		// reset anything written in the buffer
 		offset = 0;
+		// Reset the seek position if applicable
+		if (handle->CanSeek() && handle->SeekPosition() > size) {
+			handle->Seek(size);
+		}
 	}
 }
 

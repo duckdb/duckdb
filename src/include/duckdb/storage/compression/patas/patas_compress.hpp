@@ -35,7 +35,7 @@ struct PatasCompressionState : public CompressionState {};
 // Compression Functions
 
 template <class T>
-unique_ptr<CompressionState> PatasInitCompression(ColumnDataCheckpointer &checkpointer,
+unique_ptr<CompressionState> PatasInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                   unique_ptr<AnalyzeState> state) {
 	throw InternalException("Patas has been deprecated, can no longer be used to compress data");
 	return nullptr;

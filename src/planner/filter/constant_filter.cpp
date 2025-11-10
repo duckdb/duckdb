@@ -2,6 +2,8 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -13,7 +15,31 @@ ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_
 	}
 }
 
-FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
+bool ConstantFilter::Compare(const Value &value) const {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		return ValueOperations::Equals(value, constant);
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return ValueOperations::NotEquals(value, constant);
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return ValueOperations::GreaterThan(value, constant);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return ValueOperations::GreaterThanEquals(value, constant);
+	case ExpressionType::COMPARE_LESSTHAN:
+		return ValueOperations::LessThan(value, constant);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return ValueOperations::LessThanEquals(value, constant);
+	default:
+		throw InternalException("unknown comparison type for ConstantFilter: " + EnumUtil::ToString(comparison_type));
+	}
+}
+
+FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) const {
+	if (!stats.CanHaveNoNull()) {
+		// no non-null values are possible: always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	FilterPropagateResult result;
 	D_ASSERT(constant.type().id() == stats.GetType().id());
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:
@@ -28,15 +54,31 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		return NumericStats::CheckZonemap(stats, comparison_type, constant);
+		result = NumericStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));
+		break;
 	case PhysicalType::VARCHAR:
-		return StringStats::CheckZonemap(stats, comparison_type, StringValue::Get(constant));
+		switch (stats.GetStatsType()) {
+		case StatisticsType::STRING_STATS:
+			result = StringStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));
+			break;
+		default:
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+		// the numeric filter is always true, but the column can have NULL values
+		// we can't prune the filter
+		if (stats.CanHaveNull()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+	}
+	return result;
 }
 
-string ConstantFilter::ToString(const string &column_name) {
+string ConstantFilter::ToString(const string &column_name) const {
 	return column_name + ExpressionTypeToOperator(comparison_type) + constant.ToSQLString();
 }
 

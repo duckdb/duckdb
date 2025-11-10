@@ -26,11 +26,11 @@ do
         # calculate SHA256 hash of extension binary
         cat $f > $f.append
         # 0 for custom section
-        # 113 in hex = 275 in decimal, total lenght of what follows (1 + 16 + 2 + 256)
+        # 113 in hex = 275 in decimal, total length of what follows (1 + 16 + 2 + 256)
         # [1(continuation) + 0010011(payload) = \x93, 0(continuation) + 10(payload) = \x02]
         echo -n -e '\x00' >> $f.append
         echo -n -e '\x93\x02' >> $f.append
-        # 10 in hex = 16 in decimal, lenght of name, 1 byte
+        # 10 in hex = 16 in decimal, length of name, 1 byte
         echo -n -e '\x10' >> $f.append
         echo -n -e 'duckdb_signature' >> $f.append
         # the name of the WebAssembly custom section, 16 bytes
@@ -49,9 +49,9 @@ do
         # upload compressed extension binary to S3
 	if [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
 		#AWS_SECRET_ACCESS_KEY is empty -> dry run
-		aws s3 cp $f.brotli s3://duckdb-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm" --dryrun
+		aws s3 cp $f.brotli s3://duckdb-core-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm" --dryrun
 	else
-		aws s3 cp $f.brotli s3://duckdb-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
+		aws s3 cp $f.brotli s3://duckdb-core-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
 	fi
 done
 

@@ -7,6 +7,7 @@
 
 namespace duckdb {
 
+#ifndef DUCKDB_SMALLER_BINARY
 struct BothInclusiveBetweenOperator {
 	template <class T>
 	static inline bool Operation(T input, T lower, T upper) {
@@ -85,6 +86,7 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 		throw InvalidTypeException(input.GetType(), "Invalid type for BETWEEN");
 	}
 }
+#endif
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundBetweenExpression &expr,
                                                                 ExpressionExecutorState &root) {
@@ -131,6 +133,9 @@ void ExpressionExecutor::Execute(const BoundBetweenExpression &expr, ExpressionS
 
 idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+#ifdef DUCKDB_SMALLER_BINARY
+	throw InternalException("ExpressionExecutor::Select not available with DUCKDB_SMALLER_BINARY");
+#else
 	// resolve the children
 	Vector input(state->intermediate_chunk.data[0]);
 	Vector lower(state->intermediate_chunk.data[1]);
@@ -152,6 +157,7 @@ idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionS
 	} else {
 		return BetweenLoopTypeSwitch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
 	}
+#endif
 }
 
 } // namespace duckdb

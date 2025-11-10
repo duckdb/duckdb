@@ -95,24 +95,38 @@ public:
 		map.resize(nz);
 	}
 
-	void insert(const string &key, V &value) { // NOLINT: match stl API
-		map.push_back(make_pair(key, std::move(value)));
-		map_idx[key] = map.size() - 1;
+	void clear() { // NOLINT: match stl API
+		map.clear();
 	}
 
 	void insert(const string &key, V &&value) { // NOLINT: match stl API
-		map.push_back(make_pair(key, std::move(value)));
+		if (contains(key)) {
+			return;
+		}
+		map.emplace_back(key, std::move(value));
+		map_idx[key] = map.size() - 1;
+	}
+
+	void insert(const string &key, const V &value) { // NOLINT: match stl API
+		if (contains(key)) {
+			return;
+		}
+		map.emplace_back(key, value);
 		map_idx[key] = map.size() - 1;
 	}
 
 	void insert(pair<string, V> &&value) { // NOLINT: match stl API
-		map_idx[value.first] = map.size();
+		auto &key = value.first;
+		if (contains(key)) {
+			return;
+		}
+		map_idx[key] = map.size();
 		map.push_back(std::move(value));
 	}
 
 	void erase(typename VECTOR_TYPE::iterator it) { // NOLINT: match stl API
 		auto key = it->first;
-		auto idx = map_idx[it->first];
+		auto idx = map_idx[key];
 		map.erase(it);
 		map_idx.erase(key);
 		for (auto &kv : map_idx) {
@@ -133,9 +147,17 @@ public:
 	V &operator[](const string &key) {
 		if (!contains(key)) {
 			auto v = V();
-			insert(key, v);
+			insert(key, std::move(v));
 		}
 		return map[map_idx[key]].second;
+	}
+
+	bool operator==(const InsertionOrderPreservingMap &other) const {
+		return map == other.map && map_idx == other.map_idx;
+	}
+
+	bool operator!=(const InsertionOrderPreservingMap &other) const {
+		return !(*this == other);
 	}
 };
 

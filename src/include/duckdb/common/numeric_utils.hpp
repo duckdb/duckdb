@@ -76,17 +76,17 @@ struct NumericCastImpl<TO, FROM, false> {
 
 		if (!NumericLimits<FROM>::IsSigned() && !NumericLimits<TO>::IsSigned() &&
 		    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(unsigned_min), static_cast<TO>(unsigned_max));
 		}
 
 		if (NumericLimits<FROM>::IsSigned() && NumericLimits<TO>::IsSigned() &&
 		    (signed_in < signed_min || signed_in > signed_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(signed_min), static_cast<TO>(signed_max));
 		}
 
 		if (NumericLimits<FROM>::IsSigned() != NumericLimits<TO>::IsSigned() &&
 		    (signed_in < signed_min || unsigned_in > unsigned_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(signed_min), static_cast<TO>(unsigned_max));
 		}
 
 		return static_cast<TO>(val);
@@ -119,13 +119,8 @@ TO UnsafeNumericCast(FROM in) {
 // LossyNumericCast
 // When: between double/float to other convertible types
 // Checks: no checks performed (at the moment, to be improved adding range checks)
-template <class TO>
-TO LossyNumericCast(double val) {
-	return static_cast<TO>(val);
-}
-
-template <class TO>
-TO LossyNumericCast(float val) {
+template <class TO, class FROM>
+TO LossyNumericCast(FROM val) {
 	return static_cast<TO>(val);
 }
 
@@ -156,5 +151,62 @@ TO ExactNumericCast(float val) {
 #endif
 	return res;
 }
+
+template <class T>
+struct NextUnsigned {};
+
+template <>
+struct NextUnsigned<uint8_t> {
+	using type = uint16_t;
+};
+
+template <>
+struct NextUnsigned<uint16_t> {
+	using type = uint32_t;
+};
+
+template <>
+struct NextUnsigned<uint32_t> {
+	using type = uint64_t;
+};
+
+template <>
+struct NextUnsigned<uint64_t> {
+#if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
+	using type = __uint128_t;
+#else
+	using type = uhugeint_t;
+#endif
+};
+
+template <class TYPE>
+class FastMod {
+	using NEXT_TYPE = typename NextUnsigned<TYPE>::type;
+	static_assert(sizeof(NEXT_TYPE) != 0, "NextUnsigned not available for this type");
+
+public:
+	explicit FastMod(TYPE divisor_p) : divisor(divisor_p), multiplier((static_cast<TYPE>(-1) / divisor) + 1) {
+	}
+
+	TYPE Div(const TYPE &val) const {
+		return static_cast<TYPE>((static_cast<NEXT_TYPE>(val) * multiplier) >> (sizeof(TYPE) * 8)); // NOLINT
+	}
+
+	TYPE Mod(const TYPE &val, const TYPE &quotient) const {
+		return val - quotient * divisor;
+	}
+
+	TYPE Mod(const TYPE &val) const {
+		return Mod(val, Div(val));
+	}
+
+	const TYPE &GetDivisor() const {
+		return divisor;
+	}
+
+private:
+	const TYPE divisor;
+	const TYPE multiplier;
+};
 
 } // namespace duckdb

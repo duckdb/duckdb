@@ -1,0 +1,9 @@
+# name: test/fuzzer/duckfuzz/temporal_avg.test
+# description: Fuzzyduck issue #1128
+# group: [duckfuzz]
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+
+statement ok
+SELECT avg(c1) FROM test_vector_types(CAST(NULL AS TIMESTAMP)) AS test_vector_types(c1);

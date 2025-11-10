@@ -1,5 +1,5 @@
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -161,23 +161,26 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	// first check if either side is a bound column ref
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
-	if (!compare_distinct && left.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (!compare_distinct && left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).binding);
 	}
-	if (!compare_distinct && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (!compare_distinct && right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
 	}
 	// check if this is a comparison between a constant and a column ref
 	optional_ptr<BoundConstantExpression> constant;
 	optional_ptr<BoundColumnRefExpression> columnref;
-	if (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
+	    right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		constant = &left.Cast<BoundConstantExpression>();
 		columnref = &right.Cast<BoundColumnRefExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
-	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::VALUE_CONSTANT) {
+	} else if (left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+	           right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		columnref = &left.Cast<BoundColumnRefExpression>();
 		constant = &right.Cast<BoundConstantExpression>();
-	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	} else if (left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+	           right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		// comparison between two column refs
 		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();
 		auto &right_column_ref = right.Cast<BoundColumnRefExpression>();
@@ -213,12 +216,33 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
 	}
 	case ExpressionClass::BOUND_COMPARISON: {
 		auto &comparison = condition.Cast<BoundComparisonExpression>();
-		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.type);
+		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.GetExpressionType());
 		break;
 	}
 	default:
 		break;
 	}
+}
+
+FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> &condition) {
+	PropagateExpression(condition);
+
+	if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
+
+	if (ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(true))) {
+		return FilterPropagateResult::FILTER_TRUE_OR_NULL;
+	}
+
+	if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
+	    ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
+	}
+
+	// cannot prune this filter: propagate statistics from the filter
+	UpdateFilterStatistics(*condition);
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilter &filter,
@@ -233,9 +257,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 	// then propagate to each of the expressions
 	for (idx_t i = 0; i < filter.expressions.size(); i++) {
 		auto &condition = filter.expressions[i];
-		PropagateExpression(condition);
-
-		if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
+		auto prune_result = HandleFilter(condition);
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			filter.expressions.erase_at(i);
@@ -249,14 +272,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 				}
 				break;
 			}
-		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
-		           ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+		} else if (prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(node_ptr);
 			return make_uniq<NodeStatistics>(0U, 0U);
-		} else {
-			// cannot prune this filter: propagate statistics from the filter
-			UpdateFilterStatistics(*condition);
 		}
 	}
 	// the max cardinality of a filter is the cardinality of the input (i.e. no tuples get filtered)

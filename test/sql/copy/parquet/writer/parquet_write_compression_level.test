@@ -4,6 +4,9 @@
 
 require parquet
 
+# NOTE: since updating ZSTD, compression levels between -131072 and 22 are now supported
+# We now also support this, and this test has been updated accordingly
+
 statement ok
 PRAGMA enable_verification
 
@@ -15,15 +18,21 @@ COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', COMPRE
 ----
 only supported
 
-statement error
+statement ok
 COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 0);
-----
-must be between 1 and 22
 
 statement error
 COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 23);
 ----
-must be between 1 and 22
+level must be between
+
+statement ok
+COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL -131072);
+
+statement error
+COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL -131073);
+----
+level must be between
 
 statement ok
 COPY integers TO '__TEST_DIR__/compress_level.parquet' (FORMAT 'parquet', CODEC ZSTD, COMPRESSION_LEVEL 1);

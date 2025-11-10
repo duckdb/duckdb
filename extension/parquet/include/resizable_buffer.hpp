@@ -5,12 +5,11 @@
 //
 //
 //===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/allocator.hpp"
-#endif
 
 #include <exception>
 
@@ -97,9 +96,14 @@ public:
 		}
 		if (new_size > alloc_len) {
 			alloc_len = NextPowerOfTwo(new_size);
+			allocated_data.Reset(); // Have to reset before allocating new buffer (otherwise we use ~2x the memory)
 			allocated_data = allocator.Allocate(alloc_len);
 			ptr = allocated_data.get();
 		}
+	}
+	void reset() {
+		ptr = allocated_data.get();
+		len = alloc_len;
 	}
 
 private:

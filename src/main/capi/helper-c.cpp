@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
-	switch (c_type) {
+LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
+	switch (type) {
 	case DUCKDB_TYPE_INVALID:
 		return LogicalTypeId::INVALID;
 	case DUCKDB_TYPE_BOOLEAN:
@@ -74,17 +74,25 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::TIMESTAMP_TZ;
 	case DUCKDB_TYPE_ANY:
 		return LogicalTypeId::ANY;
+	case DUCKDB_TYPE_BIGNUM:
+		return LogicalTypeId::BIGNUM;
 	case DUCKDB_TYPE_SQLNULL:
 		return LogicalTypeId::SQLNULL;
+	case DUCKDB_TYPE_STRING_LITERAL:
+		return LogicalTypeId::STRING_LITERAL;
+	case DUCKDB_TYPE_INTEGER_LITERAL:
+		return LogicalTypeId::INTEGER_LITERAL;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
 	} // LCOV_EXCL_STOP
 }
 
-duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
-	switch (sql_type.id()) {
+duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
+	switch (type) {
 	case LogicalTypeId::INVALID:
+		return DUCKDB_TYPE_INVALID;
+	case LogicalTypeId::UNKNOWN:
 		return DUCKDB_TYPE_INVALID;
 	case LogicalTypeId::BOOLEAN:
 		return DUCKDB_TYPE_BOOLEAN;
@@ -134,8 +142,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::BIT:
 		return DUCKDB_TYPE_BIT;
-	case LogicalTypeId::VARINT:
-		return DUCKDB_TYPE_VARINT;
+	case LogicalTypeId::BIGNUM:
+		return DUCKDB_TYPE_BIGNUM;
 	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
 	case LogicalTypeId::DECIMAL:
@@ -158,13 +166,17 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_ANY;
 	case LogicalTypeId::SQLNULL:
 		return DUCKDB_TYPE_SQLNULL;
+	case LogicalTypeId::STRING_LITERAL:
+		return DUCKDB_TYPE_STRING_LITERAL;
+	case LogicalTypeId::INTEGER_LITERAL:
+		return DUCKDB_TYPE_INTEGER_LITERAL;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
 	} // LCOV_EXCL_STOP
 }
 
-idx_t GetCTypeSize(duckdb_type type) {
+idx_t GetCTypeSize(const duckdb_type type) {
 	switch (type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return sizeof(bool);
@@ -197,6 +209,7 @@ idx_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_TIME:
 		return sizeof(duckdb_time);
 	case DUCKDB_TYPE_TIMESTAMP:
+	case DUCKDB_TYPE_TIMESTAMP_TZ:
 	case DUCKDB_TYPE_TIMESTAMP_S:
 	case DUCKDB_TYPE_TIMESTAMP_MS:
 	case DUCKDB_TYPE_TIMESTAMP_NS:
@@ -216,66 +229,252 @@ idx_t GetCTypeSize(duckdb_type type) {
 	} // LCOV_EXCL_STOP
 }
 
-duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
-	switch (statement_type) {
-	case duckdb::StatementType::SELECT_STATEMENT:
+duckdb_statement_type StatementTypeToC(const StatementType type) {
+	switch (type) {
+	case StatementType::SELECT_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_SELECT;
-	case duckdb::StatementType::INVALID_STATEMENT:
+	case StatementType::INVALID_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_INVALID;
-	case duckdb::StatementType::INSERT_STATEMENT:
+	case StatementType::INSERT_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_INSERT;
-	case duckdb::StatementType::UPDATE_STATEMENT:
+	case StatementType::UPDATE_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_UPDATE;
-	case duckdb::StatementType::EXPLAIN_STATEMENT:
+	case StatementType::EXPLAIN_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_EXPLAIN;
-	case duckdb::StatementType::DELETE_STATEMENT:
+	case StatementType::DELETE_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_DELETE;
-	case duckdb::StatementType::PREPARE_STATEMENT:
+	case StatementType::PREPARE_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_PREPARE;
-	case duckdb::StatementType::CREATE_STATEMENT:
+	case StatementType::CREATE_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_CREATE;
-	case duckdb::StatementType::EXECUTE_STATEMENT:
+	case StatementType::EXECUTE_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_EXECUTE;
-	case duckdb::StatementType::ALTER_STATEMENT:
+	case StatementType::ALTER_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_ALTER;
-	case duckdb::StatementType::TRANSACTION_STATEMENT:
+	case StatementType::TRANSACTION_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_TRANSACTION;
-	case duckdb::StatementType::COPY_STATEMENT:
+	case StatementType::COPY_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_COPY;
-	case duckdb::StatementType::ANALYZE_STATEMENT:
+	case StatementType::ANALYZE_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_ANALYZE;
-	case duckdb::StatementType::VARIABLE_SET_STATEMENT:
+	case StatementType::VARIABLE_SET_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_VARIABLE_SET;
-	case duckdb::StatementType::CREATE_FUNC_STATEMENT:
+	case StatementType::CREATE_FUNC_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_CREATE_FUNC;
-	case duckdb::StatementType::DROP_STATEMENT:
+	case StatementType::DROP_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_DROP;
-	case duckdb::StatementType::EXPORT_STATEMENT:
+	case StatementType::EXPORT_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_EXPORT;
-	case duckdb::StatementType::PRAGMA_STATEMENT:
+	case StatementType::PRAGMA_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_PRAGMA;
-	case duckdb::StatementType::VACUUM_STATEMENT:
+	case StatementType::VACUUM_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_VACUUM;
-	case duckdb::StatementType::CALL_STATEMENT:
+	case StatementType::CALL_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_CALL;
-	case duckdb::StatementType::SET_STATEMENT:
+	case StatementType::SET_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_SET;
-	case duckdb::StatementType::LOAD_STATEMENT:
+	case StatementType::LOAD_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_LOAD;
-	case duckdb::StatementType::RELATION_STATEMENT:
+	case StatementType::RELATION_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_RELATION;
-	case duckdb::StatementType::EXTENSION_STATEMENT:
+	case StatementType::EXTENSION_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_EXTENSION;
-	case duckdb::StatementType::LOGICAL_PLAN_STATEMENT:
+	case StatementType::LOGICAL_PLAN_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN;
-	case duckdb::StatementType::ATTACH_STATEMENT:
+	case StatementType::ATTACH_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_ATTACH;
-	case duckdb::StatementType::DETACH_STATEMENT:
+	case StatementType::DETACH_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_DETACH;
-	case duckdb::StatementType::MULTI_STATEMENT:
+	case StatementType::MULTI_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_MULTI;
 	default:
 		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+}
+
+duckdb_error_type ErrorTypeToC(const ExceptionType type) {
+	switch (type) {
+	case ExceptionType::INVALID:
+		return DUCKDB_ERROR_INVALID;
+	case ExceptionType::OUT_OF_RANGE:
+		return DUCKDB_ERROR_OUT_OF_RANGE;
+	case ExceptionType::CONVERSION:
+		return DUCKDB_ERROR_CONVERSION;
+	case ExceptionType::UNKNOWN_TYPE:
+		return DUCKDB_ERROR_UNKNOWN_TYPE;
+	case ExceptionType::DECIMAL:
+		return DUCKDB_ERROR_DECIMAL;
+	case ExceptionType::MISMATCH_TYPE:
+		return DUCKDB_ERROR_MISMATCH_TYPE;
+	case ExceptionType::DIVIDE_BY_ZERO:
+		return DUCKDB_ERROR_DIVIDE_BY_ZERO;
+	case ExceptionType::OBJECT_SIZE:
+		return DUCKDB_ERROR_OBJECT_SIZE;
+	case ExceptionType::INVALID_TYPE:
+		return DUCKDB_ERROR_INVALID_TYPE;
+	case ExceptionType::SERIALIZATION:
+		return DUCKDB_ERROR_SERIALIZATION;
+	case ExceptionType::TRANSACTION:
+		return DUCKDB_ERROR_TRANSACTION;
+	case ExceptionType::NOT_IMPLEMENTED:
+		return DUCKDB_ERROR_NOT_IMPLEMENTED;
+	case ExceptionType::EXPRESSION:
+		return DUCKDB_ERROR_EXPRESSION;
+	case ExceptionType::CATALOG:
+		return DUCKDB_ERROR_CATALOG;
+	case ExceptionType::PARSER:
+		return DUCKDB_ERROR_PARSER;
+	case ExceptionType::PLANNER:
+		return DUCKDB_ERROR_PLANNER;
+	case ExceptionType::SCHEDULER:
+		return DUCKDB_ERROR_SCHEDULER;
+	case ExceptionType::EXECUTOR:
+		return DUCKDB_ERROR_EXECUTOR;
+	case ExceptionType::CONSTRAINT:
+		return DUCKDB_ERROR_CONSTRAINT;
+	case ExceptionType::INDEX:
+		return DUCKDB_ERROR_INDEX;
+	case ExceptionType::STAT:
+		return DUCKDB_ERROR_STAT;
+	case ExceptionType::CONNECTION:
+		return DUCKDB_ERROR_CONNECTION;
+	case ExceptionType::SYNTAX:
+		return DUCKDB_ERROR_SYNTAX;
+	case ExceptionType::SETTINGS:
+		return DUCKDB_ERROR_SETTINGS;
+	case ExceptionType::BINDER:
+		return DUCKDB_ERROR_BINDER;
+	case ExceptionType::NETWORK:
+		return DUCKDB_ERROR_NETWORK;
+	case ExceptionType::OPTIMIZER:
+		return DUCKDB_ERROR_OPTIMIZER;
+	case ExceptionType::NULL_POINTER:
+		return DUCKDB_ERROR_NULL_POINTER;
+	case ExceptionType::IO:
+		return DUCKDB_ERROR_IO;
+	case ExceptionType::INTERRUPT:
+		return DUCKDB_ERROR_INTERRUPT;
+	case ExceptionType::FATAL:
+		return DUCKDB_ERROR_FATAL;
+	case ExceptionType::INTERNAL:
+		return DUCKDB_ERROR_INTERNAL;
+	case ExceptionType::INVALID_INPUT:
+		return DUCKDB_ERROR_INVALID_INPUT;
+	case ExceptionType::OUT_OF_MEMORY:
+		return DUCKDB_ERROR_OUT_OF_MEMORY;
+	case ExceptionType::PERMISSION:
+		return DUCKDB_ERROR_PERMISSION;
+	case ExceptionType::PARAMETER_NOT_RESOLVED:
+		return DUCKDB_ERROR_PARAMETER_NOT_RESOLVED;
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+		return DUCKDB_ERROR_PARAMETER_NOT_ALLOWED;
+	case ExceptionType::DEPENDENCY:
+		return DUCKDB_ERROR_DEPENDENCY;
+	case ExceptionType::HTTP:
+		return DUCKDB_ERROR_HTTP;
+	case ExceptionType::MISSING_EXTENSION:
+		return DUCKDB_ERROR_MISSING_EXTENSION;
+	case ExceptionType::AUTOLOAD:
+		return DUCKDB_ERROR_AUTOLOAD;
+	case ExceptionType::SEQUENCE:
+		return DUCKDB_ERROR_SEQUENCE;
+	case ExceptionType::INVALID_CONFIGURATION:
+		return DUCKDB_INVALID_CONFIGURATION;
+	default:
+		return DUCKDB_ERROR_INVALID;
+	}
+}
+
+ExceptionType ErrorTypeFromC(const duckdb_error_type type) {
+	switch (type) {
+	case DUCKDB_ERROR_INVALID:
+		return ExceptionType::INVALID;
+	case DUCKDB_ERROR_OUT_OF_RANGE:
+		return ExceptionType::OUT_OF_RANGE;
+	case DUCKDB_ERROR_CONVERSION:
+		return ExceptionType::CONVERSION;
+	case DUCKDB_ERROR_UNKNOWN_TYPE:
+		return ExceptionType::UNKNOWN_TYPE;
+	case DUCKDB_ERROR_DECIMAL:
+		return ExceptionType::DECIMAL;
+	case DUCKDB_ERROR_MISMATCH_TYPE:
+		return ExceptionType::MISMATCH_TYPE;
+	case DUCKDB_ERROR_DIVIDE_BY_ZERO:
+		return ExceptionType::DIVIDE_BY_ZERO;
+	case DUCKDB_ERROR_OBJECT_SIZE:
+		return ExceptionType::OBJECT_SIZE;
+	case DUCKDB_ERROR_INVALID_TYPE:
+		return ExceptionType::INVALID_TYPE;
+	case DUCKDB_ERROR_SERIALIZATION:
+		return ExceptionType::SERIALIZATION;
+	case DUCKDB_ERROR_TRANSACTION:
+		return ExceptionType::TRANSACTION;
+	case DUCKDB_ERROR_NOT_IMPLEMENTED:
+		return ExceptionType::NOT_IMPLEMENTED;
+	case DUCKDB_ERROR_EXPRESSION:
+		return ExceptionType::EXPRESSION;
+	case DUCKDB_ERROR_CATALOG:
+		return ExceptionType::CATALOG;
+	case DUCKDB_ERROR_PARSER:
+		return ExceptionType::PARSER;
+	case DUCKDB_ERROR_PLANNER:
+		return ExceptionType::PLANNER;
+	case DUCKDB_ERROR_SCHEDULER:
+		return ExceptionType::SCHEDULER;
+	case DUCKDB_ERROR_EXECUTOR:
+		return ExceptionType::EXECUTOR;
+	case DUCKDB_ERROR_CONSTRAINT:
+		return ExceptionType::CONSTRAINT;
+	case DUCKDB_ERROR_INDEX:
+		return ExceptionType::INDEX;
+	case DUCKDB_ERROR_STAT:
+		return ExceptionType::STAT;
+	case DUCKDB_ERROR_CONNECTION:
+		return ExceptionType::CONNECTION;
+	case DUCKDB_ERROR_SYNTAX:
+		return ExceptionType::SYNTAX;
+	case DUCKDB_ERROR_SETTINGS:
+		return ExceptionType::SETTINGS;
+	case DUCKDB_ERROR_BINDER:
+		return ExceptionType::BINDER;
+	case DUCKDB_ERROR_NETWORK:
+		return ExceptionType::NETWORK;
+	case DUCKDB_ERROR_OPTIMIZER:
+		return ExceptionType::OPTIMIZER;
+	case DUCKDB_ERROR_NULL_POINTER:
+		return ExceptionType::NULL_POINTER;
+	case DUCKDB_ERROR_IO:
+		return ExceptionType::IO;
+	case DUCKDB_ERROR_INTERRUPT:
+		return ExceptionType::INTERRUPT;
+	case DUCKDB_ERROR_FATAL:
+		return ExceptionType::FATAL;
+	case DUCKDB_ERROR_INTERNAL:
+		return ExceptionType::INTERNAL;
+	case DUCKDB_ERROR_INVALID_INPUT:
+		return ExceptionType::INVALID_INPUT;
+	case DUCKDB_ERROR_OUT_OF_MEMORY:
+		return ExceptionType::OUT_OF_MEMORY;
+	case DUCKDB_ERROR_PERMISSION:
+		return ExceptionType::PERMISSION;
+	case DUCKDB_ERROR_PARAMETER_NOT_RESOLVED:
+		return ExceptionType::PARAMETER_NOT_RESOLVED;
+	case DUCKDB_ERROR_PARAMETER_NOT_ALLOWED:
+		return ExceptionType::PARAMETER_NOT_ALLOWED;
+	case DUCKDB_ERROR_DEPENDENCY:
+		return ExceptionType::DEPENDENCY;
+	case DUCKDB_ERROR_HTTP:
+		return ExceptionType::HTTP;
+	case DUCKDB_ERROR_MISSING_EXTENSION:
+		return ExceptionType::MISSING_EXTENSION;
+	case DUCKDB_ERROR_AUTOLOAD:
+		return ExceptionType::AUTOLOAD;
+	case DUCKDB_ERROR_SEQUENCE:
+		return ExceptionType::SEQUENCE;
+	case DUCKDB_INVALID_CONFIGURATION:
+		return ExceptionType::INVALID_CONFIGURATION;
+	default:
+		return ExceptionType::INVALID;
 	}
 }
 

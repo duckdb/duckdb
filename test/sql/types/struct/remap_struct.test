@@ -1,0 +1,222 @@
+# name: test/sql/types/struct/remap_struct.test
+# description: Test struct remapping
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+# remap without targets
+query I
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v2 INT), NULL, {'v2': NULL::INTEGER});
+----
+{'v2': NULL}
+
+# basic binding error
+statement error
+select remap_struct(42, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER})
+----
+<REGEX>:.*Binder Error.*Struct remap can only remap nested types.*
+
+# basic remap usage
+query I
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER});
+----
+{'v1': 2, 'v2': NULL, 'v3': 1}
+
+# different defaults + casting
+query I
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'});
+----
+{'v1': 2, 'v2': hello, 'v3': 1}
+
+# Remapping operations:
+# - rename 'i' -> 'v1'
+# - rename 'j' -> 'v2'
+# - add column 'v2.y'
+# - add column 'v3'
+
+# remap nested types
+query I
+SELECT remap_struct(
+	{
+		'i': 1,
+		'j': {
+			'x': 42,
+			'z': 100
+		}
+	}, -- data
+	NULL::ROW(
+		v1 INT,
+		v2 STRUCT(
+			x INT,
+			y INT,
+			z INT
+		),
+		v3 VARCHAR
+	), -- target type
+	{
+		'v1': 'i',
+		'v2': ROW(
+			'j', {
+				'x': 'x',
+				'z': 'z'
+			}
+		)
+	}, -- remapping data -> target_type
+	{
+		'v2': {
+			'y': NULL::INT
+		},
+		'v3': NULL::VARCHAR
+	}
+); -- defaults
+----
+{'v1': 1, 'v2': {'x': 42, 'y': NULL, 'z': 100}, 'v3': NULL}
+
+# nested struct with null as default
+query I
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'y': 100}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT, z STRUCT(a INT, b INT))),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'y'})},
+ {'v2': {'z': NULL::STRUCT(a INT, b INT)}});
+----
+{'v1': 1, 'v2': {'x': 42, 'y': 100, 'z': NULL}}
+
+# nested type - no defaults
+query I
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'y': 100, 'z': 1000}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, z INT), v3 VARCHAR),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'z': 'z'})},
+ {'v3': NULL::VARCHAR});
+----
+{'v1': 1, 'v2': {'x': 42, 'z': 1000}, 'v3': NULL}
+
+# nested type - no input for a struct
+query I
+SELECT remap_struct(
+ {'i': 1},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT, z INT), v3 VARCHAR),
+ {'v1': 'i'},
+ {'v2': {'x': NULL::INT, 'y': NULL::INT, 'z': NULL::INT}, 'v3': NULL::VARCHAR});
+----
+{'v1': 1, 'v2': {'x': NULL, 'y': NULL, 'z': NULL}, 'v3': NULL}
+
+# bulk
+statement ok
+CREATE TABLE structs(struct_val STRUCT(i INT, j VARCHAR));
+
+statement ok
+INSERT INTO structs VALUES ({'i': 42, 'j': 'hello world this is my string'}), (NULL), ({'i': 100, 'j': NULL}), ({'i': NULL, 'j': 'string string string'});
+
+query I
+SELECT remap_struct(struct_val, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'})
+FROM structs
+----
+{'v1': hello world this is my string, 'v2': hello, 'v3': 42}
+NULL
+{'v1': NULL, 'v2': hello, 'v3': 100}
+{'v1': string string string, 'v2': hello, 'v3': NULL}
+
+query I
+SELECT remap_struct(struct_val, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::VARCHAR})
+FROM structs
+----
+{'v1': hello world this is my string, 'v2': NULL, 'v3': 42}
+NULL
+{'v1': NULL, 'v2': NULL, 'v3': 100}
+{'v1': string string string, 'v2': NULL, 'v3': NULL}
+
+# no defaults
+query I
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT), {'v1': 'j', 'v2': 'i'}, NULL);
+----
+{'v1': 2, 'v2': 1}
+
+# invalid usage
+# invalid target value
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v2': 'i'}, NULL);
+----
+<REGEX>:.*Binder Error.*Target value v2 not found.*
+
+# invalid type
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL, {'v2': 'i'}, NULL);
+----
+<REGEX>:.*Binder Error.*Struct remap can only remap nested types.*
+
+statement error
+SELECT remap_struct(ROW(1, 2), NULL::ROW(v1 VARCHAR), {'v2': 'i'}, NULL);
+----
+<REGEX>:.*Binder Error.*Struct remap can only remap named structs.*
+
+# invalid source value
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v1': 'k'}, NULL);
+----
+<REGEX>:.*Binder Error.*Source value k not found.*
+
+# duplicate default/target
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v1': 'i'}, {'v1': NULL::VARCHAR});
+----
+<REGEX>:.*Binder Error.*Duplicate value provided for target v1.*
+
+# not all target values mapped
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR, v2 VARCHAR), {'v1': 'i'}, NULL);
+----
+<REGEX>:.*Binder Error.*Missing target value v2.*
+
+statement error
+SELECT remap_struct(struct_val, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, struct_val)
+FROM structs
+----
+<REGEX>:.*Binder Error.*Default values must be constants.*
+
+# default type mismatch
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'});
+----
+<REGEX>:.*Binder Error.*Default key v2 does not match target type INTEGER.*
+
+# duplicate default
+statement error
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'z': 100}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT), v3 VARCHAR),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'z'})},
+ {'v2': {'y': NULL::INT}, 'v3': NULL::VARCHAR});
+----
+<REGEX>:.*Binder Error.*Duplicate value provided for target y.*
+
+# unaligned nested type
+statement error
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'z': 100}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT), v3 VARCHAR),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'z'})},
+ {'v2': NULL, 'v3': NULL::VARCHAR});
+----
+<REGEX>:.*Binder Error.*Default key v2 does not match target type.*
+
+statement error
+SELECT remap_struct(
+      [
+          {
+              'i': 1,
+              'j': 42
+          }
+      ],
+      NULL::STRUCT(k INT)[],
+      {'list': 'list'},
+      {
+          'list': {
+              'k': NULL
+          }
+      }
+  );
+----
+<REGEX>:.*Binder Error.*No child remaps found.*

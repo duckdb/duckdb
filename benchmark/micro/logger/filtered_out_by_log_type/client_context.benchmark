@@ -1,0 +1,12 @@
+# name: benchmark/micro/logger/filtered_out_by_log_type/client_context.benchmark
+# description: Benchmarking the Client Context logger filtering out disabled log types
+# group: [filtered_out_by_log_type]
+
+name Client Context
+group logger
+
+load
+CALL enable_logging('FileSystem');
+
+run
+SELECT write_log('hello world', level := 'warn', scope := 'connection', log_type := 'duckdb.SomeName.SomeOtherName.BlaBla' ) from range(0,10000000);

@@ -5,10 +5,10 @@
 require vector_size 2048
 
 statement ok
-PRAGMA enable_verification
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
 
 query I
-select [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
+SELECT [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
 ----
 [-2147483648, 2147483647]
 []
@@ -23,7 +23,7 @@ select [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
 [7]
 
 query I
-select [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
+SELECT [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
 ----
 []
 []
@@ -39,7 +39,7 @@ select [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
 
 
 query I
-select list_reduce(c, (x, y) -> x + y) FROM test_vector_types(NULL::INT[]) t(c) WHERE len(c) > 0;
+SELECT list_reduce(c, lambda x, y: x + y) FROM test_vector_types(NULL::INT[]) t(c) WHERE len(c) > 0;
 ----
 -1
 NULL

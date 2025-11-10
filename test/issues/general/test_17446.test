@@ -1,0 +1,33 @@
+# name: test/issues/general/test_17446.test
+# description: Issue 17446 - multiple joins crash with 'Execute called with a result vector of type INTEGER that does not match expression type VARCHAR'
+# group: [general]
+
+statement ok
+pragma disable_optimizer;
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE t0(c0 varchar);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+CREATE TABLE t2(c1 INT);
+
+statement ok
+CREATE TABLE t40(c0 varchar);
+
+statement ok
+INSERT INTO t0(c0) VALUES ('duckdb');
+
+statement ok
+INSERT INTO t2(c1) VALUES (1);
+
+statement ok
+INSERT INTO t40(c0) VALUES ('duckdb');
+
+statement ok
+SELECT * FROM t0, (SELECT 0) as subQuery0 LEFT JOIN (SELECT t0.c0 AS col_1, t1.c0 AS col_2, t2.c1 AS col_3 FROM t1 RIGHT JOIN t2 ON true) as subQuery1 ON true;

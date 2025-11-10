@@ -1,0 +1,11 @@
+# name: test/sql/json/issues/issue14167.test
+# description: Test issue 14167 - Dot notation for json field extraction is no longer working in v1.1.*
+# group: [issues]
+
+require json
+
+# the auto-detected type is a MAP, but we can still extract using the dot syntax because we rewrite to map_extract
+query I
+select columns.v4_c6 from read_ndjson_auto('{DATA_DIR}/json/14167.json');
+----
+{'statistics': {'nonNullCount': 0}}

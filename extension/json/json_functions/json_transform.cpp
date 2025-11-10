@@ -102,6 +102,7 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 	switch (unsafe_yyjson_get_tag(val)) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.strict_cast);
 		break;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -138,6 +139,7 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 	switch (unsafe_yyjson_get_tag(val)) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -172,6 +174,7 @@ static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &re
 	switch (unsafe_yyjson_get_tag(val)) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 		return true;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -259,8 +262,8 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 		if (!unsafe_yyjson_is_str(val)) {
 			validity.SetInvalid(i);
 			if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
-				options.error_message = StringUtil::Format("Unable to cast '%s' to " + EnumUtil::ToString(target.id()),
-				                                           JSONCommon::ValToString(val, 50));
+				options.error_message = StringUtil::Format(
+				    "Unable to cast '%s' to %s", JSONCommon::ValToString(val, 50), EnumUtil::ToString(target.id()));
 				options.object_index = i;
 				success = false;
 			}
@@ -291,8 +294,8 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 }
 
 template <class OP, class T>
-static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &format, const idx_t count, Vector &result,
-                                      JSONTransformOptions &options) {
+static bool TransformStringWithFormat(Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
+                                      Vector &result, JSONTransformOptions &options) {
 	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &source_validity = FlatVector::Validity(string_vector);
 
@@ -359,9 +362,14 @@ static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 
 bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
-                                    JSONTransformOptions &options) {
+                                    JSONTransformOptions &options,
+                                    optional_ptr<const vector<ColumnIndex>> column_indices, bool error_unknown_key) {
+	if (column_indices && column_indices->empty()) {
+		column_indices = nullptr;
+	}
 	D_ASSERT(alc);
 	D_ASSERT(names.size() == result_vectors.size());
+	D_ASSERT(!column_indices || column_indices->size() == names.size());
 	const idx_t column_count = names.size();
 
 	// Build hash map from key to column index so we don't have to linearly search using the key
@@ -416,8 +424,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				if (found_keys[col_idx]) {
 					if (success && options.error_duplicate_key) {
 						options.error_message =
-						    StringUtil::Format("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s",
-						                       JSONCommon::ValToString(objects[i], 50));
+						    StringUtil::Format("Object %s has duplicate key \"%s\"",
+						                       JSONCommon::ValToString(objects[i], 50), string(key_ptr, key_len));
 						options.object_index = i;
 						success = false;
 					}
@@ -426,10 +434,10 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 					found_keys[col_idx] = true;
 					found_key_count++;
 				}
-			} else if (success && options.error_unknown_key) {
+			} else if (success && error_unknown_key && options.error_unknown_key) {
 				options.error_message =
-				    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
-				                       JSONCommon::ValToString(objects[i], 50));
+				    StringUtil::Format("Object %s has unknown key \"%s\"", JSONCommon::ValToString(objects[i], 50),
+				                       string(key_ptr, key_len));
 				options.object_index = i;
 				success = false;
 			}
@@ -445,8 +453,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 				nested_vals[col_idx][i] = nullptr;
 
 				if (success && options.error_missing_key) {
-					options.error_message = StringUtil::Format("Object %s does not have key \"" + names[col_idx] + "\"",
-					                                           JSONCommon::ValToString(objects[i], 50));
+					options.error_message = StringUtil::Format("Object %s does not have key \"%s\"",
+					                                           JSONCommon::ValToString(objects[i], 50), names[col_idx]);
 					options.object_index = i;
 					success = false;
 				}
@@ -455,7 +463,9 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	}
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		if (!JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options)) {
+		auto child_column_index = column_indices ? &(*column_indices)[col_idx] : nullptr;
+		if (!JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options,
+		                              child_column_index)) {
 			success = false;
 		}
 	}
@@ -468,7 +478,11 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 }
 
 static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
-                                    JSONTransformOptions &options) {
+                                    JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index) {
+	if (column_index && column_index->ChildIndexCount() == 0) {
+		column_index = nullptr;
+	}
+
 	// Set validity first
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
@@ -482,14 +496,31 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	auto &child_vs = StructVector::GetEntries(result);
 	vector<string> child_names;
 	vector<Vector *> child_vectors;
-	child_names.reserve(child_vs.size());
-	child_vectors.reserve(child_vs.size());
-	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
-		child_names.push_back(StructType::GetChildName(result.GetType(), child_i));
-		child_vectors.push_back(child_vs[child_i].get());
+
+	const auto child_count = column_index ? column_index->ChildIndexCount() : child_vs.size();
+	child_names.reserve(child_count);
+	child_vectors.reserve(child_count);
+
+	unordered_set<idx_t> projected_indices;
+	for (idx_t child_i = 0; child_i < child_count; child_i++) {
+		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
+		projected_indices.insert(actual_i);
+
+		child_names.push_back(StructType::GetChildName(result.GetType(), actual_i));
+		child_vectors.push_back(child_vs[actual_i].get());
 	}
 
-	return JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, options);
+	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
+		if (projected_indices.find(child_i) == projected_indices.end()) {
+			child_vs[child_i]->SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(*child_vs[child_i], true);
+		}
+	}
+
+	auto child_indices = column_index ? &column_index->GetChildIndexes() : nullptr;
+	const auto error_unknown_key = child_count == child_vs.size(); // Nothing projected out, error if unknown
+	return JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, options, child_indices,
+	                                      error_unknown_key);
 }
 
 static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
@@ -559,7 +590,7 @@ static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &
 	}
 
 	// Transform array values
-	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options)) {
+	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options, nullptr)) {
 		success = false;
 	}
 
@@ -649,7 +680,7 @@ static bool TransformArrayToArray(yyjson_val *arrays[], yyjson_alc *alc, Vector 
 	}
 
 	// Transform array values
-	if (!JSONTransform::Transform(nested_vals, alc, ArrayVector::GetEntry(result), child_count, options)) {
+	if (!JSONTransform::Transform(nested_vals, alc, ArrayVector::GetEntry(result), child_count, options, nullptr)) {
 		success = false;
 	}
 
@@ -717,13 +748,13 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	D_ASSERT(list_offset == list_size);
 
 	// Transform keys
-	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {
+	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options, nullptr)) {
 		throw ConversionException(
-		    StringUtil::Format(options.error_message + ". Cannot default to NULL, because map keys cannot be NULL"));
+		    StringUtil::Format("%s. Cannot default to NULL, because map keys cannot be NULL", options.error_message));
 	}
 
 	// Transform values
-	if (!JSONTransform::Transform(vals, alc, MapVector::GetValues(result), list_size, options)) {
+	if (!JSONTransform::Transform(vals, alc, MapVector::GetValues(result), list_size, options, nullptr)) {
 		success = false;
 	}
 
@@ -810,7 +841,7 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		idx_t actual_tag = tag - names.begin();
 
 		Vector single(UnionType::GetMemberType(type, actual_tag), 1);
-		if (!JSONTransform::Transform(&val, alc, single, 1, options)) {
+		if (!JSONTransform::Transform(&val, alc, single, 1, options, nullptr)) {
 			success = false;
 		}
 
@@ -821,7 +852,7 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 }
 
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-                              JSONTransformOptions &options) {
+                              JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index) {
 	auto result_type = result.GetType();
 	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map &&
 	    options.date_format_map->HasFormats(result_type.id())) {
@@ -884,6 +915,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -896,7 +928,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
-		return TransformObjectInternal(vals, alc, result, count, options);
+		return TransformObjectInternal(vals, alc, result, count, options, column_index);
 	case LogicalTypeId::LIST:
 		return TransformArrayToList(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:
@@ -932,7 +964,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 		}
 	}
 
-	auto success = JSONTransform::Transform(vals, alc, result, count, options);
+	auto success = JSONTransform::Transform(vals, alc, result, count, options, nullptr);
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
@@ -943,12 +975,14 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYAlc();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	JSONTransformOptions options(strict, strict, strict, false);
 	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
 		throw InvalidInputException(options.error_message);
 	}
+
+	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
@@ -977,8 +1011,8 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 
 static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	JSONTransformOptions options(true, true, true, true);
 	options.delay_error = true;
@@ -994,7 +1028,7 @@ BoundCastInfo JSONToAnyCastBind(BindCastInput &input, const LogicalType &source,
 	return BoundCastInfo(JSONToAnyCast, nullptr, JSONFunctionLocalState::InitCastLocalState);
 }
 
-void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
+void JSONFunctions::RegisterJSONTransformCastFunctions(ExtensionLoader &loader) {
 	// JSON can be cast to anything
 	for (const auto &type : LogicalType::AllTypes()) {
 		LogicalType target_type;
@@ -1021,8 +1055,9 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 			target_type = type;
 		}
 		// Going from JSON to another type has the same cost as going from VARCHAR to that type
-		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
-		casts.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
+		const auto json_to_target_cost =
+		    CastFunctionSet::ImplicitCastCost(loader.GetDatabaseInstance(), LogicalType::VARCHAR, target_type);
+		loader.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
 	}
 }
 

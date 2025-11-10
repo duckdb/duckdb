@@ -32,6 +32,7 @@ using void_t = void;
 // Check for anything implementing a `void Serialize(Serializer &Serializer)` method
 template <typename T, typename = T>
 struct has_serialize : std::false_type {};
+
 template <typename T>
 struct has_serialize<
     T, typename std::enable_if<
@@ -185,7 +186,6 @@ struct is_atomic<std::atomic<T>> : std::true_type {
 // NOLINTEND
 
 struct SerializationDefaultValue {
-
 	template <typename T = void>
 	static inline typename std::enable_if<is_atomic<T>::value, T>::type GetDefault() {
 		using INNER = typename is_atomic<T>::TYPE;

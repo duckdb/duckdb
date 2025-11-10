@@ -1,0 +1,384 @@
+# name: test/sql/copy/csv/multidelimiter/test_abac.test
+# description: Test CSVs with repeating patterns in delimiter/escape/quote
+# group: [multidelimiter]
+
+query II
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaab_delim.csv', delim = 'AAAB')
+----
+A	C
+
+query II
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aab_delim.csv', delim = 'AAB')
+----
+A	C
+
+# ABAC delimiter
+# CSV file contains ABABACABABABAC
+# this is equivalent to "AB|ABAB|"
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
+
+query I
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (DELIMITER 'ABAC', AUTO_DETECT FALSE);
+----
+1
+
+query TTT
+SELECT * FROM abac_tbl
+----
+AB	ABAB	NULL
+
+# do the same but with a large unused quote specifier
+statement ok
+DELETE FROM abac_tbl;
+
+# query I
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (DELIMITER 'ABAC', QUOTE 'ABABABABABAB', AUTO_DETECT FALSE);
+# ----
+# 1
+#
+# query TTT
+# SELECT * FROM abac_tbl
+# ----
+# AB	ABAB	NULL
+#
+# statement ok
+# DROP TABLE abac_tbl
+#
+# # Mix of complex quotes/delimiters/escapes
+# # CSV contains ABABABACABABABABABADABABABADABACABABABABABADABAC
+# # quote -> "ABAB"
+# # escape -> "ABAC"
+# # delimiter -> "ABAD"
+# # first value is an escaped quote (ABAB)
+# # second value is a quoted delimiter followed by an escaped quote
+# # third value is an escape outside of a set of quotes (interpreted as a literal value)
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
+#
+# query I
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac_mix.csv' (DELIMITER 'ABAD', QUOTE 'ABAB', ESCAPE 'ABAC', AUTO_DETECT FALSE);
+# ----
+# 1
+#
+# query TTT
+# SELECT * FROM abac_tbl
+# ----
+# ABAB	ABADABAB	ABAC
+#
+# statement ok
+# DROP TABLE abac_tbl
+#
+# # CSV terminates in the middle of quote parsing
+# # CSV contains ABAB, quote is ABABABABAB
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
+#
+# query I
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac_incomplete_quote.csv' (QUOTE 'ABABABABAB', AUTO_DETECT FALSE);
+# ----
+# 1
+#
+# query T
+# SELECT * FROM abac_tbl
+# ----
+# ABAB
+#
+# statement ok
+# DROP TABLE abac_tbl
+#
+# # Newline in the middle of quote parsing
+# # CSV contains ABAB\nABAB
+# # Quote is ABABABABAB
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
+#
+# query I
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac_newline_in_quote.csv' (QUOTE 'ABABABABAB', AUTO_DETECT FALSE);
+# ----
+# 2
+#
+# query T
+# SELECT * FROM abac_tbl
+# ----
+# ABAB
+# ABAB
+
+statement ok
+DROP TABLE abac_tbl
+
+# Simple quote terminates immediately results in error
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+statement error
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/simple_unterminated_quote.csv' (QUOTE '"', AUTO_DETECT FALSE, strict_mode TRUE);
+----
+Line: 1
+
+statement ok
+DROP TABLE abac_tbl
+
+# File ends in quoted value (simple)
+# CSV contains only ""
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+query I
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/file_ends_in_quoted_value.csv' (QUOTE '"', AUTO_DETECT FALSE);
+----
+1
+
+query T
+SELECT * FROM abac_tbl
+----
+NULL
+
+statement ok
+DROP TABLE abac_tbl
+
+# File ends in quoted value (complex)
+# force complex parsing through a complex delimiter
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+query I
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/file_ends_in_quoted_value.csv' (QUOTE '"', DELIMITER 'AAAB', AUTO_DETECT FALSE);
+----
+1
+
+query T
+SELECT * FROM abac_tbl
+----
+NULL
+
+statement ok
+DROP TABLE abac_tbl
+
+# Simple quote terminates after escape results in error
+# CSV contains "\"
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+statement error
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_with_escape.csv' (QUOTE '"', ESCAPE '|', AUTO_DETECT FALSE, strict_mode TRUE);
+----
+Value with unterminated quote found.
+
+statement ok
+DROP TABLE abac_tbl
+
+# Simple quote terminates after quote escape results in error
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+statement error
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_escape.csv' (QUOTE '"', ESCAPE '"', AUTO_DETECT FALSE, strict_mode TRUE);
+----
+Value with unterminated quote found.
+
+statement ok
+DROP TABLE abac_tbl
+
+# Simple quote terminates after escape results in error
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+statement error
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_escape.csv' (QUOTE '"', ESCAPE '''', AUTO_DETECT FALSE, strict_mode TRUE);
+----
+0
+
+statement ok
+DROP TABLE abac_tbl
+
+# # Multi-byte quote terminates immediately results in error
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
+#
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/complex_unterminated_quote.csv' (QUOTE 'ABABAC', AUTO_DETECT FALSE);
+# ----
+# 0
+#
+# statement ok
+# DROP TABLE abac_tbl
+#
+# Quote followed by incomplete multi-byte delimiter
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+statement error
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/incomplete_multibyte_delimiter.csv' (DELIMITER 'ABAC', AUTO_DETECT FALSE, quote '"', strict_mode TRUE);
+----
+Value with unterminated quote found.
+
+query I
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/incomplete_multibyte_delimiter.csv' (DELIMITER 'AB', AUTO_DETECT FALSE , quote '"');
+----
+1
+
+statement ok
+DROP TABLE abac_tbl
+
+# # Multi-byte quote terminates after escape results in error
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
+#
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_with_escape_complex.csv' (QUOTE 'ABAC', ESCAPE 'ABAB', AUTO_DETECT FALSE);
+# ----
+# line 1
+#
+# statement ok
+# DROP TABLE abac_tbl
+#
+# # Multi-byte quote terminates after quote escape results in error
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
+#
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_escape_complex.csv' (QUOTE 'ABAC', ESCAPE 'ABAC', AUTO_DETECT FALSE);
+# ----
+# line 1
+#
+# statement ok
+# DROP TABLE abac_tbl
+#
+# # Multi-byte quote terminates after escape results in error
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
+#
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_escape_complex.csv' (QUOTE 'ABAC', ESCAPE 'ABAB', AUTO_DETECT FALSE);
+# ----
+# line 1
+#
+# statement ok
+# DROP TABLE abac_tbl
+#
+# # Delimiter, quote and escape have a maximum size of 255 bytes
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (QUOTE 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
+#
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (ESCAPE 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
+
+statement error
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (DELIMITER 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
+----
+The delimiter option cannot exceed a size of 4 bytes.
+
+
+# query I
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (QUOTE 'BLABLABLA', AUTO_DETECT FALSE);
+# ----
+# 1
+
+statement ok
+DROP TABLE abac_tbl
+
+# Test newline with multi-byte delimiter
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
+
+query I
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/carriage_feed_newline.csv' (DELIMITER 'BA', AUTO_DETECT FALSE);
+----
+2
+
+query TT
+SELECT * FROM abac_tbl
+----
+A	B
+A	C
+
+statement ok
+DROP TABLE abac_tbl
+
+# Test newline with multi-byte delimiter
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
+
+query I
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/windows_newline.csv' (DELIMITER 'BA', AUTO_DETECT FALSE);
+----
+2
+
+query TT
+SELECT * FROM abac_tbl
+----
+A	B
+A	C
+
+statement ok
+DROP TABLE abac_tbl
+
+# Test unterminated quotes with multi-line delimiter
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+statement error
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_multi_line.csv' (DELIMITER 'BA', AUTO_DETECT FALSE, strict_mode TRUE);
+----
+Value with unterminated quote found.
+
+statement ok
+DROP TABLE abac_tbl
+
+# Test unquote not followed by delimiter
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
+
+statement error
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unquote_without_delimiter.csv' (DELIMITER 'BA', AUTO_DETECT FALSE, strict_mode TRUE);
+----
+Value with unterminated quote found.
+
+statement ok
+DROP TABLE abac_tbl
+
+# # Test escape followed by non-quote and non-escape (multi-byte)
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
+#
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/escape_non_quote_escape_complex.csv' (DELIMITER 'BA', ESCAPE 'XX', AUTO_DETECT FALSE);
+#
+# statement ok
+# DROP TABLE abac_tbl
+#
+# Test file end after delimiter with multi-byte delimiter
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+query I
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/trailing_delimiter_complex.csv' (DELIMITER 'BA', AUTO_DETECT FALSE);
+----
+1
+
+query T
+SELECT * FROM abac_tbl
+----
+AAA
+
+statement ok
+DROP TABLE abac_tbl
+
+# Test file end after delimiter with single-byte delimiter
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
+query I
+COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/trailing_delimiter.csv' (DELIMITER '|', AUTO_DETECT FALSE);
+----
+1
+
+query T
+SELECT * FROM abac_tbl
+----
+AAA
+

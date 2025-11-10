@@ -1,8 +1,6 @@
 # name: test/sql/json/test_json_serialize_plan.test
 # group: [json]
 
-require noforcestorage
-
 require json
 
 statement ok
@@ -38,3 +36,6 @@ query I
 SELECT json_serialize_plan('SELECT * FROM nonexistent_table') LIKE '%Table with name nonexistent_table does not exist%';
 ----
 true
+
+statement ok
+select json_serialize_plan('select blob ''\\x00''');

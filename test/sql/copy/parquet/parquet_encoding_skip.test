@@ -1,0 +1,33 @@
+# name: test/sql/copy/parquet/parquet_encoding_skip.test
+# description: Test skipping of various encodings
+# group: [parquet]
+
+require parquet
+
+foreach parquet_version v1 v2
+
+# primitives
+statement ok
+COPY (SELECT i id, i AS bigint, i::SMALLINT AS tinyint, i::DOUBLE dbl, 'prefix_' || i::VARCHAR str, 'constant' const_str FROM range(3000) t(i)) TO '__TEST_DIR__/skip.parquet'  (PARQUET_VERSION '${parquet_version}');
+
+query IIIIII
+SELECT * FROM '__TEST_DIR__/skip.parquet' WHERE id>2995
+----
+2996	2996	2996	2996.0	prefix_2996	constant
+2997	2997	2997	2997.0	prefix_2997	constant
+2998	2998	2998	2998.0	prefix_2998	constant
+2999	2999	2999	2999.0	prefix_2999	constant
+
+# nested types
+statement ok
+COPY (SELECT i id, [i, i + 1, i + 2] l, {'a': i, 'l': [i, i + 1, i + 2]} struct_1, [{'a': i}, {'a': i + 1}, {'a': i + 2}] struct_2 FROM range(3000) t(i)) TO '__TEST_DIR__/skip_nested.parquet'  (PARQUET_VERSION '${parquet_version}');
+
+query IIII
+SELECT * FROM '__TEST_DIR__/skip_nested.parquet' WHERE id>2995
+----
+2996	[2996, 2997, 2998]	{'a': 2996, 'l': [2996, 2997, 2998]}	[{'a': 2996}, {'a': 2997}, {'a': 2998}]
+2997	[2997, 2998, 2999]	{'a': 2997, 'l': [2997, 2998, 2999]}	[{'a': 2997}, {'a': 2998}, {'a': 2999}]
+2998	[2998, 2999, 3000]	{'a': 2998, 'l': [2998, 2999, 3000]}	[{'a': 2998}, {'a': 2999}, {'a': 3000}]
+2999	[2999, 3000, 3001]	{'a': 2999, 'l': [2999, 3000, 3001]}	[{'a': 2999}, {'a': 3000}, {'a': 3001}]
+
+endloop

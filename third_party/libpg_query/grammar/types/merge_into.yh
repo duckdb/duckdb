@@ -1,0 +1,4 @@
+%type <list> merge_match_list opt_insert_column_list
+%type <node> matched_or_not_matched_clause matched_clause not_matched_clause opt_and_clause matched_clause_action opt_star_expr opt_error_message
+
+%type <mergeaction> opt_source_or_target

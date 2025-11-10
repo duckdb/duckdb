@@ -1,0 +1,18 @@
+# name: test/sql/function/autocomplete/suggest_file.test
+# description: Test sql_auto_complete
+# group: [autocomplete]
+
+require notwindows
+
+require autocomplete
+
+# test file auto complete
+query I
+SELECT suggestion FROM sql_auto_complete('COPY tbl FROM ''{DATA_DIR}/parq') LIMIT 1;
+----
+parquet-testing/
+
+query I
+SELECT suggestion FROM sql_auto_complete('COPY tbl FROM ''{DATA_DIR}/csv/all_quote') LIMIT 1;
+----
+all_quotes.csv'

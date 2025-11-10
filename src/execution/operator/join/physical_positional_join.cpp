@@ -5,11 +5,12 @@
 
 namespace duckdb {
 
-PhysicalPositionalJoin::PhysicalPositionalJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-                                               unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+PhysicalPositionalJoin::PhysicalPositionalJoin(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                               PhysicalOperator &left, PhysicalOperator &right,
+                                               idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::POSITIONAL_JOIN, std::move(types), estimated_cardinality) {
+	children.push_back(left);
+	children.push_back(right);
 }
 
 //===--------------------------------------------------------------------===//
@@ -18,7 +19,7 @@ PhysicalPositionalJoin::PhysicalPositionalJoin(vector<LogicalType> types, unique
 class PositionalJoinGlobalState : public GlobalSinkState {
 public:
 	explicit PositionalJoinGlobalState(ClientContext &context, const PhysicalPositionalJoin &op)
-	    : rhs(context, op.children[1]->GetTypes()), initialized(false), source_offset(0), exhausted(false) {
+	    : rhs(context, op.children[1].get().GetTypes()), initialized(false), source_offset(0), exhausted(false) {
 		rhs.InitializeAppend(append_state);
 	}
 
@@ -186,7 +187,7 @@ void PhysicalPositionalJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalPositionalJoin::GetSources() const {
-	auto result = children[0]->GetSources();
+	auto result = children[0].get().GetSources();
 	if (IsSource()) {
 		result.push_back(*this);
 	}

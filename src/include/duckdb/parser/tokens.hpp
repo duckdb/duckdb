@@ -43,6 +43,7 @@ class LoadStatement;
 class LogicalPlanStatement;
 class MultiStatement;
 class CopyDatabaseStatement;
+class MergeIntoStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -52,6 +53,7 @@ class SelectNode;
 class SetOperationNode;
 class RecursiveCTENode;
 class CTENode;
+class StatementNode;
 
 //===--------------------------------------------------------------------===//
 // Expressions
@@ -92,6 +94,7 @@ class ForeignKeyConstraint;
 class TableRef;
 
 class BaseTableRef;
+class BoundRefWrapper;
 class JoinRef;
 class SubqueryRef;
 class TableFunctionRef;
@@ -104,6 +107,7 @@ class ShowRef;
 //===--------------------------------------------------------------------===//
 // Other
 //===--------------------------------------------------------------------===//
-struct SampleOptions;
+class SampleOptions;
+class MergeIntoAction;
 
 } // namespace duckdb

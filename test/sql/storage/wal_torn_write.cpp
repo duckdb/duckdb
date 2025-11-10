@@ -62,13 +62,66 @@ TEST_CASE("Test torn WAL writes", "[storage][.]") {
 	DeleteDatabase(storage_database);
 }
 
+TEST_CASE("Test torn WAL writes followed by successful commits", "[storage][.]") {
+	auto config = GetTestConfig();
+	duckdb::unique_ptr<QueryResult> result;
+	auto storage_database = TestCreatePath("storage_test");
+	auto storage_wal = storage_database + ".wal";
+
+	LocalFileSystem lfs;
+	config->options.checkpoint_wal_size = idx_t(-1);
+	config->options.checkpoint_on_shutdown = false;
+	config->options.abort_on_wal_failure = false;
+	idx_t wal_size_one_table;
+	// obtain the size of the WAL when writing one table, and then when writing two tables
+	DeleteDatabase(storage_database);
+	{
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE A (a INTEGER);"));
+		wal_size_one_table = GetWALFileSize(lfs, storage_wal);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE B (a INTEGER);"));
+	}
+	DeleteDatabase(storage_database);
+
+	DeleteDatabase(storage_database);
+	{
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE A (a INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE B (a INTEGER);"));
+	}
+	TruncateWAL(lfs, storage_wal, wal_size_one_table + 17);
+	{
+		// reload and make sure table A is there, and table B is not there
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("FROM A"));
+		REQUIRE_FAIL(con.Query("FROM B"));
+
+		// create table C
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE C (a INTEGER);"));
+	}
+	{
+		// reload and make sure table A and C are there, and table B is not
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("FROM A"));
+		REQUIRE_FAIL(con.Query("FROM B"));
+		REQUIRE_NO_FAIL(con.Query("FROM C"));
+	}
+	DeleteDatabase(storage_database);
+}
+
 static void FlipWALByte(FileSystem &fs, const string &path, idx_t byte_pos) {
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ);
-	idx_t wal_size = handle->GetFileSize();
+	auto wal_size = handle->GetFileSize();
 	auto wal_contents = duckdb::unique_ptr<data_t[]>(new data_t[wal_size]);
-	handle->Read(wal_contents.get(), wal_size, 0);
+
+	handle->Read(QueryContext(), wal_contents.get(), wal_size, 0);
 	wal_contents[byte_pos]++;
-	handle->Write(wal_contents.get(), wal_size, 0);
+
+	handle->Write(QueryContext(), wal_contents.get(), wal_size, 0);
 }
 
 TEST_CASE("Test WAL checksums", "[storage][.]") {

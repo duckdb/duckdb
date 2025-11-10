@@ -6,11 +6,11 @@
 
 namespace duckdb {
 
-CreateTypeInfo::CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY), bind_modifiers(nullptr) {
+CreateTypeInfo::CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY), bind_function(nullptr) {
 }
-CreateTypeInfo::CreateTypeInfo(string name_p, LogicalType type_p, bind_type_modifiers_function_t bind_modifiers_p)
+CreateTypeInfo::CreateTypeInfo(string name_p, LogicalType type_p, bind_logical_type_function_t bind_function_p)
     : CreateInfo(CatalogType::TYPE_ENTRY), name(std::move(name_p)), type(std::move(type_p)),
-      bind_modifiers(bind_modifiers_p) {
+      bind_function(bind_function_p) {
 }
 
 unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
@@ -21,18 +21,12 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 	if (query) {
 		result->query = query->Copy();
 	}
-	result->bind_modifiers = bind_modifiers;
+	result->bind_function = bind_function;
 	return std::move(result);
 }
 
 string CreateTypeInfo::ToString() const {
-	string result = "";
-	result += "CREATE";
-	if (temporary) {
-		// These are created by PIVOT
-		throw NotImplementedException("CREATE TEMPORARY TYPE can't be parsed currently");
-	}
-	result += " TYPE ";
+	string result = GetCreatePrefix("TYPE");
 	result += QualifierToString(temporary ? "" : catalog, schema, name);
 	if (type.id() == LogicalTypeId::ENUM) {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
@@ -61,6 +55,7 @@ string CreateTypeInfo::ToString() const {
 		result += " AS ";
 		result += type.ToString();
 	}
+	result += ";";
 	return result;
 }
 

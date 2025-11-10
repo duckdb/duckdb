@@ -37,12 +37,18 @@
  * order to yield to another virtual CPU.
  */
 #if defined(__aarch64__) || defined(__ARM_ARCH)
-#define CPU_SPINWAIT __asm__ volatile("isb")
+    #define CPU_SPINWAIT __asm__ volatile("isb")
+    #define HAVE_CPU_SPINWAIT 1
+#elif defined(__x86_64__) || defined(__i386__)
+    #define CPU_SPINWAIT __asm__ volatile("pause")
+    #define HAVE_CPU_SPINWAIT 1
+#elif defined(__powerpc64__) || defined(__PPC64__)
+    #define CPU_SPINWAIT __asm__ volatile("or 27,27,27")
+    #define HAVE_CPU_SPINWAIT 1
 #else
-#define CPU_SPINWAIT __asm__ volatile("pause")
+    #define CPU_SPINWAIT
+    #define HAVE_CPU_SPINWAIT 0
 #endif
-/* 1 if CPU_SPINWAIT is defined, 0 otherwise. */
-#define HAVE_CPU_SPINWAIT 1
 
 /*
  * Number of significant bits in virtual addresses.  This may be less than the
@@ -347,7 +353,9 @@
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
-// #define JEMALLOC_CACHE_OBLIVIOUS
+#if (LG_PAGE == 12)
+#define JEMALLOC_CACHE_OBLIVIOUS
+#endif
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to

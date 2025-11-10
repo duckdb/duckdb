@@ -21,7 +21,14 @@ ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const vec
 		this->expressions.push_back(std::move(expressions));
 	}
 	QueryResult::DeduplicateColumns(names);
-	context->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
+}
+
+ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context,
+                             vector<vector<unique_ptr<ParsedExpression>>> &&expressions_p, vector<string> names_p,
+                             string alias_p)
+    : ValueRelation(make_shared_ptr<RelationContextWrapper>(context), std::move(expressions_p), std::move(names_p),
+                    std::move(alias_p)) {
 }
 
 ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const string &values_list,
@@ -29,7 +36,40 @@ ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const str
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list, context->GetParserOptions());
 	QueryResult::DeduplicateColumns(names);
-	context->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
+}
+
+ValueRelation::ValueRelation(const shared_ptr<RelationContextWrapper> &context, const vector<vector<Value>> &values,
+                             vector<string> names_p, string alias_p)
+    : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
+	// create constant expressions for the values
+	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
+		auto &list = values[row_idx];
+		vector<unique_ptr<ParsedExpression>> expressions;
+		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
+			expressions.push_back(make_uniq<ConstantExpression>(list[col_idx]));
+		}
+		this->expressions.push_back(std::move(expressions));
+	}
+	QueryResult::DeduplicateColumns(names);
+	TryBindRelation(columns);
+}
+
+ValueRelation::ValueRelation(const shared_ptr<RelationContextWrapper> &context,
+                             vector<vector<unique_ptr<ParsedExpression>>> &&expressions_p, vector<string> names_p,
+                             string alias_p)
+    : Relation(context, RelationType::VALUE_LIST_RELATION), alias(std::move(alias_p)) {
+	D_ASSERT(!expressions_p.empty());
+	if (names_p.empty()) {
+		auto &first_list = expressions_p[0];
+		for (auto &expr : first_list) {
+			names_p.push_back(expr->GetName());
+		}
+	}
+	names = std::move(names_p);
+	expressions = std::move(expressions_p);
+	QueryResult::DeduplicateColumns(names);
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> ValueRelation::GetQueryNode() {

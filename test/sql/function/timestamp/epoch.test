@@ -3,7 +3,13 @@
 # group: [timestamp]
 
 query TTTTTT
-SELECT epoch_ms(0) as epoch1, epoch_ms(1574802684123) as epoch2, epoch_ms(-291044928000) as epoch3, epoch_ms(-291081600000) as epoch4,  epoch_ms(-291081600001) as epoch5, epoch_ms(-290995201000) as epoch6
+SELECT 
+	make_timestamp(0) as epoch1, 
+	make_timestamp(1574802684123 * 1000) as epoch2, 
+	make_timestamp(-291044928000 * 1000) as epoch3, 
+	make_timestamp(-291081600000 * 1000) as epoch4,  
+	make_timestamp(-291081600001 * 1000) as epoch5, 
+	make_timestamp(-290995201000 * 1000) as epoch6
 ----
 1970-01-01 00:00:00
 2019-11-26 21:11:24.123
@@ -12,6 +18,22 @@ SELECT epoch_ms(0) as epoch1, epoch_ms(1574802684123) as epoch2, epoch_ms(-29104
 1960-10-10 23:59:59.999
 1960-10-11 23:59:59
 
+# MS version for replacing epoch_ms(bigint)
+query TTTTTT
+SELECT 
+	make_timestamp_ms(0) as epoch1, 
+	make_timestamp_ms(1574802684123) as epoch2, 
+	make_timestamp_ms(-291044928000) as epoch3, 
+	make_timestamp_ms(-291081600000) as epoch4,  
+	make_timestamp_ms(-291081600001) as epoch5, 
+	make_timestamp_ms(-290995201000) as epoch6
+----
+1970-01-01 00:00:00
+2019-11-26 21:11:24.123
+1960-10-11 10:11:12
+1960-10-11 00:00:00
+1960-10-10 23:59:59.999
+1960-10-11 23:59:59
 
 query IIII
 SELECT to_timestamp(0), to_timestamp(1), to_timestamp(1574802684), to_timestamp(-1)
@@ -31,4 +53,4 @@ SELECT to_timestamp(1284352323.5);
 statement error
 SELECT to_timestamp(1284352323::DOUBLE * 100000000);
 ----
-Could not convert epoch seconds to TIMESTAMP WITH TIME ZONE
+Conversion Error: Epoch seconds out of range for TIMESTAMP WITH TIME ZONE

@@ -2,9 +2,7 @@
 # description: ATTACH to a database that uses ICU collations in types
 # group: [storage]
 
-require skip_reload
-
-require no_extension_autoloading
+require icu
 
 # The database is written with a vector size of 2048.
 require vector_size 2048
@@ -22,14 +20,6 @@ Goldmann
 Göbel
 Göthe
 Götz
-
-# cannot order by without ICU
-statement error
-SELECT * FROM strings ORDER BY 1
-----
-not in the catalog
-
-require icu
 
 query I
 SELECT * FROM strings ORDER BY 1

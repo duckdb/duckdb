@@ -18,7 +18,7 @@ NULL
 query I
 select corr(1,1)
 ----
-NULL
+NAN
 
 statement error
 select corr(*)

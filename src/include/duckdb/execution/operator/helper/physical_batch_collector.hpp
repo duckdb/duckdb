@@ -15,10 +15,10 @@ namespace duckdb {
 
 class PhysicalBatchCollector : public PhysicalResultCollector {
 public:
-	explicit PhysicalBatchCollector(PreparedStatementData &data);
+	PhysicalBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
 
 public:
-	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
+	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;
 
 public:
 	// Sink interface
@@ -30,8 +30,8 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
-	bool RequiresBatchIndex() const override {
-		return true;
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return OperatorPartitionInfo::BatchIndex();
 	}
 
 	bool ParallelSink() const override {
@@ -44,7 +44,8 @@ public:
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
-	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
+	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op)
+	    : data(context, op.types, op.memory_type) {
 	}
 
 	mutex glock;
@@ -54,7 +55,8 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op)
+	    : data(context, op.types, op.memory_type) {
 	}
 
 	BatchedDataCollection data;

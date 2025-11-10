@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
@@ -51,6 +52,8 @@ public:
 
 	virtual void PrintPipeline() {
 	}
+
+	ClientContext &GetClientContext();
 
 	template <class TARGET>
 	TARGET &Cast() {

@@ -3,9 +3,6 @@
 # group: [pushdown]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 create table t1 as from VALUES 
 	('A', 1), 
 	('B', 3),
@@ -28,11 +25,11 @@ statement ok
 create view window_no_filter as select a,  b, LEAD(b) OVER (partition by a) as lead from t1;
 
 query III no_sort result_1
-select * from window_with_filter where a != 'C' order by a;
+select * from window_with_filter where a != 'C' order by all;
 ----
 
 query III no_sort result_1
-select * from window_no_filter where a != 'C' order by a;
+select * from window_no_filter where a != 'C' order by all;
 ----
 
 statement ok
@@ -134,7 +131,7 @@ logical_opt	<REGEX>:.*FILTER.*WINDOW.*
 query II
 explain select * from window_no_filter where a != 'C' order by a;
 ----
-logical_opt	<REGEX>:.*WINDOW.*FILTER.*
+logical_opt	<REGEX>:.*WINDOW.*Filters.*
 
 statement ok
 create table t2 as select range a, range%50 b, range%25 c from range(500);

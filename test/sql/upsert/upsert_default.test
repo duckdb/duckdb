@@ -17,14 +17,14 @@ insert into tbl(b) VALUES (3), (5), (6);
 statement ok
 insert into tbl(b) VALUES (7), (3), (4) ON CONFLICT do update set c = 5, a = 10;
 
-query III
+query III rowsort
 select * from tbl;
 ----
 10	3	5
+5	4	10
 5	5	10
 5	6	10
 5	7	10
-5	4	10
 
 statement ok
 create table t (i int primary key, j int);

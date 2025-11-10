@@ -5,8 +5,6 @@
 statement ok
 PRAGMA verify_external
 
-require skip_reload
-
 # test tinyints
 statement ok
 CREATE TABLE tinyints(i TINYINT)

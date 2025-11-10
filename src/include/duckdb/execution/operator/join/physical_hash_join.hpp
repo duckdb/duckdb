@@ -22,15 +22,18 @@ class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_JOIN;
 
+	struct JoinProjectionColumns {
+		vector<idx_t> col_idxs;
+		vector<LogicalType> col_types;
+	};
+
 public:
-	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
-	                 idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats,
-	                 unique_ptr<JoinFilterPushdownInfo> pushdown_info);
-	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
-	                 PerfectHashJoinStats join_state);
+	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
@@ -38,20 +41,18 @@ public:
 	//! The types of the join keys
 	vector<LogicalType> condition_types;
 
-	//! The indices for getting the payload columns
-	vector<idx_t> payload_column_idxs;
-	//! The types of the payload columns
-	vector<LogicalType> payload_types;
-
-	//! Positions of the RHS columns that need to output
-	vector<idx_t> rhs_output_columns;
-	//! The types of the output
-	vector<LogicalType> rhs_output_types;
+	//! The indices/types of the payload columns
+	JoinProjectionColumns payload_columns;
+	//! The indices/types of the lhs columns that need to be output
+	JoinProjectionColumns lhs_output_columns;
+	//! The indices/types of the rhs columns that need to be output
+	JoinProjectionColumns rhs_output_columns;
 
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	//! Used in perfect hash join
-	PerfectHashJoinStats perfect_join_statistics;
+
+	//! Join Keys statistics (optional)
+	vector<unique_ptr<BaseStatistics>> join_stats;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -75,7 +76,7 @@ protected:
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
-	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	//! Becomes a source when it is an external join
 	bool IsSource() const override {

@@ -14,6 +14,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/enums/preserve_order.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,9 @@ public:
 
 	bool partition_output;
 	bool write_partition_columns;
+	bool write_empty_file = true;
+	bool hive_file_pattern = true;
+	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	vector<idx_t> partition_columns;
 	vector<string> names;
 	vector<LogicalType> expected_types;

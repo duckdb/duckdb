@@ -1,0 +1,36 @@
+# name: test/sql/storage/compression/zstd/test_skipping.test
+# group: [zstd]
+
+statement ok
+SET storage_compatibility_version='v1.2.0'
+
+load __TEST_DIR__/zstd_vector_skipping.db
+
+statement ok
+pragma force_compression='zstd';
+
+set seed 0.42
+
+statement ok
+create table tbl as
+select
+	i // 5_000 as num,
+	num::VARCHAR || list_reduce([uuid()::varchar for x in range(10)], lambda x, y: concat(x, y)) str
+from range(20_000) t(i) order by num
+
+statement ok
+force checkpoint;
+
+query I
+select str[0:1]::BIGINT from tbl where num = 1 limit 10;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
