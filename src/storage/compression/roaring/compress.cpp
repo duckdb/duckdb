@@ -476,10 +476,26 @@ idx_t RoaringCompressState::Count(RoaringCompressState &state) {
 void RoaringCompressState::Flush(RoaringCompressState &state) {
 	state.NextContainer();
 }
-
-void RoaringCompressState::Compress(Vector &input, idx_t count) {
+template <>
+void RoaringCompressState::Compress<PhysicalType::BIT>(Vector &input, idx_t count) {
 	auto &self = *this;
-	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input, count);
+	UnifiedVectorFormat unified;
+	input.ToUnifiedFormat(count, unified);
+	auto &validity = unified.validity;
+
+	auto input_vector = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
+	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input_vector, count);
+}
+template <>
+void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count) {
+	auto &self = *this;
+	input.Flatten(count);
+	Vector bitpacked_input(LogicalType::UBIGINT, count);
+	auto bitpacked_data = FlatVector::GetData<uint64_t>(bitpacked_input);
+
+	auto input_data = FlatVector::GetData<uint8_t>(input);
+	BitpackingPrimitives::PackBuffer<uint8_t, true>(data_ptr_cast(bitpacked_data), data_ptr_cast(input_data), count, 1);
+	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_input, count);
 }
 
 } // namespace roaring

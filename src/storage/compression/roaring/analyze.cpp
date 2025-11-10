@@ -167,10 +167,28 @@ void RoaringAnalyzeState::FlushContainer() {
 	count = 0;
 }
 
-void RoaringAnalyzeState::Analyze(Vector &input, idx_t count) {
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BIT>(Vector &input, idx_t count) {
 	auto &self = *this;
+	UnifiedVectorFormat unified;
+	input.ToUnifiedFormat(count, unified);
+	auto &validity = unified.validity;
 
-	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, input, count);
+	auto input_vector = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
+	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, input_vector, count);
+	total_count += count;
+}
+
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count) {
+	auto &self = *this;
+	input.Flatten(count);
+	Vector bitpacked_input(LogicalType::UBIGINT, count);
+	auto bitpacked_data = FlatVector::GetData<uint64_t>(bitpacked_input);
+
+	auto input_data = FlatVector::GetData<uint8_t>(input);
+	BitpackingPrimitives::PackBuffer<uint8_t, true>(data_ptr_cast(bitpacked_data), data_ptr_cast(input_data), count, 1);
+	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, bitpacked_input, count);
 	total_count += count;
 }
 

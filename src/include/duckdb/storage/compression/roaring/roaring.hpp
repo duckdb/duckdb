@@ -223,8 +223,10 @@ public:
 	bool HasEnoughSpaceInSegment(idx_t required_space);
 	void FlushSegment();
 	void FlushContainer();
-	void Analyze(Vector &input, idx_t count);
-
+	template <PhysicalType TYPE>
+	void Analyze(Vector &input, idx_t count) {
+		throw InternalException("RoaringAnalyzState::Analyze, type %s not handled", EnumUtil::ToString(TYPE));
+	}
 public:
 	unsafe_unique_array<BitmaskTableEntry> bitmask_table;
 
@@ -260,6 +262,8 @@ public:
 	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> container_metadata;
 };
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BIT>(Vector &input, idx_t count);
 
 //===--------------------------------------------------------------------===//
 // Compress
@@ -343,7 +347,10 @@ public:
 	void FlushContainer();
 	void NextContainer();
 	void Compress(Vector &input, idx_t count);
-
+	template <PhysicalType TYPE>
+	void Compress(Vector &input, idx_t count) {
+		throw InternalException("RoaringCompressState::Compress, type %s not handled", EnumUtil::ToString(TYPE));
+	}
 public:
 	unique_ptr<AnalyzeState> owned_analyze_state;
 	RoaringAnalyzeState &analyze_state;
@@ -364,6 +371,9 @@ public:
 	//! The amount of values already compressed
 	idx_t total_count = 0;
 };
+
+template <>
+void RoaringCompressState::Compress<PhysicalType::BIT>(Vector &input, idx_t count);
 
 //===--------------------------------------------------------------------===//
 // Scan
