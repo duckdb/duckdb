@@ -9,5 +9,5 @@ FROM UNNEST(ARRAY[6]) AS x
 UNION ALL
 SELECT 2 FROM generate_series(1, 1);
 ----
-6
 2
+6
