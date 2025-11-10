@@ -216,6 +216,7 @@ struct PostRequestInfo : public BaseRequest {
 class HTTPClient {
 public:
 	virtual ~HTTPClient() = default;
+	virtual void Initialize(HTTPParams &http_params) = 0;
 
 	virtual unique_ptr<HTTPResponse> Get(GetRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Put(PutRequestInfo &info) = 0;
