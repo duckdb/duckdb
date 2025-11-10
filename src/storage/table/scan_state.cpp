@@ -25,7 +25,7 @@ idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const 
 	if (!stats.CanHaveNull()) {
 		return row_group.count;
 	}
-	NumericStats::IsConstant(stats);
+
 	if (type == OrderByColumnType::NUMERIC) {
 		if (!NumericStats::HasMinMax(stats)) {
 			return 0;
@@ -34,11 +34,10 @@ idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const 
 			return 1;
 		}
 		return 2;
-	} else {
-		// We cannot check if the min/max for StringStats have actually been set. As the strings may be truncated, we
-		// also cannot assume that min and max are the same
-		return 0;
 	}
+	// We cannot check if the min/max for StringStats have actually been set. As the strings may be truncated, we
+	// also cannot assume that min and max are the same
+	return 0;
 }
 
 template <typename It, typename End>
