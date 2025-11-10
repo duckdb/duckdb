@@ -75,11 +75,11 @@ SELECT struct_keys(col) FROM filtered_struct WHERE idx % 2 != 0 ORDER BY idx;
 [a, b]
 NULL
 
-# Unnamed struct should return NULL
-query I
+# Unnamed struct should raise an error
+statement error
 select struct_keys(ROW(1, 2));
 ----
-NULL
+Invalid Input Error: struct_keys() cannot be applied to an unnamed STRUCT
 
 # Error cases: non-STRUCT inputs should fail
 statement error

@@ -7,15 +7,10 @@ namespace duckdb {
 
 struct StructKeysBindData : public FunctionData {
 	const LogicalType type;
-	const bool is_unnamed;
 	Vector keys_vector;
 
-	explicit StructKeysBindData(const LogicalType &type_p, bool is_unnamed_p)
-	    : type(type_p), is_unnamed(is_unnamed_p), keys_vector(LogicalType::LIST(LogicalType::VARCHAR), 2) {
-		// If the struct is unnamed, we don't need to compute or store the keys at all
-		if (is_unnamed) {
-			return;
-		}
+	explicit StructKeysBindData(const LogicalType &type_p)
+	    : type(type_p), keys_vector(LogicalType::LIST(LogicalType::VARCHAR), 2) {
 		const auto &child_types = StructType::GetChildTypes(type);
 		const auto count = child_types.size();
 
@@ -38,11 +33,11 @@ struct StructKeysBindData : public FunctionData {
 	bool Equals(const FunctionData &other) const override {
 		auto &o = other.Cast<StructKeysBindData>();
 		// Compare type and flag (content is derived from them)
-		return type == o.type && is_unnamed == o.is_unnamed;
+		return type == o.type;
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<StructKeysBindData>(type, is_unnamed);
+		return make_uniq<StructKeysBindData>(type);
 	}
 };
 
@@ -52,13 +47,6 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	auto &data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<StructKeysBindData>();
 	auto &keys_vector = data.keys_vector;
-
-	// Unnamed STRUCTs should yield NULL (decided at bind time)
-	if (data.is_unnamed) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
-		return;
-	}
 
 	// If the input is a constant, we must return a CONSTANT_VECTOR
 	if (args.AllConstant()) {
@@ -91,7 +79,10 @@ static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFun
 	}
 
 	const bool is_unnamed = StructType::IsUnnamed(arguments[0]->return_type);
-	return make_uniq<StructKeysBindData>(arguments[0]->return_type, is_unnamed);
+	if (is_unnamed) {
+		throw InvalidInputException("struct_keys() cannot be applied to an unnamed STRUCT");
+	}
+	return make_uniq<StructKeysBindData>(arguments[0]->return_type);
 }
 
 ScalarFunction StructKeysFun::GetFunction() {
