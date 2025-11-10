@@ -468,7 +468,7 @@ jobs:
     # TODO: clean this up: we should probably be able to run this whole test suite with httpfs
     # We want to run the remainder of tests with httpfs
     - name: Build with httpfs extension
-      id: build
+      id: build-httpfs
       shell: bash
       if: (success() || failure()) && steps.build.conclusion == 'success'
       env:
