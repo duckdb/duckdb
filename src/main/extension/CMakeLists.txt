@@ -1,5 +1,3 @@
-include_directories(../../../third_party/httplib/)
-
 # To link extensions into DuckDB and auto-load them on startup, we generated an
 # include file and a loader function based on the `DUCKDB_EXTENSION_NAMES`
 # parameter.
@@ -85,6 +83,9 @@ set(GENERATED_CPP_FILE
     ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
 configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
 add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
+add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
+add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
 add_library(duckdb_generated_extension_loader OBJECT ${GENERATED_CPP_FILE})
 set(generated_loader_obj_files
@@ -93,15 +94,10 @@ set(generated_loader_obj_files
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
 
-if(${EXIT_TIME_DESTRUCTORS_WARNING})
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
-endif()
-
 add_library(
   duckdb_main_extension OBJECT
   extension_alias.cpp extension_helper.cpp extension_install.cpp
-  extension_load.cpp extension_util.cpp)
+  extension_load.cpp extension_loader.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>

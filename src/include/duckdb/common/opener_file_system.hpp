@@ -24,10 +24,10 @@ public:
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
-	};
+	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		GetFileSystem().Write(handle, buffer, nr_bytes, location);
+		throw InternalException("writing on the OpenerFileSystem is undefined");
 	}
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
@@ -41,7 +41,7 @@ public:
 	int64_t GetFileSize(FileHandle &handle) override {
 		return GetFileSystem().GetFileSize(handle);
 	}
-	time_t GetLastModifiedTime(FileHandle &handle) override {
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
 		return GetFileSystem().GetLastModifiedTime(handle);
 	}
 	string GetVersionTag(FileHandle &handle) override {
@@ -107,6 +107,12 @@ public:
 		GetFileSystem().RemoveFile(filename, GetOpener());
 	}
 
+	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(filename);
+		return GetFileSystem().TryRemoveFile(filename, GetOpener());
+	}
+
 	string PathSeparator(const string &path) override {
 		return GetFileSystem().PathSeparator(path);
 	}
@@ -135,6 +141,10 @@ public:
 
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
+	}
+
+	bool SubSystemIsDisabled(const string &name) override {
+		return GetFileSystem().SubSystemIsDisabled(name);
 	}
 
 	vector<string> ListSubSystems() override {

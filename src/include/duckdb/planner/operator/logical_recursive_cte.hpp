@@ -36,6 +36,8 @@ public:
 	vector<unique_ptr<Expression>> key_targets;
 
 public:
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, column_count);
 	}

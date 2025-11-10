@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LOAD;
 
 public:
-	explicit PhysicalLoad(unique_ptr<LoadInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::LOAD, {LogicalType::BOOLEAN}, estimated_cardinality),
+	explicit PhysicalLoad(PhysicalPlan &physical_plan, unique_ptr<LoadInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::LOAD, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

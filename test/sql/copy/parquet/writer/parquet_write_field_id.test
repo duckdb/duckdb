@@ -16,12 +16,6 @@ copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 
 ----
 Binder Error
 
-# we can't do functions here
-statement error
-copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42-1})
-----
-Parser Error
-
 # this should work
 statement ok
 copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42})
@@ -61,17 +55,11 @@ copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 
 ----
 Conversion Error
 
-# we can't do functions inside of casts (this one is just for coverage)
-statement error
-copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:cast(42-1 as hugeint)})
-----
-Parser Error
-
 # field id can't be a colref
 statement error
 copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:i})
 ----
-Parser Error
+Could not convert string 'i' to INT32
 
 # this shouldn't work
 statement error
@@ -87,7 +75,7 @@ Binder Error
 
 # can't have duplicate field id values either
 statement error
-copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42,j:42})
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42,j:41+1})
 ----
 Binder Error
 
@@ -236,7 +224,10 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
 
 # big nestedness
 statement ok
-copy (select map {'my_key' : [{j : 42}]} as i) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,key:43,value:{__duckdb_field_id:44,element:{__duckdb_field_id:45,j:46}}}})
+set variable field_id_values={i:{__duckdb_field_id:42,key:43,value:{__duckdb_field_id:44,element:{__duckdb_field_id:45,j:46}}}}
+
+statement ok
+copy (select map {'my_key' : [{j : 42}]} as i) to '__TEST_DIR__/my.parquet' (FIELD_IDS getvariable('field_id_values'))
 
 query II
 select name, field_id from parquet_schema('__TEST_DIR__/my.parquet') where name in ('i', 'key', 'value', 'element', 'j') order by field_id

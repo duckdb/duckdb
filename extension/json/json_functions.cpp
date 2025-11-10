@@ -14,7 +14,7 @@ namespace duckdb {
 
 using JSONPathType = JSONCommon::JSONPathType;
 
-static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+JSONPathType JSONReadFunctionData::CheckPath(const Value &path_val, string &path, idx_t &len) {
 	if (path_val.IsNull()) {
 		throw BinderException("JSON path cannot be NULL");
 	}
@@ -60,7 +60,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
 	string path;
-	size_t len = 0;
+	idx_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->IsFoldable()) {
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
@@ -80,7 +80,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len, path_type);
 }
 
-JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
+JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<idx_t> lens_p)
     : paths(std::move(paths_p)), lens(std::move(lens_p)) {
 	for (const auto &path : paths) {
 		ptrs.push_back(path.c_str());
@@ -107,13 +107,13 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	}
 
 	vector<string> paths;
-	vector<size_t> lens;
+	vector<idx_t> lens;
 	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);
-		if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+		if (JSONReadFunctionData::CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
 			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
 		}
 	}
@@ -121,7 +121,8 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	return make_uniq<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
 }
 
-JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator) : json_allocator(allocator) {
+JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator)
+    : json_allocator(make_shared_ptr<JSONAllocator>(allocator)) {
 }
 
 JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
@@ -140,7 +141,7 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLo
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
+	lstate.json_allocator->Reset();
 	return lstate;
 }
 
@@ -200,6 +201,12 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+
+	// Table in-out
+	functions.push_back(GetJSONEachFunction());
+	functions.push_back(GetJSONTreeFunction());
+
+	// Serialized plan
 	functions.push_back(GetExecuteJsonSerializedSqlFunction());
 
 	return functions;
@@ -226,8 +233,8 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
@@ -252,20 +259,151 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	return success;
 }
 
-void JSONFunctions::RegisterSimpleCastFunctions(CastFunctionSet &casts) {
+static bool CastJSONListToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &) {
+	UnifiedVectorFormat child_format;
+	ListVector::GetEntry(source).ToUnifiedFormat(ListVector::GetListSize(source), child_format);
+	const auto input_jsons = UnifiedVectorFormat::GetData<string_t>(child_format);
+
+	static constexpr char const *NULL_STRING = "NULL";
+	static constexpr idx_t NULL_STRING_LENGTH = 4;
+
+	UnaryExecutor::Execute<list_entry_t, string_t>(
+	    source, result, count,
+	    [&](const list_entry_t &input) {
+		    // Compute len (start with [] and ,)
+		    idx_t len = 2;
+		    len += input.length == 0 ? 0 : (input.length - 1) * 2;
+		    for (idx_t json_idx = input.offset; json_idx < input.offset + input.length; json_idx++) {
+			    const auto sel_json_idx = child_format.sel->get_index(json_idx);
+			    if (child_format.validity.RowIsValid(sel_json_idx)) {
+				    len += input_jsons[sel_json_idx].GetSize();
+			    } else {
+				    len += NULL_STRING_LENGTH;
+			    }
+		    }
+
+		    // Allocate string
+		    auto res = StringVector::EmptyString(result, len);
+		    auto ptr = res.GetDataWriteable();
+
+		    // Populate string
+		    *ptr++ = '[';
+		    for (idx_t json_idx = input.offset; json_idx < input.offset + input.length; json_idx++) {
+			    const auto sel_json_idx = child_format.sel->get_index(json_idx);
+			    if (child_format.validity.RowIsValid(sel_json_idx)) {
+				    auto &input_json = input_jsons[sel_json_idx];
+				    memcpy(ptr, input_json.GetData(), input_json.GetSize());
+				    ptr += input_json.GetSize();
+			    } else {
+				    memcpy(ptr, NULL_STRING, NULL_STRING_LENGTH);
+				    ptr += NULL_STRING_LENGTH;
+			    }
+			    if (json_idx != input.offset + input.length - 1) {
+				    *ptr++ = ',';
+				    *ptr++ = ' ';
+			    }
+		    }
+		    *ptr = ']';
+
+		    res.Finalize();
+		    return res;
+	    },
+	    FunctionErrors::CANNOT_ERROR);
+	return true;
+}
+
+static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
+
+	bool success = true;
+	UnaryExecutor::ExecuteWithNulls<string_t, list_entry_t>(
+	    source, result, count, [&](const string_t &input, ValidityMask &mask, idx_t idx) -> list_entry_t {
+		    // Figure out if the cast can succeed
+		    yyjson_read_err error;
+		    const auto doc = JSONCommon::ReadDocumentUnsafe(input.GetDataWriteable(), input.GetSize(),
+		                                                    JSONCommon::READ_FLAG, alc, &error);
+		    if (!doc || !unsafe_yyjson_is_arr(doc->root)) {
+			    mask.SetInvalid(idx);
+			    if (success) {
+				    if (!doc) {
+					    HandleCastError::AssignError(
+					        JSONCommon::FormatParseError(input.GetDataWriteable(), input.GetSize(), error), parameters);
+				    } else if (!unsafe_yyjson_is_arr(doc->root)) {
+					    auto truncated_input =
+					        input.GetSize() > 50 ? string(input.GetData(), 47) + "..." : input.GetString();
+					    HandleCastError::AssignError(
+					        StringUtil::Format("Cannot cast to list of JSON. Input \"%s\"", truncated_input),
+					        parameters);
+				    }
+				    success = false;
+			    }
+			    return {};
+		    }
+
+		    auto current_size = ListVector::GetListSize(result);
+		    const auto arr_len = unsafe_yyjson_get_len(doc->root);
+		    const auto new_size = current_size + arr_len;
+
+		    // Grow list if needed
+		    if (ListVector::GetListCapacity(result) < new_size) {
+			    ListVector::Reserve(result, new_size);
+		    }
+
+		    // Populate list
+		    const auto result_jsons = FlatVector::GetData<string_t>(ListVector::GetEntry(result));
+		    size_t arr_idx, max;
+		    yyjson_val *val;
+		    yyjson_arr_foreach(doc->root, arr_idx, max, val) {
+			    result_jsons[current_size + arr_idx] = JSONCommon::WriteVal(val, alc);
+		    }
+
+		    // Update size
+		    ListVector::SetListSize(result, current_size + arr_len);
+
+		    return {current_size, arr_len};
+	    });
+
+	JSONAllocator::AddBuffer(ListVector::GetEntry(result), alc);
+	return success;
+}
+
+void JSONFunctions::RegisterSimpleCastFunctions(ExtensionLoader &loader) {
+	auto &db = loader.GetDatabaseInstance();
+
 	// JSON to VARCHAR is basically free
-	casts.RegisterCastFunction(LogicalType::JSON(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
+	loader.RegisterCastFunction(LogicalType::JSON(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
 
 	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than a cast to STRUCT
-	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;
+	const auto varchar_to_json_cost =
+	    CastFunctionSet::ImplicitCastCost(db, LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;
 	BoundCastInfo varchar_to_json_info(CastVarcharToJSON, nullptr, JSONFunctionLocalState::InitCastLocalState);
-	casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::JSON(), std::move(varchar_to_json_info),
-	                           varchar_to_json_cost);
+	loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::JSON(), std::move(varchar_to_json_info),
+	                            varchar_to_json_cost);
 
 	// Register NULL to JSON with a different cost than NULL to VARCHAR so the binder can disambiguate functions
-	auto null_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::VARCHAR) + 1;
-	casts.RegisterCastFunction(LogicalType::SQLNULL, LogicalType::JSON(), DefaultCasts::TryVectorNullCast,
-	                           null_to_json_cost);
+	const auto null_to_json_cost =
+	    CastFunctionSet::ImplicitCastCost(db, LogicalType::SQLNULL, LogicalTypeId::VARCHAR) + 1;
+	loader.RegisterCastFunction(LogicalType::SQLNULL, LogicalType::JSON(), DefaultCasts::TryVectorNullCast,
+	                            null_to_json_cost);
+
+	// JSON[] to VARCHAR (this needs a special case otherwise the cast will escape quotes)
+	const auto json_list_to_varchar_cost =
+	    CastFunctionSet::ImplicitCastCost(db, LogicalType::LIST(LogicalType::JSON()), LogicalTypeId::VARCHAR) - 1;
+	loader.RegisterCastFunction(LogicalType::LIST(LogicalType::JSON()), LogicalTypeId::VARCHAR, CastJSONListToVarchar,
+	                            json_list_to_varchar_cost);
+
+	// JSON[] to JSON is allowed implicitly
+	loader.RegisterCastFunction(LogicalType::LIST(LogicalType::JSON()), LogicalType::JSON(), CastJSONListToVarchar,
+	                            100);
+
+	// VARCHAR to JSON[] (also needs a special case otherwise we get a VARCHAR -> VARCHAR[] cast first)
+	const auto varchar_to_json_list_cost =
+	    CastFunctionSet::ImplicitCastCost(db, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::JSON())) - 1;
+	BoundCastInfo varchar_to_json_list_info(CastVarcharToJSONList, nullptr, JSONFunctionLocalState::InitCastLocalState);
+	loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::LIST(LogicalType::JSON()),
+	                            std::move(varchar_to_json_list_info), varchar_to_json_list_cost);
 }
 
 } // namespace duckdb

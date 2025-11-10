@@ -19,13 +19,15 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INOUT_FUNCTION;
 
 public:
-	PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
+	PhysicalTableInOutFunction(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function_p,
 	                           unique_ptr<FunctionData> bind_data_p, vector<ColumnIndex> column_ids_p,
 	                           idx_t estimated_cardinality, vector<column_t> projected_input);
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;
+	static void SetOrdinality(DataChunk &chunk, const optional_idx &ordinality_column_idx, const idx_t &ordinality_idx,
+	                          const idx_t &ordinality);
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
@@ -40,6 +42,9 @@ public:
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
+	//! Information for WITH ORDINALITY
+	optional_idx ordinality_idx;
 
 private:
 	//! The table function

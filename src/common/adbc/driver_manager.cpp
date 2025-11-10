@@ -51,9 +51,9 @@ void GetWinError(std::string *buffer) {
 	DWORD rc = GetLastError();
 	LPVOID message;
 
-	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-	              /*lpSource=*/nullptr, rc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-	              reinterpret_cast<LPSTR>(&message), /*nSize=*/0, /*Arguments=*/nullptr);
+	FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+	               /*lpSource=*/nullptr, rc, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+	               reinterpret_cast<LPSTR>(&message), /*nSize=*/0, /*Arguments=*/nullptr);
 
 	(*buffer) += '(';
 	(*buffer) += std::to_string(rc);
@@ -1080,7 +1080,6 @@ AdbcStatusCode AdbcConnectionGetTableTypes(struct AdbcConnection *connection, st
 
 AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
                                   struct AdbcError *error) {
-
 	if (!connection->private_data) {
 		SetError(error, "Must call AdbcConnectionNew first");
 		return ADBC_STATUS_INVALID_STATE;

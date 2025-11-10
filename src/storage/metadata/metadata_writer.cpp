@@ -30,6 +30,13 @@ MetaBlockPointer MetadataWriter::GetMetaBlockPointer() {
 	return manager.GetDiskPointer(block.pointer, UnsafeNumericCast<uint32_t>(offset));
 }
 
+void MetadataWriter::SetWrittenPointers(optional_ptr<vector<MetaBlockPointer>> written_pointers_p) {
+	written_pointers = written_pointers_p;
+	if (written_pointers && capacity > 0 && offset < capacity) {
+		written_pointers->push_back(manager.GetDiskPointer(current_pointer));
+	}
+}
+
 MetadataHandle MetadataWriter::NextHandle() {
 	return manager.AllocateHandle();
 }

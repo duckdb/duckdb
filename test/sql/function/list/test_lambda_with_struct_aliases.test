@@ -1,0 +1,57 @@
+# name: test/sql/function/list/test_lambda_with_struct_aliases.test
+# description: Test binding lambda functions containing a STRUCT with an alias.
+# group: [list]
+
+statement ok
+PRAGMA enable_verification;
+
+# Test TableFunctionBinder::BindColumnReference.
+
+query I
+SELECT COALESCE(*COLUMNS(lambda c: {'title': c}.title IN ('a', 'c')))
+FROM (SELECT NULL, 2, 3) t(a, b, c);
+----
+3
+
+# Test HavingBinder::BindColumnRef.
+
+statement ok
+CREATE TABLE addresses (i INT, b INT);
+
+statement ok
+INSERT INTO addresses VALUES (1, 10), (2, 20), (1, 52), (3, 7);
+
+query II
+SELECT i, sum(b) FROM addresses
+GROUP BY i
+HAVING sum(b) >= list_sum(list_transform([20], lambda x: {'title': x}.title + 30))
+----
+1	62
+
+# Test ExpressionBinder::QualifyColumnName.
+
+query I
+SELECT list_transform([10], lambda x: sum(1) + {'title': x}.title)
+----
+[11]
+
+# Test AlterBinder::BindColumnReference.
+
+statement ok
+CREATE TABLE test (a VARCHAR[]);
+
+statement ok
+INSERT INTO test VALUES (NULL), ([]), (['asdf']), (['qwer', 'CXZASDF']);
+
+statement ok
+ALTER TABLE test
+ALTER COLUMN a TYPE STRUCT(title VARCHAR)[]
+USING (list_transform(a, lambda x: {'title': x}));
+
+query I
+SELECT a FROM test ORDER BY ALL;
+----
+[]
+[{'title': asdf}]
+[{'title': qwer}, {'title': CXZASDF}]
+NULL

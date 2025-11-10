@@ -8,7 +8,7 @@ load __TEST_DIR__/null_byte_storage.db
 statement ok
 PRAGMA enable_verification
 
-foreach compr uncompressed fsst dictionary
+foreach compr uncompressed fsst dictionary dict_fsst
 
 statement ok
 PRAGMA force_compression='${compr}'

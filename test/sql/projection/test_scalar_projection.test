@@ -49,10 +49,12 @@ SELECT 1 AS a, a * 2
 statement error
 SELECT
 ----
+Parser Error: SELECT clause without selection list
 
 statement error
 SELECT FROM (SELECT 42) v1
 ----
+Parser Error: SELECT clause without selection list
 
 # Scalar query from SQLLogicTests
 query I

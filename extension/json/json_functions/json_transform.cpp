@@ -915,6 +915,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -974,12 +975,14 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYAlc();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	JSONTransformOptions options(strict, strict, strict, false);
 	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
 		throw InvalidInputException(options.error_message);
 	}
+
+	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
@@ -1008,8 +1011,8 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 
 static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
-	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYAlc();
+	lstate.json_allocator->Reset();
+	auto alc = lstate.json_allocator->GetYYAlc();
 
 	JSONTransformOptions options(true, true, true, true);
 	options.delay_error = true;
@@ -1025,7 +1028,7 @@ BoundCastInfo JSONToAnyCastBind(BindCastInput &input, const LogicalType &source,
 	return BoundCastInfo(JSONToAnyCast, nullptr, JSONFunctionLocalState::InitCastLocalState);
 }
 
-void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
+void JSONFunctions::RegisterJSONTransformCastFunctions(ExtensionLoader &loader) {
 	// JSON can be cast to anything
 	for (const auto &type : LogicalType::AllTypes()) {
 		LogicalType target_type;
@@ -1052,8 +1055,9 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 			target_type = type;
 		}
 		// Going from JSON to another type has the same cost as going from VARCHAR to that type
-		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
-		casts.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
+		const auto json_to_target_cost =
+		    CastFunctionSet::ImplicitCastCost(loader.GetDatabaseInstance(), LogicalType::VARCHAR, target_type);
+		loader.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
 	}
 }
 

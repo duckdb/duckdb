@@ -2,16 +2,11 @@
 # description: DISTINCT ON over Lineitem
 # group: [aggregate]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Lineitem Distinct On (Many Groups)
 group aggregate
 subgroup tpch
-
-require tpch
-
-cache tpch_sf1.duckdb
-
-load
-CALL dbgen(sf=1);
 
 run
 SELECT AVG(l_orderkey), AVG(l_extendedprice)
@@ -21,5 +16,5 @@ FROM (
   ORDER BY l_orderkey, l_extendedprice DESC
 ) l;
 
-result II
+result II sf=1
 2999991.5	59874.92

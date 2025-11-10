@@ -40,7 +40,6 @@ struct LeadingZeroBufferConstants {
 
 template <bool EMPTY>
 class LeadingZeroBuffer {
-
 public:
 	static constexpr uint32_t CHIMP_GROUP_SIZE = 1024;
 	static constexpr uint32_t LEADING_ZERO_BITS_SIZE = 3;

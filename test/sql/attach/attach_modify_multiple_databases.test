@@ -2,8 +2,6 @@
 # description: Modify multiple databases in one transaction
 # group: [attach]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 

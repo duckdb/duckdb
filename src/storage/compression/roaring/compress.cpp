@@ -113,7 +113,7 @@ void ContainerCompressionState::OverrideArray(data_ptr_t &destination, bool null
 		auto data_start = destination + sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
 		compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(data_start);
 	} else {
-		destination = AlignValue<sizeof(uint16_t)>(destination);
+		destination = AlignPointer<sizeof(uint16_t)>(destination);
 		arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
 	}
 }
@@ -127,14 +127,14 @@ void ContainerCompressionState::OverrideRun(data_ptr_t &destination, idx_t count
 		auto data_start = destination + sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
 		compressed_runs = reinterpret_cast<uint8_t *>(data_start);
 	} else {
-		destination = AlignValue<sizeof(RunContainerRLEPair)>(destination);
+		destination = AlignPointer<sizeof(RunContainerRLEPair)>(destination);
 		runs = reinterpret_cast<RunContainerRLEPair *>(destination);
 	}
 }
 
 void ContainerCompressionState::OverrideUncompressed(data_ptr_t &destination) {
 	append_function = AppendBitset;
-	destination = AlignValue<sizeof(idx_t)>(destination);
+	destination = AlignPointer<sizeof(idx_t)>(destination);
 	uncompressed = reinterpret_cast<validity_t *>(destination);
 }
 
@@ -308,24 +308,30 @@ void RoaringCompressState::FlushSegment() {
 	base_ptr += sizeof(idx_t);
 
 	// Size of the 'd' part
-	idx_t data_size = NumericCast<idx_t>(data_ptr - base_ptr);
-	data_size = AlignValue(data_size);
+	auto unaligned_data_size = NumericCast<idx_t>(data_ptr - base_ptr);
+	auto data_size = AlignValue(unaligned_data_size);
+	data_ptr += data_size - unaligned_data_size;
 
 	// Size of the 'm' part
-	idx_t metadata_size = metadata_collection.GetMetadataSizeForSegment();
-
+	auto metadata_size = metadata_collection.GetMetadataSizeForSegment();
 	if (current_segment->count.load() == 0) {
 		D_ASSERT(metadata_size == 0);
 		return;
 	}
 
-	idx_t serialized_metadata_size = metadata_collection.Serialize(data_ptr);
+	auto serialized_metadata_size = metadata_collection.Serialize(data_ptr);
+	if (metadata_size != serialized_metadata_size) {
+		throw InternalException("mismatch in metadata size during RoaringCompressState::FlushSegment");
+	}
+
 	metadata_collection.FlushSegment();
-	(void)serialized_metadata_size;
-	D_ASSERT(metadata_size == serialized_metadata_size);
-	idx_t metadata_start = static_cast<idx_t>(data_ptr - base_ptr);
+	auto metadata_start = static_cast<idx_t>(data_ptr - base_ptr);
+	if (metadata_start > info.GetBlockSize()) {
+		throw InternalException("metadata start outside of block size during RoaringCompressState::FlushSegment");
+	}
+
 	Store<idx_t>(metadata_start, handle.Ptr());
-	idx_t total_segment_size = sizeof(idx_t) + data_size + metadata_size;
+	auto total_segment_size = sizeof(idx_t) + data_size + metadata_size;
 	state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 }
 

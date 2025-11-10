@@ -1,8 +1,6 @@
 # name: test/sql/copy_database/copy_table_with_sequence.test
 # group: [copy_database]
 
-require noforcestorage
-
 statement ok
 pragma enable_verification;
 

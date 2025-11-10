@@ -36,7 +36,7 @@ struct CatalogTransaction;
 struct FunctionList {
 	static const StaticFunctionDefinition *GetInternalFunctionList();
 	static void RegisterFunctions(Catalog &catalog, CatalogTransaction transaction);
-	static void RegisterExtensionFunctions(DatabaseInstance &db, const StaticFunctionDefinition *functions);
+	static void RegisterExtensionFunctions(ExtensionLoader &db, const StaticFunctionDefinition *functions);
 };
 
 } // namespace duckdb

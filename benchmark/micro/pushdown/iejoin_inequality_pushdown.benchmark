@@ -1,0 +1,24 @@
+# name: benchmark/micro/pushdown/iejoin_inequality_pushdown.benchmark
+# description: Show the performance of using pushdown with IEJoin
+# group: [pushdown]
+
+name IEJoinInequalityPushdown
+group micro
+subgroup pushdown
+
+require tpch
+
+argument sf 10
+
+cache tpch_sf${sf}.duckdb
+
+load
+CALL dbgen(sf=${sf});
+
+run
+SELECT count(*)
+FROM lineitem lhs 
+INNER JOIN lineitem rhs
+ ON lhs.l_shipdate < rhs.l_receiptdate
+AND rhs.l_shipdate < lhs.l_receiptdate
+WHERE rhs.l_shipdate = '1992-01-10'::DATE;

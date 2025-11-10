@@ -1,6 +1,7 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
@@ -59,7 +60,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
                                 block_id_t block_id) {
-	if (reusable_buffer) {
+	if (reusable_buffer && reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
 		// re-usable buffer: re-use it
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// we can reuse the buffer entirely
@@ -135,7 +136,7 @@ BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_p
 	return BufferHandle(shared_from_this(), buffer.get());
 }
 
-BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
+BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reusable_buffer) {
 	if (state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(buffer);
@@ -145,11 +146,12 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 
 	if (block_id < MAXIMUM_BLOCK) {
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
-		block_manager.Read(*block);
+		block_manager.Read(context, *block);
 		buffer = std::move(block);
 	} else {
 		if (MustWriteToTemporaryFile()) {
-			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(tag, *this, std::move(reusable_buffer));
+			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(QueryContext(), tag, *this,
+			                                                          std::move(reusable_buffer));
 		} else {
 			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
 		}
@@ -205,6 +207,14 @@ bool BlockHandle::CanUnload() const {
 
 void BlockHandle::ConvertToPersistent(BlockLock &l, BlockHandle &new_block, unique_ptr<FileBuffer> new_buffer) {
 	VerifyMutex(l);
+
+	D_ASSERT(tag == memory_charge.tag);
+	if (tag != new_block.tag) {
+		const auto memory_charge_size = memory_charge.size;
+		memory_charge.Resize(0);
+		memory_charge.tag = new_block.tag;
+		memory_charge.Resize(memory_charge_size);
+	}
 
 	// move the data from the old block into data for the new block
 	new_block.state = BlockState::BLOCK_LOADED;

@@ -62,6 +62,9 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::SQLNULL) {
 		return StatisticsType::BASE_STATS;
 	}
+	if (type.id() == LogicalTypeId::GEOMETRY) {
+		return StatisticsType::GEOMETRY_STATS;
+	}
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -153,6 +156,9 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	case StatisticsType::ARRAY_STATS:
 		ArrayStats::Merge(*this, other);
 		break;
+	case StatisticsType::GEOMETRY_STATS:
+		GeometryStats::Merge(*this, other);
+		break;
 	default:
 		break;
 	}
@@ -174,6 +180,8 @@ BaseStatistics BaseStatistics::CreateUnknownType(LogicalType type) {
 		return StructStats::CreateUnknown(std::move(type));
 	case StatisticsType::ARRAY_STATS:
 		return ArrayStats::CreateUnknown(std::move(type));
+	case StatisticsType::GEOMETRY_STATS:
+		return GeometryStats::CreateUnknown(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -191,6 +199,8 @@ BaseStatistics BaseStatistics::CreateEmptyType(LogicalType type) {
 		return StructStats::CreateEmpty(std::move(type));
 	case StatisticsType::ARRAY_STATS:
 		return ArrayStats::CreateEmpty(std::move(type));
+	case StatisticsType::GEOMETRY_STATS:
+		return GeometryStats::CreateEmpty(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -329,6 +339,9 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 		case StatisticsType::ARRAY_STATS:
 			ArrayStats::Serialize(*this, serializer);
 			break;
+		case StatisticsType::GEOMETRY_STATS:
+			GeometryStats::Serialize(*this, serializer);
+			break;
 		default:
 			break;
 		}
@@ -367,6 +380,9 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
 		case StatisticsType::ARRAY_STATS:
 			ArrayStats::Deserialize(obj, stats);
 			break;
+		case StatisticsType::GEOMETRY_STATS:
+			GeometryStats::Deserialize(obj, stats);
+			break;
 		default:
 			break;
 		}
@@ -397,13 +413,16 @@ string BaseStatistics::ToString() const {
 	case StatisticsType::ARRAY_STATS:
 		result = ArrayStats::ToString(*this) + result;
 		break;
+	case StatisticsType::GEOMETRY_STATS:
+		result = GeometryStats::ToString(*this) + result;
+		break;
 	default:
 		break;
 	}
 	return result;
 }
 
-void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) const {
+void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count, const bool ignore_has_null) const {
 	D_ASSERT(vector.GetType() == this->type);
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
@@ -420,6 +439,9 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		break;
 	case StatisticsType::ARRAY_STATS:
 		ArrayStats::Verify(*this, vector, sel, count);
+		break;
+	case StatisticsType::GEOMETRY_STATS:
+		GeometryStats::Verify(*this, vector, sel, count);
 		break;
 	default:
 		break;
@@ -439,7 +461,7 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
 			    vector.ToString(count));
 		}
-		if (!row_is_valid && !has_null) {
+		if (!row_is_valid && !has_null && !ignore_has_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
 			    vector.ToString(count));
@@ -449,7 +471,7 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 
 void BaseStatistics::Verify(Vector &vector, idx_t count) const {
 	auto sel = FlatVector::IncrementalSelectionVector();
-	Verify(vector, *sel, count);
+	Verify(vector, *sel, count, false);
 }
 
 BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
@@ -502,6 +524,14 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 			for (auto &child_element : list_children) {
 				child_stats.Merge(FromConstant(child_element));
 			}
+		}
+		return result;
+	}
+	case StatisticsType::GEOMETRY_STATS: {
+		auto result = GeometryStats::CreateEmpty(input.type());
+		if (!input.IsNull()) {
+			auto &string_value = StringValue::Get(input);
+			GeometryStats::Update(result, string_t(string_value));
 		}
 		return result;
 	}

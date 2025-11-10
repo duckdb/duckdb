@@ -1,1 +1,1 @@
-SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWidth) FROM hits;
+SELECT AVG(UserID) FROM hits;

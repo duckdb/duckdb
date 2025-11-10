@@ -12,7 +12,7 @@ PRAGMA enable_verification
 foreach i 1 2 6
 
 statement error
-select * from parquet_scan('data/parquet-testing/afl/${i}.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/afl/${i}.parquet')
 ----
 Invalid dictionary page header
 
@@ -23,7 +23,7 @@ foreach i 3 4 5 7
 
 
 statement error
-select * from parquet_scan('data/parquet-testing/afl/3.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/afl/3.parquet')
 ----
 Invalid Error: Parquet file is likely corrupted, missing dictionary
 

@@ -14,10 +14,10 @@ JSONBufferHandle::JSONBufferHandle(JSONReader &reader, idx_t buffer_index_p, idx
       buffer_size(buffer_size_p), buffer_start(buffer_start_p) {
 }
 
-JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
-    : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(file_handle->CanSeek()),
-      file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0), actual_reads(0),
-      last_read_requested(false), cached_size(0) {
+JSONFileHandle::JSONFileHandle(QueryContext context_p, unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
+    : context(context_p), file_handle(std::move(file_handle_p)), allocator(allocator_p),
+      can_seek(file_handle->CanSeek()), file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0),
+      actual_reads(0), last_read_requested(false), cached_size(0) {
 }
 
 bool JSONFileHandle::IsOpen() const {
@@ -95,7 +95,7 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position,
 	}
 	if (size != 0) {
 		auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
-		handle.Read(pointer, size, position);
+		handle.Read(context, pointer, size, position);
 	}
 
 	const auto incremented_actual_reads = ++actual_reads;
@@ -184,7 +184,7 @@ void JSONReader::OpenJSONFile() {
 	if (!IsOpen()) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		auto regular_file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | options.compression);
-		file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
+		file_handle = make_uniq<JSONFileHandle>(context, std::move(regular_file_handle), BufferAllocator::Get(context));
 	}
 	Reset();
 }
@@ -737,7 +737,7 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 	idx_t prev_buffer_size = previous_buffer_handle->buffer_size - previous_buffer_handle->buffer_start;
 	auto prev_buffer_ptr = char_ptr_cast(previous_buffer_handle->buffer.get()) + previous_buffer_handle->buffer_size;
 	auto prev_object_start = PreviousNewline(prev_buffer_ptr, prev_buffer_size);
-	auto prev_object_size = prev_buffer_ptr - prev_object_start;
+	auto prev_object_size = NumericCast<idx_t>(prev_buffer_ptr - prev_object_start);
 
 	D_ASSERT(scan_state.buffer_offset == options.maximum_object_size);
 	if (prev_object_size > scan_state.buffer_offset) {

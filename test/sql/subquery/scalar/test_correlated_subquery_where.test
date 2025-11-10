@@ -3,9 +3,6 @@
 # group: [scalar]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test AS FROM VALUES (1, 22), (1, 21), (2, 22) v(id, b);
 
 # correlated subquery with one correlated expression

@@ -152,7 +152,6 @@ struct AlpRDCompression {
 	}
 
 	static void Compress(const EXACT_TYPE *input_vector, idx_t n_values, State &state) {
-
 		uint64_t right_parts[AlpRDConstants::ALP_VECTOR_SIZE];
 		uint16_t left_parts[AlpRDConstants::ALP_VECTOR_SIZE];
 
@@ -207,7 +206,6 @@ struct AlpRDDecompression {
 	                       EXACT_TYPE *output, idx_t values_count, uint16_t exceptions_count,
 	                       const uint16_t *exceptions, const uint16_t *exceptions_positions, uint8_t left_bit_width,
 	                       uint8_t right_bit_width) {
-
 		uint8_t left_decoded[AlpRDConstants::ALP_VECTOR_SIZE * 8] = {0};
 		uint8_t right_decoded[AlpRDConstants::ALP_VECTOR_SIZE * 8] = {0};
 

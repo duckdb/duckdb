@@ -87,7 +87,7 @@ insert into tbl VALUES (
 );
 
 query I
-select list_apply(maps, x -> map_values(x)) from tbl;
+select list_apply(maps, lambda x: map_values(x)) from tbl;
 ----
 [[a, c, b], [NULL], [ab, c, d, ef, ba, he]]
 
@@ -105,12 +105,12 @@ NULL
 
 # Select the map, and the map_values sorted, to show that the sort does not impact the original map
 query II
-select maps, list_apply(maps, x -> list_sort(map_values(x))) from tbl;
+select maps, list_apply(maps, lambda x: list_sort(map_values(x))) from tbl;
 ----
 [{5=a, 3=c, 2=b}, {1=NULL}, {7=ab, 9=c, 1=d, 3=ef, 5=ba, 6=he}]	[[a, b, c], [NULL], [ab, ba, c, d, ef, he]]
 
 query II
-select maps, list_apply(maps, x -> map(list_sort(map_keys(x)), list_sort(map_values(x)))) from tbl;
+select maps, list_apply(maps, lambda x: map(list_sort(map_keys(x)), list_sort(map_values(x)))) from tbl;
 ----
 [{5=a, 3=c, 2=b}, {1=NULL}, {7=ab, 9=c, 1=d, 3=ef, 5=ba, 6=he}]	[{2=a, 3=b, 5=c}, {1=NULL}, {1=ab, 3=ba, 5=c, 6=d, 7=ef, 9=he}]
 

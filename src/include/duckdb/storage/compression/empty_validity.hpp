@@ -32,9 +32,12 @@ public:
 
 public:
 	static CompressionFunction CreateFunction() {
-		return CompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT, nullptr, nullptr, nullptr,
+		CompressionFunction result(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT, nullptr, nullptr, nullptr,
 		                           InitCompression, Compress, FinalizeCompress, InitScan, Scan, ScanPartial, FetchRow,
 		                           Skip, InitSegment);
+		result.filter = Filter;
+		result.select = Select;
+		return result;
 	}
 
 public:
@@ -74,7 +77,7 @@ public:
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);
 	}
-	static unique_ptr<SegmentScanState> InitScan(ColumnSegment &segment) {
+	static unique_ptr<SegmentScanState> InitScan(const QueryContext &context, ColumnSegment &segment) {
 		return make_uniq<EmptyValiditySegmentScanState>();
 	}
 	static void ScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
@@ -94,6 +97,13 @@ public:
 	static unique_ptr<CompressedSegmentState> InitSegment(ColumnSegment &segment, block_id_t block_id,
 	                                                      optional_ptr<ColumnSegmentState> segment_state) {
 		return nullptr;
+	}
+	static void Filter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+	                   SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
+	                   TableFilterState &filter_state) {
+	}
+	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+	                   const SelectionVector &sel, idx_t sel_count) {
 	}
 };
 

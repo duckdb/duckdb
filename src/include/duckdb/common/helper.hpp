@@ -58,7 +58,7 @@ struct TemplatedUniqueIf<DATA_TYPE[N]>
 };
 
 template<class DATA_TYPE, class... ARGS>
-inline 
+inline
 typename TemplatedUniqueIf<DATA_TYPE, true>::templated_unique_single_t
 make_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
@@ -66,15 +66,15 @@ make_uniq(ARGS&&... args) // NOLINT: mimic std style
 }
 
 template<class DATA_TYPE, class... ARGS>
-inline 
+inline
 shared_ptr<DATA_TYPE>
 make_shared_ptr(ARGS&&... args) // NOLINT: mimic std style
 {
-	return shared_ptr<DATA_TYPE>(std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
+	return shared_ptr<DATA_TYPE>(duckdb_base_std::make_shared<DATA_TYPE>(std::forward<ARGS>(args)...));
 }
 
 template<class DATA_TYPE, class... ARGS>
-inline 
+inline
 typename TemplatedUniqueIf<DATA_TYPE, false>::templated_unique_single_t
 make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
@@ -82,31 +82,31 @@ make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
 }
 
 template<class DATA_TYPE>
-inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, true>
 make_uniq_array(size_t n) // NOLINT: mimic std style
 {
-	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]());
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, true>(new DATA_TYPE[n]());
 }
 
 template<class DATA_TYPE>
-inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, true>
 make_uniq_array_uninitialized(size_t n) // NOLINT: mimic std style
 {
-	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]);
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, true>(new DATA_TYPE[n]);
 }
 
 template<class DATA_TYPE>
-inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, false>
 make_unsafe_uniq_array(size_t n) // NOLINT: mimic std style
 {
-	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]());
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, false>(new DATA_TYPE[n]());
 }
 
 template<class DATA_TYPE>
-inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, false>
 make_unsafe_uniq_array_uninitialized(size_t n) // NOLINT: mimic std style
 {
-	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]);
+	return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>, false>(new DATA_TYPE[n]);
 }
 
 template<class DATA_TYPE, class... ARGS>
@@ -195,16 +195,21 @@ T AbsValue(T a) {
 	return a < 0 ? -a : a;
 }
 
-//! Align value (ceiling)
-template<class T, T val=8>
+//! Align value (ceiling) (not for pointer types)
+template<class T, T val=8, typename = typename std::enable_if<!std::is_pointer<T>::value>::type>
 static inline T AlignValue(T n) {
 	return ((n + (val - 1)) / val) * val;
 }
 
-template<uintptr_t alignment>
-inline data_ptr_t AlignValue(data_ptr_t addr) {
+template <class T>
+static T AlignValue(T n, T val) {
+	return ((n + (val - 1)) / val) * val;
+}
+
+template<uintptr_t alignment, class T>
+inline T *AlignPointer(T *addr) {
 	static_assert((alignment & (alignment - 1)) == 0, "'alignment' has to be a power of 2");
-	return reinterpret_cast<data_ptr_t>((reinterpret_cast<uintptr_t>(addr) + alignment - 1) & ~(alignment - 1));
+	return reinterpret_cast<T *>((reinterpret_cast<uintptr_t>(addr) + alignment - 1) & ~(alignment - 1));
 }
 
 template<class T, T val=8>
@@ -268,5 +273,18 @@ void DynamicCastCheck(const SRC *source) {
 	D_ASSERT(reinterpret_cast<const T *>(source) == dynamic_cast<const T *>(source));
 #endif
 }
+
+//! Used to increment counters that need to be exception-proof
+template<typename T>
+class PostIncrement {
+public:
+	explicit PostIncrement(T &t) : t(t) {
+	}
+	~PostIncrement() {
+		++t;
+	}
+private:
+	T &t;
+};
 
 } // namespace duckdb

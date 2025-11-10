@@ -1,0 +1,33 @@
+DropStatement <- 'DROP' DropEntries DropBehavior?
+
+DropEntries <-
+	DropTable /
+	DropTableFunction /
+	DropFunction /
+	DropSchema /
+	DropIndex /
+	DropSequence /
+	DropCollation /
+	DropType /
+	DropSecret
+
+DropTable <- TableOrView IfExists? List(BaseTableName)
+DropTableFunction <- 'MACRO' 'TABLE' IfExists? List(TableFunctionName)
+DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
+DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
+DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
+QualifiedIndexName <- CatalogQualification? SchemaQualification? IndexName
+DropSequence <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
+DropCollation <- 'COLLATION' IfExists? List(CollationName)
+DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
+DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
+
+TableOrView <- 'TABLE' / 'VIEW' / ('MATERIALIZED' 'VIEW')
+FunctionType <- 'MACRO' / 'FUNCTION'
+
+DropBehavior <- 'CASCADE' / 'RESTRICT'
+
+IfExists <- 'IF' 'EXISTS'
+QualifiedSchemaName <- CatalogQualification? SchemaName
+
+DropSecretStorage <- 'FROM' Identifier

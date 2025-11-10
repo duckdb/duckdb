@@ -41,16 +41,13 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	bool parameters_resolved = true;
 	try {
 		profiler.StartPhase(MetricsType::PLANNER_BINDING);
-		binder->parameters = &bound_parameters;
+		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
 		profiler.EndPhase();
 
 		this->names = bound_statement.names;
 		this->types = bound_statement.types;
-		this->plan = FlattenDependentJoins::DecorrelateIndependent(*binder, std::move(bound_statement.plan));
-
-		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
-		CheckTreeDepth(*plan, max_tree_depth);
+		this->plan = std::move(bound_statement.plan);
 	} catch (const std::exception &ex) {
 		ErrorData error(ex);
 		this->plan = nullptr;
@@ -78,6 +75,12 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		} else {
 			throw;
 		}
+	}
+	if (this->plan) {
+		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
+		CheckTreeDepth(*plan, max_tree_depth);
+
+		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 	}
 	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
@@ -141,6 +144,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::DETACH_STATEMENT:
 	case StatementType::COPY_DATABASE_STATEMENT:
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+	case StatementType::MERGE_INTO_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:

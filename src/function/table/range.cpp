@@ -29,7 +29,7 @@ static void GetParameters(int64_t values[], idx_t value_count, hugeint_t &start,
 }
 
 struct RangeFunctionBindData : public TableFunctionData {
-	explicit RangeFunctionBindData(const vector<Value> &inputs) : cardinality(0) {
+	explicit RangeFunctionBindData(const vector<Value> &inputs, bool generate_series) : cardinality(0) {
 		int64_t values[3];
 		for (idx_t i = 0; i < inputs.size(); i++) {
 			if (inputs[i].IsNull()) {
@@ -41,7 +41,15 @@ struct RangeFunctionBindData : public TableFunctionData {
 		hugeint_t end;
 		hugeint_t increment;
 		GetParameters(values, inputs.size(), start, end, increment);
+		if (generate_series) {
+			// generate_series has inclusive bounds on the RHS
+			end += 1;
+		}
+
 		cardinality = Hugeint::Cast<idx_t>((end - start) / increment);
+		if ((end - start) % increment != 0) {
+			cardinality += 1;
+		}
 	}
 
 	idx_t cardinality;
@@ -59,7 +67,7 @@ static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableF
 	if (input.inputs.empty() || input.inputs.size() > 3) {
 		return nullptr;
 	}
-	return make_uniq<RangeFunctionBindData>(input.inputs);
+	return make_uniq<RangeFunctionBindData>(input.inputs, GENERATE_SERIES);
 }
 
 struct RangeFunctionLocalState : public LocalTableFunctionState {

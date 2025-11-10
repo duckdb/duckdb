@@ -18,7 +18,6 @@ struct LambdaExecuteInfo {
 	LambdaExecuteInfo(ClientContext &context, const Expression &lambda_expr, const DataChunk &args,
 	                  const bool has_index, const Vector &child_vector)
 	    : has_index(has_index) {
-
 		expr_executor = make_uniq<ExpressionExecutor>(context, lambda_expr);
 
 		// get the input types for the input chunk
@@ -103,7 +102,6 @@ struct ListFilterFunctor {
 	//! Uses the lambda vector to filter the incoming list and to append the filtered list to the result vector
 	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *result_entries,
 	                         ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
-
 		idx_t count = 0;
 		SelectionVector sel(elem_cnt);
 		UnifiedVectorFormat lambda_data;
@@ -181,10 +179,9 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 	return inconstant_info;
 }
 
-void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
-                       const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
-                       LambdaExecuteInfo &info) {
-
+static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
+                              const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
+                              LambdaExecuteInfo &info) {
 	info.input_chunk.SetCardinality(elem_cnt);
 	info.lambda_chunk.SetCardinality(elem_cnt);
 
@@ -203,7 +200,6 @@ void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &
 	// (slice and) reference the other columns
 	vector<Vector> slices;
 	for (idx_t i = 0; i < column_infos.size(); i++) {
-
 		if (column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// only reference constant vectorsl
 			info.input_chunk.data[i + slice_offset].Reference(column_infos[i].vector);
@@ -229,7 +225,7 @@ void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<Fu
 	serializer.WriteProperty(100, "return_type", bind_data.return_type);
 	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
 	serializer.WriteProperty(102, "has_index", bind_data.has_index);
-	serializer.WriteProperty(103, "has_initial", bind_data.has_initial);
+	serializer.WritePropertyWithDefault<bool>(103, "has_initial", bind_data.has_initial, false);
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, ScalarFunction &) {
@@ -237,18 +233,33 @@ unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deseriali
 	auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(101, "lambda_expr",
 	                                                                                        unique_ptr<Expression>());
 	auto has_index = deserializer.ReadProperty<bool>(102, "has_index");
-	auto has_initial = deserializer.ReadProperty<bool>(103, "has_initial");
+	auto has_initial = deserializer.ReadPropertyWithExplicitDefault<bool>(103, "has_initial", false);
 	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index, has_initial);
 }
 
 //===--------------------------------------------------------------------===//
 // LambdaFunctions
 //===--------------------------------------------------------------------===//
+LogicalType LambdaFunctions::DetermineListChildType(const LogicalType &child_type) {
+	if (child_type.id() != LogicalTypeId::SQLNULL && child_type.id() != LogicalTypeId::UNKNOWN) {
+		if (child_type.id() == LogicalTypeId::ARRAY) {
+			return ArrayType::GetChildType(child_type);
+		} else if (child_type.id() == LogicalTypeId::LIST) {
+			return ListType::GetChildType(child_type);
+		}
+		throw InternalException("The first argument must be a list or array type");
+	}
 
-LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
+	return child_type;
+}
+
+LogicalType LambdaFunctions::BindBinaryChildren(const vector<LogicalType> &function_child_types,
+                                                const idx_t parameter_idx) {
+	auto list_type = DetermineListChildType(function_child_types[0]);
+
 	switch (parameter_idx) {
 	case 0:
-		return list_child_type;
+		return list_type;
 	case 1:
 		return LogicalType::BIGINT;
 	default:
@@ -256,22 +267,8 @@ LogicalType LambdaFunctions::BindBinaryLambda(const idx_t parameter_idx, const L
 	}
 }
 
-LogicalType LambdaFunctions::BindTernaryLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
-	switch (parameter_idx) {
-	case 0:
-		return list_child_type;
-	case 1:
-		return list_child_type;
-	case 2:
-		return LogicalType::BIGINT;
-	default:
-		throw BinderException("This lambda function only supports up to three lambda parameters!");
-	}
-}
-
 template <class FUNCTION_FUNCTOR>
-void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
-
+static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 	bool result_is_null = false;
 	LambdaFunctions::LambdaInfo info(args, state, result, result_is_null);
 	if (result_is_null) {
@@ -300,7 +297,6 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 	idx_t elem_cnt = 0;
 	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < info.row_count; row_idx++) {
-
 		auto list_idx = info.list_column_format.sel->get_index(row_idx);
 		const auto &list_entry = info.list_entries[list_idx];
 
@@ -320,10 +316,8 @@ void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
 
 		// iterate the elements of the current list and create the corresponding selection vectors
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
-
 				execute_info.lambda_chunk.Reset();
 				ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
 				auto &lambda_vector = execute_info.lambda_chunk.data[0];
@@ -366,8 +360,8 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
 	// NULL list parameter
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<ListLambdaBindData>(bound_function.return_type, nullptr);
+		bound_function.SetReturnType(LogicalType::SQLNULL);
+		return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), nullptr);
 	}
 	// prepared statements
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -391,7 +385,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
 
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr), has_index);
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(lambda_expr), has_index);
 }
 
 void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {

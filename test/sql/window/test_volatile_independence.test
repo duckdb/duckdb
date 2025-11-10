@@ -2,10 +2,10 @@
 # description: Window Sharing should distiguish identical volatile expressions
 # group: [window]
 
-require skip_reload
+# With chunk-level window parallelism, the order of evaluation changes with vector size
+require vector_size 2048
 
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 query II
 SELECT 

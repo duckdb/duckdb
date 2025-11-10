@@ -2,11 +2,6 @@
 # description: Grouping OVER clauses to reduce unnecessary sorting
 # group: [window]
 
-require skip_reload
-
-#statement ok
-#PRAGMA enable_verification
-
 statement ok
 PRAGMA threads=4
 
@@ -32,8 +27,7 @@ create table image  (
 statement ok
 insert into image (id, width, height) values (1, 500, 297);
 
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 statement ok
 create table pixel (

@@ -66,6 +66,11 @@ SELECT
    bar(count, 0, max(count) over ()) AS bar
 FROM histogram_values(source, col_name, bin_count := bin_count, technique := technique);
 )"},
+	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {}, R"(
+SELECT * EXCLUDE (message), UNNEST(parse_duckdb_log_message(log_type, message))
+FROM duckdb_logs(denormalized_table=1)
+WHERE type = log_type
+)"},
 	{nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}
 	};
 // clang-format on
@@ -81,12 +86,13 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 		function->parameters.push_back(make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 	}
 	for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
-		auto expr_list = Parser::ParseExpressionList(default_macro.named_parameters[named_idx].default_value);
+		const auto &named_param = default_macro.named_parameters[named_idx];
+		auto expr_list = Parser::ParseExpressionList(named_param.default_value);
 		if (expr_list.size() != 1) {
 			throw InternalException("Expected a single expression");
 		}
-		function->default_parameters.insert(
-		    make_pair(default_macro.named_parameters[named_idx].name, std::move(expr_list[0])));
+		function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
+		function->default_parameters.insert(make_pair(named_param.name, std::move(expr_list[0])));
 	}
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;

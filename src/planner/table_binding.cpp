@@ -19,6 +19,10 @@ Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalT
                  idx_t index)
     : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)),
       names(std::move(colnames)) {
+	Initialize();
+}
+
+void Binding::Initialize() {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
@@ -28,6 +32,34 @@ Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalT
 		}
 		name_map[name] = i;
 	}
+}
+
+BindingType Binding::GetBindingType() {
+	return binding_type;
+}
+
+const BindingAlias &Binding::GetBindingAlias() {
+	return alias;
+}
+
+idx_t Binding::GetIndex() {
+	return index;
+}
+
+const vector<LogicalType> &Binding::GetColumnTypes() {
+	return types;
+}
+
+const vector<string> &Binding::GetColumnNames() {
+	return names;
+}
+
+idx_t Binding::GetColumnCount() {
+	return GetColumnNames().size();
+}
+
+void Binding::SetColumnType(idx_t col_idx, LogicalType type_p) {
+	types[col_idx] = std::move(type_p);
 }
 
 string Binding::GetAlias() const {
@@ -135,24 +167,20 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 	}
 }
 
-static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
+static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
                            const unordered_map<idx_t, string> &alias_map) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		D_ASSERT(col_names.size() == 1);
 		auto idx_entry = list.GetColumnIndex(col_names[0]);
 		auto &alias = alias_map.at(idx_entry.index);
 		col_names = {alias};
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { ReplaceAliases(child, list, alias_map); });
+	});
 }
 
-static void BakeTableName(ParsedExpression &expr, const BindingAlias &binding_alias) {
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
+static void BakeTableName(ParsedExpression &root_expr, const BindingAlias &binding_alias) {
+	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		col_names.insert(col_names.begin(), binding_alias.GetAlias());
@@ -162,9 +190,7 @@ static void BakeTableName(ParsedExpression &expr, const BindingAlias &binding_al
 		if (!binding_alias.GetCatalog().empty()) {
 			col_names.insert(col_names.begin(), binding_alias.GetCatalog());
 		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(expr,
-	                                            [&](ParsedExpression &child) { BakeTableName(child, binding_alias); });
+	});
 }
 
 unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {
@@ -308,6 +334,44 @@ unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colre
 	auto arg = (*arguments)[column_index]->Copy();
 	arg->SetAlias(colref.GetAlias());
 	return arg;
+}
+
+CTEBinding::CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index,
+                       CTEType cte_type)
+    : Binding(BindingType::CTE, std::move(alias), std::move(types), std::move(names), index), cte_type(cte_type),
+      reference_count(0) {
+}
+
+CTEBinding::CTEBinding(BindingAlias alias_p, shared_ptr<CTEBindState> bind_state_p, idx_t index)
+    : Binding(BindingType::CTE, std::move(alias_p), vector<LogicalType>(), vector<string>(), index),
+      cte_type(CTEType::CAN_BE_REFERENCED), reference_count(0), bind_state(std::move(bind_state_p)) {
+}
+
+bool CTEBinding::CanBeReferenced() const {
+	return cte_type == CTEType::CAN_BE_REFERENCED;
+}
+
+bool CTEBinding::IsReferenced() const {
+	return reference_count > 0;
+}
+
+void CTEBinding::Reference() {
+	if (!CanBeReferenced()) {
+		throw InternalException("CTE cannot be referenced!");
+	}
+	if (bind_state) {
+		// we have not bound the CTE yet - bind it
+		bind_state->Bind(*this);
+
+		// copy over the names / types and initialize the binding
+		this->names = bind_state->names;
+		this->types = bind_state->types;
+		Initialize();
+
+		// finalize binding
+		bind_state.reset();
+	}
+	reference_count++;
 }
 
 } // namespace duckdb

@@ -1,0 +1,26 @@
+# name: test/sql/merge/merge_into_index.test
+# description: Test MERGE INTO with an index
+# group: [merge]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Accounts(id INTEGER, username VARCHAR PRIMARY KEY, favorite_numbers INT[]);
+
+statement ok
+INSERT INTO Accounts VALUES (1, 'user1', NULL)
+
+query I
+MERGE INTO Accounts USING (
+	VALUES (1, 'user2', [1, 2, 3])
+) new_account(id) USING (id)
+WHEN MATCHED THEN UPDATE
+WHEN NOT MATCHED THEN INSERT
+----
+1
+
+query III
+FROM Accounts WHERE username='user2'
+----
+1	user2	[1, 2, 3]

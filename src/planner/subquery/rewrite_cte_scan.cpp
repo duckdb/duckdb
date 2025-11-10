@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-RewriteCTEScan::RewriteCTEScan(idx_t table_index, const vector<CorrelatedColumnInfo> &correlated_columns)
+RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns)
     : table_index(table_index), correlated_columns(correlated_columns) {
 }
 
@@ -49,7 +49,7 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 				// The correlated columns must be placed at the beginning of the
 				// correlated_columns list. Otherwise, further column accesses
 				// and rewrites will fail.
-				join.correlated_columns.emplace(join.correlated_columns.begin(), corr);
+				join.correlated_columns.AddColumn(std::move(corr));
 			}
 		}
 	}

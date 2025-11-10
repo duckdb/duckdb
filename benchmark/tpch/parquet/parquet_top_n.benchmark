@@ -2,19 +2,11 @@
 # description: Top-N over lineitem Parquet
 # group: [parquet]
 
+include benchmark/tpch/tpch_load_parquet.benchmark.in
+
 name Lineitem Top N (order key)
 group topn
 subgroup tpch
-
-require tpch
-
-require parquet
-require tpch
-
-load
-CALL dbgen(sf=1, suffix='_normal');
-COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.parquet' (FORMAT PARQUET);
-CREATE VIEW lineitem AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/lineitem.parquet');
 
 run
 SELECT * FROM lineitem ORDER BY l_extendedprice DESC, l_orderkey LIMIT 5;

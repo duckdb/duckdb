@@ -6,5 +6,5 @@ statement ok
 PRAGMA enable_verification
 
 statement maybe
-FROM read_csv('data/csv/afl/4172/case_4.csv', ignore_errors=true, buffer_size=1, store_rejects=false);
+FROM read_csv('{DATA_DIR}/csv/afl/4172/case_4.csv', ignore_errors=true, buffer_size=1, store_rejects=false);
 ----

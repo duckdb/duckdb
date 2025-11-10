@@ -1,7 +1,8 @@
 #include "catch.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_manager.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -53,7 +54,10 @@ TEST_CASE("Test ClientContextState", "[api]") {
 		    return nullptr;
 	    });
 
-	ExtensionUtil::RegisterFunction(*db.instance, table_fun);
+	ExtensionInfo extension_info {};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_extension"};
+	ExtensionLoader loader {load_info};
+	loader.RegisterFunction(table_fun);
 
 	SECTION("No error, No explicit transaction") {
 		REQUIRE_NO_FAIL(conn.Query("SELECT * FROM my_table"));

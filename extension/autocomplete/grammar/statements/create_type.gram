@@ -1,0 +1,4 @@
+CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
+CreateType <- ('ENUM' Parens(SelectStatement)) /
+              ('ENUM' Parens(List(StringLiteral))) /
+              Type

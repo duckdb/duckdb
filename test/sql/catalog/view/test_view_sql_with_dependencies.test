@@ -11,9 +11,6 @@ statement ok
 set enable_view_dependencies=true
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create schema my_schema;
 
 # X contains columns `a` and `y`

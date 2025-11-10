@@ -1062,7 +1062,7 @@ from_list_opt_comma:
 		;
 
 alias_prefix_colon_clause:
-            ColIdOrString ':'
+            ColIdOrString SINGLE_COLON
             {
                 $$ = makeNode(PGAlias);
                 $$->aliasname = $1;
@@ -1725,9 +1725,10 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| qualified_typename
+			| qualified_typename opt_array_bounds
 				{
 					$$ = makeTypeNameFromNameList($1);
+					$$->arrayBounds = $2;
 				}
 			| RowOrStruct '(' colid_type_list ')' opt_array_bounds
 				{
@@ -2446,9 +2447,17 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @2;
 					$$ = (PGNode *)n;
 				}
-			| a_expr LAMBDA_ARROW a_expr
+			| LAMBDA name_list SINGLE_COLON a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
+				n->lhs = $2;
+				n->rhs = $4;
+				n->location = @2;
+				$$ = (PGNode *) n;
+			}
+			| a_expr SINGLE_ARROW a_expr
+			{
+				PGSingleArrowFunction *n = makeNode(PGSingleArrowFunction);
 				n->lhs = $1;
 				n->rhs = $3;
 				n->location = @2;
@@ -3138,16 +3147,8 @@ func_expr_common_subexpr:
 				}
 		;
 
-list_comprehension_lhs:
-		columnrefList
-		{
-			PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
-			$$ = (PGNode *) n;
-		}
-	;
-
 list_comprehension:
-				'[' a_expr FOR list_comprehension_lhs IN_P a_expr ']'
+				'[' a_expr FOR name_list IN_P a_expr ']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
 					lambda->lhs = $4;
@@ -3156,7 +3157,7 @@ list_comprehension:
 					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda), @1);
 					$$ = (PGNode *) n;
 				}
-				| '[' a_expr FOR list_comprehension_lhs IN_P c_expr IF_P a_expr']'
+				| '[' a_expr FOR name_list IN_P c_expr IF_P a_expr']'
 				{
 					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
 					lambda->lhs = $4;
@@ -3449,7 +3450,7 @@ row:		qualified_row							{ $$ = $1;}
 		;
 
 dict_arg:
-	ColIdOrString ':' a_expr						{
+	ColIdOrString SINGLE_COLON a_expr						{
 		PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
 		na->name = $1;
 		na->arg = (PGExpr *) $3;
@@ -3469,7 +3470,7 @@ dict_arguments_opt_comma:
 		;
 
 map_arg:
-			a_expr ':' a_expr
+			a_expr SINGLE_COLON a_expr
 			{
 				$$ = list_make2($1, $3);
 			}
@@ -3868,7 +3869,7 @@ indirection_el:
 					ai->uidx = $2;
 					$$ = (PGNode *) ai;
 				}
-			| '[' opt_slice_bound ':' opt_slice_bound ']'
+			| '[' opt_slice_bound SINGLE_COLON opt_slice_bound ']'
 				{
 					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = true;
@@ -3876,7 +3877,7 @@ indirection_el:
 					ai->uidx = $4;
 					$$ = (PGNode *) ai;
 				}
-			| '[' opt_slice_bound ':' opt_slice_bound ':' opt_slice_bound ']' {
+			| '[' opt_slice_bound SINGLE_COLON opt_slice_bound SINGLE_COLON opt_slice_bound ']' {
 				    	PGAIndices *ai = makeNode(PGAIndices);
 				    	ai->is_slice = true;
 				    	ai->lidx = $2;
@@ -3884,7 +3885,7 @@ indirection_el:
 				    	ai->step = $6;
 				    	$$ = (PGNode *) ai;
 				}
-			| '[' opt_slice_bound ':' '-' ':' opt_slice_bound ']' {
+			| '[' opt_slice_bound SINGLE_COLON '-' SINGLE_COLON opt_slice_bound ']' {
 					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = true;
 					ai->lidx = $2;
@@ -3928,7 +3929,7 @@ extended_indirection_el:
 					ai->uidx = $2;
 					$$ = (PGNode *) ai;
 				}
-			| '[' opt_slice_bound ':' opt_slice_bound ']'
+			| '[' opt_slice_bound SINGLE_COLON opt_slice_bound ']'
 				{
 					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = true;
@@ -3936,7 +3937,7 @@ extended_indirection_el:
 					ai->uidx = $4;
 					$$ = (PGNode *) ai;
 				}
-		    	| '[' opt_slice_bound ':' opt_slice_bound ':' opt_slice_bound ']' {
+		    	| '[' opt_slice_bound SINGLE_COLON opt_slice_bound SINGLE_COLON opt_slice_bound ']' {
 					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = true;
 					ai->lidx = $2;
@@ -3945,7 +3946,7 @@ extended_indirection_el:
                  			$$ = (PGNode *) ai;
                 		}
 
-			| '[' opt_slice_bound ':' '-' ':' opt_slice_bound ']' {
+			| '[' opt_slice_bound SINGLE_COLON '-' SINGLE_COLON opt_slice_bound ']' {
 					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = true;
 					ai->lidx = $2;
@@ -4023,7 +4024,7 @@ target_el:	a_expr AS ColLabelOrString
 					$$->val = (PGNode *)$1;
 					$$->location = @1;
 				}
-            | ColId ':' a_expr
+            | ColId SINGLE_COLON a_expr
 				{
 					$$ = makeNode(PGResTarget);
 					$$->name = $1;

@@ -27,11 +27,14 @@
 #include <stack>
 
 namespace duckdb {
+
 class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
+
+enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
 struct OperatorInformation {
 	explicit OperatorInformation() {
@@ -91,7 +94,6 @@ public:
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
-	DUCKDB_API void AddExtraInfo(InsertionOrderPreservingMap<string> extra_info);
 
 public:
 	ClientContext &context;
@@ -110,29 +112,55 @@ private:
 	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
 };
 
-struct QueryInfo {
-	QueryInfo() {
+//! Top level query metrics.
+struct QueryMetrics {
+	QueryMetrics() : total_bytes_read(0), total_bytes_written(0) {};
+
+	//! Reset the query metrics.
+	void Reset() {
+		query = "";
+		latency.Reset();
+		waiting_to_attach_latency.Reset();
+		attach_load_storage_latency.Reset();
+		attach_replay_wal_latency.Reset();
+		checkpoint_latency.Reset();
+		commit_write_wal_latency.Reset();
+		wal_replay_entry_count = 0;
+		total_bytes_read = 0;
+		total_bytes_written = 0;
 	}
-	string query_name;
+
 	ProfilingInfo query_global_info;
+
+	//! The SQL string of the query.
+	string query;
+	//! The timer of the execution of the entire query.
+	Profiler latency;
+	//! The timer of the delay when waiting to ATTACH a file.
+	Profiler waiting_to_attach_latency;
+	//! The timer for loading from storage.
+	Profiler attach_load_storage_latency;
+	//! The timer for replaying the WAL file.
+	Profiler attach_replay_wal_latency;
+	//! The timer for running checkpoints.
+	Profiler checkpoint_latency;
+	//! The timer for the WAL writes during COMMIT.
+	Profiler commit_write_wal_latency;
+	//! The total number of entries to replay in the WAL.
+	atomic<idx_t> wal_replay_entry_count;
+	//! The total bytes read by the file system.
+	atomic<idx_t> total_bytes_read;
+	//! The total bytes written by the file system.
+	atomic<idx_t> total_bytes_written;
 };
 
-//! The QueryProfiler can be used to measure timings of queries
+//! QueryProfiler collects the profiling metrics of a query.
 class QueryProfiler {
 public:
-	DUCKDB_API explicit QueryProfiler(ClientContext &context);
-
-public:
-	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
-	void Propagate(QueryProfiler &qp);
-
 	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
 
-private:
-	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
-	                                     const idx_t depth = 0);
-	void Render(const ProfilingNode &node, std::ostream &str) const;
-	string RenderDisabledMessage(ProfilerPrintFormat format) const;
+public:
+	DUCKDB_API explicit QueryProfiler(ClientContext &context);
 
 public:
 	DUCKDB_API bool IsEnabled() const;
@@ -143,15 +171,24 @@ public:
 
 	DUCKDB_API static QueryProfiler &Get(ClientContext &context);
 
-	DUCKDB_API void StartQuery(string query, bool is_explain_analyze = false, bool start_at_optimizer = false);
+	DUCKDB_API void Start(const string &query);
+	DUCKDB_API void Reset();
+	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
+
+	//! Adds amount to a specific metric type.
+	DUCKDB_API void AddToCounter(MetricsType type, const idx_t amount);
+
+	//! Start/End a timer for a specific metric type.
+	DUCKDB_API void StartTimer(MetricsType type);
+	DUCKDB_API void EndTimer(MetricsType type);
 
 	DUCKDB_API void StartExplainAnalyze();
 
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
-	DUCKDB_API void SetInfo(const double &blocked_thread_time);
+	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
 
 	DUCKDB_API void StartPhase(MetricsType phase_metric);
 	DUCKDB_API void EndPhase();
@@ -167,11 +204,15 @@ public:
 	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
 	DUCKDB_API string ToString(ProfilerPrintFormat format) const;
 
-	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
+	// Sanitize a Value::MAP
+	static Value JSONSanitize(const Value &input);
 	static string JSONSanitize(const string &text);
 	static string DrawPadded(const string &str, idx_t width);
+	DUCKDB_API void ToLog() const;
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
+	DUCKDB_API idx_t GetBytesRead() const;
+	DUCKDB_API idx_t GetBytesWritten() const;
 
 	idx_t OperatorSize() {
 		return tree_map.size();
@@ -179,17 +220,23 @@ public:
 
 	void Finalize(ProfilingNode &node);
 
-	//! Return the root of the query tree
+	//! Return the root of the query tree.
 	optional_ptr<ProfilingNode> GetRoot() {
 		return root.get();
 	}
 
-	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
-	//! This can be useful when implementing continuous profiling or making customizations
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications.
+	//! This can be useful when implementing continuous profiling or making customizations.
 	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
 		lock_guard<std::mutex> guard(lock);
 		callback(GetRoot());
 	}
+
+private:
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
+	                                     const idx_t depth = 0);
+	void Render(const ProfilingNode &node, std::ostream &str) const;
+	string RenderDisabledMessage(ProfilerPrintFormat format) const;
 
 private:
 	ClientContext &context;
@@ -206,9 +253,8 @@ private:
 	unique_ptr<ProfilingNode> root;
 
 	//! Top level query information.
-	QueryInfo query_info;
-	//! The timer used to time the execution time of the entire query
-	Profiler main_query;
+	QueryMetrics query_metrics;
+
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
 	//! Whether or not we are running as part of a explain_analyze query
@@ -234,7 +280,7 @@ private:
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
-	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	bool OperatorRequiresProfiling(const PhysicalOperatorType op_type);
 	ExplainFormat GetExplainFormat(ProfilerPrintFormat format) const;
 };
 

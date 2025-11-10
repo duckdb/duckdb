@@ -19,17 +19,18 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
 
 public:
-	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr);
 	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
-	                       unique_ptr<ParquetColumnSchema> expression_schema);
-
-	unique_ptr<ParquetColumnSchema> cast_schema;
+	                       const ParquetColumnSchema &schema);
+	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
+	                       unique_ptr<ParquetColumnSchema> owned_schema);
 
 	unique_ptr<ColumnReader> child_reader;
 	DataChunk intermediate_chunk;
 	unique_ptr<Expression> expr;
 	ExpressionExecutor executor;
-	unique_ptr<ParquetColumnSchema> expression_schema;
+
+	// If this reader was created on top of a child reader, after-the-fact, the schema needs to live somewhere
+	unique_ptr<ParquetColumnSchema> owned_schema;
 
 public:
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;

@@ -1,0 +1,14 @@
+# name: benchmark/micro/list/list_value_struct.benchmark
+# description: LIST_VALUE performance with large structs
+# group: [list]
+
+name List Value
+group micro
+subgroup list
+
+load
+CREATE TABLE large_struct_table AS
+SELECT {'a': i - 5, 'b': i - 4} AS a, {'a': i - 3, 'b': i - 2} AS b, {'a': i - 1,'b': i} AS c FROM range(10000000) tbl(i);
+
+run
+SELECT LIST_VALUE(a, b, c) FROM large_struct_table;

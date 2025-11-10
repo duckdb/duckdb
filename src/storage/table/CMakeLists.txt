@@ -8,8 +8,10 @@ add_library_unity(
   column_segment.cpp
   array_column_data.cpp
   list_column_data.cpp
+  in_memory_checkpoint.cpp
   update_segment.cpp
   persistent_table_data.cpp
+  row_id_column_data.cpp
   row_group.cpp
   row_group_collection.cpp
   row_version_manager.cpp

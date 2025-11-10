@@ -1,0 +1,49 @@
+# name: test/optimizer/joins/lateral_cross_join.test
+# description: test to string of complex lateral cross join
+# group: [joins]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE all_time_periods (
+    start_date DATE,
+    end_date DATE
+);
+
+statement ok
+CREATE TABLE weekly_trading_cube (
+    ship_date DATE,
+    vendor_name VARCHAR,
+    master_league VARCHAR,
+    net_demand DECIMAL
+);
+
+statement ok
+CREATE TABLE league_mapping (
+    wtc_league VARCHAR,
+    finance_league VARCHAR
+);
+
+statement ok
+INSERT INTO all_time_periods VALUES
+('2024-01-01', '2024-12-31');
+
+statement ok
+INSERT INTO weekly_trading_cube VALUES
+('2024-06-15', 'F Branded', 'MLB', 100.0),
+('2024-07-15', 'M & Ness', 'NBA', 200.0);
+
+statement ok
+INSERT INTO league_mapping VALUES
+('MLB', 'Major League Baseball'),
+('NBA', 'National Basketball Association');
+
+query III
+WITH date_range AS (SELECT min(start_date) AS min_start_date, max(end_date) AS max_end_date FROM all_time_periods)
+SELECT wtc.vendor_name, wtc.ship_date, lm.finance_league
+FROM weekly_trading_cube AS wtc CROSS JOIN date_range AS dr
+LEFT JOIN league_mapping AS lm ON (((upper(wtc.master_league) = upper(lm.wtc_league)) AND (wtc.ship_date BETWEEN dr.min_start_date AND dr.max_end_date)))
+WHERE (wtc.vendor_name = 'F Branded')
+----
+F Branded	2024-06-15	Major League Baseball

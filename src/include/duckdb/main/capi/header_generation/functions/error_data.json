@@ -1,0 +1,96 @@
+{
+  "group": "error_data",
+  "description": "Functions to operate on `duckdb_error_data`, which contains, for example, the error type and message. Please use this interface for all new C API functions, as it supersedes previous error handling approaches.",
+  "deprecated": false,
+  "entries": [
+    {
+      "name": "duckdb_create_error_data",
+      "return_type": "duckdb_error_data",
+      "params": [
+        {
+          "type": "duckdb_error_type",
+          "name": "type"
+        },
+        {
+          "type": "const char *",
+          "name": "message"
+        }
+      ],
+      "comment": {
+        "description": "Creates duckdb_error_data.\nMust be destroyed with `duckdb_destroy_error_data`.\n\n",
+        "param_comments": {
+          "type": "The error type.",
+          "message": "The error message."
+        },
+        "return_value": "The error data."
+      }
+    },
+    {
+      "name": "duckdb_destroy_error_data",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_error_data *",
+          "name": "error_data"
+        }
+      ],
+      "comment": {
+        "description": "Destroys the error data and deallocates its memory.\n\n",
+        "param_comments": {
+          "error_data": "The error data to destroy."
+        }
+      }
+    },
+    {
+      "name": "duckdb_error_data_error_type",
+      "return_type": "duckdb_error_type",
+      "params": [
+        {
+          "type": "duckdb_error_data",
+          "name": "error_data"
+        }
+      ],
+      "comment": {
+        "description": "Returns the duckdb_error_type of the error data.\n\n",
+        "param_comments": {
+          "error_data": "The error data."
+        },
+        "return_value": "The error type."
+      }
+    },
+    {
+      "name": "duckdb_error_data_message",
+      "return_type": "const char *",
+      "params": [
+        {
+          "type": "duckdb_error_data",
+          "name": "error_data"
+        }
+      ],
+      "comment": {
+        "description": "Returns the error message of the error data. Must not be freed.\n\n",
+        "param_comments": {
+          "error_data": "The error data."
+        },
+        "return_value": "The error message."
+      }
+    },
+    {
+      "name": "duckdb_error_data_has_error",
+      "return_type": "bool",
+      "params": [
+        {
+          "type": "duckdb_error_data",
+          "name": "error_data"
+        }
+      ],
+      "comment": {
+        "description": "Returns whether the error data contains an error or not.\n\n",
+        "param_comments": {
+          "error_data": "The error data."
+        },
+        "return_value": "True, if the error data contains an exception, else false."
+      }
+    }
+  ]
+}

@@ -12,7 +12,7 @@ PRAGMA enable_verification
 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/decimal/fixed_length_decimal.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_decimal.parquet')
 ----
 1.00
 2.00
@@ -40,7 +40,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/decimal/fixed_length_decimal.pa
 24.00
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/decimal/fixed_length_decimal_legacy.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/fixed_length_decimal_legacy.parquet')
 ----
 1.00
 2.00
@@ -70,7 +70,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/decimal/fixed_length_decimal_le
 
 # yay NULLs
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/decimal/decimal_dc.parquet') limit 10
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/decimal_dc.parquet') limit 10
 ----
 NULL
 NULL
@@ -85,7 +85,7 @@ NULL
 
 
 query IIIII
-SELECT * FROM parquet_scan('data/parquet-testing/decimal/pandas_decimal.parquet') limit 10
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/decimal/pandas_decimal.parquet') limit 10
 ----
 1234.0	12.34	12345.6789	123456789.98765433	922337203685477580700.92230685477500000
 -1234.0	-12.34	-9765.4321	-987654321.1234568	-922337236854775807.92233720306854775

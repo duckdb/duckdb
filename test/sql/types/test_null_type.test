@@ -2,8 +2,6 @@
 # description: Test null type
 # group: [types]
 
-require skip_reload
-
 statement ok
 pragma enable_verification
 

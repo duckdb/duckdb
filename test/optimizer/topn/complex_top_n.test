@@ -2,12 +2,9 @@
 # description: topN
 # group: [topn]
 
-require skip_reload
-
 require vector_size 1024
 
-statement ok
-SELECT SETSEED(0.42);
+set seed 0.42
 
 statement ok
 create table CUSTOMERVIEW as select range customer_id, range*random()::INT % 3 as customer_priority from range(1000, 4000); 

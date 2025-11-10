@@ -2,18 +2,32 @@
 # description: Fetch from compressed string column with index
 # group: [string]
 
-# load the DB from disk
-load __TEST_DIR__/test_string_compression.db
+statement ok
+ATTACH '__TEST_DIR__/test_index_fetch_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
 
 statement ok
-pragma verify_fetch_row
+ATTACH '__TEST_DIR__/test_index_fetch_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
 
-foreach compression fsst dictionary
-
-foreach enable_fsst_vector true false
+foreach compression fsst dictionary dict_fsst
 
 statement ok
-SET enable_fsst_vectors='${enable_fsst_vector}'
+USE db_v1
+
+onlyif compression=dict_fsst
+statement ok
+USE db_v13
+
+statement ok
+drop type if exists test_result
+
+statement ok
+create type test_result as UNION(
+    ok BOOL,
+    err STRUCT(
+        expected VARCHAR,
+        actual VARCHAR
+    )
+);
 
 statement ok
 PRAGMA force_compression='${compression}'
@@ -33,13 +47,19 @@ SELECT MIN(id), MAX(id), SUM(col::INT), MIN(col::INT), MAX(col::INT), COUNT(*) F
 5000	5000	5000	5000	5000	1
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT
+	CASE WHEN lower(compression)='${compression}'
+		THEN true::test_result
+	ELSE {
+		'expected': '${compression}',
+		'actual': lower(compression)
+	}::test_result
+	END
+FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-1
+true
 
 statement ok
 DROP TABLE test;
-
-endloop
 
 endloop

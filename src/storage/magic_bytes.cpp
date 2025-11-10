@@ -1,10 +1,11 @@
 #include "duckdb/storage/magic_bytes.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
-DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
+DataFileType MagicBytes::CheckMagicBytes(QueryContext context, FileSystem &fs, const string &path) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		return DataFileType::DUCKDB_FILE;
 	}
@@ -16,7 +17,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	constexpr const idx_t MAGIC_BYTES_READ_SIZE = 16;
 	char buffer[MAGIC_BYTES_READ_SIZE] = {};
 
-	handle->Read(buffer, MAGIC_BYTES_READ_SIZE);
+	handle->Read(context, buffer, MAGIC_BYTES_READ_SIZE);
 	if (memcmp(buffer, "SQLite format 3\0", 16) == 0) {
 		return DataFileType::SQLITE_FILE;
 	}
@@ -26,7 +27,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	if (memcmp(buffer + MainHeader::MAGIC_BYTE_OFFSET, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) == 0) {
 		return DataFileType::DUCKDB_FILE;
 	}
-	return DataFileType::FILE_DOES_NOT_EXIST;
+	return DataFileType::UNKNOWN_FILE;
 }
 
 } // namespace duckdb

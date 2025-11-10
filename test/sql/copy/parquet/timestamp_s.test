@@ -1,0 +1,38 @@
+# name: test/sql/copy/parquet/timestamp_s.test
+# group: [parquet]
+
+require parquet
+
+statement ok
+create table t (ts TIMESTAMP_S);
+
+# Populate with timestamps 6 minutes apart, just to produce some mock data
+statement ok
+insert into t select make_timestamp((1706961600 + (360 * i))::BIGINT * 1000000) from range(10000) range(i);
+
+query I
+select * from t limit 3;
+----
+2024-02-03 12:00:00
+2024-02-03 12:06:00
+2024-02-03 12:12:00
+
+statement ok
+copy (select * from t) to '__TEST_DIR__/t.parquet' (format parquet);
+
+query I
+select * from '__TEST_DIR__/t.parquet' limit 3;
+----
+2024-02-03 12:00:00
+2024-02-03 12:06:00
+2024-02-03 12:12:00
+
+statement ok
+copy (select * from t) to '__TEST_DIR__/t.parquet' (format parquet);
+
+query I
+select * from '__TEST_DIR__/t.parquet' limit 3;
+----
+2024-02-03 12:00:00
+2024-02-03 12:06:00
+2024-02-03 12:12:00

@@ -17,26 +17,25 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                   vector<JoinCondition> cond, JoinType join_type,
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
+                             estimated_cardinality),
       delim_types(std::move(delim_types)) {
-
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
@@ -102,9 +101,11 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, 
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                   vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalHashJoin(op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality, nullptr) {
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                                   idx_t estimated_cardinality)
+    : PhysicalHashJoin(physical_plan, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
+                       nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -148,7 +149,7 @@ public:
 			                                                               NumericStats::Max(*op.join_stats[1]));
 		}
 		// For external hash join
-		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
+		external = ClientConfig::GetConfig(context).force_external;
 		// Set probe types
 		probe_types = op.children[0].get().GetTypes();
 		probe_types.emplace_back(LogicalType::HASH);
@@ -249,7 +250,7 @@ public:
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result = make_uniq<JoinHashTable>(context, conditions, payload_columns.col_types, join_type,
+	auto result = make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type,
 	                                       rhs_output_columns.col_idxs);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -281,7 +282,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			auto count_fun = CountFunctionBase::GetFunction();
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
-			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0U));
+			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
 			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
@@ -389,7 +390,6 @@ static bool KeysAreSkewed(const HashJoinGlobalSinkState &sink) {
 //! If we have only one thread, always finalize single-threaded. Otherwise, we finalize in parallel if we
 //! have more than 1M rows or if we want to verify parallelism.
 static bool FinalizeSingleThreaded(const HashJoinGlobalSinkState &sink, const bool consider_skew) {
-
 	// if only one thread, finalize single-threaded
 	const auto num_threads = NumericCast<idx_t>(sink.num_threads);
 	if (num_threads == 1) {
@@ -469,6 +469,10 @@ public:
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
+	string TaskType() const override {
+		return "HashJoinTableInitTask";
+	}
+
 private:
 	HashJoinGlobalSinkState &sink;
 	idx_t entry_idx_from;
@@ -523,6 +527,9 @@ public:
 		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+	string TaskType() const override {
+		return "HashJoinFinalizeTask";
 	}
 
 private:
@@ -605,6 +612,10 @@ public:
 		local_ht.Repartition(global_ht);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	string TaskType() const override {
+		return "HashJoinRepartitionTask";
 	}
 
 private:
@@ -750,7 +761,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 		return final_min_max; // There are not table souces in which we can push down filters
 	}
 
-	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
+	auto dynamic_or_filter_threshold = DBConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
@@ -768,7 +779,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 				continue;
 			}
 			// if the HT is small we can generate a complete "OR" filter
-			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold) {
+			// but only if the join condition is equality.
+			if (ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold &&
+			    cmp == ExpressionType::COMPARE_EQUAL) {
 				PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
 			}
 
@@ -841,6 +854,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			sink.external = false;
 		}
 	}
+	DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Finalize",
+	           {{"external", to_string(sink.external)}});
 	if (sink.external) {
 		// External Hash Join
 		sink.perfect_join_executor.reset();
@@ -851,8 +866,12 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		if (!very_very_skewed &&
 		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
+			const auto radix_bits_before = ht.GetRadixBits();
 			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
 			                           sink.max_partition_count);
+			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Repartition",
+			           {{"partitions_before", to_string(RadixPartitioning::NumberOfPartitions(radix_bits_before))},
+			            {"partitions_after", to_string(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()))}});
 			auto new_event = make_shared_ptr<HashJoinRepartitionEvent>(pipeline, *this, sink, sink.local_hash_tables);
 			event.InsertEvent(std::move(new_event));
 		} else {
@@ -1138,7 +1157,8 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context)
     : op(op), global_stage(HashJoinSourceStage::INIT), build_chunk_count(0), build_chunk_done(0), probe_chunk_count(0),
       probe_chunk_done(0), probe_count(op.children[0].get().estimated_cardinality),
-      parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
+      parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120), full_outer_chunk_count(0),
+      full_outer_chunk_done(0) {
 }
 
 void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
