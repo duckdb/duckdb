@@ -1,35 +1,19 @@
 #include "duckdb/optimizer/window_rewriter.hpp"
 
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/planner/binder.hpp"
+
 namespace duckdb {
 
-WindowRewriter::WindowRewriter(Optimizer &optimizer) : optimizer(optimizer), lhs_window(false) {
+WindowRewriter::WindowRewriter(Optimizer &optimizer) : optimizer(optimizer) {
 }
 
 bool WindowRewriter::CanOptimize(LogicalOperator &op) {
-
-	// Check for window on LHS of join
-	if (op.type == LogicalOperatorType::LOGICAL_JOIN || op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
-	    op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-
-		auto &join_op = op.Cast<LogicalJoin>();
-		if (join_op.children.empty()) {
-			return false;
-		}
-
-		auto *child = join_op.children[0].get();
-		while (child) {
-			if (child->type == LogicalOperatorType::LOGICAL_WINDOW) {
-				lhs_window = true;
-				break;
-			}
-			if (child->children.empty())
-				break;
-			child = child->children[0].get();
-		}
-	}
-
 	// If the operator is a projection and its child is a window, check if optimization is possible
-	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION && !lhs_window) {
+	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		if (op.children.empty() || !op.children[0]) {
 			return false;
 		}
@@ -46,10 +30,24 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 
 		auto &expression = window.expressions[0];
 		auto &window_expr = expression->Cast<BoundWindowExpression>();
+
+		// Try to optimize simple window functions, without partitions or ordering
 		if (!window_expr.partitions.empty() || !window_expr.orders.empty()) {
 			return false;
 		}
 		if (expression->type != ExpressionType::WINDOW_ROW_NUMBER) {
+			return false;
+		}
+
+		// Should be followed by a get
+		auto &window_ch = window.children[0];
+		if (window_ch->type != LogicalOperatorType::LOGICAL_GET) {
+			return false;
+		}
+
+		// and can only be a seq_scan
+		auto &get = window_ch->Cast<LogicalGet>();
+		if (get.function.name != "seq_scan") {
 			return false;
 		}
 
@@ -71,21 +69,20 @@ unique_ptr<LogicalOperator> WindowRewriter::Optimize(unique_ptr<LogicalOperator>
 	return op;
 }
 
-unique_ptr<LogicalOperator> WindowRewriter::RewriteGet(unique_ptr<LogicalOperator> op,
-                                                       ColumnBindingReplacer &replacer) {
+unique_ptr<LogicalOperator> WindowRewriter::Rewrite(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer) {
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto &proj = op->Cast<LogicalProjection>();
+	D_ASSERT(proj.children[0]->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = proj.children[0]->Cast<LogicalWindow>();
 	auto &child = window.children[0];
-
+	D_ASSERT(child->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = child->Cast<LogicalGet>();
-	if (get.function.name != "seq_scan") {
-		return op;
-	}
 
 	// Find where in the projection the row_number column appears
 	idx_t row_number_index = 0;
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
 		auto &col = proj.expressions.at(i);
+		D_ASSERT(col->type == ExpressionType::BOUND_COLUMN_REF);
 		auto &col_ref = col->Cast<BoundColumnRefExpression>();
 		if (col_ref.binding.table_index == window.window_index) {
 			row_number_index = i;
@@ -123,6 +120,7 @@ unique_ptr<LogicalOperator> WindowRewriter::RewriteGet(unique_ptr<LogicalOperato
 			expressions.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, row_number_binding));
 		} else {
 			// Copy the existing projection
+			D_ASSERT(proj.expressions[i]->type == ExpressionType::BOUND_COLUMN_REF);
 			auto &col_ref = proj.expressions[i]->Cast<BoundColumnRefExpression>();
 			auto binding_index = col_ref.binding.column_index;
 			expressions.push_back(
@@ -150,27 +148,7 @@ unique_ptr<LogicalOperator> WindowRewriter::OptimizeInternal(unique_ptr<LogicalO
                                                              ColumnBindingReplacer &replacer) {
 
 	if (CanOptimize(*op)) {
-		auto &proj = op->Cast<LogicalProjection>();
-		auto &window = proj.children[0]->Cast<LogicalWindow>();
-
-		auto &child = window.children[0];
-
-		switch (child->type) {
-		case LogicalOperatorType::LOGICAL_JOIN:
-		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-			// FIXME implement RewriteJoins
-			break;
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-			// FIXME implement RewriteAggregate
-			break;
-		case LogicalOperatorType::LOGICAL_GET:
-			return RewriteGet(std::move(op), replacer);
-		default:
-			break;
-		}
+		return Rewrite(std::move(op), replacer);
 	}
 
 	// Recurse into children

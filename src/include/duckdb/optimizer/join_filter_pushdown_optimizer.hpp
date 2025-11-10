@@ -26,7 +26,6 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 	static void GetPushdownFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
 	                                     vector<PushdownFilterTarget> &targets);
-	bool CanOptimize(LogicalOperator &op);
 
 private:
 	void GenerateJoinFilters(LogicalComparisonJoin &join);

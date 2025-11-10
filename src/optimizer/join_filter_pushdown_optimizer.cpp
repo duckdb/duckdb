@@ -93,6 +93,11 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_GET: {
 		// found LogicalGet
 		auto &get = probe_child.Cast<LogicalGet>();
+		for (auto &col_id : get.GetColumnIds()) {
+			if (col_id.IsRowNumberColumn()) {
+				return;
+			}
+		}
 		if (!get.function.filter_pushdown) {
 			// filter pushdown is not supported - no need to consider this node
 			return;
@@ -256,52 +261,9 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	join.filter_pushdown = std::move(pushdown_info);
 }
 
-bool JoinFilterPushdownOptimizer::CanOptimize(LogicalOperator &op) {
-	// Check if any child scan outputs a ROW_NUMBER column.
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_GET: {
-		auto &get = op.Cast<LogicalGet>();
-		// Check the column IDs projected by the LogicalGet. If the scan outputs row_number column we skip pushdown
-		for (auto &col_id : get.GetColumnIds()) {
-			if (col_id.IsRowNumberColumn()) {
-				return false;
-			}
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-	case LogicalOperatorType::LOGICAL_FILTER:
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-	case LogicalOperatorType::LOGICAL_LIMIT:
-	case LogicalOperatorType::LOGICAL_WINDOW:
-	case LogicalOperatorType::LOGICAL_TOP_N: {
-		// Recurse into children
-		for (auto &child : op.children) {
-			if (!CanOptimize(*child)) {
-				return false;
-			}
-		}
-		break;
-	}
-	default:
-		break;
-	}
-	return true;
-}
-
 void JoinFilterPushdownOptimizer::VisitOperator(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		// comparison join - try to generate join filters (if possible)
-
-		// If LHS is projecting row_numbers we skip this optimization. Row_numbers are assigned during scan, hence we
-		// can scan different things in each end of the join.
-		auto &join_op = op.Cast<LogicalJoin>();
-		auto &lhs = *join_op.children[0];
-		if (!CanOptimize(lhs)) {
-			return;
-		}
-
 		GenerateJoinFilters(op.Cast<LogicalComparisonJoin>());
 	}
 	LogicalOperatorVisitor::VisitOperator(op);

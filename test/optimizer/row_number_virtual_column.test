@@ -14,6 +14,13 @@ SELECT a, row_number FROM foo;
 ----
 Binder Error: Referenced column "row_number" not found in FROM clause
 
+query I
+SELECT a as row_number FROM foo limit 3;
+----
+0
+1
+2
+
 statement ok
 delete from foo where a < 5000;
 
@@ -27,25 +34,6 @@ explain select a,rowid, row_number() over() as x from foo order by a desc limit 
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
 
-# Test that if the window function is on the LHS we do not rewrite
-
-statement ok
-CREATE TABLE test (a INTEGER, b INTEGER);
-
-statement ok
-INSERT INTO test VALUES (11, 1), (12, 2), (13, 3);
-
-statement ok
-CREATE TABLE test2 (b INTEGER, c INTEGER);
-
-statement ok
-INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30);
-
-query II
-explain SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b;
-----
-physical_plan	<REGEX>:.*WINDOW.*
-
 statement ok
 select setseed(0.1);
 
@@ -55,19 +43,9 @@ create or replace table test as select (random()*10)::INT a, (random()*5)::INT b
 statement ok
 create or replace table test2 as select (random()*100)::INT c, (random()*5)::INT b  from range(10);
 
-# Try with a window function on LHS
+# Try with a window function and a Join
 
 query II
 explain SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b limit 10;
 ----
-physical_plan	<REGEX>:.*WINDOW.*
-
-# =================== IGNORE ===================
-# BUILD_SIDE_PROBE_SIDE changes the window from RHS to LHS
-
-# Try with a window function on RHS
-
-# query II
-# explain SELECT t.a, t.b, t2.row_num, t2.c FROM test t JOIN ( SELECT b, c, ROW_NUMBER() OVER () AS row_num FROM test2) t2 ON t.b = t2.b;
-# ----
-# physical_plan	<!REGEX>:.*WINDOW.*
+physical_plan	<!REGEX>:.*WINDOW.*
