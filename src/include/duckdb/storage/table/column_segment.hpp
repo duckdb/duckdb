@@ -125,11 +125,7 @@ public:
 		return offset;
 	}
 
-	idx_t GetRelativeIndex(idx_t row_index) {
-		D_ASSERT(row_index >= this->start);
-		D_ASSERT(row_index <= this->start + this->count);
-		return row_index - this->start;
-	}
+	idx_t GetRelativeIndex(idx_t row_index);
 
 	optional_ptr<CompressedSegmentState> GetSegmentState() {
 		return segment_state.get();

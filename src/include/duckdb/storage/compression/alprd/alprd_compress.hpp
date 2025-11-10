@@ -45,7 +45,7 @@ public:
 		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
 		memcpy((void *)state.left_parts_dict, (void *)analyze_state->state.left_parts_dict,
 		       actual_dictionary_size_bytes);
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
@@ -125,7 +125,7 @@ public:
 		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
-			auto row_start = current_segment->start + current_segment->count;
+			auto row_start = current_segment->GetSegmentStart() + current_segment->count;
 			FlushSegment();
 			CreateEmptySegment(row_start);
 		}

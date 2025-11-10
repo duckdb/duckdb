@@ -21,7 +21,7 @@ DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &che
           1                                                                // maximum_target_capacity_p (byte capacity)
           ),
       analyze(std::move(analyze_p)) {
-	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+	CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
 }
 
 DictFSSTCompressionState::~DictFSSTCompressionState() {
@@ -277,7 +277,7 @@ void DictFSSTCompressionState::Flush(bool final) {
 
 	current_segment->count = tuple_count;
 
-	auto next_start = current_segment->start + current_segment->count;
+	auto next_start = current_segment->GetSegmentStart() + current_segment->count;
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);

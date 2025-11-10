@@ -105,7 +105,8 @@ idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
 	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 }
 
-void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id, idx_t row_group_start) {
+void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id,
+                            idx_t row_group_start) {
 	info.max = STANDARD_VECTOR_SIZE;
 	info.row_group_start = row_group_start;
 	info.version_number = transaction_id;
@@ -1328,7 +1329,8 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 				node_ref = dtransaction.CreateUpdateInfo(type_size, data_table, count, row_group_start);
 				node = &UpdateInfo::Get(node_ref);
 			} else {
-				node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
+				node =
+				    CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
 			}
 			node->segment = this;
 			node->vector_index = vector_index;
@@ -1375,7 +1377,8 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 			node_ref = transaction.transaction->CreateUpdateInfo(type_size, data_table, count, row_group_start);
 			transaction_node = &UpdateInfo::Get(node_ref);
 		} else {
-			transaction_node = CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
+			transaction_node =
+			    CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
 		}
 
 		InitializeUpdateInfo(*transaction_node, ids, sel, count, vector_index, vector_offset);

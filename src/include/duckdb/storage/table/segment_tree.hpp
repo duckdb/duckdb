@@ -175,7 +175,7 @@ public:
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		auto node = make_uniq<SegmentNode<T>>();
-		node->row_start = segment->start;
+		node->row_start = segment->GetSegmentStart();
 		node->node = std::move(segment);
 		node->index = nodes.size();
 		node->next = nullptr;
@@ -249,7 +249,7 @@ public:
 				                        segments);
 			}
 			auto &entry = *nodes[index];
-			D_ASSERT(entry.row_start == entry.node->start);
+			D_ASSERT(entry.row_start == entry.node->GetSegmentStart());
 			if (row_number < entry.row_start) {
 				upper = index - 1;
 			} else if (row_number >= entry.row_start + entry.node->count) {
@@ -264,10 +264,10 @@ public:
 
 	void Verify(SegmentLock &) {
 #ifdef DEBUG
-		idx_t base_start = nodes.empty() ? 0 : nodes[0]->node->start;
+		idx_t base_start = nodes.empty() ? 0 : nodes[0]->node->GetSegmentStart();
 		for (idx_t i = 0; i < nodes.size(); i++) {
-			D_ASSERT(nodes[i]->row_start == nodes[i]->node->start);
-			D_ASSERT(nodes[i]->node->start == base_start);
+			D_ASSERT(nodes[i]->row_start == nodes[i]->node->GetSegmentStart());
+			D_ASSERT(nodes[i]->node->GetSegmentStart() == base_start);
 			base_start += nodes[i]->node->count;
 		}
 #endif
@@ -299,11 +299,12 @@ public:
 		if (nodes.empty()) {
 			return;
 		}
-		idx_t offset = nodes[0]->node->start;
+		idx_t offset = nodes[0]->node->GetSegmentStart();
 		for (auto &entry : nodes) {
-			if (entry->node->start != offset) {
+			if (entry->node->GetSegmentStart() != offset) {
 				throw InternalException("In SegmentTree::Reinitialize - gap found between nodes!");
 			}
+
 			entry->row_start = offset;
 			offset += entry->node->count;
 		}

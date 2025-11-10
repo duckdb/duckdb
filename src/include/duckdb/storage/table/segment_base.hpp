@@ -19,10 +19,19 @@ public:
 	SegmentBase(idx_t start, idx_t count) : start(start), count(count) {
 	}
 
-	//! The start row id of this chunk
-	idx_t start;
+	idx_t GetSegmentStart() const {
+		return start;
+	}
+	void SetSegmentStart(idx_t start_p) {
+		this->start = start_p;
+	}
+
 	//! The amount of entries in this storage chunk
 	atomic<idx_t> count;
+
+private:
+	//! The start row id of this chunk
+	idx_t start;
 };
 
 } // namespace duckdb

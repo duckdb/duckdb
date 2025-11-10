@@ -69,11 +69,11 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	lock_guard<mutex> l(row_group_lock);
-	if (start != new_start) {
+	if (GetSegmentStart() != new_start) {
 		has_changes = true;
 	}
 	this->collection = collection_p;
-	this->start = new_start;
+	this->SetSegmentStart(new_start);
 	for (idx_t c = 0; c < columns.size(); c++) {
 		if (is_loaded && !is_loaded[c]) {
 			// we only need to set the column start position if it is already loaded
@@ -112,7 +112,7 @@ ColumnData &RowGroup::GetRowIdColumnData() {
 	}
 	lock_guard<mutex> l(row_group_lock);
 	if (!row_id_column_data) {
-		row_id_column_data = make_uniq<RowIdColumnData>(GetBlockManager(), GetTableInfo(), start);
+		row_id_column_data = make_uniq<RowIdColumnData>(GetBlockManager(), GetTableInfo(), GetSegmentStart());
 		row_id_column_data->count = count.load();
 		row_id_is_loaded = true;
 	}
@@ -150,12 +150,12 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	auto &block_pointer = column_pointers[c];
 	MetadataReader column_data_reader(metadata_manager, block_pointer);
 	this->columns[c] =
-	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c]);
+	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, GetSegmentStart(), column_data_reader, types[c]);
 	is_loaded[c] = true;
 	if (this->columns[c]->count != this->count) {
 		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
 		                        "not match count of row group %llu",
-		                        c, start, this->columns[c]->count.load(), this->count.load());
+		                        c, GetSegmentStart(), this->columns[c]->count.load(), this->count.load());
 	}
 	return *columns[c];
 }
@@ -171,7 +171,7 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	D_ASSERT(columns.empty());
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), i, start, types[i]);
+		auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), i, GetSegmentStart(), types[i]);
 		columns.push_back(std::move(column_data));
 	}
 }
@@ -256,9 +256,9 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 
 	state.row_group = node;
 	state.vector_index = vector_offset;
-	state.max_row_group_row =
-	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
-	auto row_number = start + vector_offset * STANDARD_VECTOR_SIZE;
+	auto row_start = node.row_start;
+	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
+	auto row_number = row_start + vector_offset * STANDARD_VECTOR_SIZE;
 	if (state.max_row_group_row == 0) {
 		// exceeded row groups to scan
 		return false;
@@ -282,10 +282,10 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	if (!RefersToSameObject(*node.node, *this)) {
 		throw InternalException("RowGroup::InitializeScan segment node mismatch");
 	}
+	auto row_start = node.row_start;
 	state.row_group = node;
 	state.vector_index = 0;
-	state.max_row_group_row =
-	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
+	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
 	if (state.max_row_group_row == 0) {
 		return false;
 	}
@@ -306,7 +306,8 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	Verify();
 
 	// construct a new column data for this type
-	auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), changed_idx, start, target_type);
+	auto column_data =
+	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), changed_idx, GetSegmentStart(), target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -334,7 +335,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
+	auto row_group = make_uniq<RowGroup>(new_collection, GetSegmentStart(), this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
@@ -356,8 +357,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column =
-	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), GetColumnCount(), start, new_column.Type());
+	auto added_column = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), GetColumnCount(), GetSegmentStart(),
+	                                             new_column.Type());
 
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {
@@ -374,7 +375,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
+	auto row_group = make_uniq<RowGroup>(new_collection, GetSegmentStart(), this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	row_group->columns = GetColumns();
 	// now add the new column
@@ -389,7 +390,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 
 	D_ASSERT(removed_column < columns.size());
 
-	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
+	auto row_group = make_uniq<RowGroup>(new_collection, GetSegmentStart(), this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	// copy over all columns except for the removed one
 	auto &cols = GetColumns();
@@ -480,14 +481,14 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 			// no segment to skip
 			continue;
 		}
-		idx_t target_row = current_segment->node->start + current_segment->node->count;
+		idx_t target_row = current_segment->row_start + current_segment->node->count;
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;
 		}
-
-		D_ASSERT(target_row >= this->start);
-		D_ASSERT(target_row <= this->start + this->count);
-		idx_t target_vector_index = (target_row - this->start) / STANDARD_VECTOR_SIZE;
+		auto row_start = GetSegmentStart();
+		D_ASSERT(target_row >= row_start);
+		D_ASSERT(target_row <= row_start + this->count);
+		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
 		if (state.vector_index == target_vector_index) {
 			// we can't skip any full vectors because this segment contains less than a full vector
 			// for now we just bail-out
@@ -820,11 +821,11 @@ void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_
 
 void RowGroup::RevertAppend(idx_t row_group_start) {
 	auto &vinfo = GetOrCreateVersionInfo();
-	vinfo.RevertAppend(row_group_start - this->start);
+	vinfo.RevertAppend(row_group_start - GetSegmentStart());
 	for (auto &column : GetColumns()) {
 		column->RevertAppend(UnsafeNumericCast<row_t>(row_group_start));
 	}
-	SetCount(MinValue<idx_t>(row_group_start - this->start, this->count));
+	SetCount(MinValue<idx_t>(row_group_start - GetSegmentStart(), this->count));
 	Verify();
 }
 
@@ -858,7 +859,7 @@ void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_
 
 void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataChunk &update_chunk, row_t *ids,
                       idx_t offset, idx_t count, const vector<PhysicalIndex> &column_ids, idx_t row_group_start) {
-	if (row_group_start != this->start) {
+	if (row_group_start != GetSegmentStart()) {
 		throw InternalException("RowGroup::Update - start unaligned");
 	}
 #ifdef DEBUG
@@ -883,7 +884,7 @@ void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataCh
 
 void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
                             idx_t offset, idx_t count, const vector<column_t> &column_path, idx_t row_group_start) {
-	if (row_group_start != this->start) {
+	if (row_group_start != this->GetSegmentStart()) {
 		throw InternalException("RowGroup::UpdateColumn - start unaligned");
 	}
 	D_ASSERT(updates.ColumnCount() == 1);
@@ -989,7 +990,7 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
 			auto &column = row_group.GetColumn(column_idx);
-			if (column.start != row_group.start) {
+			if (column.start != row_group.GetSegmentStart()) {
 				throw InternalException("RowGroup::WriteToDisk - child-column is unaligned with row group");
 			}
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
@@ -1054,7 +1055,7 @@ vector<idx_t> RowGroup::GetOrComputeExtraMetadataBlocks(bool force_compute) {
 	// for the last column we need to deserialize the column - because we don't know where it stops
 	auto &types = GetCollection().GetTypes();
 	MetadataReader reader(metadata_manager, column_pointers[last_idx], &read_pointers);
-	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, start, reader, types[last_idx]);
+	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, GetSegmentStart(), reader, types[last_idx]);
 
 	unordered_set<idx_t> result_as_set;
 	for (auto &ptr : read_pointers) {
@@ -1103,7 +1104,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 
 	auto metadata_manager = writer.GetMetadataManager();
 	// construct the row group pointer and write the column meta data to disk
-	row_group_pointer.row_start = start;
+	row_group_pointer.row_start = GetSegmentStart();
 	row_group_pointer.tuple_count = count;
 	if (write_data.reuse_existing_metadata_blocks) {
 		// we are re-using the previous metadata
@@ -1219,7 +1220,7 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
 	for (auto &col : columns) {
 		result.column_data.push_back(col->Serialize());
 	}
-	result.start = start;
+	result.start = GetSegmentStart();
 	result.count = count;
 	return result;
 }
@@ -1266,7 +1267,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 PartitionStatistics RowGroup::GetPartitionStats() const {
 	PartitionStatistics result;
-	result.row_start = start;
+	result.row_start = GetSegmentStart();
 	result.count = count;
 	if (HasUnloadedDeletes() || version_info.load().get()) {
 		// we have version info - approx count
@@ -1314,13 +1315,14 @@ public:
 };
 
 idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count) {
-	VersionDeleteState del_state(*this, transaction, table, this->start);
+	auto row_start = GetSegmentStart();
+	VersionDeleteState del_state(*this, transaction, table, row_start);
 
 	// obtain a write lock
 	for (idx_t i = 0; i < count; i++) {
 		D_ASSERT(ids[i] >= 0);
-		D_ASSERT(idx_t(ids[i]) >= this->start && idx_t(ids[i]) < this->start + this->count);
-		del_state.Delete(ids[i] - UnsafeNumericCast<row_t>(this->start));
+		D_ASSERT(idx_t(ids[i]) >= row_start && idx_t(ids[i]) < row_start + this->count);
+		del_state.Delete(ids[i] - UnsafeNumericCast<row_t>(row_start));
 	}
 	del_state.Flush();
 	return del_state.delete_count;

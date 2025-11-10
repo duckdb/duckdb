@@ -383,7 +383,7 @@ public:
 	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
 
 		state.data_ptr = reinterpret_cast<void *>(this);
 
@@ -524,7 +524,7 @@ public:
 
 	void FlushAndCreateSegmentIfFull(idx_t required_data_bytes, idx_t required_meta_bytes) {
 		if (!CanStore(required_data_bytes, required_meta_bytes)) {
-			idx_t row_start = current_segment->start + current_segment->count;
+			idx_t row_start = current_segment->GetSegmentStart() + current_segment->count;
 			FlushSegment();
 			CreateEmptySegment(row_start);
 		}

@@ -37,7 +37,7 @@ void ColumnData::SetStart(idx_t new_start) {
 	this->start = new_start;
 	idx_t offset = 0;
 	for (auto &segment : data.Segments()) {
-		segment.start = start + offset;
+		segment.SetSegmentStart(start + offset);
 		offset += segment.count;
 	}
 	data.Reinitialize();
@@ -87,7 +87,7 @@ bool ColumnData::HasChanges() const {
 			return true;
 		}
 		// persistent segment; check if there were any updates or deletions in this segment
-		idx_t start_row_idx = segment.start - start;
+		idx_t start_row_idx = nodes[segment_idx]->row_start - start;
 		idx_t end_row_idx = start_row_idx + segment.count;
 		if (HasChanges(start_row_idx, end_row_idx)) {
 			return true;
@@ -140,7 +140,7 @@ ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_
 	}
 	// check if the current segment has enough data remaining
 	auto &current = *state.current->node;
-	idx_t remaining_in_segment = current.start + current.count - state.row_index;
+	idx_t remaining_in_segment = state.current->row_start + current.count - state.row_index;
 	if (remaining_in_segment < scan_count) {
 		// there is not enough data remaining in the current segment so we need to scan across segments
 		// we need flat vectors here
@@ -161,7 +161,7 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 	idx_t row_index = scan_state.row_index;
 	while (remaining > 0) {
 		auto &current = *current_segment->node;
-		idx_t scan_count = MinValue<idx_t>(remaining, current.start + current.count - row_index);
+		idx_t scan_count = MinValue<idx_t>(remaining, current_segment->row_start + current.count - row_index);
 		remaining -= scan_count;
 		row_index += scan_count;
 		if (remaining > 0) {
@@ -180,7 +180,7 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 	if (!state.initialized) {
 		auto &current = *state.current->node;
 		current.InitializeScan(state);
-		state.internal_index = current.start;
+		state.internal_index = state.current->row_start;
 		state.initialized = true;
 	}
 	D_ASSERT(data.HasSegment(*state.current));
@@ -201,8 +201,9 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 	idx_t initial_remaining = remaining;
 	while (remaining > 0) {
 		auto &current = *state.current->node;
-		D_ASSERT(state.row_index >= current.start && state.row_index <= current.start + current.count);
-		idx_t scan_count = MinValue<idx_t>(remaining, current.start + current.count - state.row_index);
+		auto current_start = state.current->row_start;
+		D_ASSERT(state.row_index >= current_start && state.row_index <= current_start + current.count);
+		idx_t scan_count = MinValue<idx_t>(remaining, current_start + current.count - state.row_index);
 		idx_t result_offset = base_result_offset + initial_remaining - remaining;
 		if (scan_count > 0) {
 			if (state.scan_options && state.scan_options->force_fetch_row) {
@@ -240,7 +241,7 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
                               idx_t sel_count) {
 	BeginScanVectorInternal(state);
 	auto &current = *state.current->node;
-	if (current.start + current.count - state.row_index < target_count) {
+	if (state.current->row_start + current.count - state.row_index < target_count) {
 		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
 	}
 	if (state.scan_options && state.scan_options->force_fetch_row) {
@@ -260,7 +261,7 @@ void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t targ
                               idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	BeginScanVectorInternal(state);
 	auto &current = *state.current->node;
-	if (current.start + current.count - state.row_index < target_count) {
+	if (state.current->row_start + current.count - state.row_index < target_count) {
 		throw InternalException("ColumnData::Filter should be able to fetch everything from one segment");
 	}
 	current.Filter(state, target_count, result, sel, sel_count, filter, filter_state);
@@ -489,7 +490,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	if (last_segment.segment_type == ColumnSegmentType::PERSISTENT ||
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
-		auto total_rows = last_segment.start + last_segment.count;
+		auto total_rows = segment->row_start + last_segment.count;
 		AppendTransientSegment(l, total_rows);
 		state.current = data.GetLastSegment(l);
 	} else {
@@ -518,7 +519,7 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
 			auto l = data.Lock();
-			AppendTransientSegment(l, append_segment.start + append_segment.count);
+			AppendTransientSegment(l, state.current->row_start + append_segment.count);
 			state.current = data.GetLastSegment(l);
 			state.current->node->InitializeAppend(state);
 		}
@@ -536,15 +537,15 @@ void ColumnData::RevertAppend(row_t start_row_p) {
 		return;
 	}
 	auto &last_segment = *last_segment_node->node;
-	if (start_row >= last_segment.start + last_segment.count) {
+	if (start_row >= last_segment_node->row_start + last_segment.count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(start_row == last_segment.start + last_segment.count);
+		D_ASSERT(start_row == last_segment_node->row_start + last_segment.count);
 		return;
 	}
 	// find the segment index that the current row belongs to
 	idx_t segment_index = data.GetSegmentIndex(l, start_row);
 	auto segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-	if (segment->node->start == start_row) {
+	if (segment->row_start == start_row) {
 		// we are truncating exactly this segment - erase it entirely
 		data.EraseSegments(l, segment_index);
 	} else {
@@ -568,7 +569,7 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	state.row_index =
 	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = data.GetSegment(state.row_index);
-	state.internal_index = state.current->node->start;
+	state.internal_index = state.current->row_start;
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
@@ -939,14 +940,15 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 
 	// iterate over the segments
 	idx_t segment_idx = 0;
-	for (auto &segment : data.Segments()) {
+	for (auto &segment_node : data.SegmentNodes()) {
+		auto &segment = *segment_node.node;
 		ColumnSegmentInfo column_info;
 		column_info.row_group_index = row_group_index;
 		column_info.column_id = col_path[0];
 		column_info.column_path = col_path_str;
 		column_info.segment_idx = segment_idx;
 		column_info.segment_type = type.ToString();
-		column_info.segment_start = segment.start;
+		column_info.segment_start = segment_node.row_start;
 		column_info.segment_count = segment.count;
 		column_info.compression_type = CompressionTypeToString(segment.GetCompressionFunction().type);
 		{

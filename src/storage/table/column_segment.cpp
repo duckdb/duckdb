@@ -88,6 +88,12 @@ ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
 ColumnSegment::~ColumnSegment() {
 }
 
+idx_t ColumnSegment::GetRelativeIndex(idx_t row_index) {
+	auto segment_start = GetSegmentStart();
+	D_ASSERT(row_index >= segment_start);
+	D_ASSERT(row_index <= segment_start + this->count);
+	return row_index - segment_start;
+}
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
@@ -152,8 +158,9 @@ void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector
 // Fetch
 //===--------------------------------------------------------------------===//
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	function.get().fetch_row(*this, state, UnsafeNumericCast<int64_t>(UnsafeNumericCast<idx_t>(row_id) - this->start),
-	                         result, result_idx);
+	function.get().fetch_row(*this, state,
+	                         UnsafeNumericCast<int64_t>(UnsafeNumericCast<idx_t>(row_id) - GetSegmentStart()), result,
+	                         result_idx);
 }
 
 //===--------------------------------------------------------------------===//
@@ -210,7 +217,7 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 	if (function.get().revert_append) {
 		function.get().revert_append(*this, start_row);
 	}
-	this->count = start_row - this->start;
+	this->count = start_row - GetSegmentStart();
 }
 
 //===--------------------------------------------------------------------===//
@@ -261,7 +268,7 @@ DataPointer ColumnSegment::GetDataPointer() {
 	DataPointer pointer(stats.statistics.Copy());
 	pointer.block_pointer.block_id = GetBlockId();
 	pointer.block_pointer.offset = NumericCast<uint32_t>(GetBlockOffset());
-	pointer.row_start = start;
+	pointer.row_start = GetSegmentStart();
 	pointer.tuple_count = count;
 	pointer.compression_type = function.get().type;
 	if (function.get().serialize_state) {

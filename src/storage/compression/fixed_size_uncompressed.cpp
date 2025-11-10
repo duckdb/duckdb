@@ -61,7 +61,7 @@ UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointData &c
                                                      const CompressionInfo &info)
     : CompressionState(info), checkpoint_data(checkpoint_data),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED)) {
-	UncompressedCompressState::CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+	UncompressedCompressState::CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
 }
 
 void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
@@ -120,7 +120,7 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 			// appended everything: finished
 			return;
 		}
-		auto next_start = state.current_segment->start + state.current_segment->count;
+		auto next_start = state.current_segment->GetSegmentStart() + state.current_segment->count;
 		// the segment is full: flush it to disk
 		state.FlushSegment(state.current_segment->FinalizeAppend(state.append_state));
 

@@ -219,7 +219,7 @@ public:
 	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
 	}
 
 	~FSSTCompressionState() override {
@@ -323,7 +323,7 @@ public:
 	}
 
 	void Flush(bool final = false) {
-		auto next_start = current_segment->start + current_segment->count;
+		auto next_start = current_segment->GetSegmentStart() + current_segment->count;
 
 		auto segment_size = Finalize();
 		auto &state = checkpoint_data.GetCheckpointState();

@@ -92,7 +92,8 @@ struct UpdateInfo {
 	//! Returns the total allocation size for an UpdateInfo entry, together with space for the tuple data
 	static idx_t GetAllocSize(idx_t type_size);
 	//! Initialize an UpdateInfo struct that has been allocated using GetAllocSize (i.e. has extra space after it)
-	static void Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id, idx_t row_group_start);
+	static void Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id,
+	                       idx_t row_group_start);
 };
 
 } // namespace duckdb

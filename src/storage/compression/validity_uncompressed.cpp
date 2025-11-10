@@ -512,7 +512,7 @@ idx_t ValidityFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
 }
 
 void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
-	idx_t start_bit = start_row - segment.start;
+	idx_t start_bit = start_row - segment.GetSegmentStart();
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);

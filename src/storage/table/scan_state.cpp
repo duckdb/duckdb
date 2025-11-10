@@ -195,7 +195,7 @@ void ColumnScanState::NextInternal(idx_t count) {
 		return;
 	}
 	row_index += count;
-	while (row_index >= current->node->start + current->node->count) {
+	while (row_index >= current->row_start + current->node->count) {
 		current = segment_tree->GetNextSegment(*current);
 		initialized = false;
 		segment_checked = false;
@@ -203,8 +203,7 @@ void ColumnScanState::NextInternal(idx_t count) {
 			break;
 		}
 	}
-	D_ASSERT(!current ||
-	         (row_index >= current->node->start && row_index < current->node->start + current->node->count));
+	D_ASSERT(!current || (row_index >= current->row_start && row_index < current->row_start + current->node->count));
 }
 
 void ColumnScanState::Next(idx_t count) {
@@ -281,14 +280,14 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 		row_group->node->Scan(transaction, *this, result);
 		if (result.size() > 0) {
 			return true;
-		} else if (max_row <= row_group->node->start + row_group->node->count) {
+		} else if (max_row <= row_group->row_start + row_group->node->count) {
 			row_group = nullptr;
 			return false;
 		} else {
 			do {
 				row_group = GetNextRowGroup(*row_group).get();
 				if (row_group) {
-					if (row_group->node->start >= max_row) {
+					if (row_group->row_start >= max_row) {
 						row_group = nullptr;
 						break;
 					}

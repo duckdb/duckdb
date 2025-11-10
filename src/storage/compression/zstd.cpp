@@ -314,10 +314,10 @@ public:
 		}
 		idx_t row_start;
 		if (segment) {
-			row_start = segment->start + segment->count;
+			row_start = segment->GetSegmentStart() + segment->count;
 			FlushSegment();
 		} else {
-			row_start = checkpoint_data.GetRowGroup().start;
+			row_start = checkpoint_data.GetRowGroup().GetSegmentStart();
 		}
 		CreateEmptySegment(row_start);
 

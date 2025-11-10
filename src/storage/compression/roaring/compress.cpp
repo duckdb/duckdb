@@ -202,7 +202,7 @@ RoaringCompressState::RoaringCompressState(ColumnDataCheckpointData &checkpoint_
       analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()), container_state(),
       container_metadata(analyze_state.container_metadata), checkpoint_data(checkpoint_data),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
-	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+	CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
 	total_count = 0;
 	InitializeContainer();
 }
@@ -257,7 +257,7 @@ void RoaringCompressState::InitializeContainer() {
 	idx_t container_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(
 	    MinValue<idx_t>(analyze_state.total_count - container_state.appended_count, ROARING_CONTAINER_SIZE));
 	if (!CanStore(container_size, metadata)) {
-		idx_t row_start = current_segment->start + current_segment->count;
+		idx_t row_start = current_segment->GetSegmentStart() + current_segment->count;
 		FlushSegment();
 		CreateEmptySegment(row_start);
 	}

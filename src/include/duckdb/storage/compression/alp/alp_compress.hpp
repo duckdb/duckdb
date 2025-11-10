@@ -34,7 +34,7 @@ public:
 	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
 	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
 
 		//! Combinations found on the analyze step are needed for compression
 		state.best_k_combinations = analyze_state->state.best_k_combinations;
@@ -113,7 +113,7 @@ public:
 		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx, state);
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
-			auto row_start = current_segment->start + current_segment->count;
+			auto row_start = current_segment->GetSegmentStart() + current_segment->count;
 			FlushSegment();
 			CreateEmptySegment(row_start);
 		}
