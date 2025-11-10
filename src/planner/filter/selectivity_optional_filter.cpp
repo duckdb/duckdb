@@ -21,17 +21,9 @@ SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> fil
 }
 
 FilterPropagateResult SelectivityOptionalFilter::CheckStatistics(BaseStatistics &stats) const {
-	const auto child_result = child_filter->CheckStatistics(stats);
-
-	if (selectivity_stats->status.load() != SelectivityOptionalFilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY) {
-		if (child_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-			selectivity_stats->SetStatus(SelectivityOptionalFilterStatus::PAUSED_DUE_TO_ZONE_MAP_STATS);
-		} else if (child_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
-			selectivity_stats->SetStatus(SelectivityOptionalFilterStatus::ACTIVE);
-		}
-	}
-
-	return child_result;
+	// TODO: A potential optimization would be to pause the filter for this row group if the stats return always true,
+	//		 but this needs to happen thread local, as other threads scan other row groups
+	return child_filter->CheckStatistics(stats);
 }
 
 unique_ptr<Expression> SelectivityOptionalFilter::ToExpression(const Expression &column) const {
@@ -54,7 +46,8 @@ unique_ptr<TableFilter> SelectivityOptionalFilter::Deserialize(Deserializer &des
 }
 
 string SelectivityOptionalFilter::ToString(const string &column_name) const {
-	return string("s_optional: ") + child_filter->ToString(column_name);
+	const auto child_string = child_filter ? child_filter->ToString(column_name) : "NULL";
+	return string("s_optional: ") + child_string;
 }
 
 unique_ptr<TableFilter> SelectivityOptionalFilter::Copy() const {
