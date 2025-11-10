@@ -29,8 +29,8 @@ WindowAggregator::~WindowAggregator() {
 
 WindowAggregatorGlobalState::WindowAggregatorGlobalState(ClientContext &client, const WindowAggregator &aggregator_p,
                                                          idx_t group_count)
-    : client(client), allocator(Allocator::DefaultAllocator()), aggregator(aggregator_p), aggr(aggregator.wexpr),
-      locals(0), finalized(0) {
+    : client(client), allocator(Allocator::Get(client)), aggregator(aggregator_p), aggr(aggregator.wexpr), locals(0),
+      finalized(0) {
 	if (aggr.filter) {
 		// 	Start with all invalid and set the ones that pass
 		filter_mask.Initialize(group_count, false);
@@ -45,7 +45,7 @@ unique_ptr<GlobalSinkState> WindowAggregator::GetGlobalState(ClientContext &cont
 }
 
 WindowAggregatorLocalState::WindowAggregatorLocalState(ExecutionContext &context)
-    : allocator(Allocator::DefaultAllocator()) {
+    : allocator(Allocator::Get(context.client)) {
 }
 
 void WindowAggregatorLocalState::Sink(ExecutionContext &context, WindowAggregatorGlobalState &gastate,
