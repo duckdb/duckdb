@@ -95,8 +95,8 @@ static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFun
 }
 
 ScalarFunction StructKeysFun::GetFunction() {
-	ScalarFunction func({LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR), StructKeysFunction);
-	func.bind = StructKeysBind;
+	ScalarFunction func({LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR), StructKeysFunction,
+	                    StructKeysBind);
 	return func;
 }
 
