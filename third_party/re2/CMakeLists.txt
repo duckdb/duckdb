@@ -13,7 +13,7 @@ endif()
 
 project(RE2 CXX)
 
-set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_CXX_VISIBILITY_PRESET default)
 
 include(CTest)
 
