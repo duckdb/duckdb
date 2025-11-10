@@ -753,7 +753,6 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                const PhysicalComparisonJoin &op, const ExpressionType &cmp,
                                                const bool is_perfect_hashtable) const {
-
 	if (!ht) {
 		return false;
 	}
@@ -787,7 +786,7 @@ void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &inf
 	ht.SetBuildBloomFilter(true);
 
 	auto opt_bf_filter =
-	    make_uniq<SelectivityOptionalFilter>(std::move(bf_filter), SELECTIVITY_BF_THRESHOLD, SELECTIVITY_BF_CHECK_N);
+	    make_uniq<SelectivityOptionalFilter>(std::move(bf_filter), SelectivityOptionalFilter::BF_THRESHOLD, SelectivityOptionalFilter::BF_CHECK_N);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_bf_filter));
 }
 
@@ -816,7 +815,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;
 		for (auto &info : probe_info) {
-
 			auto filter_col_idx = info.columns[filter_idx].probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
@@ -845,20 +843,15 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				// for non-equalities, the range must be half-open
 				// e.g., for lhs < rhs we can only use lhs <= max
 
-				const bool use_bloom_filter = CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable);
 				switch (cmp) {
 				case ExpressionType::COMPARE_EQUAL:
 				case ExpressionType::COMPARE_GREATERTHAN:
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					auto greater_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					if (true) {
-						auto optional_greater_equals = make_uniq<SelectivityOptionalFilter>(
-						    std::move(greater_equals), SELECTIVITY_MIN_MAX_THRESHOLD, SELECTIVITY_MIN_MAX_CHECK_N);
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
-					} else {
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(greater_equals));
-					}
+					auto optional_greater_equals = make_uniq<SelectivityOptionalFilter>(
+				std::move(greater_equals), SelectivityOptionalFilter::MIN_MAX_THRESHOLD, SelectivityOptionalFilter::MIN_MAX_CHECK_N);
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
 					break;
 				}
 				default:
@@ -870,20 +863,16 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					auto less_equals =
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-					if (true) {
-						auto optional_less_equals = make_uniq<SelectivityOptionalFilter>(
-						    std::move(less_equals), SELECTIVITY_MIN_MAX_THRESHOLD, SELECTIVITY_MIN_MAX_CHECK_N);
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
-					} else {
-						info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
-					}
+					auto optional_less_equals = make_uniq<SelectivityOptionalFilter>(
+					    std::move(less_equals), SelectivityOptionalFilter::MIN_MAX_THRESHOLD, SelectivityOptionalFilter::MIN_MAX_CHECK_N);
+					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
 					break;
 				}
 				default:
 					break;
 				}
 
-				if (ht && use_bloom_filter) {
+				if (ht && CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable)) {
 					PushBloomFilter(info, *ht, op, filter_col_idx);
 				}
 			}

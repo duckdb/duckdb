@@ -409,7 +409,6 @@ public:
 
 	//! Capacity of the pointer table given the ht count
 	idx_t PointerTableCapacity(idx_t count) const {
-
 		const auto capacity = NextPowerOfTwo(LossyNumericCast<idx_t>(static_cast<double>(count) * load_factor));
 		return MaxValue<idx_t>(capacity, MINIMUM_CAPACITY);
 	}

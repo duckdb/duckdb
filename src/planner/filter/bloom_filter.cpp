@@ -11,7 +11,6 @@ static constexpr idx_t SHIFT_MASK = 0x3F3F3F3F3F3F3F3F; // 6 bits for 64 positio
 static constexpr idx_t N_BITS = 4;                      // the number of bits to set per hash
 
 void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
-
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
 
 	const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, number_of_rows * MIN_NUM_BITS_PER_KEY);
@@ -27,7 +26,6 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 }
 
 inline uint64_t GetMask(const hash_t hash) {
-
 	const uint64_t shifts = hash & SHIFT_MASK;
 	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);
 
@@ -79,7 +77,6 @@ inline bool BloomFilter::LookupOne(const uint64_t hash) const {
 }
 
 string BFTableFilter::ToString(const string &column_name) const {
-
 	return column_name + " IN BF(" + key_column_name + ")";
 }
 
@@ -95,7 +92,6 @@ void BFTableFilter::HashInternal(Vector &keys_v, const SelectionVector &sel, con
 
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
                             BFTableFilterState &state) const {
-
 	if (state.current_capacity < approved_tuple_count) {
 		state.hashes_v.Initialize(false, approved_tuple_count);
 		state.bf_sel.Initialize(approved_tuple_count);

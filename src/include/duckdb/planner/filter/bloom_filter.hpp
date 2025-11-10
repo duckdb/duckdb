@@ -18,7 +18,6 @@
 namespace duckdb {
 
 class BloomFilter {
-
 public:
 	BloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t number_of_rows);
@@ -43,7 +42,6 @@ private:
 };
 
 class BFTableFilter final : public TableFilter {
-
 private:
 	BloomFilter &filter;
 

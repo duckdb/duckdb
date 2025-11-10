@@ -12,28 +12,12 @@
 
 namespace duckdb {
 
-constexpr float SELECTIVITY_MIN_MAX_THRESHOLD = 0.75f;
-constexpr idx_t SELECTIVITY_MIN_MAX_CHECK_N = 50;
-
-constexpr float SELECTIVITY_BF_THRESHOLD = 0.25f;
-constexpr idx_t SELECTIVITY_BF_CHECK_N = 50;
 
 enum class SelectivityOptionalFilterStatus : uint8_t {
 	ACTIVE, // ready and in use
 	PAUSED_DUE_TO_ZONE_MAP_STATS,
 	PAUSED_DUE_TO_HIGH_SELECTIVITY
 };
-
-// add the runtime statistics to stop using the bf if not selective
-// auto &stats = this->filter.GetSelectivityStats();
-// if (stats.vectors_processed.load() < SELECTIVITY_N_VECTORS_TO_CHECK) {
-// 	stats.Update(found_count, approved_tuple_count);
-// 	if (stats.vectors_processed.load() >= SELECTIVITY_N_VECTORS_TO_CHECK) {
-// 		if (stats.GetSelectivity() >= SELECTIVITY_THRESHOLD) {
-// 			this->filter.Pause();
-// 		}
-// 	}
-// }
 
 class SelectivityOptionalFilter final : public TableFilter {
 
@@ -81,6 +65,13 @@ private:
 	idx_t n_vectors_to_check;
 
 public:
+
+	static constexpr float MIN_MAX_THRESHOLD = 0.75f;
+	static constexpr idx_t MIN_MAX_CHECK_N = 40;
+
+	static constexpr float BF_THRESHOLD = 0.25f;
+	static constexpr idx_t BF_CHECK_N = 60;
+
 	static constexpr auto TYPE = TableFilterType::SELECTIVITY_OPTIONAL_FILTER;
 	unique_ptr<SelectivityStats> selectivity_stats;
 

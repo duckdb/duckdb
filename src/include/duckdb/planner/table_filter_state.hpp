@@ -53,7 +53,6 @@ public:
 };
 
 struct BFTableFilterState final : public TableFilterState {
-
 	idx_t current_capacity;
 	Vector hashes_v;
 	Vector found_v;
