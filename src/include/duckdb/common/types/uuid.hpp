@@ -34,6 +34,11 @@ public:
 	//! Convert a uuid value to a uhugeint_t object
 	static uhugeint_t ToUHugeint(hugeint_t input);
 
+	//! Convert 16-byte binary data to UUID (hugeint_t)
+	static hugeint_t FromBlob(const_data_ptr_t input);
+	//! Convert UUID (hugeint_t) to 16-byte binary data
+	static void ToBlob(hugeint_t input, data_ptr_t output);
+
 	//! Convert a hugeint object to a uuid style string
 	static string ToString(hugeint_t input) {
 		char buff[STRING_SIZE];

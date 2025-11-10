@@ -5,6 +5,7 @@ import functools
 from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 from dataclasses import dataclass
 from typing import Optional, List, Union
+import subprocess
 
 print = functools.partial(print, flush=True)
 
@@ -38,11 +39,15 @@ parser.add_argument("--new", type=str, help="Path to the new runner.", required=
 parser.add_argument("--benchmarks", type=str, help="Path to the benchmark file.", required=True)
 parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
 parser.add_argument("--threads", type=int, help="Number of threads to use.")
+parser.add_argument("--memory_limit", type=str, help="Memory limit to use.")
 parser.add_argument("--nofail", action="store_true", help="Do not fail on regression.")
 parser.add_argument("--disable-timeout", action="store_true", help="Disable timeout.")
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
 parser.add_argument("--no-summary", action="store_true", help="No summary in the end.")
+parser.add_argument(
+    "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
+)
 parser.add_argument(
     "--regression-threshold-seconds",
     type=float,
@@ -65,6 +70,7 @@ new_runner_path = args.new
 benchmark_file = args.benchmarks
 verbose = args.verbose
 threads = args.threads
+memory_limit = args.memory_limit
 no_regression_fail = args.nofail
 disable_timeout = args.disable_timeout
 max_timeout = args.max_timeout
@@ -89,6 +95,18 @@ if not os.path.isfile(old_runner_path):
 if not os.path.isfile(new_runner_path):
     print(f"Failed to find new runner {new_runner_path}")
     sys.exit(1)
+
+if args.clear_benchmark_cache:
+    old_cache_path = os.path.join(os.path.dirname(old_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
+    new_cache_path = os.path.join(os.path.dirname(new_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
+    try:
+        shutil.rmtree(old_cache_path)
+    except:
+        pass
+    try:
+        shutil.rmtree(new_cache_path)
+    except:
+        pass
 
 config_dict = vars(args)
 old_runner = BenchmarkRunner(BenchmarkRunnerConfig.from_params(old_runner_path, benchmark_file, **config_dict))
@@ -269,8 +287,11 @@ if summary and not no_summary:
 ====================================================
 '''
     )
+    # check the value is "true" otherwise you'll see the prefix in local run outputs
+    prefix = "::error::" if ('CI' in os.environ and os.getenv('CI') == 'true') else ""
     for i, failure_message in enumerate(summary, start=1):
-        print(f"{i}: ", failure_message["benchmark"])
+        prefix_str = f"{prefix}{i}" if len(prefix) > 0 else f"{i}"
+        print(f"{prefix_str}: ", failure_message["benchmark"])
         if failure_message["old_failure"] != failure_message["new_failure"]:
             print("Old:\n", failure_message["old_failure"])
             print("New:\n", failure_message["new_failure"])

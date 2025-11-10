@@ -1,0 +1,106 @@
+{
+  "description": "Run on persistent databases as storage with automatic checkpointing disabled to stress test the WAL.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__stress_test_wal.db",
+  "force_restart": "true",
+  "checkpoint_wal_size": "1000000000",
+  "checkpoint_on_shutdown": "false",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Contains explicit use of the memory catalog.",
+      "paths": [
+        "test/sql/attach/attach_default_table.test",
+        "test/sql/attach/attach_defaults.test",
+        "test/sql/attach/attach_did_you_mean.test",
+        "test/sql/attach/attach_issue7711.test",
+        "test/sql/attach/attach_issue_7660.test",
+        "test/sql/attach/attach_show_all_tables.test",
+        "test/sql/attach/attach_table_info.test",
+        "test/sql/attach/attach_views.test",
+        "test/sql/attach/show_databases.test",
+        "test/sql/catalog/function/attached_macro.test",
+        "test/sql/catalog/test_temporary.test",
+        "test/sql/copy_database/copy_table_with_sequence.test",
+        "test/sql/pg_catalog/sqlalchemy.test",
+        "test/sql/pg_catalog/system_functions.test",
+        "test/sql/pragma/test_show_tables_temp_views.test",
+        "test/sql/show_select/test_describe_all.test",
+        "test/sql/attach/attach_use_rollback.test",
+        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
+      ]
+    },
+    {"reason": "Loading from disk is necessary to trigger expected OOM.",
+      "paths": [
+        "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Unexpected (?) binder error.",
+      "paths": [
+        "test/fuzzer/pedro/index_generated_column.test",
+        "test/sql/alter/add_col/test_add_col_stats.test",
+        "test/sql/alter/add_col/test_add_col_user_type.test",
+        "test/sql/alter/alter_type/alter_type_struct.test",
+        "test/sql/alter/alter_type/test_alter_type.test",
+        "test/sql/alter/alter_type/test_alter_type_expression.test",
+        "test/sql/alter/alter_type/test_alter_type_multi_column.test",
+        "test/sql/alter/default/test_set_default.test",
+        "test/sql/alter/list/add_column_in_struct.test",
+        "test/sql/alter/list/drop_column_in_struct.test",
+        "test/sql/alter/list/rename_column_in_struct.test",
+        "test/sql/alter/map/add_column_in_struct.test",
+        "test/sql/alter/map/drop_column_in_struct.test",
+        "test/sql/alter/map/rename_column_in_struct.test",
+        "test/sql/alter/struct/add_col_nested_struct.test",
+        "test/sql/alter/struct/add_col_struct.test",
+        "test/sql/alter/struct/drop_col_nested_struct.test",
+        "test/sql/alter/struct/drop_col_struct.test",
+        "test/sql/alter/struct/rename_col_nested_struct.test",
+        "test/sql/alter/struct/rename_col_struct.test",
+        "test/sql/attach/attach_dependencies.test",
+        "test/sql/copy/partitioned/hive_partition_escape.test",
+        "test/sql/export/export_indexes.test",
+        "test/sql/function/list/lambdas/arrow/table_functions_deprecated.test",
+        "test/sql/function/list/lambdas/table_functions.test",
+        "test/sql/function/list/test_lambda_with_struct_aliases.test",
+        "test/sql/generated_columns/virtual/rename.test",
+        "test/sql/generated_columns/virtual/rename_dependency.test",
+        "test/sql/index/art/constraints/test_art_compound_key_changes.test",
+        "test/sql/index/art/storage/test_art_storage.test",
+        "test/sql/index/art/types/test_art_expression_key.test",
+        "test/sql/index/art/types/test_art_union.test",
+        "test/sql/types/alias/type_with_schema.test",
+        "test/sql/types/struct/create_type_struct.test",
+        "test/sql/types/enum/test_alter_enum.test",
+        "test/sql/types/enum/test_enum_schema.test",
+        "test/sql/types/enum/test_enum_structs.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Wrong result in query.",
+      "paths": [
+        "test/sql/index/art/storage/test_art_duckdb_versions.test",
+        "test/sql/storage/wal/wal_lazy_creation.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Internal Exception.",
+      "paths": [
+        "test/sql/alter/add_pk/test_add_pk_with_generated_column.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Query unexpectedly succeeded/failed.",
+      "paths": [
+        "test/fuzzer/sqlsmith/nullif_map_with_config.test",
+        "test/sql/storage/memory/in_memory_compress.test"
+      ]
+    },
+    {
+      "reason": "FIXME: Attempting to checkpoint read-only database.",
+      "paths": [
+        "test/sql/storage/read_duckdb/read_duckdb_index.test"
+      ]
+    }
+  ]
+}

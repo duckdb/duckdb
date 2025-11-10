@@ -11,17 +11,17 @@ CREATE TABLE T1 (name VARCHAR);
 foreach header true false
 
 statement error
-COPY T1(name) from 'data/csv/line_too_long.csv.gz' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+COPY T1(name) from '{DATA_DIR}/csv/line_too_long.csv.gz' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
 ----
 Maximum line size of 2000000 bytes exceeded
 
 statement error
-COPY T1(name) from 'data/csv/line_too_long_with_newline.csv.gz' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+COPY T1(name) from '{DATA_DIR}/csv/line_too_long_with_newline.csv.gz' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
 ----
 Possible Solution: Change the maximum length size, e.g., max_line_size=2097165
 
 statement error
-COPY T1(name) from 'data/csv/multiple_line_too_long.csv.gz' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+COPY T1(name) from '{DATA_DIR}/csv/multiple_line_too_long.csv.gz' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
 ----
 Possible Solution: Change the maximum length size, e.g., max_line_size=2097165
 

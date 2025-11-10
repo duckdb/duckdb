@@ -42,16 +42,19 @@ class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
-	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0);
+	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
-	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0);
-	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
+	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	~GroupedAggregateHashTable() override;
 
 public:
 	//! The hash table load factor, when a resize is triggered
-	constexpr static double LOAD_FACTOR = 1.25;
+	constexpr static double LOAD_FACTOR = 1.5;
 
 	//! Get the layout of this HT
 	shared_ptr<TupleDataLayout> GetLayoutPtr();
@@ -189,10 +192,9 @@ private:
 		Vector hashes;
 		Vector ht_offsets;
 		Vector hash_salts;
+		SelectionVector new_groups;
 		SelectionVector group_compare_vector;
 		SelectionVector no_match_vector;
-		SelectionVector empty_vector;
-		SelectionVector new_groups;
 		Vector addresses;
 		DataChunk group_chunk;
 		AggregateDictionaryState dict_state;

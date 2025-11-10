@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -113,7 +114,7 @@ struct CSVStates {
 //! The STA indicates the current state of parsing based on both the current and preceding characters.
 //! This reveals whether we are dealing with a Field, a New Line, a Delimiter, and so forth.
 //! The STA's creation depends on the provided quote, character, and delimiter options for that state machine.
-//! The motivation behind implementing an STA is to remove branching in regular CSV Parsing by predicting and detecting
+//! The motivation behind implementing an STA is to remove branching in regular CSV parsing by predicting and detecting
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
@@ -129,12 +130,12 @@ public:
 	}
 
 	void Print() const {
-		std::cout << "State Machine Options" << '\n';
-		std::cout << "Delim: " << state_machine_options.delimiter.GetValue() << '\n';
-		std::cout << "Quote: " << state_machine_options.quote.GetValue() << '\n';
-		std::cout << "Escape: " << state_machine_options.escape.GetValue() << '\n';
-		std::cout << "Comment: " << state_machine_options.comment.GetValue() << '\n';
-		std::cout << "---------------------" << '\n';
+		Printer::Print(OutputStream::STREAM_STDOUT, string("State Machine Options"));
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Delim: ") + state_machine_options.delimiter.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Quote: ") + state_machine_options.quote.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Escape: ") + state_machine_options.escape.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("Comment: ") + state_machine_options.comment.FormatValue());
+		Printer::Print(OutputStream::STREAM_STDOUT, string("---------------------"));
 	}
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters

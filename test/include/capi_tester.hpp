@@ -211,6 +211,8 @@ duckdb_date CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
 duckdb_time CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
+duckdb_time_ns CAPIResult::Fetch(idx_t col, idx_t row);
+template <>
 duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
 duckdb_timestamp_s CAPIResult::Fetch(idx_t col, idx_t row);

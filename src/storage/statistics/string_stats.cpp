@@ -161,13 +161,21 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 	}
 	if (stats.GetType().id() == LogicalTypeId::VARCHAR && !string_data.has_unicode) {
 		auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(data), size);
-		if (unicode == UnicodeType::UNICODE) {
+		if (unicode == UnicodeType::UTF8) {
 			string_data.has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
 			throw ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size),
 			                                        "segment statistics update");
 		}
 	}
+}
+
+void StringStats::SetMin(BaseStatistics &stats, const string_t &value) {
+	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).min);
+}
+
+void StringStats::SetMax(BaseStatistics &stats, const string_t &value) {
+	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).max);
 }
 
 void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
@@ -291,7 +299,7 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 		}
 		if (stats.GetType().id() == LogicalTypeId::VARCHAR && !string_data.has_unicode) {
 			auto unicode = Utf8Proc::Analyze(data, len);
-			if (unicode == UnicodeType::UNICODE) {
+			if (unicode == UnicodeType::UTF8) {
 				throw InternalException("Statistics mismatch: string value contains unicode, but statistics says it "
 				                        "shouldn't.\nStatistics: %s\nVector: %s",
 				                        stats.ToString(), vector.ToString(count));

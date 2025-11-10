@@ -1,0 +1,31 @@
+# name: test/sql/storage/compression/dict_fsst/test_dict_fsst_with_smaller_block_size.test
+# description: Test storage with dictionary compression and a smaller block size.
+# group: [dict_fsst]
+
+statement ok
+SET storage_compatibility_version='latest';
+
+statement ok
+ATTACH '{TEMP_DIR}/partial_manager.db' AS db (BLOCK_SIZE 16384);
+
+statement ok
+CREATE TABLE db.t AS FROM read_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', strict_mode=FALSE);
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '{TEMP_DIR}/partial_manager.db' AS db;
+
+query I
+SELECT COUNT("XXX XXX/XXX") FROM db.t WHERE "XXX XXX/XXX" IS NOT NULL;
+----
+3767
+
+query I
+SELECT COUNT(*) FROM db.t WHERE "XXX XXX/XXX" IS NULL;
+----
+5460
+
+statement ok
+SELECT * FROM db.t;

@@ -10,10 +10,8 @@
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#endif
 
 namespace duckdb {
 class ClientContext;

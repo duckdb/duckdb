@@ -45,3 +45,4 @@ CREATE TABLE b(i row(t int));
 statement error
 SELECT i.* FROM a, b;
 ----
+<REGEX>:.*Binder Error.*Ambiguous reference to column name.*

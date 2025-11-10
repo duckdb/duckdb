@@ -1,17 +1,14 @@
-#define DUCKDB_EXTENSION_MAIN
 #include "core_functions_extension.hpp"
-
 #include "core_functions/function_list.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
-void LoadInternal(DuckDB &db) {
-	FunctionList::RegisterExtensionFunctions(*db.instance, CoreFunctionList::GetFunctionList());
+static void LoadInternal(ExtensionLoader &loader) {
+	FunctionList::RegisterExtensionFunctions(loader, CoreFunctionList::GetFunctionList());
 }
 
-void CoreFunctionsExtension::Load(DuckDB &db) {
-	LoadInternal(db);
+void CoreFunctionsExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string CoreFunctionsExtension::Name() {
@@ -30,16 +27,7 @@ std::string CoreFunctionsExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void core_functions_init(duckdb::DatabaseInstance &db) {
-	duckdb::DuckDB db_wrapper(db);
-	duckdb::LoadInternal(db_wrapper);
-}
-
-DUCKDB_EXTENSION_API const char *core_functions_version() {
-	return duckdb::DuckDB::LibraryVersion();
+DUCKDB_CPP_EXTENSION_ENTRY(core_functions, loader) {
+	duckdb::LoadInternal(loader);
 }
 }
-
-#ifndef DUCKDB_EXTENSION_MAIN
-#error DUCKDB_EXTENSION_MAIN not defined
-#endif

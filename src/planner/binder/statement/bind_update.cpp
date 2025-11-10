@@ -2,7 +2,6 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
@@ -12,7 +11,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -20,14 +18,10 @@
 
 namespace duckdb {
 
-// This creates a LogicalProjection and moves 'root' into it as a child
-// unless there are no expressions to project, in which case it just returns 'root'
-unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
-                                                  UpdateSetInfo &set_info, TableCatalogEntry &table,
-                                                  vector<PhysicalIndex> &columns) {
-	auto proj_index = GenerateTableIndex();
-
-	vector<unique_ptr<Expression>> projection_expressions;
+void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
+                           TableCatalogEntry &table, vector<PhysicalIndex> &columns,
+                           vector<unique_ptr<Expression>> &update_expressions,
+                           vector<unique_ptr<Expression>> &projection_expressions) {
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
@@ -49,18 +43,29 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_pt
 		}
 		columns.push_back(column.Physical());
 		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
-			op.expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
+			update_expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(bound_expr, root);
 
-			op.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			update_expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
 			projection_expressions.push_back(std::move(bound_expr));
 		}
 	}
+}
+
+// This creates a LogicalProjection and moves 'root' into it as a child
+// unless there are no expressions to project, in which case it just returns 'root'
+unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
+                                                  UpdateSetInfo &set_info, TableCatalogEntry &table,
+                                                  vector<PhysicalIndex> &columns) {
+	auto proj_index = GenerateTableIndex();
+
+	vector<unique_ptr<Expression>> projection_expressions;
+	BindUpdateSet(proj_index, root, set_info, table, columns, op.expressions, projection_expressions);
 	if (op.type != LogicalOperatorType::LOGICAL_UPDATE && projection_expressions.empty()) {
 		return root;
 	}
@@ -88,8 +93,10 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 				break;
 			}
 		}
-		expressions.push_back(
-		    make_uniq<BoundColumnRefExpression>(row_id_entry->second.type, ColumnBinding(get.table_index, column_idx)));
+		auto row_id_expr =
+		    make_uniq<BoundColumnRefExpression>(row_id_entry->second.type, ColumnBinding(get.table_index, column_idx));
+		row_id_expr->alias = row_id_entry->second.name;
+		expressions.push_back(std::move(row_id_expr));
 		if (column_idx == column_ids.size()) {
 			get.AddColumnId(row_id_column);
 		}
@@ -97,19 +104,19 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 }
 
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
-	BoundStatement result;
 	unique_ptr<LogicalOperator> root;
 
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
-		throw BinderException("Can only update base table!");
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("Can only update base table");
 	}
-	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-	auto &table = table_binding.table;
-
-	// Add CTEs as bindable
-	AddCTEMap(stmt.cte_map);
+	auto &bound_table_get = bound_table.plan->Cast<LogicalGet>();
+	auto table_ptr = bound_table_get.GetTable();
+	if (!table_ptr) {
+		throw BinderException("Can only update base table");
+	}
+	auto &table = *table_ptr;
 
 	optional_ptr<LogicalGet> get;
 	if (stmt.from_table) {
@@ -121,7 +128,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		get = &root->children[0]->Cast<LogicalGet>();
 		bind_context.AddContext(std::move(from_binder->bind_context));
 	} else {
-		root = CreatePlan(*bound_table);
+		root = std::move(bound_table.plan);
 		get = &root->Cast<LogicalGet>();
 	}
 
@@ -175,15 +182,16 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
 		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
-		                     std::move(update_as_logicaloperator), std::move(result));
+		                     std::move(update_as_logicaloperator));
 	}
 
+	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	result.plan = std::move(update);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

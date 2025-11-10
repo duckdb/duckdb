@@ -105,6 +105,7 @@ public:
 	//! Returns a list of all operators (including source and sink) involved in this pipeline
 	vector<reference<PhysicalOperator>> GetOperators();
 	vector<const_reference<PhysicalOperator>> GetOperators() const;
+	const vector<reference<PhysicalOperator>> &GetIntermediateOperators() const;
 
 	optional_ptr<PhysicalOperator> GetSink() {
 		return sink;

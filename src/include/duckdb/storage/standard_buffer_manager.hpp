@@ -40,9 +40,6 @@ public:
 
 public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
-	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
-	                                                          idx_t position, idx_t size,
-	                                                          unique_ptr<FileBuffer> reusable_buffer);
 
 	//! Registers a transient memory buffer.
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) final;
@@ -59,7 +56,7 @@ public:
 	idx_t GetBlockAllocSize() const final;
 	//! Returns the block size for buffer-managed blocks.
 	idx_t GetBlockSize() const final;
-	idx_t GetTemporaryBlockHeaderSize() const final;
+	idx_t GetQueryMaxMemory() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
@@ -72,8 +69,10 @@ public:
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
-
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
+
+	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
+
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 
@@ -84,6 +83,8 @@ public:
 
 	//! Returns information about memory usage
 	vector<MemoryInformation> GetMemoryUsageInfo() const override;
+
+	BlockManager &GetTemporaryBlockManager() final;
 
 	//! Returns a list of all temporary files
 	vector<TemporaryFileInformation> GetTemporaryFiles() final;
@@ -107,6 +108,7 @@ public:
 	DUCKDB_API void ReserveMemory(idx_t size) final;
 	DUCKDB_API void FreeReservedMemory(idx_t size) final;
 	bool HasTemporaryDirectory() const final;
+	bool HasFilesInTemporaryDirectory() const final;
 
 protected:
 	//! Helper
@@ -137,7 +139,7 @@ protected:
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final;
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer = nullptr) final;
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);

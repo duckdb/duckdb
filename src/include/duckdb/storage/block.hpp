@@ -22,7 +22,7 @@ public:
 	Block(Allocator &allocator, const block_id_t id, const idx_t block_size, const idx_t block_header_size);
 	Block(Allocator &allocator, block_id_t id, uint32_t internal_size, idx_t block_header_size);
 	Block(Allocator &allocator, const block_id_t id, BlockManager &block_manager);
-	Block(FileBuffer &source, block_id_t id);
+	Block(FileBuffer &source, block_id_t id, idx_t block_header_size);
 
 	block_id_t id;
 };
@@ -60,6 +60,15 @@ struct MetaBlockPointer {
 	}
 	block_id_t GetBlockId() const;
 	uint32_t GetBlockIndex() const;
+
+	bool operator==(const MetaBlockPointer &rhs) const {
+		return block_pointer == rhs.block_pointer && offset == rhs.offset;
+	}
+
+	friend std::ostream &operator<<(std::ostream &os, const MetaBlockPointer &obj) {
+		return os << "{block_id: " << obj.GetBlockId() << " index: " << obj.GetBlockIndex() << " offset: " << obj.offset
+		          << "}";
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static MetaBlockPointer Deserialize(Deserializer &source);

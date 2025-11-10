@@ -1,0 +1,12 @@
+# name: test/sql/copy/csv/18579.test
+# description: Test for issue #18579
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query IIIIII
+DESCRIBE FROM read_csv('{DATA_DIR}/csv/18579/*.csv', union_by_name = true);
+----
+billingAccountName	VARCHAR	YES	NULL	NULL	NULL
+partnerName	VARCHAR	YES	NULL	NULL	NULL

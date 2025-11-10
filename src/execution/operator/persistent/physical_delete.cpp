@@ -12,10 +12,10 @@
 
 namespace duckdb {
 
-PhysicalDelete::PhysicalDelete(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
-                               vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
-                               idx_t estimated_cardinality, bool return_chunk)
-    : PhysicalOperator(PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
+PhysicalDelete::PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
+                               DataTable &table, vector<unique_ptr<BoundConstraint>> bound_constraints,
+                               idx_t row_id_index, idx_t estimated_cardinality, bool return_chunk)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
       tableref(tableref), table(table), bound_constraints(std::move(bound_constraints)), row_id_index(row_id_index),
       return_chunk(return_chunk) {
 }
@@ -27,7 +27,6 @@ public:
 	explicit DeleteGlobalState(ClientContext &context, const vector<LogicalType> &return_types,
 	                           TableCatalogEntry &table, const vector<unique_ptr<BoundConstraint>> &bound_constraints)
 	    : deleted_count(0), return_collection(context, return_types), has_unique_indexes(false) {
-
 		// We need to append deletes to the local delete-ART.
 		auto &storage = table.GetStorage();
 		if (storage.HasUniqueIndexes()) {
@@ -39,6 +38,7 @@ public:
 	mutex delete_lock;
 	idx_t deleted_count;
 	ColumnDataCollection return_collection;
+	unordered_set<row_t> deleted_row_ids;
 	LocalAppendState delete_index_append_state;
 	bool has_unique_indexes;
 };
@@ -147,12 +147,40 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		});
 	}
 
+	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
+	g_state.deleted_count += deleted_count;
+
 	// Append the return_chunk to the return collection.
 	if (return_chunk) {
+		// Rows can be duplicated, so we get the chunk indexes for new row id values.
+		map<row_t, idx_t> new_row_ids_deleted;
+		auto flat_ids = FlatVector::GetData<row_t>(row_ids);
+		for (idx_t i = 0; i < chunk.size(); i++) {
+			// If the row has not been deleted previously
+			// and is not a duplicate within the current chunk,
+			// then we add it to new_row_ids_deleted.
+			auto row_id = flat_ids[i];
+			auto already_deleted = g_state.deleted_row_ids.find(row_id) != g_state.deleted_row_ids.end();
+			auto newly_deleted = new_row_ids_deleted.find(row_id) != new_row_ids_deleted.end();
+			if (!already_deleted && !newly_deleted) {
+				new_row_ids_deleted[row_id] = i;
+				g_state.deleted_row_ids.insert(row_id);
+			}
+		}
+
+		D_ASSERT(new_row_ids_deleted.size() == deleted_count);
+		if (deleted_count < l_state.delete_chunk.size()) {
+			SelectionVector delete_sel(0, deleted_count);
+			idx_t chunk_index = 0;
+			for (auto &row_id_to_chunk_index : new_row_ids_deleted) {
+				delete_sel.set_index(chunk_index, row_id_to_chunk_index.second);
+				chunk_index++;
+			}
+			l_state.delete_chunk.Slice(delete_sel, deleted_count);
+		}
 		g_state.return_collection.Append(l_state.delete_chunk);
 	}
 
-	g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

@@ -1,0 +1,19 @@
+# name: benchmark/micro/cast/cast_lineitem_json_to_variant.benchmark
+# description: Cast all columns of the lineitem table sf1 as a JSON column to a VARIANT column
+# group: [cast]
+
+name Lineitem JSON To Variant
+group tpch
+subgroup sf1
+
+require tpch
+
+require json
+
+load
+CALL dbgen(sf=1);
+CREATE TABLE lineitem_struct AS SELECT lineitem lineitem_struct FROM lineitem;
+CREATE TABLE lineitem_json AS SELECT lineitem::JSON lineitem_json FROM lineitem;
+
+run
+SELECT lineitem_json::VARIANT FROM lineitem_json

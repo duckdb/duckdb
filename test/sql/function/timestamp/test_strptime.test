@@ -331,6 +331,22 @@ select strptime('2020-12-30 23:25:58.745232-04', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
 2020-12-31 03:25:58.745232+00
 
+# Right side padding of fractional seconds
+query I
+select strptime('2024-11-28 23:59:00.3', '%Y-%m-%d %H:%M:%S.%g');
+----
+2024-11-28 23:59:00.3
+
+query I
+select strptime('2024-11-28 23:59:00.312', '%Y-%m-%d %H:%M:%S.%f');
+----
+2024-11-28 23:59:00.312
+
+query I
+select strptime('2024-11-28 23:59:00.312457', '%Y-%m-%d %H:%M:%S.%n');
+----
+2024-11-28 23:59:00.312457
+
 # infinities should always parse
 
 query I

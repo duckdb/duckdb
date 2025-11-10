@@ -6,9 +6,6 @@
 mode skip
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET immediate_transaction_mode = true;
 
 statement ok

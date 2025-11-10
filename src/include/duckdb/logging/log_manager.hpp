@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/logging/log_storage.hpp
+// duckdb/logging/log_manager.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,17 +9,19 @@
 #pragma once
 
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/logging/log_storage.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
+class LogType;
 
 // Holds global logging state
 // - Handles configuration changes
 // - Creates Loggers with cached configuration
 // - Main sink for logs (either by logging directly into this, or by syncing a pre-cached set of log entries)
 // - Holds the log storage
-class LogManager : public enable_shared_from_this<LogManager> {
+class LogManager {
 	friend class ThreadSafeLogger;
 	friend class ThreadLocalLogger;
 	friend class MutableLogger;
@@ -39,24 +41,34 @@ public:
 
 	//! The global logger can be used whe
 	DUCKDB_API Logger &GlobalLogger();
+	DUCKDB_API shared_ptr<Logger> GlobalLoggerReference();
 
 	//! Flush everything
 	DUCKDB_API void Flush();
 
 	//! Get a shared_ptr to the log storage (For example, to scan it)
 	DUCKDB_API shared_ptr<LogStorage> GetLogStorage();
-	DUCKDB_API bool CanScan();
+	DUCKDB_API bool CanScan(LoggingTargetTable table);
 
+	DUCKDB_API void SetConfig(DatabaseInstance &db, const LogConfig &config);
 	DUCKDB_API void SetEnableLogging(bool enable);
 	DUCKDB_API void SetLogMode(LogMode mode);
 	DUCKDB_API void SetLogLevel(LogLevel level);
-	DUCKDB_API void SetEnabledLogTypes(unordered_set<string> &enabled_log_types);
-	DUCKDB_API void SetDisabledLogTypes(unordered_set<string> &disabled_log_types);
+	DUCKDB_API void SetEnabledLogTypes(optional_ptr<unordered_set<string>> enabled_log_types);
+	DUCKDB_API void SetDisabledLogTypes(optional_ptr<unordered_set<string>> disabled_log_types);
 	DUCKDB_API void SetLogStorage(DatabaseInstance &db, const string &storage_name);
+
+	DUCKDB_API void UpdateLogStorageConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config_value);
+
+	DUCKDB_API void SetEnableStructuredLoggers(vector<string> &enabled_logger_types);
 
 	DUCKDB_API void TruncateLogStorage();
 
 	DUCKDB_API LogConfig GetConfig();
+
+	DUCKDB_API void RegisterLogType(unique_ptr<LogType> type);
+	DUCKDB_API optional_ptr<const LogType> LookupLogType(const string &type);
+	DUCKDB_API void RegisterDefaultLogTypes();
 
 protected:
 	RegisteredLoggingContext RegisterLoggingContextInternal(LoggingContext &context);
@@ -67,10 +79,16 @@ protected:
 	// This allows efficiently pushing a cached set of log entries into the log manager
 	void FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context);
 
+	void SetLogStorageInternal(DatabaseInstance &db, const string &storage_name);
+
+	optional_ptr<const LogType> LookupLogTypeInternal(const string &type);
+
+	void SetConfigInternal(LogConfig config);
+
 	mutex lock;
 	LogConfig config;
 
-	unique_ptr<Logger> global_logger;
+	shared_ptr<Logger> global_logger;
 
 	shared_ptr<LogStorage> log_storage;
 
@@ -78,6 +96,7 @@ protected:
 
 	// Any additional LogStorages registered (by extensions for example)
 	case_insensitive_map_t<shared_ptr<LogStorage>> registered_log_storages;
+	case_insensitive_map_t<unique_ptr<LogType>> registered_log_types;
 };
 
 } // namespace duckdb

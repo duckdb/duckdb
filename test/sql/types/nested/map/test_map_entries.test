@@ -2,9 +2,6 @@
 # description: Show expected behavior with an empty arguments list
 # group: [map]
 
-statement ok
-PRAGMA enable_verification
-
 # Empty
 query I
 select map_entries(MAP())

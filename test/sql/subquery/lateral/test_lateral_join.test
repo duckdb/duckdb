@@ -18,7 +18,7 @@ select (select MIN(val) from unnest((select (select a))) t(val)) from (select AR
 ----
 1
 
-query II
+query II rowsort
 select * from (select array[1, 2, 3] a), unnest((select (select (select a))))
 ----
 [1, 2, 3]	1

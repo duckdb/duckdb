@@ -18,8 +18,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PROJECTION;
 
 public:
-	PhysicalProjection(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	                   idx_t estimated_cardinality);
+	PhysicalProjection(PhysicalPlan &physical_plan, vector<LogicalType> types,
+	                   vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality);
 
 	vector<unique_ptr<Expression>> select_list;
 
@@ -33,11 +33,6 @@ public:
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
-
-	static unique_ptr<PhysicalOperator>
-	CreateJoinProjection(vector<LogicalType> proj_types, const vector<LogicalType> &lhs_types,
-	                     const vector<LogicalType> &rhs_types, const vector<idx_t> &left_projection_map,
-	                     const vector<idx_t> &right_projection_map, const idx_t estimated_cardinality);
 };
 
 } // namespace duckdb

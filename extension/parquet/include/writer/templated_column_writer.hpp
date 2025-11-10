@@ -20,8 +20,9 @@ namespace duckdb {
 template <class SRC, class TGT, class OP = ParquetCastOperator, bool ALL_VALID>
 static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, const idx_t chunk_start,
                                 const idx_t chunk_end, const ValidityMask &mask, WriteStream &ser) {
-	static constexpr bool COPY_DIRECTLY_FROM_VECTOR =
-	    ALL_VALID && std::is_same<SRC, TGT>::value && std::is_arithmetic<TGT>::value;
+	static constexpr bool COPY_DIRECTLY_FROM_VECTOR = ALL_VALID && std::is_same<SRC, TGT>::value &&
+	                                                  std::is_arithmetic<TGT>::value &&
+	                                                  std::is_same<OP, ParquetCastOperator>::value;
 
 	const auto *const ptr = FlatVector::GetData<SRC>(col);
 
@@ -67,7 +68,9 @@ class StandardColumnWriterState : public PrimitiveColumnWriterState {
 public:
 	StandardColumnWriterState(ParquetWriter &writer, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : PrimitiveColumnWriterState(writer, row_group, col_idx),
-	      dictionary(BufferAllocator::Get(writer.GetContext()), writer.DictionarySizeLimit(),
+	      dictionary(BufferAllocator::Get(writer.GetContext()),
+	                 writer.DictionarySizeLimit().IsValid() ? writer.DictionarySizeLimit().GetIndex()
+	                                                        : NumericCast<idx_t>(row_group.num_rows) / 5,
 	                 writer.StringDictionaryPageSizeLimit()),
 	      encoding(duckdb_parquet::Encoding::PLAIN) {
 	}
@@ -194,6 +197,7 @@ public:
 
 		const bool check_parent_empty = parent && !parent->is_empty.empty();
 		const idx_t parent_index = state.definition_levels.size();
+		D_ASSERT(!check_parent_empty || parent_index < parent->is_empty.size());
 
 		const idx_t vcount =
 		    check_parent_empty ? parent->definition_levels.size() - state.definition_levels.size() : count;
@@ -204,7 +208,7 @@ public:
 			// Fast path
 			for (; vector_index < vcount; vector_index++) {
 				const auto &src_value = data_ptr[vector_index];
-				state.dictionary.Insert(src_value);
+				state.dictionary.template Insert<true>(src_value);
 				state.total_value_count++;
 				state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 			}
@@ -215,7 +219,7 @@ public:
 				}
 				if (validity.RowIsValid(vector_index)) {
 					const auto &src_value = data_ptr[vector_index];
-					state.dictionary.Insert(src_value);
+					state.dictionary.template Insert<true>(src_value);
 					state.total_value_count++;
 					state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 				}
@@ -284,15 +288,19 @@ public:
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
 		D_ASSERT(state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY);
 
-		state.bloom_filter =
-		    make_uniq<ParquetBloomFilter>(state.dictionary.GetSize(), writer.BloomFilterFalsePositiveRatio());
+		if (writer.EnableBloomFilters()) {
+			state.bloom_filter =
+			    make_uniq<ParquetBloomFilter>(state.dictionary.GetSize(), writer.BloomFilterFalsePositiveRatio());
+		}
 
 		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
 			// update the statistics
 			OP::template HandleStats<SRC, TGT>(stats, tgt_value);
-			// update the bloom filter
-			auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
-			state.bloom_filter->FilterInsert(hash);
+			if (state.bloom_filter) {
+				// update the bloom filter
+				auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
+				state.bloom_filter->FilterInsert(hash);
+			}
 		});
 
 		// flush the dictionary page and add it to the to-be-written pages
@@ -403,7 +411,7 @@ private:
 			break;
 		}
 		case duckdb_parquet::Encoding::BYTE_STREAM_SPLIT: {
-			if (page_state.bss_initialized) {
+			if (!page_state.bss_initialized) {
 				page_state.bss_encoder.BeginWrite(BufferAllocator::Get(writer.GetContext()));
 				page_state.bss_initialized = true;
 			}

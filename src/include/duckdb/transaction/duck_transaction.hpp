@@ -35,14 +35,12 @@ public:
 	transaction_t transaction_id;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
-	//! Highest active query when the transaction finished, used for cleaning up
-	transaction_t highest_active_query;
 
 	atomic<idx_t> catalog_version;
 
 	//! Transactions undergo Cleanup, after (1) removing them directly in RemoveTransaction,
-	//! or (2) after they exist old_transactions.
-	//! Some (after rollback) enter old_transactions, but do not require Cleanup.
+	//! or (2) after they enter cleanup_queue.
+	//! Some (after rollback) enter cleanup_queue, but do not require Cleanup.
 	bool awaiting_cleanup;
 
 public:
@@ -51,6 +49,7 @@ public:
 	LocalStorage &GetLocalStorage();
 
 	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size);
+	void PushAttach(AttachedDatabase &db);
 
 	void SetReadWrite() override;
 
@@ -75,7 +74,7 @@ public:
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
-	UndoBufferReference CreateUpdateInfo(idx_t type_size, idx_t entries);
+	UndoBufferReference CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries);
 
 	bool IsDuckTransaction() const override {
 		return true;
@@ -89,6 +88,7 @@ public:
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
 
+	//! Hold an owning reference of the table, needed to safely reference it inside the transaction commit/undo logic
 	void ModifyTable(DataTable &tbl);
 
 private:
@@ -104,6 +104,8 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
+	//! Lock for modified_tables
+	mutex modified_tables_lock;
 	//! Tables that are modified by this transaction
 	reference_map_t<DataTable, shared_ptr<DataTable>> modified_tables;
 	//! Lock for the active_locks map

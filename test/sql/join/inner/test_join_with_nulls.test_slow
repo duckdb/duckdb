@@ -1,0 +1,35 @@
+# name: test/sql/join/inner/test_join_with_nulls.test_slow
+# description: Test joins on uint64 columns with NULL values
+# group: [inner]
+
+set seed 0.42
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA disable_optimizer;
+
+statement ok
+CREATE OR REPLACE TABLE build AS (SELECT if(random() < 0.1,null, CAST(round(random() * 1_000_000) as INT64)) as key FROM range(1_000_000))
+
+statement ok
+CREATE OR REPLACE TABLE probe AS (SELECT if(random() < 0.1,null, CAST(round(random() * 1_000_000) as INT64)) as key FROM range(4_000_000))
+
+query II
+SELECT COUNT(*), SUM(probe.key) FROM probe JOIN build ON probe.key = build.key;
+----
+3239239	1617830750716
+
+statement ok
+CREATE OR REPLACE TABLE build2 AS (SELECT if(CAST(round(random() * 400_000) as INT64) < 10, null, CAST(round(random() * 400_000) as INT64)) as key FROM range(500_000));
+
+query II
+SELECT COUNT(*), SUM(probe.key) FROM probe JOIN build2 ON probe.key = build2.key;
+----
+1801809	360752228491
+
+query II
+SELECT COUNT(*), SUM(probe.key) FROM probe JOIN build2 ON probe.key IS NOT DISTINCT FROM build2.key;
+----
+5393349	360752228491

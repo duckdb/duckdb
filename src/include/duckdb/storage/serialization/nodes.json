@@ -41,7 +41,8 @@
       {
         "id": 102,
         "name": "materialized",
-        "type": "CTEMaterialize"
+        "type": "CTEMaterialize",
+        "serialize_property": "GetMaterializedForSerialization(serializer)"
       },
       {
         "id": 103,
@@ -1106,5 +1107,34 @@
     ],
     "pointer_type": "none",
     "constructor": ["name", "type"]
+  },
+  {
+    "class": "ExtraOperatorInfo",
+    "includes": [
+      "duckdb/common/extra_operator_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "file_filters",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "total_files",
+        "type": "optional_idx"
+      },
+      {
+        "id": 102,
+        "name": "filtered_files",
+        "type": "optional_idx"
+      },
+      {
+        "id": 103,
+        "name": "sample_options",
+        "type": "unique_ptr<SampleOptions>"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

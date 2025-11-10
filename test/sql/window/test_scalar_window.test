@@ -20,20 +20,25 @@ SELECT avg(42) OVER ()
 statement error
 SELECT concat() OVER ()
 ----
+<REGEX>:.*Catalog Error.*concat is not an aggregate function.*
 
 statement error
 SELECT nonexistingfunction() OVER ()
 ----
+<REGEX>:.*Catalog Error.*nonexistingfunction does not exist.*
 
 # nested window functions are not allowed
 statement error
 SELECT avg(row_number() over ()) over ()
 ----
+<REGEX>:.*Binder Error.*window function calls cannot be nested.*
 
 statement error
 SELECT avg(42) over (partition by row_number() over ())
 ----
+<REGEX>:.*Parser Error.*window functions are not allowed.*
 
 statement error
 SELECT avg(42) over (order by row_number() over ())
 ----
+<REGEX>:.*Parser Error.*window functions are not allowed.*

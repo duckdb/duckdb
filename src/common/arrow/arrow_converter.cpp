@@ -39,6 +39,8 @@ static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	}
 	schema->release = nullptr;
 	auto holder = static_cast<DuckDBArrowSchemaHolder *>(schema->private_data);
+	schema->private_data = nullptr;
+
 	delete holder;
 }
 
@@ -173,7 +175,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
 		} else {
-			if (options.produce_arrow_string_view) {
+			if (options.produce_arrow_string_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+				// List views are only introduced in arrow format v1.4
 				child.format = "vu";
 			} else {
 				if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -186,7 +189,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::VARCHAR:
-		if (options.produce_arrow_string_view) {
+		if (options.produce_arrow_string_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			// List views are only introduced in arrow format v1.4
 			child.format = "vu";
 		} else {
 			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -233,19 +237,24 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width, scale, bit_width;
-		switch (type.InternalType()) {
-		case PhysicalType::INT16:
-		case PhysicalType::INT32:
-			bit_width = 32;
-			break;
-		case PhysicalType::INT64:
-			bit_width = 64;
-			break;
-		case PhysicalType::INT128:
+		if (options.arrow_output_version <= ArrowFormatVersion::V1_4) {
+			// Before version 1.4 all decimals were int128
 			bit_width = 128;
-			break;
-		default:
-			throw NotImplementedException("Unsupported internal type For DUCKDB Decimal -> Arrow ");
+		} else {
+			switch (type.InternalType()) {
+			case PhysicalType::INT16:
+			case PhysicalType::INT32:
+				bit_width = 32;
+				break;
+			case PhysicalType::INT64:
+				bit_width = 64;
+				break;
+			case PhysicalType::INT128:
+				bit_width = 128;
+				break;
+			default:
+				throw NotImplementedException("Unsupported internal type For DUCKDB Decimal -> Arrow ");
+			}
 		}
 
 		type.GetDecimalProperties(width, scale);
@@ -259,7 +268,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::BLOB:
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+		if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			// Views are only introduced in arrow format v1.4
+			child.format = "vz";
+		} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
@@ -269,7 +281,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
 		} else {
-			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+				// Views are only introduced in arrow format v1.4
+				child.format = "vz";
+			} else if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				child.format = "Z";
 			} else {
 				child.format = "z";
@@ -279,7 +294,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		if (options.arrow_use_list_view) {
+		if (options.arrow_use_list_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
+			// List views are only introduced in arrow format v1.4
 			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 				child.format = "+vL";
 			} else {
@@ -342,7 +358,6 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		}
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
-
 			InitializeChild(*child.children[type_idx], root_holder);
 
 			root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first));

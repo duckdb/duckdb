@@ -31,17 +31,19 @@ private:
 
 public:
 	//! Get a new BaseLeaf and initialize it.
-	static BaseLeaf &New(ART &art, Node &node) {
+	static NodeHandle<BaseLeaf> New(ART &art, Node &node) {
 		node = Node::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
-		auto &n = Node::Ref<BaseLeaf>(art, node, TYPE);
+		NodeHandle<BaseLeaf> handle(art, node);
+		auto &n = handle.Get();
+
 		n.count = 0;
-		return n;
+		return handle;
 	}
 
 	//! Returns true, if the byte exists, else false.
-	bool HasByte(uint8_t &byte) const {
+	bool HasByte(const uint8_t byte) const {
 		for (uint8_t i = 0; i < count; i++) {
 			if (key[i] == byte) {
 				return true;
@@ -70,7 +72,7 @@ public:
 
 private:
 	static void InsertByteInternal(BaseLeaf &n, const uint8_t byte);
-	static BaseLeaf &DeleteByteInternal(ART &art, Node &node, const uint8_t byte);
+	static NodeHandle<BaseLeaf> DeleteByteInternal(ART &art, Node &node, const uint8_t byte);
 };
 
 //! Node7Leaf holds up to seven sorted bytes.
@@ -109,6 +111,7 @@ public:
 
 private:
 	static void GrowNode7Leaf(ART &art, Node &node15_leaf, Node &node7_leaf);
+	//! We shrink at <= Node48::SHRINK_THRESHOLD.
 	static void ShrinkNode256Leaf(ART &art, Node &node15_leaf, Node &node256_leaf);
 };
 

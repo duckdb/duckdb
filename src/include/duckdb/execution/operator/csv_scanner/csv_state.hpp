@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-//! All States of CSV Parsing
+//! All States of CSV parsing
 enum class CSVState : uint8_t {
 	STANDARD = 0,  //! Regular unquoted field state
 	DELIMITER = 1, //! State after encountering a field separator (e.g., ;) - This is always the last delimiter byte

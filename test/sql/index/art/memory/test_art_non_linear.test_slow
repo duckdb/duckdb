@@ -2,8 +2,6 @@
 # description: Test the memory usage of the ART for various workloads
 # group: [memory]
 
-require noforcestorage
-
 require skip_reload
 
 statement ok

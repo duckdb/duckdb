@@ -1,0 +1,55 @@
+# name: test/optimizer/joins/test_issue_5265.test_slow
+# description: Verify expected cardinality of multiple cross products
+# group: [joins]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.1);
+
+# this should run quickly
+statement ok
+SELECT n.n_name,
+       SUM(l.l_extendedprice * (1 - l.l_discount)) AS revenue
+FROM region r
+JOIN nation n
+  ON n.n_regionkey = r.r_regionkey
+JOIN supplier s
+  ON s.s_nationkey = n.n_nationkey
+JOIN lineitem l
+  ON l.l_suppkey = s.s_suppkey
+JOIN orders o
+  ON o.o_orderkey = l.l_orderkey
+JOIN customer c
+  ON c.c_custkey = o.o_custkey
+ AND c.c_nationkey = s.s_nationkey
+JOIN (SELECT 1 AS dummy) single_row ON 1 = 1
+WHERE r.r_name = 'ASIA'
+  AND o.o_orderdate >= DATE '1994-01-01'
+  AND o.o_orderdate < DATE '1995-01-01'
+GROUP BY n.n_name
+ORDER BY revenue DESC;
+
+query II
+explain SELECT n.n_name,
+       SUM(l.l_extendedprice * (1 - l.l_discount)) AS revenue
+FROM region r
+JOIN nation n
+  ON n.n_regionkey = r.r_regionkey
+JOIN supplier s
+  ON s.s_nationkey = n.n_nationkey
+JOIN lineitem l
+  ON l.l_suppkey = s.s_suppkey
+JOIN orders o
+  ON o.o_orderkey = l.l_orderkey
+JOIN customer c
+  ON c.c_custkey = o.o_custkey
+ AND c.c_nationkey = s.s_nationkey
+JOIN (SELECT 1 AS dummy) single_row ON 1 = 1
+WHERE r.r_name = 'ASIA'
+  AND o.o_orderdate >= DATE '1994-01-01'
+  AND o.o_orderdate < DATE '1995-01-01'
+GROUP BY n.n_name
+ORDER BY revenue DESC;
+----
+physical_plan	<!REGEX>:.*CROSS_PRODUCT.*CROSS_PRODUCT.*

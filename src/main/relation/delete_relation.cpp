@@ -26,6 +26,14 @@ BoundStatement DeleteRelation::Bind(Binder &binder) {
 	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
+unique_ptr<QueryNode> DeleteRelation::GetQueryNode() {
+	throw InternalException("Cannot create a query node from a delete relation");
+}
+
+string DeleteRelation::GetQuery() {
+	return string();
+}
+
 const vector<ColumnDefinition> &DeleteRelation::Columns() {
 	return columns;
 }

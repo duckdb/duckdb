@@ -11,6 +11,18 @@
 
 namespace duckdb {
 
+StrpTimeFormat::StrpTimeFormat() {
+}
+
+StrpTimeFormat::StrpTimeFormat(const string &format_string) {
+	if (format_string.empty()) {
+		return;
+	}
+	StrTimeFormat::ParseFormatSpecifier(format_string, *this);
+}
+
+namespace {
+
 struct StrfTimeBindData : public FunctionData {
 	explicit StrfTimeBindData(StrfTimeFormat format_p, string format_string_p, bool is_null)
 	    : format(std::move(format_p)), format_string(std::move(format_string_p)), is_null(is_null) {
@@ -93,34 +105,6 @@ static void StrfTimeFunctionTimestampNS(DataChunk &args, ExpressionState &state,
 	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result, args.size());
 }
 
-ScalarFunctionSet StrfTimeFun::GetFunctions() {
-	ScalarFunctionSet strftime("strftime");
-
-	strftime.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionDate<false>, StrfTimeBindFunction<false>));
-	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
-	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestampNS<false>, StrfTimeBindFunction<false>));
-	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionDate<true>, StrfTimeBindFunction<true>));
-	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
-	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_NS}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestampNS<true>, StrfTimeBindFunction<true>));
-	return strftime;
-}
-
-StrpTimeFormat::StrpTimeFormat() {
-}
-
-StrpTimeFormat::StrpTimeFormat(const string &format_string) {
-	if (format_string.empty()) {
-		return;
-	}
-	StrTimeFormat::ParseFormatSpecifier(format_string, *this);
-}
-
 struct StrpTimeBindData : public FunctionData {
 	StrpTimeBindData(const StrpTimeFormat &format, const string &format_string)
 	    : formats(1, format), format_strings(1, format_string) {
@@ -164,7 +148,6 @@ inline bool StrpTimeTryResult(StrpTimeFormat &format, string_t &input, timestamp
 }
 
 struct StrpTimeFunction {
-
 	template <typename T>
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -241,9 +224,9 @@ struct StrpTimeFunction {
 				                            error);
 			}
 			if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
-				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
 			} else if (format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED)) {
-				bound_function.return_type = LogicalType::TIMESTAMP_NS;
+				bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
 				if (bound_function.name == "strptime") {
 					bound_function.function = Parse<timestamp_ns_t>;
 				} else {
@@ -277,11 +260,11 @@ struct StrpTimeFunction {
 
 			if (has_offset) {
 				// If any format has UTC offsets, then we have to produce TSTZ
-				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
 			} else if (has_nanos) {
 				// If any format has nanoseconds, then we have to produce TSNS
 				// unless there is an offset, in which case we produce
-				bound_function.return_type = LogicalType::TIMESTAMP_NS;
+				bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
 				if (bound_function.name == "strptime") {
 					bound_function.function = Parse<timestamp_ns_t>;
 				} else {
@@ -295,20 +278,39 @@ struct StrpTimeFunction {
 	}
 };
 
+} // namespace
+
+ScalarFunctionSet StrfTimeFun::GetFunctions() {
+	ScalarFunctionSet strftime("strftime");
+
+	strftime.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionDate<false>, StrfTimeBindFunction<false>));
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<false>, StrfTimeBindFunction<false>));
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionDate<true>, StrfTimeBindFunction<true>));
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_NS}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<true>, StrfTimeBindFunction<true>));
+	return strftime;
+}
 ScalarFunctionSet StrpTimeFun::GetFunctions() {
 	ScalarFunctionSet strptime("strptime");
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
 	                          StrpTimeFunction::Parse<timestamp_t>, StrpTimeFunction::Bind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	BaseScalarFunction::SetReturnsError(fun);
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 	strptime.AddFunction(fun);
 
 	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP,
 	                     StrpTimeFunction::Parse<timestamp_t>, StrpTimeFunction::Bind);
-	BaseScalarFunction::SetReturnsError(fun);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetFallible();
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	strptime.AddFunction(fun);
 	return strptime;
 }
@@ -319,12 +321,12 @@ ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
 	                          StrpTimeFunction::TryParse<timestamp_t>, StrpTimeFunction::Bind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	try_strptime.AddFunction(fun);
 
 	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP,
 	                     StrpTimeFunction::TryParse<timestamp_t>, StrpTimeFunction::Bind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	try_strptime.AddFunction(fun);
 
 	return try_strptime;

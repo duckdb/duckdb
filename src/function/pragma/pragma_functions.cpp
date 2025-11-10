@@ -3,7 +3,6 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/logging/http_logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -12,6 +11,8 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include <cctype>
 
@@ -94,10 +95,6 @@ static void PragmaForceCheckpoint(ClientContext &context, const FunctionParamete
 	DBConfig::GetConfig(context).options.force_checkpoint = true;
 }
 
-static void PragmaTruncateDuckDBLogs(ClientContext &context, const FunctionParameters &parameters) {
-	context.db->GetLogManager().TruncateLogStorage();
-}
-
 static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).verify_parallelism = false;
 }
@@ -116,14 +113,6 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
-static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
-	context.db->GetLogManager().SetEnableLogging(true);
-}
-
-static void PragmaDisableLogging(ClientContext &context, const FunctionParameters &parameters) {
-	context.db->GetLogManager().SetEnableLogging(false);
-}
-
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).enable_optimizer = true;
 }
@@ -134,6 +123,10 @@ static void PragmaDisableOptimizer(ClientContext &context, const FunctionParamet
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
+
+	// NOTE: use of Pragma functions is discouraged. Instead, opt for adding a regular table function to be invoked with
+	// CALL.
+	//       see for example the "enable_logging" function
 
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));
@@ -156,15 +149,10 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_logging", PragmaEnableLogging));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_logging", PragmaDisableLogging));
-
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("truncate_duckdb_logs", PragmaTruncateDuckDBLogs));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_progress_bar", PragmaEnableProgressBar));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_progress_bar", PragmaDisableProgressBar));

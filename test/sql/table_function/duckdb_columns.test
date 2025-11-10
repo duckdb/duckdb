@@ -5,8 +5,6 @@
 statement ok
 set storage_compatibility_version='v0.10.2'
 
-require noforcestorage
-
 statement ok
 PRAGMA enable_verification
 
@@ -22,13 +20,20 @@ CREATE TABLE integers(i INTEGER)
 statement ok
 CREATE TABLE test(i INTEGER NOT NULL, j DECIMAL(18, 3), k VARCHAR DEFAULT 'hello')
 
-query IIIIIIIII
-select cols.database_name, tables.table_name, column_name, data_type, column_default, is_nullable, numeric_precision, numeric_precision_radix, numeric_scale from duckdb_columns cols join duckdb_tables tables using (table_oid) ORDER BY 1, 2, 3;
+query IIIIIIII
+SELECT tables.table_name, column_name, data_type, column_default, is_nullable, numeric_precision, numeric_precision_radix, numeric_scale
+FROM duckdb_columns cols JOIN duckdb_tables tables USING (table_oid) ORDER BY 1, 2, 3;
 ----
-memory	integers	i	INTEGER	NULL	True	32	2	0
-memory	test	i	INTEGER	NULL	False	32	2	0
-memory	test	j	DECIMAL(18,3)	NULL	True	18	10	3
-memory	test	k	VARCHAR	'hello'	True	NULL	NULL	NULL
+integers	i	INTEGER	NULL	True	32	2	0
+test	i	INTEGER	NULL	False	32	2	0
+test	j	DECIMAL(18,3)	NULL	True	18	10	3
+test	k	VARCHAR	'hello'	True	NULL	NULL	NULL
+
+query I
+SELECT DISTINCT(cols.database_name) = current_database()
+FROM duckdb_columns cols JOIN duckdb_tables tables USING (table_oid);
+----
+True
 
 statement ok
 create view v1 as select * from test

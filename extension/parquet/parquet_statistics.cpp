@@ -8,15 +8,12 @@
 #include "reader/string_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "reader/uuid_column_reader.hpp"
-#endif
 
 namespace duckdb {
 
@@ -214,6 +211,25 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			return Value::TIME(dtime_t(val));
 		}
 	}
+	case LogicalTypeId::TIME_NS: {
+		int64_t val;
+		if (stats.size() == sizeof(int32_t)) {
+			val = Load<int32_t>(stats_data);
+		} else if (stats.size() == sizeof(int64_t)) {
+			val = Load<int64_t>(stats_data);
+		} else {
+			throw InvalidInputException("Incorrect stats size for type TIME");
+		}
+		switch (schema_ele.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return Value::TIME_NS(ParquetMsIntToTimeNs(val));
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return Value::TIME_NS(ParquetIntToTimeNs(val));
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+		default:
+			return Value::TIME_NS(dtime_ns_t(val));
+		}
+	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
 		if (stats.size() == sizeof(int32_t)) {
@@ -304,8 +320,8 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 }
 
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
-                                                                             const vector<ColumnChunk> &columns) {
-
+                                                                             const vector<ColumnChunk> &columns,
+                                                                             bool can_have_nan) {
 	// Not supported types
 	auto &type = schema.type;
 	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP || type.id() == LogicalTypeId::LIST) {
@@ -320,7 +336,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		// Recurse into child readers
 		for (idx_t i = 0; i < schema.children.size(); i++) {
 			auto &child_schema = schema.children[i];
-			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns);
+			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns, can_have_nan);
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));
 		}
 		row_group_stats = struct_stats.ToUnique();
@@ -330,6 +346,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		}
 		return row_group_stats;
+	} else if (schema.schema_type == ParquetColumnSchemaType::VARIANT) {
+		//! FIXME: there are situations where VARIANT columns can have stats
+		return nullptr;
 	}
 
 	// Otherwise, its a standard column with stats
@@ -363,31 +382,81 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		break;
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
-		row_group_stats = CreateFloatingPointStats(type, schema, parquet_stats);
+		if (can_have_nan) {
+			// Since parquet doesn't tell us if the column has NaN values, if the user has explicitly declared that it
+			// does, we create stats without an upper max value, as NaN compares larger than anything else.
+			row_group_stats = CreateFloatingPointStats(type, schema, parquet_stats);
+		} else {
+			// Otherwise we use the numeric stats as usual, which might lead to "wrong" pruning if the column contains
+			// NaN values. The parquet spec is not clear on how to handle NaN values in statistics, and so this is
+			// probably the best we can do for now.
+			row_group_stats = CreateNumericStats(type, schema, parquet_stats);
+		}
 		break;
 	case LogicalTypeId::VARCHAR: {
-		auto string_stats = StringStats::CreateEmpty(type);
+		auto string_stats = StringStats::CreateUnknown(type);
 		if (parquet_stats.__isset.min_value) {
 			StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min_value);
+			StringStats::SetMin(string_stats, parquet_stats.min_value);
 		} else if (parquet_stats.__isset.min) {
 			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min);
-		} else {
-			return nullptr;
+			StringStats::SetMin(string_stats, parquet_stats.min);
 		}
 		if (parquet_stats.__isset.max_value) {
 			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max_value);
+			StringStats::SetMax(string_stats, parquet_stats.max_value);
 		} else if (parquet_stats.__isset.max) {
 			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max);
-		} else {
-			return nullptr;
+			StringStats::SetMax(string_stats, parquet_stats.max);
 		}
-		StringStats::SetContainsUnicode(string_stats);
-		StringStats::ResetMaxStringLength(string_stats);
 		row_group_stats = string_stats.ToUnique();
+		break;
+	}
+	case LogicalTypeId::GEOMETRY: {
+		auto geo_stats = GeometryStats::CreateUnknown(type);
+		if (column_chunk.meta_data.__isset.geospatial_statistics) {
+			if (column_chunk.meta_data.geospatial_statistics.__isset.bbox) {
+				auto &bbox = column_chunk.meta_data.geospatial_statistics.bbox;
+				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
+
+				// xmin > xmax is allowed if the geometry crosses the antimeridian,
+				// but we don't handle this right now
+				if (bbox.xmin <= bbox.xmax) {
+					stats_bbox.x_min = bbox.xmin;
+					stats_bbox.x_max = bbox.xmax;
+				}
+
+				if (bbox.ymin <= bbox.ymax) {
+					stats_bbox.y_min = bbox.ymin;
+					stats_bbox.y_max = bbox.ymax;
+				}
+
+				if (bbox.__isset.zmin && bbox.__isset.zmax && bbox.zmin <= bbox.zmax) {
+					stats_bbox.z_min = bbox.zmin;
+					stats_bbox.z_max = bbox.zmax;
+				}
+
+				if (bbox.__isset.mmin && bbox.__isset.mmax && bbox.mmin <= bbox.mmax) {
+					stats_bbox.m_min = bbox.mmin;
+					stats_bbox.m_max = bbox.mmax;
+				}
+			}
+			if (column_chunk.meta_data.geospatial_statistics.__isset.geospatial_types) {
+				auto &types = column_chunk.meta_data.geospatial_statistics.geospatial_types;
+				auto &stats_types = GeometryStats::GetTypes(geo_stats);
+
+				// if types are set but empty, that still means "any type" - so we leave stats_types as-is (unknown)
+				// otherwise, clear and set to the actual types
+
+				if (!types.empty()) {
+					stats_types.Clear();
+					for (auto &geom_type : types) {
+						stats_types.AddWKBType(geom_type);
+					}
+				}
+			}
+		}
+		row_group_stats = geo_stats.ToUnique();
 		break;
 	}
 	default:
@@ -400,6 +469,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
 		if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
 			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		}
+		if (parquet_stats.__isset.null_count && parquet_stats.null_count == column_chunk.meta_data.num_values) {
+			row_group_stats->Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
 		}
 	}
 	return row_group_stats;
@@ -433,7 +505,7 @@ static bool HasFilterConstants(const TableFilter &duckdb_filter) {
 }
 
 template <class T>
-uint64_t ValueXH64FixedWidth(const Value &constant) {
+static uint64_t ValueXH64FixedWidth(const Value &constant) {
 	T val = constant.GetValue<T>();
 	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
 }
@@ -552,7 +624,6 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 }
 
 ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_false_positive_ratio) {
-
 	// aim for hit ratio of 0.01%
 	// see http://tfk.mit.edu/pdf/bloom.pdf
 	double f = bloom_filter_false_positive_ratio;

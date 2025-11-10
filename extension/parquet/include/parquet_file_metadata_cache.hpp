@@ -9,7 +9,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/storage/object_cache.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_geometry.hpp"
 #include "parquet_types.h"
 
 namespace duckdb {
@@ -20,7 +20,7 @@ enum class ParquetCacheValidity { VALID, INVALID, UNKNOWN };
 class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
 	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, CachingFileHandle &handle,
-	                         unique_ptr<GeoParquetFileMetadata> geo_metadata);
+	                         unique_ptr<GeoParquetFileMetadata> geo_metadata, idx_t footer_size);
 	~ParquetFileMetadataCache() override = default;
 
 	//! Parquet file metadata
@@ -28,6 +28,9 @@ public:
 
 	//! GeoParquet metadata
 	unique_ptr<GeoParquetFileMetadata> geo_metadata;
+
+	//! Parquet footer size
+	idx_t footer_size;
 
 public:
 	static string ObjectType();
@@ -40,7 +43,7 @@ public:
 
 private:
 	bool validate;
-	time_t last_modified;
+	timestamp_t last_modified;
 	string version_tag;
 };
 

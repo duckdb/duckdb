@@ -125,14 +125,14 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 //===--------------------------------------------------------------------===//
 bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	// First, allocate memory for each build column
-	auto build_size = perfect_join_statistics.build_range + 1;
+	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : join.rhs_output_columns.col_types) {
-		perfect_hash_table.emplace_back(type, build_size);
+		perfect_hash_table.emplace_back(DictionaryVector::CreateReusableDictionary(type, build_size));
 	}
 
 	// and for duplicate_checking
-	bitmap_build_idx = make_unsafe_uniq_array_uninitialized<bool>(build_size);
-	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
+	bitmap_build_idx.Initialize(build_size);
+	bitmap_build_idx.SetAllInvalid(build_size);
 
 	// Now fill columns with build data
 	return FullScanHashTable(key_type);
@@ -168,22 +168,25 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 	if (!success) {
 		return false;
 	}
-	if (unique_keys == perfect_join_statistics.build_range + 1 && !ht.has_null) {
+
+	const auto build_size = perfect_join_statistics.build_range + 1;
+	if (unique_keys == build_size && !ht.has_null) {
 		perfect_join_statistics.is_build_dense = true;
+		bitmap_build_idx.Reset(build_size); // All valid
 	}
 	key_count = unique_keys; // do not consider keys out of the range
 
 	// Full scan the remaining build columns and fill the perfect hash table
-	const auto build_size = perfect_join_statistics.build_range + 1;
+
 	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
-		auto &vector = perfect_hash_table[i];
+		auto &vector = perfect_hash_table[i]->data;
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-		if (build_size > STANDARD_VECTOR_SIZE) {
-			auto &col_mask = FlatVector::Validity(vector);
-			col_mask.Initialize(build_size);
-		}
+		auto &col_mask = FlatVector::Validity(vector);
+		col_mask.Reset(build_size);
 		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build, nullptr);
+		// This ensures the empty entries are set to NULL, so that the emitted dictionary vectors make sense
+		col_mask.Combine(bitmap_build_idx, build_size);
 	}
 
 	return true;
@@ -227,19 +230,19 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 	UnifiedVectorFormat vector_data;
 	source.ToUnifiedFormat(count, vector_data);
-	auto data = reinterpret_cast<T *>(vector_data.data);
+	const auto data = vector_data.GetData<T>();
 	// generate the selection vector
 	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
 		auto data_idx = vector_data.sel->get_index(i);
 		auto input_value = data[data_idx];
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
-			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
+			auto idx = UnsafeNumericCast<idx_t>(input_value - min_value); // subtract min value to get the idx position
 			sel_vec.set_index(sel_idx, idx);
-			if (bitmap_build_idx[idx]) {
+			if (bitmap_build_idx.RowIsValidUnsafe(idx)) {
 				return false;
 			} else {
-				bitmap_build_idx[idx] = true;
+				bitmap_build_idx.SetValidUnsafe(idx);
 				unique_keys++;
 			}
 			seq_sel_vec.set_index(sel_idx++, i);
@@ -302,9 +305,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
 		auto &result_vector = result.data[lhs_output_columns.ColumnCount() + i];
 		D_ASSERT(result_vector.GetType() == ht.layout_ptr->GetTypes()[ht.output_columns[i]]);
-		auto &build_vec = perfect_hash_table[i];
-		result_vector.Reference(build_vec);
-		result_vector.Slice(state.build_sel_vec, probe_sel_count);
+		result_vector.Dictionary(perfect_hash_table[i], state.build_sel_vec);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
@@ -367,9 +368,9 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			auto input_value = data[data_idx];
 			// add index to selection vector if value in the range
 			if (min_value <= input_value && input_value <= max_value) {
-				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-				                                             // check for matches in the build
-				if (bitmap_build_idx[idx]) {
+				auto idx = UnsafeNumericCast<idx_t>(input_value - min_value); // subtract min value to get the idx
+				                                                              // position check for matches in the build
+				if (bitmap_build_idx.RowIsValid(idx)) {
 					build_sel_vec.set_index(sel_idx, idx);
 					probe_sel_vec.set_index(sel_idx++, i);
 					probe_sel_count++;
@@ -386,9 +387,9 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 			auto input_value = data[data_idx];
 			// add index to selection vector if value in the range
 			if (min_value <= input_value && input_value <= max_value) {
-				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-				                                             // check for matches in the build
-				if (bitmap_build_idx[idx]) {
+				auto idx = UnsafeNumericCast<idx_t>(input_value - min_value); // subtract min value to get the idx
+				                                                              // position check for matches in the build
+				if (bitmap_build_idx.RowIsValid(idx)) {
 					build_sel_vec.set_index(sel_idx, idx);
 					probe_sel_vec.set_index(sel_idx++, i);
 					probe_sel_count++;

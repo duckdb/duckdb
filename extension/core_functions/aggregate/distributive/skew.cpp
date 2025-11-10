@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct SkewState {
 	size_t n;
 	double sum;
@@ -77,6 +79,8 @@ struct SkewnessOperation {
 		return true;
 	}
 };
+
+} // namespace
 
 AggregateFunction SkewnessFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<SkewState, double, double, SkewnessOperation>(LogicalType::DOUBLE,

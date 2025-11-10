@@ -13,7 +13,6 @@ class UnnestOperatorState : public OperatorState {
 public:
 	UnnestOperatorState(ClientContext &context, const vector<unique_ptr<Expression>> &select_list)
 	    : current_row(0), list_position(0), first_fetch(true), input_sel(STANDARD_VECTOR_SIZE), executor(context) {
-
 		// for each UNNEST in the select_list, we add the child expression to the expression executor
 		// and set the return type in the list_data chunk, which will contain the evaluated expression results
 		vector<LogicalType> list_data_types;
@@ -62,9 +61,11 @@ void UnnestOperatorState::Reset() {
 	first_fetch = true;
 }
 
-PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-                               idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalOperator(type, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
+PhysicalUnnest::PhysicalUnnest(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                               vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
+                               PhysicalOperatorType type)
+    : PhysicalOperator(physical_plan, type, std::move(types), estimated_cardinality),
+      select_list(std::move(select_list)) {
 	D_ASSERT(!this->select_list.empty());
 }
 
@@ -137,7 +138,6 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
                                                    OperatorState &state_p,
                                                    const vector<unique_ptr<Expression>> &select_list,
                                                    bool include_input) {
-
 	auto &state = state_p.Cast<UnnestOperatorState>();
 
 	do {

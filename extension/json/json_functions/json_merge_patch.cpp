@@ -3,23 +3,6 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
-	if (arguments.size() < 2) {
-		throw InvalidInputException("json_merge_patch requires at least two parameters");
-	}
-	bound_function.arguments.reserve(arguments.size());
-	for (auto &arg : arguments) {
-		const auto &arg_type = arg->return_type;
-		if (arg_type == LogicalTypeId::SQLNULL || arg_type == LogicalType::VARCHAR || arg_type.IsJSONType()) {
-			bound_function.arguments.push_back(arg_type);
-		} else {
-			throw InvalidInputException("Arguments to json_merge_patch must be of type VARCHAR or JSON");
-		}
-	}
-	return nullptr;
-}
-
 static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
 	if ((yyjson_mut_get_tag(orig) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) ||
 	    (yyjson_mut_get_tag(patch) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE))) {
@@ -98,10 +81,10 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
-	ScalarFunction fun("json_merge_patch", {}, LogicalType::JSON(), MergePatchFunction, JSONMergePatchBind, nullptr,
-	                   nullptr, JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	ScalarFunction fun("json_merge_patch", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
+	                   MergePatchFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
+	fun.varargs = LogicalType::JSON();
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return ScalarFunctionSet(fun);
 }

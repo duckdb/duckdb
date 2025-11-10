@@ -17,33 +17,8 @@
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 
 namespace duckdb {
-
-template <class OP, class OPTIONS_TYPE>
-class UnionByReaderTask : public BaseExecutorTask {
-public:
-	UnionByReaderTask(TaskExecutor &executor, ClientContext &context, const OpenFileInfo &file, idx_t file_idx,
-	                  vector<shared_ptr<BaseUnionData>> &readers, OPTIONS_TYPE &options, MultiFileOptions &file_options)
-	    : BaseExecutorTask(executor), context(context), file(file), file_idx(file_idx), readers(readers),
-	      options(options), file_options(file_options) {
-	}
-
-	void ExecuteTask() override {
-		auto reader = OP::CreateReader(context, file, options, file_options);
-		readers[file_idx] = OP::GetUnionData(std::move(reader), file_idx);
-	}
-
-	string TaskType() const override {
-		return "UnionByReaderTask";
-	}
-
-private:
-	ClientContext &context;
-	const OpenFileInfo &file;
-	idx_t file_idx;
-	vector<shared_ptr<BaseUnionData>> &readers;
-	OPTIONS_TYPE &options;
-	MultiFileOptions &file_options;
-};
+struct MultiFileReader;
+struct MultiFileReaderInterface;
 
 class UnionByName {
 public:
@@ -52,32 +27,10 @@ public:
 	                              case_insensitive_map_t<idx_t> &union_names_map);
 
 	//! Union all files(readers) by their col names
-	template <class OP, class OPTIONS_TYPE>
 	static vector<shared_ptr<BaseUnionData>>
 	UnionCols(ClientContext &context, const vector<OpenFileInfo> &files, vector<LogicalType> &union_col_types,
-	          vector<string> &union_col_names, OPTIONS_TYPE &options, MultiFileOptions &file_options) {
-		vector<shared_ptr<BaseUnionData>> union_readers;
-		union_readers.resize(files.size());
-
-		TaskExecutor executor(context);
-		// schedule tasks for all files
-		for (idx_t file_idx = 0; file_idx < files.size(); ++file_idx) {
-			auto task = make_uniq<UnionByReaderTask<OP, OPTIONS_TYPE>>(executor, context, files[file_idx], file_idx,
-			                                                           union_readers, options, file_options);
-			executor.ScheduleTask(std::move(task));
-		}
-		// complete all tasks
-		executor.WorkOnTasks();
-
-		// now combine the result schemas
-		case_insensitive_map_t<idx_t> union_names_map;
-		for (auto &reader : union_readers) {
-			auto &col_names = reader->names;
-			auto &sql_types = reader->types;
-			CombineUnionTypes(col_names, sql_types, union_col_types, union_col_names, union_names_map);
-		}
-		return union_readers;
-	}
+	          vector<string> &union_col_names, BaseFileReaderOptions &options, MultiFileOptions &file_options,
+	          MultiFileReader &multi_file_reader, MultiFileReaderInterface &interface);
 };
 
 } // namespace duckdb

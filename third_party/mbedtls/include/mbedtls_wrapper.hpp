@@ -19,6 +19,8 @@ typedef struct mbedtls_cipher_info_t mbedtls_cipher_info_t;
 
 namespace duckdb_mbedtls {
 
+
+
 class MbedTlsWrapper {
 public:
 	static void ComputeSha256Hash(const char *in, size_t in_len, char *out);
@@ -36,8 +38,12 @@ public:
 		SHA256State();
 		~SHA256State();
 		void AddString(const std::string &str);
+		void AddBytes(duckdb::data_ptr_t input_bytes, duckdb::idx_t len);
+		void AddBytes(duckdb::const_data_ptr_t input_bytes, duckdb::idx_t len);
+		void AddSalt(unsigned char *salt, size_t salt_len);
 		std::string Finalize();
 		void FinishHex(char *out);
+		void FinalizeDerivedKey(duckdb::data_ptr_t hash);
 
 	private:
 		void *sha_context;
@@ -60,12 +66,13 @@ public:
 
 class AESStateMBEDTLS : public duckdb::EncryptionState {
 	public:
-		DUCKDB_API explicit AESStateMBEDTLS(const std::string *key = nullptr);
+		DUCKDB_API explicit AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len);
 		DUCKDB_API ~AESStateMBEDTLS() override;
 
 	public:
-		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) override;
-		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) override;
+		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
+		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
+
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		                          duckdb::idx_t out_len) override;
 		DUCKDB_API size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len) override;
@@ -76,16 +83,18 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API const mbedtls_cipher_info_t *GetCipher(size_t key_len);
 
 	private:
-		Mode mode;
-		Cipher cipher = GCM;
+		DUCKDB_API void InitializeInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len);
+
+	private:
+		duckdb::EncryptionTypes::Mode mode;
 		duckdb::unique_ptr<mbedtls_cipher_context_t> context;
 	};
 
 	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
 
 	public:
-		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const override {
-			return duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(key);
+		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len = 0) const override {
+			return duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(cipher_p, key_len);
 		}
 
 		~AESStateMBEDTLSFactory() override {} //

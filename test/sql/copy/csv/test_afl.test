@@ -6,102 +6,102 @@ statement ok
 PRAGMA enable_verification
 
 statement maybe
-FROM read_csv('data/csv/afl/1.csv', force_not_null=012%0);
+FROM read_csv('{DATA_DIR}/csv/afl/1.csv', force_not_null=012%0);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/2.csv', max_line_size=-9151315542319464311);
+FROM read_csv('{DATA_DIR}/csv/afl/2.csv', max_line_size=-9151315542319464311);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/3.csv', max_line_size=-1003718790012071149, ignore_errors=true);
+FROM read_csv('{DATA_DIR}/csv/afl/3.csv', max_line_size=-1003718790012071149, ignore_errors=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/4.csv', max_line_size=-432344490485710328, all_varchar=false);
+FROM read_csv('{DATA_DIR}/csv/afl/4.csv', max_line_size=-432344490485710328, all_varchar=false);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/5.csv', max_line_size=-68088296696312078);
+FROM read_csv('{DATA_DIR}/csv/afl/5.csv', max_line_size=-68088296696312078);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/6.csv', buffer_size=42);
+FROM read_csv('{DATA_DIR}/csv/afl/6.csv', buffer_size=42);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/7.csv', buffer_size=42);
+FROM read_csv('{DATA_DIR}/csv/afl/7.csv', buffer_size=42);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/8.csv', buffer_size=42);
+FROM read_csv('{DATA_DIR}/csv/afl/8.csv', buffer_size=42);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/9.csv', buffer_size=42);
+FROM read_csv('{DATA_DIR}/csv/afl/9.csv', buffer_size=42);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/10.csv', buffer_size=42);
+FROM read_csv('{DATA_DIR}/csv/afl/10.csv', buffer_size=42);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/11.csv', max_line_size=-7987305294711008699, rejects_limit=42);
+FROM read_csv('{DATA_DIR}/csv/afl/11.csv', max_line_size=-7987305294711008699, rejects_limit=42);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/12.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/12.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/13.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/13.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/14.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/14.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/15.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/15.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/16.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/16.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/17.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/17.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/18.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/18.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/19.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/19.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/20.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/20.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/21.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/21.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/22.csv', rejects_table='d');
+FROM read_csv('{DATA_DIR}/csv/afl/22.csv', rejects_table='d');
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/23.csv', buffer_size=42);
+FROM read_csv('{DATA_DIR}/csv/afl/23.csv', buffer_size=42);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/24.csv', buffer_size=26, delim=';', header=true, allow_quoted_nulls=true, allow_quoted_nulls=true);
+FROM read_csv('{DATA_DIR}/csv/afl/24.csv', buffer_size=26, delim=';', header=true, allow_quoted_nulls=true, allow_quoted_nulls=true);
 ----
 
 statement maybe
-FROM read_csv('data/csv/afl/25.csv', buffer_size=734771105608237082, max_line_size=-8825501086615982989, allow_quoted_nulls=true);
+FROM read_csv('{DATA_DIR}/csv/afl/25.csv', buffer_size=734771105608237082, max_line_size=-8825501086615982989, allow_quoted_nulls=true);
 ----
 

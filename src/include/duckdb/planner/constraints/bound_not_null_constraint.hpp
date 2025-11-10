@@ -22,6 +22,10 @@ public:
 
 	//! Column index this constraint pertains to
 	PhysicalIndex index;
+
+	unique_ptr<BoundConstraint> Copy() const override {
+		return make_uniq<BoundNotNullConstraint>(index);
+	}
 };
 
 } // namespace duckdb

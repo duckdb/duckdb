@@ -39,7 +39,7 @@ set enable_logging=false;
 query I
 SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
 where
-	message.starts_with('FinalAnalyze') and
+	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
 	message.contains('test_uncompressed') and
 	message.contains('VALIDITY') and
 	message.contains('COMPRESSION_UNCOMPRESSED');
@@ -75,7 +75,7 @@ set enable_logging=false;
 query I
 SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
 where
-	message.starts_with('FinalAnalyze') and
+	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
 	message.contains('test_roaring') and
 	message.contains('VALIDITY') and
 	message.contains('COMPRESSION_ROARING');

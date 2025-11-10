@@ -5,9 +5,6 @@
 require tpch
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CALL dbgen(sf=0);
 
 # verify that we can grab missing columns from either the correlated subquery or the outer (uncorrelated) subquery

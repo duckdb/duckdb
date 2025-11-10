@@ -1,0 +1,5 @@
+CommentStatement <- 'COMMENT' 'ON' CommentOnType ColumnReference 'IS' CommentValue
+
+
+CommentOnType <- 'TABLE' / 'SEQUENCE' / 'FUNCTION' / ('MACRO' 'TABLE'?) / 'VIEW' / 'DATABASE' / 'INDEX' / 'SCHEMA' / 'TYPE' / 'COLUMN'
+CommentValue <- 'NULL' / StringLiteral

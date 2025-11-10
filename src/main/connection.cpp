@@ -19,7 +19,7 @@
 namespace duckdb {
 
 Connection::Connection(DatabaseInstance &database)
-    : context(make_shared_ptr<ClientContext>(database.shared_from_this())), warning_cb(nullptr) {
+    : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
 	auto &connection_manager = ConnectionManager::Get(database);
 	connection_manager.AddConnection(*context);
 	connection_manager.AssignConnectionId(*this);
@@ -31,18 +31,15 @@ Connection::Connection(DatabaseInstance &database)
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
-	// Initialization of warning_cb happens in the other constructor
 }
 
-Connection::Connection(Connection &&other) noexcept : warning_cb(nullptr) {
+Connection::Connection(Connection &&other) noexcept {
 	std::swap(context, other.context);
-	std::swap(warning_cb, other.warning_cb);
 	std::swap(connection_id, other.connection_id);
 }
 
 Connection &Connection::operator=(Connection &&other) noexcept {
 	std::swap(context, other.context);
-	std::swap(warning_cb, other.warning_cb);
 	std::swap(connection_id, other.connection_id);
 	return *this;
 }
@@ -98,40 +95,51 @@ void Connection::ForceParallelism() {
 	ClientConfig::GetConfig(*context).verify_parallelism = true;
 }
 
-unique_ptr<QueryResult> Connection::SendQuery(const string &query) {
-	return context->Query(query, true);
+unique_ptr<QueryResult> Connection::SendQuery(const string &query, QueryParameters query_parameters) {
+	return context->Query(query, query_parameters);
+}
+
+unique_ptr<QueryResult> Connection::SendQuery(unique_ptr<SQLStatement> statement, QueryParameters query_parameters) {
+	return context->Query(std::move(statement), query_parameters);
 }
 
 unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
-	auto result = context->Query(query, false);
+	QueryParameters query_parameters;
+	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	auto result = context->Query(query, query_parameters);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
-unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {
-	auto result = context->Query(std::move(statement), false);
+unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement,
+                                                      QueryResultMemoryType memory_type) {
+	QueryParameters query_parameters;
+	query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	query_parameters.memory_type = memory_type;
+	auto result = context->Query(std::move(statement), query_parameters);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, bool allow_stream_result) {
-	return context->PendingQuery(query, allow_stream_result);
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, QueryParameters query_parameters) {
+	return context->PendingQuery(query, query_parameters);
 }
 
-unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	return context->PendingQuery(std::move(statement), allow_stream_result);
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
+                                                        QueryParameters query_parameters) {
+	return context->PendingQuery(std::move(statement), query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
                                                         case_insensitive_map_t<BoundParameterData> &named_values,
-                                                        bool allow_stream_result) {
-	return context->PendingQuery(query, named_values, allow_stream_result);
+                                                        QueryParameters query_parameters) {
+	return context->PendingQuery(query, named_values, query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
                                                         case_insensitive_map_t<BoundParameterData> &named_values,
-                                                        bool allow_stream_result) {
-	return context->PendingQuery(std::move(statement), named_values, allow_stream_result);
+                                                        QueryParameters query_parameters) {
+	return context->PendingQuery(std::move(statement), named_values, query_parameters);
 }
 
 static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
@@ -144,15 +152,19 @@ static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<V
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vector<Value> &values,
-                                                        bool allow_stream_result) {
+                                                        QueryParameters query_parameters) {
 	auto named_params = ConvertParamListToMap(values);
-	return context->PendingQuery(query, named_params, allow_stream_result);
+	return context->PendingQuery(query, named_params, query_parameters);
 }
 
 unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
-                                                        bool allow_stream_result) {
+                                                        QueryParameters query_parameters) {
 	auto named_params = ConvertParamListToMap(values);
-	return context->PendingQuery(std::move(statement), named_params, allow_stream_result);
+	return context->PendingQuery(std::move(statement), named_params, query_parameters);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, PendingQueryParameters parameters) {
+	return context->PendingQuery(query, parameters);
 }
 
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
@@ -165,7 +177,11 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
 	auto named_params = ConvertParamListToMap(values);
-	auto pending = PendingQuery(query, named_params, false);
+	PendingQueryParameters parameters;
+	parameters.parameters = &named_params;
+	parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	parameters.query_parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
+	auto pending = PendingQuery(query, parameters);
 	if (pending->HasError()) {
 		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
 	}
@@ -323,8 +339,8 @@ shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool bi
 	return TableFunction("parquet_scan", params, named_parameters)->Alias(parquet_file);
 }
 
-unordered_set<string> Connection::GetTableNames(const string &query) {
-	return context->GetTableNames(query);
+unordered_set<string> Connection::GetTableNames(const string &query, const bool qualified) {
+	return context->GetTableNames(query, qualified);
 }
 
 shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const string &alias, const string &error) {

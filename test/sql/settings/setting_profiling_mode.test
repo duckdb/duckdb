@@ -11,3 +11,4 @@ SET profiling_mode='detailed';
 statement error
 SET profiling_mode='unknown';
 ----
+<REGEX>:.*Parser Error.*Unrecognized profiling mode.*

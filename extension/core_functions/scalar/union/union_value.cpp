@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct UnionValueBindData : public FunctionData {
 	UnionValueBindData() {
 	}
@@ -20,7 +22,7 @@ public:
 	}
 };
 
-static void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// Assign the new entries to the result vector
 	UnionVector::GetMember(result, 0).Reference(args.data[0]);
 
@@ -36,9 +38,8 @@ static void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-
+unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &bound_function,
+                                        vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 1) {
 		throw BinderException("union_value takes exactly one argument");
 	}
@@ -52,14 +53,16 @@ static unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFun
 
 	union_members.push_back(make_pair(child->GetAlias(), child->return_type));
 
-	bound_function.return_type = LogicalType::UNION(std::move(union_members));
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(LogicalType::UNION(std::move(union_members)));
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
+
+} // namespace
 
 ScalarFunction UnionValueFun::GetFunction() {
 	ScalarFunction fun("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.serialize = VariableReturnBindData::Serialize;
 	fun.deserialize = VariableReturnBindData::Deserialize;
 	return fun;

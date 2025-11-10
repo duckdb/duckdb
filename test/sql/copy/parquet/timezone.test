@@ -10,7 +10,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select typeof(TimeRecStart) from 'data/parquet-testing/tz.parquet' limit 1;
+select typeof(TimeRecStart) from '{DATA_DIR}/parquet-testing/tz.parquet' limit 1;
 ----
 TIMESTAMP WITH TIME ZONE
 
@@ -18,7 +18,7 @@ statement ok
 SET timezone='UTC'
 
 query I
-select TimeRecStart from 'data/parquet-testing/tz.parquet';
+select TimeRecStart from '{DATA_DIR}/parquet-testing/tz.parquet';
 ----
 2022-10-17 21:52:27+00
 2022-10-17 21:52:27+00

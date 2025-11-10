@@ -1,0 +1,32 @@
+# name: test/sql/peg_parser/transformer/set_statement.test
+# description: Test lambda syntax in peg parser
+# group: [transformer]
+
+require autocomplete
+
+require icu
+
+statement ok
+set allow_parser_override_extension=strict;
+
+statement ok
+SET threads=1;
+
+statement ok
+set VARIABLE dataset_size = 122880;
+
+statement error
+SET SEARCH_PATH TO app2;
+----
+Catalog Error: SET search_path: No catalog + schema named "app2" found.
+
+statement error
+SET GLOBAL enable_progress_bar=true;
+----
+Catalog Error: option "enable_progress_bar" cannot be set globally
+
+statement ok
+RESET threads;
+
+statement ok
+SET TimeZone='UTC';

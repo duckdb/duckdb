@@ -50,3 +50,4 @@ ALTER TABLE test ALTER i TYPE VARCHAR USING i::VARCHAR
 statement error
 EXECUTE v2
 ----
+Invalid Input Error: Values were not provided
