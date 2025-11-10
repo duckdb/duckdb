@@ -1,0 +1,55 @@
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index 9070621fa68..0954e8cd554 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -15,25 +15,6 @@
+ 
+ namespace duckdb {
+ 
+-static void SetHttpfsClientImplementation(DBConfig &config, const string &value) {
+-	if (config.http_util && config.http_util->GetName() == "WasmHTTPUtils") {
+-		if (value == "wasm" || value == "default") {
+-			// Already handled, do not override
+-			return;
+-		}
+-		throw InvalidInputException("Unsupported option for httpfs_client_implementation, only `wasm` and "
+-		                            "`default` are currently supported for duckdb-wasm");
+-	}
+-	if (value == "httplib" || value == "default") {
+-		if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil") {
+-			config.http_util = make_shared_ptr<HTTPFSUtil>();
+-		}
+-		return;
+-	}
+-	throw InvalidInputException("Unsupported option for httpfs_client_implementation, only `curl`, `httplib` and "
+-	                            "`default` are currently supported");
+-}
+-
+ static void LoadInternal(ExtensionLoader &loader) {
+ 	auto &instance = loader.GetDatabaseInstance();
+ 	auto &fs = instance.GetFileSystem();
+@@ -107,13 +88,13 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 			                            "`default` are currently supported for duckdb-wasm");
+ 		}
+ #ifndef EMSCRIPTEN
+-		if (value == "curl") {
++		if (value == "curl" || value == "default") {
+ 			if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil-Curl") {
+ 				config.http_util = make_shared_ptr<HTTPFSCurlUtil>();
+ 			}
+ 			return;
+ 		}
+-		if (value == "httplib" || value == "default") {
++		if (value == "httplib") {
+ 			if (!config.http_util || config.http_util->GetName() != "HTTPFSUtil") {
+ 				config.http_util = make_shared_ptr<HTTPFSUtil>();
+ 			}
+@@ -129,7 +110,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	if (config.http_util && config.http_util->GetName() == "WasmHTTPUtils") {
+ 		// Already handled, do not override
+ 	} else {
+-		config.http_util = make_shared_ptr<HTTPFSUtil>();
++		config.http_util = make_shared_ptr<HTTPFSCurlUtil>();
+ 	}
+ 
+ 	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
