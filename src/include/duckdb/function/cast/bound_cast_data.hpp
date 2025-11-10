@@ -113,6 +113,34 @@ public:
 	unique_ptr<FunctionLocalState> value_state;
 };
 
+struct StructToMapBoundCastData : public BoundCastData {
+	StructToMapBoundCastData(BoundCastInfo key_cast, vector<BoundCastInfo> value_casts)
+	    : key_cast(std::move(key_cast)), value_casts(std::move(value_casts)) {
+	}
+
+	BoundCastInfo key_cast;
+	vector<BoundCastInfo> value_casts;
+
+	static unique_ptr<BoundCastData> BindStructToMapCast(BindCastInput &input, const LogicalType &source,
+	                                                     const LogicalType &target);
+	static unique_ptr<FunctionLocalState> InitStructToMapCastLocalState(CastLocalStateParameters &parameters);
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		vector<BoundCastInfo> copy_value_casts;
+		for (auto &value_cast : value_casts) {
+			copy_value_casts.push_back(value_cast.Copy());
+		}
+		return make_uniq<StructToMapBoundCastData>(key_cast.Copy(), std::move(copy_value_casts));
+	}
+};
+
+struct StructToMapCastLocalState : public FunctionLocalState {
+public:
+	unique_ptr<FunctionLocalState> key_state;
+	vector<unique_ptr<FunctionLocalState>> value_states;
+};
+
 struct UnionBoundCastData : public BoundCastData {
 	UnionBoundCastData(union_tag_t member_idx, string name, LogicalType type, int64_t cost,
 	                   BoundCastInfo member_cast_info)

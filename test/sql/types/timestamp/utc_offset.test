@@ -1,56 +1,75 @@
 # name: test/sql/types/timestamp/utc_offset.test
-# description: Test UTC offset in timestamp parsing
+# description: Test UTC offset in timestamptz parsing
 # group: [timestamp]
+
+require icu
 
 statement ok
 PRAGMA enable_verification
 
+statement ok
+set Calendar='gregorian';
+
+statement ok
+set TimeZone='UTC';
+
+# Offset parsing for plain  timestamps drops the offset instead of subtracting it
 query I
-select timestamp '2020-12-31 21:25:58.745232';
+SELECT '2025-01-01T08:00:00+08'::TIMESTAMP AS c;
 ----
-2020-12-31 21:25:58.745232
+2025-01-01 08:00:00
 
 query I
-select timestamp '2020-12-31 21:25:58.745232';
+SELECT '2025-01-01T08:00:00+08'::TIMESTAMPTZ AS c;
 ----
-2020-12-31 21:25:58.745232
+2025-01-01 00:00:00+00
 
 query I
-select timestamp '2020-12-31 21:25:58.745232+00';
+select timestamptz '2020-12-31 21:25:58.745232';
 ----
-2020-12-31 21:25:58.745232
+2020-12-31 21:25:58.745232+00
 
 query I
-select timestamp '2020-12-31 21:25:58.745232+0000';
+select timestamptz '2020-12-31 21:25:58.745232';
 ----
-2020-12-31 21:25:58.745232
+2020-12-31 21:25:58.745232+00
 
 query I
-select timestamp '2020-12-31 21:25:58.745232+02';
+select timestamptz '2020-12-31 21:25:58.745232+00';
 ----
-2020-12-31 19:25:58.745232
+2020-12-31 21:25:58.745232+00
 
 query I
-select timestamp '2020-12-31 21:25:58.745232-02';
+select timestamptz '2020-12-31 21:25:58.745232+0000';
 ----
-2020-12-31 23:25:58.745232
+2020-12-31 21:25:58.745232+00
 
 query I
-select timestamp '2020-12-31 21:25:58.745232+0215';
+select timestamptz '2020-12-31 21:25:58.745232+02';
 ----
-2020-12-31 19:10:58.745232
+2020-12-31 19:25:58.745232+00
 
 query I
-select timestamp '2020-12-31 21:25:58.745232+02:15';
+select timestamptz '2020-12-31 21:25:58.745232-02';
 ----
-2020-12-31 19:10:58.745232
+2020-12-31 23:25:58.745232+00
 
 query I
-select timestamp '2020-12-31 21:25:58.745232-0215';
+select timestamptz '2020-12-31 21:25:58.745232+0215';
 ----
-2020-12-31 23:40:58.745232
+2020-12-31 19:10:58.745232+00
 
 query I
-select timestamp '2020-12-31 21:25:58+02:15';
+select timestamptz '2020-12-31 21:25:58.745232+02:15';
 ----
-2020-12-31 19:10:58
+2020-12-31 19:10:58.745232+00
+
+query I
+select timestamptz '2020-12-31 21:25:58.745232-0215';
+----
+2020-12-31 23:40:58.745232+00
+
+query I
+select timestamptz '2020-12-31 21:25:58+02:15';
+----
+2020-12-31 19:10:58+00

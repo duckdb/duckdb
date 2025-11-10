@@ -93,7 +93,10 @@ public:
 		sel_vector[j] = tmp;
 	}
 	inline idx_t get_index(idx_t idx) const { // NOLINT: allow casing for legacy reasons
-		return sel_vector ? sel_vector[idx] : idx;
+		return sel_vector ? get_index_unsafe(idx) : idx;
+	}
+	inline idx_t get_index_unsafe(idx_t idx) const { // NOLINT: allow casing for legacy reasons
+		return sel_vector[idx];
 	}
 	sel_t *data() { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
@@ -105,11 +108,15 @@ public:
 		return selection_data;
 	}
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
+	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;
 
-	inline sel_t &operator[](idx_t index) const {
+	inline const sel_t &operator[](idx_t index) const {
+		return sel_vector[index];
+	}
+	inline sel_t &operator[](idx_t index) {
 		return sel_vector[index];
 	}
 	inline bool IsSet() const {
@@ -156,62 +163,6 @@ public:
 private:
 	SelectionVector *sel;
 	SelectionVector vec;
-};
-
-// Contains a selection vector, combined with a count
-class ManagedSelection {
-public:
-	explicit inline ManagedSelection(idx_t size, bool initialize = true)
-	    : initialized(initialize), size(size), internal_opt_selvec(nullptr) {
-		count = 0;
-		if (!initialized) {
-			return;
-		}
-		sel_vec.Initialize(size);
-		internal_opt_selvec.Initialize(&sel_vec);
-	}
-
-public:
-	bool Initialized() const {
-		return initialized;
-	}
-	void Initialize(idx_t new_size) {
-		D_ASSERT(!initialized);
-		this->size = new_size;
-		sel_vec.Initialize(new_size);
-		internal_opt_selvec.Initialize(&sel_vec);
-		initialized = true;
-	}
-
-	inline idx_t operator[](idx_t index) const {
-		D_ASSERT(index < size);
-		return sel_vec.get_index(index);
-	}
-	inline bool IndexMapsToLocation(idx_t idx, idx_t location) const {
-		return idx < count && sel_vec.get_index(idx) == location;
-	}
-	inline void Append(const idx_t idx) {
-		internal_opt_selvec.Append(count, idx);
-	}
-	inline idx_t Count() const {
-		return count;
-	}
-	inline idx_t Size() const {
-		return size;
-	}
-	inline const SelectionVector &Selection() const {
-		return sel_vec;
-	}
-	inline SelectionVector &Selection() {
-		return sel_vec;
-	}
-
-private:
-	bool initialized = false;
-	idx_t count;
-	idx_t size;
-	SelectionVector sel_vec;
-	OptionalSelection internal_opt_selvec;
 };
 
 } // namespace duckdb

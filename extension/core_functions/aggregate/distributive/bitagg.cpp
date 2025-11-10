@@ -8,6 +8,8 @@
 
 namespace duckdb {
 
+namespace {
+
 template <class T>
 struct BitState {
 	using TYPE = T;
@@ -16,7 +18,7 @@ struct BitState {
 };
 
 template <class OP>
-static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
+AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, int8_t, int8_t, OP>(type, type);
@@ -164,7 +166,6 @@ struct BitStringBitwiseOperation : public BitwiseOperation {
 };
 
 struct BitStringAndOperation : public BitStringBitwiseOperation {
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		Bit::BitwiseAnd(input, state.value, state.value);
@@ -172,7 +173,6 @@ struct BitStringAndOperation : public BitStringBitwiseOperation {
 };
 
 struct BitStringOrOperation : public BitStringBitwiseOperation {
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		Bit::BitwiseOr(input, state.value, state.value);
@@ -193,6 +193,8 @@ struct BitStringXorOperation : public BitStringBitwiseOperation {
 		}
 	}
 };
+
+} // namespace
 
 AggregateFunctionSet BitAndFun::GetFunctions() {
 	AggregateFunctionSet bit_and;

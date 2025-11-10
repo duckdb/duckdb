@@ -8,3 +8,4 @@ PRAGMA enable_verification
 statement error
 create table y(y int, foreign key (y) references y(y));
 ----
+<REGEX>:.*Binder Error: Failed to create foreign key.*referenced table "y".*

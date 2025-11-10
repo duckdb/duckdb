@@ -1,0 +1,21 @@
+# name: benchmark/types/bignum/bignum_sum.benchmark
+# description: sum of very big bignums
+# group: [bignum]
+
+name Sum of 10000 Bignums with 100k digits
+group bignum
+
+load
+CREATE TABLE t1 AS
+SELECT
+  i AS id,
+  const_val.a
+FROM
+  range(10000) AS i,
+  (
+    SELECT CAST(CONCAT('1', REPEAT('0', 100000)) AS BIGNUM) AS a
+  ) AS const_val;
+
+run
+SELECT sum(a) from t1
+

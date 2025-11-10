@@ -28,7 +28,7 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 
 public:
-	static void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings);
+	static void ExtractColumnBindings(const Expression &expr, vector<ColumnBinding> &bindings);
 
 protected:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;

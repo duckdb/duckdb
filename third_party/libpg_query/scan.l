@@ -331,7 +331,8 @@ identifier		{ident_start}{ident_cont}*
 typecast		"::"
 dot_dot			\.\.
 colon_equals	":="
-lambda_arrow	"->"
+single_arrow	"->"
+single_colon	":"
 double_arrow    "->>"
 power_of        "**"
 integer_div     "//"
@@ -821,9 +822,14 @@ other			.
 					return COLON_EQUALS;
 				}
 
-{lambda_arrow}	{
+{single_arrow}	{
 					SET_YYLLOC();
-					return LAMBDA_ARROW;
+					return SINGLE_ARROW;
+				}
+
+{single_colon}	{
+					SET_YYLLOC();
+					return SINGLE_COLON;
 				}
 
 {double_arrow}  {

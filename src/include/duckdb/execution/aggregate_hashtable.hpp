@@ -14,6 +14,7 @@
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 
 namespace duckdb {
 
@@ -41,16 +42,19 @@ class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
-	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0);
+	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
-	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0);
-	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
+	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
+	                          TupleDataValidityType group_validity = TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	~GroupedAggregateHashTable() override;
 
 public:
 	//! The hash table load factor, when a resize is triggered
-	constexpr static double LOAD_FACTOR = 1.25;
+	constexpr static double LOAD_FACTOR = 1.5;
 
 	//! Get the layout of this HT
 	shared_ptr<TupleDataLayout> GetLayoutPtr();
@@ -105,10 +109,18 @@ public:
 	void SetRadixBits(idx_t radix_bits);
 	//! Get the radix bits for this HT
 	idx_t GetRadixBits() const;
-	//! Get the total amount of data sunk into this HT
+	//! Get the total number of tuples sunk into this HT
 	idx_t GetSinkCount() const;
+	//! Get the total number of tuples materialized currently in this HT
+	idx_t GetMaterializedCount() const;
 	//! Skips lookups from here on out
 	void SkipLookups();
+	//! Enable/disable HLL
+	void EnableHLL(bool enable);
+	//! Whether HLL is enabled
+	bool HLLEnabled() const;
+	//! Get HLL count
+	idx_t GetHLLUpperBound() const;
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
@@ -160,6 +172,10 @@ private:
 	idx_t sink_count;
 	//! If true, we just append, skipping HT lookups
 	bool skip_lookups;
+	//! Whether to enable HLL counting the hashes
+	bool enable_hll;
+	//! The associated HLL
+	HyperLogLog hll;
 
 	//! The active arena allocator used by the aggregates for their internal state
 	shared_ptr<ArenaAllocator> aggregate_allocator;
@@ -176,10 +192,9 @@ private:
 		Vector hashes;
 		Vector ht_offsets;
 		Vector hash_salts;
+		SelectionVector new_groups;
 		SelectionVector group_compare_vector;
 		SelectionVector no_match_vector;
-		SelectionVector empty_vector;
-		SelectionVector new_groups;
 		Vector addresses;
 		DataChunk group_chunk;
 		AggregateDictionaryState dict_state;

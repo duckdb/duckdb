@@ -1,6 +1,6 @@
 #include "include/icu-dateadd.hpp"
 
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -11,6 +11,17 @@
 #include "icu-helpers.hpp"
 
 namespace duckdb {
+
+static duckdb::unique_ptr<FunctionData> ICUBindIntervalMonths(ClientContext &context, ScalarFunction &bound_function,
+                                                              vector<duckdb::unique_ptr<Expression>> &arguments) {
+	auto result = ICUDateFunc::Bind(context, bound_function, arguments);
+	auto &info = result->Cast<ICUDateFunc::BindData>();
+	TZCalendar calendar(*info.calendar, info.cal_setting);
+	if (!calendar.SupportsIntervals()) {
+		throw NotImplementedException("INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.");
+	}
+	return std::move(result);
+}
 
 struct ICUCalendarAdd {
 	template <class TA, class TB, class TR>
@@ -208,7 +219,6 @@ interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_dat
 }
 
 struct ICUDateAdd : public ICUDateFunc {
-
 	template <typename TA, typename TR, typename OP>
 	static void ExecuteUnary(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 1);
@@ -228,7 +238,7 @@ struct ICUDateAdd : public ICUDateFunc {
 	template <typename TA, typename TR, typename OP>
 	inline static ScalarFunction GetUnaryDateFunction(const LogicalTypeId &left_type,
 	                                                  const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type}, result_type, ExecuteUnary<TA, TR, OP>, Bind);
+		return ScalarFunction({left_type}, result_type, ExecuteUnary<TA, TR, OP>, ICUBindIntervalMonths);
 	}
 
 	template <typename TA, typename TB, typename TR, typename OP>
@@ -247,7 +257,8 @@ struct ICUDateAdd : public ICUDateFunc {
 	template <typename TA, typename TB, typename TR, typename OP>
 	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
 	                                                   const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>, Bind);
+		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>,
+		                      ICUBindIntervalMonths);
 	}
 
 	template <typename TA, typename TB, typename OP>
@@ -255,14 +266,14 @@ struct ICUDateAdd : public ICUDateFunc {
 		return GetBinaryDateFunction<TA, TB, timestamp_t, OP>(left_type, right_type, LogicalType::TIMESTAMP_TZ);
 	}
 
-	static void AddDateAddOperators(const string &name, DatabaseInstance &db) {
+	static void AddDateAddOperators(const string &name, ExtensionLoader &loader) {
 		//	temporal + interval
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
 		                                                                            LogicalType::INTERVAL));
 		set.AddFunction(GetDateAddFunction<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
 		                                                                            LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 
 	template <typename TA, typename OP>
@@ -275,7 +286,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		return GetBinaryDateFunction<TA, TB, interval_t, OP>(left_type, right_type, LogicalType::INTERVAL);
 	}
 
-	static void AddDateSubOperators(const string &name, DatabaseInstance &db) {
+	static void AddDateSubOperators(const string &name, ExtensionLoader &loader) {
 		//	temporal - interval
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
@@ -284,16 +295,16 @@ struct ICUDateAdd : public ICUDateFunc {
 		//	temporal - temporal
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 
-	static void AddDateAgeFunctions(const string &name, DatabaseInstance &db) {
+	static void AddDateAgeFunctions(const string &name, ExtensionLoader &loader) {
 		//	age(temporal, temporal)
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetUnaryAgeFunction<timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::RegisterFunction(db, set);
+		loader.RegisterFunction(set);
 	}
 };
 
@@ -309,10 +320,10 @@ interval_t ICUDateFunc::Sub(TZCalendar &calendar, timestamp_t end_date, timestam
 	return ICUCalendarSub::Operation<timestamp_t, timestamp_t, interval_t>(end_date, start_date, calendar);
 }
 
-void RegisterICUDateAddFunctions(DatabaseInstance &db) {
-	ICUDateAdd::AddDateAddOperators("+", db);
-	ICUDateAdd::AddDateSubOperators("-", db);
-	ICUDateAdd::AddDateAgeFunctions("age", db);
+void RegisterICUDateAddFunctions(ExtensionLoader &loader) {
+	ICUDateAdd::AddDateAddOperators("+", loader);
+	ICUDateAdd::AddDateSubOperators("-", loader);
+	ICUDateAdd::AddDateAgeFunctions("age", loader);
 }
 
 } // namespace duckdb

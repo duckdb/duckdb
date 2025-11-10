@@ -5,6 +5,7 @@ add_library_unity(
   alter_scalar_function_info.cpp
   alter_table_function_info.cpp
   alter_table_info.cpp
+  alter_database_info.cpp
   attach_info.cpp
   comment_on_column_info.cpp
   copy_info.cpp

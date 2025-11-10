@@ -44,6 +44,7 @@ public:
 	bool partition_output;
 	bool write_partition_columns;
 	bool write_empty_file = true;
+	bool hive_file_pattern = true;
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	vector<idx_t> partition_columns;
 	vector<string> names;

@@ -8,6 +8,6 @@ statement ok
 PRAGMA enable_verification
 
 query IIIIIIIIIIIIIIIIIIIIII
-SELECT * FROM parquet_scan('data/parquet-testing/adam_genotypes.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/adam_genotypes.parquet')
 ----
 {'referenceName': NULL, 'start': NULL, 'end': NULL, 'names': [name], 'splitFromMultiAllelic': false, 'referenceAllele': NULL, 'alternateAllele': NULL, 'quality': NULL, 'filtersApplied': NULL, 'filtersPassed': NULL, 'filtersFailed': [], 'annotation': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	[]	NULL	NULL	NULL	NULL	NULL	NULL	[]	[]	[]	false	false	NULL	NULL

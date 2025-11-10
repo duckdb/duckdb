@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -242,7 +243,7 @@ bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
 	if (in_list.empty()) {
 		return true;
 	}
-	if (!in_list[0].type().IsIntegral()) {
+	if (!in_list[0].type().IsIntegral() || in_list[0].type() == LogicalType::UHUGEINT) {
 		return false;
 	}
 	// sort the input list
@@ -332,13 +333,11 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
-void ReplaceWithBoundReference(unique_ptr<Expression> &expr) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		expr = make_uniq<BoundReferenceExpression>(expr->return_type, 0ULL);
-		return;
-	}
-	ExpressionIterator::EnumerateChildren(*expr,
-	                                      [&](unique_ptr<Expression> &child) { ReplaceWithBoundReference(child); });
+void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &expr) {
+		    expr = make_uniq<BoundReferenceExpression>(col_ref.return_type, 0ULL);
+	    });
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {
@@ -603,7 +602,7 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
-FilterPushdownResult FilterCombiner::TryPushdownExpression(const LogicalGet &get, TableFilterSet &table_filters,
+FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table_filters,
                                                            const vector<ColumnIndex> &column_ids, Expression &expr) {
 	auto pushdown_result = TryPushdownPrefixFilter(table_filters, column_ids, expr);
 	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
@@ -624,10 +623,9 @@ FilterPushdownResult FilterCombiner::TryPushdownExpression(const LogicalGet &get
 	return FilterPushdownResult::NO_PUSHDOWN;
 }
 
-TableFilterSet FilterCombiner::GenerateTableScanFilters(const LogicalGet &get,
+TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
                                                         vector<FilterPushdownResult> &pushdown_results) {
 	TableFilterSet table_filters;
-	auto &column_ids = get.GetColumnIds();
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
 		auto expr_id = constant_value.first;
@@ -637,7 +635,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const LogicalGet &get,
 	//! Here we look for LIKE or IN filters
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
-		auto pushdown_result = TryPushdownExpression(get, table_filters, column_ids, *remaining_filter);
+		auto pushdown_result = TryPushdownExpression(table_filters, column_ids, *remaining_filter);
 		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
 			// the filter has been pushed down entirely - we can prune it
 			remaining_filters.erase_at(rem_fil_idx--);
@@ -910,6 +908,12 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	idx_t left_equivalence_set = GetEquivalenceSet(left_node);
 	idx_t right_equivalence_set = GetEquivalenceSet(right_node);
 	if (left_equivalence_set == right_equivalence_set) {
+		if (comparison.GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN ||
+		    comparison.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
+			// non equal comparison has equal equivalence set, then it is unsatisfiable
+			// e.g., j > i AND i < j is unsatisfiable
+			return FilterResult::UNSATISFIABLE;
+		}
 		// this equality filter already exists, prune it
 		return FilterResult::SUCCESS;
 	}

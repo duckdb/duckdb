@@ -2,15 +2,10 @@
 # description: Re-order mixed comparisons adaptively
 # group: [expression_reordering]
 
-require tpch
-
-cache tpch_sf1.duckdb
-
-load
-CALL dbgen(sf=1);
+include benchmark/tpch/tpch_load.benchmark.in
 
 run
 SELECT COUNT(*) FROM lineitem WHERE l_returnflag = 'R' OR l_orderkey > 5000 OR l_shipdate > DATE '1990-01-01';
 
-result I
+result I sf=1
 6001215

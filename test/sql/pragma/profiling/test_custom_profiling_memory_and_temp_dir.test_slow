@@ -14,13 +14,10 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MEMORY": "true", "SYSTEM_PEAK_TEMP_DIR_SIZE": "true"}';
-
-statement ok
 SET memory_limit = '0.7gb';
 
 statement ok
-CREATE TABLE test AS SELECT hash(range) i FROM range(100_000_000);
+CREATE OR REPLACE TABLE test AS SELECT hash(range) i FROM range(100_000_000);
 
 statement ok
 PRAGMA disable_profiling;
@@ -37,3 +34,29 @@ SELECT
 FROM metrics_output;
 ----
 true	true	1.0
+
+# disabling should omit them from output
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MEMORY": "false", "SYSTEM_PEAK_TEMP_DIR_SIZE": "false"}';
+
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT hash(range) i FROM range(100_000_000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+statement error
+SELECT system_peak_buffer_memory FROM metrics_output;
+----
+Binder Error
+
+statement error
+SELECT system_peak_temp_dir_size FROM metrics_output;
+----
+Binder Error

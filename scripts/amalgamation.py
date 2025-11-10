@@ -39,7 +39,7 @@ main_header_files = [
     os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'memory_stream.hpp'),
     os.path.join(include_dir, 'duckdb', 'main', 'appender.hpp'),
     os.path.join(include_dir, 'duckdb', 'main', 'client_context.hpp'),
-    os.path.join(include_dir, 'duckdb', 'main', 'extension_util.hpp'),
+    os.path.join(include_dir, 'duckdb', 'main', 'extension', 'extension_loader.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'function.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'table_function.hpp'),
     os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_table_function_info.hpp'),
@@ -271,13 +271,18 @@ def git_commit_hash():
 
 
 ######
+# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
+# MAIN_BRANCH_VERSIONING default should be 'False' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
 # - scripts/amalgamation.py
 # - scripts/package_build.py
-# - tools/pythonpkg/setup.py
 ######
-main_branch_versioning = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
+MAIN_BRANCH_VERSIONING = True
+if os.getenv('MAIN_BRANCH_VERSIONING') == "0":
+    MAIN_BRANCH_VERSIONING = False
+if os.getenv('MAIN_BRANCH_VERSIONING') == "1":
+    MAIN_BRANCH_VERSIONING = True
 
 
 def git_dev_version():
@@ -291,7 +296,7 @@ def git_dev_version():
         else:
             # not on a tag: increment the version by one and add a -devX suffix
             # this needs to keep in sync with changes to CMakeLists.txt
-            if main_branch_versioning == True:
+            if MAIN_BRANCH_VERSIONING == True:
                 # increment minor version
                 version_splits[1] = str(int(version_splits[1]) + 1)
             else:

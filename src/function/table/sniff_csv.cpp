@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
@@ -155,9 +156,21 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	CSVSniffer sniffer(sniffer_options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
 	if (sniffer.EmptyOrOnlyHeader()) {
-		for (auto &type : sniffer_result.return_types) {
-			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+		for (idx_t i = 0; i < sniffer_result.return_types.size(); i++) {
+			if (!sniffer_options.sql_types_per_column.empty()) {
+				if (sniffer_options.sql_types_per_column.find(sniffer_result.names[i]) !=
+				    sniffer_options.sql_types_per_column.end()) {
+					continue;
+				}
+			} else if (i < sniffer_options.sql_type_list.size()) {
+				continue;
+			}
 			// we default to varchar if all files are empty or only have a header after all the sniffing
+			sniffer_result.return_types[i] = LogicalType::VARCHAR;
+		}
+	}
+	for (auto &type : sniffer_result.return_types) {
+		if (type.id() == LogicalTypeId::SQLNULL) {
 			type = LogicalType::VARCHAR;
 		}
 	}

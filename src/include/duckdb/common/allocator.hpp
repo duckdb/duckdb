@@ -77,6 +77,9 @@ public:
 	bool IsSet() {
 		return pointer;
 	}
+	optional_ptr<Allocator> GetAllocator() const {
+		return allocator;
+	}
 	void Reset();
 
 private:

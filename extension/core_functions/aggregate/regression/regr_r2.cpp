@@ -10,6 +10,8 @@
 #include "core_functions/aggregate/regression_functions.hpp"
 
 namespace duckdb {
+
+namespace {
 struct RegrR2State {
 	CorrState corr;
 	StddevState var_pop_x;
@@ -65,8 +67,11 @@ struct RegrR2Operation {
 	}
 };
 
+} // namespace
+
 AggregateFunction RegrR2Fun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrR2State, double, double, double, RegrR2Operation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
+
 } // namespace duckdb

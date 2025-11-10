@@ -1,6 +1,7 @@
 {
     "group": "date_time_timestamp_helpers",
     "deprecated": false,
+    "description": "Functions to convert from and to `duckdb_[date, time, time_tz, timestamp]`.\n// `duckdb_is_finite_timestamp[_s, _ms, _ns]` helper functions.",
     "entries": [
         {
             "name": "duckdb_from_date",

@@ -49,13 +49,23 @@ class TupleDataCollection {
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
-	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr);
+	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr,
+	                    shared_ptr<ArenaAllocator> stl_allocator = nullptr);
+	TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr,
+	                    shared_ptr<ArenaAllocator> stl_allocator = nullptr);
 
 	~TupleDataCollection();
 
+	//! Create a TupleDataCollection with the same layout
+	unique_ptr<TupleDataCollection> CreateUnique() const;
+
 public:
+	//! Get the layout (shared pointer) of the rows
+	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	//! The layout of the stored rows
 	const TupleDataLayout &GetLayout() const;
+	//! How many tuples fit per block
+	idx_t TuplesPerBlock() const;
 	//! The number of rows stored in the tuple data collection
 	const idx_t &Count() const;
 	//! The number of chunks stored in the tuple data collection
@@ -66,11 +76,20 @@ public:
 	void Unpin();
 	//! Sets the partition index of this tuple data collection
 	void SetPartitionIndex(idx_t index);
+	//! Gets the pointers to the start of every block
+	vector<data_ptr_t> GetRowBlockPointers() const;
+	//! Destroy the blocks corresponding to the chunk indices
+	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end);
 
 	//! Gets the scatter function for the given type
 	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_collection = false);
 	//! Gets the gather function for the given type
 	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type);
+
+	//! Gets the scatter function for the given sort key type
+	static TupleDataScatterFunction GetSortKeyScatterFunction(const LogicalType &type, SortKeyType sort_key_type);
+	//! Gets the gather function for the given sort key type
+	static TupleDataGatherFunction GetSortKeyGatherFunction(const LogicalType &type, SortKeyType sort_key_type);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
@@ -119,6 +138,10 @@ public:
 	//! Computes the heap sizes for the new DataChunk that will be appended
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
+	//! Computes the heap sizes for a SortKey layout
+	static void SortKeyComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
+	                                    const SelectionVector &append_sel, const idx_t append_count,
+	                                    const SortKeyType sort_key_type);
 
 	//! Builds out the buffer space for the specified Chunk state
 	void Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const idx_t append_offset,
@@ -132,6 +155,8 @@ public:
 	//! Copy rows from input to the built Chunk state
 	void CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input, const SelectionVector &append_sel,
 	              const idx_t append_count) const;
+	//! Finds the heap pointers of the rows in the given Chunk state
+	void FindHeapPointers(TupleDataChunkState &chunk_state, const idx_t chunk_count) const;
 
 	//! Finalizes the Pin state, releasing or storing blocks
 	void FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment);
@@ -150,7 +175,7 @@ public:
 	//! Initializes a chunk with the correct types that can be used to call Append/Scan for the given columns
 	void InitializeChunk(DataChunk &chunk, const vector<column_t> &columns) const;
 	//! Initializes a chunk with the correct types for a given scan state
-	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
+	void InitializeScanChunk(const TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
 	void InitializeScan(TupleDataScanState &state,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
@@ -163,6 +188,8 @@ public:
 	//! Initialize a parallel scan over the tuple data collection over a subset of the columns
 	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Grab the chunk state for the given chunk index, returns the count of the chunk
+	idx_t FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
@@ -197,7 +224,7 @@ private:
 	//! Gets all column ids
 	void GetAllColumnIDs(vector<column_t> &column_ids);
 	//! Adds a segment to this TupleDataCollection
-	void AddSegment(TupleDataSegment &&segment);
+	void AddSegment(unsafe_arena_ptr<TupleDataSegment> segment);
 
 	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,
@@ -238,6 +265,8 @@ private:
 	void Verify() const;
 
 private:
+	//! Shared allocator for STL allocations
+	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The layout of the TupleDataCollection
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
@@ -248,11 +277,11 @@ private:
 	//! The size (in bytes) of this TupleDataCollection
 	idx_t data_size;
 	//! The data segments of the TupleDataCollection
-	unsafe_vector<TupleDataSegment> segments;
+	unsafe_arena_vector<unsafe_arena_ptr<TupleDataSegment>> segments;
 	//! The set of scatter functions
-	vector<TupleDataScatterFunction> scatter_functions;
+	unsafe_arena_vector<TupleDataScatterFunction> scatter_functions;
 	//! The set of gather functions
-	vector<TupleDataGatherFunction> gather_functions;
+	unsafe_arena_vector<TupleDataGatherFunction> gather_functions;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 };

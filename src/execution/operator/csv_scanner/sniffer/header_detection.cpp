@@ -182,7 +182,8 @@ bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<Header
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
 				if (!CSVSniffer::CanYouCastIt(context, best_header_row[col].value, sql_type, options.dialect_options,
-				                              best_header_row[col].IsNull(), options.decimal_separator[0])) {
+				                              best_header_row[col].IsNull(), options.decimal_separator[0],
+				                              options.thousands_separator)) {
 					first_row_consistent = false;
 				}
 			}
@@ -270,7 +271,8 @@ vector<string> CSVSniffer::DetectHeaderInternal(
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
 				if (!CanYouCastIt(context, best_header_row[col].value, sql_type, dialect_options,
-				                  best_header_row[col].IsNull(), options.decimal_separator[0])) {
+				                  best_header_row[col].IsNull(), options.decimal_separator[0],
+				                  options.thousands_separator)) {
 					first_row_consistent = false;
 				}
 			}
@@ -349,7 +351,7 @@ void CSVSniffer::DetectHeader() {
 		// This file only contains a header, lets default to the lowest type of all.
 		detected_types.clear();
 		for (idx_t i = 0; i < names.size(); i++) {
-			detected_types.push_back(LogicalType::BOOLEAN);
+			detected_types.push_back(LogicalType::SQLNULL);
 		}
 	}
 	for (idx_t i = max_columns_found; i < names.size(); i++) {

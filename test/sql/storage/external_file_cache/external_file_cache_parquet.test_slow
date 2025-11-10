@@ -31,11 +31,10 @@ create view lineitem as from '__TEST_DIR__/test_efc_lineitem.parquet';
 # otherwise, we run into problems with file systems with low time resolution for last modified time
 sleep 11 seconds
 
-# creating the view has loaded the last 8 bytes and the footer (separately, for now)
+# creating the view has loaded the footer
 query I
 select loaded from duckdb_external_file_cache() order by location;
 ----
-true
 true
 
 # select the first column
@@ -43,7 +42,7 @@ statement ok
 select l_orderkey from lineitem;
 
 query II
-select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 1000;
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 100000;
 ----
 23.0	true
 
@@ -52,7 +51,7 @@ statement ok
 select l_suppkey from lineitem;
 
 query II
-select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 1000 order by location;
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 100000 order by location;
 ----
 23.0	1
 10.0	1
@@ -62,7 +61,7 @@ statement ok
 select l_orderkey, l_partkey, l_suppkey, l_linenumber from lineitem;
 
 query II
-select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 1000 order by location;
+select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() where nr_bytes > 100000 order by location;
 ----
 47.0	1
 
@@ -75,7 +74,7 @@ select round(memory_usage_bytes / 1048576) from duckdb_memory() where tag = 'EXT
 
 # set the memory so low that the ~3MB entry should be unloaded
 statement ok
-set memory_limit='100kb';
+set memory_limit='512KiB';
 
 # set it back to something reasonable so we can actually do the following queries
 statement ok

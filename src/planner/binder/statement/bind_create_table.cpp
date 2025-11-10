@@ -21,6 +21,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,46 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 			continue;
 		}
 		info.column_dependency_manager.AddGeneratedColumn(col, base.columns);
+	}
+}
+
+static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageManager> storage_manager,
+                                  DBConfig &config, BoundCreateTableInfo &info) {
+	auto &base = info.base->Cast<CreateTableInfo>();
+	for (auto &col : base.columns.Logical()) {
+		auto compression_type = col.CompressionType();
+		auto compression_availability_result = CompressionTypeIsAvailable(compression_type, storage_manager);
+		if (!compression_availability_result.IsAvailable()) {
+			if (compression_availability_result.IsDeprecated()) {
+				throw BinderException(
+				    "Can't compress using user-provided compression type '%s', that type is deprecated "
+				    "and only has decompress support",
+				    CompressionTypeToString(compression_type));
+			} else {
+				throw BinderException(
+				    "Can't compress using user-provided compression type '%s', that type is not available yet",
+				    CompressionTypeToString(compression_type));
+			}
+		}
+		auto logical_type = col.GetType();
+		if (logical_type.id() == LogicalTypeId::USER && logical_type.HasAlias()) {
+			// Resolve user type if possible
+			const auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(
+			    context, INVALID_CATALOG, INVALID_SCHEMA, logical_type.GetAlias(), OnEntryNotFound::RETURN_NULL);
+			if (type_entry) {
+				logical_type = type_entry->user_type;
+			}
+		}
+		auto physical_type = logical_type.InternalType();
+		if (compression_type == CompressionType::COMPRESSION_AUTO) {
+			continue;
+		}
+		auto compression_method = config.GetCompressionFunction(compression_type, physical_type);
+		if (!compression_method) {
+			throw BinderException(
+			    "Can't compress column \"%s\" with type '%s' (physical: %s) using compression type '%s'", col.Name(),
+			    logical_type.ToString(), EnumUtil::ToString(physical_type), CompressionTypeToString(compression_type));
+		}
 	}
 }
 
@@ -256,7 +297,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			col.SetType(bound_expression->return_type);
 
 			// Update the type in the binding, for future expansions
-			table_binding->types[i.index] = col.Type();
+			table_binding->SetColumnType(i.index, col.Type());
 		}
 		bound_indices.insert(i);
 	}
@@ -310,21 +351,16 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<Cr
 	return result;
 }
 
-void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unordered_set<string> &gcols,
+void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
                                        bool &contains_gcol) {
-	if (contains_gcol) {
-		return;
-	}
-	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
-		auto &column_ref = expr.Cast<ColumnRefExpression>();
-		auto &name = column_ref.GetColumnName();
-		if (gcols.count(name)) {
-			contains_gcol = true;
-			return;
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { ExpressionContainsGeneratedColumn(child, gcols, contains_gcol); });
+	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
+	                                                               [&](const ColumnRefExpression &column_ref) {
+		                                                               auto &name = column_ref.GetColumnName();
+		                                                               if (gcols.count(name)) {
+			                                                               contains_gcol = true;
+			                                                               return;
+		                                                               }
+	                                                               });
 }
 
 static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
@@ -531,13 +567,15 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
 		FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
 		CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
-		auto &storage = pk_table_entry_ptr.GetStorage();
+		if (pk_table_entry_ptr.IsDuckTable()) {
+			auto &storage = pk_table_entry_ptr.GetStorage();
 
-		if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
-			auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
-			throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
-			                      "present on these columns",
-			                      pk_table_entry_ptr.name, fk_column_names);
+			if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
+				auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+				throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
+				                      "present on these columns",
+				                      pk_table_entry_ptr.name, fk_column_names);
+			}
 		}
 
 		D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
@@ -551,6 +589,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &dependencies = result->dependencies;
+	auto &catalog = schema.ParentCatalog();
+	optional_ptr<StorageManager> storage_manager;
+	if (catalog.IsDuckCatalog() && !catalog.InMemory()) {
+		storage_manager = StorageManager::Get(catalog);
+	}
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {
@@ -603,6 +646,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			}
 			dependencies.AddDependency(entry);
 		});
+
+		auto &config = DBConfig::Get(catalog.GetAttached());
+		VerifyCompressionType(context, storage_manager, config, *result);
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
@@ -635,7 +681,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	return result;
 }
 

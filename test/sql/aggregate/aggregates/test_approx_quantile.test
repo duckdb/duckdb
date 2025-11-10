@@ -2,16 +2,13 @@
 # description: Test approx quantile operator
 # group: [aggregates]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
 statement ok
 PRAGMA verify_external
 
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 statement ok
 create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
@@ -246,6 +243,9 @@ PRAGMA disable_verification;
 
 statement ok
 PRAGMA disable_verify_external;
+
+statement ok
+PRAGMA disable_verify_fetch_row;
 
 statement ok
 SELECT reservoir_quantile(r, 0.9)  from quantile

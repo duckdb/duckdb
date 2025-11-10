@@ -8,6 +8,9 @@ PRAGMA enable_verification
 statement ok
 SET merge_join_threshold=0
 
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
 # Create a range of dates
 statement ok
 create table calendar as SELECT *
@@ -34,6 +37,19 @@ from calendar
 cross join generate_series(1, 85) as n
 
 # Aggregate each table by using a range join
+query II
+explain
+select
+    range,
+    count(*) as n
+from scd2_non_null
+inner join calendar
+    on range between range_start and ifnull(range_end,'2099-01-01')
+group by range
+order by range
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 query II nosort expected
 select
     range,
@@ -45,6 +61,19 @@ group by range
 order by range
 
 # First key should work
+query II
+explain
+select
+	range,
+	count(*) as n
+from scd2
+inner join calendar
+		on range <= ifnull(range_end,'2099-01-01') and range_start <= range
+group by range
+order by range
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 query II nosort expected
 select
 	range,
@@ -56,6 +85,19 @@ group by range
 order by range
 
 # Second key should work
+query II
+explain
+select
+	range,
+	count(*) as n
+from scd2
+inner join calendar
+		on range between range_start and ifnull(range_end,'2099-01-01')
+group by range
+order by range
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 query II nosort expected
 select
 	range,

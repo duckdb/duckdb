@@ -2,7 +2,7 @@
 # description: Test compatibility of ART indexes for different duckdb versions
 # group: [storage]
 
-# data/storage/index_0-9-1.db was written with a 64-bit version of duckdb
+# data/storage/index_0-9-1.db was written with a 64-bit version of duckdb.
 require 64bit
 
 # The database is written with a vector size of 2048.
@@ -219,6 +219,9 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT used_blocks < 2 FROM pragma_database_size();
+SELECT
+CASE WHEN get_block_size('test_art_import') = 16384 THEN used_blocks < 3
+ELSE used_blocks < 2 END
+FROM pragma_database_size();
 ----
 1

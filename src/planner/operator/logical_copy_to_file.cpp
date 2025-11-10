@@ -68,6 +68,8 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(216, "write_partition_columns", write_partition_columns, true);
 	serializer.WritePropertyWithDefault(217, "write_empty_file", write_empty_file, true);
 	serializer.WritePropertyWithDefault(218, "preserve_order", preserve_order, PreserveOrderType::AUTOMATIC);
+	serializer.WritePropertyWithDefault(219, "hive_file_pattern", hive_file_pattern, true);
+	serializer.WritePropertyWithDefault(220, "file_size_bytes", file_size_bytes, optional_idx());
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -115,6 +117,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto write_empty_file = deserializer.ReadPropertyWithExplicitDefault(217, "write_empty_file", true);
 	auto preserve_order =
 	    deserializer.ReadPropertyWithExplicitDefault(218, "preserve_order", PreserveOrderType::AUTOMATIC);
+	auto hive_file_pattern = deserializer.ReadPropertyWithExplicitDefault(219, "hive_file_pattern", true);
+	auto file_size_bytes = deserializer.ReadPropertyWithExplicitDefault(220, "file_size_bytes", optional_idx());
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -122,7 +126,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 			throw InternalException("Copy function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 
-		CopyFunctionBindInput function_bind_input(*copy_info);
+		CopyFunctionBindInput function_bind_input(*copy_info, function.function_info);
 		auto names_to_write = GetNamesWithoutPartitions(names, partition_columns, write_partition_columns);
 		auto types_to_write = GetTypesWithoutPartitions(expected_types, partition_columns, write_partition_columns);
 		bind_data = function.copy_to_bind(context, function_bind_input, names_to_write, types_to_write);
@@ -144,6 +148,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->write_partition_columns = write_partition_columns;
 	result->write_empty_file = write_empty_file;
 	result->preserve_order = preserve_order;
+	result->hive_file_pattern = hive_file_pattern;
+	result->file_size_bytes = file_size_bytes;
 
 	return std::move(result);
 }

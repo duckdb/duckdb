@@ -6,22 +6,35 @@ require icu
 
 # Normalise the testing locale
 statement ok
-SET Calendar = 'hebrew';
-
-statement ok
 SET TimeZone = 'UTC';
 
-query I
-SELECT AGE(timestamptz '2020-01-01' + interval (30) day, timestamptz '2020-01-01')
-----
-1 month
+# Test intervals for lunar calendars
+foreach cal hebrew coptic ethiopic
 
-query I
-SELECT AGE(timestamptz '2020-06-01' + interval (230) day, timestamptz '2020-06-01')
-----
-7 months 23 days
+statement ok
+SET Calendar = '${cal}';
 
-query I
-SELECT AGE(timestamptz '2021-06-01', timestamptz '2020-06-01' + interval (230) day)
+statement error
+select age('2020-01-01'::timestamptz);
 ----
-5 months 7 days
+INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+statement error
+select '2020-01-01'::timestamptz + interval '380 days'
+----
+INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+statement error
+select '2021-01-01'::timestamptz - interval '380 days'
+----
+INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+statement error
+select 
+	'2020-01-01'::timestamptz as start_date,
+	'2021-01-01'::timestamptz as end_date,
+	age(end_date, start_date) as delta;
+----
+INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+endloop

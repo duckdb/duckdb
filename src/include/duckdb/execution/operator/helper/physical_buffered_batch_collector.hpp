@@ -23,10 +23,10 @@ public:
 
 class PhysicalBufferedBatchCollector : public PhysicalResultCollector {
 public:
-	explicit PhysicalBufferedBatchCollector(PreparedStatementData &data);
+	PhysicalBufferedBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
 
 public:
-	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
+	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;
 
 public:
 	// Sink interface

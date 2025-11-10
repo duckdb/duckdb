@@ -2,8 +2,6 @@
 # description: Issue #7711 - Detaching the current database prevents from using another one
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 attach ':memory:' as test;
 

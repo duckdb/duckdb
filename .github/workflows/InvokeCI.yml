@@ -19,6 +19,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  extensions:
+    uses: ./.github/workflows/Extensions.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
+
   osx:
     uses: ./.github/workflows/OSX.yml
     secrets: inherit
@@ -45,40 +54,6 @@ jobs:
       skip_tests: ${{ inputs.skip_tests }}
       run_all: ${{ inputs.run_all }}
 
-  python:
-    uses: ./.github/workflows/Python.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-      run_all: ${{ inputs.run_all }}
-      override_twine_upload: ${{ inputs.twine_upload }}
-
-  pyodide:
-    uses: ./.github/workflows/Pyodide.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-
-  R:
-    uses: ./.github/workflows/R.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-
-  Wasm:
-    uses: ./.github/workflows/Wasm.yml
-    secrets: inherit
-    with:
-      override_git_describe: ${{ inputs.override_git_describe }}
-      git_ref: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests }}
-
   static-libraries:
     uses: ./.github/workflows/BundleStaticLibs.yml
     secrets: inherit
@@ -89,14 +64,12 @@ jobs:
 
   prepare-status:
     runs-on: ubuntu-latest
+    if: always()
     needs:
+      - extensions
       - osx
       - linux-release
       - windows
-      - python
-      - pyodide
-      - R
-      - Wasm
       - static-libraries
     outputs:
       is-success: ${{ steps.set-output.outputs.success }}
@@ -104,40 +77,25 @@ jobs:
       - id: set-output
         shell: bash
         run: |
-          if [[ "${{ needs.osx.result }}" == "success" && \
-                "${{ needs.linux-release.result }}" == "success" && \
+          if [[ "${{ needs.extensions.result }}" == "success" && \
+                "${{ needs.osx.result }}" == "success" && \
                 "${{ needs.linux-release.result }}" == "success" && \
                 "${{ needs.windows.result }}" == "success" && \
-                "${{ needs.python.result }}" == "success" && \
-                "${{ needs.pyodide.result }}" == "success" && \
-                "${{ needs.R.result }}" == "success" && \
-                "${{ needs.Wasm.result }}" == "success" && \
                 "${{ needs.static-libraries.result }}" == "success" ]]; then
-            echo "success='true'" >> $GITHUB_OUTPUT
+            echo "success=true" >> $GITHUB_OUTPUT
           else
-            echo "success='false'" >> $GITHUB_OUTPUT
+            echo "success=false" >> $GITHUB_OUTPUT
           fi
-    
-  notify-external-repos-main:
-    uses: ./.github/workflows/NotifyExternalRepositories.yml
-    secrets: inherit
-    needs: prepare-status  
-    if: ${{ inputs.git_ref == '' && always() }} 
-    with:
-      is-success: ${{ needs.prepare-status.outputs.is-success }}
-      target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ github.ref }}
-      triggering-event: ${{ github.event_name }}
-      should-publish: 'true'
 
-  notify-specific-branch-on-external-repos:
+  notify-external-repos:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
     secrets: inherit
     needs: prepare-status
-    if: ${{ inputs.git_ref != '' && always() }}
+    if: ${{ always() }}
     with:
       is-success: ${{ needs.prepare-status.outputs.is-success }}
-      target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ inputs.git_ref }}
+      target-branch: ${{ inputs.git_ref == '' && github.ref || inputs.git_ref }}
+      duckdb-sha: ${{ github.sha }}
       triggering-event: ${{ github.event_name }}
       should-publish: 'true'
+      override-git-describe: ${{ inputs.override_git_describe }}

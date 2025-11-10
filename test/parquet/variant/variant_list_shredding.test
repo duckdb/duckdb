@@ -1,0 +1,32 @@
+# name: test/parquet/variant/variant_list_shredding.test
+# group: [variant]
+
+require parquet
+
+statement ok
+create macro data() AS TABLE (
+	FROM (VALUES
+		([['test', NULL, 'this is a long string'],[],['hello'],NULL,[],[1, 2, 3]::VARIANT]::VARIANT),
+		(NULL::VARIANT),
+		([]::VARIANT),
+		([[{'a': 'test'}::VARIANT, [1, 2, 3]]::VARIANT, {'a': 21}, {'b': 42}, [['hello']]]),
+		([[], NULL, [1::VARIANT, 2, 'test'],['hello', 'world']]::VARIANT)
+	) t(a)
+)
+
+query I nosort expected_res
+select * from data();
+----
+
+statement ok
+COPY (
+	select a from data()
+) TO '__TEST_DIR__/shredded_list_of_list_of_string.parquet' (
+	shredding {
+		a: 'VARCHAR[][]'
+	}
+)
+
+query I nosort expected_res
+select * from '__TEST_DIR__/shredded_list_of_list_of_string.parquet';
+----

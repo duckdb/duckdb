@@ -32,6 +32,7 @@ class BenchmarkRunnerConfig:
     benchmark_file: str
     verbose: bool = False
     threads: Optional[int] = None
+    memory_limit: Optional[str] = None
     disable_timeout: bool = False
     max_timeout: int = MAX_TIMEOUT
     root_dir: str = ""
@@ -41,6 +42,7 @@ class BenchmarkRunnerConfig:
     def from_params(cls, benchmark_runner, benchmark_file, **kwargs) -> "BenchmarkRunnerConfig":
         verbose = kwargs.get("verbose", False)
         threads = kwargs.get("threads", None)
+        memory_limit = kwargs.get("memory_limit", None)
         disable_timeout = kwargs.get("disable_timeout", False)
         max_timeout = kwargs.get("max_timeout", MAX_TIMEOUT)
         root_dir = kwargs.get("root_dir", "")
@@ -51,6 +53,7 @@ class BenchmarkRunnerConfig:
             benchmark_file=benchmark_file,
             verbose=verbose,
             threads=threads,
+            memory_limit=memory_limit,
             disable_timeout=disable_timeout,
             max_timeout=max_timeout,
             root_dir=root_dir,
@@ -67,6 +70,7 @@ class BenchmarkRunnerConfig:
         parser.add_argument("--benchmarks", type=str, help="Path to the benchmark file.", required=True)
         parser.add_argument("--verbose", action="store_true", help="Enable verbose output.")
         parser.add_argument("--threads", type=int, help="Number of threads to use.")
+        parser.add_argument("--memory_limit", type=str, help="Memory limit to use.")
         parser.add_argument("--disable-timeout", action="store_true", help="Disable timeout.")
         parser.add_argument(
             "--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600)."
@@ -85,6 +89,7 @@ class BenchmarkRunnerConfig:
             benchmark_file=parsed_args.benchmarks,
             verbose=parsed_args.verbose,
             threads=parsed_args.threads,
+            memory_limit=parsed_args.memory_limit,
             disable_timeout=parsed_args.disable_timeout,
             max_timeout=parsed_args.max_timeout,
             root_dir=parsed_args.root_dir,
@@ -108,6 +113,8 @@ class BenchmarkRunner:
             benchmark_args.extend(['--root-dir', self.config.root_dir])
         if self.config.threads:
             benchmark_args.extend([f"--threads={self.config.threads}"])
+        if self.config.memory_limit:
+            benchmark_args.extend([f"--memory_limit={self.config.memory_limit}"])
         if self.config.disable_timeout:
             benchmark_args.extend(["--disable-timeout"])
         if self.config.no_summary:

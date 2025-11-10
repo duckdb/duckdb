@@ -21,9 +21,9 @@ parser.add_argument(
     help='If set will validate that extension_entries.hpp is up to date, otherwise it generates the extension_functions.hpp file.',
 )
 parser.add_argument(
-    '--extension_dir',
+    '--extension_repository',
     action='store',
-    help="The root directory to look for the '<extension_name>/<extension>.duckdb_extension' files",
+    help="The repository to look for the '**/<extension>.duckdb_extension' files",
     default='build/release/repository',
 )
 parser.add_argument(
@@ -44,6 +44,13 @@ args = parser.parse_args()
 EXTENSIONS_PATH = os.path.join("build", "extension_configuration", "extensions.csv")
 DUCKDB_PATH = os.path.join(*args.shell.split('/'))
 HEADER_PATH = os.path.join("src", "include", "duckdb", "main", "extension_entries.hpp")
+
+EXTENSION_DEPENDENCIES = {
+    'iceberg': [
+        'avro',
+        'parquet',
+    ]
+}
 
 from enum import Enum
 
@@ -310,8 +317,8 @@ def check_prerequisites():
         )
         print("* Specify a comma separated list of extensions using --extensions")
         exit(1)
-    if not os.path.isdir(args.extension_dir):
-        print(f"provided --extension_dir '{args.extension_dir}' is not a valid directory")
+    if not os.path.isdir(args.extension_repository):
+        print(f"provided --extension_repository '{args.extension_repository}' is not a valid directory")
         exit(1)
 
 
@@ -439,6 +446,16 @@ class ExtensionData:
         # All function overloads (also ones that will not be written to the file)
         self.all_function_overloads: Dict[Function, List[ExtensionFunctionOverload]] = {}
 
+        self.base_settings: Set[str] = set()
+        self.base_secret_types: Set[str] = set()
+        self.base_functions: Set[Function] = set()
+
+        self.extension_settings: Dict[str, Set[str]] = {}
+        self.extension_secret_types: Dict[str, Set[str]] = {}
+        self.extension_functions: Dict[str, Set[Function]] = {}
+
+        self.added_extensions: Set[str] = set()
+
         # Map of extension -> extension_path
         self.extensions: Dict[str, str] = get_extension_path_map()
 
@@ -460,13 +477,34 @@ class ExtensionData:
         self.settings_map.update(entries.settings)
         self.secret_types_map.update(entries.secret_types)
 
+    def load_dependencies(self, extension_name: str) -> str:
+        if extension_name not in EXTENSION_DEPENDENCIES:
+            return ''
+
+        res = ''
+        dependencies = EXTENSION_DEPENDENCIES[extension_name]
+        for item in dependencies:
+            if item not in self.extensions:
+                print(f"Could not load extension '{extension_name}', dependency '{item}' is missing")
+                exit(1)
+            extension_path = self.extensions[item]
+            print(f"Load {item} at {extension_path}")
+            res += f"LOAD '{extension_path}';"
+        return res
+
     def add_extension(self, extension_name: str):
+        if extension_name in EXTENSION_DEPENDENCIES:
+            for item in EXTENSION_DEPENDENCIES[extension_name]:
+                if item not in self.added_extensions:
+                    self.add_extension(item)
+
         if extension_name in self.extensions:
             # Perform a LOAD and add the added settings/functions/secret_types
             extension_path = self.extensions[extension_name]
 
             print(f"Load {extension_name} at {extension_path}")
-            load = f"LOAD '{extension_path}';"
+            load = self.load_dependencies(extension_name)
+            load += f"LOAD '{extension_path}';"
 
             (functions, function_overloads) = get_functions(load)
             extension_functions = list(functions)
@@ -488,14 +526,26 @@ class ExtensionData:
             self.add_functions(extension_name, extension_functions)
         else:
             error = f"""Missing extension {extension_name} and not found in stored_functions/stored_settings/stored_secret_types
-Please double check if '{args.extension_dir}' is the right location to look for ./**/*.duckdb_extension files"""
+Please double check if '{args.extension_repository}' is the right location to look for ./**/*.duckdb_extension files"""
             print(error)
             exit(1)
+        self.added_extensions.add(extension_name)
 
     def add_settings(self, extension_name: str, settings_list: List[str]):
         extension_name = extension_name.lower()
 
-        added_settings: Set[str] = set(settings_list) - self.base_settings
+        base_settings = set()
+        base_settings.update(self.base_settings)
+        if extension_name in EXTENSION_DEPENDENCIES:
+            dependencies = EXTENSION_DEPENDENCIES[extension_name]
+            for item in dependencies:
+                assert item in self.extension_settings
+                base_settings.update(self.extension_settings[item])
+
+        added_settings: Set[str] = set(settings_list) - base_settings
+
+        self.extension_settings[extension_name] = added_settings
+
         settings_to_add: Dict[str, ExtensionSetting] = {}
         for setting in added_settings:
             setting_name = setting.lower()
@@ -506,7 +556,18 @@ Please double check if '{args.extension_dir}' is the right location to look for 
     def add_secret_types(self, extension_name: str, secret_types_list: List[str]):
         extension_name = extension_name.lower()
 
-        added_secret_types: Set[str] = set(secret_types_list) - self.base_secret_types
+        base_secret_types = set()
+        base_secret_types.update(self.base_secret_types)
+        if extension_name in EXTENSION_DEPENDENCIES:
+            dependencies = EXTENSION_DEPENDENCIES[extension_name]
+            for item in dependencies:
+                assert item in self.extension_secret_types
+                base_secret_types.update(self.extension_secret_types[item])
+
+        added_secret_types: Set[str] = set(secret_types_list) - base_secret_types
+
+        self.extension_secret_types[extension_name] = added_secret_types
+
         secret_types_to_add: Dict[str, ExtensionSecretType] = {}
         for secret_type in added_secret_types:
             secret_type_name = secret_type.lower()
@@ -534,8 +595,19 @@ Please double check if '{args.extension_dir}' is the right location to look for 
     ):
         extension_name = extension_name.lower()
 
+        base_functions = set()
+        base_functions.update(self.base_functions)
+        if extension_name in EXTENSION_DEPENDENCIES:
+            dependencies = EXTENSION_DEPENDENCIES[extension_name]
+            for item in dependencies:
+                assert item in self.extension_functions
+                base_functions.update(self.extension_functions[item])
+
         overloads = self.get_extension_overloads(extension_name, overloads)
-        added_functions: Set[Function] = set(function_list) - self.base_functions
+        added_functions: Set[Function] = set(function_list) - base_functions
+
+        self.extension_functions[extension_name] = added_functions
+
         functions_to_add: Dict[Function, ExtensionFunction] = {}
         for function in added_functions:
             if function in self.function_overloads:
@@ -660,9 +732,9 @@ def print_map_diff(d1, d2):
 
 def get_extension_path_map() -> Dict[str, str]:
     extension_paths: Dict[str, str] = {}
-    # extension_dir = pathlib.Path('../build/release/extension')
-    extension_dir = args.extension_dir
-    for location in glob.iglob(extension_dir + '/**/*.duckdb_extension', recursive=True):
+    # extension_repository = pathlib.Path('../build/release/repository')
+    extension_repository = args.extension_repository
+    for location in glob.iglob(extension_repository + '/**/*.duckdb_extension', recursive=True):
         name, _ = os.path.splitext(os.path.basename(location))
         print(f"Located extension: {name} in path: '{location}'")
         extension_paths[name] = location
@@ -686,11 +758,11 @@ def write_header(data: ExtensionData):
 // NOTE: this file is generated by scripts/generate_extensions_function.py.
 // Example usage to refresh one extension (replace "icu" with the desired extension):
 // GENERATE_EXTENSION_ENTRIES=1 make debug
-// python3 scripts/generate_extensions_function.py --extensions icu --shell build/debug/duckdb --extension_dir build/debug
+// python3 scripts/generate_extensions_function.py --extensions icu --shell build/debug/duckdb --extension_repository build/debug/repository
 
 // Check out the check-load-install-extensions  job in .github/workflows/LinuxRelease.yml for more details
 
-namespace duckdb { 
+namespace duckdb {
 
 struct ExtensionEntry {
     char name[48];
@@ -716,7 +788,8 @@ struct ExtensionFunctionOverloadEntry {
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
-    {"json", "json"}
+    {"json", "json"},
+    {"avro", "avro"}
 }; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -772,6 +845,7 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".gpkg", "spatial"},
     {".fgb", "spatial"},
     {".xlsx", "excel"},
+    {".avro", "avro"},
 }; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -810,6 +884,8 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete",
     "core_functions",
     "delta",
+    "ducklake",
+    "encodings",
     "excel",
     "fts",
     "httpfs",

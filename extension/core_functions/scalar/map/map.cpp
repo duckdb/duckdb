@@ -38,7 +38,6 @@ static bool MapIsNull(DataChunk &chunk) {
 }
 
 static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
-
 	// internal MAP representation
 	// - LIST-vector that contains STRUCTs as child entries
 	// - STRUCTs have exactly two fields, a key-field, and a value-field
@@ -107,7 +106,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	idx_t offset = 0;
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-
 		auto keys_idx = keys_data.sel->get_index(row_idx);
 		auto values_idx = values_data.sel->get_index(row_idx);
 		auto result_idx = result_data.sel->get_index(row_idx);
@@ -128,7 +126,6 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		// set the selection vectors and perform a duplicate key check
 		value_set_t unique_keys;
 		for (idx_t child_idx = 0; child_idx < keys_entry.length; child_idx++) {
-
 			auto key_idx = keys_child_data.sel->get_index(keys_entry.offset + child_idx);
 			auto value_idx = values_child_data.sel->get_index(values_entry.offset + child_idx);
 
@@ -172,52 +169,23 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	result.Verify(row_count);
 }
 
-static unique_ptr<FunctionData> MapBind(ClientContext &, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+ScalarFunctionSet MapFun::GetFunctions() {
+	ScalarFunction empty_func({}, LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL), MapFunction);
+	empty_func.SetFallible();
 
-	if (arguments.size() != 2 && !arguments.empty()) {
-		MapVector::EvalMapInvalidReason(MapInvalidReason::INVALID_PARAMS);
-	}
+	auto key_type = LogicalType::TEMPLATE("K");
+	auto val_type = LogicalType::TEMPLATE("V");
+	ScalarFunction value_func({LogicalType::LIST(key_type), LogicalType::LIST(val_type)},
+	                          LogicalType::MAP(key_type, val_type), MapFunction);
+	value_func.SetFallible();
+	value_func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
-	bool is_null = false;
-	if (arguments.empty()) {
-		is_null = true;
-	}
-	if (!is_null) {
-		auto key_id = arguments[0]->return_type.id();
-		auto value_id = arguments[1]->return_type.id();
-		if (key_id == LogicalTypeId::SQLNULL || value_id == LogicalTypeId::SQLNULL) {
-			is_null = true;
-		}
-	}
+	ScalarFunctionSet set;
 
-	if (is_null) {
-		bound_function.return_type = LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL);
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
-	}
+	set.AddFunction(empty_func);
+	set.AddFunction(value_func);
 
-	// bind a MAP with key-value pairs
-	D_ASSERT(arguments.size() == 2);
-	if (arguments[0]->return_type.id() != LogicalTypeId::LIST) {
-		MapVector::EvalMapInvalidReason(MapInvalidReason::INVALID_PARAMS);
-	}
-	if (arguments[1]->return_type.id() != LogicalTypeId::LIST) {
-		MapVector::EvalMapInvalidReason(MapInvalidReason::INVALID_PARAMS);
-	}
-
-	auto key_type = ListType::GetChildType(arguments[0]->return_type);
-	auto value_type = ListType::GetChildType(arguments[1]->return_type);
-
-	bound_function.return_type = LogicalType::MAP(key_type, value_type);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
-}
-
-ScalarFunction MapFun::GetFunction() {
-	ScalarFunction fun({}, LogicalTypeId::MAP, MapFunction, MapBind);
-	fun.varargs = LogicalType::ANY;
-	BaseScalarFunction::SetReturnsError(fun);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return fun;
+	return set;
 }
 
 } // namespace duckdb

@@ -21,13 +21,11 @@
 #include "decoder/delta_length_byte_array_decoder.hpp"
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "parquet_column_schema.hpp"
-#ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
-#endif
 
 namespace duckdb {
 class ParquetReader;

@@ -2,8 +2,6 @@
 # description: Test attach and re-attach with serialized dependencies
 # group: [attach]
 
-require noforcestorage
-
 statement ok
 set storage_compatibility_version='latest';
 
@@ -23,7 +21,10 @@ statement ok
 CREATE TABLE B(B1 INTEGER REFERENCES A(A1));
 
 statement ok
-use memory;
+attach '__TEST_DIR__/db1_other.db';
+
+statement ok
+USE db1_other;
 
 statement ok
 detach db1;
@@ -54,7 +55,7 @@ statement ok
 CREATE TABLE B(B1 INTEGER REFERENCES A(A1));
 
 statement ok
-use memory;
+USE db1_other;
 
 statement ok
 detach db2;

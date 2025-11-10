@@ -4,8 +4,6 @@
 
 require no_alternative_verify
 
-require skip_reload
-
 # The database is written with a vector size of 2048.
 require vector_size 2048
 

@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-HasCorrelatedExpressions::HasCorrelatedExpressions(const vector<CorrelatedColumnInfo> &correlated, bool lateral,
+HasCorrelatedExpressions::HasCorrelatedExpressions(const CorrelatedColumns &correlated, bool lateral,
                                                    idx_t lateral_depth)
     : has_correlated_expressions(false), lateral(lateral), correlated_columns(correlated),
       lateral_depth(lateral_depth) {
@@ -43,7 +43,7 @@ unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpr
 	}
 	// correlated column reference
 	D_ASSERT(expr.depth == lateral_depth + 1);
-	has_correlated_expressions = found_match;
+	has_correlated_expressions |= found_match;
 	return nullptr;
 }
 

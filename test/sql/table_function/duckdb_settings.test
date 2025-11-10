@@ -11,7 +11,7 @@ SELECT * FROM duckdb_settings();
 query II
 SELECT name, value FROM duckdb_settings() WHERE name='default_null_order';
 ----
-default_null_order	nulls_first
+default_null_order	NULLS_FIRST
 
 statement ok
 SET default_null_order='nulls_last'
@@ -19,4 +19,4 @@ SET default_null_order='nulls_last'
 query II
 SELECT name, value FROM duckdb_settings() WHERE name='default_null_order';
 ----
-default_null_order	nulls_last
+default_null_order	NULLS_LAST

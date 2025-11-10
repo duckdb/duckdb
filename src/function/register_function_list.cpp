@@ -4,7 +4,7 @@
 #include "duckdb/function/register_function_list_helper.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 
 namespace duckdb {
 
@@ -34,8 +34,8 @@ struct ExtensionRegister {
 	}
 
 	template <class T>
-	static void RegisterFunction(DatabaseInstance &db, T &info) {
-		ExtensionUtil::RegisterFunction(db, std::move(info));
+	static void RegisterFunction(ExtensionLoader &loader, T &info) {
+		loader.RegisterFunction(std::move(info));
 	}
 };
 
@@ -81,8 +81,8 @@ static void RegisterFunctionList(REGISTER_CONTEXT &context, const StaticFunction
 	}
 }
 
-void FunctionList::RegisterExtensionFunctions(DatabaseInstance &db, const StaticFunctionDefinition *functions) {
-	RegisterFunctionList<ExtensionRegister>(db, functions);
+void FunctionList::RegisterExtensionFunctions(ExtensionLoader &loader, const StaticFunctionDefinition *functions) {
+	RegisterFunctionList<ExtensionRegister>(loader, functions);
 }
 
 void FunctionList::RegisterFunctions(Catalog &catalog, CatalogTransaction transaction) {

@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
-class LogicalRecursiveCTE : public LogicalOperator {
-	LogicalRecursiveCTE() : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+class LogicalRecursiveCTE : public LogicalCTE {
+	LogicalRecursiveCTE() : LogicalCTE(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 	}
 
 public:
@@ -24,25 +25,19 @@ public:
 	LogicalRecursiveCTE(string ctename_p, idx_t table_index, idx_t column_count, bool union_all,
 	                    vector<unique_ptr<Expression>> key_targets, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all),
-	      ctename(std::move(ctename_p)), table_index(table_index), column_count(column_count),
-	      key_targets(std::move(key_targets)) {
-
-		children.push_back(std::move(top));
-		children.push_back(std::move(bottom));
+	    : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(top), std::move(bottom),
+	                 LogicalOperatorType::LOGICAL_RECURSIVE_CTE),
+	      union_all(union_all), key_targets(std::move(key_targets)) {
 	}
 
 	bool union_all;
 	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
 	bool ref_recurring;
-	string ctename;
-	idx_t table_index;
-	idx_t column_count;
-
 	vector<unique_ptr<Expression>> key_targets;
-	vector<CorrelatedColumnInfo> correlated_columns;
 
 public:
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, column_count);
 	}

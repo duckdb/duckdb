@@ -2,8 +2,6 @@
 # description: Test attach mixed with sequences and default values
 # group: [attach]
 
-require skip_reload
-
 # The database is written with a vector size of 2048.
 require vector_size 2048
 

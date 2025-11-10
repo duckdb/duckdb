@@ -19,16 +19,15 @@ public:
 	MultiFileColumnMapper(ClientContext &context, MultiFileReader &multi_file_reader, MultiFileReaderData &reader_data,
 	                      const vector<MultiFileColumnDefinition> &global_columns,
 	                      const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
-	                      const OpenFileInfo &initial_file, const MultiFileReaderBindData &bind_data,
-	                      const virtual_column_map_t &virtual_columns);
+	                      MultiFileList &multi_file_list, const virtual_column_map_t &virtual_columns);
 
 public:
-	ReaderInitializeType CreateMapping();
+	ReaderInitializeType CreateMapping(MultiFileColumnMappingMode mapping_mode);
 
 	void ThrowColumnNotFoundError(const string &global_column_name) const;
 
 private:
-	ResultColumnMapping CreateColumnMapping();
+	ResultColumnMapping CreateColumnMapping(MultiFileColumnMappingMode mapping_mode);
 	ResultColumnMapping CreateColumnMappingByMapper(const ColumnMapper &mapper);
 
 	unique_ptr<TableFilterSet> CreateFilters(map<idx_t, reference<TableFilter>> &filters, ResultColumnMapping &mapping);
@@ -40,12 +39,11 @@ private:
 private:
 	ClientContext &context;
 	MultiFileReader &multi_file_reader;
+	MultiFileList &multi_file_list;
 	MultiFileReaderData &reader_data;
 	const vector<MultiFileColumnDefinition> &global_columns;
 	const vector<ColumnIndex> &global_column_ids;
 	optional_ptr<TableFilterSet> global_filters;
-	const OpenFileInfo &initial_file;
-	const MultiFileReaderBindData &bind_data;
 	const virtual_column_map_t &virtual_columns;
 };
 

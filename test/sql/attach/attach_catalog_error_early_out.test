@@ -1,0 +1,19 @@
+# name: test/sql/attach/attach_catalog_error_early_out.test
+# description: Test limiting 'did you mean' to the same schema.
+# group: [attach]
+
+statement ok
+SET catalog_error_max_schemas = 0;
+
+loop i 0 10
+
+statement ok
+ATTACH '__TEST_DIR__/did_you_mean_db_${i}.db';
+
+endloop
+
+statement error
+FROM tbl;
+----
+Catalog Error: Table with name tbl does not exist!
+Did you mean "pg_tablespace"?

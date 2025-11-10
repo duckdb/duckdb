@@ -11,7 +11,7 @@ PRAGMA verify_parallelism
 
 # CSV file with irregularity in first column and default sample size
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/test_fallback.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/test_fallback.csv');
 
 query TTTT
 SELECT typeof(TestDoubleError), typeof(TestDouble), typeof(TestText), typeof(TestInteger) FROM test LIMIT 1
@@ -25,14 +25,14 @@ loop i 1 100
 
 # CSV file with irregularity in first column and small sample size
 statement error
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/test_fallback.csv', SAMPLE_SIZE=1);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/test_fallback.csv', SAMPLE_SIZE=1);
 ----
 Column TestDoubleError is being converted as type DOUBLE
 
 endloop
 # CSV file with irregularity in first column, small sample size and fallback activated
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/test_fallback.csv', SAMPLE_SIZE=1, ALL_VARCHAR=1);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/test_fallback.csv', SAMPLE_SIZE=1, ALL_VARCHAR=1);
 
 query TTTT
 SELECT typeof(TestDoubleError), typeof(TestDouble), typeof(TestText), typeof(TestInteger) FROM test LIMIT 1

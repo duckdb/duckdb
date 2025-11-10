@@ -5,10 +5,10 @@
 require parquet
 
 query I nosort query
-select * from 'data/parquet-testing/leftdate3_192_loop_1.parquet'
+select * from '{DATA_DIR}/parquet-testing/leftdate3_192_loop_1.parquet'
 
 statement ok
-create table test as select * from 'data/parquet-testing/leftdate3_192_loop_1.parquet'
+create table test as select * from '{DATA_DIR}/parquet-testing/leftdate3_192_loop_1.parquet'
 
 query I nosort query
 select * from test

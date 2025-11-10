@@ -1,0 +1,52 @@
+# name: test/sql/storage/encryption/temp_files/encrypted_tmp_file_setting.test
+# group: [temp_files]
+
+foreach cipher GCM CTR
+
+require block_size 262144
+
+statement ok
+SET temp_directory='__TEST_DIR__/test_temp_dir'
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
+
+statement ok
+USE enc;
+
+# we do not encrypt temporary files at all
+statement ok
+SET temp_file_encryption = false;
+
+statement ok
+SET memory_limit = '8MB';
+
+statement ok
+SET enable_external_access=false
+
+statement error
+SET temp_directory='__TEST_DIR__/new_temp_dir'
+----
+disabled by configuration
+
+statement error
+RESET temp_directory
+----
+disabled by configuration
+
+# temp files are not encrypted
+statement ok
+CREATE TEMPORARY TABLE tbl AS FROM range(10_000_000)
+
+# note; you should be very careful using this
+# If some tmp files are encrypted and others not
+# this will lead to corrupt files
+# therefore, this is disabled
+statement error
+SET temp_file_encryption = true;
+----
+Permission Error: Existing temporary files found: Modifying the temp_file_encryption setting while there are existing temporary files is disabled.
+
+restart
+
+endloop

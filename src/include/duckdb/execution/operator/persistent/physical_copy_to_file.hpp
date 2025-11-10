@@ -33,8 +33,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::COPY_TO_FILE;
 
 public:
-	PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
-	                   idx_t estimated_cardinality);
+	PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
+	                   unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
 
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
@@ -52,6 +52,7 @@ public:
 	bool partition_output;
 	bool write_partition_columns;
 	bool write_empty_file;
+	bool hive_file_pattern;
 	vector<idx_t> partition_columns;
 	vector<string> names;
 	vector<LogicalType> expected_types;

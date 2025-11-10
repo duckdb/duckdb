@@ -48,13 +48,21 @@ copy (from tbl where i = 20000) to '__TEST_DIR__/empty.parquet' (WRITE_EMPTY_FIL
 
 endloop
 
+# write_empty_file with file_size_bytes
+query I
+copy (select 42 where 42=84) to '__TEST_DIR__/empty_file_size_bytes/' (FORMAT PARQUET, WRITE_EMPTY_FILE false, FILENAME_PATTERN '{uuidv7}.parquet', FILE_SIZE_BYTES 128)
+----
+0
+
+query I
+SELECT COUNT(*) FROM glob('__TEST_DIR__/empty_file_size_bytes/*.parquet')
+----
+0
+
+statement ok
+copy tbl to '__TEST_DIR__/empty_row_groups_per_file.parquet' (WRITE_EMPTY_FILE false, ROW_GROUPS_PER_FILE 1)
 
 # these combinations are not allowed
-statement error
-copy tbl to '__TEST_DIR__/empty.parquet' (WRITE_EMPTY_FILE false, ROW_GROUPS_PER_FILE 1)
-----
-Can't combine
-
 statement error
 copy empty_tbl to '__TEST_DIR__/empty.parquet' (WRITE_EMPTY_FILE false, PARTITION_BY (i))
 ----

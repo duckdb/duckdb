@@ -5,13 +5,13 @@
 require parquet
 
 statement error
-SELECT * FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1)
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1)
 ----
 schema mismatch
 
 query IIII
 SELECT i, j, k, x
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=0, union_by_name=1)
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=0, union_by_name=1)
 ORDER BY j, x NULLS LAST
 ----
 42	84	NULL	1
@@ -20,7 +20,7 @@ NULL	128	33	NULL
 
 query IIII
 SELECT i, j, k, x
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
 ORDER BY j
 ----
 42	84	NULL	1
@@ -29,7 +29,7 @@ NULL	128	33	2
 
 query IIII
 SELECT i, j, k, x
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
 WHERE x=2
 ORDER BY j
 ----
@@ -41,7 +41,7 @@ CREATE TABLE selected_values AS SELECT 2 x
 
 query IIII
 SELECT i, j, k, x
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
 WHERE x=(SELECT MAX(x) FROM selected_values)
 ORDER BY j
 ----
@@ -49,7 +49,7 @@ NULL	128	33	2
 
 query IIII
 SELECT i, j, k, x
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
 ORDER BY j
 ----
 42	84	NULL	1
@@ -57,7 +57,7 @@ NULL	128	33	2
 
 query IIII
 SELECT i, j, k, x
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
 WHERE k IS NULL
 ORDER BY j
 ----
@@ -65,7 +65,7 @@ ORDER BY j
 
 query IIII
 SELECT i, j, k, x
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
 WHERE k IS NOT DISTINCT FROM NULL
 ORDER BY j
 ----
@@ -73,39 +73,39 @@ ORDER BY j
 
 query IIII
 SELECT i, j, k, x
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
 WHERE k>0
 ORDER BY j
 ----
 NULL	128	33	2
 
 query IIIII
-SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
+SELECT i, j, k, x, parse_path(filename)[-2]
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
 WHERE k>0
 ORDER BY j
 ----
 NULL	128	33	2	x=2
 
 query IIIII
-SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
-WHERE filename.replace('\', '/') >= 'data/parquet-testing/hive-partitioning/union_by_name/x=2'
+SELECT i, j, k, x, parse_path(filename)[-2]
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
+WHERE parse_path(filename) >= parse_path('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/x=2')
 ORDER BY j
 ----
 NULL	128	33	2	x=2
 
 query IIIII
-SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
-WHERE filename.replace('\', '/') < 'data/parquet-testing/hive-partitioning/union_by_name/x=2'
+SELECT i, j, k, x, parse_path(filename)[-2]
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
+WHERE parse_path(filename) < parse_path('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/x=2')
 ORDER BY j
 ----
 42	84	NULL	1	x=1
 
 query IIIII
 SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
-FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
-WHERE filename.replace('\', '/') < 'data/parquet-testing/hive-partitioning/union_by_name/x=1'
+FROM read_parquet('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
+WHERE parse_path(filename) < parse_path('{DATA_DIR}/parquet-testing/hive-partitioning/union_by_name/x=1')
 ORDER BY j
 ----

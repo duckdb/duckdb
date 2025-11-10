@@ -2,8 +2,6 @@
 # description: Test that we revert the global storage correctly after a constraint violation
 # group: [transactions]
 
-require skip_reload
-
 statement ok
 PRAGMA enable_verification
 
@@ -34,6 +32,7 @@ COMMIT;
 statement error con2
 COMMIT;
 ----
+PRIMARY KEY or UNIQUE constraint violation
 
 statement ok
 INSERT INTO integers SELECT i FROM range(2, 4097, 1) t1(i)

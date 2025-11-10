@@ -5,6 +5,7 @@
 //
 //
 //===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/stack.hpp"
@@ -20,24 +21,16 @@ enum class ARTScanHandling : uint8_t {
 	POP,
 };
 
-enum class ARTScanHandlingResult : uint8_t {
-	CONTINUE,
-	SKIP,
-	YIELD,
-};
-
+//! ARTScanner scans the entire ART and processes each node.
 template <ARTScanHandling HANDLING, class NODE>
 class ARTScanner {
 public:
-	explicit ARTScanner(ART &art) : art(art) {
-	}
-
-public:
 	template <class FUNC>
-	void Init(FUNC &&handler, NODE &root) {
+	explicit ARTScanner(ART &art, FUNC &&handler, NODE &root) : art(art) {
 		Emplace(handler, root);
 	}
 
+public:
 	template <class FUNC>
 	void Scan(FUNC &&handler) {
 		while (!s.empty()) {
@@ -48,7 +41,7 @@ public:
 			}
 			entry.exhausted = true;
 
-			auto type = entry.node.GetType();
+			const auto type = entry.node.GetType();
 			switch (type) {
 			case NType::LEAF_INLINED:
 			case NType::LEAF:
@@ -79,7 +72,7 @@ public:
 				break;
 			}
 			default:
-				throw InternalException("invalid node type for ART ScanHandleLast: %s", EnumUtil::ToString(type));
+				throw InternalException("invalid node type for ART ARTScanner: %d", type);
 			}
 		}
 	}
@@ -88,9 +81,11 @@ private:
 	template <class FUNC>
 	void Emplace(FUNC &&handler, NODE &node) {
 		if (HANDLING == ARTScanHandling::EMPLACE) {
-			if (handler(node) == ARTScanHandlingResult::SKIP) {
+			auto result = handler(node);
+			if (result == ARTHandlingResult::SKIP) {
 				return;
 			}
+			D_ASSERT(result == ARTHandlingResult::CONTINUE);
 		}
 		s.emplace(node);
 	}
@@ -111,7 +106,9 @@ private:
 
 private:
 	struct NodeEntry {
+		NodeEntry() = delete;
 		explicit NodeEntry(NODE &node) : node(node), exhausted(false) {};
+
 		NODE &node;
 		bool exhausted;
 	};

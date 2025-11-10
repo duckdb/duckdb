@@ -1,92 +1,38 @@
-diff --git a/extension/httpfs/hffs.cpp b/extension/httpfs/hffs.cpp
-index 0273141..7ef5432 100644
---- a/extension/httpfs/hffs.cpp
-+++ b/extension/httpfs/hffs.cpp
-@@ -201,7 +201,7 @@ end:
- // - hf://datasets/lhoestq/demo1/default/train/*.parquet
- // - hf://datasets/lhoestq/demo1/*/train/file_[abc].parquet
- // - hf://datasets/lhoestq/demo1/**/train/*.parquet
--vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opener) {
-+vector<OpenFileInfo> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opener) {
- 	// Ensure the glob pattern is a valid HF url
- 	auto parsed_glob_url = HFUrlParse(path);
- 	auto first_wildcard_pos = parsed_glob_url.path.find_first_of("*[\\");
-@@ -251,7 +251,7 @@ vector<string> HuggingFaceFileSystem::Glob(const string &path, FileOpener *opene
+diff --git a/src/s3fs.cpp b/src/s3fs.cpp
+index 72eddc3..601ecba 100644
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -895,7 +895,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 						correct_region = new_region->second;
+ 					}
+ 					auto extra_text = S3FileSystem::GetS3BadRequestError(auth_params, correct_region);
+-					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
++					throw Exception(extra_info, error.Type(), error.RawMessage() + extra_text);
+ 				}
+ 				if (entry->second == "403") {
+ 					// 403: FORBIDDEN
+@@ -905,7 +905,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 					} else {
+ 						extra_text = S3FileSystem::GetS3AuthError(auth_params);
+ 					}
+-					throw Exception(error.Type(), error.RawMessage() + extra_text, extra_info);
++					throw Exception(extra_info, error.Type(), error.RawMessage() + extra_text);
+ 				}
+ 			}
+ 			throw;
+@@ -941,13 +941,13 @@ bool S3FileSystem::CanHandleFile(const string &fpath) {
+ void S3FileSystem::RemoveFile(const string &path, optional_ptr<FileOpener> opener) {
+ 	auto handle = OpenFile(path, FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
+ 	if (!handle) {
+-		throw IOException("Could not remove file \"%s\": %s", {{"errno", "404"}}, path, "No such file or directory");
++		throw IOException({{"errno", "404"}}, "Could not remove file \"%s\": %s", path, "No such file or directory");
  	}
- 
- 	vector<string> pattern_splits = StringUtil::Split(parsed_glob_url.path, "/");
--	vector<string> result;
-+	vector<OpenFileInfo> result;
- 	for (const auto &file : files) {
- 
- 		vector<string> file_splits = StringUtil::Split(file, "/");
-diff --git a/extension/httpfs/include/hffs.hpp b/extension/httpfs/include/hffs.hpp
-index 27f44c3..49c7f83 100644
---- a/extension/httpfs/include/hffs.hpp
-+++ b/extension/httpfs/include/hffs.hpp
-@@ -22,7 +22,7 @@ class HuggingFaceFileSystem : public HTTPFileSystem {
- public:
- 	~HuggingFaceFileSystem() override;
- 
--	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
-+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
- 
- 	duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string hf_url, HeaderMap header_map) override;
- 	duckdb::unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string hf_url, HeaderMap header_map) override;
-diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
-index 9dc9eda..e2fac97 100644
---- a/extension/httpfs/include/httpfs.hpp
-+++ b/extension/httpfs/include/httpfs.hpp
-@@ -148,7 +148,7 @@ public:
- 	static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> InitializeHeaders(HeaderMap &header_map,
- 	                                                                             const HTTPParams &http_params);
- 
--	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
-+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
- 		return {path}; // FIXME
+
+ 	auto &s3fh = handle->Cast<S3FileHandle>();
+ 	auto res = DeleteRequest(*handle, s3fh.path, {});
+ 	if (res->status != HTTPStatusCode::OK_200 && res->status != HTTPStatusCode::NoContent_204) {
+-		throw IOException("Could not remove file \"%s\": %s", {{"errno", to_string(static_cast<int>(res->status))}},
++		throw IOException({{"errno", to_string(static_cast<int>(res->status))}}, "Could not remove file \"%s\": %s",
+ 		                  path, res->GetError());
  	}
- 
-diff --git a/extension/httpfs/include/s3fs.hpp b/extension/httpfs/include/s3fs.hpp
-index c8fd897..8e8a4df 100644
---- a/extension/httpfs/include/s3fs.hpp
-+++ b/extension/httpfs/include/s3fs.hpp
-@@ -211,7 +211,7 @@ public:
- 	// Note: caller is responsible to not call this method twice on the same buffer
- 	static void UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer);
- 
--	vector<string> Glob(const string &glob_pattern, FileOpener *opener = nullptr) override;
-+	vector<OpenFileInfo> Glob(const string &glob_pattern, FileOpener *opener = nullptr) override;
- 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
- 	               FileOpener *opener = nullptr) override;
- 
-diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
-index 48a6ce5..4898c36 100644
---- a/extension/httpfs/s3fs.cpp
-+++ b/extension/httpfs/s3fs.cpp
-@@ -887,7 +887,7 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
- 	return key == key_end && pattern == pattern_end;
  }
- 
--vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener) {
-+vector<OpenFileInfo> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener) {
- 	if (opener == nullptr) {
- 		throw InternalException("Cannot S3 Glob without FileOpener");
- 	}
-@@ -950,7 +950,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
- 	} while (!main_continuation_token.empty());
- 
- 	vector<string> pattern_splits = StringUtil::Split(parsed_s3_url.key, "/");
--	vector<string> result;
-+	vector<OpenFileInfo> result;
- 	for (const auto &s3_key : s3_keys) {
- 
- 		vector<string> key_splits = StringUtil::Split(s3_key, "/");
-@@ -983,7 +983,7 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
- 	}
- 
- 	for (const auto &file : glob_res) {
--		callback(file, false);
-+		callback(file.path, false);
- 	}
- 
- 	return true;

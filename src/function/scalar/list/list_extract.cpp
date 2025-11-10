@@ -137,14 +137,7 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
                                                 vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-
-	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
-	// list extract returns the child type of the list as return type
-	auto child_type = ListType::GetChildType(arguments[0]->return_type);
-
-	bound_function.return_type = child_type;
-	bound_function.arguments[0] = LogicalType::LIST(child_type);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	return nullptr;
 }
 
 static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -160,12 +153,12 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 	ScalarFunctionSet list_extract_set("list_extract");
 
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
-	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
+	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
+	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
-	BaseScalarFunction::SetReturnsError(lfun);
-	BaseScalarFunction::SetReturnsError(sfun);
+	lfun.SetFallible();
+	sfun.SetFallible();
 	list_extract_set.AddFunction(lfun);
 	list_extract_set.AddFunction(sfun);
 	return list_extract_set;
@@ -175,8 +168,8 @@ ScalarFunctionSet ArrayExtractFun::GetFunctions() {
 	ScalarFunctionSet array_extract_set("array_extract");
 
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
-	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
+	ScalarFunction lfun({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::BIGINT},
+	                    LogicalType::TEMPLATE("T"), ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 

@@ -40,7 +40,7 @@ SELECT * FROM tbl ORDER BY COLUMNS('col2') DESC, COLUMNS('col3') ASC
 2	100	20
 
 query III
-SELECT * FROM tbl ORDER BY COLUMNS(x -> x[-1] IN ('2', '3'))
+SELECT * FROM tbl ORDER BY COLUMNS(lambda x: x[-1] IN ('2', '3'))
 ----
 2	100	20
 3	200	0

@@ -5,4 +5,4 @@
 require json
 
 statement ok
-FROM read_json('data/json/internal_4014.json', map_inference_threshold=0);
+FROM read_json('{DATA_DIR}/json/internal_4014.json', map_inference_threshold=0);

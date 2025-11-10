@@ -9,7 +9,7 @@ pragma enable_verification
 statement error
 copy (
 select '2021-05-25 04:55:03.382494 UTC'::timestamp as ts, '2021-05-25 04:55:03.382494 UTC'::timestamptz as tstz
-) to '__TEST_DIR__/timestamps.csv' ( timestampformat '%A');
+) to '{TEMP_DIR}/timestamps.csv' ( timestampformat '%A');
 ----
 No function matches the given name and argument types
 
@@ -22,7 +22,7 @@ SET TimeZone='UTC'
 
 # If we set to timestamptz it works
 query II
-FROM read_csv('data/csv/timestamp_timezone.csv', columns = {'time':'timestamptz', 'description':'varchar'})
+FROM read_csv('{DATA_DIR}/csv/timestamp_timezone.csv', columns = {'time':'timestamptz', 'description':'varchar'})
 ----
 2020-01-01 00:00:00+00	midnight local
 2020-01-01 08:00:00+00	midnight in San Francisco
@@ -34,7 +34,7 @@ FROM read_csv('data/csv/timestamp_timezone.csv', columns = {'time':'timestamptz'
 2020-01-01 03:30:00+00	Canada/Newfoundland
 
 query II
-FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEAN', 'BIGINT', 'DOUBLE', 'TIME', 'DATE', 'TIMESTAMP','TIMESTAMPTZ', 'VARCHAR'])
+FROM read_csv('{DATA_DIR}/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEAN', 'BIGINT', 'DOUBLE', 'TIME', 'DATE', 'TIMESTAMP','TIMESTAMPTZ', 'VARCHAR'])
 ----
 2020-01-01 00:00:00+00	midnight local
 2020-01-01 08:00:00+00	midnight in San Francisco
@@ -47,7 +47,7 @@ FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEA
 
 
 query II
-FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEAN', 'BIGINT', 'DOUBLE', 'TIME', 'DATE', 'TIMESTAMPTZ', 'VARCHAR'])
+FROM read_csv('{DATA_DIR}/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEAN', 'BIGINT', 'DOUBLE', 'TIME', 'DATE', 'TIMESTAMPTZ', 'VARCHAR'])
 ----
 2020-01-01 00:00:00+00	midnight local
 2020-01-01 08:00:00+00	midnight in San Francisco
@@ -59,12 +59,12 @@ FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEA
 2020-01-01 03:30:00+00	Canada/Newfoundland
 
 query I
-SELECT columns FROM sniff_csv('data/csv/timestamp_timezone.csv')
+SELECT columns FROM sniff_csv('{DATA_DIR}/csv/timestamp_timezone.csv')
 ----
 [{'name': time, 'type': TIMESTAMP WITH TIME ZONE}, {'name': description, 'type': VARCHAR}]
 
 query II
-FROM 'data/csv/timestamp_timezone.csv'
+FROM '{DATA_DIR}/csv/timestamp_timezone.csv'
 ----
 2020-01-01 00:00:00+00	midnight local
 2020-01-01 08:00:00+00	midnight in San Francisco
@@ -77,12 +77,12 @@ FROM 'data/csv/timestamp_timezone.csv'
 
 
 query I
-SELECT columns FROM sniff_csv('data/csv/timestamp_with_tz.csv')
+SELECT columns FROM sniff_csv('{DATA_DIR}/csv/timestamp_with_tz.csv')
 ----
 [{'name': id, 'type': BIGINT}, {'name': timestamps, 'type': TIMESTAMP WITH TIME ZONE}]
 
 query II
-FROM 'data/csv/timestamp_with_tz.csv'
+FROM '{DATA_DIR}/csv/timestamp_with_tz.csv'
 ----
 1	2021-05-25 04:55:03.382494+00
 2	2021-05-25 09:55:03.382494+00
@@ -92,10 +92,10 @@ statement ok
 create table t as SELECT '1; 2020-01-01 00:00:00+00' as ts from range (10000)
 
 statement ok
-copy t to '__TEST_DIR__/timetz.csv'
+copy t to '{TEMP_DIR}/timetz.csv'
 
 query I
-SELECT columns FROM sniff_csv('__TEST_DIR__/timetz.csv')
+SELECT columns FROM sniff_csv('{TEMP_DIR}/timetz.csv')
 ----
 [{'name': column0, 'type': BIGINT}, {'name': column1, 'type': TIMESTAMP WITH TIME ZONE}]
 
@@ -103,10 +103,10 @@ statement ok
 insert into t values ('2; thisisastring')
 
 statement ok
-copy t to '__TEST_DIR__/timetz_2.csv'
+copy t to '{TEMP_DIR}/timetz_2.csv'
 
 query I
-SELECT columns FROM sniff_csv('__TEST_DIR__/timetz_2.csv')
+SELECT columns FROM sniff_csv('{TEMP_DIR}/timetz_2.csv')
 ----
 [{'name': column0, 'type': BIGINT}, {'name': column1, 'type': VARCHAR}]
 

@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IT
-SELECT * FROM read_csv('data/csv/unquoted_escape/plain.csv', escape = '\', sep = ',', strict_mode = false, nullstr = '\N');
+SELECT * FROM read_csv('{DATA_DIR}/csv/unquoted_escape/plain.csv', escape = '\', sep = ',', strict_mode = false, nullstr = '\N');
 ----
 0	\
 1	,
@@ -36,7 +36,7 @@ loop buffer_size 10 25
 
 # replace CRLF with LF to pass the test on Windows
 query I
-SELECT bool_and(b = replace(s, E'\r\n', E'\n'))::int FROM special_char JOIN read_csv('data/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t', strict_mode = false) t (i, s, j) ON i = a;
+SELECT bool_and(b = replace(s, E'\r\n', E'\n'))::int FROM special_char JOIN read_csv('{DATA_DIR}/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t', strict_mode = false) t (i, s, j) ON i = a;
 ----
 1
 

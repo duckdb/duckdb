@@ -70,7 +70,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	order_errors.SetValue(2, "TOO MANY COLUMNS");
 	order_errors.SetValue(3, "UNQUOTED VALUE");
 	order_errors.SetValue(4, "LINE SIZE OVER MAXIMUM");
-	order_errors.SetValue(5, "INVALID UNICODE");
+	order_errors.SetValue(5, "INVALID ENCODING");
 	order_errors.SetValue(6, "INVALID STATE");
 
 	LogicalType enum_type = LogicalType::ENUM(enum_name, order_errors, number_of_accepted_errors);

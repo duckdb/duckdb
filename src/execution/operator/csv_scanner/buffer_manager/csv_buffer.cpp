@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -31,12 +32,12 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
 	last_buffer = file_handle.FinishedReading();
 }
 
-shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, bool &has_seaked) const {
-	if (has_seaked) {
+shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, bool &has_seeked) const {
+	if (has_seeked) {
 		// This means that at some point a reload was done, and we are currently on the incorrect position in our file
 		// handle
 		file_handle.Seek(global_csv_start + actual_buffer_size);
-		has_seaked = false;
+		has_seeked = false;
 	}
 	auto next_csv_buffer = make_shared_ptr<CSVBuffer>(file_handle, context, buffer_size,
 	                                                  global_csv_start + actual_buffer_size, buffer_idx + 1);
@@ -68,7 +69,7 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 
 shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	if (!is_pipe && block->IsUnloaded()) {
+	if (!block || (!is_pipe && block->IsUnloaded())) {
 		// We have to reload it from disk
 		block = nullptr;
 		Reload(file_handle);

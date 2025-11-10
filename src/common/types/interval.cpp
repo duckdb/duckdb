@@ -313,6 +313,25 @@ int64_t Interval::GetMilli(const interval_t &val) {
 	return milli;
 }
 
+bool Interval::TryGetMicro(const interval_t &val, int64_t &micro_total) {
+	int64_t micro_month, micro_day;
+	micro_total = val.micros;
+	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH, micro_month)) {
+		return false;
+	}
+	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY, micro_day)) {
+		return false;
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(micro_total, micro_month, micro_total)) {
+		return false;
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(micro_total, micro_day, micro_total)) {
+		return false;
+	}
+
+	return true;
+}
+
 int64_t Interval::GetMicro(const interval_t &val) {
 	int64_t micro_month, micro_day, micro_total;
 	micro_total = val.micros;

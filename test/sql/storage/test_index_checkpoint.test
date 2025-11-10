@@ -2,8 +2,6 @@
 # description: Verify that database footprint remains within expected bounds when writing index data.
 # group: [storage]
 
-require skip_reload
-
 load __TEST_DIR__/index_checkpoint.db
 
 # ensure we do not checkpoint early

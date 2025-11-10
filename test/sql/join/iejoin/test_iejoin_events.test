@@ -14,8 +14,7 @@ statement ok
 SET merge_join_threshold=0
 
 # Use small 1K table to test Q2 because it melts down the other operators at larger scales
-statement ok
-SELECT SETSEED(0.8675309);
+set seed 0.8675309
 
 statement ok
 CREATE TABLE events AS (
@@ -34,6 +33,17 @@ CREATE TABLE events AS (
 		FROM range(1, 1000) tbl(id)
 	) q
 );
+
+query II
+EXPLAIN
+SELECT COUNT(*) FROM (
+	SELECT r.id, s.id
+	FROM events r, events s
+	WHERE r.start <= s.end AND r.end >= s.start
+	  AND r.id <> s.id
+) q2;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
 
 query I
 SELECT COUNT(*) FROM (

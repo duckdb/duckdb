@@ -22,7 +22,6 @@ public:
 	BoundUniqueConstraint(vector<PhysicalIndex> keys_p, physical_index_set_t key_set_p, const bool is_primary_key)
 	    : BoundConstraint(ConstraintType::UNIQUE), keys(std::move(keys_p)), key_set(std::move(key_set_p)),
 	      is_primary_key(is_primary_key) {
-
 #ifdef DEBUG
 		D_ASSERT(keys.size() == key_set.size());
 		for (auto &key : keys) {
@@ -37,6 +36,11 @@ public:
 	physical_index_set_t key_set;
 	//! Whether this is a PRIMARY KEY constraint, or a UNIQUE constraint.
 	bool is_primary_key;
+
+public:
+	unique_ptr<BoundConstraint> Copy() const override {
+		return make_uniq<BoundUniqueConstraint>(keys, key_set, is_primary_key);
+	}
 };
 
 } // namespace duckdb

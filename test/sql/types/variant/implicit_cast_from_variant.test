@@ -1,0 +1,263 @@
+# name: test/sql/types/variant/implicit_cast_from_variant.test
+# group: [variant]
+
+query I
+select [100::VARIANT, 1.2]
+----
+[100, 1.2]
+
+# VARIANT(INT32) -> INTEGER
+query I
+select ['test', 'hello', 'world'][1::VARIANT::INTEGER]
+----
+test
+
+# VARIANT(INT32) -> BIGINT
+query I
+select ['test', 'hello', 'world'][1::VARIANT]
+----
+test
+
+# VARIANT(INT64) -> BIGINT
+query I
+select ['test', 'hello', 'world'][1::BIGINT::VARIANT]
+----
+test
+
+# VARIANT(VARCHAR) -> BOOL
+query I
+select 'true'::VARIANT::BOOL;
+----
+true
+
+# VARIANT(OBJECT('a': VARCHAR)) -> STRUCT(a BOOLEAN)
+query I
+select {'a': 'true'}::VARIANT::STRUCT(a BOOLEAN);
+----
+{'a': true}
+
+# VARIANT(OBJECT('a': VARCHAR)) -> STRUCT(a BOOLEAN)
+statement error
+select {'a': 'lalala'}::VARIANT::STRUCT(a BOOLEAN);
+----
+Conversion Error: Can't convert VARIANT(VARCHAR) value 'lalala' to 'STRUCT(a BOOLEAN)'
+
+# VARIANT(OBJECT('a': VARCHAR)) -> STRUCT(a BOOLEAN)
+statement error
+select {'b': 42, 'a': 'lalala', 'c': {'a': 'test'}}::VARIANT::STRUCT(a BOOLEAN);
+----
+Conversion Error: Can't convert VARIANT(VARCHAR) value 'lalala' to 'STRUCT(a BOOLEAN)'
+
+# VARIANT(OBJECT('a': VARCHAR)) -> STRUCT(a BOOLEAN)
+statement error
+select {'b': 42, 'a': 'lalala', 'c': {'a': 'test'}}::VARIANT::STRUCT(a BOOLEAN);
+----
+Conversion Error: Can't convert VARIANT(VARCHAR) value 'lalala' to 'STRUCT(a BOOLEAN)'
+
+# VARIANT(TIMESTAMP_MICROS) -> TIMESTAMP
+query I
+select '2019/03/21'::TIMESTAMP::VARIANT::TIMESTAMP;
+----
+2019-03-21 00:00:00
+
+# Direct conversion
+query I
+select '0.123456789'::DECIMAL(10,9)::VARIANT::DECIMAL(10,9)
+----
+0.123456789
+
+# Fallback conversion using Value
+query I
+select '0.123456789'::DECIMAL(10,9)::VARIANT::DECIMAL(10,8)
+----
+0.12345679
+
+# Direct conversion from VARIANT(BLOB) -> BLOB
+query I
+select 'thisisalongblob\x00withnullbytes'::BLOB::VARIANT::BLOB;
+----
+thisisalongblob\x00withnullbytes
+
+# Fallback conversion from VARIANT(BLOB) -> VARCHAR
+query I
+select 'thisisalongblob\x00withnullbytes'::BLOB::VARIANT::VARCHAR;
+----
+thisisalongblob\x00withnullbytes
+
+# Added a fallback for nested types as well
+query I
+select {'a': '[1, 2, 3, 4]'}::VARIANT::STRUCT(a INTEGER[])
+----
+{'a': [1, 2, 3, 4]}
+
+# Added a fallback for nested types as well
+query I
+select {'a': ['1', '2', '3', '4']}::VARIANT::STRUCT(a INTEGER[])
+----
+{'a': [1, 2, 3, 4]}
+
+statement ok
+create table struct_cast_tbl(a STRUCT(a VARCHAR));
+
+statement ok
+insert into struct_cast_tbl select {'a': '[1, 2, 3, 4]'};
+
+statement ok
+insert into struct_cast_tbl select {'a': '[8, 7, 6]'};
+
+statement ok
+insert into struct_cast_tbl select {'a': '[]'};
+
+statement ok
+insert into struct_cast_tbl select {'a': '[10, 6, 4, 8, 9, 10, 12]'};
+
+# Added a fallback for nested types as well
+query I
+select a::VARIANT::STRUCT(a INTEGER[]) from struct_cast_tbl;
+----
+{'a': [1, 2, 3, 4]}
+{'a': [8, 7, 6]}
+{'a': []}
+{'a': [10, 6, 4, 8, 9, 10, 12]}
+
+statement ok
+create table struct_cast_tbl2(a STRUCT(a INTEGER[]));
+
+statement ok
+insert into struct_cast_tbl2 select {'a': [1, 2, 3, 4]};
+
+statement ok
+insert into struct_cast_tbl2 select {'a': [8, 7, 6]};
+
+statement ok
+insert into struct_cast_tbl2 select {'a': []};
+
+statement ok
+insert into struct_cast_tbl2 select {'a': [10, 6, 4, 8, 9, 10, 12]};
+
+# Added a fallback for nested types as well
+query I
+select a::VARIANT::STRUCT(a INTEGER[]) from struct_cast_tbl2;
+----
+{'a': [1, 2, 3, 4]}
+{'a': [8, 7, 6]}
+{'a': []}
+{'a': [10, 6, 4, 8, 9, 10, 12]}
+
+statement ok
+create table struct_cast_tbl3(a STRUCT(a STRUCT(b VARCHAR, c BOOL, a DATE)[]));
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+	{
+		'b': 'hello',
+		'c': NULL,
+		'a': '1970/03/15'::DATE
+	},
+	{
+		'b': NULL,
+		'c': True,
+		'a': '2020/11/03'::DATE
+	}
+]};
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+]};
+
+statement ok
+insert into struct_cast_tbl3 select {'a': [
+	{
+		'b': 'this is a long string',
+		'c': False,
+		'a': '1953/9/16'::DATE
+	}
+]};
+
+query I
+select a::VARIANT::STRUCT(a STRUCT(a VARCHAR, b VARCHAR)[]) from struct_cast_tbl3;
+----
+{'a': [{'a': 1970-03-15, 'b': hello}, {'a': 2020-11-03, 'b': NULL}]}
+{'a': []}
+{'a': [{'a': 1953-09-16, 'b': this is a long string}]}
+
+query I
+select [
+	{
+		'var': {'a': true, 'b': 42}::VARIANT
+	},
+	NULL,
+	{
+		'var': {'c': false}::VARIANT
+	}
+]
+----
+[{'var': {'a': true, 'b': 42}}, NULL, {'var': {'c': false}}]
+
+query I
+select [
+	42::UNION(a INTEGER, b BOOLEAN, c VARCHAR),
+	true::UNION(a INTEGER, b BOOLEAN, c VARCHAR),
+	'test'::UNION(a INTEGER, b BOOLEAN, c VARCHAR),
+]::VARIANT
+----
+[42, true, test]
+
+query I
+select [
+	42::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+	true::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+	'test'::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+]::VARIANT
+----
+[42, true, test]
+
+query I
+select [
+	42::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+	null::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+	'test'::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT,
+]::VARIANT
+----
+[42, NULL, test]
+
+query I
+with base as (
+	from (values
+		(null),
+		('test'),
+		(null)
+	) t(a)
+)
+select
+	a::UNION(a INTEGER, b BOOLEAN, c VARCHAR)::VARIANT from base;
+----
+NULL
+test
+NULL
+
+statement error
+select [
+	42::UNION(a INTEGER, b BOOLEAN, c VARIANT)::VARIANT,
+	{'a': 21, 'b': false}::VARIANT::UNION(a INTEGER, b BOOLEAN, c VARIANT)::VARIANT,
+	{'hello': 'world'},
+	'test'::VARIANT::UNION(a INTEGER, b BOOLEAN, c VARIANT)::VARIANT,
+]::VARIANT
+----
+Conversion Error: Can't convert VARIANT to 'UNION(a INTEGER, b BOOLEAN, c VARIANT)'
+
+
+statement error
+select v::int from (values ({'a': 42}::variant)) t(v);
+----
+Conversion Error: Can't convert VARIANT(OBJECT) value '{'a': 42}' to 'INTEGER'
+
+statement error
+select v.a.b from (values ({'a': 42}::variant)) t(v);
+----
+Invalid Input Error: Can't extract key 'b' from a VARIANT(INT32)
+
+statement error
+select v['helo'] from (values ({'hello': 42}::variant)) t(v);
+----
+Invalid Input Error: VARIANT(OBJECT(hello)) is missing key 'helo'

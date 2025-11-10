@@ -349,6 +349,17 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 					}
 				}
 				delim_condition.comparison = FlipComparisonExpression(join_comparison);
+				// join condition was a not equal and filtered out all NULLS.
+				// DELIM JOIN need to do that for not DELIM_GET side. Easiest way is to change the
+				// comparison expression type. See duckdb/duckdb#16803
+				if (delim_join.join_type != JoinType::MARK) {
+					if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_NOTEQUAL;
+					}
+					if (delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_EQUAL;
+					}
+				}
 				found = true;
 				break;
 			}

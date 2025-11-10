@@ -78,6 +78,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.expected_types = op.expected_types;
 	cast_copy.parallel = mode == CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
 	cast_copy.write_empty_file = op.write_empty_file;
+	cast_copy.hive_file_pattern = op.hive_file_pattern;
 
 	cast_copy.children.push_back(plan);
 	return copy;

@@ -47,6 +47,14 @@ struct DuckDBSchemasFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBConnectionCountFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBApproxDatabaseCountFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBColumnsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -147,6 +155,10 @@ struct DuckDBViewsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct EnableLoggingFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct TestType {
 	TestType(LogicalType type_p, string name_p)
 	    : type(std::move(type_p)), name(std::move(name_p)), min_value(Value::MinimumValue(type)),
@@ -164,7 +176,7 @@ struct TestType {
 
 struct TestAllTypesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static vector<TestType> GetTestTypes(bool large_enum = false);
+	static vector<TestType> GetTestTypes(bool large_enum = false, bool large_bignum = false);
 };
 
 struct TestVectorTypesFun {

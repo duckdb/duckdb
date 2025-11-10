@@ -38,8 +38,16 @@
     {
         "name": "current_query_id",
         "description": "Get the current query_id",
-        "example": "current_transaction_id('Hello')",
+        "example": "current_query_id()",
         "type": "scalar_function",
         "struct": "CurrentQueryId"
+    },
+    {
+        "name": "parse_duckdb_log_message",
+        "parameters": "type,message",
+        "description": "Parse the message into the expected logical type",
+        "example": "parse_duckdb_log_message('FileSystem', log_message)",
+        "type": "scalar_function",
+        "struct": "ParseLogMessage"
     }
 ]

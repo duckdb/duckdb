@@ -1,0 +1,65 @@
+# name: test/sql/copy/encryption/reencrypt.test_slow
+# group: [encryption]
+
+require skip_reload
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/reencrypted.duckdb' as reencrypted (ENCRYPTION_KEY 'xxxx');
+
+statement ok
+USE encrypted;
+
+statement ok
+CALL dbgen(sf=0.01);
+
+statement ok
+COPY FROM DATABASE encrypted to reencrypted;
+
+statement ok
+USE memory;
+
+statement ok
+DETACH reencrypted
+
+statement ok
+DETACH encrypted
+
+statement error
+ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted;
+----
+
+statement ok
+ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
+
+statement ok
+DETACH reencrypted
+
+statement error
+ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'asdf');
+----
+Wrong encryption key used to open the database file
+
+statement ok
+ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
+
+query I
+SELECT l_suppkey FROM reencrypted.lineitem limit 10;
+----
+93
+75
+38
+48
+23
+10
+33
+19
+70
+60

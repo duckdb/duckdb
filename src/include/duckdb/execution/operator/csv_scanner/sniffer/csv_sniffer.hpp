@@ -10,7 +10,6 @@
 
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 #include "duckdb/execution/operator/csv_scanner/header_value.hpp"
@@ -24,6 +23,25 @@ struct DateTimestampSniffing {
 	idx_t initial_size;
 };
 
+struct QuoteEscapeCombination {
+	QuoteEscapeCombination(char quote, char escape) : quote(quote), escape(escape) {
+	}
+	char quote;
+	char escape;
+};
+
+//! Current stats of candidate analysis
+struct CandidateStats {
+	//! Number of rows read
+	idx_t rows_read = 0;
+	//! Best Number of consistent rows (i.e., presenting all columns)
+	idx_t best_consistent_rows = 0;
+	//! If padding was necessary (i.e., rows are missing some columns, how many)
+	idx_t prev_padding_count = 0;
+	//! Min number of ignored rows
+	idx_t min_ignored_rows = 0;
+};
+
 //! All the options that will be used to sniff the dialect of the CSV file
 struct DialectCandidates {
 	//! The constructor populates all of our the options that will be used in our sniffer search space
@@ -31,12 +49,8 @@ struct DialectCandidates {
 
 	//! Static functions to get defaults of the search space
 	static vector<string> GetDefaultDelimiter();
-
-	static vector<vector<char>> GetDefaultQuote();
-
-	static vector<QuoteRule> GetDefaultQuoteRule();
-
-	static vector<vector<char>> GetDefaultEscape();
+	//! Default Quote/Escape combinations in priority order
+	static vector<QuoteEscapeCombination> GetDefaultQuoteEscapeCombination();
 
 	static vector<char> GetDefaultComment();
 
@@ -46,12 +60,8 @@ struct DialectCandidates {
 	vector<string> delim_candidates;
 	//! Candidates for the comment
 	vector<char> comment_candidates;
-	//! Quote-Rule Candidates
-	vector<QuoteRule> quote_rule_candidates;
-	//! Candidates for the quote option
-	unordered_map<uint8_t, vector<char>> quote_candidates_map;
-	//! Candidates for the escape option
-	unordered_map<uint8_t, vector<char>> escape_candidates_map;
+	//! Candidates for combinations of quotes and escapes
+	vector<QuoteEscapeCombination> quote_escape_candidates;
 };
 
 //! Struct used to know if we have a date or timestamp type already identified in this CSV File
@@ -90,7 +100,8 @@ public:
 
 	//! If a string_t value can be cast to a type
 	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
-	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator);
+	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator,
+	                         const char thousands_separator);
 
 	idx_t LinesSniffed() const;
 
@@ -132,9 +143,9 @@ private:
 	void GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountScanner>> &column_count_scanners,
 	                                     const DialectCandidates &dialect_candidates);
 
-	//! 2. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
-	                             idx_t &prev_padding_count, idx_t &min_ignored_rows);
+	//! 2. Analyzes if a dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
+	void AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner>, CandidateStats &stats,
+	                             vector<unique_ptr<ColumnCountScanner>> &successful_candidates);
 	//! 3. Refine Candidates over remaining chunks
 	void RefineCandidates();
 

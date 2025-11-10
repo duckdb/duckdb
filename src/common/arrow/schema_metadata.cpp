@@ -66,8 +66,8 @@ ArrowSchemaMetadata ArrowSchemaMetadata::NonCanonicalType(const string &type_nam
 	ArrowSchemaMetadata metadata;
 	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL);
 	// We have to set the metadata key with type_name and vendor_name.
-	metadata.extension_metadata_map->AddObject("vendor_name", make_uniq<ComplexJSON>(vendor_name));
-	metadata.extension_metadata_map->AddObject("type_name", make_uniq<ComplexJSON>(type_name));
+	metadata.extension_metadata_map->AddObjectEntry("vendor_name", make_uniq<ComplexJSON>(vendor_name));
+	metadata.extension_metadata_map->AddObjectEntry("type_name", make_uniq<ComplexJSON>(type_name));
 	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToComplexJSONMap(*metadata.extension_metadata_map));
 	return metadata;
 }

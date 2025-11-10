@@ -1,8 +1,6 @@
 #include "duckdb/parser/statement/call_statement.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 
@@ -19,7 +17,7 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 
 	auto result = Bind(select_statement);
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	return result;
 }
 

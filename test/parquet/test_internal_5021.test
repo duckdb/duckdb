@@ -1,0 +1,11 @@
+# name: test/parquet/test_internal_5021.test
+# description: Internal issue 5021: Assertion failure in DbpEncoder when writing Parquet V2
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE tbl AS SELECT 'hello world' || i str FROM range(11) t(i);
+
+statement ok
+COPY tbl TO '__TEST_DIR__/file.parquet' (PARQUET_VERSION 'V2', DICTIONARY_SIZE_LIMIT 1);

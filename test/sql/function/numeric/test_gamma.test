@@ -2,9 +2,6 @@
 # description: Test gamma function
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT gamma(NULL)
 ----
@@ -13,6 +10,7 @@ NULL
 statement error
 SELECT gamma(0)
 ----
+<REGEX>:.*Out of Range Error: cannot take gamma.*
 
 query I
 SELECT gamma(-1)
@@ -53,6 +51,7 @@ SELECT gamma(2::hugeint)
 statement error
 SELECT gamma('asdf')
 ----
+<REGEX>:.*Conversion Error: Could not convert string.*
 
 query I
 SELECT lgamma(NULL)
@@ -62,6 +61,7 @@ NULL
 statement error
 SELECT lgamma(0)
 ----
+<REGEX>:.*Out of Range Error: cannot take.*
 
 query I
 SELECT lgamma(-1)
@@ -107,3 +107,4 @@ SELECT lgamma(2::hugeint)
 statement error
 SELECT lgamma('asdf')
 ----
+<REGEX>:.*Conversion Error: Could not convert string.*

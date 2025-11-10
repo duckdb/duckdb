@@ -46,7 +46,7 @@
         "name": "reservoir_quantile",
         "parameters": "x,quantile,sample_size",
         "description": "Gives the approximate quantile using reservoir sampling, the sample size is optional and uses 8192 as a default size.",
-        "example": "reservoir_quantile(A,0.5,1024)",
+        "example": "reservoir_quantile(A, 0.5, 1024)",
         "type": "aggregate_function_set"
     },
     {

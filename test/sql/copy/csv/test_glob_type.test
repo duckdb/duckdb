@@ -1,0 +1,43 @@
+# name: test/sql/copy/csv/test_glob_type.test
+# description: Test globbing files with different types
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT typeof(bar) FROM '{DATA_DIR}/csv/17451/*.csv' limit 1
+----
+DATE
+
+statement ok
+CREATE TABLE T AS SELECT 'bar,baz', UNION ALL SELECT ',baz' from range (0,100000)
+
+statement ok
+COPY T TO '{TEMP_DIR}/t.csv' (QUOTE '', HEADER 0)
+
+# If we can't be absolutely sure by reading the whole file, we need to push it as a varchar still
+query I
+SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv', '{TEMP_DIR}/t.csv']) limit 1
+----
+VARCHAR
+
+statement error
+SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = 0) limit 1
+----
+Unsupported parameter for files_to_sniff: value must be -1 for all files or higher than one.
+
+query I
+SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = 5) limit 1
+----
+DATE
+
+statement error
+FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = 5)
+----
+Consider setting files_to_sniff to a higher value (e.g., files_to_sniff = -1)
+
+query I
+SELECT typeof(bar) FROM read_csv(['{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/1.csv','{DATA_DIR}/csv/17451/2.csv','{DATA_DIR}/csv/17451/extra/3.csv'], files_to_sniff = -1) limit 1
+----
+VARCHAR

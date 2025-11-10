@@ -1,0 +1,35 @@
+# name: test/sql/storage/metadata/partial_table_metadata_reuse_nested.test_slow
+# description: Test full table metadata reuse of complex nested data
+# group: [metadata]
+
+load __TEST_DIR__/partial_table_metadata_reuse_nested.test.db
+
+statement ok
+BEGIN
+
+statement ok
+CREATE TABLE complex_nested(s STRUCT(i INT, j INT[], k VARCHAR, l INT[], i1 INT, i2 INT, i3 INT, i4 INT, i5 INT, i6 INT, i7 INT, i8 INT, i9 INT, i10 INT, i11 INT, i12 INT, i13 INT, i14 INT, i15 INT, i16 INT, i17 INT, i18 INT, i19 INT, i20 INT, i21 INT, i22 INT, i23 INT, i24 INT, i25 INT, i26 INT, i27 INT, i28 INT, i29 INT, i30 INT, i31 INT, i32 INT, i33 INT, i34 INT, i35 INT, i36 INT, i37 INT, i38 INT, i39 INT, i40 INT, i41 INT, i42 INT, i43 INT, i44 INT, i45 INT, i46 INT, i47 INT, i48 INT, i49 INT, i50 INT));
+
+statement ok
+INSERT INTO complex_nested SELECT ROW(r, range(10), 'hello world', range(90, 100), r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r, r) s FROM range(1000000) t(r)
+
+statement ok
+COMMIT
+
+
+loop i 0 10
+
+statement ok
+INSERT INTO complex_nested DEFAULT VALUES
+
+statement ok
+CHECKPOINT
+
+restart
+
+endloop
+
+query IIIII
+SELECT COUNT(*), SUM(t.i), SUM(LEN(t.j)), SUM(LEN(t.k)), SUM(LIST_SUM([*COLUMNS('i\d+')])) FROM (SELECT UNNEST(s) FROM complex_nested) t
+----
+1000010	499999500000	10000000	11000000	24999975000000

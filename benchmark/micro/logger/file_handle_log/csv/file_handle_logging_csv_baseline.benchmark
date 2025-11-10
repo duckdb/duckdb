@@ -1,0 +1,12 @@
+# name: benchmark/micro/logger/file_handle_log/csv/file_handle_logging_csv_baseline.benchmark
+# description: 
+# group: [csv]
+
+name File Handle Log (parquet, baseline)
+group logger
+
+load
+CREATE TABLE test AS select i from range(0,100000000) t(i);
+
+run
+copy test to '${BENCHMARK_DIR}/file_handle_logging.csv';

@@ -1,0 +1,38 @@
+# name: test/geoparquet/geoarrow.test
+# group: [geoparquet]
+
+require parquet
+
+#------------------------------------------------------------------------------
+# Test reading geoarrow encoded geometries
+#------------------------------------------------------------------------------
+
+query T
+SELECT point FROM '__WORKING_DIRECTORY__/test/geoparquet/seattle.parquet'
+----
+{'x': -122.3321, 'y': 47.6062}
+
+query T
+SELECT linestring FROM '__WORKING_DIRECTORY__/test/geoparquet/seattle.parquet'
+----
+[{'x': -122.3321, 'y': 47.6062}, {'x': -122.3493, 'y': 47.6205}, {'x': -122.354, 'y': 47.622}]
+
+query T
+SELECT polygon FROM '__WORKING_DIRECTORY__/test/geoparquet/seattle.parquet'
+----
+[[{'x': -122.3321, 'y': 47.6062}, {'x': -122.335, 'y': 47.608}, {'x': -122.32, 'y': 47.604}, {'x': -122.3321, 'y': 47.6062}]]
+
+query T
+SELECT multipoint FROM '__WORKING_DIRECTORY__/test/geoparquet/seattle.parquet'
+----
+[{'x': -122.3321, 'y': 47.6062}, {'x': -122.3493, 'y': 47.6205}, {'x': -122.335, 'y': 47.608}]
+
+query T
+SELECT multilinestring FROM '__WORKING_DIRECTORY__/test/geoparquet/seattle.parquet'
+----
+[[{'x': -122.3321, 'y': 47.6062}, {'x': -122.3493, 'y': 47.6205}, {'x': -122.354, 'y': 47.622}], [{'x': -122.354, 'y': 47.622}, {'x': -122.3194, 'y': 47.6179}, {'x': -122.3366, 'y': 47.6276}]]
+
+query T
+SELECT multipolygon FROM '__WORKING_DIRECTORY__/test/geoparquet/seattle.parquet'
+----
+[[[{'x': -122.3321, 'y': 47.6062}, {'x': -122.335, 'y': 47.608}, {'x': -122.32, 'y': 47.604}, {'x': -122.3321, 'y': 47.6062}]], [[{'x': -122.354, 'y': 47.622}, {'x': -122.3194, 'y': 47.6179}, {'x': -122.3366, 'y': 47.6276}, {'x': -122.354, 'y': 47.622}]]]

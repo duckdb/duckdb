@@ -19,7 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ASOF_JOIN;
 
 public:
-	PhysicalAsOfJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right);
+	PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperator &left,
+	                 PhysicalOperator &right);
 
 	vector<LogicalType> join_key_types;
 	vector<column_t> null_sensitive;
@@ -35,18 +36,6 @@ public:
 
 	// Projection mappings
 	vector<column_t> right_projection_map;
-
-	// Predicate (join conditions that don't reference both sides)
-	unique_ptr<Expression> predicate;
-
-public:
-	// Operator Interface
-	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;
-	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
-
-	bool ParallelOperator() const override {
-		return true;
-	}
 
 protected:
 	// CachingOperator Interface
@@ -82,6 +71,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+public:
+	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 };
 
 } // namespace duckdb

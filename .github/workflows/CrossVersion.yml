@@ -18,6 +18,10 @@ on:
       - '**'
       - '!.github/workflows/CrossVersion.yml'
 
+concurrency:
+  group: crossversion-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
@@ -28,7 +32,8 @@ jobs:
     runs-on: macos-14
     strategy:
       matrix:
-        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.1', 'v1.2-histrionicus', 'main' ]
+        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.2', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -52,7 +57,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Build
         shell: bash
@@ -83,7 +88,8 @@ jobs:
       - linux-step-1
     strategy:
       matrix:
-        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.1', 'v1.2-histrionicus', 'main' ]
+        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.2', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -107,7 +113,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Build
         shell: bash
@@ -127,12 +133,12 @@ jobs:
           path: osx_v1_1_3
       - uses: actions/download-artifact@v4
         with:
-          name: files-osx-v1.2.1
-          path: osx_v1_2_1
+          name: files-osx-v1.2.2
+          path: osx_v1_2_2
       - uses: actions/download-artifact@v4
         with:
-          name: files-osx-v1.2-histrionicus
-          path: osx_v1_2-histrionicus
+          name: files-osx-v1.3-ossivalis
+          path: osx_v1_3-ossivalis
       - uses: actions/download-artifact@v4
         with:
           name: files-osx-main
@@ -147,12 +153,12 @@ jobs:
           path: linux_v1_1_3
       - uses: actions/download-artifact@v4
         with:
-          name: files-linux-v1.2.1
-          path: linux_v1_2_1
+          name: files-linux-v1.2.2
+          path: linux_v1_2_2
       - uses: actions/download-artifact@v4
         with:
-          name: files-linux-v1.2-histrionicus
-          path: linux_v1_2-histrionicus
+          name: files-linux-v1.3-ossivalis
+          path: linux_v1_3-ossivalis
       - uses: actions/download-artifact@v4
         with:
           name: files-linux-main
@@ -162,7 +168,7 @@ jobs:
         shell: bash
         run: |
           touch report
-          for folder in osx_v1_0_0 osx_v1_1_3 osx_main linux_main linux_v1_0_0 linux_v1_1_3 linux_v1_2_1 linux_v1_2 osx_v1_2_1 osx_v1_2; do
+          for folder in osx_v1_0_0 osx_v1_1_3 osx_main linux_main linux_v1_0_0 linux_v1_1_3 linux_v1_2_2 linux_v1_2 osx_v1_2_2 osx_v1_2; do
             for filename in $folder/*; do
               touch $filename.wal && cp $filename.wal a.db.wal 2>/dev/null && cp $filename a.db 2>/dev/null && (./build/release/duckdb a.db -c "ATTACH 'b.db'; COPY FROM DATABASE a TO b;" 2>out || (grep "but it is not a valid DuckDB database file!" out 2>/dev/null || ( echo "--> " $filename && cat out && echo "" && (grep -i "internal error" out && echo "--> " $filename >> report && cat out >> report && echo "" >> report)))) || true
               rm -f b.db a.db b.db.wal a.db.wal
@@ -180,7 +186,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.1', 'v1.2-histrionicus', 'main' ]
+        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.2', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -205,7 +212,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Build
         shell: bash
@@ -236,7 +243,8 @@ jobs:
       - linux-step-1
     strategy:
       matrix:
-        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.1', 'v1.2-histrionicus', 'main' ]
+        version: [ 'v1.0.0', 'v1.1.3', 'v1.2.2', 'v1.3-ossivalis', 'main' ]
+      fail-fast: false
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -261,7 +269,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Build
         shell: bash
@@ -281,12 +289,12 @@ jobs:
           path: osx_v1_1_3
       - uses: actions/download-artifact@v4
         with:
-          name: files-osx-v1.2.1
-          path: osx_v1_2_1
+          name: files-osx-v1.2.2
+          path: osx_v1_2_2
       - uses: actions/download-artifact@v4
         with:
-          name: files-osx-v1.2-histrionicus
-          path: osx_v1_2-histrionicus
+          name: files-osx-v1.3-ossivalis
+          path: osx_v1_3-ossivalis
       - uses: actions/download-artifact@v4
         with:
           name: files-osx-main
@@ -301,12 +309,12 @@ jobs:
           path: linux_v1_1_3
       - uses: actions/download-artifact@v4
         with:
-          name: files-linux-v1.2.1
-          path: linux_v1_2_1
+          name: files-linux-v1.2.2
+          path: linux_v1_2_2
       - uses: actions/download-artifact@v4
         with:
-          name: files-linux-v1.2-histrionicus
-          path: linux_v1_2-histrionicus
+          name: files-linux-v1.3-ossivalis
+          path: linux_v1_3-ossivalis
       - uses: actions/download-artifact@v4
         with:
           name: files-linux-main
@@ -316,7 +324,7 @@ jobs:
         shell: bash
         run: |
           touch report
-          for folder in osx_v1_0_0 osx_v1_1_3 osx_main linux_main linux_v1_0_0 linux_v1_1_3 linux_v1_2_1 linux_v1_2 osx_v1_2_1 osx_v1_2; do
+          for folder in osx_v1_0_0 osx_v1_1_3 osx_main osx_v1_3-ossivalis linux_main linux_v1_3-ossivalis linux_v1_0_0 linux_v1_1_3 linux_v1_2_2 linux_v1_2 osx_v1_2_2 osx_v1_2; do
             for filename in $folder/*; do
               touch $filename.wal && cp $filename.wal a.db.wal 2>/dev/null && cp $filename a.db 2>/dev/null && (./build/release/duckdb a.db -c "ATTACH 'b.db'; COPY FROM DATABASE a TO b;" 2>out || (grep "but it is not a valid DuckDB database file!" out 2>/dev/null || ( echo "--> " $filename && cat out && echo "" && (grep -i "internal error" out && echo "--> " $filename >> report && cat out >> report && echo "" >> report)))) || true
               rm -f b.db a.db b.db.wal a.db.wal

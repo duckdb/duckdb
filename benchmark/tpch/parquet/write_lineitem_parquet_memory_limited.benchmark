@@ -2,17 +2,12 @@
 # description: Write the lineitem of TPC-H SF1 to a Parquet file with limited memory
 # group: [parquet]
 
+include benchmark/tpch/tpch_load.benchmark.in
+
 name Write Lineitem Parquet (Limited Memory)
 group parquet
 
-cache tpch_sf1.duckdb
-
 require parquet
-
-require tpch
-
-load
-CALL dbgen(sf=1);
 
 init
 SET memory_limit='500MB';
@@ -20,5 +15,5 @@ SET memory_limit='500MB';
 run
 COPY lineitem TO '${BENCHMARK_DIR}/lineitem.parquet';
 
-result I
+result I sf=1
 6001215

@@ -1,13 +1,18 @@
 # name: test/sql/attach/attach_encryption_block_header.test
 # group: [attach]
 
-require noforcestorage
-
 # workaround - alternative verify always forces the latest storage
 require no_alternative_verify
 
-statement ok
-PRAGMA enable_verification
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
+----
+Binder Error: Not a valid key. A key cannot be empty
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 42);
+----
+Binder Error: "42" is not a valid key. A key must be of type VARCHAR
 
 statement ok
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
@@ -59,7 +64,7 @@ SELECT SUM(i) FROM encrypted.tbl
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name LIKE '%encrypted%' ORDER BY database_name;
 ----
-{storage_version=v1.3.0+}
+{storage_version=v1.4.0+}
 {storage_version=v1.0.0+}
 
 statement ok
@@ -68,3 +73,10 @@ DETACH encrypted
 statement ok
 DETACH unencrypted
 
+statement error
+ATTACH '__TEST_DIR__/incompatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.2.0');
+----
+Invalid Input Error: Explicit provided STORAGE_VERSION ("v1.2.0") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible
+
+statement ok
+ATTACH '__TEST_DIR__/compatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0');

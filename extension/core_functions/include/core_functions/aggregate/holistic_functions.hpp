@@ -85,7 +85,7 @@ struct ReservoirQuantileFun {
 	static constexpr const char *Name = "reservoir_quantile";
 	static constexpr const char *Parameters = "x,quantile,sample_size";
 	static constexpr const char *Description = "Gives the approximate quantile using reservoir sampling, the sample size is optional and uses 8192 as a default size.";
-	static constexpr const char *Example = "reservoir_quantile(A,0.5,1024)";
+	static constexpr const char *Example = "reservoir_quantile(A, 0.5, 1024)";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();

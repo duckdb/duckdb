@@ -2,9 +2,6 @@
 # description: Test As-Of joins for timestamps
 # group: [asof]
 
-statement ok
-PRAGMA enable_verification
-
 # Join on a timestamp range
 
 statement ok
@@ -31,6 +28,18 @@ INSERT INTO probe0 VALUES
 	(NULL),
 	('infinity')
 ;
+
+statement ok
+CREATE TABLE asof_nulls (
+	time TIMESTAMP,
+	value FLOAT
+);
+
+statement ok
+INSERT INTO asof_nulls (time, value) VALUES ('2025-07-15 00:00:00', 42);
+
+statement ok
+INSERT INTO asof_nulls (time, value) VALUES ('2025-07-15 01:00:00', null);
 
 # Compare NLJ optimisation to operator
 foreach threshold 0 32
@@ -210,5 +219,14 @@ ON p.begin >= e.begin
 ORDER BY p.begin ASC
 ----
 2023-03-21 12:00:00
+NULL
+
+# Return NULLs
+query II
+SELECT time_series.time, asof_nulls.value
+FROM (VALUES ('2025-07-15 02:00:00'::TIMESTAMP)) as time_series(time)
+ASOF LEFT JOIN asof_nulls ON asof_nulls.time <= time_series.time;
+----
+2025-07-15 02:00:00	NULL
 
 endloop

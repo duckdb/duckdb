@@ -1,0 +1,27 @@
+# name: test/optimizer/pushdown/issue_18202.test
+# description: Test join filter pushdown with join conditions reordered
+# group: [pushdown]
+
+statement ok
+CREATE TABLE t0(c0 FLOAT , c1 CHAR);
+
+statement ok
+INSERT INTO t0 VALUES(0.001, 'WORLD');
+
+statement ok
+CREATE VIEW v0(c0) AS SELECT 1522975040 FROM t0;
+
+statement ok
+INSERT INTO t0 VALUES(3.14, 'ABCDE');
+
+statement ok
+CREATE INDEX t0i0 ON t0(c1);
+
+statement ok
+INSERT INTO t0(c1, c0) VALUES('WORLD', 3.1415);
+
+statement ok
+UPDATE t0 SET c1 = 'HELLO';
+
+statement ok 
+explain SELECT v0, c1 FROM t0 JOIN v0 ON((c1) < (CAST(v0.c0 AS CHAR))) WHERE (NOT((v0) = ((CASE WHEN t0.c0 THEN c1 END))));
