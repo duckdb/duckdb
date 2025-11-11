@@ -207,6 +207,13 @@ public:
 	//! Convert to WKT
 	DUCKDB_API static string_t ToString(Vector &result, const string_t &geom);
 
+	//! Convert from WKB
+	DUCKDB_API static bool FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict);
+	DUCKDB_API static void FromBinary(Vector &source, Vector &result, idx_t count, bool strict);
+
+	//! Convert to WKB
+	DUCKDB_API static void ToBinary(Vector &source, Vector &result, idx_t count);
+
 	//! Get the geometry type and vertex type from the WKB
 	DUCKDB_API static pair<GeometryType, VertexType> GetType(const string_t &wkb);
 

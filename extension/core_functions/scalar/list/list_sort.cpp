@@ -257,18 +257,19 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	LogicalType child_type;
 	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN) {
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
-		bound_function.return_type = LogicalType::SQLNULL;
-		child_type = bound_function.return_type;
-		return make_uniq<ListSortBindData>(order, null_order, false, bound_function.return_type, child_type, context);
+		bound_function.SetReturnType(LogicalType::SQLNULL);
+		child_type = bound_function.GetReturnType();
+		return make_uniq<ListSortBindData>(order, null_order, false, bound_function.GetReturnType(), child_type,
+		                                   context);
 	}
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	child_type = ListType::GetChildType(arguments[0]->return_type);
 
 	bound_function.arguments[0] = arguments[0]->return_type;
-	bound_function.return_type = arguments[0]->return_type;
+	bound_function.SetReturnType(arguments[0]->return_type);
 
-	return make_uniq<ListSortBindData>(order, null_order, false, bound_function.return_type, child_type, context);
+	return make_uniq<ListSortBindData>(order, null_order, false, bound_function.GetReturnType(), child_type, context);
 }
 
 template <class T>
@@ -302,9 +303,9 @@ static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFu
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	bound_function.arguments[0] = arguments[0]->return_type;
-	bound_function.return_type = LogicalType::LIST(LogicalTypeId::BIGINT);
+	bound_function.SetReturnType(LogicalType::LIST(LogicalTypeId::BIGINT));
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);
-	return make_uniq<ListSortBindData>(order, null_order, true, bound_function.return_type, child_type, context);
+	return make_uniq<ListSortBindData>(order, null_order, true, bound_function.GetReturnType(), child_type, context);
 }
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,

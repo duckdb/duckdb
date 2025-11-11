@@ -48,7 +48,7 @@ class TestResult:
         assert self.status_code == 0
         assert not is_needle_in_haystack(not_exist, self.stdout)
 
-    def check_stderr(self, expected: str | None):
+    def check_stderr(self, expected):
         if expected is None:
             assert self.stderr == ""
         else:
@@ -185,7 +185,7 @@ def check_load_status(shell, extension: str):
     return result.stdout
 
 
-def is_needle_in_haystack(needle: str | bytes, haystack: str | bytes) -> bool:
+def is_needle_in_haystack(needle, haystack) -> bool:
     if needle == "" or haystack == "":
         return False
     if isinstance(haystack, str) and isinstance(needle, str):

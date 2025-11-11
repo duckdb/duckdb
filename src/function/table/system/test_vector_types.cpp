@@ -277,6 +277,9 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 	}
 	for (auto &entry : input.named_parameters) {
 		if (entry.first == "all_flat") {
+			if (entry.second.IsNull()) {
+				throw InvalidInputException("Cannot use NULL as argument for all_flat");
+			}
 			result->all_flat = BooleanValue::Get(entry.second);
 		} else {
 			throw InternalException("Unrecognized named parameter for test_vector_types");

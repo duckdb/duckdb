@@ -62,8 +62,8 @@ unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFunction &
 
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;
-	bound_function.return_type = LogicalType::ARRAY(child_type, arguments.size());
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(LogicalType::ARRAY(child_type, arguments.size()));
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -84,7 +84,7 @@ ScalarFunction ArrayValueFun::GetFunction() {
 	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, ArrayValueBind, nullptr,
 	                   ArrayValueStats);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

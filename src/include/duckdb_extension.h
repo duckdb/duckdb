@@ -544,6 +544,7 @@ typedef struct {
 	duckdb_state (*duckdb_appender_create_query)(duckdb_connection connection, const char *query, idx_t column_count,
 	                                             duckdb_logical_type *types, const char *table_name,
 	                                             const char **column_names, duckdb_appender *out_appender);
+	duckdb_state (*duckdb_appender_clear)(duckdb_appender appender);
 #endif
 
 // New arrow interface functions
@@ -1163,6 +1164,7 @@ typedef struct {
 // Version unstable_new_append_functions
 #define duckdb_appender_create_query   duckdb_ext_api.duckdb_appender_create_query
 #define duckdb_appender_error_data     duckdb_ext_api.duckdb_appender_error_data
+#define duckdb_appender_clear          duckdb_ext_api.duckdb_appender_clear
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
 
 // Version unstable_new_arrow_functions

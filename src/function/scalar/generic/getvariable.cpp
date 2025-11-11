@@ -36,7 +36,7 @@ unique_ptr<FunctionData> GetVariableBind(ClientContext &context, ScalarFunction 
 	if (!variable_name.IsNull()) {
 		ClientConfig::GetConfig(context).GetUserVariable(variable_name.ToString(), value);
 	}
-	function.return_type = value.type();
+	function.SetReturnType(value.type());
 	return make_uniq<GetVariableBindData>(std::move(value));
 }
 

@@ -36,7 +36,7 @@ unique_ptr<Expression> BindCanCastImplicitlyExpression(FunctionBindExpressionInp
 
 ScalarFunction CanCastImplicitlyFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::BOOLEAN, CanCastImplicitlyFunction);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.bind_expression = BindCanCastImplicitlyExpression;
 	return fun;
 }

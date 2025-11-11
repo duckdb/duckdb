@@ -191,7 +191,7 @@ struct ArgMinMaxBase {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 		return unique_ptr<FunctionData>(std::move(function_data));
@@ -354,7 +354,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
 		function.arguments[0] = arguments[0]->return_type;
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 		return unique_ptr<FunctionData>(std::move(function_data));
@@ -551,7 +551,7 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateF
 	auto name = std::move(function.name);
 	function = GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING);
 	function.name = std::move(name);
-	function.return_type = decimal_type;
+	function.SetReturnType(decimal_type);
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 	return unique_ptr<FunctionData>(std::move(function_data));
@@ -859,7 +859,7 @@ unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunctio
 
 	const auto val_type = arguments[0]->return_type.InternalType();
 	const auto arg_type = arguments[1]->return_type.InternalType();
-	function.return_type = LogicalType::LIST(arguments[0]->return_type);
+	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
 
 	// Specialize the function based on the input types
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING, NULLS_LAST);
