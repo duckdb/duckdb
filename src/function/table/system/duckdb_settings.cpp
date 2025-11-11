@@ -18,21 +18,6 @@ struct DuckDBSettingValue {
 	};
 };
 
-struct DuckDBSettingsBindData : public TableFunctionData {
-	bool in_bytes = false;
-
-	unique_ptr<FunctionData> Copy() const override {
-		auto res = make_uniq<DuckDBSettingsBindData>();
-		res->in_bytes = in_bytes;
-		return unique_ptr<FunctionData>(std::move(res));
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<const DuckDBSettingsBindData>();
-		return in_bytes == other.in_bytes;
-	}
-};
-
 struct DuckDBSettingsData : public GlobalTableFunctionState {
 	DuckDBSettingsData() : offset(0) {
 	}
@@ -52,14 +37,12 @@ static bool extract_in_bytes_argument(const TableFunctionBindInput &input) {
 
 static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, TableFunctionBindInput &input,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
-	auto bind_data = make_uniq<DuckDBSettingsBindData>();
-	bool in_bytes = extract_in_bytes_argument(input);
-	bind_data->in_bytes = in_bytes;
-
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("value");
+
+	bool in_bytes = extract_in_bytes_argument(input);
 	if (in_bytes) {
 		return_types.emplace_back(LogicalType::UBIGINT);
 	} else {
@@ -78,7 +61,7 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
-	return std::move(bind_data);
+	return nullptr;
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -156,10 +139,12 @@ static optional_idx TryParseBytes(const string &str) {
 
 void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBSettingsData>();
-	bool in_bytes = false;
-	if (data_p.bind_data) {
-		in_bytes = data_p.bind_data->Cast<DuckDBSettingsBindData>().in_bytes;
-	}
+
+	// We can infer from the value column type that we are in byte mode or not, because of the binding step
+	const auto value_column = output.data[1];
+	const auto& value_type = value_column.GetType();
+	const bool in_bytes = value_type.id() == LogicalTypeId::UBIGINT;
+
 	if (data.offset >= data.settings.size()) {
 		// finished returning values
 		return;
