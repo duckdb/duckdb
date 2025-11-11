@@ -1153,7 +1153,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 			// schedule a checkpoint task for this row group
 			auto &row_group = *entry->node;
-			row_group.MoveToCollection(*this, vacuum_state.row_start);
+			if (vacuum_state.row_start != entry->row_start) {
+				row_group.MoveToCollection(*this, vacuum_state.row_start);
+			} else if (!RefersToSameObject(row_group.GetCollection(), *this)) {
+				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
+			}
 			if (writer.GetCheckpointType() != CheckpointType::VACUUM_ONLY) {
 				DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx,
 				           row_group);

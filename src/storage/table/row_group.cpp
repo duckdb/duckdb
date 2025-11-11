@@ -80,9 +80,7 @@ ColumnDataType RowGroup::GetColumnDataType() const {
 
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	lock_guard<mutex> l(row_group_lock);
-	if (GetSegmentStart() != new_start) {
-		has_changes = true;
-	}
+	has_changes = true;
 	auto data_type = GetColumnDataType();
 	this->collection = collection_p;
 	this->SetSegmentStart(new_start);
