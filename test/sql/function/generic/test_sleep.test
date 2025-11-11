@@ -1,0 +1,63 @@
+# name: test/sql/function/generic/test_sleep.test
+# description: Test sleep function
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+# Test basic sleep function - should return NULL
+query 
+SELECT sleep(10)
+----
+NULL
+
+# Test sleep with 0 milliseconds
+query 
+SELECT sleep(0)
+----
+NULL
+
+# Test sleep with NULL input
+query 
+SELECT sleep(NULL)
+----
+NULL
+
+# Test sleep in a query with timing
+query I
+SELECT 1, sleep(50), 2
+----
+1	NULL	2
+
+# Test sleep with different values
+query 
+SELECT sleep(100)
+----
+NULL
+
+# Test sleep in WHERE clause (should still execute)
+query I
+SELECT 42 WHERE sleep(10) IS NULL
+----
+42
+
+# Test sleep with multiple rows
+query 
+SELECT sleep(10) FROM range(3)
+----
+NULL
+NULL
+NULL
+
+# Test sleep with expression
+query 
+SELECT sleep(10 + 20)
+----
+NULL
+
+# Test sleep with negative value (should still work, but sleep for 0 or handle gracefully)
+query 
+SELECT sleep(-10)
+----
+NULL
+
