@@ -12,6 +12,12 @@ include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
 add_library(dummy_static_extension_loader
             loader/dummy_static_extension_loader.cpp)
 
+install(
+  TARGETS dummy_static_extension_loader
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+
 add_extension_definitions()
 
 configure_file(
