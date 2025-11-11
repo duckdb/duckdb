@@ -489,13 +489,13 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 }
 
 void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx) {
-	idx_t vector_index = (row_id - column_data.start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (row_id - column_data.GetSegmentStart()) / STANDARD_VECTOR_SIZE;
 	auto lock_handle = lock.GetSharedLock();
 	auto entry = GetUpdateNode(*lock_handle, vector_index);
 	if (!entry.IsSet()) {
 		return;
 	}
-	idx_t row_in_vector = (row_id - column_data.start) - vector_index * STANDARD_VECTOR_SIZE;
+	idx_t row_in_vector = (row_id - column_data.GetSegmentStart()) - vector_index * STANDARD_VECTOR_SIZE;
 	auto pin = entry.Pin();
 	fetch_row_function(transaction.start_time, transaction.transaction_id, UpdateInfo::Get(pin), row_in_vector, result,
 	                   result_idx);
@@ -819,7 +819,7 @@ template <class T, class V, class OP = ExtractStandardEntry>
 static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, UpdateInfo &update_info,
                                     const SelectionVector &update_vector_sel, const V *update_vector_data, row_t *ids,
                                     idx_t count, const SelectionVector &sel) {
-	auto base_id = base_info.segment->column_data.start + base_info.vector_index * STANDARD_VECTOR_SIZE;
+	auto base_id = base_info.segment->column_data.GetSegmentStart() + base_info.vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {

@@ -76,10 +76,11 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
-	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
+	auto start_offset = GetSegmentStart();
+	auto child_offset = row_idx == start_offset ? 0 : FetchListOffset(row_idx - 1);
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
+		child_column->InitializeScanWithOffset(state.child_states[1], start_offset + child_offset);
 	}
 	state.last_offset = child_offset;
 }
@@ -133,7 +134,8 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 		auto &child_entry = ListVector::GetEntry(result);
 		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
 		    child_entry.GetType().InternalType() != PhysicalType::ARRAY &&
-		    state.child_states[1].row_index + child_scan_count > child_column->start + child_column->GetMaxEntry()) {
+		    state.child_states[1].row_index + child_scan_count >
+		        child_column->GetSegmentStart() + child_column->GetMaxEntry()) {
 			throw InternalException("ListColumnData::ScanCount - internal list scan offset is out of range");
 		}
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
@@ -252,7 +254,7 @@ void ListColumnData::RevertAppend(row_t start_row) {
 	ColumnData::RevertAppend(start_row);
 	validity.RevertAppend(start_row);
 	auto column_count = GetMaxEntry();
-	if (column_count > start) {
+	if (column_count > GetSegmentStart()) {
 		// revert append in the child column
 		auto list_offset = FetchListOffset(column_count - 1);
 		child_column->RevertAppend(UnsafeNumericCast<row_t>(list_offset));
@@ -290,7 +292,8 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	}
 
 	// now perform the fetch within the segment
-	auto start_offset = idx_t(row_id) == this->start ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
+	auto start_idx = GetSegmentStart();
+	auto start_offset = idx_t(row_id) == start_idx ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
 	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 
@@ -314,9 +317,9 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
 		child_state->Initialize(state.context, child_type, nullptr);
-		child_column->InitializeScanWithOffset(*child_state, start + start_offset);
+		child_column->InitializeScanWithOffset(*child_state, start_idx + start_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state->row_index + child_scan_count - this->start <= child_column->GetMaxEntry());
+		         child_state->row_index + child_scan_count - start_idx <= child_column->GetMaxEntry());
 		child_column->ScanCount(*child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);

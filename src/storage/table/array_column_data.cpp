@@ -19,7 +19,7 @@ ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &inf
 }
 
 void ArrayColumnData::SetStart(idx_t new_start) {
-	this->start = new_start;
+	this->SetSegmentStart(new_start);
 	child_column->SetStart(new_start);
 	validity.SetStart(new_start);
 }
@@ -65,12 +65,13 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	// initialize the validity segment
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
+	auto start_offset = GetSegmentStart();
 	auto array_size = ArrayType::GetSize(type);
-	auto child_count = (row_idx - start) * array_size;
+	auto child_count = (row_idx - start_offset) * array_size;
 
 	D_ASSERT(child_count <= child_column->GetMaxEntry());
 	if (child_count < child_column->GetMaxEntry()) {
-		const auto child_offset = start + child_count;
+		const auto child_offset = start_offset + child_count;
 		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
 }
@@ -217,7 +218,8 @@ void ArrayColumnData::RevertAppend(row_t start_row) {
 	auto array_size = ArrayType::GetSize(type);
 	child_column->RevertAppend(start_row * UnsafeNumericCast<row_t>(array_size));
 
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
+	auto start_offset = GetSegmentStart();
+	this->count = UnsafeNumericCast<idx_t>(start_row) - start_offset;
 }
 
 idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -258,7 +260,8 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	auto child_state = make_uniq<ColumnScanState>();
 	child_state->Initialize(state.context, child_type, nullptr);
 
-	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
+	auto start_offset = GetSegmentStart();
+	const auto child_offset = start_offset + (UnsafeNumericCast<idx_t>(row_id) - start_offset) * array_size;
 
 	child_column->InitializeScanWithOffset(*child_state, child_offset);
 	Vector child_scan(child_type, array_size);

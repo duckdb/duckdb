@@ -229,8 +229,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			state.current = next;
 			state.current->node->InitializeScan(state);
 			state.segment_checked = false;
-			D_ASSERT(state.row_index >= state.current->node->start &&
-			         state.row_index <= state.current->node->start + state.current->node->count);
+			D_ASSERT(state.row_index >= state.current->row_start &&
+			         state.row_index <= state.current->row_start + state.current->node->count);
 		}
 	}
 	state.internal_index = state.row_index;
@@ -483,7 +483,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(l, start);
+		AppendTransientSegment(l, GetSegmentStart());
 	}
 	auto segment = data.GetLastSegment(l);
 	auto &last_segment = *segment->node;
@@ -559,15 +559,15 @@ void ColumnData::RevertAppend(row_t start_row_p) {
 		transient.RevertAppend(start_row);
 	}
 
-	this->count = start_row - this->start;
+	this->count = start_row - this->GetSegmentStart();
 }
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(row_id >= 0);
-	D_ASSERT(NumericCast<idx_t>(row_id) >= start);
+	D_ASSERT(NumericCast<idx_t>(row_id) >= GetSegmentStart());
 	// perform the fetch within the segment
-	state.row_index =
-	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
+	state.row_index = GetSegmentStart() + ((UnsafeNumericCast<idx_t>(row_id) - GetSegmentStart()) /
+	                                       STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = data.GetSegment(state.row_index);
 	state.internal_index = state.current->row_start;
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
@@ -713,7 +713,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
-		data_pointer.row_start = start + count;
+		data_pointer.row_start = GetSegmentStart() + count;
 		this->count += data_pointer.tuple_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats

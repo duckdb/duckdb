@@ -59,8 +59,6 @@ public:
 	           optional_ptr<ColumnData> parent);
 	virtual ~ColumnData();
 
-	//! The start row
-	idx_t start;
 	//! The count of the column data
 	atomic<idx_t> count;
 	//! The block manager
@@ -96,6 +94,12 @@ public:
 	const ColumnData &Parent() const {
 		D_ASSERT(HasParent());
 		return *parent;
+	}
+	idx_t GetSegmentStart() const {
+		return start;
+	}
+	void SetSegmentStart(idx_t start_p) {
+		this->start = start_p;
 	}
 
 	virtual void SetStart(idx_t new_start);
@@ -243,6 +247,10 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
+
+private:
+	//! The start row
+	idx_t start;
 
 private:
 	//! The parent column (if any)

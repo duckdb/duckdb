@@ -990,7 +990,7 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
 			auto &column = row_group.GetColumn(column_idx);
-			if (column.start != row_group.GetSegmentStart()) {
+			if (column.GetSegmentStart() != row_group.GetSegmentStart()) {
 				throw InternalException("RowGroup::WriteToDisk - child-column is unaligned with row group");
 			}
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
