@@ -6,6 +6,8 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/arena_containers/arena_unordered_map.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 
 namespace duckdb {
 
@@ -17,49 +19,76 @@ enum class ConversionType {
 	RESTORE_ORIGINAL,
 };
 
-class PlanSignatureCreateState {
+class PlanSignatureColumnIndexMap {
 public:
-	PlanSignatureCreateState() : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream) {
+	explicit PlanSignatureColumnIndexMap(ArenaAllocator &allocator)
+	    : to_canonical(allocator), restore_original(allocator) {
 	}
 
 public:
-	void Initialize(LogicalOperator &op) {
-		to_canonical.clear();
-		from_canonical.clear();
-		table_indices.clear();
-		expression_info.clear();
-
-		for (const auto &child_op : op.children) {
-			for (const auto &child_cb : child_op->GetColumnBindings()) {
-				const auto &original = child_cb.table_index;
-				auto it = to_canonical.find(original);
-				if (it != to_canonical.end()) {
-					continue; // We've seen this table index before
-				}
-				const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + to_canonical.size();
-				to_canonical[original] = canonical;
-				from_canonical[canonical] = original;
-			}
-		}
+	void Insert(const idx_t original, const idx_t canonical) {
+		const auto res1 = to_canonical.insert(make_pair(original, canonical));
+		const auto res2 = restore_original.insert(make_pair(canonical, original));
+		D_ASSERT(res1.second && res2.second);
 	}
 
 	template <ConversionType TYPE>
+	idx_t Get(const idx_t index) const {
+		const auto &map = TYPE == ConversionType::TO_CANONICAL ? to_canonical : restore_original;
+		return map.at(index);
+	}
+
+private:
+	//! Map from original column index to canonical column index (and reverse)
+	arena_unordered_map<idx_t, idx_t> to_canonical;
+	arena_unordered_map<idx_t, idx_t> restore_original;
+};
+
+class PlanSignatureTableIndexMap {
+public:
+	explicit PlanSignatureTableIndexMap(ArenaAllocator &allocator_p)
+	    : allocator(allocator_p), table_index_map(allocator), to_canonical_table_index(allocator),
+	      restore_original_table_index(allocator), table_indices(allocator) {
+	}
+
+public:
+	template <ConversionType TYPE>
 	bool Convert(LogicalOperator &op) {
-		switch (TYPE) {
-		case ConversionType::TO_CANONICAL:
-			D_ASSERT(children.empty());
-			children = std::move(op.children);
-			break;
-		case ConversionType::RESTORE_ORIGINAL:
-			D_ASSERT(op.children.empty());
-			op.children = std::move(children);
-			break;
-		}
+		Initialize<TYPE>(op);
 		ConvertTableIndices<TYPE>(op);
+		ConvertColumnIndices<TYPE>(op);
+		ConvertChildren<TYPE>(op);
 		return ConvertExpressions<TYPE>(op);
 	}
 
 private:
+	template <ConversionType TYPE>
+	void Initialize(LogicalOperator &op) {
+		if (TYPE == ConversionType::TO_CANONICAL) {
+			// Clear temporary data structures
+			to_canonical_table_index.clear();
+			restore_original_table_index.clear();
+			column_ids.clear();
+			table_indices.clear();
+			expression_info.clear();
+
+			// Store temporary mapping
+			for (const auto &child_op : op.children) {
+				for (const auto &child_cb : child_op->GetColumnBindings()) {
+					const auto &original = child_cb.table_index;
+					auto it = to_canonical_table_index.find(original);
+					if (it != to_canonical_table_index.end()) {
+						continue; // We've seen this table index before
+					}
+					const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size();
+					const auto res1 = to_canonical_table_index.insert(make_pair(original, canonical));
+					const auto res2 = restore_original_table_index.insert(make_pair(canonical, original));
+					D_ASSERT(res1.second && res2.second);
+				}
+			}
+		}
+	}
+
 	template <ConversionType TYPE>
 	void ConvertTableIndices(LogicalOperator &op) {
 		switch (op.type) {
@@ -113,7 +142,7 @@ private:
 		case ConversionType::TO_CANONICAL:
 			D_ASSERT(table_indices.size() == i);
 			table_indices.emplace_back(table_index);
-			table_index = CANONICAL_TABLE_INDEX_OFFSET + i;
+			table_index = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size() + i;
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			table_index = table_indices[i];
@@ -122,19 +151,72 @@ private:
 	}
 
 	template <ConversionType TYPE>
+	void ConvertColumnIndices(LogicalOperator &op) {
+		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = op.Cast<LogicalGet>();
+			switch (TYPE) {
+			case ConversionType::TO_CANONICAL: {
+				D_ASSERT(column_ids.empty());
+				// Grab selected GET columns and populate with all possible columns
+				column_ids = std::move(get.GetMutableColumnIds());
+				for (idx_t col_idx = 0; col_idx < get.names.size(); col_idx++) {
+					get.GetMutableColumnIds().push_back(ColumnIndex(col_idx));
+				}
+				const auto emp_res = table_index_map.emplace(table_indices[0], PlanSignatureColumnIndexMap(allocator));
+				D_ASSERT(emp_res.second);
+				// Store mapping for base tables
+				auto &column_index_map = emp_res.first->second;
+				for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+					column_index_map.Insert(col_idx, column_ids[col_idx].GetPrimaryIndex());
+				}
+				break;
+			}
+			case ConversionType::RESTORE_ORIGINAL:
+				D_ASSERT(!column_ids.empty());
+				get.GetMutableColumnIds() = std::move(column_ids);
+				break;
+			}
+		}
+	}
+
+	template <ConversionType TYPE>
+	void ConvertChildren(LogicalOperator &op) {
+		switch (TYPE) {
+		case ConversionType::TO_CANONICAL:
+			D_ASSERT(children.empty());
+			children = std::move(op.children);
+			break;
+		case ConversionType::RESTORE_ORIGINAL:
+			D_ASSERT(op.children.empty());
+			op.children = std::move(children);
+			break;
+		}
+	}
+
+	template <ConversionType TYPE>
 	bool ConvertExpressions(LogicalOperator &op) {
-		const auto &table_index_mapping = TYPE == ConversionType::TO_CANONICAL ? to_canonical : from_canonical;
+		const auto &table_index_mapping =
+		    TYPE == ConversionType::TO_CANONICAL ? to_canonical_table_index : restore_original_table_index;
 		bool can_materialize = true;
 		idx_t info_idx = 0;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
 			ExpressionIterator::EnumerateExpression(*expr, [&](unique_ptr<Expression> &child) {
+				// Replace column binding
 				if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &col_ref = child->Cast<BoundColumnRefExpression>();
-					auto &table_index = col_ref.binding.table_index;
-					auto it = table_index_mapping.find(table_index);
-					D_ASSERT(it != table_index_mapping.end());
-					table_index = it->second;
+					auto &column_binding = child->Cast<BoundColumnRefExpression>().binding;
+					const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
+					                            ? column_binding.table_index
+					                            : restore_original_table_index.at(column_binding.table_index);
+					const auto it = table_index_map.find(lookup_idx);
+					if (it != table_index_map.end()) {
+						// Replace column index
+						column_binding.column_index = it->second.Get<TYPE>(column_binding.column_index);
+					}
+					// Replace table index
+					column_binding.table_index = table_index_mapping.at(column_binding.table_index);
 				}
+
+				// Replace default fields
 				switch (TYPE) {
 				case ConversionType::TO_CANONICAL:
 					expression_info.emplace_back(std::move(child->alias), child->query_location);
@@ -156,22 +238,44 @@ private:
 	}
 
 private:
+	//! Offset for table index conversion
 	static constexpr idx_t CANONICAL_TABLE_INDEX_OFFSET = 10000000000000;
 
+	//! For batching allocations
+	ArenaAllocator &allocator;
+
+	//! Map from original table index to column index map
+	arena_unordered_map<idx_t, PlanSignatureColumnIndexMap> table_index_map;
+
+	//! Temporary map from original table index to canonical table index (and reverse)
+	arena_unordered_map<idx_t, idx_t> to_canonical_table_index;
+	arena_unordered_map<idx_t, idx_t> restore_original_table_index;
+
+	//! Utility to temporarily store, column ids, table indices, expression info and children
+	vector<ColumnIndex> column_ids;
+	arena_vector<idx_t> table_indices;
+	vector<pair<string, optional_idx>> expression_info;
+	vector<unique_ptr<LogicalOperator>> children;
+};
+
+class PlanSignatureCreateState {
 public:
+	explicit PlanSignatureCreateState(ClientContext &context)
+	    : stream(DEFAULT_BLOCK_ALLOC_SIZE), serializer(stream), allocator(BufferAllocator::Get(context)),
+	      table_index_map(allocator) {
+	}
+
+public:
+public:
+	//! For serializing operators to a binary string
 	MemoryStream stream;
 	BinarySerializer serializer;
 
-	//! Mapping from original table index to canonical table index (and reverse mapping)
-	unordered_map<idx_t, idx_t> to_canonical;
-	unordered_map<idx_t, idx_t> from_canonical;
+	//! For batching allocations together
+	ArenaAllocator allocator;
 
-	//! Place to temporarily store children
-	vector<unique_ptr<LogicalOperator>> children;
-
-	//! Utility vectors to temporarily store table indices and expression info
-	vector<idx_t> table_indices;
-	vector<pair<string, optional_idx>> expression_info;
+	//! Manages mappings
+	PlanSignatureTableIndexMap table_index_map;
 };
 
 class PlanSignature {
@@ -191,9 +295,8 @@ public:
 		if (!OperatorIsSupported(op)) {
 			return nullptr;
 		}
-		state.Initialize(op);
 
-		auto can_materialize = state.Convert<ConversionType::TO_CANONICAL>(op);
+		auto can_materialize = state.table_index_map.Convert<ConversionType::TO_CANONICAL>(op);
 
 		// Serialize canonical representation of operator
 		const auto offset = state.stream.GetPosition();
@@ -207,29 +310,31 @@ public:
 		const auto length = state.stream.GetPosition() - offset;
 
 		// Convert back from canonical
-		state.Convert<ConversionType::RESTORE_ORIGINAL>(op);
+		state.table_index_map.Convert<ConversionType::RESTORE_ORIGINAL>(op);
 
-		if (can_materialize) {
-			idx_t operator_count = 1;
-			idx_t base_table_count = 0;
-			idx_t max_base_table_cardinality = 0;
-			if (op.children.empty()) {
-				base_table_count++;
-				if (op.has_estimated_cardinality) {
-					max_base_table_cardinality = op.estimated_cardinality;
-				}
-			}
-			for (auto &child_signature : child_signatures) {
-				operator_count += child_signature.get().OperatorCount();
-				base_table_count += child_signature.get().BaseTableCount();
-				max_base_table_cardinality =
-				    MaxValue(max_base_table_cardinality, child_signature.get().MaxBaseTableCardinality());
-			}
-			return unique_ptr<PlanSignature>(new PlanSignature(state.stream, offset, length,
-			                                                   std::move(child_signatures), operator_count,
-			                                                   base_table_count, max_base_table_cardinality));
+		if (!can_materialize) {
+			return nullptr; // Cannot materialize, no point in adding it
 		}
-		return nullptr;
+
+		// Collect some statistics so we can select a good candidate later
+		idx_t operator_count = 1;
+		idx_t base_table_count = 0;
+		idx_t max_base_table_cardinality = 0;
+		if (op.children.empty()) {
+			base_table_count++;
+			if (op.has_estimated_cardinality) {
+				max_base_table_cardinality = op.estimated_cardinality;
+			}
+		}
+		for (auto &child_signature : child_signatures) {
+			operator_count += child_signature.get().OperatorCount();
+			base_table_count += child_signature.get().BaseTableCount();
+			max_base_table_cardinality =
+			    MaxValue(max_base_table_cardinality, child_signature.get().MaxBaseTableCardinality());
+		}
+		return unique_ptr<PlanSignature>(new PlanSignature(state.stream, offset, length, std::move(child_signatures),
+		                                                   operator_count, base_table_count,
+		                                                   max_base_table_cardinality));
 	}
 
 	idx_t OperatorCount() const {
@@ -359,7 +464,7 @@ using subplan_map_t = unordered_map<reference<PlanSignature>, SubplanInfo, PlanS
 //===--------------------------------------------------------------------===//
 class CommonSubplanFinder {
 public:
-	CommonSubplanFinder() {
+	explicit CommonSubplanFinder(ClientContext &context) : state(context) {
 	}
 
 private:
@@ -582,7 +687,7 @@ static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperato
 
 unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
 	// Bottom-up identification of identical subplans
-	CommonSubplanFinder finder;
+	CommonSubplanFinder finder(optimizer.context);
 	auto subplans = finder.FindCommonSubplans(op);
 
 	// Identify the single best subplan (TODO: for now, in the future we should identify multiple)
