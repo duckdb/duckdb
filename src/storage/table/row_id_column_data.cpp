@@ -5,8 +5,8 @@
 namespace duckdb {
 
 RowIdColumnData::RowIdColumnData(BlockManager &block_manager, DataTableInfo &info)
-    : ColumnData(block_manager, info, COLUMN_IDENTIFIER_ROW_ID, ColumnDataType::MAIN_TABLE,
-                 LogicalType(LogicalTypeId::BIGINT), nullptr) {
+    : ColumnData(block_manager, info, COLUMN_IDENTIFIER_ROW_ID, LogicalType(LogicalTypeId::BIGINT),
+                 ColumnDataType::MAIN_TABLE, nullptr) {
 }
 
 FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

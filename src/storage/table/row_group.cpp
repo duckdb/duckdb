@@ -57,10 +57,9 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
-	auto data_type = ColumnDataType::MAIN_TABLE;
 	columns.reserve(types.size());
 	for (idx_t c = 0; c < types.size(); c++) {
-		auto entry = ColumnData::CreateColumn(block_manager, info, c, data_type, types[c], nullptr);
+		auto entry = ColumnData::CreateColumn(block_manager, info, c, types[c]);
 		entry->InitializeColumn(data.column_data[c]);
 		columns.push_back(std::move(entry));
 	}
@@ -68,20 +67,9 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 	Verify();
 }
 
-ColumnDataType RowGroup::GetColumnDataType() const {
-	if (GetSegmentStart() == MAX_ROW_ID) {
-		return ColumnDataType::INITIAL_TRANSACTION_LOCAL;
-	}
-	if (GetSegmentStart() > MAX_ROW_ID) {
-		return ColumnDataType::TRANSACTION_LOCAL;
-	}
-	return ColumnDataType::MAIN_TABLE;
-}
-
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	lock_guard<mutex> l(row_group_lock);
 	has_changes = true;
-	auto data_type = GetColumnDataType();
 	this->collection = collection_p;
 	this->SetSegmentStart(new_start);
 	for (idx_t c = 0; c < columns.size(); c++) {
@@ -90,7 +78,7 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_star
 			// if it is not loaded - we will set the correct start position upon loading
 			continue;
 		}
-		columns[c]->SetDataType(data_type);
+		columns[c]->SetDataType(ColumnDataType::MAIN_TABLE);
 	}
 }
 
@@ -173,12 +161,11 @@ DataTableInfo &RowGroup::GetTableInfo() {
 	return GetCollection().GetTableInfo();
 }
 
-void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
+void RowGroup::InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type) {
 	// set up the segment trees for the column segments
 	D_ASSERT(columns.empty());
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data =
-		    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), i, GetColumnDataType(), types[i]);
+		auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), i, types[i], data_type);
 		columns.push_back(std::move(column_data));
 	}
 }
@@ -324,8 +311,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	Verify();
 
 	// construct a new column data for this type
-	auto column_data =
-	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), changed_idx, GetColumnDataType(), target_type);
+	auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), changed_idx, target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -375,8 +361,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), GetColumnCount(),
-	                                             GetColumnDataType(), new_column.Type());
+	auto added_column =
+	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), GetColumnCount(), new_column.Type());
 
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {

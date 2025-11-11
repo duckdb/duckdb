@@ -8,14 +8,14 @@
 
 namespace duckdb {
 
-ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                               ColumnDataType data_type, LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, data_type, std::move(type_p), parent),
+ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
+                               ColumnDataType data_type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
       validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
-	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, data_type, child_type, this);
+	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, child_type, data_type, this);
 }
 
 void ListColumnData::SetDataType(ColumnDataType data_type) {

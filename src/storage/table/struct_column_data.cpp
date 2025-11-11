@@ -10,8 +10,8 @@
 namespace duckdb {
 
 StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                   ColumnDataType data_type, LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, data_type, std::move(type_p), parent),
+                                   LogicalType type_p, ColumnDataType data_type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
       validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
@@ -26,7 +26,7 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	idx_t sub_column_index = 1;
 	for (auto &child_type : child_types) {
 		sub_columns.push_back(
-		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, data_type, child_type.second, this));
+		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, child_type.second, data_type, this));
 		sub_column_index++;
 	}
 }

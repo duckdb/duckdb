@@ -12,8 +12,8 @@
 namespace duckdb {
 
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                       ColumnDataType data_type, LogicalType type, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, data_type, std::move(type), parent),
+                                       LogicalType type, ColumnDataType data_type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, std::move(type), data_type, parent),
       validity(block_manager, info, 0, *this) {
 }
 

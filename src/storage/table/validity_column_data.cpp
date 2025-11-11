@@ -6,7 +6,7 @@ namespace duckdb {
 
 ValidityColumnData::ValidityColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                        ColumnData &parent)
-    : ColumnData(block_manager, info, column_index, parent.GetDataType(), LogicalType(LogicalTypeId::VALIDITY),
+    : ColumnData(block_manager, info, column_index, LogicalType(LogicalTypeId::VALIDITY), parent.GetDataType(),
                  &parent) {
 }
 

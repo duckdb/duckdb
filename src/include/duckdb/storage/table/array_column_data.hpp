@@ -16,8 +16,8 @@ namespace duckdb {
 //! List column data represents a list
 class ArrayColumnData : public ColumnData {
 public:
-	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnDataType data_type,
-	                LogicalType type, optional_ptr<ColumnData> parent = nullptr);
+	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
+	                ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;

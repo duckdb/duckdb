@@ -16,8 +16,8 @@ namespace duckdb {
 //! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
 class StandardColumnData : public ColumnData {
 public:
-	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnDataType data_type,
-	                   LogicalType type, optional_ptr<ColumnData> parent = nullptr);
+	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
+	                   ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 	//! The validity column data
 	ValidityColumnData validity;

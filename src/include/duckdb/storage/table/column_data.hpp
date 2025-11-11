@@ -57,8 +57,8 @@ class ColumnData {
 	friend class ColumnDataCheckpointer;
 
 public:
-	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnDataType data_type,
-	           LogicalType type, optional_ptr<ColumnData> parent);
+	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
+	           ColumnDataType data_type, optional_ptr<ColumnData> parent);
 	virtual ~ColumnData();
 
 	//! The count of the column data
@@ -191,11 +191,12 @@ public:
 	FilterPropagateResult CheckZonemap(TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                           ColumnDataType data_type, const LogicalType &type,
+	                                           const LogicalType &type,
+	                                           ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
 	                                           optional_ptr<ColumnData> parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
-	                                                 idx_t column_index, ColumnDataType data_type,
-	                                                 const LogicalType &type,
+	                                                 idx_t column_index, const LogicalType &type,
+	                                                 ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
 	                                                 optional_ptr<ColumnData> parent = nullptr);
 
 	void MergeStatistics(const BaseStatistics &other);

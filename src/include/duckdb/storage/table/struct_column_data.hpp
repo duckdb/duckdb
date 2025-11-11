@@ -16,8 +16,8 @@ namespace duckdb {
 //! Struct column data represents a struct
 class StructColumnData : public ColumnData {
 public:
-	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnDataType data_type,
-	                 LogicalType type, optional_ptr<ColumnData> parent = nullptr);
+	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
+	                 ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 	//! The sub-columns of the struct
 	vector<unique_ptr<ColumnData>> sub_columns;

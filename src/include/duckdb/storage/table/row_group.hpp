@@ -128,7 +128,7 @@ public:
 	void CommitDrop();
 	void CommitDropColumn(const idx_t column_index);
 
-	void InitializeEmpty(const vector<LogicalType> &types);
+	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;
 
 	//! Initialize a scan over this row_group
@@ -218,7 +218,6 @@ private:
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
 	void SetVersionInfo(shared_ptr<RowVersionManager> version);
-	ColumnDataType GetColumnDataType() const;
 
 	ColumnData &GetColumn(storage_t c);
 	ColumnData &GetColumn(const StorageIndex &c);

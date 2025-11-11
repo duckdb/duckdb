@@ -125,10 +125,20 @@ void RowGroupCollection::InitializeEmpty() {
 	stats.InitializeEmpty(types);
 }
 
+ColumnDataType GetColumnDataType(idx_t row_start) {
+	if (row_start == MAX_ROW_ID) {
+		return ColumnDataType::INITIAL_TRANSACTION_LOCAL;
+	}
+	if (row_start > MAX_ROW_ID) {
+		return ColumnDataType::TRANSACTION_LOCAL;
+	}
+	return ColumnDataType::MAIN_TABLE;
+}
+
 void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	D_ASSERT(start_row >= row_start);
 	auto new_row_group = make_uniq<RowGroup>(*this, start_row, 0U);
-	new_row_group->InitializeEmpty(types);
+	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
 	row_groups->AppendSegment(l, std::move(new_row_group));
 	requires_new_row_group = false;
 }
@@ -908,7 +918,7 @@ public:
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, row_group_size);
 			auto new_row_group = make_uniq<RowGroup>(collection, start, current_row_group_rows);
-			new_row_group->InitializeEmpty(types);
+			new_row_group->InitializeEmpty(types, ColumnDataType::MAIN_TABLE);
 			new_row_groups.push_back(std::move(new_row_group));
 			append_counts.push_back(0);
 
