@@ -27,11 +27,7 @@ inline void AppendBitset(ContainerCompressionState &state, bool null, uint16_t a
 	D_ASSERT(state.uncompressed);
 	if (null) {
 		ValidityMask mask(state.uncompressed, ROARING_CONTAINER_SIZE);
-		printf("\nAppendBitset()");
-
-		auto vector_from_validity = Vector(LogicalType::UBIGINT, data_ptr_cast(state.uncompressed));
-
-		SetInvalidRange(vector_from_validity, state.appended_count, state.appended_count + amount);
+		SetInvalidRange(mask, state.appended_count, state.appended_count + amount);
 	}
 }
 

@@ -80,27 +80,23 @@ Data layout per segment:
 namespace duckdb {
 
 namespace roaring {
-
 // Set all the bits from start (inclusive) to end (exclusive) to 0
-void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
+void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	printf("\nSetInvalidRange");
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
-	// result.EnsureWritable();
-	if (!result.GetData()) {
-		result.Initialize();
-	}
-	auto result_data = (validity_t *) FlatVector::GetData<uint64_t>(result);
+	result.EnsureWritable();
+	auto result_data = (validity_t *)result.GetData();
 
-// #ifdef DEBUG
-// 	ValidityMask copy_for_verification(result.Capacity());
-// 	copy_for_verification.EnsureWritable();
-// 	for (idx_t i = 0;
-// 	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
-// 		copy_for_verification.GetData()[i] = result.GetData()[i];
-// 	}
-// #endif
+	#ifdef DEBUG
+		ValidityMask copy_for_verification(result.Capacity());
+		copy_for_verification.EnsureWritable();
+		for (idx_t i = 0;
+			 i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
+			copy_for_verification.GetData()[i] = result.GetData()[i];
+		}
+	#endif
 
 	idx_t index = start;
 
@@ -158,17 +154,17 @@ void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 		result_data[entry_idx] &= mask;
 	}
 
-	// #ifdef DEBUG
-	// 	D_ASSERT(end <= result.Capacity());
-	// 	for (idx_t i = 0; i < result.Capacity(); i++) {
-	// 		if (i >= start && i < end) {
-	// 			D_ASSERT(!result.RowIsValidUnsafe(i));
-	// 		} else {
-	// 			// Ensure no others bits are touched by this method
-	// 			D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
-	// 		}
-	// 	}
-	// #endif
+	#ifdef DEBUG
+		D_ASSERT(end <= result.Capacity());
+		for (idx_t i = 0; i < result.Capacity(); i++) {
+			if (i >= start && i < end) {
+				D_ASSERT(!result.RowIsValidUnsafe(i));
+			} else {
+				// Ensure no others bits are touched by this method
+				D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
+			}
+		}
+	#endif
 }
 
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
@@ -199,7 +195,7 @@ idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 }
 
 unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &checkpoint_data,
-                                                    unique_ptr<AnalyzeState> state) {
+													unique_ptr<AnalyzeState> state) {
 	return make_uniq<RoaringCompressState>(checkpoint_data, std::move(state));
 }
 template <PhysicalType TYPE>
@@ -229,10 +225,19 @@ void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
-
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	printf("\nroaring::RoaringScan");
 	RoaringScanPartial(segment, state, scan_count, result, 0);
+}
+
+void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	Vector temp(LogicalType::UBIGINT, false, false, scan_count);
+	RoaringScan(segment, state, scan_count, temp);
+	// "UnBitPack" temp's validity_mask and put it in result's data
+	UnifiedVectorFormat unified;
+	temp.ToUnifiedFormat(scan_count, unified);
+	auto &validity = unified.validity;
+	BitpackingPrimitives::UnPackBuffer<uint8_t>(result.GetData(), data_ptr_cast(validity.GetData()), scan_count, 1);
 }
 
 //===--------------------------------------------------------------------===//
@@ -269,16 +274,20 @@ unique_ptr<CompressedSegmentState> RoaringInitSegment(ColumnSegment &segment, bl
 CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	compression_analyze_t analyze = nullptr;
 	compression_compress_data_t compress = nullptr;
+	compression_scan_vector_t scan = nullptr;
+	// compression_fetch_row_t fetch_row = nullptr;
 
 	switch (data_type) {
 	case PhysicalType::BIT: {
 		analyze = roaring::RoaringAnalyze<PhysicalType::BIT>;
 		compress = roaring::RoaringCompress<PhysicalType::BIT>;
+		scan = roaring::RoaringScan;
 		break;
 	}
 	case PhysicalType::BOOL: {
 		analyze = roaring::RoaringAnalyze<PhysicalType::BOOL>;
 		compress = roaring::RoaringCompress<PhysicalType::BOOL>;
+		scan = roaring::RoaringScanBoolean;
 		break;
 	}
 	default:
@@ -286,7 +295,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	}
 	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, roaring::RoaringInitAnalyze, analyze,
 	                           roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression, compress,
-	                           roaring::RoaringFinalizeCompress, roaring::RoaringInitScan, roaring::RoaringScan,
+	                           roaring::RoaringFinalizeCompress, roaring::RoaringInitScan, scan,
 	                           roaring::RoaringScanPartial, roaring::RoaringFetchRow, roaring::RoaringSkip,
 	                           roaring::RoaringInitSegment);
 }
@@ -294,7 +303,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BIT:
-		// case PhysicalType::BOOL:
+	case PhysicalType::BOOL:
 		return GetCompressionFunction(type);
 	default:
 		throw InternalException("Unsupported type for Roaring");
@@ -304,7 +313,7 @@ CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 bool RoaringCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
 	switch (physical_type) {
 	case PhysicalType::BIT:
-		// case PhysicalType::BOOL:
+	case PhysicalType::BOOL:
 		return true;
 	default:
 		return false;
