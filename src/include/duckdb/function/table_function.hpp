@@ -35,6 +35,9 @@ class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
+enum class OrderByColumnType;
+enum class RowGroupOrderType;
+enum class OrderByStatistics;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -107,6 +110,18 @@ struct TableFunctionBindInput {
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
+};
+
+struct RowGroupOrderOptions {
+	RowGroupOrderOptions(column_t column_idx_p, OrderByStatistics order_by_p, RowGroupOrderType order_type_p,
+	                     OrderByColumnType column_type_p)
+	    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p) {
+	}
+
+	const column_t column_idx;
+	const OrderByStatistics order_by;
+	const RowGroupOrderType order_type;
+	const OrderByColumnType column_type;
 };
 
 struct TableFunctionInitInput {
@@ -327,6 +342,9 @@ typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientConte
 typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &context,
                                                               optional_ptr<FunctionData> bind_data);
 
+typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
+                                              optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
@@ -416,6 +434,8 @@ public:
 	table_function_get_virtual_columns_t get_virtual_columns;
 	//! (Optional) returns a list of row id columns
 	table_function_get_row_id_columns get_row_id_columns;
+	//! (Optional) sets the order to scan the row groups in
+	table_function_set_scan_order set_scan_order;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

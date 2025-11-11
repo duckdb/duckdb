@@ -41,6 +41,9 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 		const auto &open_options = path.extended_info->options;
 		const auto validate_entry = open_options.find("validate_external_file_cache");
 		if (validate_entry != open_options.end()) {
+			if (validate_entry->second.IsNull()) {
+				throw InvalidInputException("Cannot use NULL as argument for validate_external_file_cache");
+			}
 			validate = BooleanValue::Get(validate_entry->second);
 		}
 	}

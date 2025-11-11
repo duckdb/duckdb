@@ -1,0 +1,697 @@
+{
+  "group": "copy_functions",
+  "deprecated": false,
+  "description": "Functions to copy data from and to external file formats.",
+  "entries": [
+    {
+      "name": "duckdb_create_copy_function",
+      "return_type": "duckdb_copy_function",
+      "params": [],
+      "comment": {
+        "description": "Creates a new empty copy function.\n\nThe return value must be destroyed with `duckdb_destroy_copy_function`.\n\n",
+        "return_value": "The copy function object."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_name",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "const char *",
+          "name": "name"
+        }
+      ],
+      "comment": {
+        "description": "Sets the name of the copy function.\n\n",
+        "param_comments": {
+          "copy_function": "The copy function",
+          "name": "The name to set"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_extra_info",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "void *",
+          "name": "extra_info"
+        },
+        {
+          "type": "duckdb_delete_callback_t",
+          "name": "destructor"
+        }
+      ],
+      "comment": {
+        "description": "Sets the extra info pointer of the copy function, which can be used to store arbitrary data.\n\n",
+        "param_comments": {
+          "copy_function": "The copy function",
+          "extra_info": "The extra info pointer",
+          "destructor": " A destructor function to call to destroy the extra info"
+        }
+      }
+    },
+    {
+      "name": "duckdb_register_copy_function",
+      "return_type": "duckdb_state",
+      "params": [
+        {
+          "type": "duckdb_connection",
+          "name": "connection"
+        },
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        }
+      ],
+      "comment": {
+        "description": "Registers the given copy function on the database connection under the specified name.\n\n",
+        "param_comments": {
+          "connection": "The database connection",
+          "copy_function": "The copy function to register",
+          "name": "The name to register the copy function under"
+        }
+      }
+    },
+    {
+      "name": "duckdb_destroy_copy_function",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function *",
+          "name": "copy_function"
+        }
+      ],
+      "comment": {
+        "description": "Destroys the given copy function object.\n",
+        "param_comments": {
+          "copy_function": "The copy function to destroy."
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_bind",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_function_bind_t",
+          "name": "bind"
+        }
+      ],
+      "comment": {
+        "description": "Sets the bind function of the copy function, to use when binding `COPY ... TO`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "bind": "The bind function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_bind_set_error",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "const char *",
+          "name": "error"
+        }
+      ],
+      "comment": {
+        "description": "Report that an error occurred during the binding-phase of a `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function",
+          "error": "The error message"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_bind_get_extra_info",
+        "return_type": "void *",
+        "params": [
+            {
+            "type": "duckdb_copy_function_bind_info",
+            "name": "info"
+            }
+        ],
+        "comment": {
+            "description": "Retrieves the extra info pointer of the copy function.\n\n",
+            "param_comments": {
+            "info": "The bind info provided to the bind function"
+            },
+            "return_value": "The extra info pointer."
+        }
+    },
+    {
+      "name": "duckdb_copy_function_bind_get_client_context",
+      "return_type": "duckdb_client_context",
+        "params": [
+            {
+            "type": "duckdb_copy_function_bind_info",
+            "name": "info"
+            }
+        ],
+        "comment": {
+            "description": "Retrieves the client context of the current connection binding the `COPY ... TO` function.\n\nMust be destroyed with `duckdb_destroy_client_context`\n\n",
+            "param_comments": {
+            "info": "The bind info provided to the bind function"
+            },
+            "return_value": "The client context."
+        }
+    },
+    {
+      "name": "duckdb_copy_function_bind_get_column_count",
+      "return_type": "idx_t",
+      "params": [
+        {
+          "type": "duckdb_copy_function_bind_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the number of columns that will be provided to the `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function"
+        },
+        "return_value": "The number of columns."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_bind_get_column_type",
+      "return_type": "duckdb_logical_type",
+      "params": [
+        {
+          "type": "duckdb_copy_function_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "idx_t",
+          "name": "col_idx"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the type of a column that will be provided to the `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function",
+          "col_idx": "The index of the column to retrieve the type for"
+        },
+        "return_value": "The type of the column. Must be destroyed with `duckdb_destroy_logical_type`."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_bind_get_options",
+      "return_type": "duckdb_value",
+      "params": [
+        {
+          "type": "duckdb_copy_function_bind_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves all values for the given options provided to the `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function"
+        },
+        "return_value": "A STRUCT value containing all options as fields. Must be destroyed with `duckdb_destroy_value`."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_bind_set_bind_data",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "void *",
+          "name": "bind_data"
+        },
+        {
+          "type": "duckdb_delete_callback_t",
+          "name": "destructor"
+        }
+      ],
+      "comment": {
+        "description": "Sets the bind data of the copy function, to be provided to the init, sink and finalize functions.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function",
+          "bind_data": "The bind data pointer",
+          "destructor": " A destructor function to call to destroy the bind data"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_global_init",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_function_global_init_t",
+          "name": "init"
+        }
+      ],
+      "comment": {
+        "description": "Sets the initialization function of the copy function, called right before executing `COPY ... TO`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "init": "The init function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_global_init_set_error",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function_global_init_info",
+          "name": "info"
+        },
+        {
+          "type": "const char *",
+          "name": "error"
+        }
+      ],
+      "comment": {
+        "description": "Report that an error occurred during the initialization-phase of a `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function",
+          "error": "The error message"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_global_init_get_extra_info",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_global_init_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the extra info pointer of the copy function.\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function"
+        },
+        "return_value": "The extra info pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_global_init_get_client_context",
+      "return_type": "duckdb_client_context",
+      "params": [
+        {
+          "type": "duckdb_copy_function_global_init_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the client context of the current connection initializing the `COPY ... TO` function.\n\nMust be destroyed with `duckdb_destroy_client_context`\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function"
+        },
+        "return_value": "The client context."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_global_init_get_bind_data",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_global_init_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function"
+        },
+        "return_value": "The bind data pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_global_init_get_file_path",
+      "return_type": "const char *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_global_init_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the file path provided to the `COPY ... TO` function.\n\nLives for the duration of the initialization callback, must not be destroyed.\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function"
+        },
+        "return_value": "The file path."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_global_init_set_global_state",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function_global_init_info",
+          "name": "info"
+        },
+        {
+          "type": "void *",
+          "name": "global_state"
+        },
+        {
+          "type": "duckdb_delete_callback_t",
+          "name": "destructor"
+        }
+      ],
+      "comment": {
+        "description": "Sets the global state of the copy function, to be provided to all subsequent local init, sink and finalize functions.\n\n",
+        "param_comments": {
+          "info": "The init info provided to the init function",
+          "global_state": "The global state pointer",
+          "destructor": " A destructor function to call to destroy the global state"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_sink",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_function_sink_t",
+          "name": "function"
+        }
+      ],
+      "comment": {
+        "description": "Sets the sink function of the copy function, called during `COPY ... TO`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "function": "The sink function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_sink_set_error",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function_sink_info",
+          "name": "info"
+        },
+        {
+          "type": "const char *",
+          "name": "error"
+        }
+      ],
+      "comment": {
+        "description": "Report that an error occurred during the sink-phase of a `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The sink info provided to the sink function",
+          "error": "The error message"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_sink_get_extra_info",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_sink_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the extra info pointer of the copy function.\n\n",
+        "param_comments": {
+          "info": "The sink info provided to the sink function"
+        },
+        "return_value": "The extra info pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_sink_get_client_context",
+      "return_type": "duckdb_client_context",
+      "params": [
+        {
+          "type": "duckdb_copy_function_sink_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the client context of the current connection during the sink-phase of the `COPY ... TO` function.\n\nMust be destroyed with `duckdb_destroy_client_context`\n\n",
+        "param_comments": {
+          "info": "The sink info provided to the sink function"
+        },
+        "return_value": "The client context."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_sink_get_bind_data",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_sink_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The sink info provided to the sink function"
+        },
+        "return_value": "The bind data pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_sink_get_global_state",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_sink_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the global state provided during the init-phase of a `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The sink info provided to the sink function"
+        },
+        "return_value": "The global state pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_finalize",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function",
+          "name": "copy_function"
+        },
+        {
+          "type": "duckdb_copy_function_finalize_t",
+          "name": "finalize"
+        }
+      ],
+      "comment": {
+        "description": "Sets the finalize function of the copy function, called at the end of `COPY ... TO`.\n\n",
+        "param_comments": {
+          "table_function": "The copy function",
+          "finalize": "The finalize function"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_finalize_set_error",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_copy_function_finalize_info",
+          "name": "info"
+        },
+        {
+          "type": "const char *",
+          "name": "error"
+        }
+      ],
+      "comment": {
+        "description": "Report that an error occurred during the finalize-phase of a `COPY ... TO` function\n\n",
+        "param_comments": {
+          "info": "The finalize info provided to the finalize function",
+          "error": "The error message"
+        }
+      }
+    },
+    {
+      "name": "duckdb_copy_function_finalize_get_extra_info",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_finalize_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the extra info pointer of the copy function.\n\n",
+        "param_comments": {
+          "info": "The finalize info provided to the finalize function"
+        },
+        "return_value": "The extra info pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_finalize_get_client_context",
+      "return_type": "duckdb_client_context",
+      "params": [
+        {
+          "type": "duckdb_copy_function_finalize_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the client context of the current connection during the finalize-phase of the `COPY ... TO` function.\n\nMust be destroyed with `duckdb_destroy_client_context`\n\n",
+        "param_comments": {
+          "info": "The finalize info provided to the finalize function"
+        },
+        "return_value": "The client context."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_finalize_get_bind_data",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_finalize_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the bind data provided during the binding-phase of a `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The finalize info provided to the finalize function"
+        },
+        "return_value": "The bind data pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_finalize_get_global_state",
+      "return_type": "void *",
+      "params": [
+        {
+          "type": "duckdb_copy_function_finalize_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the global state provided during the init-phase of a `COPY ... TO` function.\n\n",
+        "param_comments": {
+          "info": "The finalize info provided to the finalize function"
+        },
+        "return_value": "The global state pointer."
+      }
+    },
+    {
+      "name": "duckdb_copy_function_set_copy_from_function",
+      "return_type": "void",
+        "params": [
+            {
+            "type": "duckdb_copy_function",
+            "name": "copy_function"
+            },
+          {
+            "type": "duckdb_table_function",
+            "name": "table_function"
+          }
+        ],
+        "comment": {
+          "description": "Sets the table function to use when executing a `COPY ... FROM (...)` statement with this copy function.\n\nThe table function must have a `duckdb_table_function_bind_t`, `duckdb_table_function_init_t` and `duckdb_table_function_t` set.\n\nThe table function must take a single VARCHAR parameter (the file path).\n\nOptions passed to the `COPY ... FROM (...)` statement are forwarded as named parameters to the table function.\n\nSince `COPY ... FROM` copies into an already existing table, the table function should not define its own result columns using `duckdb_bind_add_result_column` when binding\n. Instead use `duckdb_table_function_bind_get_result_column_count` and related functions in the bind callback of the table function to retrieve the schema of the target table of the `COPY ... FROM` statement.\n\n",
+            "param_comments": {
+            "copy_function": "The copy function",
+            "table_function": "The table function to use for `COPY ... FROM`"
+          }
+        }
+    },
+    {
+      "name": "duckdb_table_function_bind_get_result_column_count",
+      "return_type": "idx_t",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the number of result columns of a table function.\n\nIf the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the number of columns in the target table at the start of the bind callback.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function"
+        },
+        "return_value": "The number of result columns."
+      }
+    },
+    {
+      "name": "duckdb_table_function_bind_get_result_column_name",
+      "return_type": "const char *",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "idx_t",
+          "name": "col_idx"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the name of a result column of a table function.\n\nIf the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the names of the columns in the target table at the start of the bind callback.\n\nThe result is valid for the duration of the bind callback or until the next call to `duckdb_bind_add_result_column`, so it must not be destroyed.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function",
+          "col_idx": "The index of the result column to retrieve the name for"
+        },
+        "return_value": "The name of the result column."
+      }
+    },
+    {
+      "name": "duckdb_table_function_bind_get_result_column_type",
+      "return_type": "duckdb_logical_type",
+      "params": [
+        {
+          "type": "duckdb_bind_info",
+          "name": "info"
+        },
+        {
+          "type": "idx_t",
+          "name": "col_idx"
+        }
+      ],
+      "comment": {
+        "description": "Retrieves the type of a result column of a table function.\n\nIf the table function is used in a `COPY ... FROM` statement, this can be used to retrieve the types of the columns in the target table at the start of the bind callback.\n\nThe result must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+        "param_comments": {
+          "info": "The bind info provided to the bind function",
+          "col_idx": "The index of the result column to retrieve the type for"
+        },
+        "return_value": "The type of the result column."
+      }
+    }
+  ]
+}

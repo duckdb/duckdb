@@ -4,6 +4,7 @@
 #include "terminal.hpp"
 #include "highlighting.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "shell_highlight.hpp"
 
 using duckdb::Highlighting;
 using duckdb::History;
@@ -115,14 +116,6 @@ void linenoiseSetMultiLine(int ml) {
 	Terminal::SetMultiLine(ml);
 }
 
-void linenoiseSetHighlighting(int enabled) {
-	if (enabled) {
-		Highlighting::Enable();
-	} else {
-		Highlighting::Disable();
-	}
-}
-
 void linenoiseSetErrorRendering(int enabled) {
 	if (enabled) {
 		Linenoise::EnableErrorRendering();
@@ -139,53 +132,6 @@ void linenoiseSetCompletionRendering(int enabled) {
 	}
 }
 
-int linenoiseTrySetHighlightColor(const char *component, const char *code, char *out_error, size_t out_error_len) {
-	// figure out the component
-	duckdb::HighlightingType type;
-	bool raw_code = false;
-	std::string raw_component;
-	if (duckdb::StringUtil::EndsWith(component, "code")) {
-		raw_code = true;
-		raw_component = std::string(component, strlen(component) - 4);
-		component = raw_component.c_str();
-	}
-	if (duckdb::StringUtil::Equals(component, "keyword")) {
-		type = duckdb::HighlightingType::KEYWORD;
-	} else if (duckdb::StringUtil::Equals(component, "constant")) {
-		type = duckdb::HighlightingType::CONSTANT;
-	} else if (duckdb::StringUtil::Equals(component, "comment")) {
-		type = duckdb::HighlightingType::COMMENT;
-	} else if (duckdb::StringUtil::Equals(component, "error")) {
-		type = duckdb::HighlightingType::ERROR;
-	} else if (duckdb::StringUtil::Equals(component, "cont")) {
-		type = duckdb::HighlightingType::CONTINUATION;
-	} else if (duckdb::StringUtil::Equals(component, "cont_sel")) {
-		type = duckdb::HighlightingType::CONTINUATION_SELECTED;
-	} else {
-		snprintf(out_error, out_error_len - 1,
-		         "Unknown component '%s'.\nSupported highlighting components: "
-		         "[keyword|constant|comment|error|cont|cont_sel]",
-		         component);
-		return 0;
-	}
-	// if this is not a raw code - lookup the color codes
-	if (!raw_code) {
-		const char *option = Highlighting::GetColorOption(code);
-		if (!option) {
-			snprintf(out_error, out_error_len - 1,
-			         "Unknown highlighting color '%s'.\nSupported highlighting colors: "
-			         "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
-			         "brightblue|brightmagenta|brightcyan|brightwhite]",
-			         code);
-			return 0;
-		}
-		Highlighting::SetHighlightingColor(type, option);
-	} else {
-		Highlighting::SetHighlightingColor(type, code);
-	}
-	return 1;
-}
-
 void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {
 	Linenoise::SetPrompt(continuation, continuationSelected);
 }
@@ -194,21 +140,17 @@ void linenoiseSetPrompt(const char *continuation, const char *continuationSelect
  * in order to add completion options given the input string when the
  * user typed <tab>. See the example.c source code for a very easy to
  * understand example. */
-void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
-	size_t len = strlen(str);
-	char *copy, **cvec;
-
-	copy = (char *)malloc(len + 1);
-	if (copy == NULL)
-		return;
-	memcpy(copy, str, len + 1);
-	cvec = (char **)realloc(lc->cvec, sizeof(char *) * (lc->len + 1));
-	if (cvec == NULL) {
-		free(copy);
-		return;
-	}
-	lc->cvec = cvec;
-	lc->cvec[lc->len++] = copy;
+void linenoiseAddCompletion(linenoiseCompletions *lc, const char *zLine, const char *completion, size_t nCompletion,
+                            size_t completion_start, const char *completion_type) {
+	auto &completions = *reinterpret_cast<duckdb::TabCompletion *>(lc);
+	duckdb::Completion c;
+	c.original_completion = duckdb::string(completion, nCompletion);
+	c.completion.reserve(completion_start + nCompletion + 1);
+	c.completion += duckdb::string(zLine, completion_start);
+	c.completion += c.original_completion;
+	c.completion_type = Linenoise::GetCompletionType(completion_type);
+	c.cursor_pos = c.completion.size();
+	completions.completions.push_back(std::move(c));
 }
 
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len) {

@@ -54,6 +54,8 @@ ProfilerPrintFormat QueryProfiler::GetPrintFormat(ExplainFormat format) const {
 		return ProfilerPrintFormat::HTML;
 	case ExplainFormat::GRAPHVIZ:
 		return ProfilerPrintFormat::GRAPHVIZ;
+	case ExplainFormat::MERMAID:
+		return ProfilerPrintFormat::MERMAID;
 	default:
 		throw NotImplementedException("No mapping from ExplainFormat::%s to ProfilerPrintFormat",
 		                              EnumUtil::ToString(format));
@@ -71,6 +73,8 @@ ExplainFormat QueryProfiler::GetExplainFormat(ProfilerPrintFormat format) const 
 		return ExplainFormat::HTML;
 	case ProfilerPrintFormat::GRAPHVIZ:
 		return ExplainFormat::GRAPHVIZ;
+	case ProfilerPrintFormat::MERMAID:
+		return ExplainFormat::MERMAID;
 	case ProfilerPrintFormat::NO_OUTPUT:
 		throw InternalException("Should not attempt to get ExplainFormat for ProfilerPrintFormat::NO_OUTPUT");
 	default:
@@ -238,6 +242,9 @@ void QueryProfiler::EndQuery() {
 
 	guard.unlock();
 
+	// To log is inexpensive, whether to log or not depends on whether logging is active
+	ToLog();
+
 	if (emit_output) {
 		string tree = ToString();
 		auto save_location = GetSaveLocation();
@@ -269,6 +276,14 @@ void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
 	default:
 		return;
 	}
+}
+
+idx_t QueryProfiler::GetBytesRead() const {
+	return query_metrics.total_bytes_read;
+}
+
+idx_t QueryProfiler::GetBytesWritten() const {
+	return query_metrics.total_bytes_written;
 }
 
 void QueryProfiler::StartTimer(const MetricType type) {
@@ -337,7 +352,8 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 	case ProfilerPrintFormat::NO_OUTPUT:
 		return "";
 	case ProfilerPrintFormat::HTML:
-	case ProfilerPrintFormat::GRAPHVIZ: {
+	case ProfilerPrintFormat::GRAPHVIZ:
+	case ProfilerPrintFormat::MERMAID: {
 		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
@@ -569,7 +585,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	profiler.operator_infos.clear();
 }
 
-void QueryProfiler::SetInfo(const double &blocked_thread_time) {
+void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
 	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
@@ -803,6 +819,19 @@ static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val 
 	return result;
 }
 
+void QueryProfiler::ToLog() const {
+	lock_guard<std::mutex> guard(lock);
+
+	if (!root) {
+		// No root, not much to do
+		return;
+	}
+
+	auto &settings = root->GetProfilingInfo();
+
+	settings.WriteMetricsToLog(context);
+}
+
 string QueryProfiler::ToJSON() const {
 	lock_guard<std::mutex> guard(lock);
 	ConvertedJSONHolder json_holder;
@@ -912,6 +941,12 @@ string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
 				    node_0_0 [label="Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling!"];
 				}
 			)";
+	case ProfilerPrintFormat::MERMAID:
+		return R"(flowchart TD
+    node_0_0["`**DISABLED**
+Query profiling is disabled.
+Use 'PRAGMA enable_profiling;' to enable profiling!`"]
+)";
 	case ProfilerPrintFormat::JSON: {
 		ConvertedJSONHolder json_holder;
 		json_holder.doc = yyjson_mut_doc_new(nullptr);

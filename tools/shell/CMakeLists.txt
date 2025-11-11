@@ -1,10 +1,8 @@
 include_directories(include)
-if(NOT WIN32)
-  add_subdirectory(linenoise)
-  add_definitions(-DHAVE_LINENOISE=1)
-  include_directories(../../third_party/utf8proc/include)
-  include_directories(linenoise/include)
-endif()
+add_subdirectory(linenoise)
+add_definitions(-DHAVE_LINENOISE=1)
+include_directories(../../third_party/utf8proc/include)
+include_directories(linenoise/include)
 add_definitions(-DSQLITE_SHELL_IS_UTF8)
 add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 
@@ -18,11 +16,15 @@ if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
 endif()
 set(SHELL_SOURCES
     ${SHELL_SOURCES}
+    shell_command_line_option.cpp
     shell_extension.cpp
     shell.cpp
     shell_helpers.cpp
+    shell_metadata_command.cpp
+    shell_prompt.cpp
     shell_renderer.cpp
     shell_highlight.cpp
+    shell_progress_bar.cpp
     shell_windows.cpp)
 
 option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)

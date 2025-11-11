@@ -372,7 +372,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*writer));
 
 	file_meta_data.num_rows = 0;
-	file_meta_data.version = 1;
+	file_meta_data.version = UnsafeNumericCast<int32_t>(parquet_version);
 
 	file_meta_data.__isset.created_by = true;
 	file_meta_data.created_by =
@@ -541,7 +541,7 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	row_group.__isset.total_compressed_size = true;
 
 	if (encryption_config) {
-		auto row_group_ordinal = num_row_groups.load();
+		const auto row_group_ordinal = file_meta_data.row_groups.size();
 		if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
 			throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
 		}
@@ -561,6 +561,14 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	if (buffer.Count() == 0) {
 		return;
 	}
+
+	// "total_written" is only used for the FILE_SIZE_BYTES flag, and only when threads are writing in parallel.
+	// We pre-emptively increase it here to try to reduce overshooting when many threads are writing in parallel.
+	// However, waiting for the exact value (PrepareRowGroup) takes too long, and would cause overshoots to happen.
+	// So, we guess the compression ratio. We guess 3x, but this will be off depending on the data.
+	// "total_written" is restored to the exact number of written bytes at the end of FlushRowGroup.
+	// PhysicalCopyToFile should be reworked to use prepare/flush batch separately for better accuracy.
+	total_written += buffer.SizeInBytes() / 2;
 
 	PreparedRowGroup prepared_row_group;
 	PrepareRowGroup(buffer, prepared_row_group);

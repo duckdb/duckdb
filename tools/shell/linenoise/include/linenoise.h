@@ -39,14 +39,13 @@
 #ifndef __LINENOISE_H
 #define __LINENOISE_H
 
+typedef struct _linenoiseCompletions {
+	void *internal_ptr;
+} * linenoiseCompletions;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct linenoiseCompletions {
-	size_t len;
-	char **cvec;
-} linenoiseCompletions;
 
 typedef void(linenoiseCompletionCallback)(const char *, linenoiseCompletions *);
 typedef char *(linenoiseHintsCallback)(const char *, int *color, int *bold);
@@ -54,7 +53,8 @@ typedef void(linenoiseFreeHintsCallback)(void *);
 void linenoiseSetCompletionCallback(linenoiseCompletionCallback *);
 void linenoiseSetHintsCallback(linenoiseHintsCallback *);
 void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *);
-void linenoiseAddCompletion(linenoiseCompletions *, const char *);
+void linenoiseAddCompletion(linenoiseCompletions *, const char *line, const char *completion, size_t nCompletion,
+                            size_t completion_start, const char *completion_type);
 
 char *linenoise(const char *prompt);
 void linenoiseFree(void *ptr);
@@ -64,11 +64,9 @@ int linenoiseHistorySave(const char *filename);
 int linenoiseHistoryLoad(const char *filename);
 void linenoiseClearScreen(void);
 void linenoiseSetMultiLine(int ml);
-void linenoiseSetHighlighting(int enabled);
 void linenoiseSetErrorRendering(int enabled);
 void linenoiseSetCompletionRendering(int enabled);
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len);
-int linenoiseTrySetHighlightColor(const char *component, const char *code, char *out_error, size_t out_error_len);
 int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *n);
 void linenoiseSetPrompt(const char *continuation, const char *continuationSelected);
 

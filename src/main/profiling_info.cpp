@@ -2,6 +2,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include "yyjson.hpp"
 
@@ -93,6 +94,16 @@ string ProfilingInfo::GetMetricAsString(const MetricType metric) const {
 		return EnumUtil::ToString(type);
 	}
 	return metrics.at(metric).ToString();
+}
+
+void ProfilingInfo::WriteMetricsToLog(ClientContext &context) {
+	auto &logger = Logger::Get(context);
+	if (logger.ShouldLog(MetricsLogType::NAME, MetricsLogType::LEVEL)) {
+		for (auto &metric : settings) {
+			logger.WriteLog(MetricsLogType::NAME, MetricsLogType::LEVEL,
+			                MetricsLogType::ConstructLogMessage(metric, metrics[metric]));
+		}
+	}
 }
 
 void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) {

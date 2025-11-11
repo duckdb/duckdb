@@ -30,10 +30,7 @@
 #include <unistd.h>
 
 #ifdef __MVS__
-#define _XOPEN_SOURCE_EXTENDED 1
 #include <sys/resource.h>
-// enjoy - https://reviews.llvm.org/D92110
-#define PATH_MAX _XOPEN_PATH_MAX
 #endif
 
 #else

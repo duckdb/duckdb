@@ -171,14 +171,14 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 ScalarFunctionSet MapFun::GetFunctions() {
 	ScalarFunction empty_func({}, LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL), MapFunction);
-	BaseScalarFunction::SetReturnsError(empty_func);
+	empty_func.SetFallible();
 
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
 	ScalarFunction value_func({LogicalType::LIST(key_type), LogicalType::LIST(val_type)},
 	                          LogicalType::MAP(key_type, val_type), MapFunction);
-	BaseScalarFunction::SetReturnsError(value_func);
-	value_func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	value_func.SetFallible();
+	value_func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	ScalarFunctionSet set;
 

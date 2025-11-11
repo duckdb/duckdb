@@ -262,6 +262,11 @@ public:
 		destroy_partition_idx = end_partition_idx;
 	}
 
+private:
+	static BlockIteratorStateType GetBlockIteratorStateType(const bool &external) {
+		return external ? BlockIteratorStateType::EXTERNAL : BlockIteratorStateType::IN_MEMORY;
+	}
+
 public:
 	ClientContext &context;
 	const idx_t num_threads;
@@ -350,7 +355,9 @@ SourceResultType SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalSta
 		if (!chunk || chunk->size() == 0) {
 			gstate.DestroyScannedData();
 			gstate.partitions[partition_idx.GetIndex()]->scanned = true;
-			const auto scan_count_after_adding = gstate.total_scanned.fetch_add(merged_partition_count);
+			//	fetch_add returns the _previous_ value!
+			const auto scan_count_before_adding = gstate.total_scanned.fetch_add(merged_partition_count);
+			const auto scan_count_after_adding = scan_count_before_adding + merged_partition_count;
 			partition_idx = optional_idx::Invalid();
 			task = SortedRunMergerTask::FINISHED;
 			if (scan_count_after_adding == gstate.merger.total_count) {

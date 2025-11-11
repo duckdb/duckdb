@@ -597,6 +597,11 @@ public:
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 
+		if (gstate.finished) {
+			data_p.async_result = SourceResultType::FINISHED;
+			return;
+		}
+
 		do {
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
@@ -627,18 +632,36 @@ public:
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
+			}
+			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
+				// Loop back to the same block
+				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					continue;
+				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				return;
 			}
 
-			scan_chunk.Reset();
-			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				data_p.async_result = SourceResultType::FINISHED;
-				return;
+			if (res.GetResultType() != AsyncResultType::FINISHED) {
+				throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
+				                        EnumUtil::ToChars(res.GetResultType()));
 			}
+
+			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
+				if (scan_chunk.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					gstate.finished = true;
+					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+				} else {
+					data_p.async_result = SourceResultType::FINISHED;
+				}
+			} else {
+				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					continue;
+				}
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+			}
+			return;
 		} while (true);
-		// This is not expected to be ever taken
-		throw InternalException("MultiFileScan is malformed");
 	}
 
 	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
@@ -698,7 +721,8 @@ public:
 				continue;
 			}
 			auto &reader_data = *reader_data_ptr;
-			double progress_in_file;
+			// Initialize progress_in_file with a default value to avoid uninitialized variable usage
+			double progress_in_file = 0.0;
 			if (reader_data.file_state == MultiFileFileState::OPEN) {
 				// file is currently open - get the progress within the file
 				progress_in_file = reader_data.reader->GetProgressInFile(context);
@@ -712,9 +736,6 @@ public:
 					// file is still being read
 					progress_in_file = reader->GetProgressInFile(context);
 				}
-			} else {
-				// file has not been opened yet - progress in this file is zero
-				progress_in_file = 0;
 			}
 			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
 			total_progress += progress_in_file;

@@ -613,7 +613,7 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 		if (access(normalized_dir, 0) == 0) {
 			struct stat status;
 			stat(normalized_dir, &status);
-			if (status.st_mode & S_IFDIR) {
+			if (S_ISDIR(status.st_mode)) {
 				return true;
 			}
 		}
@@ -719,7 +719,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		if (res != 0) {
 			continue;
 		}
-		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
+		if (!S_ISREG(status.st_mode) && !S_ISDIR(status.st_mode)) {
 			// not a file or directory: skip
 			continue;
 		}
@@ -727,7 +727,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 		auto &options = info.extended_info->options;
 		// file type
-		Value file_type(status.st_mode & S_IFDIR ? "directory" : "file");
+		Value file_type(S_ISDIR(status.st_mode) ? "directory" : "file");
 		options.emplace("type", std::move(file_type));
 		// file size
 		options.emplace("file_size", Value::BIGINT(UnsafeNumericCast<int64_t>(status.st_size)));

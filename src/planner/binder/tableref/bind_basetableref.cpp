@@ -71,7 +71,14 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 			auto &subquery = replacement_function->Cast<SubqueryRef>();
 			subquery.column_name_alias = ref.column_name_alias;
 		} else {
-			throw InternalException("Replacement scan should return either a table function or a subquery");
+			auto select_node = make_uniq<SelectNode>();
+			select_node->select_list.push_back(make_uniq<StarExpression>());
+			select_node->from_table = std::move(replacement_function);
+			auto select_stmt = make_uniq<SelectStatement>();
+			select_stmt->node = std::move(select_node);
+			auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt));
+			subquery->column_name_alias = ref.column_name_alias;
+			replacement_function = std::move(subquery);
 		}
 		if (GetBindingMode() == BindingMode::EXTRACT_REPLACEMENT_SCANS) {
 			AddReplacementScan(ref.table_name, replacement_function->Copy());
