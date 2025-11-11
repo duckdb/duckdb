@@ -314,6 +314,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeOp);
 	REGISTER_TRANSFORM(TransformBetweenClause);
+	REGISTER_TRANSFORM(TransformLikeClause);
+	REGISTER_TRANSFORM(TransformLikeVariations);
 	REGISTER_TRANSFORM(TransformComparisonExpression);
 	REGISTER_TRANSFORM(TransformComparisonOperator);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
@@ -637,6 +639,14 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("TrimBoth", "trim");
 	RegisterEnum<string>("TrimLeading", "ltrim");
 	RegisterEnum<string>("TrimTrailing", "rtrim");
+
+	RegisterEnum<string>("LikeToken", "~~");
+	RegisterEnum<string>("ILikeToken", "~~*");
+	RegisterEnum<string>("GlobToken", "~~~");
+	RegisterEnum<string>("SimilarToToken", "regexp_full_match");
+	RegisterEnum<string>("NotILikeOp", "!~~*");
+	RegisterEnum<string>("NotLikeOp", "!~~");
+	RegisterEnum<string>("NotSimilarToOp", "!~");
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
