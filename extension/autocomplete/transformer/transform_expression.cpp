@@ -31,7 +31,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 			expr = std::move(operator_expr);
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
-			function_expr->children.push_back(std::move(expr));
+			function_expr->children.insert(function_expr->children.begin(), std::move(expr));
 			expr = std::move(function_expr);
 		}
 	}
