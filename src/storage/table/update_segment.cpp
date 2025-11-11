@@ -386,6 +386,8 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	if (!root) {
 		return;
 	}
+	D_ASSERT(start_row <= column_data.count);
+	D_ASSERT(start_row + count <= column_data.count);
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	idx_t end_row = start_row + count;
@@ -489,13 +491,16 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 }
 
 void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx) {
-	idx_t vector_index = (row_id - column_data.GetSegmentStart()) / STANDARD_VECTOR_SIZE;
+	if (row_id > column_data.count) {
+		throw InternalException("UpdateSegment::FetchRow out of range");
+	}
+	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
 	auto lock_handle = lock.GetSharedLock();
 	auto entry = GetUpdateNode(*lock_handle, vector_index);
 	if (!entry.IsSet()) {
 		return;
 	}
-	idx_t row_in_vector = (row_id - column_data.GetSegmentStart()) - vector_index * STANDARD_VECTOR_SIZE;
+	idx_t row_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
 	auto pin = entry.Pin();
 	fetch_row_function(transaction.start_time, transaction.transaction_id, UpdateInfo::Get(pin), row_in_vector, result,
 	                   result_idx);
@@ -818,8 +823,8 @@ struct ExtractValidityEntry {
 template <class T, class V, class OP = ExtractStandardEntry>
 static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, UpdateInfo &update_info,
                                     const SelectionVector &update_vector_sel, const V *update_vector_data, row_t *ids,
-                                    idx_t count, const SelectionVector &sel) {
-	auto base_id = base_info.segment->column_data.GetSegmentStart() + base_info.vector_index * STANDARD_VECTOR_SIZE;
+                                    idx_t count, const SelectionVector &sel, idx_t row_group_start) {
+	auto base_id = row_group_start + base_info.vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {
@@ -922,20 +927,22 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 }
 
 static void MergeValidityLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-                              UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel) {
+                              UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel,
+                              idx_t row_group_start) {
 	auto &base_validity = FlatVector::Validity(base_data);
 	auto &update_validity = update.validity;
-	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(base_info, &base_validity, update_info,
-	                                                                  *update.sel, &update_validity, ids, count, sel);
+	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(
+	    base_info, &base_validity, update_info, *update.sel, &update_validity, ids, count, sel, row_group_start);
 }
 
 template <class T>
 static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
-                            UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel) {
+                            UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel,
+                            idx_t row_group_start) {
 	auto base_table_data = FlatVector::GetData<T>(base_data);
 	auto update_vector_data = update.GetData<T>(update);
 	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
-	                              sel);
+	                              sel, row_group_start);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {
@@ -1354,7 +1361,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		node->Verify();
 
 		// now we are going to perform the merge
-		merge_update_function(base_info, base_data, *node, update_format, ids, count, sel);
+		merge_update_function(base_info, base_data, *node, update_format, ids, count, sel, row_group_start);
 
 		base_info.Verify();
 		node->Verify();

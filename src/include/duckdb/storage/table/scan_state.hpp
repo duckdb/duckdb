@@ -90,8 +90,8 @@ struct ColumnScanState {
 	optional_ptr<SegmentNode<ColumnSegment>> current;
 	//! Column segment tree
 	ColumnSegmentTree *segment_tree = nullptr;
-	//! The current row index of the scan
-	idx_t row_index = 0;
+	//! The current row offset in the column
+	idx_t offset_in_column = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
 	idx_t internal_index = 0;
 	//! Segment scan state
@@ -120,6 +120,8 @@ public:
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
 	void NextInternal(idx_t count);
+	//! Returns the current row position in the segment
+	idx_t GetPositionInSegment() const;
 };
 
 struct ColumnFetchState {
@@ -129,6 +131,8 @@ struct ColumnFetchState {
 	buffer_handle_set_t handles;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
+	//! The current row group we are fetching from
+	optional_ptr<SegmentNode<RowGroup>> row_group;
 
 	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };

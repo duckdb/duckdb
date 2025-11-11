@@ -269,7 +269,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 	state.vector_index = vector_offset;
 	auto row_start = node.row_start;
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
-	auto row_number = row_start + vector_offset * STANDARD_VECTOR_SIZE;
+	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
 	if (state.max_row_group_row == 0) {
 		// exceeded row groups to scan
 		return false;
@@ -780,7 +780,9 @@ idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t tr
 }
 
 bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
-	D_ASSERT(row < this->count);
+	if (UnsafeNumericCast<idx_t>(row) > count) {
+		throw InternalException("RowGroup::Fetch - row_id out of range for row group");
+	}
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return true;
@@ -790,6 +792,9 @@ bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 
 void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
                         row_t row_id, DataChunk &result, idx_t result_idx) {
+	if (UnsafeNumericCast<idx_t>(row_id) > count) {
+		throw InternalException("RowGroup::FetchRow - row_id out of range for row group");
+	}
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto &column = column_ids[col_idx];
 		auto &result_vector = result.data[col_idx];

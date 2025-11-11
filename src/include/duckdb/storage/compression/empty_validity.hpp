@@ -58,10 +58,9 @@ public:
 
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
-		auto row_start = checkpoint_data.GetRowGroup().GetSegmentStart();
 
 		auto &info = state.info;
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, row_start,
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, 0,
 		                                                                info.GetBlockSize(), info.GetBlockManager());
 		compressed_segment->count = state.count;
 		if (state.non_nulls != state.count) {

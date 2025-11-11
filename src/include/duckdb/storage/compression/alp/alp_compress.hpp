@@ -34,7 +34,7 @@ public:
 	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
 	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+		CreateEmptySegment();
 
 		//! Combinations found on the analyze step are needed for compression
 		state.best_k_combinations = analyze_state->state.best_k_combinations;
@@ -88,7 +88,7 @@ public:
 		state.Reset();
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment(idx_t row_start = 0) {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 

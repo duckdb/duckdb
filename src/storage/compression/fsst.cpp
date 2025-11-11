@@ -219,7 +219,7 @@ public:
 	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+		CreateEmptySegment(0);
 	}
 
 	~FSSTCompressionState() override {
@@ -642,7 +642,7 @@ template <bool ALLOW_FSST_VECTORS>
 void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	bool enable_fsst_vectors;
 	if (ALLOW_FSST_VECTORS) {
@@ -710,7 +710,7 @@ void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                          const SelectionVector &sel, idx_t sel_count) {
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, scan_state.handle);

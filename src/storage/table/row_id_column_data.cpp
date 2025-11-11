@@ -18,15 +18,17 @@ void RowIdColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnSc
 }
 
 void RowIdColumnData::InitializeScan(ColumnScanState &state) {
-	auto row_start = state.parent->row_group->row_start;
-	InitializeScanWithOffset(state, row_start);
+	InitializeScanWithOffset(state, 0);
 }
 
 void RowIdColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+	if (row_idx > count) {
+		throw InternalException("row_idx in InitializeScanWithOffset out of range");
+	}
 	state.current = nullptr;
 	state.segment_tree = nullptr;
-	state.row_index = row_idx;
-	state.internal_index = state.row_index;
+	state.offset_in_column = row_idx;
+	state.internal_index = state.offset_in_column;
 	state.initialized = true;
 	state.scan_state.reset();
 	state.last_offset = 0;
@@ -52,17 +54,18 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 	if (result_offset != 0) {
 		throw InternalException("RowIdColumnData result_offset must be 0");
 	}
-	ScanCommittedRange(row_start, state.row_index - row_start, count, result);
-	state.row_index += count;
+	ScanCommittedRange(row_start, state.offset_in_column, count, result);
+	state.offset_in_column += count;
 	return count;
 }
 
 void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              SelectionVector &sel, idx_t &count, const TableFilter &filter,
                              TableFilterState &filter_state) {
-	auto current_row = state.row_index;
+	auto row_start = state.parent->row_group->row_start;
+	auto current_row = row_start + state.offset_in_column;
 	auto max_count = GetVectorCount(vector_index);
-	state.row_index += max_count;
+	state.offset_in_column += max_count;
 	// We do another quick statistics scan for row ids here
 	const auto rowid_start = current_row;
 	const auto rowid_end = current_row + max_count;
@@ -101,10 +104,11 @@ void RowIdColumnData::SelectCommitted(idx_t vector_index, ColumnScanState &state
                                       idx_t count, bool allow_updates) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<row_t>(result);
+	auto row_start = state.parent->row_group->row_start;
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
-		result_data[sel_idx] = UnsafeNumericCast<row_t>(state.row_index + sel.get_index(sel_idx));
+		result_data[sel_idx] = UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx));
 	}
-	state.row_index += GetVectorCount(vector_index);
+	state.offset_in_column += GetVectorCount(vector_index);
 }
 
 idx_t RowIdColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -115,11 +119,13 @@ void RowIdColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
                                idx_t result_idx) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto data = FlatVector::GetData<row_t>(result);
-	data[result_idx] = row_id;
+	auto row_start = state.row_group->row_start;
+	data[result_idx] = UnsafeNumericCast<row_t>(row_start) + row_id;
 }
+
 void RowIdColumnData::Skip(ColumnScanState &state, idx_t count) {
-	state.row_index += count;
-	state.internal_index = state.row_index;
+	state.offset_in_column += count;
+	state.internal_index = state.offset_in_column;
 }
 
 void RowIdColumnData::InitializeAppend(ColumnAppendState &state) {

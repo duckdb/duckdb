@@ -57,7 +57,7 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                                idx_t target_count) {
-	D_ASSERT(state.row_index == state.child_states[0].row_index);
+	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	auto mode = ScanVectorMode::REGULAR_SCAN;
 	auto scan_count = ScanVector(transaction, vector_index, state, result, target_count, scan_type, mode);
@@ -67,7 +67,7 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
 
 idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
                                         idx_t target_count) {
-	D_ASSERT(state.row_index == state.child_states[0].row_index);
+	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
 	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates, target_count);
 	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
 	return scan_count;
@@ -157,8 +157,8 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
 	ColumnScanState standard_state(nullptr);
 	ColumnScanState validity_state(nullptr);
 	Vector base_vector(type);
-	auto standard_fetch = FetchUpdateData(standard_state, row_ids, base_vector);
-	auto validity_fetch = validity.FetchUpdateData(validity_state, row_ids, base_vector);
+	auto standard_fetch = FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
+	auto validity_fetch = validity.FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
 	if (standard_fetch != validity_fetch) {
 		throw InternalException("Unaligned fetch in validity and main column data for update");
 	}
@@ -278,7 +278,7 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
                                         idx_t count, Vector &scan_vector) {
 	ColumnData::CheckpointScan(segment, state, row_group_start, count, scan_vector);
 
-	idx_t offset_in_row_group = state.row_index - row_group_start;
+	idx_t offset_in_row_group = state.offset_in_column;
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 

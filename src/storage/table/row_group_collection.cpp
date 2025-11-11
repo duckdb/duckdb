@@ -324,10 +324,13 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 			row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 		}
 		auto &current_row_group = *row_group->node;
-		if (!current_row_group.Fetch(transaction, UnsafeNumericCast<idx_t>(row_id) - row_group->row_start)) {
+		auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->row_start;
+		if (!current_row_group.Fetch(transaction, offset_in_row_group)) {
 			continue;
 		}
-		current_row_group.FetchRow(transaction, state, column_ids, row_id, result, count);
+		state.row_group = row_group;
+		current_row_group.FetchRow(transaction, state, column_ids, UnsafeNumericCast<row_t>(offset_in_row_group),
+		                           result, count);
 		count++;
 	}
 	result.SetCardinality(count);
@@ -344,7 +347,8 @@ bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_i
 		row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 	}
 	auto &current_row_group = *row_group->node;
-	return current_row_group.Fetch(transaction, UnsafeNumericCast<idx_t>(row_id) - row_group->row_start);
+	auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->row_start;
+	return current_row_group.Fetch(transaction, offset_in_row_group);
 }
 
 //===--------------------------------------------------------------------===//

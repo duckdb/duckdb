@@ -21,7 +21,7 @@ DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &che
           1                                                                // maximum_target_capacity_p (byte capacity)
           ),
       analyze(std::move(analyze_p)) {
-	CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+	CreateEmptySegment(0);
 }
 
 DictFSSTCompressionState::~DictFSSTCompressionState() {

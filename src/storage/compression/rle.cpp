@@ -140,7 +140,7 @@ struct RLECompressState : public CompressionState {
 	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data_p),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+		CreateEmptySegment(0);
 
 		state.dataptr = (void *)this;
 		max_rle_count = MaxRLECount();

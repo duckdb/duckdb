@@ -397,7 +397,7 @@ void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, Vect
 
 void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                          idx_t result_offset) {
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
@@ -410,7 +410,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	result.Flatten(scan_count);
 
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
 		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
@@ -435,7 +435,7 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vecto
 	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
 
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 	ValidityMask source_mask(input_data, segment.count);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto source_idx = start + sel.get_index(i);

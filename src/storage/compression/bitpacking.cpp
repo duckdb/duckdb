@@ -383,7 +383,7 @@ public:
 	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+		CreateEmptySegment(0);
 
 		state.data_ptr = reinterpret_cast<void *>(this);
 

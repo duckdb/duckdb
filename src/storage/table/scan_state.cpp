@@ -194,8 +194,8 @@ void ColumnScanState::NextInternal(idx_t count) {
 		//! There is no column segment
 		return;
 	}
-	row_index += count;
-	while (row_index >= current->row_start + current->node->count) {
+	offset_in_column += count;
+	while (offset_in_column >= current->row_start + current->node->count) {
 		current = segment_tree->GetNextSegment(*current);
 		initialized = false;
 		segment_checked = false;
@@ -203,7 +203,12 @@ void ColumnScanState::NextInternal(idx_t count) {
 			break;
 		}
 	}
-	D_ASSERT(!current || (row_index >= current->row_start && row_index < current->row_start + current->node->count));
+	D_ASSERT(!current ||
+	         (offset_in_column >= current->row_start && offset_in_column < current->row_start + current->node->count));
+}
+
+idx_t ColumnScanState::GetPositionInSegment() const {
+	return offset_in_column - (current ? current->row_start : 0);
 }
 
 void ColumnScanState::Next(idx_t count) {

@@ -142,8 +142,8 @@ void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &res
 }
 
 void ColumnSegment::Skip(ColumnScanState &state) {
-	function.get().skip(*this, state, state.row_index - state.internal_index);
-	state.internal_index = state.row_index;
+	function.get().skip(*this, state, state.offset_in_column - state.internal_index);
+	state.internal_index = state.offset_in_column;
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result) {
@@ -158,9 +158,10 @@ void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector
 // Fetch
 //===--------------------------------------------------------------------===//
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	function.get().fetch_row(*this, state,
-	                         UnsafeNumericCast<int64_t>(UnsafeNumericCast<idx_t>(row_id) - GetSegmentStart()), result,
-	                         result_idx);
+	if (UnsafeNumericCast<idx_t>(row_id) > count) {
+		throw InternalException("ColumnSegment::FetchRow - row_id out of range for segment");
+	}
+	function.get().fetch_row(*this, state, row_id, result, result_idx);
 }
 
 //===--------------------------------------------------------------------===//

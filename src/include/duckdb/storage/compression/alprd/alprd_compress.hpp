@@ -45,7 +45,7 @@ public:
 		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
 		memcpy((void *)state.left_parts_dict, (void *)analyze_state->state.left_parts_dict,
 		       actual_dictionary_size_bytes);
-		CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+		CreateEmptySegment();
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
@@ -98,7 +98,7 @@ public:
 		state.Reset();
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment(idx_t row_start = 0) {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 

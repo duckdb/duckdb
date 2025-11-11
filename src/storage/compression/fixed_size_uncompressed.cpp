@@ -61,7 +61,7 @@ UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointData &c
                                                      const CompressionInfo &info)
     : CompressionState(info), checkpoint_data(checkpoint_data),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED)) {
-	UncompressedCompressState::CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+	UncompressedCompressState::CreateEmptySegment(0);
 }
 
 void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
@@ -157,7 +157,7 @@ template <class T>
 void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                           idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
@@ -170,7 +170,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 template <class T>
 void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &scan_state = state.scan_state->template Cast<FixedSizeScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);

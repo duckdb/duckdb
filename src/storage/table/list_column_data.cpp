@@ -134,8 +134,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 		auto &child_entry = ListVector::GetEntry(result);
 		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
 		    child_entry.GetType().InternalType() != PhysicalType::ARRAY &&
-		    state.child_states[1].row_index + child_scan_count >
-		        child_column->GetSegmentStart() + child_column->GetMaxEntry()) {
+		    state.child_states[1].offset_in_column + child_scan_count > child_column->GetMaxEntry()) {
 			throw InternalException("ListColumnData::ScanCount - internal list scan offset is out of range");
 		}
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
@@ -292,8 +291,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	}
 
 	// now perform the fetch within the segment
-	auto start_idx = GetSegmentStart();
-	auto start_offset = idx_t(row_id) == start_idx ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
+	auto start_offset = row_id == 0 ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
 	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 
@@ -317,9 +315,9 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
 		child_state.Initialize(state.context, child_type, nullptr);
-		child_column->InitializeScanWithOffset(child_state, start_idx + start_offset);
+		child_column->InitializeScanWithOffset(child_state, start_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state.row_index + child_scan_count - start_idx <= child_column->GetMaxEntry());
+		         child_state.offset_in_column + child_scan_count <= child_column->GetMaxEntry());
 		child_column->ScanCount(child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);

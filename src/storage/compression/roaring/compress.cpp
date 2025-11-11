@@ -202,7 +202,7 @@ RoaringCompressState::RoaringCompressState(ColumnDataCheckpointData &checkpoint_
       analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()), container_state(),
       container_metadata(analyze_state.container_metadata), checkpoint_data(checkpoint_data),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
-	CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+	CreateEmptySegment(0);
 	total_count = 0;
 	InitializeContainer();
 }

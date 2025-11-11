@@ -993,7 +993,7 @@ unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(const QueryContext &con
 void ZSTDStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
 	auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }

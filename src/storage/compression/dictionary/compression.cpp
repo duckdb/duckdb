@@ -13,7 +13,7 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
           1 // maximum_target_capacity_p, 1 because we don't care about target for our use-case, as we
             // only use PrimitiveDictionary for duplicate checks, and not for writing to any target
       ) {
-	CreateEmptySegment(checkpoint_data.GetRowGroup().GetSegmentStart());
+	CreateEmptySegment(0);
 }
 
 void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
