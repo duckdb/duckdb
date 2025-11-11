@@ -24,7 +24,7 @@ struct DuckDBSettingsBindData : public TableFunctionData {
 	unique_ptr<FunctionData> Copy() const override {
 		auto res = make_uniq<DuckDBSettingsBindData>();
 		res->in_bytes = in_bytes;
-		return res;
+		return unique_ptr<FunctionData>(std::move(res));
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
