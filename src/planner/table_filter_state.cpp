@@ -16,8 +16,8 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 	switch (filter.filter_type) {
 	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
 		auto &sel_opt_filter = filter.Cast<SelectivityOptionalFilter>();
-		auto &child_filter = sel_opt_filter.child_filter;
-		return Initialize(context, *child_filter);
+		auto child_filter_state = Initialize(context, *sel_opt_filter.child_filter);
+		return make_uniq<SelectivityOptionalFilterState>(std::move(child_filter_state));
 	}
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bf = filter.Cast<BFTableFilter>();

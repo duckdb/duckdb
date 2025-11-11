@@ -413,11 +413,13 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
 		auto &sel_opt_filter = filter.Cast<SelectivityOptionalFilter>();
-		if (sel_opt_filter.IsActive()) {
+		auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
+		if (state.stats.IsActive()) {
 			auto &child_filter = *sel_opt_filter.child_filter;
 			idx_t approved_before = approved_tuple_count;
-			FilterSelection(sel, vector, vdata, child_filter, filter_state, scan_count, approved_tuple_count);
-			sel_opt_filter.UpdateStats(approved_tuple_count, approved_before);
+			FilterSelection(sel, vector, vdata, child_filter, *state.child_state, scan_count, approved_tuple_count);
+			state.stats.Update(approved_tuple_count, approved_before, sel_opt_filter.n_vectors_to_check,
+			                   sel_opt_filter.selectivity_threshold);
 			return approved_tuple_count;
 		}
 		return scan_count;

@@ -17,7 +17,7 @@ SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> fil
                                                      const float selectivity_threshold_p,
                                                      const idx_t n_vectors_to_check_p)
     : TableFilter(TYPE), selectivity_threshold(selectivity_threshold_p), n_vectors_to_check(n_vectors_to_check_p),
-      selectivity_stats(make_uniq<SelectivityStats>()), child_filter(std::move(filter)) {
+      child_filter(std::move(filter)) {
 }
 
 FilterPropagateResult SelectivityOptionalFilter::CheckStatistics(BaseStatistics &stats) const {
@@ -52,7 +52,6 @@ string SelectivityOptionalFilter::ToString(const string &column_name) const {
 
 unique_ptr<TableFilter> SelectivityOptionalFilter::Copy() const {
 	auto copy = make_uniq<SelectivityOptionalFilter>(child_filter->Copy(), selectivity_threshold, n_vectors_to_check);
-	copy->selectivity_stats = selectivity_stats->Copy();
 	return duckdb::unique_ptr_cast<SelectivityOptionalFilter, TableFilter>(std::move(copy));
 }
 

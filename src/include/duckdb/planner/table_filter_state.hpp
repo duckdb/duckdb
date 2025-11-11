@@ -11,6 +11,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "filter/selectivity_optional_filter.hpp"
 
 namespace duckdb {
 
@@ -62,6 +63,52 @@ struct BFTableFilterState final : public TableFilterState {
 	explicit BFTableFilterState(const LogicalType &key_logical_type)
 	    : current_capacity(STANDARD_VECTOR_SIZE), hashes_v(LogicalType::HASH), found_v(LogicalType::UBIGINT),
 	      keys_sliced_v(key_logical_type), bf_sel(STANDARD_VECTOR_SIZE) {
+	}
+};
+
+struct SelectivityOptionalFilterState final : public TableFilterState {
+	struct SelectivityStats {
+		idx_t tuples_accepted;
+		idx_t tuples_processed;
+		idx_t vectors_processed;
+		SelectivityOptionalFilterStatus status;
+
+		SelectivityStats()
+		    : tuples_accepted(0), tuples_processed(0), vectors_processed(0),
+		      status(SelectivityOptionalFilterStatus::ACTIVE) {
+		}
+
+		void Update(const idx_t accepted, const idx_t processed, const idx_t n_vectors_to_check_p,
+		            const float selectivity_threshold_p) {
+			tuples_accepted += accepted;
+			tuples_processed += processed;
+			vectors_processed += 1;
+
+			// pause the filter if we processed enough vectors and the selectivity is too high
+			if (vectors_processed >= n_vectors_to_check_p) {
+				if (GetSelectivity() >= selectivity_threshold_p) {
+					status = SelectivityOptionalFilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY;
+				}
+			}
+		}
+
+		bool IsActive() const {
+			return status == SelectivityOptionalFilterStatus::ACTIVE;
+		}
+
+		double GetSelectivity() const {
+			if (tuples_processed == 0) {
+				return 1.0;
+			}
+			return static_cast<double>(tuples_accepted) / static_cast<double>(tuples_processed);
+		}
+	};
+
+	unique_ptr<TableFilterState> child_state;
+	SelectivityStats stats;
+
+	explicit SelectivityOptionalFilterState(unique_ptr<TableFilterState> child_state)
+	    : child_state(std::move(child_state)) {
 	}
 };
 
