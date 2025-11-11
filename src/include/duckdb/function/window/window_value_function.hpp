@@ -19,7 +19,7 @@ public:
 
 	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const override;
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
+	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t group_idx, const idx_t payload_count,
 	                                           const ValidityMask &partition_mask,
 	                                           const ValidityMask &order_mask) const override;
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
@@ -40,7 +40,7 @@ class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
 	WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
+	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t group_idx, const idx_t payload_count,
 	                                           const ValidityMask &partition_mask,
 	                                           const ValidityMask &order_mask) const override;
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;
@@ -86,7 +86,7 @@ public:
 		return false;
 	}
 
-	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
+	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t group_idx, const idx_t payload_count,
 	                                           const ValidityMask &partition_mask,
 	                                           const ValidityMask &order_mask) const override;
 	unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const override;

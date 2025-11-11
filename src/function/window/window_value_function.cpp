@@ -19,9 +19,10 @@ namespace duckdb {
 class WindowValueGlobalState : public WindowExecutorGlobalState {
 public:
 	using WindowCollectionPtr = unique_ptr<WindowCollection>;
-	WindowValueGlobalState(ClientContext &client, const WindowValueExecutor &executor, const idx_t payload_count,
-	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
+	WindowValueGlobalState(ClientContext &client, const WindowValueExecutor &executor, const idx_t group_idx,
+	                       const idx_t payload_count, const ValidityMask &partition_mask,
+	                       const ValidityMask &order_mask)
+	    : WindowExecutorGlobalState(client, executor, group_idx, payload_count, partition_mask, order_mask),
 	      ignore_nulls(&all_valid), child_idx(executor.child_idx) {
 		if (!executor.arg_order_idx.empty()) {
 			value_tree =
@@ -155,10 +156,11 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, WindowSha
 	default_idx = shared.RegisterEvaluate(wexpr.default_expr);
 }
 
-unique_ptr<GlobalSinkState> WindowValueExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+unique_ptr<GlobalSinkState> WindowValueExecutor::GetGlobalState(ClientContext &client, const idx_t group_idx,
+                                                                const idx_t payload_count,
                                                                 const ValidityMask &partition_mask,
                                                                 const ValidityMask &order_mask) const {
-	return make_uniq<WindowValueGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowValueGlobalState>(client, *this, group_idx, payload_count, partition_mask, order_mask);
 }
 
 void WindowValueExecutor::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const {
@@ -194,10 +196,10 @@ unique_ptr<LocalSinkState> WindowValueExecutor::GetLocalState(ExecutionContext &
 
 class WindowLeadLagGlobalState : public WindowValueGlobalState {
 public:
-	explicit WindowLeadLagGlobalState(ClientContext &client, const WindowValueExecutor &executor,
-	                                  const idx_t payload_count, const ValidityMask &partition_mask,
-	                                  const ValidityMask &order_mask)
-	    : WindowValueGlobalState(client, executor, payload_count, partition_mask, order_mask) {
+	WindowLeadLagGlobalState(ClientContext &client, const WindowValueExecutor &executor, const idx_t group_idx,
+	                         const idx_t payload_count, const ValidityMask &partition_mask,
+	                         const ValidityMask &order_mask)
+	    : WindowValueGlobalState(client, executor, group_idx, payload_count, partition_mask, order_mask) {
 		if (value_tree) {
 			use_framing = true;
 
@@ -278,10 +280,11 @@ WindowLeadLagExecutor::WindowLeadLagExecutor(BoundWindowExpression &wexpr, Windo
     : WindowValueExecutor(wexpr, shared) {
 }
 
-unique_ptr<GlobalSinkState> WindowLeadLagExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+unique_ptr<GlobalSinkState> WindowLeadLagExecutor::GetGlobalState(ClientContext &client, const idx_t group_idx,
+                                                                  const idx_t payload_count,
                                                                   const ValidityMask &partition_mask,
                                                                   const ValidityMask &order_mask) const {
-	return make_uniq<WindowLeadLagGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowLeadLagGlobalState>(client, *this, group_idx, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocalState(ExecutionContext &context,
@@ -867,9 +870,10 @@ static void WindowFillCopy(WindowCursor &cursor, Vector &result, idx_t count, id
 
 class WindowFillGlobalState : public WindowLeadLagGlobalState {
 public:
-	explicit WindowFillGlobalState(ClientContext &client, const WindowFillExecutor &executor, const idx_t payload_count,
-	                               const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowLeadLagGlobalState(client, executor, payload_count, partition_mask, order_mask),
+	explicit WindowFillGlobalState(ClientContext &client, const WindowFillExecutor &executor, const idx_t group_idx,
+	                               const idx_t payload_count, const ValidityMask &partition_mask,
+	                               const ValidityMask &order_mask)
+	    : WindowLeadLagGlobalState(client, executor, group_idx, payload_count, partition_mask, order_mask),
 	      order_idx(executor.order_idx) {
 	}
 
@@ -900,10 +904,11 @@ void WindowFillLocalState::Finalize(ExecutionContext &context, CollectionPtr col
 	}
 }
 
-unique_ptr<GlobalSinkState> WindowFillExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+unique_ptr<GlobalSinkState> WindowFillExecutor::GetGlobalState(ClientContext &client, const idx_t group_idx,
+                                                               const idx_t payload_count,
                                                                const ValidityMask &partition_mask,
                                                                const ValidityMask &order_mask) const {
-	return make_uniq<WindowFillGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowFillGlobalState>(client, *this, group_idx, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowFillExecutor::GetLocalState(ExecutionContext &context,

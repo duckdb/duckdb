@@ -58,10 +58,10 @@ void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChun
 }
 
 WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, const WindowExecutor &executor,
-                                                     const idx_t payload_count, const ValidityMask &partition_mask,
-                                                     const ValidityMask &order_mask)
-    : client(client), executor(executor), payload_count(payload_count), partition_mask(partition_mask),
-      order_mask(order_mask) {
+                                                     const idx_t group_idx, const idx_t payload_count,
+                                                     const ValidityMask &partition_mask, const ValidityMask &order_mask)
+    : client(client), executor(executor), group_idx(group_idx), payload_count(payload_count),
+      partition_mask(partition_mask), order_mask(order_mask) {
 	for (const auto &child : executor.wexpr.children) {
 		arg_types.emplace_back(child->return_type);
 	}
@@ -82,10 +82,11 @@ void WindowExecutorLocalState::Finalize(ExecutionContext &context, CollectionPtr
 	}
 }
 
-unique_ptr<GlobalSinkState> WindowExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+unique_ptr<GlobalSinkState> WindowExecutor::GetGlobalState(ClientContext &client, const idx_t group_idx,
+                                                           const idx_t payload_count,
                                                            const ValidityMask &partition_mask,
                                                            const ValidityMask &order_mask) const {
-	return make_uniq<WindowExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowExecutorGlobalState>(client, *this, group_idx, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowExecutor::GetLocalState(ExecutionContext &context,

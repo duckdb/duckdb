@@ -11,9 +11,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class WindowPeerGlobalState : public WindowExecutorGlobalState {
 public:
-	WindowPeerGlobalState(ClientContext &client, const WindowPeerExecutor &executor, const idx_t payload_count,
-	                      const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask) {
+	WindowPeerGlobalState(ClientContext &client, const WindowPeerExecutor &executor, const idx_t group_idx,
+	                      const idx_t payload_count, const ValidityMask &partition_mask, const ValidityMask &order_mask)
+	    : WindowExecutorGlobalState(client, executor, group_idx, payload_count, partition_mask, order_mask) {
 		if (!executor.arg_order_idx.empty()) {
 			use_framing = true;
 
@@ -109,10 +109,11 @@ WindowPeerExecutor::WindowPeerExecutor(BoundWindowExpression &wexpr, WindowShare
 	}
 }
 
-unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobalState(ClientContext &client, const idx_t group_idx,
+                                                               const idx_t payload_count,
                                                                const ValidityMask &partition_mask,
                                                                const ValidityMask &order_mask) const {
-	return make_uniq<WindowPeerGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowPeerGlobalState>(client, *this, group_idx, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowPeerExecutor::GetLocalState(ExecutionContext &context,

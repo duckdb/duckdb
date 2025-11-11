@@ -17,8 +17,8 @@ namespace duckdb {
 class WindowAggregateExecutorGlobalState : public WindowExecutorGlobalState {
 public:
 	WindowAggregateExecutorGlobalState(ClientContext &client, const WindowAggregateExecutor &executor,
-	                                   const idx_t payload_count, const ValidityMask &partition_mask,
-	                                   const ValidityMask &order_mask);
+	                                   const idx_t group_idx, const idx_t payload_count,
+	                                   const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 	// aggregate global state
 	unique_ptr<GlobalSinkState> gsink;
@@ -90,18 +90,20 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 
 WindowAggregateExecutorGlobalState::WindowAggregateExecutorGlobalState(ClientContext &client,
                                                                        const WindowAggregateExecutor &executor,
-                                                                       const idx_t group_count,
+                                                                       const idx_t group_idx, const idx_t group_count,
                                                                        const ValidityMask &partition_mask,
                                                                        const ValidityMask &order_mask)
-    : WindowExecutorGlobalState(client, executor, group_count, partition_mask, order_mask),
+    : WindowExecutorGlobalState(client, executor, group_idx, group_count, partition_mask, order_mask),
       filter_ref(executor.filter_ref.get()) {
 	gsink = executor.aggregator->GetGlobalState(client, group_count, partition_mask);
 }
 
-unique_ptr<GlobalSinkState> WindowAggregateExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
+unique_ptr<GlobalSinkState> WindowAggregateExecutor::GetGlobalState(ClientContext &client, const idx_t group_idx,
+                                                                    const idx_t payload_count,
                                                                     const ValidityMask &partition_mask,
                                                                     const ValidityMask &order_mask) const {
-	return make_uniq<WindowAggregateExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowAggregateExecutorGlobalState>(client, *this, group_idx, payload_count, partition_mask,
+	                                                     order_mask);
 }
 
 class WindowAggregateExecutorLocalState : public WindowExecutorBoundsLocalState {
