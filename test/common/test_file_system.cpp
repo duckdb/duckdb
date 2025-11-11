@@ -173,7 +173,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ));
 	// Check file stats.
 	const auto file_metadata = fs->Stats(*handle);
-	REQUIRE(file_metadata.file_size == 512);
+	REQUIRE(file_metadata.file_size == 4096);
 	REQUIRE(file_metadata.file_type == FileType::FILE_TYPE_REGULAR);
 	REQUIRE(file_metadata.last_modification_time > timestamp_t {-1});
 

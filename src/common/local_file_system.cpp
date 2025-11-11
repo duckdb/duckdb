@@ -818,6 +818,23 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 	return message;
 }
 
+static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
+	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
+	ULARGE_INTEGER ul;
+	ul.LowPart = file_time.dwLowDateTime;
+	ul.HighPart = file_time.dwHighDateTime;
+	int64_t fileTime64 = ul.QuadPart;
+
+	// fileTime64 contains a 64-bit value representing the number of
+	// 100-nanosecond intervals since January 1, 1601 (UTC).
+	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
+
+	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
+	const auto WINDOWS_TICK = 10000000;
+	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
+	return Timestamp::FromTimeT(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+}
+
 static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	BY_HANDLE_FILE_INFORMATION file_info;
 	if (!GetFileInformationByHandle(hFile, &file_info)) {
@@ -1129,23 +1146,6 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	const auto file_metadata = Stats(handle);
 	return file_metadata.file_size;
-}
-
-timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
-	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
-	ULARGE_INTEGER ul;
-	ul.LowPart = file_time.dwLowDateTime;
-	ul.HighPart = file_time.dwHighDateTime;
-	int64_t fileTime64 = ul.QuadPart;
-
-	// fileTime64 contains a 64-bit value representing the number of
-	// 100-nanosecond intervals since January 1, 1601 (UTC).
-	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
-
-	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
-	const auto WINDOWS_TICK = 10000000;
-	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
-	return Timestamp::FromTimeT(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 }
 
 timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
