@@ -148,7 +148,7 @@ void RowGroupCollection::Verify() {
 	for (auto &row_group : row_groups->Segments()) {
 		row_group.Verify();
 		D_ASSERT(&row_group.GetCollection() == this);
-		D_ASSERT(row_group.start == this->row_start + current_total_rows);
+		D_ASSERT(row_group.GetSegmentStart() == this->row_start + current_total_rows);
 		current_total_rows += row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());

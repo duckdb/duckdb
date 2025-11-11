@@ -990,7 +990,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 
 void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
-	D_ASSERT(this->start == parent.start);
+	D_ASSERT(this->start == parent.GetSegmentStart());
 	data.Verify();
 	if (type.InternalType() == PhysicalType::STRUCT || type.InternalType() == PhysicalType::ARRAY) {
 		// structs and fixed size lists don't have segments

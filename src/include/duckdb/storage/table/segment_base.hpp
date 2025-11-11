@@ -16,7 +16,7 @@ namespace duckdb {
 template <class T>
 class SegmentBase {
 public:
-	SegmentBase(idx_t start, idx_t count) : start(start), count(count) {
+	SegmentBase(idx_t start, idx_t count) : count(count), start(start) {
 	}
 
 	idx_t GetSegmentStart() const {
