@@ -3,7 +3,7 @@
 # group: [bitpacking]
 
 # load the DB from disk
-load __TEST_DIR__/test_bitpacking.db
+load {LOCAL_TEMP_DIR}/test_bitpacking.db
 
 foreach bitpacking_mode delta_for for constant_delta constant
 

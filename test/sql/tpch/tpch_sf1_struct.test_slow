@@ -4,7 +4,7 @@
 
 require tpch
 
-load __TEST_DIR__/tpch_sf1_struct.db
+load {LOCAL_TEMP_DIR}/tpch_sf1_struct.db
 
 statement ok
 CALL dbgen(sf=1, suffix='_normal');

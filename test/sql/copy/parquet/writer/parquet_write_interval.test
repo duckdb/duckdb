@@ -22,10 +22,10 @@ INSERT INTO intervals VALUES
        (interval '1' month)
 
 statement ok
-COPY intervals TO '__TEST_DIR__/intervals.parquet'
+COPY intervals TO '{TEMP_DIR}/intervals.parquet'
 
 query I
-SELECT * FROM '__TEST_DIR__/intervals.parquet' ORDER BY 1
+SELECT * FROM '{TEMP_DIR}/intervals.parquet' ORDER BY 1
 ----
 NULL
 00:00:00
@@ -34,5 +34,5 @@ NULL
 1 month
 
 statement error
-COPY (SELECT -interval '1 day') TO '__TEST_DIR__/intervals.parquet'
+COPY (SELECT -interval '1 day') TO '{TEMP_DIR}/intervals.parquet'
 ----

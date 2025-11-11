@@ -18,18 +18,18 @@ SELECT * FROM dates
 ----
 
 statement ok
-COPY dates TO '__TEST_DIR__/dates.parquet' (FORMAT 'parquet');
+COPY dates TO '{TEMP_DIR}/dates.parquet' (FORMAT 'parquet');
 
 query I nosort date_scan
-SELECT * FROM '__TEST_DIR__/dates.parquet'
+SELECT * FROM '{TEMP_DIR}/dates.parquet'
 ----
 
 query I
-SELECT typeof(d) FROM '__TEST_DIR__/dates.parquet' LIMIT 1
+SELECT typeof(d) FROM '{TEMP_DIR}/dates.parquet' LIMIT 1
 ----
 DATE
 
 query I
-SELECT * FROM '__TEST_DIR__/dates.parquet' WHERE d='1992-01-01'
+SELECT * FROM '{TEMP_DIR}/dates.parquet' WHERE d='1992-01-01'
 ----
 1992-01-01

@@ -6,16 +6,16 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-copy (select 42) to '__TEST_DIR__/file.csv' (prefix 'a');
+copy (select 42) to '{TEMP_DIR}/file.csv' (prefix 'a');
 ----
 must have both PREFIX and SUFFIX
 
 statement error
-copy (select 42) to '__TEST_DIR__/file.csv' (prefix 'a', suffix 'b', header);
+copy (select 42) to '{TEMP_DIR}/file.csv' (prefix 'a', suffix 'b', header);
 ----
 HEADER cannot be combined with PREFIX/SUFFIX
 
 statement error
-copy (select 42) to '__TEST_DIR__/file.csv' (escape 'null', null 'null');
+copy (select 42) to '{TEMP_DIR}/file.csv' (escape 'null', null 'null');
 ----
 The escape option cannot exceed a size of 1 byte.

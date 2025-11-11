@@ -2,7 +2,7 @@
 # description: Test storing many columns with RLE
 # group: [partial_blocks]
 
-load __TEST_DIR__/many_columns.db
+load {LOCAL_TEMP_DIR}/many_columns.db
 
 statement ok
 PRAGMA force_compression='rle'

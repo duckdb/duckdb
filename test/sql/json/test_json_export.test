@@ -14,13 +14,13 @@ statement ok
 insert into text values ('bla');
 
 statement ok
-export database '__TEST_DIR__/test_export' (FORMAT JSON);
+export database '{TEMP_DIR}/test_export' (FORMAT JSON);
 
 statement ok
 drop table text;
 
 statement ok
-import database '__TEST_DIR__/test_export';
+import database '{TEMP_DIR}/test_export';
 
 query I
 select * from text;
@@ -28,7 +28,7 @@ select * from text;
 bla
 
 statement ok
-COPY text TO '__TEST_DIR__/text.json' (ARRAY)
+COPY text TO '{TEMP_DIR}/text.json' (ARRAY)
 
 statement ok
 drop table text;
@@ -37,7 +37,7 @@ statement ok
 create table text(i varchar);
 
 statement ok
-COPY text from '__TEST_DIR__/text.json' (ARRAY)
+COPY text from '{TEMP_DIR}/text.json' (ARRAY)
 
 query I
 select * from text;
@@ -45,6 +45,6 @@ select * from text;
 bla
 
 query I
-select * from '__TEST_DIR__/text.json';
+select * from '{TEMP_DIR}/text.json';
 ----
 bla

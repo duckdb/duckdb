@@ -8,17 +8,17 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-COPY (FROM (VALUES ('f1', 42), ('f1', 8), ('f1', NULL)) t(f, i)) TO '__TEST_DIR__/multi_file_filter_f1.parquet'
+COPY (FROM (VALUES ('f1', 42), ('f1', 8), ('f1', NULL)) t(f, i)) TO '{TEMP_DIR}/multi_file_filter_f1.parquet'
 
 statement ok
-COPY (FROM (VALUES ('042', 'f2'), ('124', 'f2'), (NULL, 'f2')) t(i, f)) TO '__TEST_DIR__/multi_file_filter_f2.parquet'
+COPY (FROM (VALUES ('042', 'f2'), ('124', 'f2'), (NULL, 'f2')) t(i, f)) TO '{TEMP_DIR}/multi_file_filter_f2.parquet'
 
 # the schema of the file depends on the first file read
 statement ok
-CREATE VIEW integer_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f1.parquet', '__TEST_DIR__/multi_file_filter_f2.parquet'])
+CREATE VIEW integer_file_first AS FROM read_parquet(['{TEMP_DIR}/multi_file_filter_f1.parquet', '{TEMP_DIR}/multi_file_filter_f2.parquet'])
 
 statement ok
-CREATE VIEW string_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f2.parquet', '__TEST_DIR__/multi_file_filter_f1.parquet'])
+CREATE VIEW string_file_first AS FROM read_parquet(['{TEMP_DIR}/multi_file_filter_f2.parquet', '{TEMP_DIR}/multi_file_filter_f1.parquet'])
 
 # equality
 # casting to integer - this works (since '042' = 42)

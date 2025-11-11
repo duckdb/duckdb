@@ -3,7 +3,7 @@
 # group: [alp]
 
 # load the DB from disk
-load __TEST_DIR__/test_alp_list_skip.db
+load {LOCAL_TEMP_DIR}/test_alp_list_skip.db
 
 foreach comp alp alprd
 

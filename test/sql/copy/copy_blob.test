@@ -2,44 +2,44 @@
 # group: [copy]
 
 statement error
-COPY (select 'foo') TO '__TEST_DIR__/test.blob' (FORMAT BLOB);
+COPY (select 'foo') TO '{TEMP_DIR}/test.blob' (FORMAT BLOB);
 ----
 Binder Error: "COPY (FORMAT BLOB)" only supports a single BLOB column
 
 statement error
-COPY (select 'foo'::BLOB, 10) TO '__TEST_DIR__/test.blob' (FORMAT BLOB);
+COPY (select 'foo'::BLOB, 10) TO '{TEMP_DIR}/test.blob' (FORMAT BLOB);
 ----
 Binder Error: "COPY (FORMAT BLOB)" only supports a single BLOB column
 
 
 statement ok
-COPY (select 'foo'::BLOB) TO '__TEST_DIR__/test.blob' (FORMAT BLOB);
+COPY (select 'foo'::BLOB) TO '{TEMP_DIR}/test.blob' (FORMAT BLOB);
 
 query III
-select filename LIKE '%test.blob', content, size from read_blob('__TEST_DIR__/test.blob');
+select filename LIKE '%test.blob', content, size from read_blob('{TEMP_DIR}/test.blob');
 ----
 true	foo	3
 
 
 statement error
-COPY (select 'foo'::BLOB) TO '__TEST_DIR__/test.blob.gz' (FORMAT BLOB, ASDFGH);
+COPY (select 'foo'::BLOB) TO '{TEMP_DIR}/test.blob.gz' (FORMAT BLOB, ASDFGH);
 ----
 Binder Error: Unrecognized option for COPY (FORMAT BLOB): "ASDFGH"
 
 # With compression
 statement ok
-COPY (select 'foo'::BLOB) TO '__TEST_DIR__/test.blob.gz' (FORMAT BLOB);
+COPY (select 'foo'::BLOB) TO '{TEMP_DIR}/test.blob.gz' (FORMAT BLOB);
 
 query II
-select filename LIKE '%test.blob.gz', size from read_blob('__TEST_DIR__/test.blob.gz');
+select filename LIKE '%test.blob.gz', size from read_blob('{TEMP_DIR}/test.blob.gz');
 ----
 true	26
 
 # With explicit compression
 statement ok
-COPY (select 'foo'::BLOB) TO '__TEST_DIR__/test2.blob' (FORMAT BLOB, COMPRESSION 'GZIP');
+COPY (select 'foo'::BLOB) TO '{TEMP_DIR}/test2.blob' (FORMAT BLOB, COMPRESSION 'GZIP');
 
 query II
-select filename LIKE '%test2.blob', size from read_blob('__TEST_DIR__/test2.blob');
+select filename LIKE '%test2.blob', size from read_blob('{TEMP_DIR}/test2.blob');
 ----
 true	26

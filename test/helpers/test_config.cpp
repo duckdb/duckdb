@@ -1,9 +1,15 @@
 #include "test_config.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "pid.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "test_helpers.hpp"
+#include "duckdb/common/re2_regex.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
+#include "test_helpers.hpp"
+#include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <unordered_set>
@@ -43,6 +49,9 @@ static const TestConfigOption test_config_options[] = {
     {"test_env", "The test variables",
      LogicalType::LIST(LogicalType::STRUCT({{"env_name", LogicalType::VARCHAR}, {"env_value", LogicalType::VARCHAR}})),
      nullptr},
+    {"data_dir", "shortcut: sets env[DATA_DIR]", LogicalType::VARCHAR, nullptr},
+    {"temp_dir_base", "shortcut: base used to construct TEMP_DIR (if not directly set)", LogicalType::VARCHAR, nullptr},
+    {"temp_dir", "shortcut: sets env[TEMP_DIR]", LogicalType::VARCHAR, nullptr},
     {"skip_tests", "Tests to be skipped",
      LogicalType::LIST(
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
@@ -62,11 +71,18 @@ static const TestConfigOption test_config_options[] = {
      TestConfiguration::AppendSkipTagSet},
     {"skip_tag_set", "Skip tests which match _all_ named tags (multiple sets are OR'd)",
      LogicalType::LIST(LogicalType::VARCHAR), TestConfiguration::AppendSkipTagSet},
+    {"select_source_re", "Select tests whose script source (.test*) matches the given regex", LogicalType::VARCHAR,
+     TestConfiguration::AppendSelectRE},
+    {"skip_source_re", "Skip tests whose script source (.test*) matches the given regex", LogicalType::VARCHAR,
+     TestConfiguration::AppendSkipRE},
     {"settings", "Configuration settings to apply",
      LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
      nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
+
+const string TestConfiguration::DATA_DIR_DEFAULT = "data";
+const string TestConfiguration::TEMP_DIR_BASE_DEFAULT = "duckdb_unittest_tempdir";
 
 TestConfiguration &TestConfiguration::Get() {
 	static TestConfiguration instance;
@@ -107,21 +123,107 @@ void TestConfiguration::Initialize() {
 
 	working_dir = FileSystem::GetWorkingDirectory();
 	test_uuid = UUID::ToString(UUID::GenerateRandomUUID());
-	UpdateEnvironment();
 }
 
-void TestConfiguration::UpdateEnvironment() {
-	// Setup standard vars
+void TestConfiguration::Finalize() {
+	D_ASSERT(!is_finalized);
 
-	// XXX: UUID used by ducklake to avoid collisions, is there a better way?
-	test_env["TEST_UUID"] = test_uuid;
-	test_env["BUILD_DIR"] = string(DUCKDB_BUILD_DIRECTORY);
-	test_env["WORKING_DIR"] = working_dir;        // can be overridden per runner
-	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
+	// Setup standard vars --
+	variables["BUILD_DIR"] = string(DUCKDB_BUILD_DIRECTORY);
 
-	string temp_dir = TestDirectoryPath();
-	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
-	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
+	// this var is actually
+	variables["TEST_UUID"] = test_uuid; // NOTE: possibly later removable, seems a hook for ducklake?
+
+	auto data_dir = GetDataDirectory(); // default: data
+	variables["DATA_DIR"] = data_dir;   // explicitly set >> data_dir(local) >> default=data
+	if (variables.find("LOCAL_DATA_DIR") == variables.end()) {
+		variables["LOCAL_DATA_DIR"] =
+		    FileSystem::IsRemoteFile(variables["DATA_DIR"]) ? GetDataDirectoryFromWorking() : data_dir;
+	}
+
+	variables["TEMP_DIR"] = AssureTempDirectory();
+	if (variables.find("LOCAL_TEMP_DIR") == variables.end()) {
+		variables["LOCAL_TEMP_DIR"] = FileSystem::IsRemoteFile(variables["TEMP_DIR"])
+		                                  ? AssureTempDirectoryFromBase(TEMP_DIR_BASE_DEFAULT)
+		                                  : variables["TEMP_DIR"];
+	}
+
+	variables["WORKING_DIR"] = working_dir; // can be overridden per runner
+
+	TestDirectoryPath(); // NOTE: (@benfleis) - remove after __TEST_DIR__ and sibs gone
+	is_finalized = true;
+}
+
+string TestConfiguration::GetDataDirectoryFromWorking() {
+	return working_dir + "/" + TestConfiguration::DATA_DIR_DEFAULT;
+}
+
+string TestConfiguration::GetDataDirectory() {
+	auto dir = options.find("data_dir");
+	if (dir != options.end()) {
+		// use as specified, including relative spec
+		return dir->second.GetValue<string>();
+	}
+	return GetDataDirectoryFromWorking();
+}
+
+string TestConfiguration::AssureTempDirectoryFromBase(const string &base) {
+	LocalFileSystem fs;
+#if 0 // switch on once all refs to __TEST_DIR__ replaced
+	std::time_t time = std::time({});
+	char time_str[sizeof("yyyy-mm-ddThh:mm:ssZ")];
+	std::strftime(time_str, sizeof(time_str), "%FT%TZ", std::gmtime(&time));
+	const auto path = base + "/" + time_str + "--pid-" + to_string(getpid());
+#else
+	// stay compatible with existing __TEST_DIR_- behavior
+	const auto path = fs.JoinPath(fs.NormalizeLocalPath(base), to_string(getpid()));
+#endif
+	if (!FileSystem::IsRemoteFile(base)) {
+		if (base == TEMP_DIR_BASE_DEFAULT) {
+			fs.CreateDirectory(base, nullptr);
+		}
+		fs.CreateDirectory(path, nullptr);
+	}
+	return path;
+}
+
+string TestConfiguration::AssureTempDirectory() {
+	// NOTE: current behavior has 2 modes -- 1 where unittest owns the temp dir -- creates on demand,
+	// and (by default) deletes after, and another where user specifies `--test-temp-dir`, which
+	// requires the dir to not exist, leaves it untouched after unittest execution. Rather than change
+	// these behaviors right now, introduce a TEMP_DIR_BASE which allows us to set a base without
+	// changing the policy/behaviors above, while setting e.g. TEMP_DIR_BASE=az://files1/temp_dir
+
+	// Simple approach to opts/envs: get most specific first (opt) in each form, then get from env.
+	// First: get from options which is first explicit on CLI, second process ENVVAR
+	// If whole dir specified, don't make it. If built from base, then make it.
+
+	if (GetTestDirectory() != TEMP_DIR_BASE_DEFAULT) {
+		return GetTestDirectory();
+	}
+
+	auto opt_dir = options.find("temp_dir");
+	if (opt_dir != options.end()) {
+		return opt_dir->second.GetValue<string>();
+	}
+
+	auto opt_base = options.find("temp_dir_base");
+	if (opt_base != options.end()) {
+		return AssureTempDirectoryFromBase(opt_base->second.GetValue<string>());
+	}
+
+	// Then get from existing test_env specs
+	auto var_dir = variables.find("temp_dir");
+	if (var_dir != variables.end()) {
+		return var_dir->second;
+	}
+
+	auto var_base = variables.find("temp_dir_base");
+	if (var_base != variables.end()) {
+		return AssureTempDirectoryFromBase(var_base->second);
+	}
+
+	return AssureTempDirectoryFromBase(TEMP_DIR_BASE_DEFAULT);
 }
 
 string TestConfiguration::GetWorkingDirectory() {
@@ -137,7 +239,11 @@ bool TestConfiguration::ChangeWorkingDirectory(const string &dir) {
 	if (working_dir != normalized) {
 		rv = true;
 		working_dir = normalized;
-		UpdateEnvironment();
+
+		variables["WORKING_DIR"] = working_dir; // can be overridden per runner
+		// TODO: unclear whether this actually makes sense, need to check but seems logical given that
+		// it was previously "data/"
+		variables["DATA_DIR"] = GetDataDirectory();
 	}
 	return rv;
 }
@@ -218,7 +324,8 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 	if (test_config.on_set_option) {
 		test_config.on_set_option(parameter);
 	}
-	options.insert(make_pair(test_config.name, parameter));
+	// later values override earlier values
+	options[test_config.name] = parameter;
 	return true;
 }
 
@@ -452,25 +559,25 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 	return result;
 }
 
-string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
-	if (test_env.empty() && options.find("test_env") != options.end()) {
-		auto entry = options["test_env"];
+string TestConfiguration::GetVariable(const string &key, const string &default_value) {
+	if (variables.empty() && options.find("variables") != options.end()) {
+		auto entry = options["variables"];
 		auto list_children = ListValue::GetChildren(entry);
 		for (const auto &value : list_children) {
 			auto &struct_children = StructValue::GetChildren(value);
 			auto &env = StringValue::Get(struct_children[0]);
 			auto &env_value = StringValue::Get(struct_children[1]);
-			test_env[env] = env_value;
+			variables[env] = env_value;
 		}
 	}
-	if (test_env.find(key) == test_env.end()) {
+	if (variables.find(key) == variables.end()) {
 		return default_value;
 	}
-	return test_env[key];
+	return variables[key];
 }
 
-const unordered_map<string, string> &TestConfiguration::GetTestEnvMap() {
-	return test_env;
+const unordered_map<string, string> &TestConfiguration::GetVariables() {
+	return variables;
 }
 
 DebugVectorVerification TestConfiguration::GetVectorVerification() {
@@ -538,6 +645,44 @@ TestConfiguration::SelectPolicy TestConfiguration::GetPolicyForTagSet(const vect
 	for (const auto &skip_tag_set : skip_tag_sets) {
 		if (is_subset(skip_tag_set, subject_tag_set)) {
 			return TestConfiguration::SelectPolicy::SKIP;
+		}
+	}
+	return policy;
+}
+
+void TestConfiguration::AppendSelectRE(const Value &re_val) {
+	TestConfiguration::Get().select_res.emplace_back(re_val.GetValue<string>());
+}
+
+void TestConfiguration::AppendSkipRE(const Value &re_val) {
+	TestConfiguration::Get().skip_res.emplace_back(re_val.GetValue<string>());
+}
+
+// NOTE: All selects are applied (unioned), then all skips are applied to that result.
+// (Alternative, not done here: CLI ordering applied in sequence.)
+TestConfiguration::SelectPolicy TestConfiguration::GetPolicyForSourceREs(const vector<string> &source_lines) {
+	using Match = duckdb_re2::Match;
+
+	// Apply select_tag_set first then skip_tag_set; if both empty always NONE
+	auto policy = TestConfiguration::SelectPolicy::NONE;
+	// select: if >= 1 select_tag_set is subset of subject_tag_set
+	// if count(select_tag_sets) > 0 && no matches, SKIP
+	Match ignored;
+	for (const auto &select_re : select_res) {
+		for (const auto &line : source_lines) {
+			policy = TestConfiguration::SelectPolicy::SKIP; // >=1 sets => SKIP || SELECT
+			if (duckdb_re2::RegexSearch(line, ignored, select_re)) {
+				policy = TestConfiguration::SelectPolicy::SELECT;
+				break;
+			}
+		}
+	}
+	// skip: if >=1 skip_re is subset of subject_re, else passthrough
+	for (const auto &skip_re : skip_res) {
+		for (const auto &line : source_lines) {
+			if (duckdb_re2::RegexSearch(line, ignored, skip_re)) {
+				return TestConfiguration::SelectPolicy::SKIP;
+			}
 		}
 	}
 	return policy;

@@ -3,7 +3,7 @@
 # group: [delete]
 
 # load the DB from disk
-load __TEST_DIR__/load_delete_modify.db
+load {LOCAL_TEMP_DIR}/load_delete_modify.db
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM generate_series(0,599999) t(i);

@@ -3,7 +3,7 @@
 # group: [array]
 
 # load the DB from disk
-load __TEST_DIR__/array_compression.db
+load {LOCAL_TEMP_DIR}/array_compression.db
 
 statement ok
 PRAGMA enable_verification

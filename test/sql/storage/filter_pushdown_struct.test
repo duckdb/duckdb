@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/filter_pushdown_struct.db
+load {LOCAL_TEMP_DIR}/filter_pushdown_struct.db
 
 statement ok
 CREATE TABLE tbl (a STRUCT("id" VARCHAR), b STRUCT("id" VARCHAR));

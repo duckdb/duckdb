@@ -115,7 +115,7 @@ require notwindows
 ###
 
 statement ok
-CALL enable_logging('FileSystem', storage='file', storage_config={'path': '__TEST_DIR__/logging_call_functions_test_log'});
+CALL enable_logging('FileSystem', storage='file', storage_config={'path': '{TEMP_DIR}/logging_call_functions_test_log'});
 
 query II
 FROM log_settings;
@@ -132,7 +132,7 @@ logging_storage	file
 ###
 
 statement ok
-CALL enable_logging(storage='file', storage_path='__TEST_DIR__/logging_call_functions');
+CALL enable_logging(storage='file', storage_path='{TEMP_DIR}/logging_call_functions');
 
 statement ok
 CALL disable_logging()
@@ -142,7 +142,7 @@ CALL disable_logging()
 ###
 
 statement ok
-CALL enable_logging(storage_path='__TEST_DIR__/logging_call_functions');
+CALL enable_logging(storage_path='{TEMP_DIR}/logging_call_functions');
 
 query II
 FROM log_settings;
@@ -180,7 +180,7 @@ logging_storage	memory
 
 # Unknown storage option: this error is thrown by the log storage, because not all log storages implement the same params
 statement error
-CALL enable_logging(storage='file', level='DEBUG', storage_config={'hocus_pocus': 'this is bogus', 'path': '__TEST_DIR__/hi.csv'});
+CALL enable_logging(storage='file', level='DEBUG', storage_config={'hocus_pocus': 'this is bogus', 'path': '{TEMP_DIR}/hi.csv'});
 ----
 Invalid Input Error: Unrecognized log storage config option for storage: 'FileLogStorage': 'hocus_pocus'
 

@@ -228,11 +228,13 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	// ProcessPath replaced, can simplify this into simple `ReplaceVariables` loop.
 	//
 	// Replace environment variables in the SQL
-	for (auto &it : environment_variables) {
-		auto &name = it.first;
-		auto &value = it.second;
-		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
-		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
+	if (input.find('{') != string::npos) { // trivial optimization saves needless scans
+		for (auto &it : environment_variables) {
+			auto &name = it.first;
+			auto &value = it.second;
+			input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
+			input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
+		}
 	}
 	auto &test_config = TestConfiguration::Get();
 	test_config.ProcessPath(input, file_name);
@@ -738,6 +740,24 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		original_sqlite_test = true;
 	}
 
+	// open the file and parse it
+	bool success = parser.OpenFile(script);
+	if (!success) {
+		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
+	}
+
+	if (test_config.GetPolicyForSourceREs(parser.lines) == TestConfiguration::SelectPolicy::SKIP) {
+		SKIP_TEST("source-re");
+		return;
+	}
+
+	if (StringUtil::EndsWith(script, ".test_slow")) {
+		file_tags.emplace_back("slow");
+	}
+	if (StringUtil::EndsWith(script, ".test_coverage")) {
+		file_tags.emplace_back("coverage");
+	}
+
 	if (!dbpath.empty()) {
 		// delete the target database file, if it exists
 		DeleteDatabase(dbpath);
@@ -750,19 +770,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
-
-	// open the file and parse it
-	bool success = parser.OpenFile(script);
-	if (!success) {
-		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
-	}
-
-	if (StringUtil::EndsWith(script, ".test_slow")) {
-		file_tags.emplace_back("slow");
-	}
-	if (StringUtil::EndsWith(script, ".test_coverage")) {
-		file_tags.emplace_back("coverage");
-	}
 
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
@@ -777,7 +784,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		// Check tags first time we hit test statements, since all explicit & implicit tags now present
 		if (parser.IsTestCommand(token.type) && !test_expr_executed) {
 			if (test_config.GetPolicyForTagSet(file_tags) == TestConfiguration::SelectPolicy::SKIP) {
-				SKIP_TEST("select tag-set");
+				SKIP_TEST("tag-set");
 				return;
 			}
 			test_expr_executed = true;
@@ -1072,7 +1079,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("test-env requires 2 arguments: <env name> <default env val>");
 			}
 			auto env_var = token.parameters[0];
-			auto env_actual = test_config.GetTestEnv(env_var, token.parameters[1]);
+			auto env_actual = test_config.GetVariable(env_var, token.parameters[1]);
 
 			// Check if we have something defining from our test
 			if (environment_variables.count(env_var)) {

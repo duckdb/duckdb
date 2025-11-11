@@ -1,9 +1,9 @@
-# name: test/sql/storage/types/test_uuid.storage.test
+# name: test/sql/storage/types/test_uuid_storage.test
 # description: Test UUID with persistent storage
 # group: [types]
 
 # load the DB from disk
-load __TEST_DIR__/uuid_storage_test.db
+load {LOCAL_TEMP_DIR}/uuid_storage_test.db
 
 # create a table with uuid
 statement ok

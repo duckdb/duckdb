@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/test_store_null_string.db
+load {LOCAL_TEMP_DIR}/test_store_null_string.db
 
 foreach compression <compression>
 

@@ -4,9 +4,9 @@
 # The database is written with a vector size of 2048.
 require vector_size 2048
 
-unzip data/storage/dictionary.db.gz __TEST_DIR__/dictionary.db
+unzip data/storage/dictionary.db.gz {TEMP_DIR}/dictionary.db
 
-load __TEST_DIR__/dictionary.db readonly
+load {LOCAL_TEMP_DIR}/dictionary.db readonly
 
 query I
 select count(street) from tbl;

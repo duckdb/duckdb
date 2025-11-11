@@ -2,7 +2,7 @@
 # description: Test optimistic write with alter type in transaction-local storage
 # group: [optimistic_write]
 
-load __TEST_DIR__/optimistic_write_alter_type.db
+load {LOCAL_TEMP_DIR}/optimistic_write_alter_type.db
 
 statement ok
 CREATE TABLE test (a INTEGER);

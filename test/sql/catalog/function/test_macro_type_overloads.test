@@ -16,7 +16,7 @@ statement ok
 drop macro m;
 
 statement ok
-attach '__TEST_DIR__/test_macro_type_overloads_olderdb.db' AS olderdb (storage_version 'v1.3.0')
+ATTACH '{LOCAL_TEMP_DIR}/test_macro_type_overloads_olderdb.db' AS olderdb (storage_version 'v1.3.0')
 
 statement ok
 use olderdb
@@ -36,7 +36,7 @@ drop macro m;
 
 # rest of the tests proceed with a db version that works
 statement ok
-attach '__TEST_DIR__/test_macro_type_overloads_newerdb.db' AS newerdb (storage_version 'v1.4.0')
+ATTACH '{LOCAL_TEMP_DIR}/test_macro_type_overloads_newerdb.db' AS newerdb (storage_version 'v1.4.0')
 
 statement ok
 use newerdb

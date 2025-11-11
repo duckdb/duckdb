@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/copy_database_simple.db' AS db1
+ATTACH '{LOCAL_TEMP_DIR}/copy_database_simple.db' AS db1
 
 statement ok
 CREATE TABLE db1.test(a INTEGER, b INTEGER, c VARCHAR(10));
@@ -15,7 +15,7 @@ statement ok
 INSERT INTO db1.test VALUES (42, 88, 'hello');
 
 statement ok
-ATTACH '__TEST_DIR__/other_copy_database_simple.db' AS db2;
+ATTACH '{LOCAL_TEMP_DIR}/other_copy_database_simple.db' AS db2;
 
 statement ok
 COPY FROM DATABASE db1 TO db2

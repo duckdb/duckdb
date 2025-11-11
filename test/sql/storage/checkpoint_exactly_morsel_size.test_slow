@@ -2,7 +2,7 @@
 # description: Run a checkpoint on a table that is exactly morsel size
 # group: [storage]
 
-load __TEST_DIR__/checkpoint_morsel_size.db
+load {LOCAL_TEMP_DIR}/checkpoint_morsel_size.db
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(1024*100*8) tbl(i);

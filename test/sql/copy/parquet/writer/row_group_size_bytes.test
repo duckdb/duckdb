@@ -13,7 +13,7 @@ statement ok
 SET preserve_insertion_order=false
 
 statement error
-copy (select 42) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES)
+copy (select 42) to '{TEMP_DIR}/tbl.parquet' (ROW_GROUP_SIZE_BYTES)
 ----
 
 # we can use human-readable memory limits
@@ -28,16 +28,16 @@ copy (
            range c6,
            range c7,
     from range(50000)
-) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES '1mb')
+) to '{TEMP_DIR}/tbl.parquet' (ROW_GROUP_SIZE_BYTES '1mb')
 
 query T
-select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+select max(row_group_num_rows) from parquet_metadata('{TEMP_DIR}/tbl.parquet')
 ----
 16384
 
 # also test that we set this thing
 query T
-select min(row_group_bytes) != 0 from parquet_metadata('__TEST_DIR__/tbl.parquet')
+select min(row_group_bytes) != 0 from parquet_metadata('{TEMP_DIR}/tbl.parquet')
 ----
 1
 
@@ -54,10 +54,10 @@ copy (
            range c6,
            range c7,
     from range(50000)
-) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES 500000)
+) to '{TEMP_DIR}/tbl.parquet' (ROW_GROUP_SIZE_BYTES 500000)
 
 query T
-select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+select max(row_group_num_rows) from parquet_metadata('{TEMP_DIR}/tbl.parquet')
 ----
 8192
 
@@ -73,10 +73,10 @@ copy (
            range c6,
            range c7,
     from range(50000)
-) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE 10000, ROW_GROUP_SIZE_BYTES '1GB')
+) to '{TEMP_DIR}/tbl.parquet' (ROW_GROUP_SIZE 10000, ROW_GROUP_SIZE_BYTES '1GB')
 
 query T
-select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+select max(row_group_num_rows) from parquet_metadata('{TEMP_DIR}/tbl.parquet')
 ----
 10240
 
@@ -86,10 +86,10 @@ statement ok
 copy (
     select range || repeat('0', 50) c0
     from range(50000)
-) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES 200000)
+) to '{TEMP_DIR}/tbl.parquet' (ROW_GROUP_SIZE_BYTES 200000)
 
 query T
-select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+select max(row_group_num_rows) from parquet_metadata('{TEMP_DIR}/tbl.parquet')
 ----
 4096
 
@@ -98,9 +98,9 @@ statement ok
 copy (
     select range || repeat('0', 50) c0
     from range(50000)
-) to '__TEST_DIR__/tbl.parquet' (ROW_GROUP_SIZE_BYTES 650000)
+) to '{TEMP_DIR}/tbl.parquet' (ROW_GROUP_SIZE_BYTES 650000)
 
 query T
-select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
+select max(row_group_num_rows) from parquet_metadata('{TEMP_DIR}/tbl.parquet')
 ----
 10240

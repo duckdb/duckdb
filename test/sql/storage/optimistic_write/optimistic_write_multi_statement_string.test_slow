@@ -4,7 +4,7 @@
 
 require parquet
 
-load __TEST_DIR__/optimistic_write_multi_statement_string.db
+load {LOCAL_TEMP_DIR}/optimistic_write_multi_statement_string.db
 
 statement ok
 SET force_compression='uncompressed';
@@ -18,10 +18,10 @@ BEGIN
 foreach file_size 130815 125018 125774 77995
 
 statement ok
-COPY (SELECT uuid()::VARCHAR FROM range(${file_size})) TO '__TEST_DIR__/file.parquet' (ROW_GROUP_SIZE 100000000);
+COPY (SELECT uuid()::VARCHAR FROM range(${file_size})) TO '{TEMP_DIR}/file.parquet' (ROW_GROUP_SIZE 100000000);
 
 statement ok
-INSERT INTO main_tbl FROM '__TEST_DIR__/file.parquet';
+INSERT INTO main_tbl FROM '{TEMP_DIR}/file.parquet';
 
 endloop
 

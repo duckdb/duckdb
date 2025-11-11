@@ -414,7 +414,7 @@ COPY (
 		NULL::VARCHAR c399,
 	FROM
 		range(600_000)
-) TO '__TEST_DIR__/many_nulls.parquet' (ROW_GROUP_SIZE_BYTES '64mb');
+) TO '{TEMP_DIR}/many_nulls.parquet' (ROW_GROUP_SIZE_BYTES '64mb');
 
 # set a low memory env
 statement ok
@@ -434,8 +434,8 @@ SET temp_directory=NULL
 # we should see at least 10 compresses in the output (should be 400 but gets truncated)
 query II
 EXPLAIN ANALYZE SELECT ANY_VALUE(COLUMNS(*))
-FROM read_parquet(['__TEST_DIR__/many_nulls.parquet' for _ in range(2)], union_by_name=true) build
-JOIN read_parquet(['__TEST_DIR__/many_nulls.parquet' for _ in range(3)]) probe
+FROM read_parquet(['{TEMP_DIR}/many_nulls.parquet' for _ in range(2)], union_by_name=true) build
+JOIN read_parquet(['{TEMP_DIR}/many_nulls.parquet' for _ in range(3)]) probe
 USING (pk)
 ----
 analyzed_plan	<REGEX>:(.*internal_compress_string.*){10,}

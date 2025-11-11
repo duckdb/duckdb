@@ -3,7 +3,7 @@
 # group: [map]
 
 # load the DB from disk
-load __TEST_DIR__/map_storage_test.db
+load {LOCAL_TEMP_DIR}/map_storage_test.db
 
 statement ok
 CREATE TABLE a(b MAP(INTEGER,INTEGER));

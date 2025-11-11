@@ -9,7 +9,7 @@ require 64bit
 loop i 0 10
 
 statement ok
-ATTACH '__TEST_DIR__/num${i}.db';
+ATTACH '{LOCAL_TEMP_DIR}/num${i}.db';
 
 statement ok
 CREATE OR REPLACE TABLE num${i}.tbl AS SELECT range AS id, range + 10 AS other FROM range(200);

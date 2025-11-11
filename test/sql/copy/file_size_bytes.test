@@ -13,31 +13,31 @@ set threads=1
 
 # parameter in bytes
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv1' (FORMAT CSV, FILE_SIZE_BYTES 1000);
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv1' (FORMAT CSV, FILE_SIZE_BYTES 1000);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv1/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('{TEMP_DIR}/file_size_bytes_csv1/*.csv')
 ----
 10000
 
 # should lead to 3 files
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv1/*.csv')
+SELECT count(*) FROM glob('{TEMP_DIR}/file_size_bytes_csv1/*.csv')
 ----
 3
 
 # parameter in human-readable format
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv2' (FORMAT CSV, FILE_SIZE_BYTES '1kb');
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv2' (FORMAT CSV, FILE_SIZE_BYTES '1kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv2/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('{TEMP_DIR}/file_size_bytes_csv2/*.csv')
 ----
 10000
 
 # same, should also lead to 3 files
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv2/*.csv')
+SELECT count(*) FROM glob('{TEMP_DIR}/file_size_bytes_csv2/*.csv')
 ----
 3
 
@@ -45,16 +45,16 @@ SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv2/*.csv')
 require json
 
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_json' (FORMAT JSON, FILE_SIZE_BYTES '1kb');
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_json' (FORMAT JSON, FILE_SIZE_BYTES '1kb');
 
 query I
-SELECT COUNT(*) FROM read_json_auto('__TEST_DIR__/file_size_bytes_json/*.json')
+SELECT COUNT(*) FROM read_json_auto('{TEMP_DIR}/file_size_bytes_json/*.json')
 ----
 10000
 
 # JSON is a bit more wasteful, 5 files
 query I
-SELECT count(*) >= 3 and count(*) <= 12 FROM glob('__TEST_DIR__/file_size_bytes_json/*.json')
+SELECT count(*) >= 3 and count(*) <= 12 FROM glob('{TEMP_DIR}/file_size_bytes_json/*.json')
 ----
 true
 
@@ -63,16 +63,16 @@ require parquet
 # we can trigger early flushes with Parquet by setting a low row group size
 # also, we have to use hash(col)::DOUBLE for Parquet because we compress integers by A LOT which affects the file_size_bytes
 statement ok
-COPY (SELECT hash(col_a)::DOUBLE, hash(col_b)::DOUBLE FROM bigdata) TO '__TEST_DIR__/file_size_bytes_parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kb');
+COPY (SELECT hash(col_a)::DOUBLE, hash(col_b)::DOUBLE FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kb');
 
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/file_size_bytes_parquet/*.parquet')
+SELECT COUNT(*) FROM read_parquet('{TEMP_DIR}/file_size_bytes_parquet/*.parquet')
 ----
 10000
 
 # we get one file per chunk, for a total of 5
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_parquet/*.parquet')
+SELECT count(*) FROM glob('{TEMP_DIR}/file_size_bytes_parquet/*.parquet')
 ----
 5
 
@@ -90,31 +90,31 @@ pragma threads=4;
 # with parallelism we do best-effort to get to the specified file size, but we are more likely to overshoot
 # this file would be ~950MB if written to a single file, what if we set a 500kb limit
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv3' (FORMAT CSV, FILE_SIZE_BYTES '500kb');
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv3' (FORMAT CSV, FILE_SIZE_BYTES '500kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv3/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('{TEMP_DIR}/file_size_bytes_csv3/*.csv')
 ----
 100000
 
 # there should always be 2 files, even with parallelism nondeterminism
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_csv3/*.csv')
+SELECT count(*) FROM glob('{TEMP_DIR}/file_size_bytes_csv3/*.csv')
 ----
 2
 
 # what about a 200kb limit, which is <1/4th of the total file size
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv4' (FORMAT CSV, FILE_SIZE_BYTES '200kb');
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv4' (FORMAT CSV, FILE_SIZE_BYTES '200kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv4/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('{TEMP_DIR}/file_size_bytes_csv4/*.csv')
 ----
 100000
 
 # there should be around 4 files, not exact due to parallelism
 query I
-SELECT count(*) BETWEEN 3 AND 5 FROM glob('__TEST_DIR__/file_size_bytes_csv4/*.csv')
+SELECT count(*) BETWEEN 3 AND 5 FROM glob('{TEMP_DIR}/file_size_bytes_csv4/*.csv')
 ----
 1
 
@@ -122,41 +122,41 @@ SELECT count(*) BETWEEN 3 AND 5 FROM glob('__TEST_DIR__/file_size_bytes_csv4/*.c
 # no thread should see more than 700kb (being lenient in case of thread imbalance here),
 # so this should yield one file per thread
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv5' (FORMAT CSV, FILE_SIZE_BYTES '700kb', PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv5' (FORMAT CSV, FILE_SIZE_BYTES '700kb', PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('{TEMP_DIR}/file_size_bytes_csv5/*.csv')
 ----
 100000
 
 # should yield multiple files, can be less than 4 because we create files lazily
 query I
-SELECT count(*) > 1 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+SELECT count(*) > 1 FROM glob('{TEMP_DIR}/file_size_bytes_csv5/*.csv')
 ----
 true
 
 # each thread sees ~240kb if it's balanced, what about a 190kb limit
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('{TEMP_DIR}/file_size_bytes_csv6/*.csv')
 ----
 100000
 
 # ~2 files per thread, around 8 in total (5 output files in case of extreme thread imbalance and only 1 thread runs)
 query I
-SELECT count(*) BETWEEN 5 AND 10 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+SELECT count(*) BETWEEN 5 AND 10 FROM glob('{TEMP_DIR}/file_size_bytes_csv6/*.csv')
 ----
 1
 
 # doesn't work in combination with certain params
 statement error
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', USE_TMP_FILE TRUE);
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', USE_TMP_FILE TRUE);
 ----
 Not implemented Error
 
 statement error
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PARTITION_BY col_a);
+COPY (FROM bigdata) TO '{TEMP_DIR}/file_size_bytes_csv7' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PARTITION_BY col_a);
 ----
 Not implemented Error

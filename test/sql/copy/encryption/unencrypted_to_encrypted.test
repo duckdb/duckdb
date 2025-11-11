@@ -9,10 +9,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted.duckdb' as unencrypted;
 
 statement ok
 USE unencrypted;
@@ -24,7 +24,7 @@ statement ok
 COPY FROM DATABASE unencrypted to encrypted;
 
 statement ok
-ATTACH '__TEST_DIR__/not_relevant.duckdb' AS other;
+ATTACH '{LOCAL_TEMP_DIR}/not_relevant.duckdb' AS other;
 
 statement ok
 USE other;
@@ -36,7 +36,7 @@ statement ok
 DETACH encrypted
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 query I
 SELECT l_suppkey FROM encrypted.lineitem limit 10;

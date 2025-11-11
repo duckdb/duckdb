@@ -15,7 +15,7 @@ INSERT INTO test_base VALUES
     (10, REPEAT('a', 10485760), 20),
 
 statement ok
-COPY test_base TO '__TEST_DIR__/test.csv' (HEADER 0)
+COPY test_base TO '{TEMP_DIR}/test.csv' (HEADER 0)
 
 # value is too big for loading
 statement ok
@@ -24,14 +24,14 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 # Error is thrown when line does not fit maximum lines size: note that it may not always throw for exceeding the line
 # size by a small margin as the calculation is an estimate based on reads before parsing.
 statement error
-COPY test FROM '__TEST_DIR__/test.csv';
+COPY test FROM '{TEMP_DIR}/test.csv';
 ----
 Possible Solution: Change the maximum length size, e.g., max_line_size=10485769
 
 # we can override the max line size
 statement ok
-COPY test FROM '__TEST_DIR__/test.csv' (max_line_size 10485770);
+COPY test FROM '{TEMP_DIR}/test.csv' (max_line_size 10485770);
 
 # also in the read_csv call
 statement ok
-INSERT INTO test SELECT * FROM read_csv_auto('__TEST_DIR__/test.csv', max_line_size=10485770);
+INSERT INTO test SELECT * FROM read_csv_auto('{TEMP_DIR}/test.csv', max_line_size=10485770);

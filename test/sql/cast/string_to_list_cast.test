@@ -469,10 +469,10 @@ statement ok
 CREATE TABLE int_list(col INT[]);
 
 statement ok
-COPY (SELECT [1,2,3]) TO '__TEST_DIR__/int_list.csv';
+COPY (SELECT [1,2,3]) TO '{TEMP_DIR}/int_list.csv';
 
 statement ok
-COPY int_list FROM '__TEST_DIR__/int_list.csv';
+COPY int_list FROM '{TEMP_DIR}/int_list.csv';
 
 query I
 SELECT col FROM int_list;
@@ -483,10 +483,10 @@ statement ok
 CREATE TABLE assorted_lists(col1 INT[], col2 VARCHAR[], col3 DATE[]);
 
 statement ok
-COPY (SELECT [8,7,6], $$[hello, Duck\\'DB]$$, '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv' (Header 0);
+COPY (SELECT [8,7,6], $$[hello, Duck\\'DB]$$, '[2022-12-2, 1929-01-25]') TO '{TEMP_DIR}/assorted_lists.csv' (Header 0);
 
 statement ok
-COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv' (ESCAPE '\');
+COPY assorted_lists FROM '{TEMP_DIR}/assorted_lists.csv' (ESCAPE '\');
 
 query III
 SELECT * FROM assorted_lists;

@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '{LOCAL_TEMP_DIR}/persistent_attach.db'
 
 statement error
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '{LOCAL_TEMP_DIR}/persistent_attach.db'
 ----
 
 statement ok
@@ -33,7 +33,7 @@ SELECT SUM(i) FROM persistent_attach.integers
 does not exist
 
 statement ok
-ATTACH '__TEST_DIR__/persistent_attach.db'
+ATTACH '{LOCAL_TEMP_DIR}/persistent_attach.db'
 
 query I
 SELECT SUM(i) FROM persistent_attach.integers

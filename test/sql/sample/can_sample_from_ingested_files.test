@@ -11,13 +11,13 @@ statement ok
 create table all_types as select * exclude(small_enum, medium_enum, large_enum, "union", bit) from test_all_types();
 
 statement ok
-copy all_types to '__TEST_DIR__/sample_all_types.csv' (FORMAT CSV);
+copy all_types to '{TEMP_DIR}/sample_all_types.csv' (FORMAT CSV);
 
 statement ok
-Create table all_types_csv_1 as select * from read_csv_auto('__TEST_DIR__/sample_all_types.csv');
+Create table all_types_csv_1 as select * from read_csv_auto('{TEMP_DIR}/sample_all_types.csv');
 
 statement ok
-Create table all_types_csv_2 as select * from read_csv_auto('__TEST_DIR__/sample_all_types.csv');
+Create table all_types_csv_2 as select * from read_csv_auto('{TEMP_DIR}/sample_all_types.csv');
 
 query T nosort result_1
 select * from all_types_csv_1;
@@ -27,14 +27,14 @@ select * from all_types_csv_2;
 
 
 statement ok
-copy (SELECT * from all_types) to '__TEST_DIR__/sample_all_types.parquet' (FORMAT PARQUET);
+copy (SELECT * from all_types) to '{TEMP_DIR}/sample_all_types.parquet' (FORMAT PARQUET);
 
 # test parquet
 statement ok
-Create table all_types_parquet_1 as select * from read_parquet('__TEST_DIR__/sample_all_types.parquet');
+Create table all_types_parquet_1 as select * from read_parquet('{TEMP_DIR}/sample_all_types.parquet');
 
 statement ok
-Create table all_types_parquet_2 as select * from read_parquet('__TEST_DIR__/sample_all_types.parquet');
+Create table all_types_parquet_2 as select * from read_parquet('{TEMP_DIR}/sample_all_types.parquet');
 
 query T nosort result_parquet
 select * from all_types_parquet_1;

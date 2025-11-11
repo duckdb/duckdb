@@ -2,7 +2,7 @@
 # description: Test loading overflow strings in small batches
 # group: [overflow_strings]
 
-load __TEST_DIR__/overflow_strings.db
+load {LOCAL_TEMP_DIR}/overflow_strings.db
 
 loop x 0 10
 

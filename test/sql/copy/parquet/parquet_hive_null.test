@@ -8,11 +8,11 @@ statement ok
 create table test as select i%5 as a, i%2 as b from range(0,10) tbl(i);
 
 statement ok
-copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', WRITE_PARTITION_COLUMNS);
+copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '{TEMP_DIR}/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', WRITE_PARTITION_COLUMNS);
 
 query II
 select * 
-from parquet_scan('__TEST_DIR__/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
+from parquet_scan('{TEMP_DIR}/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
 ORDER BY ALL
 ----
 0	0
@@ -31,11 +31,11 @@ statement ok
 create table test2 as select i%5 as a, i%2 as b, i as c from range(0,10) tbl(i);
 
 statement ok
-copy (FROM test2 UNION ALL select 'NULL' as a, 'NULL' as b, 'NULL' as c) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', OVERWRITE);
+copy (FROM test2 UNION ALL select 'NULL' as a, 'NULL' as b, 'NULL' as c) to '{TEMP_DIR}/null-parquet-2' (PARTITION_BY (a,b), FORMAT 'parquet');
 
 query III
 select * 
-from parquet_scan('__TEST_DIR__/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
+from parquet_scan('{TEMP_DIR}/null-parquet-2/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
 ORDER BY ALL
 ----
 0	0	0

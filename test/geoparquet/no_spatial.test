@@ -35,7 +35,7 @@ SELECT col, geometry FROM '__WORKING_DIRECTORY__/data/geoparquet/data-point-enco
 # Test writing geoparquet when conversion is enabled but spatial is not loaded
 #------------------------------------------------------------------------------
 
-load __TEST_DIR__/geometry_db_test.db
+load {LOCAL_TEMP_DIR}/geometry_db_test.db
 
 statement ok
 SET enable_geoparquet_conversion = true;
@@ -56,11 +56,11 @@ SET enable_geoparquet_conversion = true;
 
 # Write some parquet containing geometry when spatial is not loaded
 statement ok
-COPY (FROM t1) TO '__TEST_DIR__/data-point-out-enabled.parquet' (FORMAT PARQUET)
+COPY (FROM t1) TO '{TEMP_DIR}/data-point-out-enabled.parquet' (FORMAT PARQUET)
 
 # The bytes differ because this is serialized GEOMETRY, not WKB
 query II rowsort raw_geo
-SELECT col, geometry FROM '__TEST_DIR__/data-point-out-enabled.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-point-out-enabled.parquet'
 ----
 0	\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00>@\x00\x00\x00\x00\x00\x00$@
 1	\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
@@ -71,7 +71,7 @@ SELECT col, geometry FROM '__TEST_DIR__/data-point-out-enabled.parquet'
 # Check that we didnt write GeoParquet metadata to the footer (spatial is not loaded)
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-enabled.parquet');
+FROM parquet_kv_metadata('{TEMP_DIR}/data-point-out-enabled.parquet');
 ----
 
 
@@ -99,15 +99,15 @@ SET enable_geoparquet_conversion = true;
 
 # Write some parquet containing geometry when spatial is not loaded
 statement ok
-COPY (FROM t1) TO '__TEST_DIR__/data-point-out-disabled.parquet' (FORMAT PARQUET)
+COPY (FROM t1) TO '{TEMP_DIR}/data-point-out-disabled.parquet' (FORMAT PARQUET)
 
 # The bytes differ because this is serialized GEOMETRY, not WKB
 query II rowsort raw_geo
-SELECT col, geometry FROM '__TEST_DIR__/data-point-out-disabled.parquet'
+SELECT col, geometry FROM '{TEMP_DIR}/data-point-out-disabled.parquet'
 ----
 
 # Check that we didnt write any GeoParquet metadata to the footer
 query I
 SELECT (decode(value)) as col
-FROM parquet_kv_metadata('__TEST_DIR__/data-point-out-disabled.parquet');
+FROM parquet_kv_metadata('{TEMP_DIR}/data-point-out-disabled.parquet');
 ----

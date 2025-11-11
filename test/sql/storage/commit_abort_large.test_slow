@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/commit_abort.db
+load {LOCAL_TEMP_DIR}/commit_abort.db
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';

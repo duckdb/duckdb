@@ -6,7 +6,7 @@ statement ok
 SELECT CURRENT_SETTING('log_query_path')
 
 statement ok
-PRAGMA log_query_path='__TEST_DIR__/query_log.txt'
+PRAGMA log_query_path='{TEMP_DIR}/query_log.txt'
 
 query I
 SELECT 42
@@ -23,7 +23,7 @@ statement ok
 PRAGMA log_query_path=''
 
 query I
-SELECT * FROM read_csv('__TEST_DIR__/query_log.txt', columns={'sql': 'VARCHAR'}, auto_detect=false)
+SELECT * FROM read_csv('{TEMP_DIR}/query_log.txt', columns={'sql': 'VARCHAR'}, auto_detect=false)
 ----
 SELECT 42
 SELECT 100

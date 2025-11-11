@@ -37,16 +37,16 @@ INSERT INTO decimals VALUES (
 );
 
 statement ok
-COPY decimals TO '__TEST_DIR__/decimals.parquet';
+COPY decimals TO '{TEMP_DIR}/decimals.parquet';
 
 query IIII nosort decimal_scan
 SELECT * FROM decimals;
 
 query IIII nosort decimal_scan
-SELECT * FROM '__TEST_DIR__/decimals.parquet';
+SELECT * FROM '{TEMP_DIR}/decimals.parquet';
 
 query IIII
-SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('__TEST_DIR__/decimals.parquet');
+SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('{TEMP_DIR}/decimals.parquet');
 ----
 -999.9	999.9	-999.9	999.9
 -9999999.99	9999999.99	-9999999.99	9999999.99
@@ -58,21 +58,21 @@ statement ok
 DELETE FROM decimals WHERE dec4<-42 OR dec4>42
 
 statement ok
-COPY decimals TO '__TEST_DIR__/decimals.parquet';
+COPY decimals TO '{TEMP_DIR}/decimals.parquet';
 
 foreach dec_column dec4 dec9 dec18 dec38
 
 query IIII
-SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=42
+SELECT * FROM '{TEMP_DIR}/decimals.parquet' WHERE ${dec_column}=42
 ----
 42	42	42	42
 
 query IIII
-SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=-43
+SELECT * FROM '{TEMP_DIR}/decimals.parquet' WHERE ${dec_column}=-43
 ----
 
 query IIII
-SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=43
+SELECT * FROM '{TEMP_DIR}/decimals.parquet' WHERE ${dec_column}=43
 ----
 
 endloop
@@ -82,6 +82,6 @@ statement ok
 PRAGMA disable_verification
 
 query IIII
-SELECT stats(dec4), stats(dec9), stats(dec18), stats(dec38) FROM '__TEST_DIR__/decimals.parquet' LIMIT 1
+SELECT stats(dec4), stats(dec9), stats(dec18), stats(dec38) FROM '{TEMP_DIR}/decimals.parquet' LIMIT 1
 ----
 [Min: -42.0, Max: 42.0][Has Null: true, Has No Null: true]	[Min: -42.00, Max: 42.00][Has Null: true, Has No Null: true]	[Min: -42.000, Max: 42.000][Has Null: true, Has No Null: true]	[Min: -42.0000, Max: 42.0000][Has Null: true, Has No Null: true]

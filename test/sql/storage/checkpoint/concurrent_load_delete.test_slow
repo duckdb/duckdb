@@ -2,7 +2,7 @@
 # description: Test concurrent delete load workflow
 # group: [checkpoint]
 
-load __TEST_DIR__/concurrent_delete_load.db
+load {LOCAL_TEMP_DIR}/concurrent_delete_load.db
 
 statement ok
 create or replace table z(id integer);

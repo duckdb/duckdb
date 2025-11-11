@@ -8,13 +8,13 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SET home_directory='__TEST_DIR__'
+SET home_directory='{LOCAL_TEMP_DIR}'
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(10)
 
 statement ok
-COPY integers TO '__TEST_DIR__/integers.parquet' (FORMAT PARQUET);
+COPY integers TO '{LOCAL_TEMP_DIR}/integers.parquet' (FORMAT PARQUET);
 
 query I
 SELECT * FROM '~/integers.parquet'
@@ -52,10 +52,10 @@ SELECT * FROM integers_load
 
 # glob from home directory
 statement ok
-COPY integers TO '__TEST_DIR__/homedir_integers1.parquet'
+COPY integers TO '{LOCAL_TEMP_DIR}/homedir_integers1.parquet'
 
 statement ok
-COPY integers TO '__TEST_DIR__/homedir_integers2.parquet'
+COPY integers TO '{LOCAL_TEMP_DIR}/homedir_integers2.parquet'
 
 query I
 SELECT COUNT(*) FROM '~/homedir_integers*.parquet'

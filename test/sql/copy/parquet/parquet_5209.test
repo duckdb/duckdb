@@ -13,12 +13,12 @@ statement ok
 CREATE TABLE test_5209 AS SELECT range FROM range(10000);
 
 statement ok
-COPY test_5209 TO '__TEST_DIR__/test_5209.parquet' (ROW_GROUP_SIZE 1000, PARQUET_VERSION 'V1');
+COPY test_5209 TO '{TEMP_DIR}/test_5209.parquet' (ROW_GROUP_SIZE 1000, PARQUET_VERSION 'V1');
 
 query III
 SELECT SUM(total_compressed_size) > 10000,
        SUM(total_uncompressed_size) > 10000,
        SUM(total_uncompressed_size) > SUM(total_compressed_size)
-FROM parquet_metadata('__TEST_DIR__/test_5209.parquet');
+FROM parquet_metadata('{TEMP_DIR}/test_5209.parquet');
 ----
 1	1	1

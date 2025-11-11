@@ -9,13 +9,13 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-ATTACH '__TEST_DIR__/smaller_block_size.db' (BLOCK_SIZE 16384);
+ATTACH '{LOCAL_TEMP_DIR}/smaller_block_size.db' (BLOCK_SIZE 16384);
 
 statement ok
 CREATE TABLE smaller_block_size.tbl AS SELECT range AS i FROM range(10000);
 
 statement ok
-ATTACH '__TEST_DIR__/larger_block_size.db' (BLOCK_SIZE 262144);
+ATTACH '{LOCAL_TEMP_DIR}/larger_block_size.db' (BLOCK_SIZE 262144);
 
 statement ok
 CREATE TABLE larger_block_size.tbl AS SELECT range AS i FROM range(10000);

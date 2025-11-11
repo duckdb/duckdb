@@ -2,7 +2,7 @@
 # description: Join all tables in TPC-H together under a tight memory limit
 # group: [external]
 
-load __TEST_DIR__/tpch_all_tables.db
+load {LOCAL_TEMP_DIR}/tpch_all_tables.db
 
 require tpch
 

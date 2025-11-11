@@ -2,7 +2,7 @@
 # description: Add column to persistent table
 # group: [catalog]
 
-load __TEST_DIR__/test_store_add_column_persistent.db
+load {LOCAL_TEMP_DIR}/test_store_add_column_persistent.db
 
 # first create a persistent table and insert data
 statement ok

@@ -12,71 +12,71 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 
 # null count
 statement ok
-COPY (SELECT 42 i) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
+COPY (SELECT 42 i) TO '{TEMP_DIR}/stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
+SELECT stats_null_count FROM parquet_metadata('{TEMP_DIR}/stats.parquet')
 ----
 0
 
 # we can filter out the IS NULL clause if there are no NULL values
 query II
-EXPLAIN SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+EXPLAIN SELECT COUNT(*) FROM '{TEMP_DIR}/stats.parquet' WHERE i IS NULL
 ----
 logical_opt	<!REGEX>:.*IS.*NULL.*
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+SELECT COUNT(*) FROM '{TEMP_DIR}/stats.parquet' WHERE i IS NULL
 ----
 0
 
 statement ok
-COPY (SELECT NULL i) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
+COPY (SELECT NULL i) TO '{TEMP_DIR}/stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
+SELECT stats_null_count FROM parquet_metadata('{TEMP_DIR}/stats.parquet')
 ----
 1
 
 # we can also filter out the IS NULL clause when everything is NULL
 query II
-EXPLAIN SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+EXPLAIN SELECT COUNT(*) FROM '{TEMP_DIR}/stats.parquet' WHERE i IS NULL
 ----
 logical_opt	<!REGEX>:.*IS.*NULL.*
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+SELECT COUNT(*) FROM '{TEMP_DIR}/stats.parquet' WHERE i IS NULL
 ----
 1
 
 statement ok
-COPY (SELECT * FROM VALUES (42), (NULL) tbl(i)) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
+COPY (SELECT * FROM VALUES (42), (NULL) tbl(i)) TO '{TEMP_DIR}/stats.parquet' (FORMAT PARQUET);
 
 # we cannot filter out the IS NULL clause when there are mixed NULL/valid
 query II
-EXPLAIN SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+EXPLAIN SELECT COUNT(*) FROM '{TEMP_DIR}/stats.parquet' WHERE i IS NULL
 ----
 logical_opt	<REGEX>:.*IS.*NULL.*
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/stats.parquet' WHERE i IS NULL
+SELECT COUNT(*) FROM '{TEMP_DIR}/stats.parquet' WHERE i IS NULL
 ----
 1
 
 # list null count not supported (i.e. we don't write the null count in this case)
 statement ok
-COPY (SELECT [42, NULL, 43] i) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
+COPY (SELECT [42, NULL, 43] i) TO '{TEMP_DIR}/stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
+SELECT stats_null_count FROM parquet_metadata('{TEMP_DIR}/stats.parquet')
 ----
 NULL
 
 statement ok
-COPY (SELECT {'a': NULL, 'b': 42} i) TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
+COPY (SELECT {'a': NULL, 'b': 42} i) TO '{TEMP_DIR}/stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
+SELECT stats_null_count FROM parquet_metadata('{TEMP_DIR}/stats.parquet')
 ----
 1
 0
@@ -87,10 +87,10 @@ statement ok
 CREATE TABLE structs AS SELECT {'a': NULL, 'b': 'hello'} i UNION ALL SELECT NULL UNION ALL SELECT {'a': 84, 'b': 'world'};
 
 statement ok
-COPY structs TO '__TEST_DIR__/stats.parquet' (FORMAT PARQUET);
+COPY structs TO '{TEMP_DIR}/stats.parquet' (FORMAT PARQUET);
 
 query I
-SELECT stats_null_count FROM parquet_metadata('__TEST_DIR__/stats.parquet')
+SELECT stats_null_count FROM parquet_metadata('{TEMP_DIR}/stats.parquet')
 ----
 2
 1

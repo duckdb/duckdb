@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 # load the DB from disk
-load __TEST_DIR__/generated_column_storage.db
+load {LOCAL_TEMP_DIR}/generated_column_storage.db
 
 statement ok
 CREATE TABLE tbl (

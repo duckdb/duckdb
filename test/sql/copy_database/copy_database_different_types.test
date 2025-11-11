@@ -3,7 +3,7 @@
 # group: [copy_database]
 
 statement ok
-ATTACH '__TEST_DIR__/copy_database_different_types.db' AS db1
+ATTACH '{LOCAL_TEMP_DIR}/copy_database_different_types.db' AS db1
 
 statement ok
 USE db1
@@ -49,7 +49,7 @@ statement ok
 CREATE FUNCTION my_add(a, b) AS a + b
 
 statement ok
-ATTACH '__TEST_DIR__/other_copy_database_different_types.db' AS db2;
+ATTACH '{LOCAL_TEMP_DIR}/other_copy_database_different_types.db' AS db2;
 
 statement ok
 COPY FROM DATABASE db1 TO db2

@@ -13,7 +13,7 @@ statement ok
 call dbgen(sf=1)
 
 statement ok
-copy lineitem to '__TEST_DIR__/lineitem.json'
+copy lineitem to '{TEMP_DIR}/lineitem.json'
 
 statement ok
 rollback;
@@ -37,7 +37,7 @@ create view lineitem_struct as select from_json(json, '{
 "l_shipmode":"VARCHAR",
 "l_comment":"VARCHAR"
 }') j
-from read_ndjson_objects('__TEST_DIR__/lineitem.json')
+from read_ndjson_objects('{TEMP_DIR}/lineitem.json')
 
 statement ok
 CREATE VIEW lineitem AS SELECT

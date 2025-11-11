@@ -14,9 +14,9 @@ SELECT SUM(i) FROM (SELECT UNNEST(l) FROM big_list) t(i)
 100000000
 
 statement ok
-COPY big_list TO '__TEST_DIR__/big_list.parquet' (FORMAT 'parquet');
+COPY big_list TO '{TEMP_DIR}/big_list.parquet' (FORMAT 'parquet');
 
 query I
-SELECT SUM(i) FROM (SELECT UNNEST(l) FROM '__TEST_DIR__/big_list.parquet') t(i)
+SELECT SUM(i) FROM (SELECT UNNEST(l) FROM '{TEMP_DIR}/big_list.parquet') t(i)
 ----
 100000000

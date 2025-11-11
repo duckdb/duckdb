@@ -3,7 +3,7 @@
 # group: [list]
 
 # load the DB from disk
-load __TEST_DIR__/struct_default_test.db
+load {LOCAL_TEMP_DIR}/struct_default_test.db
 
 statement ok
 CREATE TABLE a(i INT[] DEFAULT ([1, 2, 3]))

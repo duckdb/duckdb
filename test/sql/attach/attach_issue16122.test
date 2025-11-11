@@ -2,7 +2,7 @@
 # description: Issue #16122 - Attach binding to incorrect table
 # group: [attach]
 
-load __TEST_DIR__/issue16122.db
+load {LOCAL_TEMP_DIR}/issue16122.db
 
 statement ok
 create table mytable (C1 VARCHAR(10));
@@ -11,7 +11,7 @@ statement ok
 insert into mytable values ('a');
 
 statement ok
-attach '__TEST_DIR__/issue16122_new.db' as TOMERGE;
+ATTACH '{LOCAL_TEMP_DIR}/issue16122_new.db' as TOMERGE;
 
 statement ok
 create table TOMERGE.mytable (C1 VARCHAR(10));

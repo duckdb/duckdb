@@ -4,7 +4,7 @@
 
 # Issue #4126
 
-load __TEST_DIR__/test_art_export.db
+load {LOCAL_TEMP_DIR}/test_art_export.db
 
 statement ok
 CREATE TABLE raw(
@@ -23,12 +23,12 @@ CREATE UNIQUE INDEX customer_year_month_idx ON raw (customer_ID, year, month);
 restart
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/export_index_db' (FORMAT CSV)
+EXPORT DATABASE '{TEMP_DIR}/export_index_db' (FORMAT CSV)
 
-load __TEST_DIR__/test_art_import.db
+load {LOCAL_TEMP_DIR}/test_art_import.db
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/export_index_db'
+IMPORT DATABASE '{TEMP_DIR}/export_index_db'
 
 statement error
 INSERT INTO raw VALUES (1, 1, 1, 1);

@@ -2,7 +2,7 @@
 # description: Mix of optimistic writes with regular writes with the WAL
 # group: [optimistic_write]
 
-load __TEST_DIR__/optimistic_write_with_regular_writes_wal.db
+load {LOCAL_TEMP_DIR}/optimistic_write_with_regular_writes_wal.db
 
 statement ok
 SET debug_skip_checkpoint_on_commit=true

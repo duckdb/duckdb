@@ -2,7 +2,7 @@
 # description: Test correct behavior if we unexpectedly abort after a checkpoint but before the WAL is successfully truncated
 # group: [storage]
 
-load __TEST_DIR__/checkpoint_abort.db
+load {LOCAL_TEMP_DIR}/checkpoint_abort.db
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(100000) tbl(i);

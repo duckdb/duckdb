@@ -3,7 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/external_access_test.db
+load {LOCAL_TEMP_DIR}/external_access_test.db
 
 statement ok
 SET enable_external_access=false

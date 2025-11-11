@@ -3,7 +3,7 @@
 # group: [types]
 
 # load the DB from disk
-load __TEST_DIR__/bit_storage_test.db
+load {LOCAL_TEMP_DIR}/bit_storage_test.db
 
 # create a table with bts
 statement ok

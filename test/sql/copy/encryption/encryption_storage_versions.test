@@ -5,10 +5,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted.duckdb' as unencrypted;
 
 statement ok
-ATTACH '__TEST_DIR__/v_0_10_2.duckdb' as v_0_10_2 (STORAGE_VERSION 'v0.10.2');
+ATTACH '{LOCAL_TEMP_DIR}/v_0_10_2.duckdb' as v_0_10_2 (STORAGE_VERSION 'v0.10.2');
 
 statement  ok
 CREATE OR REPLACE TABLE unencrypted.tbl AS SELECT * FROM range(10) t(i);
@@ -33,16 +33,16 @@ statement ok
 DETACH v_0_10_2
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v2.duckdb' AS encrypted_v2 (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_v2.duckdb' AS encrypted_v2 (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/v_0_10_2.duckdb' as v_0_10_2;
+ATTACH '{LOCAL_TEMP_DIR}/v_0_10_2.duckdb' as v_0_10_2;
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted.duckdb' as unencrypted;
 
 # copy from unencrypted to encrypted
 statement ok
@@ -65,10 +65,10 @@ statement ok
 DETACH encrypted_v2
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v2.duckdb' AS encrypted_v2 (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/encrypted_v2.duckdb' AS encrypted_v2 (ENCRYPTION_KEY 'asdf');
 
 # check if we can read the encrypted data
 query I
@@ -83,10 +83,10 @@ SELECT SUM(i) FROM encrypted_v2.tbl
 45
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted_new.duckdb' as unencrypted_new;
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted_new.duckdb' as unencrypted_new;
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted_v_1_2_0.duckdb' as unencrypted_v_1_2_0 (STORAGE_VERSION 'v1.2.0');
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted_v_1_2_0.duckdb' as unencrypted_v_1_2_0 (STORAGE_VERSION 'v1.2.0');
 
 # copy encrypted db to unencrypted database
 statement ok
@@ -110,18 +110,18 @@ DETACH unencrypted_v_1_2_0
 
 # we should not be able to open an unencrypted db with an encryption key
 statement error
-ATTACH '__TEST_DIR__/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0 (ENCRYPTION_KEY 'asdf');
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0 (ENCRYPTION_KEY 'asdf');
 ----
 not encrypted
 
 # we cannot open this db with a lower (< v1.2.0) storage version
 statement error
-ATTACH '__TEST_DIR__/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0 (STORAGE_VERSION 'v1.0.0');
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0 (STORAGE_VERSION 'v1.0.0');
 ----
 The storage version of an existing database cannot be lowered
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0;
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted_v_1_2_0.duckdb' AS unencrypted_v_1_2_0;
 
 # check if it is the correct storage version
 query I
@@ -130,7 +130,7 @@ SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='unen
 v1.2.0+
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted_new.duckdb' AS unencrypted_new;
+ATTACH '{LOCAL_TEMP_DIR}/unencrypted_new.duckdb' AS unencrypted_new;
 
 query I
 SELECT SUM(i) FROM unencrypted_v_1_2_0.tbl;

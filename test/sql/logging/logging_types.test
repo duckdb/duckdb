@@ -7,10 +7,10 @@ statement ok
 CALL enable_logging('FileSystem');
 
 statement ok
-copy (select 1 as a) to '__TEST_DIR__/par.csv'
+copy (select 1 as a) to '{LOCAL_TEMP_DIR}/par.csv'
 
 statement ok
-FROM '__TEST_DIR__/par.csv'
+FROM '{LOCAL_TEMP_DIR}/par.csv'
 
 query IIIIIIII
 SELECT type, log_level, scope, fs, parse_filename(path), op, bytes, pos FROM duckdb_logs_parsed('FileSystem') ORDER BY timestamp

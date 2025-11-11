@@ -20,10 +20,10 @@ CALL dsdgen(sf=1, schema='tpcds');
 foreach tbl call_center catalog_page catalog_returns catalog_sales customer customer_demographics customer_address date_dim household_demographics inventory income_band item promotion reason ship_mode store store_returns store_sales time_dim warehouse web_page web_returns web_sales web_site
 
 statement ok
-COPY tpcds.${tbl} TO '__TEST_DIR__/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+COPY tpcds.${tbl} TO '{TEMP_DIR}/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
 
 statement ok
-CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('__TEST_DIR__/${tbl}.parquet');
+CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('{TEMP_DIR}/${tbl}.parquet');
 
 endloop
 

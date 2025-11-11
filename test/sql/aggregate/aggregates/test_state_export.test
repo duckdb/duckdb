@@ -196,7 +196,7 @@ select sum(42) EXPORT_STATE over ();
 
 
 # tests with ze persistence
-load __TEST_DIR__/test_state_export.db
+load {LOCAL_TEMP_DIR}/test_state_export.db
 
 statement ok
 create table dummy as select range % 10 g, range d from range(100);
@@ -251,10 +251,10 @@ SELECT COMBINE((SUM(42) EXPORT_STATE)::BLOB, SUM(42) EXPORT_STATE);
 require parquet
 
 statement ok
-COPY (SELECT g, (SUM(d) EXPORT_STATE)::BLOB s1 FROM dummy GROUP BY g) TO '__TEST_DIR__/state.parquet' (FORMAT PARQUET);
+COPY (SELECT g, (SUM(d) EXPORT_STATE)::BLOB s1 FROM dummy GROUP BY g) TO '{TEMP_DIR}/state.parquet' (FORMAT PARQUET);
 
 query II
-SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, SUM(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '__TEST_DIR__/state.parquet' USING(g) ORDER BY g;
+SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, SUM(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '{TEMP_DIR}/state.parquet' USING(g) ORDER BY g;
 ----
 0	900
 1	920

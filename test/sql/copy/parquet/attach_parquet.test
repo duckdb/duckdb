@@ -7,10 +7,10 @@ require parquet
 require skip_reload
 
 statement ok
-COPY (SELECT 42 val) TO '__TEST_DIR__/file.parquet';
+COPY (SELECT 42 val) TO '{LOCAL_TEMP_DIR}/file.parquet';
 
 statement ok
-ATTACH '__TEST_DIR__/file.parquet' AS attached_parquet
+ATTACH '{LOCAL_TEMP_DIR}/file.parquet' AS attached_parquet
 
 statement ok
 USE attached_parquet
@@ -26,6 +26,6 @@ SELECT * FROM attached_parquet
 42
 
 statement error
-ATTACH 'duckdb:__TEST_DIR__/file.parquet' AS duck_attach
+ATTACH 'duckdb:{LOCAL_TEMP_DIR}/file.parquet' AS duck_attach
 ----
 not a valid DuckDB database file

@@ -5,7 +5,7 @@ statement ok
 SET storage_compatibility_version='v1.2.0'
 
 # load the DB from disk
-load __TEST_DIR__/test_zstd_compression_fetch_row.db
+load {LOCAL_TEMP_DIR}/test_zstd_compression_fetch_row.db
 
 statement ok
 CREATE TABLE big_string (
