@@ -1,0 +1,19 @@
+diff --git a/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test b/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
+index cc493fb..7e682cb 100644
+--- a/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
++++ b/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
+@@ -39,14 +39,4 @@ SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', e
+ ----
+ 42
+ 
+-# write files with default mbedtls
+-statement ok
+-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'}, DEBUG_USE_OPENSSL false)
+-
+-# read mbedtls encrypted files using OpenSSL
+-query I
+-SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_mbedtls.parquet', encryption_config={footer_key: 'key${key_len}'}, debug_use_openssl=true)
+-----
+-42
+-
+ endloop
