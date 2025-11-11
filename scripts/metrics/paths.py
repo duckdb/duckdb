@@ -19,6 +19,8 @@ TEST_PROFILING_DIR = REPO_ROOT / "test" / "sql" / "pragma" / "profiling"
 # Inputs
 METRICS_JSON = COMMON_ENUMS_DIR / "metric_type.json"
 OPTIMIZER_HPP = INCLUDE_ENUMS_DIR / "optimizer_type.hpp"
+PROFILING_HPP_TEMPLATE = INCLUDE_MAIN_DIR / "profiling_utils.hpp.template"
+PROFILING_CPP_TEMPLATE = SRC_MAIN_DIR / "profiling_utils.cpp.template"
 
 # Outputs
 OUT_METRIC_HPP = INCLUDE_ENUMS_DIR / "metric_type.hpp"

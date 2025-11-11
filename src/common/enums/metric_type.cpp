@@ -8,68 +8,68 @@ namespace duckdb {
 
 profiler_settings_t MetricsUtils::GetAllMetrics() {
 	return {
-		MetricsType::ALL_OPTIMIZERS,
-		MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
-		MetricsType::ATTACH_REPLAY_WAL_LATENCY,
-		MetricsType::BLOCKED_THREAD_TIME,
-		MetricsType::CHECKPOINT_LATENCY,
-		MetricsType::COMMIT_WRITE_WAL_LATENCY,
-		MetricsType::CPU_TIME,
-		MetricsType::CUMULATIVE_CARDINALITY,
-		MetricsType::CUMULATIVE_OPTIMIZER_TIMING,
-		MetricsType::CUMULATIVE_ROWS_SCANNED,
-		MetricsType::EXTRA_INFO,
-		MetricsType::LATENCY,
-		MetricsType::OPERATOR_CARDINALITY,
-		MetricsType::OPERATOR_NAME,
-		MetricsType::OPERATOR_ROWS_SCANNED,
-		MetricsType::OPERATOR_TIMING,
-		MetricsType::OPERATOR_TYPE,
-		MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-		MetricsType::OPTIMIZER_COLUMN_LIFETIME,
-		MetricsType::OPTIMIZER_COMMON_AGGREGATE,
-		MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS,
-		MetricsType::OPTIMIZER_COMMON_SUBPLAN,
-		MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
-		MetricsType::OPTIMIZER_CTE_FILTER_PUSHER,
-		MetricsType::OPTIMIZER_CTE_INLINING,
-		MetricsType::OPTIMIZER_DELIMINATOR,
-		MetricsType::OPTIMIZER_DUPLICATE_GROUPS,
-		MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP,
-		MetricsType::OPTIMIZER_EXPRESSION_REWRITER,
-		MetricsType::OPTIMIZER_EXTENSION,
-		MetricsType::OPTIMIZER_FILTER_PULLUP,
-		MetricsType::OPTIMIZER_FILTER_PUSHDOWN,
-		MetricsType::OPTIMIZER_IN_CLAUSE,
-		MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-		MetricsType::OPTIMIZER_JOIN_ORDER,
-		MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
-		MetricsType::OPTIMIZER_LIMIT_PUSHDOWN,
-		MetricsType::OPTIMIZER_MATERIALIZED_CTE,
-		MetricsType::OPTIMIZER_REGEX_RANGE,
-		MetricsType::OPTIMIZER_REORDER_FILTER,
-		MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN,
-		MetricsType::OPTIMIZER_STATISTICS_PROPAGATION,
-		MetricsType::OPTIMIZER_SUM_REWRITER,
-		MetricsType::OPTIMIZER_TOP_N,
-		MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-		MetricsType::OPTIMIZER_UNNEST_REWRITER,
-		MetricsType::OPTIMIZER_UNUSED_COLUMNS,
-		MetricsType::PHYSICAL_PLANNER,
-		MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING,
-		MetricsType::PHYSICAL_PLANNER_CREATE_PLAN,
-		MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
-		MetricsType::PLANNER,
-		MetricsType::PLANNER_BINDING,
-		MetricsType::QUERY_NAME,
-		MetricsType::RESULT_SET_SIZE,
-		MetricsType::ROWS_RETURNED,
-		MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
-		MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
-		MetricsType::TOTAL_BYTES_READ,
-		MetricsType::TOTAL_BYTES_WRITTEN,
-		MetricsType::WAITING_TO_ATTACH_LATENCY,
-		MetricsType::WAL_REPLAY_ENTRY_COUNT,
+		MetricType::ALL_OPTIMIZERS,
+		MetricType::ATTACH_LOAD_STORAGE_LATENCY,
+		MetricType::ATTACH_REPLAY_WAL_LATENCY,
+		MetricType::BLOCKED_THREAD_TIME,
+		MetricType::CHECKPOINT_LATENCY,
+		MetricType::COMMIT_WRITE_WAL_LATENCY,
+		MetricType::CPU_TIME,
+		MetricType::CUMULATIVE_CARDINALITY,
+		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
+		MetricType::CUMULATIVE_ROWS_SCANNED,
+		MetricType::EXTRA_INFO,
+		MetricType::LATENCY,
+		MetricType::OPERATOR_CARDINALITY,
+		MetricType::OPERATOR_NAME,
+		MetricType::OPERATOR_ROWS_SCANNED,
+		MetricType::OPERATOR_TIMING,
+		MetricType::OPERATOR_TYPE,
+		MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
+		MetricType::OPTIMIZER_COLUMN_LIFETIME,
+		MetricType::OPTIMIZER_COMMON_AGGREGATE,
+		MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS,
+		MetricType::OPTIMIZER_COMMON_SUBPLAN,
+		MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
+		MetricType::OPTIMIZER_CTE_FILTER_PUSHER,
+		MetricType::OPTIMIZER_CTE_INLINING,
+		MetricType::OPTIMIZER_DELIMINATOR,
+		MetricType::OPTIMIZER_DUPLICATE_GROUPS,
+		MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP,
+		MetricType::OPTIMIZER_EXPRESSION_REWRITER,
+		MetricType::OPTIMIZER_EXTENSION,
+		MetricType::OPTIMIZER_FILTER_PULLUP,
+		MetricType::OPTIMIZER_FILTER_PUSHDOWN,
+		MetricType::OPTIMIZER_IN_CLAUSE,
+		MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN,
+		MetricType::OPTIMIZER_JOIN_ORDER,
+		MetricType::OPTIMIZER_LATE_MATERIALIZATION,
+		MetricType::OPTIMIZER_LIMIT_PUSHDOWN,
+		MetricType::OPTIMIZER_MATERIALIZED_CTE,
+		MetricType::OPTIMIZER_REGEX_RANGE,
+		MetricType::OPTIMIZER_REORDER_FILTER,
+		MetricType::OPTIMIZER_SAMPLING_PUSHDOWN,
+		MetricType::OPTIMIZER_STATISTICS_PROPAGATION,
+		MetricType::OPTIMIZER_SUM_REWRITER,
+		MetricType::OPTIMIZER_TOP_N,
+		MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
+		MetricType::OPTIMIZER_UNNEST_REWRITER,
+		MetricType::OPTIMIZER_UNUSED_COLUMNS,
+		MetricType::PHYSICAL_PLANNER,
+		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
+		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
+		MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES,
+		MetricType::PLANNER,
+		MetricType::PLANNER_BINDING,
+		MetricType::QUERY_NAME,
+		MetricType::RESULT_SET_SIZE,
+		MetricType::ROWS_RETURNED,
+		MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
+		MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+		MetricType::TOTAL_BYTES_READ,
+		MetricType::TOTAL_BYTES_WRITTEN,
+		MetricType::WAITING_TO_ATTACH_LATENCY,
+		MetricType::WAL_REPLAY_ENTRY_COUNT,
 	};
 }
 
@@ -95,27 +95,27 @@ profiler_settings_t MetricsUtils::GetMetricsByGroupType(MetricGroup type) {
 }
 profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 	return {
-		MetricsType::CPU_TIME,
-		MetricsType::CUMULATIVE_CARDINALITY,
-		MetricsType::CUMULATIVE_ROWS_SCANNED,
-		MetricsType::EXTRA_INFO,
-		MetricsType::LATENCY,
-		MetricsType::QUERY_NAME,
-		MetricsType::RESULT_SET_SIZE,
-		MetricsType::ROWS_RETURNED,
+		MetricType::CPU_TIME,
+		MetricType::CUMULATIVE_CARDINALITY,
+		MetricType::CUMULATIVE_ROWS_SCANNED,
+		MetricType::EXTRA_INFO,
+		MetricType::LATENCY,
+		MetricType::QUERY_NAME,
+		MetricType::RESULT_SET_SIZE,
+		MetricType::ROWS_RETURNED,
 	};
 }
 
-bool MetricsUtils::IsDefaultMetric(MetricsType type) {
+bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	switch(type) {
-		case MetricsType::CPU_TIME:
-		case MetricsType::CUMULATIVE_CARDINALITY:
-		case MetricsType::CUMULATIVE_ROWS_SCANNED:
-		case MetricsType::EXTRA_INFO:
-		case MetricsType::LATENCY:
-		case MetricsType::QUERY_NAME:
-		case MetricsType::RESULT_SET_SIZE:
-		case MetricsType::ROWS_RETURNED:
+		case MetricType::CPU_TIME:
+		case MetricType::CUMULATIVE_CARDINALITY:
+		case MetricType::CUMULATIVE_ROWS_SCANNED:
+		case MetricType::EXTRA_INFO:
+		case MetricType::LATENCY:
+		case MetricType::QUERY_NAME:
+		case MetricType::RESULT_SET_SIZE:
+		case MetricType::ROWS_RETURNED:
 			return true;
 		default:
 			return false;
@@ -124,17 +124,17 @@ bool MetricsUtils::IsDefaultMetric(MetricsType type) {
 
 profiler_settings_t MetricsUtils::GetExecutionMetrics() {
 	return {
-		MetricsType::BLOCKED_THREAD_TIME,
-		MetricsType::SYSTEM_PEAK_BUFFER_MEMORY,
-		MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+		MetricType::BLOCKED_THREAD_TIME,
+		MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
+		MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 	};
 }
 
-bool MetricsUtils::IsExecutionMetric(MetricsType type) {
+bool MetricsUtils::IsExecutionMetric(MetricType type) {
 	switch(type) {
-		case MetricsType::BLOCKED_THREAD_TIME:
-		case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
-		case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
+		case MetricType::BLOCKED_THREAD_TIME:
+		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
+		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 			return true;
 		default:
 			return false;
@@ -143,27 +143,27 @@ bool MetricsUtils::IsExecutionMetric(MetricsType type) {
 
 profiler_settings_t MetricsUtils::GetFileMetrics() {
 	return {
-		MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
-		MetricsType::ATTACH_REPLAY_WAL_LATENCY,
-		MetricsType::CHECKPOINT_LATENCY,
-		MetricsType::COMMIT_WRITE_WAL_LATENCY,
-		MetricsType::TOTAL_BYTES_READ,
-		MetricsType::TOTAL_BYTES_WRITTEN,
-		MetricsType::WAITING_TO_ATTACH_LATENCY,
-		MetricsType::WAL_REPLAY_ENTRY_COUNT,
+		MetricType::ATTACH_LOAD_STORAGE_LATENCY,
+		MetricType::ATTACH_REPLAY_WAL_LATENCY,
+		MetricType::CHECKPOINT_LATENCY,
+		MetricType::COMMIT_WRITE_WAL_LATENCY,
+		MetricType::TOTAL_BYTES_READ,
+		MetricType::TOTAL_BYTES_WRITTEN,
+		MetricType::WAITING_TO_ATTACH_LATENCY,
+		MetricType::WAL_REPLAY_ENTRY_COUNT,
 	};
 }
 
-bool MetricsUtils::IsFileMetric(MetricsType type) {
+bool MetricsUtils::IsFileMetric(MetricType type) {
 	switch(type) {
-		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
-		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
-		case MetricsType::CHECKPOINT_LATENCY:
-		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
-		case MetricsType::TOTAL_BYTES_READ:
-		case MetricsType::TOTAL_BYTES_WRITTEN:
-		case MetricsType::WAITING_TO_ATTACH_LATENCY:
-		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
+		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricType::CHECKPOINT_LATENCY:
+		case MetricType::COMMIT_WRITE_WAL_LATENCY:
+		case MetricType::TOTAL_BYTES_READ:
+		case MetricType::TOTAL_BYTES_WRITTEN:
+		case MetricType::WAITING_TO_ATTACH_LATENCY:
+		case MetricType::WAL_REPLAY_ENTRY_COUNT:
 			return true;
 		default:
 			return false;
@@ -172,21 +172,21 @@ bool MetricsUtils::IsFileMetric(MetricsType type) {
 
 profiler_settings_t MetricsUtils::GetOperatorMetrics() {
 	return {
-		MetricsType::OPERATOR_CARDINALITY,
-		MetricsType::OPERATOR_NAME,
-		MetricsType::OPERATOR_ROWS_SCANNED,
-		MetricsType::OPERATOR_TIMING,
-		MetricsType::OPERATOR_TYPE,
+		MetricType::OPERATOR_CARDINALITY,
+		MetricType::OPERATOR_NAME,
+		MetricType::OPERATOR_ROWS_SCANNED,
+		MetricType::OPERATOR_TIMING,
+		MetricType::OPERATOR_TYPE,
 	};
 }
 
-bool MetricsUtils::IsOperatorMetric(MetricsType type) {
+bool MetricsUtils::IsOperatorMetric(MetricType type) {
 	switch(type) {
-		case MetricsType::OPERATOR_CARDINALITY:
-		case MetricsType::OPERATOR_NAME:
-		case MetricsType::OPERATOR_ROWS_SCANNED:
-		case MetricsType::OPERATOR_TIMING:
-		case MetricsType::OPERATOR_TYPE:
+		case MetricType::OPERATOR_CARDINALITY:
+		case MetricType::OPERATOR_NAME:
+		case MetricType::OPERATOR_ROWS_SCANNED:
+		case MetricType::OPERATOR_TIMING:
+		case MetricType::OPERATOR_TYPE:
 			return true;
 		default:
 			return false;
@@ -195,205 +195,205 @@ bool MetricsUtils::IsOperatorMetric(MetricsType type) {
 
 profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
 	return {
-		MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-		MetricsType::OPTIMIZER_COLUMN_LIFETIME,
-		MetricsType::OPTIMIZER_COMMON_AGGREGATE,
-		MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS,
-		MetricsType::OPTIMIZER_COMMON_SUBPLAN,
-		MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
-		MetricsType::OPTIMIZER_CTE_FILTER_PUSHER,
-		MetricsType::OPTIMIZER_CTE_INLINING,
-		MetricsType::OPTIMIZER_DELIMINATOR,
-		MetricsType::OPTIMIZER_DUPLICATE_GROUPS,
-		MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP,
-		MetricsType::OPTIMIZER_EXPRESSION_REWRITER,
-		MetricsType::OPTIMIZER_EXTENSION,
-		MetricsType::OPTIMIZER_FILTER_PULLUP,
-		MetricsType::OPTIMIZER_FILTER_PUSHDOWN,
-		MetricsType::OPTIMIZER_IN_CLAUSE,
-		MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-		MetricsType::OPTIMIZER_JOIN_ORDER,
-		MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
-		MetricsType::OPTIMIZER_LIMIT_PUSHDOWN,
-		MetricsType::OPTIMIZER_MATERIALIZED_CTE,
-		MetricsType::OPTIMIZER_REGEX_RANGE,
-		MetricsType::OPTIMIZER_REORDER_FILTER,
-		MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN,
-		MetricsType::OPTIMIZER_STATISTICS_PROPAGATION,
-		MetricsType::OPTIMIZER_SUM_REWRITER,
-		MetricsType::OPTIMIZER_TOP_N,
-		MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-		MetricsType::OPTIMIZER_UNNEST_REWRITER,
-		MetricsType::OPTIMIZER_UNUSED_COLUMNS,
+		MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
+		MetricType::OPTIMIZER_COLUMN_LIFETIME,
+		MetricType::OPTIMIZER_COMMON_AGGREGATE,
+		MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS,
+		MetricType::OPTIMIZER_COMMON_SUBPLAN,
+		MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
+		MetricType::OPTIMIZER_CTE_FILTER_PUSHER,
+		MetricType::OPTIMIZER_CTE_INLINING,
+		MetricType::OPTIMIZER_DELIMINATOR,
+		MetricType::OPTIMIZER_DUPLICATE_GROUPS,
+		MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP,
+		MetricType::OPTIMIZER_EXPRESSION_REWRITER,
+		MetricType::OPTIMIZER_EXTENSION,
+		MetricType::OPTIMIZER_FILTER_PULLUP,
+		MetricType::OPTIMIZER_FILTER_PUSHDOWN,
+		MetricType::OPTIMIZER_IN_CLAUSE,
+		MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN,
+		MetricType::OPTIMIZER_JOIN_ORDER,
+		MetricType::OPTIMIZER_LATE_MATERIALIZATION,
+		MetricType::OPTIMIZER_LIMIT_PUSHDOWN,
+		MetricType::OPTIMIZER_MATERIALIZED_CTE,
+		MetricType::OPTIMIZER_REGEX_RANGE,
+		MetricType::OPTIMIZER_REORDER_FILTER,
+		MetricType::OPTIMIZER_SAMPLING_PUSHDOWN,
+		MetricType::OPTIMIZER_STATISTICS_PROPAGATION,
+		MetricType::OPTIMIZER_SUM_REWRITER,
+		MetricType::OPTIMIZER_TOP_N,
+		MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
+		MetricType::OPTIMIZER_UNNEST_REWRITER,
+		MetricType::OPTIMIZER_UNUSED_COLUMNS,
 	};
 }
 
-bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
+bool MetricsUtils::IsOptimizerMetric(MetricType type) {
 	switch(type) {
-		case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
-		case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
-		case MetricsType::OPTIMIZER_COMMON_AGGREGATE:
-		case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
-		case MetricsType::OPTIMIZER_COMMON_SUBPLAN:
-		case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
-		case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
-		case MetricsType::OPTIMIZER_CTE_INLINING:
-		case MetricsType::OPTIMIZER_DELIMINATOR:
-		case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
-		case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
-		case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
-		case MetricsType::OPTIMIZER_EXTENSION:
-		case MetricsType::OPTIMIZER_FILTER_PULLUP:
-		case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
-		case MetricsType::OPTIMIZER_IN_CLAUSE:
-		case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
-		case MetricsType::OPTIMIZER_JOIN_ORDER:
-		case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
-		case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
-		case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
-		case MetricsType::OPTIMIZER_REGEX_RANGE:
-		case MetricsType::OPTIMIZER_REORDER_FILTER:
-		case MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN:
-		case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION:
-		case MetricsType::OPTIMIZER_SUM_REWRITER:
-		case MetricsType::OPTIMIZER_TOP_N:
-		case MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
-		case MetricsType::OPTIMIZER_UNNEST_REWRITER:
-		case MetricsType::OPTIMIZER_UNUSED_COLUMNS:
+		case MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
+		case MetricType::OPTIMIZER_COLUMN_LIFETIME:
+		case MetricType::OPTIMIZER_COMMON_AGGREGATE:
+		case MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
+		case MetricType::OPTIMIZER_COMMON_SUBPLAN:
+		case MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
+		case MetricType::OPTIMIZER_CTE_FILTER_PUSHER:
+		case MetricType::OPTIMIZER_CTE_INLINING:
+		case MetricType::OPTIMIZER_DELIMINATOR:
+		case MetricType::OPTIMIZER_DUPLICATE_GROUPS:
+		case MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP:
+		case MetricType::OPTIMIZER_EXPRESSION_REWRITER:
+		case MetricType::OPTIMIZER_EXTENSION:
+		case MetricType::OPTIMIZER_FILTER_PULLUP:
+		case MetricType::OPTIMIZER_FILTER_PUSHDOWN:
+		case MetricType::OPTIMIZER_IN_CLAUSE:
+		case MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
+		case MetricType::OPTIMIZER_JOIN_ORDER:
+		case MetricType::OPTIMIZER_LATE_MATERIALIZATION:
+		case MetricType::OPTIMIZER_LIMIT_PUSHDOWN:
+		case MetricType::OPTIMIZER_MATERIALIZED_CTE:
+		case MetricType::OPTIMIZER_REGEX_RANGE:
+		case MetricType::OPTIMIZER_REORDER_FILTER:
+		case MetricType::OPTIMIZER_SAMPLING_PUSHDOWN:
+		case MetricType::OPTIMIZER_STATISTICS_PROPAGATION:
+		case MetricType::OPTIMIZER_SUM_REWRITER:
+		case MetricType::OPTIMIZER_TOP_N:
+		case MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
+		case MetricType::OPTIMIZER_UNNEST_REWRITER:
+		case MetricType::OPTIMIZER_UNUSED_COLUMNS:
 			return true;
 		default:
 			return false;
 	}
 }
 
-MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
+MetricType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
 	switch(type) {
 		case OptimizerType::BUILD_SIDE_PROBE_SIDE:
-			return MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE;
+			return MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE;
 		case OptimizerType::COLUMN_LIFETIME:
-			return MetricsType::OPTIMIZER_COLUMN_LIFETIME;
+			return MetricType::OPTIMIZER_COLUMN_LIFETIME;
 		case OptimizerType::COMMON_AGGREGATE:
-			return MetricsType::OPTIMIZER_COMMON_AGGREGATE;
+			return MetricType::OPTIMIZER_COMMON_AGGREGATE;
 		case OptimizerType::COMMON_SUBEXPRESSIONS:
-			return MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS;
+			return MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS;
 		case OptimizerType::COMMON_SUBPLAN:
-			return MetricsType::OPTIMIZER_COMMON_SUBPLAN;
+			return MetricType::OPTIMIZER_COMMON_SUBPLAN;
 		case OptimizerType::COMPRESSED_MATERIALIZATION:
-			return MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION;
+			return MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION;
 		case OptimizerType::CTE_FILTER_PUSHER:
-			return MetricsType::OPTIMIZER_CTE_FILTER_PUSHER;
+			return MetricType::OPTIMIZER_CTE_FILTER_PUSHER;
 		case OptimizerType::CTE_INLINING:
-			return MetricsType::OPTIMIZER_CTE_INLINING;
+			return MetricType::OPTIMIZER_CTE_INLINING;
 		case OptimizerType::DELIMINATOR:
-			return MetricsType::OPTIMIZER_DELIMINATOR;
+			return MetricType::OPTIMIZER_DELIMINATOR;
 		case OptimizerType::DUPLICATE_GROUPS:
-			return MetricsType::OPTIMIZER_DUPLICATE_GROUPS;
+			return MetricType::OPTIMIZER_DUPLICATE_GROUPS;
 		case OptimizerType::EMPTY_RESULT_PULLUP:
-			return MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP;
+			return MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP;
 		case OptimizerType::EXPRESSION_REWRITER:
-			return MetricsType::OPTIMIZER_EXPRESSION_REWRITER;
+			return MetricType::OPTIMIZER_EXPRESSION_REWRITER;
 		case OptimizerType::EXTENSION:
-			return MetricsType::OPTIMIZER_EXTENSION;
+			return MetricType::OPTIMIZER_EXTENSION;
 		case OptimizerType::FILTER_PULLUP:
-			return MetricsType::OPTIMIZER_FILTER_PULLUP;
+			return MetricType::OPTIMIZER_FILTER_PULLUP;
 		case OptimizerType::FILTER_PUSHDOWN:
-			return MetricsType::OPTIMIZER_FILTER_PUSHDOWN;
+			return MetricType::OPTIMIZER_FILTER_PUSHDOWN;
 		case OptimizerType::IN_CLAUSE:
-			return MetricsType::OPTIMIZER_IN_CLAUSE;
+			return MetricType::OPTIMIZER_IN_CLAUSE;
 		case OptimizerType::JOIN_FILTER_PUSHDOWN:
-			return MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN;
+			return MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN;
 		case OptimizerType::JOIN_ORDER:
-			return MetricsType::OPTIMIZER_JOIN_ORDER;
+			return MetricType::OPTIMIZER_JOIN_ORDER;
 		case OptimizerType::LATE_MATERIALIZATION:
-			return MetricsType::OPTIMIZER_LATE_MATERIALIZATION;
+			return MetricType::OPTIMIZER_LATE_MATERIALIZATION;
 		case OptimizerType::LIMIT_PUSHDOWN:
-			return MetricsType::OPTIMIZER_LIMIT_PUSHDOWN;
+			return MetricType::OPTIMIZER_LIMIT_PUSHDOWN;
 		case OptimizerType::MATERIALIZED_CTE:
-			return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
+			return MetricType::OPTIMIZER_MATERIALIZED_CTE;
 		case OptimizerType::REGEX_RANGE:
-			return MetricsType::OPTIMIZER_REGEX_RANGE;
+			return MetricType::OPTIMIZER_REGEX_RANGE;
 		case OptimizerType::REORDER_FILTER:
-			return MetricsType::OPTIMIZER_REORDER_FILTER;
+			return MetricType::OPTIMIZER_REORDER_FILTER;
 		case OptimizerType::SAMPLING_PUSHDOWN:
-			return MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN;
+			return MetricType::OPTIMIZER_SAMPLING_PUSHDOWN;
 		case OptimizerType::STATISTICS_PROPAGATION:
-			return MetricsType::OPTIMIZER_STATISTICS_PROPAGATION;
+			return MetricType::OPTIMIZER_STATISTICS_PROPAGATION;
 		case OptimizerType::SUM_REWRITER:
-			return MetricsType::OPTIMIZER_SUM_REWRITER;
+			return MetricType::OPTIMIZER_SUM_REWRITER;
 		case OptimizerType::TOP_N:
-			return MetricsType::OPTIMIZER_TOP_N;
+			return MetricType::OPTIMIZER_TOP_N;
 		case OptimizerType::TOP_N_WINDOW_ELIMINATION:
-			return MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION;
+			return MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION;
 		case OptimizerType::UNNEST_REWRITER:
-			return MetricsType::OPTIMIZER_UNNEST_REWRITER;
+			return MetricType::OPTIMIZER_UNNEST_REWRITER;
 		case OptimizerType::UNUSED_COLUMNS:
-			return MetricsType::OPTIMIZER_UNUSED_COLUMNS;
+			return MetricType::OPTIMIZER_UNUSED_COLUMNS;
 		default:
-			throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
+			throw InternalException("OptimizerType %s cannot be converted to a MetricType", EnumUtil::ToString(type));
 	}
 }
 
-OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
+OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {
 	switch(type) {
-		case MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
+		case MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
 			return OptimizerType::BUILD_SIDE_PROBE_SIDE;
-		case MetricsType::OPTIMIZER_COLUMN_LIFETIME:
+		case MetricType::OPTIMIZER_COLUMN_LIFETIME:
 			return OptimizerType::COLUMN_LIFETIME;
-		case MetricsType::OPTIMIZER_COMMON_AGGREGATE:
+		case MetricType::OPTIMIZER_COMMON_AGGREGATE:
 			return OptimizerType::COMMON_AGGREGATE;
-		case MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
+		case MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
 			return OptimizerType::COMMON_SUBEXPRESSIONS;
-		case MetricsType::OPTIMIZER_COMMON_SUBPLAN:
+		case MetricType::OPTIMIZER_COMMON_SUBPLAN:
 			return OptimizerType::COMMON_SUBPLAN;
-		case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
+		case MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
 			return OptimizerType::COMPRESSED_MATERIALIZATION;
-		case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
+		case MetricType::OPTIMIZER_CTE_FILTER_PUSHER:
 			return OptimizerType::CTE_FILTER_PUSHER;
-		case MetricsType::OPTIMIZER_CTE_INLINING:
+		case MetricType::OPTIMIZER_CTE_INLINING:
 			return OptimizerType::CTE_INLINING;
-		case MetricsType::OPTIMIZER_DELIMINATOR:
+		case MetricType::OPTIMIZER_DELIMINATOR:
 			return OptimizerType::DELIMINATOR;
-		case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
+		case MetricType::OPTIMIZER_DUPLICATE_GROUPS:
 			return OptimizerType::DUPLICATE_GROUPS;
-		case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
+		case MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP:
 			return OptimizerType::EMPTY_RESULT_PULLUP;
-		case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
+		case MetricType::OPTIMIZER_EXPRESSION_REWRITER:
 			return OptimizerType::EXPRESSION_REWRITER;
-		case MetricsType::OPTIMIZER_EXTENSION:
+		case MetricType::OPTIMIZER_EXTENSION:
 			return OptimizerType::EXTENSION;
-		case MetricsType::OPTIMIZER_FILTER_PULLUP:
+		case MetricType::OPTIMIZER_FILTER_PULLUP:
 			return OptimizerType::FILTER_PULLUP;
-		case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
+		case MetricType::OPTIMIZER_FILTER_PUSHDOWN:
 			return OptimizerType::FILTER_PUSHDOWN;
-		case MetricsType::OPTIMIZER_IN_CLAUSE:
+		case MetricType::OPTIMIZER_IN_CLAUSE:
 			return OptimizerType::IN_CLAUSE;
-		case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
+		case MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
 			return OptimizerType::JOIN_FILTER_PUSHDOWN;
-		case MetricsType::OPTIMIZER_JOIN_ORDER:
+		case MetricType::OPTIMIZER_JOIN_ORDER:
 			return OptimizerType::JOIN_ORDER;
-		case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
+		case MetricType::OPTIMIZER_LATE_MATERIALIZATION:
 			return OptimizerType::LATE_MATERIALIZATION;
-		case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
+		case MetricType::OPTIMIZER_LIMIT_PUSHDOWN:
 			return OptimizerType::LIMIT_PUSHDOWN;
-		case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
+		case MetricType::OPTIMIZER_MATERIALIZED_CTE:
 			return OptimizerType::MATERIALIZED_CTE;
-		case MetricsType::OPTIMIZER_REGEX_RANGE:
+		case MetricType::OPTIMIZER_REGEX_RANGE:
 			return OptimizerType::REGEX_RANGE;
-		case MetricsType::OPTIMIZER_REORDER_FILTER:
+		case MetricType::OPTIMIZER_REORDER_FILTER:
 			return OptimizerType::REORDER_FILTER;
-		case MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN:
+		case MetricType::OPTIMIZER_SAMPLING_PUSHDOWN:
 			return OptimizerType::SAMPLING_PUSHDOWN;
-		case MetricsType::OPTIMIZER_STATISTICS_PROPAGATION:
+		case MetricType::OPTIMIZER_STATISTICS_PROPAGATION:
 			return OptimizerType::STATISTICS_PROPAGATION;
-		case MetricsType::OPTIMIZER_SUM_REWRITER:
+		case MetricType::OPTIMIZER_SUM_REWRITER:
 			return OptimizerType::SUM_REWRITER;
-		case MetricsType::OPTIMIZER_TOP_N:
+		case MetricType::OPTIMIZER_TOP_N:
 			return OptimizerType::TOP_N;
-		case MetricsType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
+		case MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
 			return OptimizerType::TOP_N_WINDOW_ELIMINATION;
-		case MetricsType::OPTIMIZER_UNNEST_REWRITER:
+		case MetricType::OPTIMIZER_UNNEST_REWRITER:
 			return OptimizerType::UNNEST_REWRITER;
-		case MetricsType::OPTIMIZER_UNUSED_COLUMNS:
+		case MetricType::OPTIMIZER_UNUSED_COLUMNS:
 			return OptimizerType::UNUSED_COLUMNS;
 		default:
 			return OptimizerType::INVALID;
@@ -402,27 +402,27 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
 
 profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 	return {
-		MetricsType::ALL_OPTIMIZERS,
-		MetricsType::CUMULATIVE_OPTIMIZER_TIMING,
-		MetricsType::PHYSICAL_PLANNER,
-		MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING,
-		MetricsType::PHYSICAL_PLANNER_CREATE_PLAN,
-		MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES,
-		MetricsType::PLANNER,
-		MetricsType::PLANNER_BINDING,
+		MetricType::ALL_OPTIMIZERS,
+		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
+		MetricType::PHYSICAL_PLANNER,
+		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
+		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
+		MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES,
+		MetricType::PLANNER,
+		MetricType::PLANNER_BINDING,
 	};
 }
 
-bool MetricsUtils::IsPhaseTimingMetric(MetricsType type) {
+bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 	switch(type) {
-		case MetricsType::ALL_OPTIMIZERS:
-		case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
-		case MetricsType::PHYSICAL_PLANNER:
-		case MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING:
-		case MetricsType::PHYSICAL_PLANNER_CREATE_PLAN:
-		case MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES:
-		case MetricsType::PLANNER:
-		case MetricsType::PLANNER_BINDING:
+		case MetricType::ALL_OPTIMIZERS:
+		case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+		case MetricType::PHYSICAL_PLANNER:
+		case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
+		case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:
+		case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
+		case MetricType::PLANNER:
+		case MetricType::PLANNER_BINDING:
 			return true;
 		default:
 			return false;
@@ -431,35 +431,35 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricsType type) {
 
 profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 	return {
-		MetricsType::ATTACH_LOAD_STORAGE_LATENCY,
-		MetricsType::ATTACH_REPLAY_WAL_LATENCY,
-		MetricsType::BLOCKED_THREAD_TIME,
-		MetricsType::CHECKPOINT_LATENCY,
-		MetricsType::COMMIT_WRITE_WAL_LATENCY,
-		MetricsType::LATENCY,
-		MetricsType::QUERY_NAME,
-		MetricsType::ROWS_RETURNED,
-		MetricsType::TOTAL_BYTES_READ,
-		MetricsType::TOTAL_BYTES_WRITTEN,
-		MetricsType::WAITING_TO_ATTACH_LATENCY,
-		MetricsType::WAL_REPLAY_ENTRY_COUNT,
+		MetricType::ATTACH_LOAD_STORAGE_LATENCY,
+		MetricType::ATTACH_REPLAY_WAL_LATENCY,
+		MetricType::BLOCKED_THREAD_TIME,
+		MetricType::CHECKPOINT_LATENCY,
+		MetricType::COMMIT_WRITE_WAL_LATENCY,
+		MetricType::LATENCY,
+		MetricType::QUERY_NAME,
+		MetricType::ROWS_RETURNED,
+		MetricType::TOTAL_BYTES_READ,
+		MetricType::TOTAL_BYTES_WRITTEN,
+		MetricType::WAITING_TO_ATTACH_LATENCY,
+		MetricType::WAL_REPLAY_ENTRY_COUNT,
 	};
 }
 
-bool MetricsUtils::IsRootScopeMetric(MetricsType type) {
+bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	switch(type) {
-		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
-		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
-		case MetricsType::BLOCKED_THREAD_TIME:
-		case MetricsType::CHECKPOINT_LATENCY:
-		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
-		case MetricsType::LATENCY:
-		case MetricsType::QUERY_NAME:
-		case MetricsType::ROWS_RETURNED:
-		case MetricsType::TOTAL_BYTES_READ:
-		case MetricsType::TOTAL_BYTES_WRITTEN:
-		case MetricsType::WAITING_TO_ATTACH_LATENCY:
-		case MetricsType::WAL_REPLAY_ENTRY_COUNT:
+		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricType::BLOCKED_THREAD_TIME:
+		case MetricType::CHECKPOINT_LATENCY:
+		case MetricType::COMMIT_WRITE_WAL_LATENCY:
+		case MetricType::LATENCY:
+		case MetricType::QUERY_NAME:
+		case MetricType::ROWS_RETURNED:
+		case MetricType::TOTAL_BYTES_READ:
+		case MetricType::TOTAL_BYTES_WRITTEN:
+		case MetricType::WAITING_TO_ATTACH_LATENCY:
+		case MetricType::WAL_REPLAY_ENTRY_COUNT:
 			return true;
 		default:
 			return false;

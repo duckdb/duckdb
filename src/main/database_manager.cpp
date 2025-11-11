@@ -87,7 +87,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
 		// Start timing the ATTACH-delay step.
 		auto profiler = context.client_data->profiler;
-		profiler->StartTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+		profiler->StartTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
 
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
@@ -95,7 +95,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			auto &meta_transaction = MetaTransaction::Get(context);
 			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
 			if (existing_db) {
-				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+				profiler->EndTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
 				// it does! return it
 				return existing_db;
 			}
@@ -106,15 +106,15 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			auto entry = databases.find(info.name);
 			if (entry != databases.end()) {
 				// The database ACTUALLY exists, so we return it.
-				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+				profiler->EndTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
 				return entry->second;
 			}
 			if (context.interrupted) {
-				profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+				profiler->EndTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
 				throw InterruptException();
 			}
 		}
-		profiler->EndTimer(MetricsType::WAITING_TO_ATTACH_LATENCY);
+		profiler->EndTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
 	}
 
 	auto &config = DBConfig::GetConfig(context);

@@ -30,7 +30,7 @@
       {
         "name": "EXTRA_INFO",
         "description": "Unique operator metrics",
-        "type": "map"
+        "type": "Value::MAP"
       },
       {
         "name": "LATENCY",

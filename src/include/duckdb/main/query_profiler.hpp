@@ -177,11 +177,11 @@ public:
 	DUCKDB_API void EndQuery();
 
 	//! Adds amount to a specific metric type.
-	DUCKDB_API void AddToCounter(MetricsType type, const idx_t amount);
+	DUCKDB_API void AddToCounter(MetricType type, const idx_t amount);
 
 	//! Start/End a timer for a specific metric type.
-	DUCKDB_API void StartTimer(MetricsType type);
-	DUCKDB_API void EndTimer(MetricsType type);
+	DUCKDB_API void StartTimer(MetricType type);
+	DUCKDB_API void EndTimer(MetricType type);
 
 	DUCKDB_API void StartExplainAnalyze();
 
@@ -190,7 +190,7 @@ public:
 	//! Adds the top level query information to the global profiler.
 	DUCKDB_API void SetInfo(const double &blocked_thread_time);
 
-	DUCKDB_API void StartPhase(MetricsType phase_metric);
+	DUCKDB_API void StartPhase(MetricType phase_metric);
 	DUCKDB_API void EndPhase();
 
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
@@ -266,11 +266,11 @@ private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler phase_profiler;
 	//! A mapping of the phase names to the timings
-	using PhaseTimingStorage = unordered_map<MetricsType, double, MetricsTypeHashFunction>;
+	using PhaseTimingStorage = unordered_map<MetricType, double, MetricTypeHashFunction>;
 	PhaseTimingStorage phase_timings;
 	using PhaseTimingItem = PhaseTimingStorage::value_type;
 	//! The stack of currently active phases
-	vector<MetricsType> phase_stack;
+	vector<MetricType> phase_stack;
 
 private:
 	void MoveOptimizerPhasesToRoot();

@@ -264,7 +264,7 @@ enum class MetaPipelineType : uint8_t;
 
 enum class MetricGroup : uint8_t;
 
-enum class MetricsType : uint8_t;
+enum class MetricType : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
@@ -808,7 +808,7 @@ template<>
 const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
 
 template<>
-const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
+const char* EnumUtil::ToChars<MetricType>(MetricType value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1448,7 +1448,7 @@ template<>
 MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
 
 template<>
-MetricsType EnumUtil::FromString<MetricsType>(const char *value);
+MetricType EnumUtil::FromString<MetricType>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);

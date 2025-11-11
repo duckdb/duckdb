@@ -13,8 +13,7 @@ from metrics.paths import (
     OUT_PROFILING_CPP,
 )
 
-
-def main():
+if __name__ == "__main__":
     # load metrics from JSON
     metrics_json = load_metrics_json(METRICS_JSON)
 
@@ -28,7 +27,3 @@ def main():
 
     # emit test files
     generate_test_files(TEST_PROFILING_DIR, metric_index.metrics_by_group)
-
-
-if __name__ == "__main__":
-    main()

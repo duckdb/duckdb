@@ -272,9 +272,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
 
 		auto &profiler = *context.client_data->profiler;
-		profiler.StartTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
+		profiler.StartTimer(MetricType::COMMIT_WRITE_WAL_LATENCY);
 		error = transaction.WriteToWAL(db, commit_state);
-		profiler.EndTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
+		profiler.EndTimer(MetricType::COMMIT_WRITE_WAL_LATENCY);
 
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();

@@ -12,10 +12,10 @@ namespace duckdb {
 ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth) : settings(n_settings) {
 	// Expand.
 	if (depth == 0) {
-		settings.insert(MetricsType::QUERY_NAME);
+		settings.insert(MetricType::QUERY_NAME);
 	} else {
-		settings.insert(MetricsType::OPERATOR_NAME);
-		settings.insert(MetricsType::OPERATOR_TYPE);
+		settings.insert(MetricType::OPERATOR_NAME);
+		settings.insert(MetricType::OPERATOR_TYPE);
 	}
 	for (const auto &metric : settings) {
 		Expand(expanded_settings, metric);
@@ -48,28 +48,28 @@ void ProfilingInfo::ResetMetrics() {
 	}
 }
 
-bool ProfilingInfo::Enabled(const profiler_settings_t &settings, const MetricsType metric) {
+bool ProfilingInfo::Enabled(const profiler_settings_t &settings, const MetricType metric) {
 	if (settings.find(metric) != settings.end()) {
 		return true;
 	}
 	return false;
 }
 
-void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricsType metric) {
+void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metric) {
 	settings.insert(metric);
 
 	switch (metric) {
-	case MetricsType::CPU_TIME:
-		settings.insert(MetricsType::OPERATOR_TIMING);
+	case MetricType::CPU_TIME:
+		settings.insert(MetricType::OPERATOR_TIMING);
 		return;
-	case MetricsType::CUMULATIVE_CARDINALITY:
-		settings.insert(MetricsType::OPERATOR_CARDINALITY);
+	case MetricType::CUMULATIVE_CARDINALITY:
+		settings.insert(MetricType::OPERATOR_CARDINALITY);
 		return;
-	case MetricsType::CUMULATIVE_ROWS_SCANNED:
-		settings.insert(MetricsType::OPERATOR_ROWS_SCANNED);
+	case MetricType::CUMULATIVE_ROWS_SCANNED:
+		settings.insert(MetricType::OPERATOR_ROWS_SCANNED);
 		return;
-	case MetricsType::CUMULATIVE_OPTIMIZER_TIMING:
-	case MetricsType::ALL_OPTIMIZERS: {
+	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::ALL_OPTIMIZERS: {
 		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
 		for (const auto optimizer_metric : optimizer_metrics) {
 			settings.insert(optimizer_metric);
@@ -81,14 +81,14 @@ void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricsType metr
 	}
 }
 
-string ProfilingInfo::GetMetricAsString(const MetricsType metric) const {
+string ProfilingInfo::GetMetricAsString(const MetricType metric) const {
 	if (!Enabled(settings, metric)) {
 		throw InternalException("Metric %s not enabled", EnumUtil::ToString(metric));
 	}
 
 	// The metric cannot be NULL and must be initialized.
 	D_ASSERT(!metrics.at(metric).IsNull());
-	if (metric == MetricsType::OPERATOR_TYPE) {
+	if (metric == MetricType::OPERATOR_TYPE) {
 		const auto type = PhysicalOperatorType(metrics.at(metric).GetValue<uint8_t>());
 		return EnumUtil::ToString(type);
 	}
@@ -101,7 +101,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		auto key_val = yyjson_mut_strcpy(doc, metric_str.c_str());
 		auto key_ptr = yyjson_mut_get_str(key_val);
 
-		if (metric == MetricsType::EXTRA_INFO) {
+		if (metric == MetricType::EXTRA_INFO) {
 			auto extra_info_obj = yyjson_mut_obj(doc);
 
 			auto extra_info = metrics.at(metric);

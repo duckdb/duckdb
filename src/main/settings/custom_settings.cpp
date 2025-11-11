@@ -330,7 +330,7 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Custom Profiling Settings
 //===----------------------------------------------------------------------===//
-bool IsEnabledOptimizer(MetricsType metric, const set<OptimizerType> &disabled_optimizers) {
+bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_optimizers) {
 	auto matching_optimizer_type = MetricsUtils::GetOptimizerTypeByMetric(metric);
 	if (matching_optimizer_type != OptimizerType::INVALID &&
 	    disabled_optimizers.find(matching_optimizer_type) == disabled_optimizers.end()) {
@@ -345,10 +345,10 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &i
 
 	string invalid_settings;
 	for (auto &entry : input) {
-		MetricsType setting;
+		MetricType setting;
 		MetricGroup group = MetricGroup::INVALID;
 		try {
-			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
+			setting = EnumUtil::FromString<MetricType>(StringUtil::Upper(entry.first));
 		} catch (std::exception &ex) {
 			try {
 				group = EnumUtil::FromString<MetricGroup>(StringUtil::Upper(entry.first));
@@ -385,7 +385,7 @@ static profiler_settings_t FillTreeNodeSettings(unordered_map<string, string> &i
 }
 
 void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType> &disabled_optimizers) {
-	if (settings.find(MetricsType::ALL_OPTIMIZERS) != settings.end()) {
+	if (settings.find(MetricType::ALL_OPTIMIZERS) != settings.end()) {
 		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
 		for (auto &metric : optimizer_metrics) {
 			if (IsEnabledOptimizer(metric, disabled_optimizers)) {

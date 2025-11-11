@@ -5,6 +5,8 @@ from pathlib import Path
 
 IDENT_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
+START_OF_FILE = "// DUCKDB_START_OF_FILE"
+
 
 def load_metrics_json(path: Path) -> list[dict]:
     if not path.exists():
@@ -49,3 +51,16 @@ def retrieve_optimizers(optimizer_file: Path) -> list[str]:
 
     result.sort()
     return result
+
+
+def retrieve_template(profiling_util_file: Path) -> str:
+    if not profiling_util_file.exists():
+        raise FileNotFoundError(f"file not found at {profiling_util_file}.")
+
+    with profiling_util_file.open("r", encoding="utf-8") as f:
+        result = f.read()
+
+    if START_OF_FILE not in result:
+        print(f"Could not find the start of file mark: {START_OF_FILE}")
+
+    return result.split(START_OF_FILE)[1]

@@ -326,7 +326,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			profiler->StartTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+			profiler->StartTimer(MetricType::ATTACH_LOAD_STORAGE_LATENCY);
 		}
 
 		// Load the checkpoint from storage.
@@ -336,13 +336,13 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// End timing the storage load step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			profiler->EndTimer(MetricsType::ATTACH_LOAD_STORAGE_LATENCY);
+			profiler->EndTimer(MetricType::ATTACH_LOAD_STORAGE_LATENCY);
 		}
 
 		// Start timing the WAL replay step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			profiler->StartTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+			profiler->StartTimer(MetricType::ATTACH_REPLAY_WAL_LATENCY);
 		}
 
 		// Replay the WAL.
@@ -352,7 +352,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// End timing the WAL replay step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			profiler->EndTimer(MetricsType::ATTACH_REPLAY_WAL_LATENCY);
+			profiler->EndTimer(MetricType::ATTACH_REPLAY_WAL_LATENCY);
 		}
 	}
 
@@ -512,7 +512,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			auto client_context = context.GetClientContext();
 			if (client_context) {
 				auto profiler = client_context->client_data->profiler;
-				profiler->StartTimer(MetricsType::CHECKPOINT_LATENCY);
+				profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
 			}
 
 			// Write the checkpoint.
@@ -522,7 +522,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			// End timing the checkpoint.
 			if (client_context) {
 				auto profiler = client_context->client_data->profiler;
-				profiler->EndTimer(MetricsType::CHECKPOINT_LATENCY);
+				profiler->EndTimer(MetricType::CHECKPOINT_LATENCY);
 			}
 
 		} catch (std::exception &ex) {
