@@ -157,7 +157,7 @@ public:
 	//! Commit a previous append made by RowGroup::AppendVersionInfo
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
-	void RevertAppend(idx_t start);
+	void RevertAppend(idx_t new_count);
 	//! Clean up append states that can either be compressed or deleted
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 

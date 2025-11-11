@@ -210,15 +210,14 @@ void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Ve
 	this->count += count;
 }
 
-void ArrayColumnData::RevertAppend(row_t start_row) {
+void ArrayColumnData::RevertAppend(row_t new_count) {
 	// Revert validity
-	validity.RevertAppend(start_row);
+	validity.RevertAppend(new_count);
 	// Revert child column
 	auto array_size = ArrayType::GetSize(type);
-	child_column->RevertAppend(start_row * UnsafeNumericCast<row_t>(array_size));
+	child_column->RevertAppend(new_count * UnsafeNumericCast<row_t>(array_size));
 
-	auto start_offset = GetSegmentStart();
-	this->count = UnsafeNumericCast<idx_t>(start_row) - start_offset;
+	this->count = UnsafeNumericCast<idx_t>(new_count);
 }
 
 idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

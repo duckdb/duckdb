@@ -533,7 +533,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 		row_groups->EraseSegments(l, segment_index + 1);
 
 		segment.next = nullptr;
-		segment.node->RevertAppend(start_row);
+		segment.node->RevertAppend(start_row - segment.row_start);
 	}
 }
 

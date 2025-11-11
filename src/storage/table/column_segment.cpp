@@ -213,12 +213,12 @@ idx_t ColumnSegment::FinalizeAppend(ColumnAppendState &state) {
 	return result_count;
 }
 
-void ColumnSegment::RevertAppend(idx_t start_row) {
+void ColumnSegment::RevertAppend(idx_t new_count) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (function.get().revert_append) {
-		function.get().revert_append(*this, start_row);
+		function.get().revert_append(*this, new_count);
 	}
-	this->count = start_row - GetSegmentStart();
+	this->count = new_count;
 }
 
 //===--------------------------------------------------------------------===//

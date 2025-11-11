@@ -525,8 +525,8 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 	}
 }
 
-void ColumnData::RevertAppend(row_t start_row_p) {
-	idx_t start_row = NumericCast<idx_t>(start_row_p);
+void ColumnData::RevertAppend(row_t new_count_p) {
+	idx_t new_count = NumericCast<idx_t>(new_count_p);
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
 	auto last_segment_node = data.GetLastSegment(l);
@@ -534,15 +534,15 @@ void ColumnData::RevertAppend(row_t start_row_p) {
 		return;
 	}
 	auto &last_segment = *last_segment_node->node;
-	if (start_row >= last_segment_node->row_start + last_segment.count) {
+	if (new_count >= last_segment_node->row_start + last_segment.count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(start_row == last_segment_node->row_start + last_segment.count);
+		D_ASSERT(new_count == last_segment_node->row_start + last_segment.count);
 		return;
 	}
 	// find the segment index that the current row belongs to
-	idx_t segment_index = data.GetSegmentIndex(l, start_row);
+	idx_t segment_index = data.GetSegmentIndex(l, new_count);
 	auto segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-	if (segment->row_start == start_row) {
+	if (segment->row_start == new_count) {
 		// we are truncating exactly this segment - erase it entirely
 		data.EraseSegments(l, segment_index);
 	} else {
@@ -553,10 +553,10 @@ void ColumnData::RevertAppend(row_t start_row_p) {
 		auto &transient = *segment->node;
 		D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
 		segment->next = nullptr;
-		transient.RevertAppend(start_row);
+		transient.RevertAppend(new_count - segment->row_start);
 	}
 
-	this->count = start_row - this->GetSegmentStart();
+	this->count = new_count;
 }
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

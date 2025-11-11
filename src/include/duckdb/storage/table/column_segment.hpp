@@ -96,7 +96,7 @@ public:
 	//! Returns the number of bytes occupied within the segment
 	idx_t FinalizeAppend(ColumnAppendState &state);
 	//! Revert an append made to this segment
-	void RevertAppend(idx_t start_row);
+	void RevertAppend(idx_t new_count);
 
 	//! Convert a transient in-memory segment to a persistent segment backed by an on-disk block.
 	//! Only used during checkpointing.

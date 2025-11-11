@@ -182,12 +182,12 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 	this->count += count;
 }
 
-void StructColumnData::RevertAppend(row_t start_row) {
-	validity.RevertAppend(start_row);
+void StructColumnData::RevertAppend(row_t new_count) {
+	validity.RevertAppend(new_count);
 	for (auto &sub_column : sub_columns) {
-		sub_column->RevertAppend(start_row);
+		sub_column->RevertAppend(new_count);
 	}
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->GetSegmentStart();
+	this->count = UnsafeNumericCast<idx_t>(new_count);
 }
 
 idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

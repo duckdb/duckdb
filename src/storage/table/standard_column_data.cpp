@@ -134,10 +134,9 @@ void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &st
 	validity.AppendData(stats, state.child_appends[0], vdata, count);
 }
 
-void StandardColumnData::RevertAppend(row_t start_row) {
-	ColumnData::RevertAppend(start_row);
-
-	validity.RevertAppend(start_row);
+void StandardColumnData::RevertAppend(row_t new_count) {
+	ColumnData::RevertAppend(new_count);
+	validity.RevertAppend(new_count);
 }
 
 idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

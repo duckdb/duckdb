@@ -46,7 +46,7 @@ public:
 	void InitializeAppend(ColumnAppendState &state) override;
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
-	void RevertAppend(row_t start_row) override;
+	void RevertAppend(row_t new_count) override;
 
 	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;

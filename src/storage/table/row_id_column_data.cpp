@@ -141,7 +141,7 @@ void RowIdColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 
-void RowIdColumnData::RevertAppend(row_t start_row) {
+void RowIdColumnData::RevertAppend(row_t new_count) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 

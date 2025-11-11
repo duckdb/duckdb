@@ -511,8 +511,8 @@ idx_t ValidityFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
 	return ((segment.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE) * ValidityMask::STANDARD_MASK_SIZE;
 }
 
-void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
-	idx_t start_bit = start_row - segment.GetSegmentStart();
+void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
+	idx_t start_bit = new_count;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);

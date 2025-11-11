@@ -152,7 +152,7 @@ public:
 	void Append(ColumnAppendState &state, Vector &vector, idx_t count);
 	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
 	//! Revert a set of appends to the ColumnData
-	virtual void RevertAppend(row_t start_row);
+	virtual void RevertAppend(row_t new_count);
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);

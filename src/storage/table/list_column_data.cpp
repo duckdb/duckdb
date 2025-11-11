@@ -250,11 +250,11 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	validity.AppendData(stats, state.child_appends[0], vdata, count);
 }
 
-void ListColumnData::RevertAppend(row_t start_row) {
-	ColumnData::RevertAppend(start_row);
-	validity.RevertAppend(start_row);
+void ListColumnData::RevertAppend(row_t new_count) {
+	ColumnData::RevertAppend(new_count);
+	validity.RevertAppend(new_count);
 	auto column_count = GetMaxEntry();
-	if (column_count > GetSegmentStart()) {
+	if (column_count > 0) {
 		// revert append in the child column
 		auto list_offset = FetchListOffset(column_count - 1);
 		child_column->RevertAppend(UnsafeNumericCast<row_t>(list_offset));
