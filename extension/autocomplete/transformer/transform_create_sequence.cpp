@@ -10,6 +10,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateSequenceInfo>();
+	info->catalog = qualified_name.catalog;
+	info->schema = qualified_name.schema;
+	info->name = qualified_name.name;
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
 	auto opt_sequence_options = list_pr.Child<OptionalParseResult>(3);
