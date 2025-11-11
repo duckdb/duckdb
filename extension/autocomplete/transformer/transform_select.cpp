@@ -16,6 +16,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PE
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	if (choice_pr->name == "NamedParameter") {
 		auto parameter = transformer.Transform<MacroParameter>(choice_pr);
+		parameter.expression->alias = parameter.name;
 		return std::move(parameter.expression);
 	}
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
@@ -103,6 +104,17 @@ QualifiedName PEGTransformerFactory::TransformQualifiedName(PEGTransformer &tran
 QualifiedName
 PEGTransformerFactory::TransformCatalogReservedSchemaIdentifierOrStringLiteral(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
+	QualifiedName result;
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
+	result.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
+	return result;
+}
+
+QualifiedName
+PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(PEGTransformer &transformer,
+										optional_ptr<ParseResult> parse_result) {
 	QualifiedName result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));

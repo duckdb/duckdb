@@ -48,7 +48,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	auto &factory = GetInstance();
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
-	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	return result;
 }
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
@@ -440,6 +441,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformCatalogQualification);
 	REGISTER_TRANSFORM(TransformQualifiedName);
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifierOrStringLiteral);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifier);
 	REGISTER_TRANSFORM(TransformSchemaReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformTableNameIdentifierOrStringLiteral);

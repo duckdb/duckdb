@@ -764,6 +764,8 @@ private:
 	static QualifiedName
 	TransformCatalogReservedSchemaIdentifierOrStringLiteral(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformCatalogReservedSchemaIdentifier(PEGTransformer &transformer,
+										optional_ptr<ParseResult> parse_result);
 
 	static QualifiedName TransformSchemaReservedIdentifierOrStringLiteral(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);
