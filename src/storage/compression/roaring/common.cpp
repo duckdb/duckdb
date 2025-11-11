@@ -87,17 +87,20 @@ void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
+	// result.EnsureWritable();
+	if (!result.GetData()) {
+		result.Initialize();
+	}
+	auto result_data = (validity_t *) FlatVector::GetData<uint64_t>(result);
 
-	const auto result_data = FlatVector::GetData<uint64_t>(result);
-	D_ASSERT(result_data);
-	// #ifdef DEBUG
-	// 	ValidityMask copy_for_verification(result.Capacity());
-	// 	copy_for_verification.EnsureWritable();
-	// 	for (idx_t i = 0;
-	// 	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++)
-	// { 		copy_for_verification.GetData()[i] = result.GetData()[i];
-	// 	}
-	// #endif
+// #ifdef DEBUG
+// 	ValidityMask copy_for_verification(result.Capacity());
+// 	copy_for_verification.EnsureWritable();
+// 	for (idx_t i = 0;
+// 	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
+// 		copy_for_verification.GetData()[i] = result.GetData()[i];
+// 	}
+// #endif
 
 	idx_t index = start;
 
