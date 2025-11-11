@@ -81,7 +81,6 @@ namespace duckdb {
 
 namespace roaring {
 
-// TODO: change signature to void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 // Set all the bits from start (inclusive) to end (exclusive) to 0
 void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 	printf("\nSetInvalidRange");
@@ -89,8 +88,8 @@ void SetInvalidRange(Vector &result, idx_t start, idx_t end) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
 
-	auto result_data = (validity_t *)FlatVector::GetData<uint64_t>(result);
-
+	const auto result_data = FlatVector::GetData<uint64_t>(result);
+	D_ASSERT(result_data);
 	// #ifdef DEBUG
 	// 	ValidityMask copy_for_verification(result.Capacity());
 	// 	copy_for_verification.EnsureWritable();
