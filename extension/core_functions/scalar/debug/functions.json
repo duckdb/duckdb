@@ -7,10 +7,10 @@
         "type": "scalar_function"
     },
     {
-        "name": "sleep",
+        "name": "sleep_ms",
         "parameters": "milliseconds",
         "description": "Sleeps for the specified number of milliseconds and returns NULL",
-        "example": "sleep(100)",
+        "example": "sleep_ms(100)",
         "type": "scalar_function"
     }
 ]

@@ -1,63 +1,123 @@
 # name: test/sql/function/generic/test_sleep.test
-# description: Test sleep function
+# description: Test sleep_ms function
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # Test basic sleep function - should return NULL
-query 
-SELECT sleep(10)
+query T
+SELECT sleep_ms(10)
 ----
 NULL
 
 # Test sleep with 0 milliseconds
-query 
-SELECT sleep(0)
+query T
+SELECT sleep_ms(0)
 ----
 NULL
 
 # Test sleep with NULL input
-query 
-SELECT sleep(NULL)
+query T
+SELECT sleep_ms(NULL)
 ----
 NULL
 
 # Test sleep in a query with timing
-query I
-SELECT 1, sleep(50), 2
+query ITI
+SELECT 1, sleep_ms(50), 2
 ----
 1	NULL	2
 
 # Test sleep with different values
-query 
-SELECT sleep(100)
+query T
+SELECT sleep_ms(100)
 ----
 NULL
 
 # Test sleep in WHERE clause (should still execute)
 query I
-SELECT 42 WHERE sleep(10) IS NULL
+SELECT 42 WHERE sleep_ms(10) IS NULL
 ----
 42
 
 # Test sleep with multiple rows
-query 
-SELECT sleep(10) FROM range(3)
+query T
+SELECT sleep_ms(10) FROM range(3)
 ----
 NULL
 NULL
 NULL
 
 # Test sleep with expression
-query 
-SELECT sleep(10 + 20)
+query T
+SELECT sleep_ms(10 + 20)
 ----
 NULL
 
 # Test sleep with negative value (should still work, but sleep for 0 or handle gracefully)
-query 
-SELECT sleep(-10)
+query T
+SELECT sleep_ms(-10)
+----
+NULL
+
+# Test pg_sleep function (Postgres compatibility - takes seconds, converts to milliseconds)
+# Test basic pg_sleep function - should return NULL
+query T
+SELECT pg_sleep(0.1)
+----
+NULL
+
+# Test pg_sleep with 0 seconds
+query T
+SELECT pg_sleep(0)
+----
+NULL
+
+# Test pg_sleep with NULL input
+query T
+SELECT pg_sleep(NULL)
+----
+NULL
+
+# Test pg_sleep with fractional seconds
+query T
+SELECT pg_sleep(0.05)
+----
+NULL
+
+# Test pg_sleep with 1 second
+query T
+SELECT pg_sleep(1.0)
+----
+NULL
+
+# Test pg_sleep in a query with other columns
+query ITI
+SELECT 1, pg_sleep(0.1), 2
+----
+1	NULL	2
+
+# Test pg_sleep in WHERE clause (should still execute)
+query I
+SELECT 42 WHERE pg_sleep(0.1) IS NULL
+----
+42
+
+# Test pg_sleep with multiple rows
+query T
+SELECT pg_sleep(0.01) FROM range(3)
+----
+NULL
+NULL
+NULL
+
+# Test pg_sleep with expression
+query T
+SELECT pg_sleep(0.05 + 0.05)
+----
+NULL
+
+# Test pg_sleep with negative value (should still work, but sleep for 0 or handle gracefully)
+query T
+SELECT pg_sleep(-0.1)
 ----
 NULL
 
