@@ -167,29 +167,37 @@ public:
 	};
 };
 
-static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
+static FileMetadata StatsInternal(int fd, const string& path) {
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
-		return FileType::FILE_TYPE_INVALID;
+		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get stats for file \"%s\": %s",
+		                  path, strerror(errno));
 	}
+
+	FileMetadata file_metadata;
+	file_metadata.file_size = s.st_size;
+	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(s.st_mtime);
+
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
-		return FileType::FILE_TYPE_BLOCKDEV;
+		file_metadata.file_type = FileType::FILE_TYPE_BLOCKDEV;
 	case S_IFCHR:
-		return FileType::FILE_TYPE_CHARDEV;
+		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
 	case S_IFIFO:
-		return FileType::FILE_TYPE_FIFO;
+		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
 	case S_IFDIR:
-		return FileType::FILE_TYPE_DIR;
+		file_metadata.file_type = FileType::FILE_TYPE_DIR;
 	case S_IFLNK:
-		return FileType::FILE_TYPE_LINK;
+		file_metadata.file_type = FileType::FILE_TYPE_LINK;
 	case S_IFREG:
-		return FileType::FILE_TYPE_REGULAR;
+		file_metadata.file_type = FileType::FILE_TYPE_REGULAR;
 	case S_IFSOCK:
-		return FileType::FILE_TYPE_SOCKET;
+		file_metadata.file_type = FileType::FILE_TYPE_SOCKET;
 	default:
-		return FileType::FILE_TYPE_INVALID;
+		file_metadata.file_type = FileType::FILE_TYPE_INVALID;
 	}
+
+	return file_metadata;
 } // LCOV_EXCL_STOP
 
 #if __APPLE__ && !TARGET_OS_IPHONE
@@ -385,7 +393,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	if (flags.Lock() != FileLockType::NO_LOCK) {
 		// set lock on file
 		// but only if it is not an input/output stream
-		auto file_type = GetFileTypeInternal(fd);
+		auto file_type = StatsInternal(fd, path_p).file_type;
 		if (file_type != FileType::FILE_TYPE_FIFO && file_type != FileType::FILE_TYPE_SOCKET) {
 			struct flock fl;
 			memset(&fl, 0, sizeof fl);
@@ -575,28 +583,24 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get file size for file \"%s\": %s",
-		                  handle.path, strerror(errno));
-	}
-	return s.st_size;
+	const auto file_metadata = Stats(handle);
+	return file_metadata.file_size;
 }
 
 timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get last modified time for file \"%s\": %s",
-		                  handle.path, strerror(errno));
-	}
-	return Timestamp::FromEpochSeconds(s.st_mtime);
+	const auto file_metadata = Stats(handle);
+	return file_metadata.last_modification_time;
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
+	const auto file_metadata = Stats(handle);
+	return file_metadata.file_type;
+}
+
+FileMetadata LocalFileSystem::Stats(FileHandle& handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	return GetFileTypeInternal(fd);
+	auto file_metadata = StatsInternal(fd, handle.GetPath());	
+	return file_metadata;
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -812,6 +816,41 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 	LocalFree(messageBuffer);
 
 	return message;
+}
+
+static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
+	BY_HANDLE_FILE_INFORMATION file_info;
+	if (!GetFileInformationByHandle(hFile, &file_info)) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get stats for file \"%s\": %s", path, error);
+	}
+
+	FileMetadata file_metadata;
+	
+	// Get file size from high and low parts
+	file_metadata.file_size = (static_cast<int64_t>(file_info.nFileSizeHigh) << 32) | 
+	                          static_cast<int64_t>(file_info.nFileSizeLow);
+	
+	// Get last modification time
+	file_metadata.last_modification_time = FiletimeToTimeStamp(file_info.ftLastWriteTime);
+	
+	// Get file type from attributes
+	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
+		// pipes in windows are just files in '\\.\pipe\' folder
+		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
+	} else if (file_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+		file_metadata.file_type = FileType::FILE_TYPE_DIR;
+	} else if (file_info.dwFileAttributes & FILE_ATTRIBUTE_DEVICE) {
+		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
+	} else if (file_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+		file_metadata.file_type = FileType::FILE_TYPE_LINK;
+	} else if (file_info.dwFileAttributes != INVALID_FILE_ATTRIBUTES) {
+		file_metadata.file_type = FileType::FILE_TYPE_REGULAR;
+	} else {
+		file_metadata.file_type = FileType::FILE_TYPE_INVALID;
+	}
+	
+	return file_metadata;
 }
 
 struct WindowsFileHandle : public FileHandle {
@@ -1088,13 +1127,8 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-	LARGE_INTEGER result;
-	if (!GetFileSizeEx(hFile, &result)) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, error);
-	}
-	return result.QuadPart;
+	const auto file_metadata = Stats(handle);
+	return file_metadata.file_size;
 }
 
 timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
@@ -1115,15 +1149,8 @@ timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 }
 
 timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-
-	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
-	FILETIME last_write;
-	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
-	}
-	return FiletimeToTimeStamp(last_write);
+	const auto file_metadata = Stats(handle);
+	return file_metadata.last_modification_time;
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -1257,21 +1284,14 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
-	auto path = handle.Cast<WindowsFileHandle>().path;
-	// pipes in windows are just files in '\\.\pipe\' folder
-	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
-		return FileType::FILE_TYPE_FIFO;
-	}
-	auto normalized_path = NormalizePathAndConvertToUnicode(path);
-	DWORD attrs = WindowsGetFileAttributes(normalized_path);
-	if (attrs != INVALID_FILE_ATTRIBUTES) {
-		if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
-			return FileType::FILE_TYPE_DIR;
-		} else {
-			return FileType::FILE_TYPE_REGULAR;
-		}
-	}
-	return FileType::FILE_TYPE_INVALID;
+	const auto file_metadata = Stats(handle);
+	return file_metadata.file_type;
+}
+
+FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto file_metadata = StatsInternal(hFile, handle.GetPath());
+	return file_metadata;
 }
 #endif
 
