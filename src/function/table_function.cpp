@@ -37,6 +37,30 @@ TableFunction::TableFunction(const vector<LogicalType> &arguments, table_functio
 TableFunction::TableFunction() : TableFunction("", {}, nullptr, nullptr, nullptr, nullptr) {
 }
 
+bool TableFunction::operator==(const TableFunction &rhs) const {
+	return name == rhs.name && arguments == rhs.arguments && varargs == rhs.varargs && bind == rhs.bind &&
+	       bind_replace == rhs.bind_replace && bind_operator == rhs.bind_operator && init_global == rhs.init_global &&
+	       init_local == rhs.init_local && function == rhs.function && in_out_function == rhs.in_out_function &&
+	       in_out_function_final == rhs.in_out_function_final && statistics == rhs.statistics &&
+	       dependency == rhs.dependency && cardinality == rhs.cardinality &&
+	       pushdown_complex_filter == rhs.pushdown_complex_filter && pushdown_expression == rhs.pushdown_expression &&
+	       to_string == rhs.to_string && dynamic_to_string == rhs.dynamic_to_string &&
+	       table_scan_progress == rhs.table_scan_progress && get_partition_data == rhs.get_partition_data &&
+	       get_bind_info == rhs.get_bind_info && type_pushdown == rhs.type_pushdown &&
+	       get_multi_file_reader == rhs.get_multi_file_reader && supports_pushdown_type == rhs.supports_pushdown_type &&
+	       get_partition_info == rhs.get_partition_info && get_partition_stats == rhs.get_partition_stats &&
+	       get_virtual_columns == rhs.get_virtual_columns && get_row_id_columns == rhs.get_row_id_columns &&
+	       serialize == rhs.serialize && deserialize == rhs.deserialize &&
+	       verify_serialization == rhs.verify_serialization && projection_pushdown == rhs.projection_pushdown &&
+	       filter_pushdown == rhs.filter_pushdown && filter_prune == rhs.filter_prune &&
+	       sampling_pushdown == rhs.sampling_pushdown && late_materialization == rhs.late_materialization &&
+	       global_initialization == rhs.global_initialization;
+}
+
+bool TableFunction::operator!=(const TableFunction &rhs) const {
+	return !(*this == rhs);
+}
+
 bool TableFunction::Equal(const TableFunction &rhs) const {
 	// number of types
 	if (this->arguments.size() != rhs.arguments.size()) {

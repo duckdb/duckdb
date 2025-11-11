@@ -259,7 +259,7 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<PhysicalTableScan>();
-	if (function.function != other.function.function) {
+	if (function != other.function) {
 		return false;
 	}
 	if (column_ids != other.column_ids) {
