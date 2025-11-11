@@ -284,6 +284,7 @@ void Parser::ParseQuery(const string &query) {
 						switch (create_statement.info->type) {
 						case CatalogType::SCHEMA_ENTRY:
 						case CatalogType::MACRO_ENTRY:
+						case CatalogType::SEQUENCE_ENTRY:
 							is_supported = true;
 							break;
 						default:
