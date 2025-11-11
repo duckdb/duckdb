@@ -518,7 +518,7 @@ AggregateFunction GetTypedEntropyFunction(const LogicalType &type) {
 	auto func =
 	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, double, OP, AggregateDestructorType::LEGACY>(
 	        type, LogicalType::DOUBLE);
-	func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;
 }
 
@@ -530,7 +530,7 @@ AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	                       AggregateFunction::StateFinalize<STATE, double, OP>, nullptr);
 	func.destructor = AggregateFunction::StateDestroy<STATE, OP>;
-	func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;
 }
 

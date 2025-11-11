@@ -65,7 +65,7 @@ unique_ptr<FunctionData> WriteLogBind(ClientContext &context, ScalarFunction &bo
 	auto result = make_uniq<WriteLogBindData>();
 
 	// Default return type
-	bound_function.return_type = LogicalType::VARCHAR;
+	bound_function.SetReturnType(LogicalType::VARCHAR);
 
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto &arg = arguments[i];
@@ -100,7 +100,7 @@ unique_ptr<FunctionData> WriteLogBind(ClientContext &context, ScalarFunction &bo
 		} else if (arg->alias == "return_value") {
 			result->return_type = arg->return_type;
 			result->output_col = i;
-			bound_function.return_type = result->return_type;
+			bound_function.SetReturnType(result->return_type);
 		} else {
 			throw BinderException(StringUtil::Format("write_log: Unknown argument '%s'", arg->alias));
 		}

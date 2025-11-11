@@ -142,7 +142,7 @@ ScalarFunction ConcatWsFun::GetFunction() {
 	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::ANY},
 	                                          LogicalType::VARCHAR, ConcatWSFunction, BindConcatWSFunction);
 	concat_ws.varargs = LogicalType::ANY;
-	concat_ws.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	concat_ws.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunction(concat_ws);
 }
 

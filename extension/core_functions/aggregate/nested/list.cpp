@@ -177,8 +177,8 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
-	function.return_type = LogicalType::LIST(arguments[0]->return_type);
-	return make_uniq<ListBindData>(function.return_type);
+	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
+	return make_uniq<ListBindData>(function.GetReturnType());
 }
 
 } // namespace

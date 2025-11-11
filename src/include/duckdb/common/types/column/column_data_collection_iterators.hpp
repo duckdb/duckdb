@@ -63,7 +63,9 @@ private:
 
 	class ColumnDataRowIterator {
 	public:
-		DUCKDB_API explicit ColumnDataRowIterator(const ColumnDataCollection *collection_p);
+		DUCKDB_API explicit ColumnDataRowIterator(
+		    const ColumnDataCollection *collection_p,
+		    ColumnDataScanProperties properties = ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 
 		const ColumnDataCollection *collection;
 		ColumnDataScanState scan_state;

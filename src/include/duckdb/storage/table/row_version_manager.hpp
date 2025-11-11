@@ -23,15 +23,11 @@ struct MetaBlockPointer;
 
 class RowVersionManager {
 public:
-	explicit RowVersionManager(BufferManager &buffer_manager, idx_t start) noexcept;
+	explicit RowVersionManager(BufferManager &buffer_manager) noexcept;
 
-	idx_t GetStart() const {
-		return start;
-	}
 	FixedSizeAllocator &GetAllocator() {
 		return allocator;
 	}
-	void SetStart(idx_t start);
 	idx_t GetCommittedDeletedCount(idx_t count);
 
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
@@ -48,13 +44,11 @@ public:
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
 	vector<MetaBlockPointer> Checkpoint(MetadataManager &manager);
-	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager,
-	                                                 idx_t start);
+	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 private:
 	mutex version_lock;
 	FixedSizeAllocator allocator;
-	idx_t start;
 	vector<unique_ptr<ChunkInfo>> vector_info;
 	bool has_changes;
 	vector<MetaBlockPointer> storage_pointers;

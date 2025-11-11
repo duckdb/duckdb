@@ -5,11 +5,6 @@
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
 
-#if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
-// disable highlighting on windows (for now?)
-#define DISABLE_HIGHLIGHT
-#endif
-
 namespace duckdb {
 
 bool Highlighting::IsEnabled() {

@@ -184,7 +184,9 @@ int64_t CastFunctionSet::ImplicitCastCost(optional_ptr<ClientContext> context, c
 			old_implicit_casting = DBConfig::GetSetting<OldImplicitCastingSetting>(*config);
 		}
 		if (old_implicit_casting) {
-			score = 149;
+			// very high cost to avoid choosing this cast if any other option is available
+			// (it should be more costly than casting to TEMPLATE if that is available)
+			score = 10000000000;
 		}
 	}
 	return score;

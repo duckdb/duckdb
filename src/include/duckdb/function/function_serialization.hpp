@@ -177,8 +177,8 @@ public:
 			binder.CastToFunctionArguments(function, children);
 		}
 
-		if (TypeRequiresAssignment(function.return_type)) {
-			function.return_type = std::move(return_type);
+		if (TypeRequiresAssignment(function.GetReturnType())) {
+			function.SetReturnType(std::move(return_type));
 		}
 		return make_pair(std::move(function), std::move(bind_data));
 	}
