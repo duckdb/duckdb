@@ -1,6 +1,6 @@
 # name: test/sql/function/generic/test_sleep.test
 # description: Test sleep function
-# group: [function]
+# group: [generic]
 
 statement ok
 PRAGMA enable_verification
