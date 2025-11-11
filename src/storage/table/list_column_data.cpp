@@ -312,15 +312,15 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	// now we need to read from the child all the elements between [offset...length]
 	auto child_scan_count = list_entry.length;
 	if (child_scan_count > 0) {
-		auto child_state = make_uniq<ColumnScanState>();
+		ColumnScanState child_state(nullptr);
 		auto &child_type = ListType::GetChildType(result.GetType());
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
-		child_state->Initialize(state.context, child_type, nullptr);
-		child_column->InitializeScanWithOffset(*child_state, start_idx + start_offset);
+		child_state.Initialize(state.context, child_type, nullptr);
+		child_column->InitializeScanWithOffset(child_state, start_idx + start_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state->row_index + child_scan_count - start_idx <= child_column->GetMaxEntry());
-		child_column->ScanCount(*child_state, child_scan, child_scan_count);
+		         child_state.row_index + child_scan_count - start_idx <= child_column->GetMaxEntry());
+		child_column->ScanCount(child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);
 	}

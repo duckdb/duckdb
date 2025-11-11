@@ -257,15 +257,15 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	auto array_size = ArrayType::GetSize(type);
 
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
-	auto child_state = make_uniq<ColumnScanState>();
-	child_state->Initialize(state.context, child_type, nullptr);
+	ColumnScanState child_state(nullptr);
+	child_state.Initialize(state.context, child_type, nullptr);
 
 	auto start_offset = GetSegmentStart();
 	const auto child_offset = start_offset + (UnsafeNumericCast<idx_t>(row_id) - start_offset) * array_size;
 
-	child_column->InitializeScanWithOffset(*child_state, child_offset);
+	child_column->InitializeScanWithOffset(child_state, child_offset);
 	Vector child_scan(child_type, array_size);
-	child_column->ScanCount(*child_state, child_scan, array_size);
+	child_column->ScanCount(child_state, child_scan, array_size);
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
 }
 

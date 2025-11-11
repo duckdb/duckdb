@@ -186,10 +186,14 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		// validity - nothing to initialize
 		return;
 	}
+	D_ASSERT(child_states.empty());
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		// validity + struct children
 		auto &struct_children = StructType::GetChildTypes(type);
-		child_states.resize(struct_children.size() + 1);
+		child_states.reserve(struct_children.size() + 1);
+		for (idx_t i = 0; i <= struct_children.size(); i++) {
+			child_states.emplace_back(parent);
+		}
 
 		if (children.empty()) {
 			// scan all struct children
@@ -211,17 +215,21 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		// validity + list child
-		child_states.resize(2);
+		for (idx_t i = 0; i < 2; i++) {
+			child_states.emplace_back(parent);
+		}
 		child_states[1].Initialize(context, ListType::GetChildType(type), options);
 		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		// validity + array child
-		child_states.resize(2);
+		for (idx_t i = 0; i < 2; i++) {
+			child_states.emplace_back(parent);
+		}
 		child_states[0].scan_options = options;
 		child_states[1].Initialize(context, ArrayType::GetChildType(type), options);
 	} else {
 		// validity
-		child_states.resize(1);
+		child_states.emplace_back(parent);
 		child_states[0].scan_options = options;
 	}
 }
@@ -234,7 +242,10 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 
 void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
-	column_scans = make_unsafe_uniq_array<ColumnScanState>(column_ids.size());
+	column_scans.reserve(column_scans.size());
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		column_scans.emplace_back(*this);
+	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i].IsRowIdColumn()) {
 			continue;
@@ -263,7 +274,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 		// exceeded row groups to scan
 		return false;
 	}
-	D_ASSERT(state.column_scans);
+	D_ASSERT(!state.column_scans.empty());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
 		auto &column_data = GetColumn(column);
@@ -289,7 +300,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	if (state.max_row_group_row == 0) {
 		return false;
 	}
-	D_ASSERT(state.column_scans);
+	D_ASSERT(!state.column_scans.empty());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		auto &column_data = GetColumn(column);

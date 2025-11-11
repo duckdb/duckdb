@@ -80,6 +80,10 @@ struct IndexScanState {
 typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
 struct ColumnScanState {
+	explicit ColumnScanState(optional_ptr<CollectionScanState> parent_p) : parent(parent_p) {
+	}
+
+	optional_ptr<CollectionScanState> parent;
 	//! The query context for this scan
 	QueryContext context;
 	//! The column segment that is currently being scanned
@@ -93,7 +97,7 @@ struct ColumnScanState {
 	//! Segment scan state
 	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector
-	vector<ColumnScanState> child_states;
+	unsafe_vector<ColumnScanState> child_states;
 	//! Whether or not InitializeState has been called for this segment
 	bool initialized = false;
 	//! If this segment has already been checked for skipping purposes
@@ -219,7 +223,7 @@ public:
 	//! The maximum row within the row group
 	idx_t max_row_group_row;
 	//! Child column scans
-	unsafe_unique_array<ColumnScanState> column_scans;
+	unsafe_vector<ColumnScanState> column_scans;
 	//! Row group segment tree
 	RowGroupSegmentTree *row_groups;
 	//! The total maximum row index

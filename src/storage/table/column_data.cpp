@@ -23,8 +23,8 @@ namespace duckdb {
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
-    : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), allocation_size(0), parent(parent) {
+    : count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
+      allocation_size(0), start(start_row), parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -356,7 +356,7 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 }
 
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
-	ColumnScanState child_state;
+	ColumnScanState child_state(nullptr);
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
 	bool has_updates = HasUpdates();
 	auto scan_count = ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
@@ -593,7 +593,7 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 void ColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
                         row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	Vector base_vector(type);
-	ColumnScanState state;
+	ColumnScanState state(nullptr);
 	FetchUpdateData(state, row_ids, base_vector);
 
 	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,

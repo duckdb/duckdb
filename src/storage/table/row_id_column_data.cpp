@@ -10,15 +10,16 @@ RowIdColumnData::RowIdColumnData(BlockManager &block_manager, DataTableInfo &inf
 }
 
 FilterPropagateResult RowIdColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	return RowGroup::CheckRowIdFilter(filter, GetSegmentStart(), GetSegmentStart() + count);
-	;
+	auto row_start = state.parent->row_group->row_start;
+	return RowGroup::CheckRowIdFilter(filter, row_start, row_start + count);
 }
 
 void RowIdColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 }
 
 void RowIdColumnData::InitializeScan(ColumnScanState &state) {
-	InitializeScanWithOffset(state, GetSegmentStart());
+	auto row_start = state.parent->row_group->row_start;
+	InitializeScanWithOffset(state, row_start);
 }
 
 void RowIdColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
@@ -43,17 +44,15 @@ idx_t RowIdColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state,
 
 void RowIdColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count,
                                          Vector &result) {
-	auto start_idx = GetSegmentStart();
-	D_ASSERT(start_idx == row_group_start);
-	result.Sequence(UnsafeNumericCast<int64_t>(start_idx + offset_in_row_group), 1, count);
+	result.Sequence(UnsafeNumericCast<int64_t>(row_group_start + offset_in_row_group), 1, count);
 }
 
 idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto start_idx = GetSegmentStart();
+	auto row_start = state.parent->row_group->row_start;
 	if (result_offset != 0) {
 		throw InternalException("RowIdColumnData result_offset must be 0");
 	}
-	ScanCommittedRange(start_idx, state.row_index - start_idx, count, result);
+	ScanCommittedRange(row_start, state.row_index - row_start, count, result);
 	state.row_index += count;
 	return count;
 }

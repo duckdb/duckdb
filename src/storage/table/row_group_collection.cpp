@@ -195,7 +195,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, C
                                                   idx_t vector_index, idx_t max_row) {
 	state.max_row = max_row;
 	state.row_groups = collection.row_groups.get();
-	if (!state.column_scans) {
+	if (state.column_scans.empty()) {
 		// initialize the scan state
 		state.Initialize(context, collection.GetTypes());
 	}

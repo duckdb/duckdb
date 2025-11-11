@@ -143,7 +143,7 @@ void StandardColumnData::RevertAppend(row_t start_row) {
 idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// fetch validity mask
 	if (state.child_states.empty()) {
-		ColumnScanState child_state;
+		ColumnScanState child_state(state.parent);
 		child_state.scan_options = state.scan_options;
 		state.child_states.push_back(std::move(child_state));
 	}
@@ -154,7 +154,8 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 
 void StandardColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
                                 Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
-	ColumnScanState standard_state, validity_state;
+	ColumnScanState standard_state(nullptr);
+	ColumnScanState validity_state(nullptr);
 	Vector base_vector(type);
 	auto standard_fetch = FetchUpdateData(standard_state, row_ids, base_vector);
 	auto validity_fetch = validity.FetchUpdateData(validity_state, row_ids, base_vector);

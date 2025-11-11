@@ -88,7 +88,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto &segment_node = *nodes[segment_idx];
 		auto &segment = *segment_node.node;
-		ColumnScanState scan_state;
+		ColumnScanState scan_state(nullptr);
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
 
