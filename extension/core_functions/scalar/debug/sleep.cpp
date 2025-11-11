@@ -13,7 +13,7 @@ static void SleepFunction(DataChunk &input, ExpressionState &state, Vector &resu
 	input.data[0].ToUnifiedFormat(input.size(), vdata);
 
 	auto milliseconds = UnifiedVectorFormat::GetData<int64_t>(vdata);
-	
+
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!vdata.validity.RowIsValid(idx)) {
@@ -34,10 +34,10 @@ static unique_ptr<FunctionData> SleepBind(ClientContext &context, ScalarFunction
                                           vector<unique_ptr<Expression>> &arguments) {
 	// Validate that we have exactly one argument
 	D_ASSERT(arguments.size() == 1);
-	
+
 	// Return type is always SQLNULL
 	bound_function.return_type = LogicalType::SQLNULL;
-	
+
 	return nullptr;
 }
 
@@ -58,15 +58,10 @@ static unique_ptr<Expression> BindSleepFunctionExpression(FunctionBindExpression
 }
 
 ScalarFunction SleepFun::GetFunction() {
-	auto sleep_fun = ScalarFunction("sleep",
-	                                {LogicalType::BIGINT},
-	                                LogicalType::SQLNULL,
-	                                SleepFunction,
-	                                SleepBind);
+	auto sleep_fun = ScalarFunction("sleep", {LogicalType::BIGINT}, LogicalType::SQLNULL, SleepFunction, SleepBind);
 	sleep_fun.stability = FunctionStability::VOLATILE;
 	sleep_fun.bind_expression = BindSleepFunctionExpression;
 	return sleep_fun;
 }
 
-}
-
+} // namespace duckdb
