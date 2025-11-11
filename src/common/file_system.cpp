@@ -453,7 +453,7 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
-FileMetadata FileSystem::Stats(FileHandle& handle) {
+FileMetadata FileSystem::Stats(FileHandle &handle) {
 	throw NotImplementedException("%s: Stats is not implemented!", GetName());
 }
 

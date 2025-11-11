@@ -50,7 +50,7 @@ public:
 	FileType GetFileType(FileHandle &handle) override {
 		return GetFileSystem().GetFileType(handle);
 	}
-	FileMetadata Stats(FileHandle& handle) override {
+	FileMetadata Stats(FileHandle &handle) override {
 		return GetFileSystem().Stats(handle);
 	}
 

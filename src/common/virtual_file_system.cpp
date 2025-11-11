@@ -88,7 +88,7 @@ string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
 }
-FileMetadata VirtualFileSystem::Stats(FileHandle& handle) {
+FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
 	return handle.file_system.Stats(handle);
 }
 

@@ -175,7 +175,7 @@ TEST_CASE("Test file operations", "[file_system]") {
 	const auto file_metadata = fs->Stats(*handle);
 	REQUIRE(file_metadata.file_size == 512);
 	REQUIRE(file_metadata.file_type == FileType::FILE_TYPE_REGULAR);
-	REQUIRE(file_metadata.last_modification_time > timestamp_t{-1});
+	REQUIRE(file_metadata.last_modification_time > timestamp_t {-1});
 
 	// read the 10 integers back
 	REQUIRE_NOTHROW(handle->Read(QueryContext(), (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));

@@ -167,11 +167,11 @@ public:
 	};
 };
 
-static FileMetadata StatsInternal(int fd, const string& path) {
+static FileMetadata StatsInternal(int fd, const string &path) {
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
-		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get stats for file \"%s\": %s",
-		                  path, strerror(errno));
+		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get stats for file \"%s\": %s", path,
+		                  strerror(errno));
 	}
 
 	FileMetadata file_metadata;
@@ -597,9 +597,9 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	return file_metadata.file_type;
 }
 
-FileMetadata LocalFileSystem::Stats(FileHandle& handle) {
+FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	auto file_metadata = StatsInternal(fd, handle.GetPath());	
+	auto file_metadata = StatsInternal(fd, handle.GetPath());
 	return file_metadata;
 }
 
@@ -826,14 +826,14 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	}
 
 	FileMetadata file_metadata;
-	
+
 	// Get file size from high and low parts
-	file_metadata.file_size = (static_cast<int64_t>(file_info.nFileSizeHigh) << 32) | 
-	                          static_cast<int64_t>(file_info.nFileSizeLow);
-	
+	file_metadata.file_size =
+	    (static_cast<int64_t>(file_info.nFileSizeHigh) << 32) | static_cast<int64_t>(file_info.nFileSizeLow);
+
 	// Get last modification time
 	file_metadata.last_modification_time = FiletimeToTimeStamp(file_info.ftLastWriteTime);
-	
+
 	// Get file type from attributes
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		// pipes in windows are just files in '\\.\pipe\' folder
@@ -849,7 +849,7 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	} else {
 		file_metadata.file_type = FileType::FILE_TYPE_INVALID;
 	}
-	
+
 	return file_metadata;
 }
 
