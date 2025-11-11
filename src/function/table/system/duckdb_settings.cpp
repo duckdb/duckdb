@@ -130,9 +130,7 @@ static optional_idx TryParseBytes(const string &str) {
 	try {
 		auto val = DBConfig::ParseMemoryLimit(str);
 		return optional_idx(val);
-	} catch (ParserException &e) {
-		return optional_idx();
-	} catch (InvalidInputException &e) {
+	} catch (Exception &e) {
 		return optional_idx();
 	}
 }
