@@ -35,12 +35,6 @@ ColumnData::~ColumnData() {
 
 void ColumnData::SetStart(idx_t new_start) {
 	this->start = new_start;
-	idx_t offset = 0;
-	for (auto &segment : data.Segments()) {
-		segment.SetSegmentStart(offset);
-		offset += segment.count;
-	}
-	data.Reinitialize();
 }
 
 DatabaseInstance &ColumnData::GetDatabase() const {
