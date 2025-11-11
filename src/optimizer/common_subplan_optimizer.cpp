@@ -164,6 +164,10 @@ private:
 				}
 				const auto emp_res = table_index_map.emplace(table_indices[0], PlanSignatureColumnIndexMap(allocator));
 				D_ASSERT(emp_res.second);
+
+				// Also temporarily don't project any columns out
+				projection_ids = std::move(get.projection_ids);
+
 				// Store mapping for base tables
 				auto &column_index_map = emp_res.first->second;
 				for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
@@ -174,6 +178,8 @@ private:
 			case ConversionType::RESTORE_ORIGINAL:
 				D_ASSERT(!column_ids.empty());
 				get.GetMutableColumnIds() = std::move(column_ids);
+				D_ASSERT(get.projection_ids.empty());
+				get.projection_ids = std::move(projection_ids);
 				break;
 			}
 		}
@@ -250,10 +256,12 @@ private:
 	//! Temporary map from original table index to canonical table index (and reverse)
 	arena_unordered_map<idx_t, idx_t> to_canonical_table_index;
 	arena_unordered_map<idx_t, idx_t> restore_original_table_index;
-
-	//! Utility to temporarily store, column ids, table indices, expression info and children
-	vector<ColumnIndex> column_ids;
+	//! Temporary vector to store table indices
 	arena_vector<idx_t> table_indices;
+
+	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
+	vector<ColumnIndex> column_ids;
+	vector<idx_t> projection_ids;
 	vector<pair<string, optional_idx>> expression_info;
 	vector<unique_ptr<LogicalOperator>> children;
 };
