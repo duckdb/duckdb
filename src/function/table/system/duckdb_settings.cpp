@@ -140,7 +140,7 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 	// We can infer from the value column type that we are in byte mode or not, because of the binding step
 	const auto value_column = output.data[1];
-	const auto& value_type = value_column.GetType();
+	const auto &value_type = value_column.GetType();
 	const bool in_bytes = value_type.id() == LogicalTypeId::UBIGINT;
 
 	if (data.offset >= data.settings.size()) {
