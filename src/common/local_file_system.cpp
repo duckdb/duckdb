@@ -181,20 +181,28 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
 		file_metadata.file_type = FileType::FILE_TYPE_BLOCKDEV;
+		break;
 	case S_IFCHR:
 		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
+		break;
 	case S_IFIFO:
 		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
+		break;
 	case S_IFDIR:
 		file_metadata.file_type = FileType::FILE_TYPE_DIR;
+		break;
 	case S_IFLNK:
 		file_metadata.file_type = FileType::FILE_TYPE_LINK;
+		break;
 	case S_IFREG:
 		file_metadata.file_type = FileType::FILE_TYPE_REGULAR;
+		break;
 	case S_IFSOCK:
 		file_metadata.file_type = FileType::FILE_TYPE_SOCKET;
+		break;
 	default:
 		file_metadata.file_type = FileType::FILE_TYPE_INVALID;
+		break;
 	}
 
 	return file_metadata;
