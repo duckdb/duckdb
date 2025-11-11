@@ -218,9 +218,6 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 	// write the row ids into the chunk
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
 	idx_t start = info.row_group_start + info.vector_index * STANDARD_VECTOR_SIZE;
-	if (info.row_group_start != column_data.GetSegmentStart()) {
-		throw InternalException("WALWriteState::WriteUpdate - unaligned start");
-	}
 	auto tuples = info.GetTuples();
 	for (idx_t i = 0; i < info.N; i++) {
 		row_ids[tuples[i]] = UnsafeNumericCast<int64_t>(start + tuples[i]);

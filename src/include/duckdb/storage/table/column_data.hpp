@@ -51,12 +51,14 @@ private:
 	RowGroupWriteInfo &info;
 };
 
+enum class ColumnDataType { MAIN_TABLE, INITIAL_TRANSACTION_LOCAL, TRANSACTION_LOCAL };
+
 class ColumnData {
 	friend class ColumnDataCheckpointer;
 
 public:
-	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	           optional_ptr<ColumnData> parent);
+	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnDataType data_type,
+	           LogicalType type, optional_ptr<ColumnData> parent);
 	virtual ~ColumnData();
 
 	//! The count of the column data
@@ -87,6 +89,10 @@ public:
 	optional_ptr<const CompressionFunction> GetCompressionFunction() const {
 		return compression.get();
 	}
+	virtual void SetDataType(ColumnDataType data_type);
+	ColumnDataType GetDataType() const {
+		return data_type;
+	}
 
 	bool HasParent() const {
 		return parent != nullptr;
@@ -95,14 +101,7 @@ public:
 		D_ASSERT(HasParent());
 		return *parent;
 	}
-	idx_t GetSegmentStart() const {
-		return start;
-	}
-	void SetSegmentStart(idx_t start_p) {
-		this->start = start_p;
-	}
 
-	virtual void SetStart(idx_t new_start);
 	//! The root type of the column
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
@@ -183,7 +182,7 @@ public:
 	void InitializeColumn(PersistentColumnData &column_data);
 	virtual void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
+	                                          ReadStream &source, const LogicalType &type);
 
 	virtual void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
 	                                  vector<ColumnSegmentInfo> &result);
@@ -192,10 +191,11 @@ public:
 	FilterPropagateResult CheckZonemap(TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                           idx_t start_row, const LogicalType &type,
+	                                           ColumnDataType data_type, const LogicalType &type,
 	                                           optional_ptr<ColumnData> parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
-	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
+	                                                 idx_t column_index, ColumnDataType data_type,
+	                                                 const LogicalType &type,
 	                                                 optional_ptr<ColumnData> parent = nullptr);
 
 	void MergeStatistics(const BaseStatistics &other);
@@ -249,10 +249,8 @@ protected:
 	atomic<idx_t> allocation_size;
 
 private:
-	//! The start row
-	idx_t start;
-
-private:
+	//! Whether or not this column data belongs to a main table or if it is transaction local
+	atomic<ColumnDataType> data_type;
 	//! The parent column (if any)
 	optional_ptr<ColumnData> parent;
 	//!	The compression function used by the ColumnData

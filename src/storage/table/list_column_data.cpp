@@ -8,20 +8,20 @@
 
 namespace duckdb {
 
-ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                               LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                               ColumnDataType data_type, LogicalType type_p, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, data_type, std::move(type_p), parent),
+      validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
-	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, start_row, child_type, this);
+	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, data_type, child_type, this);
 }
 
-void ListColumnData::SetStart(idx_t new_start) {
-	ColumnData::SetStart(new_start);
-	child_column->SetStart(new_start);
-	validity.SetStart(new_start);
+void ListColumnData::SetDataType(ColumnDataType data_type) {
+	ColumnData::SetDataType(data_type);
+	child_column->SetDataType(data_type);
+	validity.SetDataType(data_type);
 }
 
 FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -77,11 +77,10 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
-	auto start_offset = GetSegmentStart();
-	auto child_offset = row_idx == start_offset ? 0 : FetchListOffset(row_idx - 1);
+	auto child_offset = FetchListOffset(row_idx - 1);
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(state.child_states[1], start_offset + child_offset);
+		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
 	state.last_offset = child_offset;
 }

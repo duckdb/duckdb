@@ -52,6 +52,7 @@ class ScanFilterInfo;
 class StorageCommitState;
 template <class T>
 struct SegmentNode;
+enum class ColumnDataType;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -216,6 +217,7 @@ private:
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
 	void SetVersionInfo(shared_ptr<RowVersionManager> version);
+	ColumnDataType GetColumnDataType() const;
 
 	ColumnData &GetColumn(storage_t c);
 	ColumnData &GetColumn(const StorageIndex &c);

@@ -16,7 +16,7 @@ namespace duckdb {
 //! List column data represents a list
 class ArrayColumnData : public ColumnData {
 public:
-	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnDataType data_type,
 	                LogicalType type, optional_ptr<ColumnData> parent = nullptr);
 
 	//! The child-column of the list
@@ -25,7 +25,7 @@ public:
 	ValidityColumnData validity;
 
 public:
-	void SetStart(idx_t new_start) override;
+	void SetDataType(ColumnDataType data_type) override;
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;

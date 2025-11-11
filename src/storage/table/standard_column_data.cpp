@@ -12,14 +12,14 @@
 namespace duckdb {
 
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                       idx_t start_row, LogicalType type, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+                                       ColumnDataType data_type, LogicalType type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, data_type, std::move(type), parent),
+      validity(block_manager, info, 0, *this) {
 }
 
-void StandardColumnData::SetStart(idx_t new_start) {
-	ColumnData::SetStart(new_start);
-	validity.SetStart(new_start);
+void StandardColumnData::SetDataType(ColumnDataType data_type) {
+	ColumnData::SetDataType(data_type);
+	validity.SetDataType(data_type);
 }
 
 ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {

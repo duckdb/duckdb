@@ -8,20 +8,20 @@
 
 namespace duckdb {
 
-ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                 LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                 ColumnDataType data_type, LogicalType type_p, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, data_type, std::move(type_p), parent),
+      validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
 	auto &child_type = ArrayType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
-	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, start_row, child_type, this);
+	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, data_type, child_type, this);
 }
 
-void ArrayColumnData::SetStart(idx_t new_start) {
-	this->SetSegmentStart(new_start);
-	child_column->SetStart(new_start);
-	validity.SetStart(new_start);
+void ArrayColumnData::SetDataType(ColumnDataType data_type) {
+	ColumnData::SetDataType(data_type);
+	child_column->SetDataType(data_type);
+	validity.SetDataType(data_type);
 }
 
 FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

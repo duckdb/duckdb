@@ -1285,8 +1285,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			auto &metadata_manager = row_group.GetCollection().GetMetadataManager();
 			for (idx_t i = 0; i < column_start_pointers.size(); i++) {
 				MetadataReader reader(metadata_manager, column_start_pointers[i], &all_full_read_blocks);
-				ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, row_group.GetSegmentStart(), reader,
-				                        types[i]);
+				ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, reader, types[i]);
 			}
 
 			// Derive sets of blocks to compare

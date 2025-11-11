@@ -16,14 +16,14 @@ namespace duckdb {
 //! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
 class StandardColumnData : public ColumnData {
 public:
-	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnDataType data_type,
 	                   LogicalType type, optional_ptr<ColumnData> parent = nullptr);
 
 	//! The validity column data
 	ValidityColumnData validity;
 
 public:
-	void SetStart(idx_t new_start) override;
+	void SetDataType(ColumnDataType data_type) override;
 
 	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;

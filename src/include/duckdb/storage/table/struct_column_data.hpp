@@ -16,7 +16,7 @@ namespace duckdb {
 //! Struct column data represents a struct
 class StructColumnData : public ColumnData {
 public:
-	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnDataType data_type,
 	                 LogicalType type, optional_ptr<ColumnData> parent = nullptr);
 
 	//! The sub-columns of the struct
@@ -25,7 +25,7 @@ public:
 	ValidityColumnData validity;
 
 public:
-	void SetStart(idx_t new_start) override;
+	void SetDataType(ColumnDataType data_type) override;
 	idx_t GetMaxEntry() override;
 
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;

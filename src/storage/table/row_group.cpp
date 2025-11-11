@@ -57,9 +57,10 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
+	auto data_type = ColumnDataType::MAIN_TABLE;
 	columns.reserve(types.size());
 	for (idx_t c = 0; c < types.size(); c++) {
-		auto entry = ColumnData::CreateColumn(block_manager, info, c, data.start, types[c], nullptr);
+		auto entry = ColumnData::CreateColumn(block_manager, info, c, data_type, types[c], nullptr);
 		entry->InitializeColumn(data.column_data[c]);
 		columns.push_back(std::move(entry));
 	}
@@ -67,11 +68,22 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 	Verify();
 }
 
+ColumnDataType RowGroup::GetColumnDataType() const {
+	if (GetSegmentStart() == MAX_ROW_ID) {
+		return ColumnDataType::INITIAL_TRANSACTION_LOCAL;
+	}
+	if (GetSegmentStart() > MAX_ROW_ID) {
+		return ColumnDataType::TRANSACTION_LOCAL;
+	}
+	return ColumnDataType::MAIN_TABLE;
+}
+
 void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
 	lock_guard<mutex> l(row_group_lock);
 	if (GetSegmentStart() != new_start) {
 		has_changes = true;
 	}
+	auto data_type = GetColumnDataType();
 	this->collection = collection_p;
 	this->SetSegmentStart(new_start);
 	for (idx_t c = 0; c < columns.size(); c++) {
@@ -80,10 +92,7 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_star
 			// if it is not loaded - we will set the correct start position upon loading
 			continue;
 		}
-		columns[c]->SetStart(new_start);
-	}
-	if (row_id_is_loaded) {
-		row_id_column_data->SetStart(new_start);
+		columns[c]->SetDataType(data_type);
 	}
 }
 
@@ -112,7 +121,7 @@ ColumnData &RowGroup::GetRowIdColumnData() {
 	}
 	lock_guard<mutex> l(row_group_lock);
 	if (!row_id_column_data) {
-		row_id_column_data = make_uniq<RowIdColumnData>(GetBlockManager(), GetTableInfo(), GetSegmentStart());
+		row_id_column_data = make_uniq<RowIdColumnData>(GetBlockManager(), GetTableInfo());
 		row_id_column_data->count = count.load();
 		row_id_is_loaded = true;
 	}
@@ -149,8 +158,7 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	auto &types = GetCollection().GetTypes();
 	auto &block_pointer = column_pointers[c];
 	MetadataReader column_data_reader(metadata_manager, block_pointer);
-	this->columns[c] =
-	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, GetSegmentStart(), column_data_reader, types[c]);
+	this->columns[c] = ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, column_data_reader, types[c]);
 	is_loaded[c] = true;
 	if (this->columns[c]->count != this->count) {
 		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
@@ -171,7 +179,8 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	D_ASSERT(columns.empty());
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), i, GetSegmentStart(), types[i]);
+		auto column_data =
+		    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), i, GetColumnDataType(), types[i]);
 		columns.push_back(std::move(column_data));
 	}
 }
@@ -318,7 +327,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 
 	// construct a new column data for this type
 	auto column_data =
-	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), changed_idx, GetSegmentStart(), target_type);
+	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), changed_idx, GetColumnDataType(), target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -368,8 +377,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), GetColumnCount(), GetSegmentStart(),
-	                                             new_column.Type());
+	auto added_column = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), GetColumnCount(),
+	                                             GetColumnDataType(), new_column.Type());
 
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {
@@ -1009,9 +1018,6 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
 			auto &column = row_group.GetColumn(column_idx);
-			if (column.GetSegmentStart() != row_group.GetSegmentStart()) {
-				throw InternalException("RowGroup::WriteToDisk - child-column is unaligned with row group");
-			}
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
 			auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
 			D_ASSERT(checkpoint_state);
@@ -1074,7 +1080,7 @@ vector<idx_t> RowGroup::GetOrComputeExtraMetadataBlocks(bool force_compute) {
 	// for the last column we need to deserialize the column - because we don't know where it stops
 	auto &types = GetCollection().GetTypes();
 	MetadataReader reader(metadata_manager, column_pointers[last_idx], &read_pointers);
-	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, GetSegmentStart(), reader, types[last_idx]);
+	ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), last_idx, reader, types[last_idx]);
 
 	unordered_set<idx_t> result_as_set;
 	for (auto &ptr : read_pointers) {

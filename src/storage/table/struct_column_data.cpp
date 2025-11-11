@@ -10,9 +10,9 @@
 namespace duckdb {
 
 StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                   idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+                                   ColumnDataType data_type, LogicalType type_p, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, data_type, std::move(type_p), parent),
+      validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(!child_types.empty());
@@ -26,17 +26,17 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	idx_t sub_column_index = 1;
 	for (auto &child_type : child_types) {
 		sub_columns.push_back(
-		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, start_row, child_type.second, this));
+		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, data_type, child_type.second, this));
 		sub_column_index++;
 	}
 }
 
-void StructColumnData::SetStart(idx_t new_start) {
-	SetSegmentStart(new_start);
+void StructColumnData::SetDataType(ColumnDataType data_type) {
+	ColumnData::SetDataType(data_type);
 	for (auto &sub_column : sub_columns) {
-		sub_column->SetStart(new_start);
+		sub_column->SetDataType(data_type);
 	}
-	validity.SetStart(new_start);
+	validity.SetDataType(data_type);
 }
 
 idx_t StructColumnData::GetMaxEntry() {

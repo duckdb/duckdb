@@ -14,7 +14,7 @@ namespace duckdb {
 
 class RowIdColumnData : public ColumnData {
 public:
-	RowIdColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t start_row);
+	RowIdColumnData(BlockManager &block_manager, DataTableInfo &info);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
