@@ -68,5 +68,5 @@ ScalarFunction SleepFun::GetFunction() {
 	return sleep_fun;
 }
 
-} 
+}
 
