@@ -9,7 +9,7 @@ ${EXT_LOADER_BODY}
     return ExtensionLoadResult::NOT_LOADED;
 }
 
-static vector<string> LinkedExtensions(){
+vector<string> LinkedExtensions(){
     vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
     };
     return VEC;
