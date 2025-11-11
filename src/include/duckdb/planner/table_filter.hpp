@@ -24,19 +24,18 @@ class PhysicalOperator;
 class PhysicalTableScan;
 
 enum class TableFilterType : uint8_t {
-	CONSTANT_COMPARISON = 0, // constant comparison (e.g. =C, >C, >=C, <C, <=C)
-	IS_NULL = 1,             // C IS NULL
-	IS_NOT_NULL = 2,         // C IS NOT NULL
-	CONJUNCTION_OR = 3,      // OR of different filters
-	CONJUNCTION_AND = 4,     // AND of different filters
-	STRUCT_EXTRACT = 5,      // filter applies to child-column of struct
-	OPTIONAL_FILTER = 6,     // executing filter is not required for query correctness
-	IN_FILTER = 7,           // col IN (C1, C2, C3, ...)
-	DYNAMIC_FILTER = 8,      // dynamic filters can be updated at run-time
-	EXPRESSION_FILTER = 9,   // an arbitrary expression
-	BLOOM_FILTER = 10,       // a probabilistic filter that can test whether a value is in a set of other value
-	SELECTIVITY_OPTIONAL_FILTER =
-	    11 // the same as optional filter, but will be used for filtering rows if very filtering
+	CONSTANT_COMPARISON = 0,         // constant comparison (e.g. =C, >C, >=C, <C, <=C)
+	IS_NULL = 1,                     // C IS NULL
+	IS_NOT_NULL = 2,                 // C IS NOT NULL
+	CONJUNCTION_OR = 3,              // OR of different filters
+	CONJUNCTION_AND = 4,             // AND of different filters
+	STRUCT_EXTRACT = 5,              // filter applies to child-column of struct
+	OPTIONAL_FILTER = 6,             // executing filter is not required for query correctness
+	IN_FILTER = 7,                   // col IN (C1, C2, C3, ...)
+	DYNAMIC_FILTER = 8,              // dynamic filters can be updated at run-time
+	EXPRESSION_FILTER = 9,           // an arbitrary expression
+	BLOOM_FILTER = 10,               // a probabilistic filter that can test whether a value is in a set of other value
+	SELECTIVITY_OPTIONAL_FILTER = 11 // Same as optional filter, but used for row-level filtering if low selectivity.
 };
 
 //! TableFilter represents a filter pushed down into the table scan.
