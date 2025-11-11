@@ -22,14 +22,6 @@ public:
 		statef.Destroy();
 	}
 
-	void Finalize() {
-		//	Make sure the memory from the local state is not still in use
-		const auto source_count = partition_offsets.size() - 1;
-		Vector source(aggregator.result_type, source_count);
-		statef.Finalize(source);
-		VectorOperations::Copy(source, *results, source_count, 0, 0);
-	}
-
 	//! Partition starts
 	vector<idx_t> partition_offsets;
 	//! Reused result state container for the window functions
@@ -322,7 +314,7 @@ void WindowConstantAggregator::Finalize(ExecutionContext &context, CollectionPtr
 	lastate.statef.Destroy();
 
 	if (!--gastate.locals) {
-		gastate.Finalize();
+		gastate.statef.Finalize(*gastate.results);
 	}
 }
 
