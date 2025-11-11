@@ -7,8 +7,6 @@
 
 namespace duckdb {
 
-namespace {
-
 struct NullResultType {
 	using STRUCT_STATE = PrimitiveTypeState;
 
@@ -16,8 +14,6 @@ struct NullResultType {
 		FlatVector::SetNull(result, i, true);
 	}
 };
-
-} // namespace
 
 static void SleepFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	input.Flatten();
@@ -34,7 +30,7 @@ static void SleepFunction(DataChunk &input, ExpressionState &state, Vector &resu
 }
 
 ScalarFunction SleepMsFun::GetFunction() {
-	auto sleep_fun = ScalarFunction("sleep_ms", {LogicalType::BIGINT}, LogicalType::SQLNULL, SleepFunction, nullptr);
+	auto sleep_fun = ScalarFunction({LogicalType::BIGINT}, LogicalType::SQLNULL, SleepFunction, nullptr);
 	sleep_fun.stability = FunctionStability::VOLATILE;
 	return sleep_fun;
 }
