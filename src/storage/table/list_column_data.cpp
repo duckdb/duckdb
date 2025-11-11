@@ -58,7 +58,7 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(LogicalType::UBIGINT, 1);
-	segment->FetchRow(fetch_state, UnsafeNumericCast<row_t>(row_idx), result, 0U);
+	segment->node->FetchRow(fetch_state, UnsafeNumericCast<row_t>(row_idx), result, 0U);
 
 	// initialize the child scan with the required offset
 	return FlatVector::GetData<uint64_t>(result)[0];

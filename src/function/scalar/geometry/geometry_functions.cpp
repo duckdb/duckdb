@@ -5,12 +5,7 @@
 namespace duckdb {
 
 static void FromWKBFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, input.size(), [&](const string_t &wkb) {
-		// TODO: Parse WKB properly
-		return wkb;
-	});
-	// Add a heap reference to the input WKB to prevent it from being freed
-	StringVector::AddHeapReference(input.data[0], result);
+	Geometry::FromBinary(input.data[0], result, input.size(), true);
 }
 
 ScalarFunction StGeomfromwkbFun::GetFunction() {

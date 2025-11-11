@@ -84,7 +84,7 @@ public:
 	void HandleTerminalResize();
 
 	void RefreshLine();
-	int CompleteLine(EscapeSequence &current_sequence);
+	bool CompleteLine(KeyPress &next_key);
 	void InsertCharacter(char c);
 	int EditInsert(char c);
 	int EditInsertMulti(const char *c);
@@ -112,7 +112,7 @@ public:
 
 	void StartSearch();
 	void CancelSearch();
-	char AcceptSearch(char nextCommand);
+	void AcceptSearch();
 	void PerformSearch();
 	void SearchPrev();
 	void SearchNext();
@@ -122,7 +122,7 @@ public:
 	bool EditFileWithEditor(const string &file_name, const char *editor);
 #endif
 
-	char Search(char c);
+	KeyPress Search(KeyPress key_press);
 
 	void RefreshMultiLine();
 	void RefreshSingleLine() const;
@@ -157,6 +157,8 @@ public:
 	static void DisableCompletionRendering();
 	static void EnableErrorRendering();
 	static void DisableErrorRendering();
+	static string GetTemporaryDirectory();
+	static bool Write(int fd, const char *data, idx_t size);
 
 public:
 	static void LogTokens(const vector<highlightToken> &tokens);
@@ -182,6 +184,8 @@ public:
 		// nop
 	}
 #endif
+protected:
+	bool TryGetKeyPress(int fd, KeyPress &key_press);
 
 public:
 	int ifd;                                 /* Terminal stdin file descriptor. */
@@ -210,6 +214,7 @@ public:
 	idx_t completion_idx;                    //! Index in set of tab completions
 	idx_t rendered_completion_lines;         //! The number of completion lines rendered
 	bool render_completion_suggestion;       //! Whether or not to render auto-complete suggestions
+	vector<KeyPress> remaining_presses;      //! Remaining key presses that haven't been consumed yet
 };
 
 } // namespace duckdb

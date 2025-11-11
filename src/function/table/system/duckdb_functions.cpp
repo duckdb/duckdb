@@ -147,7 +147,7 @@ struct ScalarFunctionExtractor {
 	}
 
 	static Value GetReturnType(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		return Value(entry.functions.GetFunctionByOffset(offset).return_type.ToString());
+		return Value(entry.functions.GetFunctionByOffset(offset).GetReturnType().ToString());
 	}
 
 	static vector<Value> GetParameters(ScalarFunctionCatalogEntry &entry, idx_t offset) {
@@ -182,11 +182,12 @@ struct ScalarFunctionExtractor {
 	}
 
 	static Value IsVolatile(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).stability == FunctionStability::VOLATILE);
+		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).GetStability() ==
+		                      FunctionStability::VOLATILE);
 	}
 
 	static Value ResultType(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).stability);
+		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).GetStability());
 	}
 };
 
@@ -272,7 +273,7 @@ struct AggregateFunctionExtractor {
 	}
 
 	static Value GetReturnType(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		return Value(entry.functions.GetFunctionByOffset(offset).return_type.ToString());
+		return Value(entry.functions.GetFunctionByOffset(offset).GetReturnType().ToString());
 	}
 
 	static vector<Value> GetParameters(AggregateFunctionCatalogEntry &entry, idx_t offset) {
@@ -307,11 +308,12 @@ struct AggregateFunctionExtractor {
 	}
 
 	static Value IsVolatile(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).stability == FunctionStability::VOLATILE);
+		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).GetStability() ==
+		                      FunctionStability::VOLATILE);
 	}
 
 	static Value ResultType(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).stability);
+		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).GetStability());
 	}
 };
 

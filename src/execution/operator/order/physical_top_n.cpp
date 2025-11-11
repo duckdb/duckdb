@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/order/physical_top_n.hpp"
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/arena_containers.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/storage/data_table.hpp"

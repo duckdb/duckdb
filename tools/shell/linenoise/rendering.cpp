@@ -3,7 +3,12 @@
 #include "history.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "shell_highlight.hpp"
+#include "shell_state.hpp"
+#if defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace duckdb {
 static const char *continuationPrompt = "> ";
@@ -42,7 +47,7 @@ struct AppendBuffer {
 	}
 
 	void Write(int fd) {
-		if (write(fd, buffer.c_str(), buffer.size()) == -1) {
+		if (!Linenoise::Write(fd, buffer.c_str(), buffer.size())) {
 			/* Can't recover from write error. */
 			Linenoise::Log("%s", "Failed to write buffer\n");
 		}

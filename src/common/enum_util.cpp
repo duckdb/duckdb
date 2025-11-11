@@ -101,6 +101,7 @@
 #include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
@@ -128,6 +129,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/query_parameters.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
@@ -767,6 +769,24 @@ const char* EnumUtil::ToChars<BlockState>(BlockState value) {
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value) {
 	return static_cast<BlockState>(StringUtil::StringToEnum(GetBlockStateValues(), 2, "BlockState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetBufferedIndexReplayValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(BufferedIndexReplay::INSERT_ENTRY), "INSERT_ENTRY" },
+		{ static_cast<uint32_t>(BufferedIndexReplay::DEL_ENTRY), "DEL_ENTRY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<BufferedIndexReplay>(BufferedIndexReplay value) {
+	return StringUtil::EnumToString(GetBufferedIndexReplayValues(), 2, "BufferedIndexReplay", static_cast<uint32_t>(value));
+}
+
+template<>
+BufferedIndexReplay EnumUtil::FromString<BufferedIndexReplay>(const char *value) {
+	return static_cast<BufferedIndexReplay>(StringUtil::StringToEnum(GetBufferedIndexReplayValues(), 2, "BufferedIndexReplay", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCAPIResultSetTypeValues() {
@@ -3689,6 +3709,42 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
 	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 6, "QueryNodeType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetQueryResultMemoryTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(QueryResultMemoryType::IN_MEMORY), "IN_MEMORY" },
+		{ static_cast<uint32_t>(QueryResultMemoryType::BUFFER_MANAGED), "BUFFER_MANAGED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value) {
+	return StringUtil::EnumToString(GetQueryResultMemoryTypeValues(), 2, "QueryResultMemoryType", static_cast<uint32_t>(value));
+}
+
+template<>
+QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *value) {
+	return static_cast<QueryResultMemoryType>(StringUtil::StringToEnum(GetQueryResultMemoryTypeValues(), 2, "QueryResultMemoryType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetQueryResultOutputTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(QueryResultOutputType::FORCE_MATERIALIZED), "FORCE_MATERIALIZED" },
+		{ static_cast<uint32_t>(QueryResultOutputType::ALLOW_STREAMING), "ALLOW_STREAMING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<QueryResultOutputType>(QueryResultOutputType value) {
+	return StringUtil::EnumToString(GetQueryResultOutputTypeValues(), 2, "QueryResultOutputType", static_cast<uint32_t>(value));
+}
+
+template<>
+QueryResultOutputType EnumUtil::FromString<QueryResultOutputType>(const char *value) {
+	return static_cast<QueryResultOutputType>(StringUtil::StringToEnum(GetQueryResultOutputTypeValues(), 2, "QueryResultOutputType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetQueryResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(QueryResultType::MATERIALIZED_RESULT), "MATERIALIZED_RESULT" },
@@ -3756,19 +3812,20 @@ const StringUtil::EnumStringLiteral *GetRelationTypeValues() {
 		{ static_cast<uint32_t>(RelationType::VIEW_RELATION), "VIEW_RELATION" },
 		{ static_cast<uint32_t>(RelationType::QUERY_RELATION), "QUERY_RELATION" },
 		{ static_cast<uint32_t>(RelationType::DELIM_JOIN_RELATION), "DELIM_JOIN_RELATION" },
-		{ static_cast<uint32_t>(RelationType::DELIM_GET_RELATION), "DELIM_GET_RELATION" }
+		{ static_cast<uint32_t>(RelationType::DELIM_GET_RELATION), "DELIM_GET_RELATION" },
+		{ static_cast<uint32_t>(RelationType::EXTENSION_RELATION), "EXTENSION_RELATION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value) {
-	return StringUtil::EnumToString(GetRelationTypeValues(), 28, "RelationType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetRelationTypeValues(), 29, "RelationType", static_cast<uint32_t>(value));
 }
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value) {
-	return static_cast<RelationType>(StringUtil::StringToEnum(GetRelationTypeValues(), 28, "RelationType", value));
+	return static_cast<RelationType>(StringUtil::StringToEnum(GetRelationTypeValues(), 29, "RelationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRenderModeValues() {

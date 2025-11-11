@@ -1,0 +1,22 @@
+# name: test/fuzzer/issue4298.test
+# group: [fuzzer]
+
+statement error
+select * FROM test_all_types(use_large_bignum := -32768, use_large_enum := NULL);
+----
+Invalid Input Error: Cannot use NULL as argument for use_large_enum
+
+statement error
+select * FROM test_all_types(use_large_bignum := NULL);
+----
+Invalid Input Error: Cannot use NULL as argument for use_large_bignum
+
+statement error
+SELECT COUNT(n) FROM test_vector_types(NULL::INT, all_flat=NULL) t(n);
+----
+Invalid Input Error: Cannot use NULL as argument for all_flat
+
+statement error
+select * from duckdb_secrets(redact=NULL);
+----
+Invalid Input Error: Cannot use NULL as argument for redact

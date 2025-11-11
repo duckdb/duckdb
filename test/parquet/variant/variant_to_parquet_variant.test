@@ -3,8 +3,6 @@
 
 require parquet
 
-require json
-
 query I
 select variant_to_parquet_variant(NULL)
 ----

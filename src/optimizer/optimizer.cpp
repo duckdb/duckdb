@@ -130,12 +130,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = cte_inlining.Optimize(std::move(plan));
 	});
 
-	// convert common subplans into materialized CTEs
-	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
-		CommonSubplanOptimizer common_subplan_optimizer(*this);
-		plan = common_subplan_optimizer.Optimize(std::move(plan));
-	});
-
 	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)
 	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
 		SumRewriterOptimizer optimizer(*this);
@@ -232,6 +226,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
 		BuildProbeSideOptimizer build_probe_side_optimizer(context, *plan);
 		build_probe_side_optimizer.VisitOperator(*plan);
+	});
+
+	// convert common subplans into materialized CTEs
+	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
+		CommonSubplanOptimizer common_subplan_optimizer(*this);
+		plan = common_subplan_optimizer.Optimize(std::move(plan));
 	});
 
 	// pushes LIMIT below PROJECTION

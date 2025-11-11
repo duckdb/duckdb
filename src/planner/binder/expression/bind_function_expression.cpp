@@ -195,7 +195,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	if (result->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
-		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
+		if (bound_function.function.GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
 		}
 	}

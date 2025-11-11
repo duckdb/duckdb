@@ -869,7 +869,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			auto transform_func = VariantColumnWriter::GetTransformFunction();
 			transform_func.bind(context, transform_func, arguments);
 
-			auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.return_type, transform_func,
+			auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.GetReturnType(), transform_func,
 			                                                    std::move(arguments), nullptr, false);
 			func_expr->SetAlias(name);
 			result.push_back(std::move(func_expr));
@@ -998,9 +998,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	    "enable_geoparquet_conversion",
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
 	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
-	config.AddExtensionOption("variant_legacy_encoding",
-	                          "Enables the Parquet reader to identify a Variant structurally.", LogicalType::BOOLEAN,
-	                          Value::BOOLEAN(false));
 }
 
 void ParquetExtension::Load(ExtensionLoader &loader) {

@@ -62,6 +62,10 @@ idx_t MaterializedQueryResult::RowCount() const {
 	return collection ? collection->Count() : 0;
 }
 
+bool MaterializedQueryResult::MoreRowsThan(idx_t row_count) {
+	return RowCount() >= row_count;
+}
+
 ColumnDataCollection &MaterializedQueryResult::Collection() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to get collection from an unsuccessful query result\n: Error %s",
@@ -84,11 +88,7 @@ unique_ptr<ColumnDataCollection> MaterializedQueryResult::TakeCollection() {
 	return std::move(collection);
 }
 
-unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
-	return FetchRaw();
-}
-
-unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
+unique_ptr<DataChunk> MaterializedQueryResult::FetchInternal() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
 	}
