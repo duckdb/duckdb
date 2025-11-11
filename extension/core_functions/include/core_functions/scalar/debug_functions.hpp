@@ -25,7 +25,7 @@ struct VectorTypeFun {
 	static ScalarFunction GetFunction();
 };
 
-struct SleepFun {
+struct SleepMsFun {
 	static constexpr const char *Name = "sleep_ms";
 	static constexpr const char *Parameters = "milliseconds";
 	static constexpr const char *Description = "Sleeps for the specified number of milliseconds and returns NULL";
