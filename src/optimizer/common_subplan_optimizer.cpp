@@ -437,7 +437,6 @@ private:
 		case LogicalOperatorType::LOGICAL_GET:
 		case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-		case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
@@ -456,6 +455,7 @@ private:
 			// - case LogicalOperatorType::LOGICAL_SAMPLE:
 			// - case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 			// - case LogicalOperatorType::LOGICAL_DELIM_GET:
+			// - case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 			// - case LogicalOperatorType::LOGICAL_CTE_REF:
 			// - case LogicalOperatorType::LOGICAL_JOIN:
 			// - case LogicalOperatorType::LOGICAL_DELIM_JOIN:
