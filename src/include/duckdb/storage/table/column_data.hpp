@@ -195,7 +195,7 @@ public:
 
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics();
+	unique_ptr<BaseStatistics> GetStatistics() const;
 
 protected:
 	//! Append a transient segment

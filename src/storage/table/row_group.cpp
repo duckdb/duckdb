@@ -1255,7 +1255,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-PartitionStatistics RowGroup::GetPartitionStats() const {
+PartitionStatistics RowGroup::GetPartitionStats() {
 	PartitionStatistics result;
 	result.row_start = start;
 	result.count = count;
@@ -1265,6 +1265,8 @@ PartitionStatistics RowGroup::GetPartitionStats() const {
 	} else {
 		result.count_type = CountType::COUNT_EXACT;
 	}
+
+	result.row_group = this;
 	return result;
 }
 

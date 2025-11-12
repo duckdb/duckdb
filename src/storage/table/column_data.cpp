@@ -452,7 +452,7 @@ FilterPropagateResult ColumnData::CheckZonemap(TableFilter &filter) {
 	return filter.CheckStatistics(stats->statistics);
 }
 
-unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
+unique_ptr<BaseStatistics> ColumnData::GetStatistics() const {
 	if (!stats) {
 		throw InternalException("ColumnData::GetStatistics called on a column without stats");
 	}

@@ -674,7 +674,6 @@ OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFun
 
 vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	vector<PartitionStatistics> result;
 	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 	auto &storage = duck_table.GetStorage();
 	return storage.GetPartitionStats(context);

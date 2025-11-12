@@ -19,7 +19,6 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/storage/storage_index.hpp"
-#include "duckdb/function/partition_stats.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -37,6 +36,7 @@ class TableStatistics;
 struct ColumnSegmentInfo;
 class Vector;
 struct ColumnCheckpointState;
+struct PartitionStatistics;
 struct PersistentColumnData;
 struct PersistentRowGroupData;
 struct RowGroupPointer;
@@ -190,7 +190,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
-	PartitionStatistics GetPartitionStats() const;
+	PartitionStatistics GetPartitionStats();
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;

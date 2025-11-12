@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,11 @@ struct PartitionStatistics {
 	idx_t count;
 	//! Whether or not the count is exact or approximate
 	CountType count_type;
+
+	optional_ptr<RowGroup> row_group;
+	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) {
+		return row_group->GetStatistics(column_id);
+	}
 };
 
 } // namespace duckdb
