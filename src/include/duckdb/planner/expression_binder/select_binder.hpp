@@ -20,7 +20,8 @@ public:
 	bool SupportsAliasReference() const override {
 		return true;
 	}
-	unique_ptr<Expression> TryResolveAliasReference(const string &alias_name, const FunctionExpression &function) override;
+	unique_ptr<Expression> TryResolveAliasReference(const string &alias_name,
+	                                                const FunctionExpression &function) override;
 
 protected:
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
