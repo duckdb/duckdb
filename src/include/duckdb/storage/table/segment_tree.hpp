@@ -249,7 +249,6 @@ public:
 				                        segments);
 			}
 			auto &entry = *nodes[index];
-			D_ASSERT(entry.row_start == entry.node->GetSegmentStart());
 			if (row_number < entry.row_start) {
 				upper = index - 1;
 			} else if (row_number >= entry.row_start + entry.node->count) {
@@ -264,10 +263,9 @@ public:
 
 	void Verify(SegmentLock &) {
 #ifdef DEBUG
-		idx_t base_start = nodes.empty() ? 0 : nodes[0]->node->GetSegmentStart();
+		idx_t base_start = nodes.empty() ? 0 : nodes[0]->row_start;
 		for (idx_t i = 0; i < nodes.size(); i++) {
-			D_ASSERT(nodes[i]->row_start == nodes[i]->node->GetSegmentStart());
-			D_ASSERT(nodes[i]->node->GetSegmentStart() == base_start);
+			D_ASSERT(nodes[i]->row_start == base_start);
 			base_start += nodes[i]->node->count;
 		}
 #endif
@@ -293,21 +291,6 @@ public:
 
 	SegmentNodeIterationHelper SegmentNodes(SegmentLock &l) {
 		return SegmentNodeIterationHelper(*this, l);
-	}
-
-	void Reinitialize() {
-		if (nodes.empty()) {
-			return;
-		}
-		idx_t offset = nodes[0]->node->GetSegmentStart();
-		for (auto &entry : nodes) {
-			if (entry->node->GetSegmentStart() != offset) {
-				throw InternalException("In SegmentTree::Reinitialize - gap found between nodes!");
-			}
-
-			entry->row_start = offset;
-			offset += entry->node->count;
-		}
 	}
 
 protected:
