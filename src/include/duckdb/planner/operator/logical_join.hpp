@@ -23,7 +23,8 @@ public:
 public:
 	explicit LogicalJoin(JoinType type, LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_JOIN);
 
-	// Gets the set of table references that are reachable from this node
+public:
+	//! Gets the set of table references that are reachable from this node
 	static void GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings);
 	static void GetExpressionBindings(const Expression &expr, unordered_set<idx_t> &bindings);
 
@@ -44,6 +45,8 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+	vector<idx_t> GetTableIndex() const override;
+	string GetName() const override;
 
 protected:
 	void ResolveTypes() override;

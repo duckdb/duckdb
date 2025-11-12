@@ -60,7 +60,7 @@ class PlanSignatureTableIndexMap {
 public:
 	explicit PlanSignatureTableIndexMap(ArenaAllocator &allocator_p)
 	    : allocator(allocator_p), table_index_map(allocator), to_canonical_table_index(allocator),
-	      restore_original_table_index(allocator), table_indices(allocator) {
+	      restore_original_table_index(allocator) {
 	}
 
 public:
@@ -108,6 +108,9 @@ private:
 
 	template <ConversionType TYPE>
 	void ConvertTableIndices(LogicalOperator &op) {
+#ifdef D_ASSERT_IS_ENABLED
+		const auto table_indices_verification = op.GetTableIndex();
+#endif
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_GET:
 			ConvertTableIndex<TYPE>(op.Cast<LogicalGet>().table_index, 0);
@@ -145,6 +148,14 @@ private:
 			}
 			break;
 		}
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+			auto &join = op.Cast<LogicalJoin>();
+			if (join.join_type == JoinType::MARK) {
+				ConvertTableIndex<TYPE>(join.mark_index, 0);
+			}
+			break;
+		}
 		case LogicalOperatorType::LOGICAL_UNION:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 		case LogicalOperatorType::LOGICAL_INTERSECT:
@@ -153,6 +164,11 @@ private:
 		default:
 			break;
 		}
+#ifdef D_ASSERT_IS_ENABLED
+		if (TYPE == ConversionType::TO_CANONICAL) {
+			D_ASSERT(table_indices == table_indices_verification);
+		}
+#endif
 	}
 
 	template <ConversionType TYPE>
@@ -276,7 +292,7 @@ private:
 	arena_unordered_map<idx_t, idx_t> to_canonical_table_index;
 	arena_unordered_map<idx_t, idx_t> restore_original_table_index;
 	//! Temporary vector to store table indices
-	arena_vector<idx_t> table_indices;
+	vector<idx_t> table_indices;
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
 	vector<ColumnIndex> column_ids;
