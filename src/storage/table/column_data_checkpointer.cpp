@@ -98,7 +98,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
 			scan_state.offset_in_column = segment_node.row_start + base_row_index;
 
-			col_data.CheckpointScan(segment, scan_state, row_group.GetSegmentStart(), count, scan_vector);
+			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			callback(scan_vector, count);
 		}
 	}

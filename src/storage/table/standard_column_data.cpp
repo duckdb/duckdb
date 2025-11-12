@@ -273,12 +273,12 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	return base_state;
 }
 
-void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start,
-                                        idx_t count, Vector &scan_vector) {
-	ColumnData::CheckpointScan(segment, state, row_group_start, count, scan_vector);
+void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
+                                        Vector &scan_vector) {
+	ColumnData::CheckpointScan(segment, state, count, scan_vector);
 
 	idx_t offset_in_row_group = state.offset_in_column;
-	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
+	validity.ScanCommittedRange(0, offset_in_row_group, count, scan_vector);
 }
 
 bool StandardColumnData::IsPersistent() {
