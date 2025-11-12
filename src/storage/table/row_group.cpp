@@ -485,15 +485,14 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 			// no segment to skip
 			continue;
 		}
-		idx_t max_row_in_row_group = state.max_row - state.row_group->row_start;
 		idx_t target_row = current_segment->row_start + current_segment->node->count;
-		if (target_row >= max_row_in_row_group) {
-			target_row = max_row_in_row_group;
+		if (target_row >= state.max_row) {
+			target_row = state.max_row;
 		}
-		D_ASSERT(target_row >= current_segment->row_start &&
-		         target_row <= current_segment->row_start + current_segment->node->count);
-		D_ASSERT(target_row <= this->count);
-		idx_t target_vector_index = (target_row - current_segment->row_start) / STANDARD_VECTOR_SIZE;
+		auto row_start = GetSegmentStart();
+		D_ASSERT(target_row >= row_start);
+		D_ASSERT(target_row <= row_start + this->count);
+		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
 		if (state.vector_index == target_vector_index) {
 			// we can't skip any full vectors because this segment contains less than a full vector
 			// for now we just bail-out
@@ -872,6 +871,9 @@ void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_
 
 void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataChunk &update_chunk, row_t *ids,
                       idx_t offset, idx_t count, const vector<PhysicalIndex> &column_ids, idx_t row_group_start) {
+	if (row_group_start != GetSegmentStart()) {
+		throw InternalException("RowGroup::Update - start unaligned");
+	}
 #ifdef DEBUG
 	for (size_t i = offset; i < offset + count; i++) {
 		D_ASSERT(ids[i] >= row_t(row_group_start) && ids[i] < row_t(row_group_start + this->count));
@@ -894,6 +896,9 @@ void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataCh
 
 void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
                             idx_t offset, idx_t count, const vector<column_t> &column_path, idx_t row_group_start) {
+	if (row_group_start != this->GetSegmentStart()) {
+		throw InternalException("RowGroup::UpdateColumn - start unaligned");
+	}
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 
@@ -1103,12 +1108,12 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 }
 
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer,
-                                     TableStatistics &global_stats, idx_t row_group_start) {
+                                     TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
 	auto metadata_manager = writer.GetMetadataManager();
 	// construct the row group pointer and write the column meta data to disk
-	row_group_pointer.row_start = row_group_start;
+	row_group_pointer.row_start = GetSegmentStart();
 	row_group_pointer.tuple_count = count;
 	if (write_data.reuse_existing_metadata_blocks) {
 		// we are re-using the previous metadata
@@ -1218,13 +1223,13 @@ bool RowGroup::IsPersistent() const {
 	return true;
 }
 
-PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) const {
+PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
 	// all columns are persistent - serialize
 	PersistentRowGroupData result;
 	for (auto &col : columns) {
 		result.column_data.push_back(col->Serialize());
 	}
-	result.start = row_group_start;
+	result.start = GetSegmentStart();
 	result.count = count;
 	return result;
 }
@@ -1269,9 +1274,9 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) const {
+PartitionStatistics RowGroup::GetPartitionStats() const {
 	PartitionStatistics result;
-	result.row_start = row_group_start;
+	result.row_start = GetSegmentStart();
 	result.count = count;
 	if (HasUnloadedDeletes() || version_info.load().get()) {
 		// we have version info - approx count
@@ -1318,14 +1323,15 @@ public:
 	void Flush();
 };
 
-idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count, idx_t row_group_start) {
-	VersionDeleteState del_state(*this, transaction, table, row_group_start);
+idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count) {
+	auto row_start = GetSegmentStart();
+	VersionDeleteState del_state(*this, transaction, table, row_start);
 
 	// obtain a write lock
 	for (idx_t i = 0; i < count; i++) {
 		D_ASSERT(ids[i] >= 0);
-		D_ASSERT(idx_t(ids[i]) >= row_group_start && idx_t(ids[i]) < row_group_start + this->count);
-		del_state.Delete(ids[i] - UnsafeNumericCast<row_t>(row_group_start));
+		D_ASSERT(idx_t(ids[i]) >= row_start && idx_t(ids[i]) < row_start + this->count);
+		del_state.Delete(ids[i] - UnsafeNumericCast<row_t>(row_start));
 	}
 	del_state.Flush();
 	return del_state.delete_count;

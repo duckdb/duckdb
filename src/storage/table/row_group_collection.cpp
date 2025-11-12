@@ -606,7 +606,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 
 		if (commit_state && (index - start_index) < optimistically_written_count) {
 			// serialize the block pointers of this row group
-			auto persistent_data = row_group->SerializeRowGroupInfo(entry->row_start);
+			auto persistent_data = row_group->SerializeRowGroupInfo();
 			persistent_data.types = types;
 			row_group_data->row_group_data.push_back(std::move(persistent_data));
 		}
@@ -648,7 +648,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 				break;
 			}
 		}
-		delete_count += current_row_group.Delete(transaction, table, ids + start, pos - start, row_group->row_start);
+		delete_count += current_row_group.Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
 
 	return delete_count;
@@ -1246,8 +1246,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			throw InternalException("Missing row group writer for index %llu", segment_idx);
 		}
 		bool metadata_reuse = checkpoint_state.write_data[segment_idx].reuse_existing_metadata_blocks;
-		auto pointer = row_group.Checkpoint(std::move(checkpoint_state.write_data[segment_idx]), *row_group_writer,
-		                                    global_stats, entry->row_start);
+		auto pointer =
+		    row_group.Checkpoint(std::move(checkpoint_state.write_data[segment_idx]), *row_group_writer, global_stats);
 
 		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
@@ -1393,9 +1393,8 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 	vector<PartitionStatistics> result;
-	for (auto &entry : row_groups->SegmentNodes()) {
-		auto &row_group = *entry.node;
-		result.push_back(row_group.GetPartitionStats(entry.row_start));
+	for (auto &row_group : row_groups->Segments()) {
+		result.push_back(row_group.GetPartitionStats());
 	}
 	return result;
 }
