@@ -606,7 +606,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 
 		if (commit_state && (index - start_index) < optimistically_written_count) {
 			// serialize the block pointers of this row group
-			auto persistent_data = row_group->SerializeRowGroupInfo();
+			auto persistent_data = row_group->SerializeRowGroupInfo(index);
 			persistent_data.types = types;
 			row_group_data->row_group_data.push_back(std::move(persistent_data));
 		}
@@ -1393,8 +1393,9 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 	vector<PartitionStatistics> result;
-	for (auto &row_group : row_groups->Segments()) {
-		result.push_back(row_group.GetPartitionStats());
+	for (auto &entry : row_groups->SegmentNodes()) {
+		auto &row_group = *entry.node;
+		result.push_back(row_group.GetPartitionStats(entry.row_start));
 	}
 	return result;
 }

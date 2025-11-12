@@ -173,7 +173,7 @@ public:
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats);
 	bool IsPersistent() const;
-	PersistentRowGroupData SerializeRowGroupInfo() const;
+	PersistentRowGroupData SerializeRowGroupInfo(idx_t row_group_start) const;
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
@@ -191,7 +191,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
-	PartitionStatistics GetPartitionStats() const;
+	PartitionStatistics GetPartitionStats(idx_t row_group_start) const;
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;

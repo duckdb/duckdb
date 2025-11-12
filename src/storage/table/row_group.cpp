@@ -1223,13 +1223,16 @@ bool RowGroup::IsPersistent() const {
 	return true;
 }
 
-PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
+PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) const {
+	if (row_group_start != GetSegmentStart()) {
+		throw InternalException("RowGroup::SerializeRowGroupInfo - row group start unaligned");
+	}
 	// all columns are persistent - serialize
 	PersistentRowGroupData result;
 	for (auto &col : columns) {
 		result.column_data.push_back(col->Serialize());
 	}
-	result.start = GetSegmentStart();
+	result.start = row_group_start;
 	result.count = count;
 	return result;
 }
@@ -1274,9 +1277,12 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-PartitionStatistics RowGroup::GetPartitionStats() const {
+PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) const {
+	if (row_group_start != GetSegmentStart()) {
+		throw InternalException("RowGroup::GetPartitionStats - row group start unaligned");
+	}
 	PartitionStatistics result;
-	result.row_start = GetSegmentStart();
+	result.row_start = row_group_start;
 	result.count = count;
 	if (HasUnloadedDeletes() || version_info.load().get()) {
 		// we have version info - approx count
@@ -1324,6 +1330,9 @@ public:
 };
 
 idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count, idx_t row_group_start) {
+	if (row_group_start != GetSegmentStart()) {
+		throw InternalException("RowGroup::Delete - row group start unaligned");
+	}
 	VersionDeleteState del_state(*this, transaction, table, row_group_start);
 
 	// obtain a write lock
