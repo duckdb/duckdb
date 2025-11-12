@@ -24,8 +24,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Row Group Segment Tree
 //===--------------------------------------------------------------------===//
-RowGroupSegmentTree::RowGroupSegmentTree(RowGroupCollection &collection)
-    : SegmentTree<RowGroup, true>(), collection(collection), current_row_group(0), max_row_group(0) {
+RowGroupSegmentTree::RowGroupSegmentTree(RowGroupCollection &collection, idx_t base_row_id)
+    : SegmentTree<RowGroup, true>(base_row_id), collection(collection), current_row_group(0), max_row_group(0) {
 }
 RowGroupSegmentTree::~RowGroupSegmentTree() {
 }
@@ -63,11 +63,11 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, TableIO
 }
 
 RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
-                                       vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p,
+                                       vector<LogicalType> types_p, idx_t row_start, idx_t total_rows_p,
                                        idx_t row_group_size_p)
     : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
-      types(std::move(types_p)), row_start(row_start_p), allocation_size(0), requires_new_row_group(false) {
-	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this);
+      types(std::move(types_p)), allocation_size(0), requires_new_row_group(false) {
+	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_start);
 }
 
 idx_t RowGroupCollection::GetTotalRows() const {
@@ -90,11 +90,14 @@ MetadataManager &RowGroupCollection::GetMetadataManager() {
 	return GetBlockManager().GetMetadataManager();
 }
 
+idx_t RowGroupCollection::GetBaseRowId() const {
+	return row_groups->GetBaseRowId();
+}
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Initialize(PersistentTableData &data) {
-	D_ASSERT(this->row_start == 0);
+	D_ASSERT(this->GetBaseRowId() == 0);
 	auto l = row_groups->Lock();
 	this->total_rows = data.total_rows;
 	row_groups->Initialize(data);
@@ -113,7 +116,7 @@ void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 		auto row_group = make_uniq<RowGroup>(*this, row_group_data);
 		row_group->MergeIntoStatistics(stats);
 		total_rows += row_group->count;
-		row_groups->AppendSegment(l, std::move(row_group));
+		row_groups->AppendSegment(l, std::move(row_group), row_group_data.start);
 	}
 }
 
@@ -126,20 +129,20 @@ void RowGroupCollection::InitializeEmpty() {
 }
 
 ColumnDataType GetColumnDataType(idx_t row_start) {
-	if (row_start == MAX_ROW_ID) {
+	if (row_start == UnsafeNumericCast<idx_t>(MAX_ROW_ID)) {
 		return ColumnDataType::INITIAL_TRANSACTION_LOCAL;
 	}
-	if (row_start > MAX_ROW_ID) {
+	if (row_start > UnsafeNumericCast<idx_t>(MAX_ROW_ID)) {
 		return ColumnDataType::TRANSACTION_LOCAL;
 	}
 	return ColumnDataType::MAIN_TABLE;
 }
 
 void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
-	D_ASSERT(start_row >= row_start);
+	D_ASSERT(start_row >= GetBaseRowId());
 	auto new_row_group = make_uniq<RowGroup>(*this, start_row, 0U);
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
-	row_groups->AppendSegment(l, std::move(new_row_group));
+	row_groups->AppendSegment(l, std::move(new_row_group), start_row);
 	requires_new_row_group = false;
 }
 
@@ -158,7 +161,7 @@ void RowGroupCollection::Verify() {
 	for (auto &row_group : row_groups->Segments()) {
 		row_group.Verify();
 		D_ASSERT(&row_group.GetCollection() == this);
-		D_ASSERT(row_group.GetSegmentStart() == this->row_start + current_total_rows);
+		D_ASSERT(row_group.GetSegmentStart() == this->GetBaseRowId() + current_total_rows);
 		current_total_rows += row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());
@@ -175,7 +178,7 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
 	auto row_group = state.GetRootSegment();
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
-	state.max_row = row_start + total_rows;
+	state.max_row = GetBaseRowId() + total_rows;
 	state.Initialize(context, GetTypes());
 	while (row_group && !row_group->node->InitializeScan(state, *row_group)) {
 		row_group = state.GetNextRowGroup(*row_group);
@@ -216,7 +219,7 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.collection = this;
 	state.current_row_group = state.GetRootSegment(*row_groups);
 	state.vector_index = 0;
-	state.max_row = row_start + total_rows;
+	state.max_row = GetBaseRowId() + total_rows;
 	state.batch_index = 0;
 	state.processed_rows = 0;
 }
@@ -390,10 +393,10 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	auto l = row_groups->Lock();
 	if (IsEmpty(l) || requires_new_row_group) {
 		// empty row group collection: empty first row group
-		AppendRowGroup(l, row_start + total_rows);
+		AppendRowGroup(l, GetBaseRowId() + total_rows);
 	}
 	state.start_row_group = row_groups->GetLastSegment(l);
-	D_ASSERT(this->row_start + total_rows == state.start_row_group->row_start + state.start_row_group->node->count);
+	D_ASSERT(GetBaseRowId() + total_rows == state.start_row_group->row_start + state.start_row_group->node->count);
 	state.start_row_group->node->InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
 
@@ -580,7 +583,7 @@ bool RowGroupCollection::IsPersistent() const {
 void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
                                       optional_ptr<StorageCommitState> commit_state) {
 	D_ASSERT(data.types == types);
-	auto start_index = row_start + total_rows.load();
+	auto start_index = GetBaseRowId() + total_rows.load();
 	auto index = start_index;
 	auto segments = data.row_groups->MoveSegments();
 
@@ -730,7 +733,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	TableScanState state;
 	auto column_ids_copy = column_ids;
 	state.Initialize(std::move(column_ids_copy));
-	state.table_state.max_row = row_start + total_rows;
+	state.table_state.max_row = GetBaseRowId() + total_rows;
 
 	DataChunk fetch_chunk;
 	fetch_chunk.Initialize(GetAllocator(), column_types);
@@ -1421,7 +1424,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
-	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), GetBaseRowId(),
 	                                                  total_rows.load(), row_group_size);
 
 	DataChunk dummy_chunk;
@@ -1449,7 +1452,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	auto new_types = types;
 	new_types.erase_at(col_idx);
 
-	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), GetBaseRowId(),
 	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeRemoveColumn(stats, col_idx);
 
@@ -1471,7 +1474,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	auto new_types = types;
 	new_types[changed_idx] = target_type;
 
-	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), GetBaseRowId(),
 	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeAlterType(stats, changed_idx, target_type);
 
@@ -1491,7 +1494,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 
 	TableScanState scan_state;
 	scan_state.Initialize(bound_columns);
-	scan_state.table_state.max_row = row_start + total_rows;
+	scan_state.table_state.max_row = GetBaseRowId() + total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
 	auto lock = result->stats.GetLock();

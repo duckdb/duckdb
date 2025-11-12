@@ -52,7 +52,7 @@ private:
 	class SegmentNodeIterationHelper;
 
 public:
-	explicit SegmentTree() : finished_loading(true) {
+	explicit SegmentTree(idx_t base_row_id = 0) : finished_loading(true), base_row_id(base_row_id) {
 	}
 	virtual ~SegmentTree() {
 	}
@@ -171,11 +171,14 @@ public:
 	}
 
 	//! Append a column segment to the tree
-	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment) {
+	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment, idx_t row_start) {
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		auto node = make_uniq<SegmentNode<T>>();
-		node->row_start = segment->GetSegmentStart();
+		if (row_start != segment->GetSegmentStart()) {
+			throw InternalException("row_start is unaligned");
+		}
+		node->row_start = row_start;
 		node->node = std::move(segment);
 		node->index = nodes.size();
 		node->next = nullptr;
@@ -184,6 +187,16 @@ public:
 		}
 		nodes.push_back(std::move(node));
 	}
+	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment) {
+		idx_t row_start;
+		if (nodes.empty()) {
+			row_start = base_row_id;
+		} else {
+			auto &last_node = nodes.back();
+			row_start = last_node->row_start + last_node->node->count;
+		}
+		AppendSegmentInternal(l, std::move(segment), row_start);
+	}
 	void AppendSegment(unique_ptr<T> segment) {
 		auto l = Lock();
 		AppendSegment(l, std::move(segment));
@@ -191,6 +204,10 @@ public:
 	void AppendSegment(SegmentLock &l, unique_ptr<T> segment) {
 		LoadAllSegments(l);
 		AppendSegmentInternal(l, std::move(segment));
+	}
+	void AppendSegment(SegmentLock &l, unique_ptr<T> segment, idx_t row_start) {
+		LoadAllSegments(l);
+		AppendSegmentInternal(l, std::move(segment), row_start);
 	}
 	//! Debug method, check whether the segment is in the segment tree
 	bool HasSegment(SegmentNode<T> &segment) {
@@ -277,6 +294,10 @@ public:
 #endif
 	}
 
+	idx_t GetBaseRowId() const {
+		return base_row_id;
+	}
+
 	SegmentIterationHelper Segments() {
 		return SegmentIterationHelper(*this);
 	}
@@ -310,6 +331,8 @@ private:
 	vector<unique_ptr<SegmentNode<T>>> nodes;
 	//! Lock to access or modify the nodes
 	mutable mutex node_lock;
+	//! Base row id (row id of the first segment)
+	idx_t base_row_id;
 
 private:
 	class BaseSegmentIterator {

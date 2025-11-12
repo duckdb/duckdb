@@ -88,12 +88,6 @@ ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
 ColumnSegment::~ColumnSegment() {
 }
 
-idx_t ColumnSegment::GetRelativeIndex(idx_t row_index) {
-	auto segment_start = GetSegmentStart();
-	D_ASSERT(row_index >= segment_start);
-	D_ASSERT(row_index <= segment_start + this->count);
-	return row_index - segment_start;
-}
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//

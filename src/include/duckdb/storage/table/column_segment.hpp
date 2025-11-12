@@ -125,8 +125,6 @@ public:
 		return offset;
 	}
 
-	idx_t GetRelativeIndex(idx_t row_index);
-
 	optional_ptr<CompressedSegmentState> GetSegmentState() {
 		return segment_state.get();
 	}
