@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception_format_value.hpp"
+#include "sqllogic_command.hpp"
 
 namespace duckdb {
 
