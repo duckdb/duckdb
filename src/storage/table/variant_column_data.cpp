@@ -300,6 +300,9 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
 		VariantStats::SetUnshreddedStats(*global_stats, child_states[0]->GetStatistics());
+		if (child_states.size() == 2) {
+			VariantStats::SetShreddedStats(*global_stats, child_states[1]->GetStatistics());
+		}
 		return std::move(global_stats);
 	}
 

@@ -15,6 +15,7 @@ struct VariantStatsData {
 struct VariantStats {
 public:
 	DUCKDB_API static void CreateUnshreddedStats(BaseStatistics &stats);
+	DUCKDB_API static void CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type);
 	DUCKDB_API static void Construct(BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
 	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
@@ -29,6 +30,7 @@ public:
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
 
+	DUCKDB_API static void SetShreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetShreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
 
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
