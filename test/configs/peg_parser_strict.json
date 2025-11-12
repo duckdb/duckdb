@@ -127,7 +127,8 @@
         "test/sql/keywords/keywords_in_expressions.test",
         "test/sql/show_select/test_describe_quoted.test",
         "test/sql/show_select/test_summarize_quoted.test",
-        "test/sql/pragma/test_show_tables.test"
+        "test/sql/pragma/test_show_tables.test",
+        "test/sql/export/export_quoted_enum.test"
       ]
     },
     {
