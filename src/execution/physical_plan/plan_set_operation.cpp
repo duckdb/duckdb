@@ -107,6 +107,19 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 		throw InternalException("Unexpected operator type for set operation");
 	}
 
+	// if the ALL specifier is not given, we have to ensure distinct results. Hence, push a GROUP BY ALL
+	if (!op.setop_all) { // no ALL, use distinct semantics
+		auto &types = result->GetTypes();
+		vector<unique_ptr<Expression>> groups, aggregates /* left empty */;
+		for (idx_t i = 0; i < types.size(); i++) {
+			groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+		}
+		auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
+		                                             result->estimated_cardinality);
+		group_by.children.push_back(*result);
+		result = group_by;
+	}
+
 	D_ASSERT(result);
 	return *result;
 }

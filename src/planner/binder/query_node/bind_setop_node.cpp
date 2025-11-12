@@ -291,6 +291,7 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 
 	if (!statement.setop_all) {
 		statement.modifiers.insert(statement.modifiers.begin(), make_uniq<DistinctModifier>());
+		statement.setop_all = false; // Already handled
 	}
 
 	SelectBindState bind_state;
