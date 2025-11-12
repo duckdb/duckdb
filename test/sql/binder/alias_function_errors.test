@@ -1,0 +1,36 @@
+# name: test/sql/binder/alias_function_errors.test
+# description: Negative tests for alias_ref('name') resolution
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+# forward reference should error
+statement error
+SELECT alias_ref('x') + 1 AS y, 1 AS x
+----
+alias_ref('x') references an alias defined after the current expression
+
+# unknown alias should error
+statement error
+SELECT alias_ref('nope')
+----
+no such alias exists in the SELECT list
+
+# alias_ref() not allowed in WHERE
+statement error
+SELECT 1 AS x WHERE alias_ref('x') = 1
+----
+can only be used inside a SELECT projection list
+
+# alias_ref() not allowed in GROUP BY
+statement error
+SELECT 1 AS x GROUP BY alias_ref('x')
+----
+can only be used inside a SELECT projection list
+
+# alias_ref with multiple arguments should error
+statement error
+SELECT 5 as x, 8 as y, alias_ref('x', 'y');
+----
+alias_ref(name): must be called with a single string literal argument

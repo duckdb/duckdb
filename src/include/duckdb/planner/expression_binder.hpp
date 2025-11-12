@@ -74,6 +74,16 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
+	// Returns true if alias_ref('name') references are allowed in this binder context
+	virtual bool SupportsAliasReference() const {
+		return false;
+	}
+	// Try to resolve alias_ref('name') in contexts that support it; default returns nullptr to defer
+	virtual unique_ptr<Expression> TryResolveAliasReference(const string &alias_name,
+	                                                        const FunctionExpression &function) {
+		return nullptr;
+	}
+
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
