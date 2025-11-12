@@ -195,6 +195,7 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
 
 	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
+	static idx_t GetOffsetAfterPruning(const RowGroupOrderOptions &options, vector<PartitionStatistics> &stats);
 
 private:
 	const column_t column_idx;
@@ -202,6 +203,7 @@ private:
 	const RowGroupOrderType order_type;
 	const OrderByColumnType column_type;
 	const optional_idx row_limit;
+	const optional_idx row_offset;
 
 	idx_t offset;
 	bool initialized;

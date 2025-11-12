@@ -32,15 +32,15 @@ unique_ptr<RowGroupPrunerParameters> RowGroupPruner::CanOptimize(LogicalOperator
 	optional_idx row_offset;
 	if (op.type != LogicalOperatorType::LOGICAL_LIMIT) {
 		return nullptr;
-	} else {
-		auto &logical_limit = op.Cast<LogicalLimit>();
-		if (logical_limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-			row_limit = logical_limit.limit_val.GetConstantValue();
-			if (logical_limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-				row_offset = logical_limit.offset_val.GetConstantValue();
-			} else if (logical_limit.offset_val.Type() == LimitNodeType::UNSET) {
-				row_offset = 0;
-			}
+	}
+
+	auto &logical_limit = op.Cast<LogicalLimit>();
+	if (logical_limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		row_limit = logical_limit.limit_val.GetConstantValue();
+		if (logical_limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+			row_offset = logical_limit.offset_val.GetConstantValue();
+		} else if (logical_limit.offset_val.Type() == LimitNodeType::UNSET) {
+			row_offset = 0;
 		}
 	}
 
@@ -110,11 +110,22 @@ unique_ptr<RowGroupPrunerParameters> RowGroupPruner::CanOptimize(LogicalOperator
 		auto order_type =
 		    logical_order.orders[0].type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
 		auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-
 		auto col_idx = pushdown_targets[0].columns[0].probe_column_index.column_index;
 		auto &column_index = logical_get.GetColumnIds()[col_idx];
 		auto options = make_uniq<RowGroupOrderOptions>(column_index.GetPrimaryIndex(), order_by, order_type,
 		                                               column_type, row_limit, row_offset);
+
+		if (logical_get.function.get_partition_stats && row_offset.IsValid() && row_offset.GetIndex() > 0) {
+			GetPartitionStatsInput input(logical_get.function, logical_get.bind_data.get());
+			auto partition_stats = logical_get.function.get_partition_stats(*context, input);
+
+			if (!partition_stats.empty()) {
+				auto new_offset = RowGroupReorderer::GetOffsetAfterPruning(*options, partition_stats);
+				// TODO: set this somewhere else. Also, set a value in options so that we know to prune the first N
+				// rowgroups
+				logical_limit.offset_val = BoundLimitNode::ConstantValue(static_cast<int64_t>(new_offset));
+			}
+		}
 
 		return make_uniq<RowGroupPrunerParameters>(std::move(options), logical_get);
 	}
