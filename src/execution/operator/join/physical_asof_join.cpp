@@ -1303,10 +1303,6 @@ public:
 		case AsOfJoinSourceStage::DONE:
 			throw InternalException("Invalid state for AsOf Task");
 		}
-
-		if (TaskFinished()) {
-			++gsource.finished;
-		}
 	}
 
 	void BeginRightScan();
@@ -1391,6 +1387,8 @@ void AsOfGlobalSourceState::FinishTask(TaskPtr task) {
 	if (!task) {
 		return;
 	}
+
+	++finished;
 
 	const auto group_idx = task->group_idx;
 	auto &finished_hash_group = asof_groups[group_idx];
@@ -1587,7 +1585,12 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (gsource.HasUnfinishedTasks() && chunk.size() == 0) {
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
-			lsource.ExecuteTask(context, chunk, input);
+			try {
+				lsource.ExecuteTask(context, chunk, input);
+			} catch (...) {
+				gsource.stopped = true;
+				throw;
+			}
 		} else {
 			auto guard = gsource.Lock();
 			if (!gsource.HasMoreTasks()) {
