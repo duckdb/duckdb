@@ -26,16 +26,28 @@ public:
 	}
 
 public:
+	template <ConversionType TYPE>
+	bool Empty() const {
+		return GetMap<TYPE>().empty();
+	}
+
 	void Insert(const idx_t original, const idx_t canonical) {
-		const auto res1 = to_canonical.insert(make_pair(original, canonical));
-		const auto res2 = restore_original.insert(make_pair(canonical, original));
-		D_ASSERT(res1.second && res2.second);
+		D_ASSERT(to_canonical.find(original) == to_canonical.end());
+		D_ASSERT(restore_original.find(canonical) == restore_original.end());
+		to_canonical.emplace(make_pair(original, canonical));
+		restore_original.emplace(make_pair(canonical, original));
 	}
 
 	template <ConversionType TYPE>
 	idx_t Get(const idx_t index) const {
-		const auto &map = TYPE == ConversionType::TO_CANONICAL ? to_canonical : restore_original;
-		return map.at(index);
+		D_ASSERT(!Empty<TYPE>());
+		return GetMap<TYPE>().at(index);
+	}
+
+private:
+	template <ConversionType TYPE>
+	const arena_unordered_map<idx_t, idx_t> &GetMap() const {
+		return TYPE == ConversionType::TO_CANONICAL ? to_canonical : restore_original;
 	}
 
 private:
@@ -52,6 +64,10 @@ public:
 	}
 
 public:
+	const arena_unordered_map<idx_t, PlanSignatureColumnIndexMap> &GetMap() const {
+		return table_index_map;
+	}
+
 	template <ConversionType TYPE>
 	bool Convert(LogicalOperator &op) {
 		Initialize<TYPE>(op);
@@ -81,9 +97,10 @@ private:
 						continue; // We've seen this table index before
 					}
 					const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size();
-					const auto res1 = to_canonical_table_index.insert(make_pair(original, canonical));
-					const auto res2 = restore_original_table_index.insert(make_pair(canonical, original));
-					D_ASSERT(res1.second && res2.second);
+					D_ASSERT(to_canonical_table_index.find(original) == to_canonical_table_index.end());
+					D_ASSERT(restore_original_table_index.find(canonical) == restore_original_table_index.end());
+					to_canonical_table_index.emplace(make_pair(original, canonical));
+					restore_original_table_index.emplace(make_pair(canonical, original));
 				}
 			}
 		}
@@ -123,7 +140,9 @@ private:
 			auto &aggr = op.Cast<LogicalAggregate>();
 			ConvertTableIndex<TYPE>(aggr.group_index, 0);
 			ConvertTableIndex<TYPE>(aggr.aggregate_index, 1);
-			ConvertTableIndex<TYPE>(aggr.groupings_index, 2);
+			if (aggr.groupings_index != DConstants::INVALID_INDEX) {
+				ConvertTableIndex<TYPE>(aggr.groupings_index, 2);
+			}
 			break;
 		}
 		case LogicalOperatorType::LOGICAL_UNION:
@@ -141,6 +160,8 @@ private:
 		switch (TYPE) {
 		case ConversionType::TO_CANONICAL:
 			D_ASSERT(table_indices.size() == i);
+			D_ASSERT(table_index_map.find(table_index) == table_index_map.end());
+			table_index_map.emplace(table_index, PlanSignatureColumnIndexMap(allocator));
 			table_indices.emplace_back(table_index);
 			table_index = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size() + i;
 			break;
@@ -162,14 +183,12 @@ private:
 				for (idx_t col_idx = 0; col_idx < get.names.size(); col_idx++) {
 					get.GetMutableColumnIds().push_back(ColumnIndex(col_idx));
 				}
-				const auto emp_res = table_index_map.emplace(table_indices[0], PlanSignatureColumnIndexMap(allocator));
-				D_ASSERT(emp_res.second);
 
 				// Also temporarily don't project any columns out
 				projection_ids = std::move(get.projection_ids);
 
 				// Store mapping for base tables
-				auto &column_index_map = emp_res.first->second;
+				auto &column_index_map = table_index_map.at(table_indices[0]);
 				for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 					column_index_map.Insert(col_idx, column_ids[col_idx].GetPrimaryIndex());
 				}
@@ -213,10 +232,10 @@ private:
 					const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
 					                            ? column_binding.table_index
 					                            : restore_original_table_index.at(column_binding.table_index);
-					const auto it = table_index_map.find(lookup_idx);
-					if (it != table_index_map.end()) {
+					auto &table_map = table_index_map.at(lookup_idx);
+					if (!table_map.Empty<TYPE>()) {
 						// Replace column index
-						column_binding.column_index = it->second.Get<TYPE>(column_binding.column_index);
+						column_binding.column_index = table_map.Get<TYPE>(column_binding.column_index);
 					}
 					// Replace table index
 					column_binding.table_index = table_index_mapping.at(column_binding.table_index);
@@ -287,7 +306,7 @@ public:
 };
 
 class PlanSignature {
-private:
+public:
 	PlanSignature(const MemoryStream &stream_p, idx_t offset_p, idx_t length_p,
 	              vector<reference<PlanSignature>> &&child_signatures_p, idx_t operator_count_p,
 	              idx_t base_table_count_p, idx_t max_base_table_cardinality_p)
@@ -298,8 +317,8 @@ private:
 	}
 
 public:
-	static unique_ptr<PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
-	                                        vector<reference<PlanSignature>> &&child_signatures) {
+	static arena_ptr<PlanSignature> Create(PlanSignatureCreateState &state, LogicalOperator &op,
+	                                       vector<reference<PlanSignature>> &&child_signatures) {
 		if (!OperatorIsSupported(op)) {
 			return nullptr;
 		}
@@ -340,9 +359,8 @@ public:
 			max_base_table_cardinality =
 			    MaxValue(max_base_table_cardinality, child_signature.get().MaxBaseTableCardinality());
 		}
-		return unique_ptr<PlanSignature>(new PlanSignature(state.stream, offset, length, std::move(child_signatures),
-		                                                   operator_count, base_table_count,
-		                                                   max_base_table_cardinality));
+		return state.allocator.MakePtr<PlanSignature>(state.stream, offset, length, std::move(child_signatures),
+		                                              operator_count, base_table_count, max_base_table_cardinality);
 	}
 
 	idx_t OperatorCount() const {
@@ -459,9 +477,14 @@ struct PlanSignatureEquality {
 };
 
 struct SubplanInfo {
-	explicit SubplanInfo(unique_ptr<LogicalOperator> &op) : subplans({op}), lowest_common_ancestor(op) {
+	SubplanInfo(ArenaAllocator &allocator, unique_ptr<LogicalOperator> &op,
+	            arena_vector<ColumnBinding> &&canonical_bindings_p)
+	    : subplans(allocator), canonical_bindings(allocator), lowest_common_ancestor(op) {
+		subplans.push_back(op);
+		canonical_bindings.push_back(std::move(canonical_bindings_p));
 	}
-	vector<reference<unique_ptr<LogicalOperator>>> subplans;
+	arena_vector<reference<unique_ptr<LogicalOperator>>> subplans;
+	arena_vector<arena_vector<ColumnBinding>> canonical_bindings;
 	reference<unique_ptr<LogicalOperator>> lowest_common_ancestor;
 };
 
@@ -482,7 +505,7 @@ private:
 
 		unique_ptr<LogicalOperator> &parent;
 		const idx_t depth;
-		unique_ptr<PlanSignature> signature;
+		arena_ptr<PlanSignature> signature;
 	};
 
 	struct StackNode {
@@ -503,6 +526,10 @@ private:
 	};
 
 public:
+	const PlanSignatureTableIndexMap &GetTableIndexMap() const {
+		return state.table_index_map;
+	}
+
 	subplan_map_t FindCommonSubplans(reference<unique_ptr<LogicalOperator>> root) {
 		// Find first operator with more than 1 child
 		while (root.get()->children.size() == 1) {
@@ -510,7 +537,7 @@ public:
 		}
 
 		// Recurse through query plan using stack-based recursion
-		vector<StackNode> stack;
+		arena_vector<StackNode> stack(state.allocator);
 		stack.emplace_back(root);
 		operator_infos.emplace(root, OperatorInfo(root, 0));
 
@@ -534,10 +561,12 @@ public:
 				if (signature) {
 					auto it = subplans.find(*signature);
 					if (it == subplans.end()) {
-						subplans.emplace(*signature, SubplanInfo(current.op));
+						subplans.emplace(*signature,
+						                 SubplanInfo(state.allocator, current.op, GetCanonicalBindings(*current.op)));
 					} else {
 						auto &info = it->second;
 						info.subplans.emplace_back(current.op);
+						info.canonical_bindings.emplace_back(GetCanonicalBindings(*current.op));
 						info.lowest_common_ancestor = LowestCommonAncestor(info.lowest_common_ancestor, current.op);
 					}
 				}
@@ -549,20 +578,61 @@ public:
 
 		// Filter out redundant or ineligible subplans before returning
 		for (auto it = subplans.begin(); it != subplans.end();) {
-			if (it->first.get().OperatorCount() == 1) {
+			const auto &signature = it->first.get();
+			auto &subplan_info = it->second;
+			if (signature.OperatorCount() == 1) {
 				it = subplans.erase(it); // Just one operator in this subplan
 				continue;
 			}
-			if (it->second.subplans.size() == 1) {
+			if (subplan_info.subplans.size() == 1) {
 				it = subplans.erase(it); // No other identical subplan
 				continue;
 			}
-			auto &subplan = it->second.subplans[0].get();
+
+			// Collect all subplan bindings, and figure out which subplan has the most outgoing bindings
+			idx_t max_subplan_idx = 0;
+			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+				const auto &subplan_bindings = subplan_info.canonical_bindings[subplan_idx];
+				const auto &max_subplan_bindings = subplan_info.canonical_bindings[max_subplan_idx];
+				if (subplan_bindings.size() > max_subplan_bindings.size()) {
+					max_subplan_idx = subplan_idx;
+				}
+			}
+
+			// Move the "maximum subplan" to the front
+			std::swap(subplan_info.subplans[0], subplan_info.subplans[max_subplan_idx]);
+
+			// Insert the bindings of the subplan with the most bindings into a set
+			column_binding_set_t max_subplan_column_binding_set;
+			for (auto &cb : subplan_info.canonical_bindings[max_subplan_idx]) {
+				D_ASSERT(max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end());
+				max_subplan_column_binding_set.insert(cb);
+			}
+
+			// Check if the maximum subplan fully contains the column bindings of the other subplans
+			bool all_contained = true;
+			for (idx_t subplan_idx = 1; subplan_idx < subplan_info.subplans.size() && all_contained; subplan_idx++) {
+				const auto &subplan_bindings = subplan_info.canonical_bindings[subplan_idx];
+				for (auto &cb : subplan_bindings) {
+					if (max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end()) {
+						all_contained = false;
+						break;
+					}
+				}
+			}
+
+			// If not, we bail on this subplan
+			if (!all_contained) {
+				it = subplans.erase(it);
+				continue;
+			}
+
+			auto &subplan = subplan_info.subplans[0].get();
 			auto &parent = operator_infos.find(subplan)->second.parent;
 			auto &parent_signature = operator_infos.find(parent)->second.signature;
 			if (parent_signature) {
 				auto parent_it = subplans.find(*parent_signature);
-				if (parent_it != subplans.end() && it->second.subplans.size() == parent_it->second.subplans.size()) {
+				if (parent_it != subplans.end() && subplan_info.subplans.size() == parent_it->second.subplans.size()) {
 					it = subplans.erase(it); // Parent has exact same number of identical subplans
 					continue;
 				}
@@ -578,7 +648,7 @@ public:
 	}
 
 private:
-	unique_ptr<PlanSignature> CreatePlanSignature(const unique_ptr<LogicalOperator> &op) {
+	arena_ptr<PlanSignature> CreatePlanSignature(const unique_ptr<LogicalOperator> &op) {
 		vector<reference<PlanSignature>> child_signatures;
 		for (auto &child : op->children) {
 			auto it = operator_infos.find(child);
@@ -589,6 +659,28 @@ private:
 			child_signatures.emplace_back(*it->second.signature);
 		}
 		return PlanSignature::Create(state, *op, std::move(child_signatures));
+	}
+
+	arena_vector<ColumnBinding> GetCanonicalBindings(LogicalOperator &op) {
+		// Compute the canonical column bindings coming out of this operator for convenience later
+		const auto &table_index_map = state.table_index_map.GetMap();
+		const auto original_bindings = op.GetColumnBindings();
+		idx_t canonical_table_index = 0;
+		arena_vector<ColumnBinding> canonical_bindings(state.allocator);
+		for (idx_t col_idx = 0; col_idx < original_bindings.size(); col_idx++) {
+			auto &cb = original_bindings[col_idx];
+			if (col_idx != 0 && cb.table_index != original_bindings[col_idx - 1].table_index) {
+				canonical_table_index++; // On to the next table index
+			}
+			auto &table_map = table_index_map.at(cb.table_index);
+			if (table_map.Empty<ConversionType::TO_CANONICAL>()) {
+				canonical_bindings.emplace_back(canonical_table_index, cb.column_index);
+			} else {
+				const auto canonical_col_idx = table_map.Get<ConversionType::TO_CANONICAL>(cb.column_index);
+				canonical_bindings.emplace_back(canonical_table_index, canonical_col_idx);
+			}
+		}
+		return canonical_bindings;
 	}
 
 	unique_ptr<LogicalOperator> &LowestCommonAncestor(reference<unique_ptr<LogicalOperator>> a,
@@ -635,12 +727,12 @@ private:
 	}
 
 private:
+	//! State for creating PlanSignature with reusable data structures
+	PlanSignatureCreateState state;
 	//! Mapping from operator to info
 	reference_map_t<unique_ptr<LogicalOperator>, OperatorInfo> operator_infos;
 	//! Mapping from subplan signature to subplan information
 	subplan_map_t subplans;
-	//! State for creating PlanSignature with reusable data structures
-	PlanSignatureCreateState state;
 };
 
 //===--------------------------------------------------------------------===//
@@ -649,7 +741,8 @@ private:
 CommonSubplanOptimizer::CommonSubplanOptimizer(Optimizer &optimizer_p) : optimizer(optimizer_p) {
 }
 
-static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info) {
+static void ConvertSubplansToCTE(Optimizer &optimizer, const PlanSignatureTableIndexMap &table_index_map,
+                                 unique_ptr<LogicalOperator> &op, SubplanInfo &subplan_info) {
 	const auto cte_index = optimizer.binder.GenerateTableIndex();
 	const auto cte_name = StringUtil::Format("__common_subplan_1");
 
@@ -657,20 +750,44 @@ static void ConvertSubplansToCTE(Optimizer &optimizer, unique_ptr<LogicalOperato
 	op->ResolveOperatorTypes();
 
 	// Get types and names
-	const auto &types = subplan_info.subplans[0].get()->types;
+	const auto &primary_subplan = *subplan_info.subplans[0].get();
+	const auto &types = primary_subplan.types;
 	vector<string> col_names;
 	for (idx_t i = 0; i < types.size(); i++) {
 		col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i));
 	}
+	const auto &primary_subplan_bindings = subplan_info.canonical_bindings[0];
 
 	// Create CTE refs and figure out column binding replacements
-	vector<unique_ptr<LogicalCTERef>> cte_refs;
+	vector<unique_ptr<LogicalOperator>> cte_refs;
 	ColumnBindingReplacer replacer;
-	for (auto &subplan : subplan_info.subplans) {
-		cte_refs.emplace_back(
-		    make_uniq<LogicalCTERef>(optimizer.binder.GenerateTableIndex(), cte_index, types, col_names));
-		const auto old_bindings = subplan.get()->GetColumnBindings();
-		const auto new_bindings = cte_refs.back()->GetColumnBindings();
+	for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+		const auto cte_ref_index = optimizer.binder.GenerateTableIndex();
+		cte_refs.emplace_back(make_uniq<LogicalCTERef>(cte_ref_index, cte_index, types, col_names));
+		const auto old_bindings = subplan_info.subplans[subplan_idx].get()->GetColumnBindings();
+		auto new_bindings = cte_refs.back()->GetColumnBindings();
+		if (old_bindings.size() != new_bindings.size()) {
+			// Different number of output columns - project columns out
+			const auto &canonical_bindings = subplan_info.canonical_bindings[subplan_idx];
+			vector<unique_ptr<Expression>> select_list;
+			for (auto &cb : canonical_bindings) {
+				idx_t cte_col_idx = 0;
+				for (; cte_col_idx < primary_subplan_bindings.size(); cte_col_idx++) {
+					if (cb == primary_subplan_bindings[cte_col_idx]) {
+						break;
+					}
+				}
+				D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
+				select_list.emplace_back(
+				    make_uniq<BoundColumnRefExpression>(types[cte_col_idx], ColumnBinding(cte_ref_index, cte_col_idx)));
+			}
+
+			// Place the projection on top
+			auto proj = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(select_list));
+			proj->children.emplace_back(std::move(cte_refs.back()));
+			cte_refs.back() = std::move(proj);
+			new_bindings = cte_refs.back()->GetColumnBindings();
+		}
 		D_ASSERT(old_bindings.size() == new_bindings.size());
 		for (idx_t i = 0; i < old_bindings.size(); i++) {
 			replacer.replacement_bindings.emplace_back(old_bindings[i], new_bindings[i]);
@@ -710,7 +827,7 @@ unique_ptr<LogicalOperator> CommonSubplanOptimizer::Optimize(unique_ptr<LogicalO
 	}
 
 	// Create a CTE!
-	ConvertSubplansToCTE(optimizer, op, best_it->second);
+	ConvertSubplansToCTE(optimizer, finder.GetTableIndexMap(), op, best_it->second);
 	return op;
 }
 
