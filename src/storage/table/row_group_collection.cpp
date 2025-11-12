@@ -399,6 +399,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	D_ASSERT(GetBaseRowId() + total_rows == state.start_row_group->row_start + state.start_row_group->node->count);
 	state.start_row_group->node->InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
+	state.row_group_start = state.start_row_group->row_start;
 
 	// initialize thread-local stats so we have less lock contention when updating distinct statistics
 	state.stats = TableStatistics();
@@ -444,13 +445,14 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 		// append a new row_group
 		new_row_group = true;
-		auto next_start = current_row_group->GetSegmentStart() + state.row_group_append_state.offset_in_row_group;
+		auto next_start = state.row_group_start + state.row_group_append_state.offset_in_row_group;
 
 		auto l = row_groups->Lock();
 		AppendRowGroup(l, next_start);
 		// set up the append state for this row_group
 		auto last_row_group = row_groups->GetLastSegment(l);
 		last_row_group->node->InitializeAppend(state.row_group_append_state);
+		state.row_group_start = next_start;
 	}
 	state.current_row += row_t(total_append_count);
 
