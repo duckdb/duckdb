@@ -98,9 +98,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 
 				// Initialize write stream if not yet done
 				if (!state.stream) {
-					// This needs to be initialized to at least 1
-					state.stream =
-					    make_uniq<MemoryStream>(BufferAllocator::Get(context), MaxValue<idx_t>(file_size, 1));
+					state.stream = make_uniq<MemoryStream>(BufferAllocator::Get(context), NextPowerOfTwo(file_size));
 				}
 				state.stream->Rewind();
 
