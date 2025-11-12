@@ -254,7 +254,7 @@ void ColumnSegment::SetBlock(shared_ptr<BlockHandle> block_p, uint32_t offset_p)
 	block = std::move(block_p);
 }
 
-DataPointer ColumnSegment::GetDataPointer() {
+DataPointer ColumnSegment::GetDataPointer(idx_t row_start) {
 	if (segment_type != ColumnSegmentType::PERSISTENT) {
 		throw InternalException("Attempting to call ColumnSegment::GetDataPointer on a transient segment");
 	}
@@ -262,7 +262,7 @@ DataPointer ColumnSegment::GetDataPointer() {
 	DataPointer pointer(stats.statistics.Copy());
 	pointer.block_pointer.block_id = GetBlockId();
 	pointer.block_pointer.offset = NumericCast<uint32_t>(GetBlockOffset());
-	pointer.row_start = 0;
+	pointer.row_start = row_start;
 	pointer.tuple_count = count;
 	pointer.compression_type = function.get().type;
 	if (function.get().serialize_state) {

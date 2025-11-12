@@ -747,8 +747,10 @@ bool ColumnData::IsPersistent() {
 
 vector<DataPointer> ColumnData::GetDataPointers() {
 	vector<DataPointer> pointers;
+	idx_t row_start = 0;
 	for (auto &segment : data.Segments()) {
-		pointers.push_back(segment.GetDataPointer());
+		pointers.push_back(segment.GetDataPointer(row_start));
+		row_start += segment.count;
 	}
 	return pointers;
 }

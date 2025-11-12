@@ -105,7 +105,7 @@ public:
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
 	void SetBlock(shared_ptr<BlockHandle> block, uint32_t offset);
 	//! Gets a data pointer from a persistent column segment
-	DataPointer GetDataPointer();
+	DataPointer GetDataPointer(idx_t row_start);
 
 	block_id_t GetBlockId() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);

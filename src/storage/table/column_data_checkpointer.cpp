@@ -394,8 +394,8 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 			    row_group.count.load(), current_row, segment_start, root.get().column_index, col_data.type,
 			    root.get().type, root.get().info.GetSchemaName(), root.get().info.GetTableName(), extra_info);
 		}
+		auto pointer = segment.GetDataPointer(current_row);
 		current_row += segment.count;
-		auto pointer = segment.GetDataPointer();
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment.stats.statistics);
