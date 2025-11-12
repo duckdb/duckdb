@@ -1,4 +1,4 @@
-# name: test/optimizer/common_subplan.test
+# name: test/optimizer/common_subplan.test_slow
 # description: Test the Common Subplan optimizer
 # group: [optimizer]
 
