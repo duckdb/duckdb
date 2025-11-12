@@ -11,10 +11,10 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class WindowRowNumberGlobalState : public WindowExecutorGlobalState {
 public:
-	WindowRowNumberGlobalState(ClientContext &client, const WindowRowNumberExecutor &executor, const idx_t group_idx,
+	WindowRowNumberGlobalState(ClientContext &client, const WindowRowNumberExecutor &executor,
 	                           const idx_t payload_count, const ValidityMask &partition_mask,
 	                           const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(client, executor, group_idx, payload_count, partition_mask, order_mask),
+	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
 	      ntile_idx(executor.ntile_idx) {
 		if (!executor.arg_order_idx.empty()) {
 			use_framing = true;
@@ -97,11 +97,10 @@ WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, W
 	}
 }
 
-unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobalState(ClientContext &client, const idx_t group_idx,
-                                                                    const idx_t payload_count,
+unique_ptr<GlobalSinkState> WindowRowNumberExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
                                                                     const ValidityMask &partition_mask,
                                                                     const ValidityMask &order_mask) const {
-	return make_uniq<WindowRowNumberGlobalState>(client, *this, group_idx, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowRowNumberGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocalState(ExecutionContext &context,

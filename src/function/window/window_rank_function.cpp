@@ -11,9 +11,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class WindowPeerGlobalState : public WindowExecutorGlobalState {
 public:
-	WindowPeerGlobalState(ClientContext &client, const WindowPeerExecutor &executor, const idx_t group_idx,
-	                      const idx_t payload_count, const ValidityMask &partition_mask, const ValidityMask &order_mask)
-	    : WindowExecutorGlobalState(client, executor, group_idx, payload_count, partition_mask, order_mask) {
+	WindowPeerGlobalState(ClientContext &client, const WindowPeerExecutor &executor, const idx_t payload_count,
+	                      const ValidityMask &partition_mask, const ValidityMask &order_mask)
+	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask) {
 		if (!executor.arg_order_idx.empty()) {
 			use_framing = true;
 
@@ -56,7 +56,6 @@ public:
 
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 
-	idx_t group_idx = DConstants::INVALID_INDEX;
 	idx_t row_idx = DConstants::INVALID_INDEX;
 	uint64_t dense_rank = 1;
 	uint64_t rank_equal = 0;
@@ -111,11 +110,10 @@ WindowPeerExecutor::WindowPeerExecutor(BoundWindowExpression &wexpr, WindowShare
 	}
 }
 
-unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobalState(ClientContext &client, const idx_t group_idx,
-                                                               const idx_t payload_count,
+unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobalState(ClientContext &client, const idx_t payload_count,
                                                                const ValidityMask &partition_mask,
                                                                const ValidityMask &order_mask) const {
-	return make_uniq<WindowPeerGlobalState>(client, *this, group_idx, payload_count, partition_mask, order_mask);
+	return make_uniq<WindowPeerGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
 unique_ptr<LocalSinkState> WindowPeerExecutor::GetLocalState(ExecutionContext &context,
@@ -188,7 +186,7 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	//	So check whether we are just picking up where we left off.
 	//	This is common because the main window operator
 	//	evaluates maximally sized runs for each hash group.
-	if (lpeer.group_idx != gpeer.group_idx || lpeer.row_idx != row_idx) {
+	if (lpeer.row_idx != row_idx) {
 		lpeer.rank = (peer_begin[0] - partition_begin[0]) + 1;
 		lpeer.rank_equal = (row_idx - peer_begin[0]);
 
@@ -234,7 +232,6 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	}
 
 	//	Remember where we left off
-	lpeer.group_idx = gpeer.group_idx;
 	lpeer.row_idx = row_idx;
 }
 

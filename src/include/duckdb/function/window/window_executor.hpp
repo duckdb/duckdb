@@ -24,14 +24,12 @@ class WindowExecutorGlobalState : public GlobalSinkState {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
 
-	WindowExecutorGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t group_ix,
-	                          const idx_t payload_count, const ValidityMask &partition_mask,
-	                          const ValidityMask &order_mask);
+	WindowExecutorGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
+	                          const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 	ClientContext &client;
 	const WindowExecutor &executor;
 
-	const idx_t group_idx;
 	const idx_t payload_count;
 	const ValidityMask &partition_mask;
 	const ValidityMask &order_mask;
@@ -78,8 +76,8 @@ public:
 
 	virtual bool IgnoreNulls() const;
 
-	virtual unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t group_idx,
-	                                                   const idx_t payload_count, const ValidityMask &partition_mask,
+	virtual unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
+	                                                   const ValidityMask &partition_mask,
 	                                                   const ValidityMask &order_mask) const;
 	virtual unique_ptr<LocalSinkState> GetLocalState(ExecutionContext &context, const GlobalSinkState &gstate) const;
 
