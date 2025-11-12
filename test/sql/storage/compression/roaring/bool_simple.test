@@ -12,9 +12,7 @@ statement ok
 CREATE TABLE test (a BOOL);
 
 statement ok
-INSERT INTO test VALUES (false), (false), (true), (false), (false), (false), (false), (false);
-
-# INSERT INTO test VALUES (true), (false), (true), (null), (false), (true), (null), (false);
+INSERT INTO test VALUES (false), (false), (true), (false), (false), (false), (true), (false);
 
 statement ok
 checkpoint;
@@ -28,12 +26,11 @@ true
 false
 false
 false
-false
+true
 false
 
-# SELECT * FROM pragma_storage_info('test');
-# SELECT compression FROM pragma_storage_info('test') WHERE compression != 'Roaring';
-# SELECT * FROM test;
+# query I
+# FROM pragma_storage_info('test');
 # ----
 
 # query I
