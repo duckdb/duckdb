@@ -844,15 +844,29 @@ static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 }
 
 static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
+	FileMetadata file_metadata;
+
+	DWORD handle_type = GetFileType(hFile);
+	if (handle_type == FILE_TYPE_CHAR) {
+		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
+		file_metadata.file_size = 0;
+		file_metadata.last_modification_time = Timestamp::FromTimeT(0);
+		return file_metadata;
+	}
+	if (handle_type == FILE_TYPE_PIPE) {
+		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
+		file_metadata.file_size = 0;
+		file_metadata.last_modification_time = Timestamp::FromTimeT(0);
+		return file_metadata;
+	}
+
 	BY_HANDLE_FILE_INFORMATION file_info;
 	if (!GetFileInformationByHandle(hFile, &file_info)) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Failed to get stats for file \"%s\": %s", path, error);
 	}
 
-	FileMetadata file_metadata;
-
-	// Get file size from high and low parts
+	// Get file size from high and low parts.
 	file_metadata.file_size =
 	    (static_cast<int64_t>(file_info.nFileSizeHigh) << 32) | static_cast<int64_t>(file_info.nFileSizeLow);
 
