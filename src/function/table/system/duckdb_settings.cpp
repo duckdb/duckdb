@@ -31,9 +31,8 @@ static bool extract_in_bytes_argument(const TableFunctionBindInput &input) {
 	auto it = input.named_parameters.find("in_bytes");
 	if (it != input.named_parameters.end()) {
 		const auto &param = it->second;
-		if (param.IsNull() || param.type().id() != LogicalTypeId::BOOLEAN) {
-			throw InvalidInputException(
-			    "duckdb_settings: named parameter 'in_bytes' must be a non-NULL BOOLEAN (true/false)");
+		if (param.IsNull()) {
+			throw BinderException("'in_bytes' parameter cannot be NULL");
 		}
 		in_bytes = param.GetValue<bool>();
 	};
@@ -199,7 +198,7 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
 	// It should be Boolean, but if we do so, we cannot have the validation we have in `extract_in_bytes_argument`
-	fun.named_parameters["in_bytes"] = LogicalType::ANY;
+	fun.named_parameters["in_bytes"] = LogicalType::BOOLEAN;
 	set.AddFunction(fun);
 }
 
