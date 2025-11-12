@@ -9,22 +9,28 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : BaseSelectBinder(binder, context, node, info) {
 }
 
-unique_ptr<Expression> SelectBinder::TryResolveAliasReference(const string &alias_name, const FunctionExpression &function) {
+unique_ptr<Expression> SelectBinder::TryResolveAliasReference(const string &alias_name,
+                                                              const FunctionExpression &function) {
 	// resolve alias_ref(name) within SELECT list
 	auto entry = node.bind_state.alias_map.find(alias_name);
 	if (entry == node.bind_state.alias_map.end()) {
-		throw BinderException(function, "alias_ref('%s') referenced, but no such alias exists in the SELECT list", alias_name);
+		throw BinderException(function, "alias_ref('%s') referenced, but no such alias exists in the SELECT list",
+		                      alias_name);
 	}
 	auto alias_index = entry->second;
 
 	// Simple way to prevent circular aliasing (`SELECT alias_ref('y') as x, alias_ref('x') as y;`)
 	if (alias_index >= node.bound_column_count) {
-		throw BinderException(function, "alias_ref('%s') references an alias defined after the current expression", alias_name);
+		throw BinderException(function, "alias_ref('%s') references an alias defined after the current expression",
+		                      alias_name);
 	}
 
 	// Restricting alias references to subqueries as we will need to define some caveats we want to enforce
 	if (node.bind_state.AliasHasSubquery(alias_index)) {
-		throw BinderException(function, "Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery. This is not yet supported.", alias_name);
+		throw BinderException(function,
+		                      "Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery. This is "
+		                      "not yet supported.",
+		                      alias_name);
 	}
 	// bind a fresh copy of the original unbound expression
 	auto copied_unbound = node.bind_state.BindAlias(alias_index);

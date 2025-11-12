@@ -141,7 +141,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		if (function.children.size() == 1 && function.children[0]->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			auto &const_expr = function.children[0]->Cast<ConstantExpression>();
 			if (const_expr.value.IsNull() || const_expr.value.type().id() != LogicalTypeId::VARCHAR) {
-				return BindResult(BinderException(function, "alias_ref(name): argument must be a non-NULL string literal"));
+				return BindResult(
+				    BinderException(function, "alias_ref(name): argument must be a non-NULL string literal"));
 			}
 			if (!SupportsAliasReference()) {
 				return BindResult(BinderException(function, "can only be used inside a SELECT projection list"));
@@ -153,7 +154,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 				return BindResult(std::move(resolved));
 			}
 		} else {
-			return BindResult(BinderException(function, "alias_ref(name): must be called with a single string literal argument"));
+			return BindResult(
+			    BinderException(function, "alias_ref(name): must be called with a single string literal argument"));
 		}
 	}
 	auto func = BindAndQualifyFunction(function, true);
