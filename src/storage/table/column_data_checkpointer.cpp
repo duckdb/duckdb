@@ -186,8 +186,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 
 	// scan over all the segments and run the analyze step
 	ScanSegments([&](Vector &scan_vector, idx_t count) {
-		printf("\ncallback!");
-
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 			if (!has_changes[i]) {
 				continue;
@@ -202,7 +200,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 				if (!state) {
 					continue;
 				}
-				printf("\nfunc->analyze");
 
 				if (!func->analyze(*state, scan_vector, count)) {
 					state = nullptr;

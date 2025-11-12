@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/roaring/roaring_compression_ratio.test_slow
+# name: test/sql/storage/compression/roaring/validity/roaring_compression_ratio.test_slow
 # description: Assert roaring compression ratio is within reasonable margins for each container type
-# group: [roaring]
+# group: [validity]
 
 require block_size 262144
 

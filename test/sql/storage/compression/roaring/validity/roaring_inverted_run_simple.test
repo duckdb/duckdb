@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/roaring/roaring_inverted_run_simple.test
+# name: test/sql/storage/compression/roaring/validity/roaring_inverted_run_simple.test
 # description: Test bitpacking with nulls
-# group: [roaring]
+# group: [validity]
 
 load __TEST_DIR__/test_roaring.db readwrite v1.2.0
 

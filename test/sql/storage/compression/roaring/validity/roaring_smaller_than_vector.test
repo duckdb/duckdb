@@ -1,5 +1,5 @@
-# name: test/sql/storage/compression/roaring/roaring_smaller_than_vector.test
-# group: [roaring]
+# name: test/sql/storage/compression/roaring/validity/roaring_smaller_than_vector.test
+# group: [validity]
 
 load __TEST_DIR__/test_roaring2.db readwrite v1.2.0
 

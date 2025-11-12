@@ -89,14 +89,14 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	result.EnsureWritable();
 	auto result_data = (validity_t *)result.GetData();
 
-	#ifdef DEBUG
-		ValidityMask copy_for_verification(result.Capacity());
-		copy_for_verification.EnsureWritable();
-		for (idx_t i = 0;
-			 i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
-			copy_for_verification.GetData()[i] = result.GetData()[i];
-		}
-	#endif
+#ifdef DEBUG
+	ValidityMask copy_for_verification(result.Capacity());
+	copy_for_verification.EnsureWritable();
+	for (idx_t i = 0;
+	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
+		copy_for_verification.GetData()[i] = result.GetData()[i];
+	}
+#endif
 
 	idx_t index = start;
 
@@ -154,17 +154,17 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 		result_data[entry_idx] &= mask;
 	}
 
-	#ifdef DEBUG
-		D_ASSERT(end <= result.Capacity());
-		for (idx_t i = 0; i < result.Capacity(); i++) {
-			if (i >= start && i < end) {
-				D_ASSERT(!result.RowIsValidUnsafe(i));
-			} else {
-				// Ensure no others bits are touched by this method
-				D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
-			}
+#ifdef DEBUG
+	D_ASSERT(end <= result.Capacity());
+	for (idx_t i = 0; i < result.Capacity(); i++) {
+		if (i >= start && i < end) {
+			D_ASSERT(!result.RowIsValidUnsafe(i));
+		} else {
+			// Ensure no others bits are touched by this method
+			D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
 		}
-	#endif
+	}
+#endif
 }
 
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
@@ -195,7 +195,7 @@ idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 }
 
 unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &checkpoint_data,
-													unique_ptr<AnalyzeState> state) {
+                                                    unique_ptr<AnalyzeState> state) {
 	return make_uniq<RoaringCompressState>(checkpoint_data, std::move(state));
 }
 template <PhysicalType TYPE>
@@ -206,7 +206,6 @@ void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count
 			auto data_ptr = scan_vector.GetData();
 			state.current_segment->stats.statistics.UpdateNumericStats<bool>(data_ptr[i]);
 		}
-
 	}
 	state.Compress<TYPE>(scan_vector, count);
 }

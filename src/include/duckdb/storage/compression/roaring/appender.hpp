@@ -151,7 +151,8 @@ public:
 	// 	auto data = UnifiedVectorFormat::GetDataNoConst<uint8_t>(unified);
 	//
 	// 	auto bitpacking_ptr = data;
-	// 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity mask.
+	// 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a
+	// validity mask.
 	// 	for (idx_t i = 0; i<input_size; i++) { 		if (bitpacking_ptr[i] == 1) { // won't trigger on null values
 	// 			// True boolean
 	// 			*bitpacking_ptr |= ValidityUncompressed::LOWER_MASKS[1] << i%8;
@@ -258,7 +259,6 @@ public:
 	// 	}
 	// 	// }
 	// }
-
 };
 
 } // namespace roaring

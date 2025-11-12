@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/roaring/roaring_inverted_array_simple.test
+# name: test/sql/storage/compression/roaring/validity/roaring_run_simple.test
 # description: Test bitpacking with nulls
-# group: [roaring]
+# group: [validity]
 
 load __TEST_DIR__/test_roaring.db readwrite v1.2.0
 
@@ -11,8 +11,18 @@ PRAGMA force_compression='roaring'
 statement ok
 CREATE TABLE test (a BIGINT);
 
+# 8 runs per Vector
 statement ok
-INSERT INTO test SELECT case when i%25=0 then null else 1337 end FROM range(0,10000) tbl(i);
+INSERT INTO test SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then null else 1337 end FROM range(0,10000) tbl(i);
+# runs:
+# (0,350)
+# (451,512)
+# (513,862)
+# (963,1024)
+# (1025,1374)
+# (1475,1536)
+# (1537,1886)
+# (1987,2048)
 
 statement ok
 checkpoint
@@ -21,28 +31,29 @@ query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
 ----
 
+query I
+select count(*) from test WHERE a IS NOT NULL;
+----
+1938
+
 query III
 select sum(a), min(a), max(a) from test;
 ----
-12835200	1337	1337
+2591106	1337	1337
 
 statement ok
-delete from test
+delete from test;
 
-# 5 null values per Vector, uses inverted uncompressed arrays
+# 3 runs per Vector (uses uncompressed runs)
 statement ok
 with intermediates as (
 	select i % 2048 as i
 	from range(0, 10_000) t(i)
 )
-insert into test select case when
-	i = 0 or
-	i = 6 or
-	i = 1000 or
-	i = 1500 or
-	i = 2000
-	then null
-else 1337 end from intermediates;
+INSERT INTO test SELECT case when (i >= 0 and i < 110) or (i >= 1500 and i < 1800) or (i >= 2000) then null else 1337 end FROM intermediates;
+# (0,110)
+# (1500,1800)
+# (2000,2048)
 
 statement ok
 checkpoint;
@@ -50,12 +61,12 @@ checkpoint;
 query I
 select count(*) from test WHERE a IS NOT NULL;
 ----
-9976
+7758
 
 query III
 select sum(a), min(a), max(a) from test;
 ----
-13337912	1337	1337
+10372446	1337	1337
 
 statement ok
 DROP TABLE test;

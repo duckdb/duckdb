@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/roaring/roaring_run_simple.test
+# name: test/sql/storage/compression/roaring/bool/roaring_bool_run_simple.test
 # description: Test bitpacking with nulls
-# group: [roaring]
+# group: [bool]
 
 load __TEST_DIR__/test_roaring.db readwrite v1.2.0
 

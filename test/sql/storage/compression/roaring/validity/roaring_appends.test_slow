@@ -1,5 +1,5 @@
-# name: test/sql/storage/compression/roaring/roaring_appends.test_slow
-# group: [roaring]
+# name: test/sql/storage/compression/roaring/validity/roaring_appends.test_slow
+# group: [validity]
 
 require block_size 262144
 

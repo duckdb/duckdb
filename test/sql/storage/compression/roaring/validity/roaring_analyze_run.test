@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/roaring/roaring_analyze_run.test
+# name: test/sql/storage/compression/roaring/validity/roaring_analyze_run.test
 # description: Check the produced (final_)analyze result
-# group: [roaring]
+# group: [validity]
 
 require block_size 262144
 
