@@ -394,6 +394,7 @@ private:
 	static unique_ptr<CreateStatement> TransformCreateSecretStmt(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 	static string TransformSecretStorageSpecifier(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformSecretName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_sequence.gram
 	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,

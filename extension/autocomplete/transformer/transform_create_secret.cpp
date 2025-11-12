@@ -6,7 +6,6 @@ namespace duckdb {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	throw NotImplementedException("TransformCreateSecretStmt");
 	auto result = make_uniq<CreateStatement>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -40,6 +39,11 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEG
 	}
 	result->info = std::move(info);
 	return result;
+}
+
+string PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 }
 
 string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer,

@@ -200,6 +200,7 @@ void PEGTransformerFactory::RegisterCreateSecret() {
 	// create_secret.gram
 	REGISTER_TRANSFORM(TransformCreateSecretStmt);
 	REGISTER_TRANSFORM(TransformSecretStorageSpecifier);
+	REGISTER_TRANSFORM(TransformSecretName);
 }
 
 void PEGTransformerFactory::RegisterCreateSequence() {

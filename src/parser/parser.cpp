@@ -286,6 +286,7 @@ void Parser::ParseQuery(const string &query) {
 						case CatalogType::MACRO_ENTRY:
 						case CatalogType::SEQUENCE_ENTRY:
 						case CatalogType::TYPE_ENTRY:
+						case CatalogType::SECRET_ENTRY:
 							is_supported = true;
 							break;
 						default:
