@@ -72,9 +72,9 @@ public:
 	bool Convert(LogicalOperator &op) {
 		Initialize<TYPE>(op);
 		ConvertTableIndices<TYPE>(op);
-		ConvertColumnIndices<TYPE>(op);
+		auto can_materialize = ConvertColumnIndices<TYPE>(op);
 		ConvertChildren<TYPE>(op);
-		return ConvertExpressions<TYPE>(op);
+		return ConvertExpressions<TYPE>(op) && can_materialize;
 	}
 
 private:
@@ -85,6 +85,7 @@ private:
 			to_canonical_table_index.clear();
 			restore_original_table_index.clear();
 			column_ids.clear();
+			projection_ids.clear();
 			table_indices.clear();
 			expression_info.clear();
 
@@ -188,7 +189,7 @@ private:
 	}
 
 	template <ConversionType TYPE>
-	void ConvertColumnIndices(LogicalOperator &op) {
+	bool ConvertColumnIndices(LogicalOperator &op) {
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op.Cast<LogicalGet>();
 			switch (TYPE) {
@@ -203,10 +204,25 @@ private:
 				// Also temporarily don't project any columns out
 				projection_ids = std::move(get.projection_ids);
 
+				// FIXME: can probably work for virtual columns in the future
+				for (const auto &col_id : column_ids) {
+					if (col_id.IsVirtualColumn()) {
+						return false;
+					}
+				}
+
 				// Store mapping for base tables
 				auto &column_index_map = table_index_map.at(table_indices[0]);
-				for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-					column_index_map.Insert(col_idx, column_ids[col_idx].GetPrimaryIndex());
+				if (projection_ids.empty()) {
+					for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+						const auto primary_index = column_ids[col_idx].GetPrimaryIndex();
+						column_index_map.Insert(col_idx, primary_index);
+					}
+				} else {
+					for (idx_t col_idx = 0; col_idx < projection_ids.size(); col_idx++) {
+						const auto primary_index = column_ids[projection_ids[col_idx]].GetPrimaryIndex();
+						column_index_map.Insert(col_idx, primary_index);
+					}
 				}
 				break;
 			}
@@ -218,6 +234,7 @@ private:
 				break;
 			}
 		}
+		return true;
 	}
 
 	template <ConversionType TYPE>
