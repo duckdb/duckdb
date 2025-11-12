@@ -34,3 +34,15 @@ statement error
 SELECT 5 as x, 8 as y, alias_ref('x', 'y');
 ----
 alias_ref(name): must be called with a single string literal argument
+
+# alias_ref with non-string argument should error
+statement error
+SELECT 5 as x, alias_ref(123);
+----
+alias_ref(name): argument must be a non-NULL string literal
+
+# alias_ref with NULL argument should error
+statement error
+SELECT 5 as x, alias_ref(NULL);
+----
+alias_ref(name): argument must be a non-NULL string literal
