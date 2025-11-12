@@ -195,6 +195,7 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 				break;
 			}
 			default:
+				next_key = key_press;
 				accept_completion = true;
 				stop = true;
 				break;
