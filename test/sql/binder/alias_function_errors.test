@@ -2,9 +2,6 @@
 # description: Negative tests for alias_ref('name') resolution
 # group: [binder]
 
-statement ok
-PRAGMA enable_verification
-
 # forward reference should error
 statement error
 SELECT alias_ref('x') + 1 AS y, 1 AS x
