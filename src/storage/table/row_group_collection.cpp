@@ -432,27 +432,25 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			current_row_group->MergeIntoStatistics(stats);
 		}
 		remaining -= append_count;
-		if (remaining > 0) {
-			// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one
-			// row_group)
-			D_ASSERT(chunk.size() == remaining + append_count);
-			// slice the input chunk
-			if (remaining < chunk.size()) {
-				chunk.Slice(append_count, remaining);
-			}
-			// append a new row_group
-			new_row_group = true;
-			auto next_start = current_row_group->GetSegmentStart() + state.row_group_append_state.offset_in_row_group;
-
-			auto l = row_groups->Lock();
-			AppendRowGroup(l, next_start);
-			// set up the append state for this row_group
-			auto last_row_group = row_groups->GetLastSegment(l);
-			last_row_group->node->InitializeAppend(state.row_group_append_state);
-			continue;
-		} else {
+		if (remaining == 0) {
 			break;
 		}
+		// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one
+		// row_group)
+		D_ASSERT(chunk.size() == remaining + append_count);
+		// slice the input chunk
+		if (remaining < chunk.size()) {
+			chunk.Slice(append_count, remaining);
+		}
+		// append a new row_group
+		new_row_group = true;
+		auto next_start = current_row_group->GetSegmentStart() + state.row_group_append_state.offset_in_row_group;
+
+		auto l = row_groups->Lock();
+		AppendRowGroup(l, next_start);
+		// set up the append state for this row_group
+		auto last_row_group = row_groups->GetLastSegment(l);
+		last_row_group->node->InitializeAppend(state.row_group_append_state);
 	}
 	state.current_row += row_t(total_append_count);
 

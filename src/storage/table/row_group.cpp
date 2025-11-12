@@ -147,9 +147,9 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	this->columns[c] = ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, column_data_reader, types[c]);
 	is_loaded[c] = true;
 	if (this->columns[c]->count != this->count) {
-		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
+		throw InternalException("Corrupted database - loaded column with index %llu, count %llu did "
 		                        "not match count of row group %llu",
-		                        c, GetSegmentStart(), this->columns[c]->count.load(), this->count.load());
+		                        c, this->columns[c]->count.load(), this->count.load());
 	}
 	return *columns[c];
 }
@@ -485,11 +485,11 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 			// no segment to skip
 			continue;
 		}
-		idx_t target_row = current_segment->row_start + current_segment->node->count;
+		auto row_start = current_segment->row_start;
+		idx_t target_row = row_start + current_segment->node->count;
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;
 		}
-		auto row_start = GetSegmentStart();
 		D_ASSERT(target_row >= row_start);
 		D_ASSERT(target_row <= row_start + this->count);
 		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
