@@ -845,7 +845,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"GeneratedColumnType <- 'VIRTUAL' / 'STORED'\n"
 	"CommitAction <- 'ON' 'COMMIT' PreserveOrDelete\n"
 	"PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'\n"
-	"CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?\n"
+	"CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?\n"
 	"WithList <- 'WITH' Parens(List(RelOption)) / Oids\n"
 	"Oids <- ('WITH' / 'WITHOUT') 'OIDS'\n"
 	"IndexElement <- Expression DescOrAsc? NullsFirstOrLast?\n"

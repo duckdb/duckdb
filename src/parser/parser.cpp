@@ -282,11 +282,12 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::CREATE_STATEMENT: {
 						auto &create_statement = statement->Cast<CreateStatement>();
 						switch (create_statement.info->type) {
-						case CatalogType::SCHEMA_ENTRY:
+						case CatalogType::INDEX_ENTRY:
 						case CatalogType::MACRO_ENTRY:
+						case CatalogType::SCHEMA_ENTRY:
+						case CatalogType::SECRET_ENTRY:
 						case CatalogType::SEQUENCE_ENTRY:
 						case CatalogType::TYPE_ENTRY:
-						case CatalogType::SECRET_ENTRY:
 							is_supported = true;
 							break;
 						default:
