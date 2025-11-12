@@ -163,7 +163,7 @@ public:
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 
 	//! Delete the given set of rows in the version manager
-	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
+	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count, idx_t row_group_start);
 
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
 	                                             const vector<reference<RowGroup>> &row_groups);

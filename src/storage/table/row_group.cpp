@@ -1323,15 +1323,14 @@ public:
 	void Flush();
 };
 
-idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count) {
-	auto row_start = GetSegmentStart();
-	VersionDeleteState del_state(*this, transaction, table, row_start);
+idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count, idx_t row_group_start) {
+	VersionDeleteState del_state(*this, transaction, table, row_group_start);
 
 	// obtain a write lock
 	for (idx_t i = 0; i < count; i++) {
 		D_ASSERT(ids[i] >= 0);
-		D_ASSERT(idx_t(ids[i]) >= row_start && idx_t(ids[i]) < row_start + this->count);
-		del_state.Delete(ids[i] - UnsafeNumericCast<row_t>(row_start));
+		D_ASSERT(idx_t(ids[i]) >= row_group_start && idx_t(ids[i]) < row_group_start + this->count);
+		del_state.Delete(ids[i] - UnsafeNumericCast<row_t>(row_group_start));
 	}
 	del_state.Flush();
 	return del_state.delete_count;

@@ -648,7 +648,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 				break;
 			}
 		}
-		delete_count += current_row_group.Delete(transaction, table, ids + start, pos - start);
+		delete_count += current_row_group.Delete(transaction, table, ids + start, pos - start, row_group->row_start);
 	} while (pos < count);
 
 	return delete_count;
