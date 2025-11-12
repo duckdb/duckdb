@@ -43,9 +43,9 @@ protected:
 	//! replacing the bindings
 	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
 
-	bool HandleStructExtract(Expression &expr);
+	bool HandleStructExtract(unique_ptr<Expression> *expression);
 
-	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	bool HandleStructExtractRecursive(Expression &expr, unique_ptr<BoundColumnRefExpression> &colref,
 	                                  vector<idx_t> &indexes);
 };
 

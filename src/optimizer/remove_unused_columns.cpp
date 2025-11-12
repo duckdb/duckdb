@@ -376,7 +376,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	}
 }
 
-bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
+bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, unique_ptr<BoundColumnRefExpression> &colref,
                                                     vector<idx_t> &indexes) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
@@ -389,32 +389,33 @@ bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, optional_p
 	if (!function.bind_info) {
 		return false;
 	}
-	if (function.children[0]->return_type.id() != LogicalTypeId::STRUCT) {
+	auto &child = function.children[0];
+	if (child->return_type.id() != LogicalTypeId::STRUCT) {
 		return false;
 	}
 	auto &bind_data = function.bind_info->Cast<StructExtractBindData>();
 	indexes.push_back(bind_data.index);
 	// struct extract, check if left child is a bound column ref
-	if (function.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+	if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		// column reference - check if it is a struct
-		auto &ref = function.children[0]->Cast<BoundColumnRefExpression>();
+		auto &ref = child->Cast<BoundColumnRefExpression>();
 		if (ref.return_type.id() != LogicalTypeId::STRUCT) {
 			return false;
 		}
-		colref = &ref;
+		colref = unique_ptr_cast<Expression, BoundColumnRefExpression>(std::move(child));
 		return true;
 	}
 	// not a column reference - try to handle this recursively
-	if (!HandleStructExtractRecursive(*function.children[0], colref, indexes)) {
+	if (!HandleStructExtractRecursive(*child, colref, indexes)) {
 		return false;
 	}
 	return true;
 }
 
-bool BaseColumnPruner::HandleStructExtract(Expression &expr) {
-	optional_ptr<BoundColumnRefExpression> colref;
+bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
+	unique_ptr<BoundColumnRefExpression> colref;
 	vector<idx_t> indexes;
-	if (!HandleStructExtractRecursive(expr, colref, indexes)) {
+	if (!HandleStructExtractRecursive(**expression, colref, indexes)) {
 		return false;
 	}
 	D_ASSERT(!indexes.empty());
@@ -425,7 +426,9 @@ bool BaseColumnPruner::HandleStructExtract(Expression &expr) {
 		new_index.AddChildIndex(std::move(index));
 		index = std::move(new_index);
 	}
+
 	AddBinding(*colref, std::move(index));
+	*expression = std::move(colref);
 	return true;
 }
 
@@ -488,8 +491,7 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
 }
 
 void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
-	auto &expr = **expression;
-	if (HandleStructExtract(expr)) {
+	if (HandleStructExtract(expression)) {
 		// already handled
 		return;
 	}
