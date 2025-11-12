@@ -17,6 +17,11 @@ class SelectBinder : public BaseSelectBinder {
 public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
+	bool SupportsAliasReference() const override {
+		return true;
+	}
+	unique_ptr<Expression> TryResolveAliasReference(const string &alias_name, const FunctionExpression &function) override;
+
 protected:
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
 	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
