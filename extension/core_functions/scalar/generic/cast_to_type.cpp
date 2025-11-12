@@ -25,7 +25,7 @@ unique_ptr<Expression> BindCastToTypeFunction(FunctionBindExpressionInput &input
 ScalarFunction CastToTypeFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, CastToTypeFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.bind_expression = BindCastToTypeFunction;
+	fun.SetBindExpressionCallback(BindCastToTypeFunction);
 	return fun;
 }
 

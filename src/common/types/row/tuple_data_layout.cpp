@@ -131,7 +131,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		const auto &aggr = aggregates[aggr_idx];
-		if (aggr.function.destructor) {
+		if (aggr.function.HasStateDestructorCallback()) {
 			aggr_destructor_idxs.push_back(aggr_idx);
 		}
 	}

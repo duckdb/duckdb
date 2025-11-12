@@ -582,11 +582,12 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 				//	Push the updates first so they propagate
 				leaves.Reference(inputs);
 				leaves.Slice(sel, nupdate);
-				aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+				aggr.function.GetStateUpdateCallback()(leaves.data.data(), aggr_input_data, leaves.ColumnCount(),
+				                                       update_v, nupdate);
 				nupdate = 0;
 
 				//	Combine the states sequentially
-				aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+				aggr.function.GetStateCombineCallback()(source_v, target_v, aggr_input_data, ncombine);
 				ncombine = 0;
 
 				// Move the update into range.
@@ -612,11 +613,12 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 			//	Push the updates first so they propagate
 			leaves.Reference(inputs);
 			leaves.Slice(sel, nupdate);
-			aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+			aggr.function.GetStateUpdateCallback()(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v,
+			                                       nupdate);
 			nupdate = 0;
 
 			//	Combine the states sequentially
-			aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+			aggr.function.GetStateCombineCallback()(source_v, target_v, aggr_input_data, ncombine);
 			ncombine = 0;
 		}
 	}
@@ -626,11 +628,12 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 		//	Push  the updates
 		leaves.Reference(inputs);
 		leaves.Slice(sel, nupdate);
-		aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v, nupdate);
+		aggr.function.GetStateUpdateCallback()(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), update_v,
+		                                       nupdate);
 		nupdate = 0;
 
 		//	Combine the states sequentially
-		aggr.function.combine(source_v, target_v, aggr_input_data, ncombine);
+		aggr.function.GetStateCombineCallback()(source_v, target_v, aggr_input_data, ncombine);
 		ncombine = 0;
 	}
 
@@ -645,7 +648,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 	const auto &aggr = gdstate.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), tree_allocator);
 	statel.Verify(flush_count);
-	aggr.function.combine(statel, statep, aggr_input_data, flush_count);
+	aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 
 	flush_count = 0;
 }

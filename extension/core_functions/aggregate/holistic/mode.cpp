@@ -408,7 +408,7 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
-	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	aggr.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	return aggr;
 }
 
@@ -419,7 +419,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	auto func =
 	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
 	        type, type);
-	func.window = OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>;
+	func.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
 	return func;
 }
 
@@ -529,7 +529,7 @@ AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
 	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	                       AggregateFunction::StateFinalize<STATE, double, OP>, nullptr);
-	func.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+	func.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;
 }

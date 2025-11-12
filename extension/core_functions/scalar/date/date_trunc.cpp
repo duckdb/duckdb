@@ -693,12 +693,12 @@ unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &b
 	case DatePartSpecifier::JULIAN_DAY:
 		switch (bound_function.arguments[1].id()) {
 		case LogicalType::TIMESTAMP:
-			bound_function.function = DateTruncFunction<timestamp_t, date_t>;
-			bound_function.statistics = DateTruncStats<timestamp_t, date_t>(part_code);
+			bound_function.SetFunctionCallback(DateTruncFunction<timestamp_t, date_t>);
+			bound_function.SetStatisticsCallback(DateTruncStats<timestamp_t, date_t>(part_code));
 			break;
 		case LogicalType::DATE:
-			bound_function.function = DateTruncFunction<date_t, date_t>;
-			bound_function.statistics = DateTruncStats<date_t, date_t>(part_code);
+			bound_function.SetFunctionCallback(DateTruncFunction<date_t, date_t>);
+			bound_function.SetStatisticsCallback(DateTruncStats<date_t, date_t>(part_code));
 			break;
 		default:
 			throw NotImplementedException("Temporal argument type for DATETRUNC");
@@ -708,10 +708,10 @@ unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &b
 	default:
 		switch (bound_function.arguments[1].id()) {
 		case LogicalType::TIMESTAMP:
-			bound_function.statistics = DateTruncStats<timestamp_t, timestamp_t>(part_code);
+			bound_function.SetStatisticsCallback(DateTruncStats<timestamp_t, timestamp_t>(part_code));
 			break;
 		case LogicalType::DATE:
-			bound_function.statistics = DateTruncStats<date_t, timestamp_t>(part_code);
+			bound_function.SetStatisticsCallback(DateTruncStats<date_t, timestamp_t>(part_code));
 			break;
 		default:
 			throw NotImplementedException("Temporal argument type for DATETRUNC");

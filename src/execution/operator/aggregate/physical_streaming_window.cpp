@@ -34,10 +34,10 @@ public:
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.aggregate;
 			bind_data = wexpr.bind_info.get();
-			dtor = aggregate.destructor;
-			state.resize(aggregate.state_size(aggregate));
+			dtor = aggregate.GetStateDestructorCallback();
+			state.resize(aggregate.GetStateSizeCallback()(aggregate));
 			state_ptr = state.data();
-			aggregate.initialize(aggregate, state.data());
+			aggregate.GetStateInitCallback()(aggregate, state.data());
 			for (auto &child : wexpr.children) {
 				arg_types.push_back(child->return_type);
 				executor.AddExpression(*child);
@@ -350,7 +350,7 @@ bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique
 	// TODO: add more expression types here?
 	case ExpressionType::WINDOW_AGGREGATE:
 		// Aggregates with destructors (e.g., quantile) are too slow to repeatedly update/finalize
-		if (wexpr.aggregate->destructor) {
+		if (wexpr.aggregate->HasStateDestructorCallback()) {
 			return false;
 		}
 		// We can stream aggregates if they are "running totals"
@@ -479,9 +479,10 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 			arg_cursor.data[struct_idx].Slice(arg_chunk.data[struct_idx], sel, 1);
 		}
 		if (filter_mask.RowIsValid(i) && distinct_mask.RowIsValid(i)) {
-			aggregate.update(arg_cursor.data.data(), aggr_input_data, arg_cursor.ColumnCount(), statev, 1);
+			aggregate.GetStateUpdateCallback()(arg_cursor.data.data(), aggr_input_data, arg_cursor.ColumnCount(),
+			                                   statev, 1);
 		}
-		aggregate.finalize(statev, aggr_input_data, result, 1, i);
+		aggregate.GetStateFinalizeCallback()(statev, aggr_input_data, result, 1, i);
 	}
 }
 

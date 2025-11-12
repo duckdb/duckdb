@@ -102,7 +102,7 @@ unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFun
 	// but the extension is not loaded
 	// try to autoload the extension
 	// first figure out which extension we need to auto-load
-	auto &function_info = bound_function.function_info->Cast<ExtensionFunctionInfo>();
+	auto &function_info = bound_function.GetExtraFunctionInfo().Cast<ExtensionFunctionInfo>();
 	auto &extension_name = function_info.extension;
 	auto &db = *context.db;
 
@@ -120,10 +120,10 @@ unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFun
 	// override the function with the extension function
 	bound_function = function_entry.functions.GetFunctionByArguments(context, bound_function.arguments);
 	// call the original bind (if any)
-	if (!bound_function.bind) {
+	if (!bound_function.HasBindCallback()) {
 		return nullptr;
 	}
-	return bound_function.bind(context, bound_function, arguments);
+	return bound_function.GetBindCallback()(context, bound_function, arguments);
 }
 
 void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {
@@ -154,7 +154,7 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 
 		ScalarFunction function(entry.name, std::move(arguments), std::move(return_type), nullptr,
 		                        BindExtensionFunction);
-		function.function_info = make_shared_ptr<ExtensionFunctionInfo>(entry.extension);
+		function.SetExtraFunctionInfo<ExtensionFunctionInfo>(entry.extension);
 		if (current_set.name != entry.name) {
 			if (!current_set.name.empty()) {
 				// create set of functions
