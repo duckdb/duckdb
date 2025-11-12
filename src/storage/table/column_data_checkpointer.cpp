@@ -79,7 +79,6 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 }
 
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
-	printf("\nColumnDataCheckpointer::ScanSegments()");
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().column_data;
@@ -269,7 +268,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		                col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
-	printf("\nCompression Methods Chosen!");
 	return result; // Here I can see which compression was chosen for what.
 }
 

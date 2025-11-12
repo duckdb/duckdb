@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/roaring/validity/roaring_analyze_array.test
+# name: test/sql/storage/compression/roaring/bool/roaring_bool_analyze_array_w_null.test
 # description: Check the produced (final_)analyze result
-# group: [validity]
+# group: [bool]
 
 require block_size 262144
 

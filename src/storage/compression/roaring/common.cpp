@@ -82,7 +82,6 @@ namespace duckdb {
 namespace roaring {
 // Set all the bits from start (inclusive) to end (exclusive) to 0
 void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
-	printf("\nSetInvalidRange");
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
 	}
@@ -225,25 +224,32 @@ unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, Column
 //===--------------------------------------------------------------------===//
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
-	printf("\nroaring::RoaringScanPartial");
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	printf("\nroaring::RoaringScan");
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 
 void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	Vector temp(LogicalType::UBIGINT, false, false, scan_count);
-	RoaringScan(segment, state, scan_count, temp);
-	// "UnBitPack" temp's validity_mask and put it in result's data
+	// dummy vector, only created to capture the booleans in the validity mask, as the current RoaringScan populates the
+	// scanned data in the vector's validity mask
+	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
+	RoaringScan(segment, state, scan_count, dummy);
+
+	// Get dummy's validity mask
 	UnifiedVectorFormat unified;
-	temp.ToUnifiedFormat(scan_count, unified);
+	dummy.ToUnifiedFormat(scan_count, unified);
 	auto &validity = unified.validity;
-	BitpackingPrimitives::UnPackBuffer<uint8_t>(result.GetData(), data_ptr_cast(validity.GetData()), scan_count, 1);
+
+	if (!validity.GetData()) {                   // All bits are set implicitly, so all valid.
+		memset(result.GetData(), 1, scan_count); // 1 is for valid
+	} else {
+		// "Bit-Unpack" dummy's validity_mask and put it in result's data
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(result.GetData(), data_ptr_cast(validity.GetData()), scan_count, 1);
+	}
 }
 
 //===--------------------------------------------------------------------===//
