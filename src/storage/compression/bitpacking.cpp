@@ -71,7 +71,7 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 }
 static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
 	bitpacking_metadata_t metadata;
-	metadata.mode = Load<BitpackingMode>(data_ptr_cast(metadata_encoded) + 3);
+	metadata.mode = static_cast<BitpackingMode>((*metadata_encoded >> 24) & 0xFF);
 	metadata.offset = *metadata_encoded & 0x00FFFFFF;
 	return metadata;
 }

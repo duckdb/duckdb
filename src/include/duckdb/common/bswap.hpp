@@ -79,6 +79,24 @@ static inline hugeint_t BSwap(const hugeint_t &x) {
 	return hugeint_t(static_cast<int64_t>(BSWAP64(x.upper)), BSWAP64(x.lower));
 }
 
+static inline float BSwap(const float &x) {
+	uint32_t temp;
+	std::memcpy(&temp, &x, sizeof(temp));
+	temp = BSWAP32(temp);
+	float result;
+	std::memcpy(&result, &temp, sizeof(result));
+	return result;
+}
+
+static inline double BSwap(const double &x) {
+	uint64_t temp;
+	std::memcpy(&temp, &x, sizeof(temp));
+	temp = BSWAP64(temp);
+	double result;
+	std::memcpy(&result, &temp, sizeof(result));
+	return result;
+}
+
 template <class T>
 static inline T BSwapIfLE(const T &x) {
 #if DUCKDB_IS_BIG_ENDIAN
