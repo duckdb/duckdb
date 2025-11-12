@@ -14,6 +14,12 @@ SELECT alias_ref('nope')
 ----
 no such alias exists in the SELECT list
 
+# alias to a subquery should error
+statement error
+SELECT (SELECT 1) AS x, alias_ref('x')
+----
+Alias "x" referenced in a SELECT clause - but the expression has a subquery. This is not yet supported
+
 # alias_ref() not allowed in WHERE
 statement error
 SELECT 1 AS x WHERE alias_ref('x') = 1
