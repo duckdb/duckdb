@@ -135,9 +135,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
-	// Handle alias_ref specially without requiring a catalog entry
 	if (StringUtil::CIEquals(function.function_name, "alias_ref")) {
-		// Only intercept alias_ref() when called with a single string literal argument
 		if (function.children.size() == 1 && function.children[0]->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			auto &const_expr = function.children[0]->Cast<ConstantExpression>();
 			if (const_expr.value.IsNull() || const_expr.value.type().id() != LogicalTypeId::VARCHAR) {
@@ -158,6 +156,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			    BinderException(function, "alias_ref(name): must be called with a single string literal argument"));
 		}
 	}
+
 	auto func = BindAndQualifyFunction(function, true);
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
