@@ -330,6 +330,7 @@ private:
 	static LogicalType TransformIntervalType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static LogicalType TransformIntervalInterval(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static DatePartSpecifier TransformInterval(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LogicalType TransformSetofType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// copy.gram
 	static unique_ptr<SQLStatement> TransformCopyStatement(PEGTransformer &transformer,
@@ -561,7 +562,7 @@ private:
 	static unique_ptr<ParsedExpression> TransformBetweenClause(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformLikeClause(PEGTransformer &transformer,
-                                                                        optional_ptr<ParseResult> parse_result);
+	                                                        optional_ptr<ParseResult> parse_result);
 	static string TransformLikeVariations(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
@@ -768,7 +769,7 @@ private:
 	TransformCatalogReservedSchemaIdentifierOrStringLiteral(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformCatalogReservedSchemaIdentifier(PEGTransformer &transformer,
-										optional_ptr<ParseResult> parse_result);
+	                                                              optional_ptr<ParseResult> parse_result);
 
 	static QualifiedName TransformSchemaReservedIdentifierOrStringLiteral(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);

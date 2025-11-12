@@ -112,9 +112,8 @@ PEGTransformerFactory::TransformCatalogReservedSchemaIdentifierOrStringLiteral(P
 	return result;
 }
 
-QualifiedName
-PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(PEGTransformer &transformer,
-										optional_ptr<ParseResult> parse_result) {
+QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
 	QualifiedName result;
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
