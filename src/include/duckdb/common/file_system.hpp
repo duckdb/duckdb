@@ -19,6 +19,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -63,7 +64,7 @@ struct FileMetadata {
 	FileType file_type = FileType::FILE_TYPE_INVALID;
 
 	// A key-value pair of the extended file metadata, which could store any attributes.
-	unordered_map<string, string> extended_file_info;
+	unordered_map<string, Value> extended_file_info;
 };
 
 struct FileHandle {
