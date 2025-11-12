@@ -245,11 +245,7 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 	CopyBase(other);
 	auto stats_type = GetStatsType();
 
-	if (stats_type != StatisticsType::VARIANT_STATS) {
-		//! FIXME: why were we doing this unconditionally?
-		//! This copy should be part of the ::Copy(*this, other) implementations
-		stats_union = other.stats_union;
-	}
+	stats_union = other.stats_union;
 	switch (stats_type) {
 	case StatisticsType::LIST_STATS:
 		ListStats::Copy(*this, other);

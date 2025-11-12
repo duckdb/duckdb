@@ -140,7 +140,6 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	auto &other_data = GetDataUnsafe(other);
 
 	if (other_data.is_shredded) {
-		const bool is_shredded = data.is_shredded;
 		if (!data.is_shredded) {
 			stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
 			data.is_shredded = true;
@@ -151,15 +150,11 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
-	stats.child_stats[0].Copy(other.child_stats[0]);
 	auto &data = VariantStats::GetDataUnsafe(stats);
 	auto &other_data = VariantStats::GetDataUnsafe(other);
+
+	stats.child_stats[0].Copy(other.child_stats[0]);
 	if (other_data.is_shredded) {
-		if (!data.is_shredded) {
-			stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
-			data.is_shredded = true;
-		}
-		//! FIXME: assumes equal shredding type?
 		stats.child_stats[1].Copy(other.child_stats[1]);
 	}
 }
