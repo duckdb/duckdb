@@ -119,15 +119,43 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	return result;
 }
 
+static const LogicalType &GetChildTypeRecursive(const LogicalType &type, const ColumnIndex &column_index) {
+	auto index = column_index.GetPrimaryIndex();
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	auto &child_type = child_types[index].second;
+	auto &children = column_index.GetChildIndexes();
+	if (child_type.id() == LogicalTypeId::STRUCT && !children.empty()) {
+		D_ASSERT(children.size() == 1);
+		return GetChildTypeRecursive(child_type, children[0]);
+	}
+	return child_type;
+}
+
 const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
+	optional_ptr<const LogicalType> res_p;
 	if (index.IsVirtualColumn()) {
 		auto entry = virtual_columns.find(index.GetPrimaryIndex());
 		if (entry == virtual_columns.end()) {
 			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
 		}
-		return entry->second.type;
+		res_p = entry->second.type;
+	} else {
+		res_p = returned_types[index.GetPrimaryIndex()];
 	}
-	return returned_types[index.GetPrimaryIndex()];
+	D_ASSERT(res_p);
+	auto &res = *res_p;
+
+	if (res.id() != LogicalTypeId::STRUCT) {
+		return res;
+	}
+	auto &children = index.GetChildIndexes();
+	if (children.empty()) {
+		return res;
+	}
+
+	D_ASSERT(children.size() == 1);
+	return GetChildTypeRecursive(res, children[0]);
 }
 
 const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {

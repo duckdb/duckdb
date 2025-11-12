@@ -43,6 +43,17 @@ idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
 }
 
+ColumnData &StructColumnData::GetChildColumn(const StorageIndex &storage_index) {
+	auto index = storage_index.GetPrimaryIndex();
+	auto &children = storage_index.GetChildIndexes();
+	D_ASSERT(index < sub_columns.size());
+	auto &child = *sub_columns[index];
+	if (!children.empty()) {
+		return child.GetChildColumn(children[0]);
+	}
+	return child;
+}
+
 void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {

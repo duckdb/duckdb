@@ -1,0 +1,22 @@
+# name: test/sql/types/struct/struct_projection_pushdown_in_storage.test
+# group: [struct]
+
+statement ok
+CREATE TABLE test_structs(i STRUCT(a integer, b bool));
+
+statement ok
+INSERT INTO test_structs VALUES
+	({'a': 1, 'b': true}),
+	({'a': 2, 'b': false}),
+	(NULL),
+	({'a': 3, 'b': true}),
+	({'a': NULL, 'b': NULL});
+
+query I
+SELECT i.a FROM test_structs;
+----
+1
+2
+NULL
+3
+NULL

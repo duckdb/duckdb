@@ -419,14 +419,18 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> *expression) {
 		return false;
 	}
 	D_ASSERT(!indexes.empty());
-	// construct the ColumnIndex
+	// construct the ColumnIndex and determine the field's type
+	reference<const LogicalType> type(colref->return_type);
 	ColumnIndex index = ColumnIndex(indexes[0]);
+	type = StructType::GetChildTypes(type.get())[indexes[0]].second;
 	for (idx_t i = 1; i < indexes.size(); i++) {
 		ColumnIndex new_index(indexes[i]);
+		type = StructType::GetChildTypes(type.get())[indexes[i]].second;
 		new_index.AddChildIndex(std::move(index));
 		index = std::move(new_index);
 	}
 
+	colref->return_type = type;
 	AddBinding(*colref, std::move(index));
 	*expression = std::move(colref);
 	return true;

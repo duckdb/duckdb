@@ -107,6 +107,10 @@ public:
 	//! Whether or not the column has changes at this level
 	bool HasChanges() const;
 
+	virtual ColumnData &GetChildColumn(const StorageIndex &index) {
+		throw InternalException("ColumnData of type %s has no child columns!", type.ToString());
+	}
+
 	//! Whether or not the column has ANY changes, including in child columns
 	virtual bool HasAnyChanges() const;
 	//! Whether or not we can scan an entire vector

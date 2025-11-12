@@ -127,7 +127,13 @@ ColumnData &RowGroup::GetRowIdColumnData() {
 }
 
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
-	return GetColumn(c.GetPrimaryIndex());
+	auto &res = GetColumn(c.GetPrimaryIndex());
+	auto &children = c.GetChildIndexes();
+	if (!children.empty()) {
+		D_ASSERT(children.size() == 1);
+		return res.GetChildColumn(children[0]);
+	}
+	return res;
 }
 
 ColumnData &RowGroup::GetColumn(storage_t c) {
@@ -239,15 +245,15 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 	Initialize(context_p, type, children, options);
 }
 
-void CollectionScanState::Initialize(const QueryContext &context, const vector<LogicalType> &types) {
+void CollectionScanState::Initialize(const QueryContext &context, RowGroupCollection &collection) {
 	auto &column_ids = GetColumnIds();
 	column_scans = make_unsafe_uniq_array<ColumnScanState>(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i].IsRowIdColumn()) {
 			continue;
 		}
-		auto col_id = column_ids[i].GetPrimaryIndex();
-		column_scans[i].Initialize(context, types[col_id], column_ids[i].GetChildIndexes(), &GetOptions());
+		auto &type = collection.GetType(column_ids[i]);
+		column_scans[i].Initialize(context, type, column_ids[i].GetChildIndexes(), &GetOptions());
 	}
 }
 
@@ -312,7 +318,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
-	scan_state.Initialize(executor.GetContext(), GetCollection().GetTypes());
+	scan_state.Initialize(executor.GetContext(), GetCollection());
 	InitializeScan(scan_state);
 
 	DataChunk append_chunk;

@@ -233,7 +233,7 @@ public:
 	unique_ptr<RowGroupReorderer> reorderer;
 
 public:
-	void Initialize(const QueryContext &context, const vector<LogicalType> &types);
+	void Initialize(const QueryContext &context, RowGroupCollection &collection);
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
