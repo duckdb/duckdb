@@ -172,7 +172,7 @@ bool ArrowTestHelper::CompareResults(Connection &con, unique_ptr<QueryResult> ar
 		for (idx_t i = 0; i < materialized_arrow.types.size(); i++) {
 			if (materialized_arrow.types[i] != duck->types[i] && duck->types[i].id() != LogicalTypeId::ENUM) {
 				mismatch_error = true;
-				error_msg << "Column " << i << "mismatch. DuckDB: '" << duck->types[i].ToString() << "'. Arrow '"
+				error_msg << "Column " << i << " mismatch. DuckDB: '" << duck->types[i].ToString() << "'. Arrow '"
 				          << materialized_arrow.types[i].ToString() << "'\n";
 			}
 		}
