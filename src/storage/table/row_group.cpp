@@ -1107,13 +1107,22 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	return WriteToDisk(info);
 }
 
+void IncrementSegmentStart(PersistentColumnData &data, idx_t start_increment) {
+	for (auto &pointer : data.pointers) {
+		pointer.row_start += start_increment;
+	}
+	for (auto &child_column : data.child_columns) {
+		IncrementSegmentStart(child_column, start_increment);
+	}
+}
+
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer,
-                                     TableStatistics &global_stats) {
+                                     TableStatistics &global_stats, idx_t row_group_start) {
 	RowGroupPointer row_group_pointer;
 
 	auto metadata_manager = writer.GetMetadataManager();
 	// construct the row group pointer and write the column meta data to disk
-	row_group_pointer.row_start = GetSegmentStart();
+	row_group_pointer.row_start = row_group_start;
 	row_group_pointer.tuple_count = count;
 	if (write_data.reuse_existing_metadata_blocks) {
 		// we are re-using the previous metadata
@@ -1161,6 +1170,9 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// Just as above, the state can refer to many other states, so this
 		// can cascade recursively into more pointer writes.
 		auto persistent_data = state->ToPersistentData();
+		// increment the "start" in all data pointers by the row group start
+		// FIXME: this is only necessary when targeting old serialization
+		IncrementSegmentStart(persistent_data, row_group_start);
 		BinarySerializer serializer(data_writer);
 		serializer.Begin();
 		persistent_data.Serialize(serializer);

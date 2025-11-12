@@ -373,7 +373,6 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	auto &col_data = state.column_data;
 	auto nodes = col_data.data.MoveSegments();
 
-	idx_t row_group_start = row_group.GetSegmentStart();
 	idx_t current_row = 0;
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto &segment = *nodes[segment_idx]->node;
@@ -392,13 +391,11 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 			    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
 			    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
 			    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
-			    row_group_start, row_group.count.load(), current_row, segment_start, root.get().column_index,
-			    col_data.type, root.get().type, root.get().info.GetSchemaName(), root.get().info.GetTableName(),
-			    extra_info);
+			    row_group.count.load(), current_row, segment_start, root.get().column_index, col_data.type,
+			    root.get().type, root.get().info.GetSchemaName(), root.get().info.GetTableName(), extra_info);
 		}
 		current_row += segment.count;
 		auto pointer = segment.GetDataPointer();
-		pointer.row_start += row_group_start;
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment.stats.statistics);

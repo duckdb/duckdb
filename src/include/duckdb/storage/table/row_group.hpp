@@ -171,7 +171,8 @@ public:
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
-	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats);
+	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
+	                           idx_t row_group_start);
 	bool IsPersistent() const;
 	PersistentRowGroupData SerializeRowGroupInfo(idx_t row_group_start) const;
 

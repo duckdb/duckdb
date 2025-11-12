@@ -185,7 +185,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	DataPointer data_pointer(segment->stats.statistics.Copy());
 	data_pointer.block_pointer.block_id = block_id;
 	data_pointer.block_pointer.offset = offset_in_block;
-	data_pointer.row_start = row_group.GetSegmentStart();
+	data_pointer.row_start = 0;
 	if (!data_pointers.empty()) {
 		auto &last_pointer = data_pointers.back();
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;

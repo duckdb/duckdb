@@ -1246,9 +1246,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		if (!row_group_writer) {
 			throw InternalException("Missing row group writer for index %llu", segment_idx);
 		}
+		idx_t row_start = new_total_rows;
 		bool metadata_reuse = checkpoint_state.write_data[segment_idx].reuse_existing_metadata_blocks;
-		auto pointer =
-		    row_group.Checkpoint(std::move(checkpoint_state.write_data[segment_idx]), *row_group_writer, global_stats);
+		auto pointer = row_group.Checkpoint(std::move(checkpoint_state.write_data[segment_idx]), *row_group_writer,
+		                                    global_stats, row_start);
 
 		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;

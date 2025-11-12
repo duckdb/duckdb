@@ -263,7 +263,7 @@ DataPointer ColumnSegment::GetDataPointer() {
 	DataPointer pointer(stats.statistics.Copy());
 	pointer.block_pointer.block_id = GetBlockId();
 	pointer.block_pointer.offset = NumericCast<uint32_t>(GetBlockOffset());
-	pointer.row_start = GetSegmentStart();
+	pointer.row_start = 0;
 	pointer.tuple_count = count;
 	pointer.compression_type = function.get().type;
 	if (function.get().serialize_state) {
