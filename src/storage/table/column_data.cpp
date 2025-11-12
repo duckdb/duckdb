@@ -206,8 +206,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			if (state.scan_options && state.scan_options->force_fetch_row) {
 				for (idx_t i = 0; i < scan_count; i++) {
 					ColumnFetchState fetch_state;
-					current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i), result,
-					                 result_offset + i);
+					current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i - current_start),
+					                 result, result_offset + i);
 				}
 			} else {
 				current.Scan(state, scan_count, result, result_offset, scan_type);
