@@ -86,7 +86,7 @@ public:
 	friend class ColumnData;
 
 public:
-	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
+	RowGroup(RowGroupCollection &collection, idx_t count);
 	RowGroup(RowGroupCollection &collection, RowGroupPointer pointer);
 	RowGroup(RowGroupCollection &collection, PersistentRowGroupData &data);
 	~RowGroup();
@@ -102,7 +102,7 @@ private:
 	vector<shared_ptr<ColumnData>> columns;
 
 public:
-	void MoveToCollection(RowGroupCollection &collection, idx_t new_start);
+	void MoveToCollection(RowGroupCollection &collection);
 	RowGroupCollection &GetCollection() {
 		return collection.get();
 	}

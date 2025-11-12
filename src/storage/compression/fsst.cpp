@@ -219,7 +219,7 @@ public:
 	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
-		CreateEmptySegment(0);
+		CreateEmptySegment();
 	}
 
 	~FSSTCompressionState() override {
@@ -241,12 +241,12 @@ public:
 		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 		Reset();
 	}
@@ -323,14 +323,12 @@ public:
 	}
 
 	void Flush(bool final = false) {
-		auto next_start = current_segment->GetSegmentStart() + current_segment->count;
-
 		auto segment_size = Finalize();
 		auto &state = checkpoint_data.GetCheckpointState();
 		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
-			CreateEmptySegment(next_start);
+			CreateEmptySegment();
 		}
 	}
 

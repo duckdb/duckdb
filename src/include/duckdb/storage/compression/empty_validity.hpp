@@ -60,8 +60,8 @@ public:
 		auto &type = checkpoint_data.GetType();
 
 		auto &info = state.info;
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, 0,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, info.GetBlockSize(),
+		                                                                info.GetBlockManager());
 		compressed_segment->count = state.count;
 		if (state.non_nulls != state.count) {
 			compressed_segment->stats.statistics.SetHasNullFast();

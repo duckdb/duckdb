@@ -383,7 +383,7 @@ public:
 	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
-		CreateEmptySegment(0);
+		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
 
@@ -497,12 +497,12 @@ public:
 		       info.GetBlockSize() - BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -524,9 +524,8 @@ public:
 
 	void FlushAndCreateSegmentIfFull(idx_t required_data_bytes, idx_t required_meta_bytes) {
 		if (!CanStore(required_data_bytes, required_meta_bytes)) {
-			idx_t row_start = current_segment->GetSegmentStart() + current_segment->count;
 			FlushSegment();
-			CreateEmptySegment(row_start);
+			CreateEmptySegment();
 		}
 	}
 

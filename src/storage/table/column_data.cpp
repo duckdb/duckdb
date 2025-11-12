@@ -634,8 +634,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
-	auto new_segment =
-	    ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_manager);
+	auto new_segment = ColumnSegment::CreateTransientSegment(db, *function, type, segment_size, block_manager);
 	AppendSegment(l, std::move(new_segment));
 }
 
@@ -729,8 +728,8 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
 		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
-		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
-		    std::move(data_pointer.statistics), std::move(data_pointer.segment_state));
+		    data_pointer.tuple_count, data_pointer.compression_type, std::move(data_pointer.statistics),
+		    std::move(data_pointer.segment_state));
 
 		auto l = data.Lock();
 		AppendSegment(l, std::move(segment));

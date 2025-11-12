@@ -175,9 +175,6 @@ public:
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		auto node = make_uniq<SegmentNode<T>>();
-		if (row_start != segment->GetSegmentStart()) {
-			throw InternalException("row_start is unaligned");
-		}
 		node->row_start = row_start;
 		node->node = std::move(segment);
 		node->index = nodes.size();

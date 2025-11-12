@@ -25,14 +25,14 @@
 
 namespace duckdb {
 
-RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t start, idx_t count)
-    : SegmentBase<RowGroup>(start, count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
+RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t count)
+    : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
       allocation_size(0), row_id_is_loaded(false), has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
-    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection_p), version_info(nullptr),
+    : SegmentBase<RowGroup>(pointer.tuple_count), collection(collection_p), version_info(nullptr),
       deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
@@ -52,8 +52,8 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
-    : SegmentBase<RowGroup>(data.start, data.count), collection(collection_p), version_info(nullptr),
-      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+    : SegmentBase<RowGroup>(data.count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
+      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
@@ -67,7 +67,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &dat
 	Verify();
 }
 
-void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_start) {
+void RowGroup::MoveToCollection(RowGroupCollection &collection_p) {
 	lock_guard<mutex> l(row_group_lock);
 	// FIXME
 	// MoveToCollection causes any_changes to be set to true because we are changing the start position of the row group
@@ -77,7 +77,6 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p, idx_t new_star
 	// especially when vacuuming from the beginning of large tables
 	has_changes = true;
 	this->collection = collection_p;
-	this->SetSegmentStart(new_start);
 	for (idx_t c = 0; c < columns.size(); c++) {
 		if (is_loaded && !is_loaded[c]) {
 			// we only need to set the column start position if it is already loaded
@@ -345,7 +344,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_uniq<RowGroup>(new_collection, GetSegmentStart(), this->count);
+	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
@@ -385,7 +384,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_uniq<RowGroup>(new_collection, GetSegmentStart(), this->count);
+	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	row_group->columns = GetColumns();
 	// now add the new column
@@ -400,7 +399,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 
 	D_ASSERT(removed_column < columns.size());
 
-	auto row_group = make_uniq<RowGroup>(new_collection, GetSegmentStart(), this->count);
+	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
 	// copy over all columns except for the removed one
 	auto &cols = GetColumns();
@@ -877,9 +876,6 @@ void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_
 
 void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataChunk &update_chunk, row_t *ids,
                       idx_t offset, idx_t count, const vector<PhysicalIndex> &column_ids, idx_t row_group_start) {
-	if (row_group_start != GetSegmentStart()) {
-		throw InternalException("RowGroup::Update - start unaligned");
-	}
 #ifdef DEBUG
 	for (size_t i = offset; i < offset + count; i++) {
 		D_ASSERT(ids[i] >= row_t(row_group_start) && ids[i] < row_t(row_group_start + this->count));
@@ -902,9 +898,6 @@ void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataCh
 
 void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
                             idx_t offset, idx_t count, const vector<column_t> &column_path, idx_t row_group_start) {
-	if (row_group_start != this->GetSegmentStart()) {
-		throw InternalException("RowGroup::UpdateColumn - start unaligned");
-	}
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 
@@ -1242,9 +1235,6 @@ bool RowGroup::IsPersistent() const {
 }
 
 PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) const {
-	if (row_group_start != GetSegmentStart()) {
-		throw InternalException("RowGroup::SerializeRowGroupInfo - row group start unaligned");
-	}
 	// all columns are persistent - serialize
 	PersistentRowGroupData result;
 	for (auto &col : columns) {
@@ -1296,9 +1286,6 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
 PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) const {
-	if (row_group_start != GetSegmentStart()) {
-		throw InternalException("RowGroup::GetPartitionStats - row group start unaligned");
-	}
 	PartitionStatistics result;
 	result.row_start = row_group_start;
 	result.count = count;
@@ -1348,9 +1335,6 @@ public:
 };
 
 idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count, idx_t row_group_start) {
-	if (row_group_start != GetSegmentStart()) {
-		throw InternalException("RowGroup::Delete - row group start unaligned");
-	}
 	VersionDeleteState del_state(*this, transaction, table, row_group_start);
 
 	// obtain a write lock

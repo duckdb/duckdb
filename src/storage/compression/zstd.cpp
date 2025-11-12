@@ -312,14 +312,8 @@ public:
 			throw InternalException("We are asking for a new segment, but somehow we're still writing vector data onto "
 			                        "the initial (segment) page");
 		}
-		idx_t row_start;
-		if (segment) {
-			row_start = segment->GetSegmentStart() + segment->count;
-			FlushSegment();
-		} else {
-			row_start = checkpoint_data.GetRowGroup().GetSegmentStart();
-		}
-		CreateEmptySegment(row_start);
+		FlushSegment();
+		CreateEmptySegment();
 
 		// Figure out how many vectors we are storing in this segment
 		idx_t vectors_in_segment;
@@ -524,11 +518,11 @@ public:
 		return res;
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
@@ -536,6 +530,9 @@ public:
 	}
 
 	void FlushSegment() {
+		if (!segment) {
+			return;
+		}
 		auto &state = checkpoint_data.GetCheckpointState();
 		idx_t segment_block_size;
 

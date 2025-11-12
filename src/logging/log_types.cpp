@@ -213,8 +213,7 @@ string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, DataTa
 string CheckpointLogType::ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
                                               RowGroup &row_group, idx_t row_group_start) {
 	vector<Value> map_keys = {"segment_idx", "start", "count"};
-	vector<Value> map_values = {to_string(segment_idx), to_string(row_group_start),
-	                            to_string(row_group.count.load())};
+	vector<Value> map_values = {to_string(segment_idx), to_string(row_group_start), to_string(row_group.count.load())};
 	return CreateLog(db, table, "checkpoint", std::move(map_keys), std::move(map_values));
 }
 

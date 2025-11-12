@@ -42,24 +42,23 @@ class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	//! Construct a column segment.
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
-	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
-	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
-	              const idx_t offset, const idx_t segment_size_p,
-	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	              const ColumnSegmentType segment_type, const idx_t count, CompressionFunction &function_p,
+	              BaseStatistics statistics, const block_id_t block_id_p, const idx_t offset,
+	              const idx_t segment_size_p, unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
-	ColumnSegment(ColumnSegment &other, const idx_t start);
+	ColumnSegment(ColumnSegment &other);
 	~ColumnSegment();
 
 public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
 	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
-	                                                         idx_t start, idx_t count, CompressionType compression_type,
+	                                                         idx_t count, CompressionType compression_type,
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
-	                                                        const LogicalType &type, const idx_t start,
-	                                                        const idx_t segment_size, BlockManager &block_manager);
+	                                                        const LogicalType &type, const idx_t segment_size,
+	                                                        BlockManager &block_manager);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);

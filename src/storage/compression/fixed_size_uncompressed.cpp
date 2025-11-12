@@ -46,7 +46,7 @@ public:
 	UncompressedCompressState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info);
 
 public:
-	virtual void CreateEmptySegment(idx_t row_start);
+	virtual void CreateEmptySegment();
 	void FlushSegment(idx_t segment_size);
 	void Finalize(idx_t segment_size);
 
@@ -61,15 +61,15 @@ UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointData &c
                                                      const CompressionInfo &info)
     : CompressionState(info), checkpoint_data(checkpoint_data),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED)) {
-	UncompressedCompressState::CreateEmptySegment(0);
+	UncompressedCompressState::CreateEmptySegment();
 }
 
-void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
+void UncompressedCompressState::CreateEmptySegment() {
 	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
-	                                                                info.GetBlockManager());
+	auto compressed_segment =
+	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		auto &storage_manager = checkpoint_data.GetStorageManager();
@@ -120,12 +120,11 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 			// appended everything: finished
 			return;
 		}
-		auto next_start = state.current_segment->GetSegmentStart() + state.current_segment->count;
 		// the segment is full: flush it to disk
 		state.FlushSegment(state.current_segment->FinalizeAppend(state.append_state));
 
 		// now create a new segment and continue appending
-		state.CreateEmptySegment(next_start);
+		state.CreateEmptySegment();
 		offset += appended;
 		count -= appended;
 	}

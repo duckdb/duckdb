@@ -140,7 +140,7 @@ ColumnDataType GetColumnDataType(idx_t row_start) {
 
 void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	D_ASSERT(start_row >= GetBaseRowId());
-	auto new_row_group = make_uniq<RowGroup>(*this, start_row, 0U);
+	auto new_row_group = make_uniq<RowGroup>(*this, 0U);
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
 	row_groups->AppendSegment(l, std::move(new_row_group), start_row);
 	requires_new_row_group = false;
@@ -158,10 +158,11 @@ void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
 	row_groups->Verify();
-	for (auto &row_group : row_groups->Segments()) {
+	for (auto &entry : row_groups->SegmentNodes()) {
+		auto &row_group = *entry.node;
 		row_group.Verify();
 		D_ASSERT(&row_group.GetCollection() == this);
-		D_ASSERT(row_group.GetSegmentStart() == this->GetBaseRowId() + current_total_rows);
+		D_ASSERT(entry.row_start == this->GetBaseRowId() + current_total_rows);
 		current_total_rows += row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());
@@ -605,7 +606,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	}
 	for (auto &entry : segments) {
 		auto &row_group = entry->node;
-		row_group->MoveToCollection(*this, index);
+		row_group->MoveToCollection(*this);
 
 		if (commit_state && (index - start_index) < optimistically_written_count) {
 			// serialize the block pointers of this row group
@@ -920,7 +921,7 @@ public:
 		idx_t start = row_start;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, row_group_size);
-			auto new_row_group = make_uniq<RowGroup>(collection, start, current_row_group_rows);
+			auto new_row_group = make_uniq<RowGroup>(collection, current_row_group_rows);
 			new_row_group->InitializeEmpty(types, ColumnDataType::MAIN_TABLE);
 			new_row_groups.push_back(std::move(new_row_group));
 			append_counts.push_back(0);
@@ -1167,7 +1168,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// schedule a checkpoint task for this row group
 			auto &row_group = *entry->node;
 			if (vacuum_state.row_start != entry->row_start) {
-				row_group.MoveToCollection(*this, vacuum_state.row_start);
+				row_group.MoveToCollection(*this);
 			} else if (!RefersToSameObject(row_group.GetCollection(), *this)) {
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
 			}
