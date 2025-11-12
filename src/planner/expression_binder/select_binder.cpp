@@ -32,7 +32,6 @@ unique_ptr<Expression> SelectBinder::TryResolveAliasReference(const string &alia
 		                      "not yet supported.",
 		                      alias_name);
 	}
-	// bind a fresh copy of the original unbound expression
 	auto copied_unbound = node.bind_state.BindAlias(alias_index);
 	return Bind(copied_unbound);
 }
