@@ -30,6 +30,12 @@ SELECT value FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpo
 ----
 1024
 
+# the 0 should be considered as false
+query I
+SELECT typeof(value) FROM duckdb_settings(in_bytes=0) WHERE name IN ('wal_autocheckpoint') LIMIT 1;
+----
+VARCHAR
+
 # Non-byte settings should not be returned at all
 statement ok
 SET default_collation='nfc';
@@ -38,13 +44,20 @@ query I
 SELECT value IS NULL FROM duckdb_settings(in_bytes=true) WHERE name='default_collation';
 ----
 
-# Incorrect inputs should error
-# - in_bytes must be boolean true/false
-statement error
-SELECT * FROM duckdb_settings(in_bytes=42);
-----
-Invalid Input Error: duckdb_settings: named parameter 'in_bytes' must be a non-NULL BOOLEAN (true/false)
 
+# We consider 1 as true
+query I
+SELECT value FROM duckdb_settings(in_bytes=1) WHERE name IN ('wal_autocheckpoint') LIMIT 1;;
+----
+1024
+
+# - non-zero should be consider true
+query I
+SELECT value FROM duckdb_settings(in_bytes=true) WHERE name IN ('wal_autocheckpoint') LIMIT 1;;
+----
+1024
+
+# Incorrect inputs should error
 # - unknown named parameter
 statement error
 SELECT * FROM duckdb_settings(hello=true);
@@ -56,18 +69,8 @@ statement error
 SELECT * FROM duckdb_settings(true);
 ----
 
-# 0/1/NULL should be rejected
-statement error
-SELECT * FROM duckdb_settings(in_bytes=0);
-----
-Invalid Input Error: duckdb_settings: named parameter 'in_bytes' must be a non-NULL BOOLEAN (true/false)
-
-statement error
-SELECT * FROM duckdb_settings(in_bytes=1);
-----
-Invalid Input Error: duckdb_settings: named parameter 'in_bytes' must be a non-NULL BOOLEAN (true/false)
-
+# NULL
 statement error
 SELECT * FROM duckdb_settings(in_bytes=NULL);
 ----
-Invalid Input Error: duckdb_settings: named parameter 'in_bytes' must be a non-NULL BOOLEAN (true/false)
+Binder Error: 'in_bytes' parameter cannot be NULL
