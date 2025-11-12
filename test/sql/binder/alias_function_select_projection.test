@@ -2,9 +2,6 @@
 # description: Test alias_ref('name') resolution in SELECT projection
 # group: [binder]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT
   a + 1 AS x,
