@@ -11,6 +11,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 
+#include <cstring>
+
 namespace duckdb {
 
 #ifndef DUCKDB_IS_BIG_ENDIAN
