@@ -19,11 +19,6 @@ public:
 	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                 ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
-	//! The sub-columns of the struct
-	vector<unique_ptr<ColumnData>> sub_columns;
-	//! The validity column data of the struct
-	ValidityColumnData validity;
-
 public:
 	void SetDataType(ColumnDataType data_type) override;
 	idx_t GetMaxEntry() override;
@@ -68,6 +63,13 @@ public:
 	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
 
 	void Verify(RowGroup &parent) override;
+
+protected:
+	//! The sub-columns of the struct
+	vector<shared_ptr<ColumnData>> sub_columns;
+	//! The validity column data of the struct
+	shared_ptr<ValidityColumnData> validity_data;
+	ValidityColumnData &validity;
 };
 
 } // namespace duckdb

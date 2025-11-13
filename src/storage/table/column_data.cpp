@@ -1002,33 +1002,19 @@ void ColumnData::Verify(RowGroup &parent) {
 #endif
 }
 
-template <class RET, class OP>
-static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                const LogicalType &type, ColumnDataType data_type, optional_ptr<ColumnData> parent) {
-	if (type.InternalType() == PhysicalType::STRUCT) {
-		return OP::template Create<StructColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.InternalType() == PhysicalType::LIST) {
-		return OP::template Create<ListColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.InternalType() == PhysicalType::ARRAY) {
-		return OP::template Create<ArrayColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.id() == LogicalTypeId::VALIDITY) {
-		return OP::template Create<ValidityColumnData>(block_manager, info, column_index, *parent);
-	}
-	return OP::template Create<StandardColumnData>(block_manager, info, column_index, type, data_type, parent);
-}
-
 shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                 const LogicalType &type, ColumnDataType data_type,
                                                 optional_ptr<ColumnData> parent) {
-	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, type,
-	                                                                       data_type, parent);
-}
-
-unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
-                                                      idx_t column_index, const LogicalType &type,
-                                                      ColumnDataType data_type, optional_ptr<ColumnData> parent) {
-	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, type,
-	                                                                       data_type, parent);
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		return make_shared_ptr<StructColumnData>(block_manager, info, column_index, type, data_type, parent);
+	} else if (type.InternalType() == PhysicalType::LIST) {
+		return make_shared_ptr<ListColumnData>(block_manager, info, column_index, type, data_type, parent);
+	} else if (type.InternalType() == PhysicalType::ARRAY) {
+		return make_shared_ptr<ArrayColumnData>(block_manager, info, column_index, type, data_type, parent);
+	} else if (type.id() == LogicalTypeId::VALIDITY) {
+		return make_shared_ptr<ValidityColumnData>(block_manager, info, column_index, *parent);
+	}
+	return make_shared_ptr<StandardColumnData>(block_manager, info, column_index, type, data_type, parent);
 }
 
 } // namespace duckdb

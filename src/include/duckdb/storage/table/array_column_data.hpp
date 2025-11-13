@@ -19,11 +19,6 @@ public:
 	ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
-	//! The child-column of the list
-	unique_ptr<ColumnData> child_column;
-	//! The validity column data of the array
-	ValidityColumnData validity;
-
 public:
 	void SetDataType(ColumnDataType data_type) override;
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
@@ -70,6 +65,13 @@ public:
 	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
 
 	void Verify(RowGroup &parent) override;
+
+protected:
+	//! The child-column of the list
+	shared_ptr<ColumnData> child_column;
+	//! The validity column data of the array
+	shared_ptr<ValidityColumnData> validity_data;
+	ValidityColumnData &validity;
 };
 
 } // namespace duckdb

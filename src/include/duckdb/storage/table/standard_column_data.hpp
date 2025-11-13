@@ -19,9 +19,6 @@ public:
 	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                   ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
-	//! The validity column data
-	ValidityColumnData validity;
-
 public:
 	void SetDataType(ColumnDataType data_type) override;
 
@@ -70,6 +67,11 @@ public:
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void Verify(RowGroup &parent) override;
+
+protected:
+	//! The validity column data
+	shared_ptr<ValidityColumnData> validity_data;
+	ValidityColumnData &validity;
 };
 
 } // namespace duckdb

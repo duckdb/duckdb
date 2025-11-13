@@ -53,7 +53,7 @@ private:
 
 enum class ColumnDataType { MAIN_TABLE, INITIAL_TRANSACTION_LOCAL, TRANSACTION_LOCAL };
 
-class ColumnData {
+class ColumnData : public enable_shared_from_this<ColumnData> {
 	friend class ColumnDataCheckpointer;
 
 public:
@@ -100,6 +100,9 @@ public:
 	const ColumnData &Parent() const {
 		D_ASSERT(HasParent());
 		return *parent;
+	}
+	const LogicalType &GetType() const {
+		return type;
 	}
 
 	//! The root type of the column
@@ -193,10 +196,6 @@ public:
 	                                           const LogicalType &type,
 	                                           ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
 	                                           optional_ptr<ColumnData> parent = nullptr);
-	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
-	                                                 idx_t column_index, const LogicalType &type,
-	                                                 ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
-	                                                 optional_ptr<ColumnData> parent = nullptr);
 
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);

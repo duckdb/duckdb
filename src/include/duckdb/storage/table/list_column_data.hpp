@@ -19,11 +19,6 @@ public:
 	ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	               ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
-	//! The child-column of the list
-	unique_ptr<ColumnData> child_column;
-	//! The validity column data of the list
-	ValidityColumnData validity;
-
 public:
 	void SetDataType(ColumnDataType data_type) override;
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
@@ -66,6 +61,13 @@ public:
 
 	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
 	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
+
+protected:
+	//! The child-column of the list
+	shared_ptr<ColumnData> child_column;
+	//! The validity column data of the list
+	shared_ptr<ValidityColumnData> validity_data;
+	ValidityColumnData &validity;
 
 private:
 	uint64_t FetchListOffset(idx_t row_idx);
