@@ -204,15 +204,15 @@ private:
 					get.GetMutableColumnIds().push_back(ColumnIndex(vc.first));
 				}
 
+				// Also temporarily don't project any columns out
+				projection_ids = std::move(get.projection_ids);
+
 				// FIXME: can probably work for nested columns in the future
 				for (const auto &col_id : column_ids) {
 					if (col_id.IsVirtualColumn() || col_id.HasChildren()) {
 						return false;
 					}
 				}
-
-				// Also temporarily don't project any columns out
-				projection_ids = std::move(get.projection_ids);
 
 				// Store mapping for base tables
 				auto &column_index_map = table_index_map.at(table_indices[0]);
