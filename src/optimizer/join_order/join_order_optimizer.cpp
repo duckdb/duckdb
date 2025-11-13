@@ -37,10 +37,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// extract the relations that go into the hyper graph.
 	// We optimize the children of any non-reorderable operations we come across.
-	if (op->type == LogicalOperatorType::LOGICAL_FILTER && op->children.size() > 0 &&
-	    op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto break_here = 0;
-	}
 	bool reorderable = query_graph_manager.Build(*this, *op);
 
 	// get relation_stats here since the reconstruction process will move all relations.

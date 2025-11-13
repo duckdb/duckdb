@@ -5,6 +5,12 @@
 require json
 
 statement ok
+CREATE TABLE tbl AS SELECT 42 AS i;
+
+statement ok
+SELECT SUM(i) OVER (ROWS BETWEEN (SELECT UNNEST([1])) PRECEDING AND 1 FOLLOWING) FROM tbl;
+
+statement ok
 CREATE OR REPLACE TABLE foo("field1" VARCHAR, "field2" INTEGER, "company-id" VARCHAR, "field3" VARCHAR);
 
 statement ok
