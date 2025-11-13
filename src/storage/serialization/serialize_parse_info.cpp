@@ -21,6 +21,7 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -222,12 +223,22 @@ void AddColumnInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WriteProperty<ColumnDefinition>(400, "new_column", new_column);
 	serializer.WritePropertyWithDefault<bool>(401, "if_column_not_exists", if_column_not_exists);
+	serializer.WritePropertyWithDefault<bool>(402, "replay_stable_result", replay_stable_result);
+	if (replay_stable_result) {
+		serializer.WriteProperty<PersistentCollectionData>(403, "stable_result", *stable_result);
+	}
 }
 
 unique_ptr<AlterTableInfo> AddColumnInfo::Deserialize(Deserializer &deserializer) {
 	auto new_column = deserializer.ReadProperty<ColumnDefinition>(400, "new_column");
 	auto result = duckdb::unique_ptr<AddColumnInfo>(new AddColumnInfo(std::move(new_column)));
 	deserializer.ReadPropertyWithDefault<bool>(401, "if_column_not_exists", result->if_column_not_exists);
+	deserializer.ReadPropertyWithDefault<bool>(402, "replay_stable_result", result->replay_stable_result);
+	if (result->replay_stable_result) {
+		// todo: deserializer.Set<DatabaseInstance &>(db.GetDatabase());
+		result->stable_result = make_shared_ptr<PersistentCollectionData>();
+		deserializer.ReadProperty<PersistentCollectionData>(403, "stable_result", *(result->stable_result));
+	}
 	return std::move(result);
 }
 

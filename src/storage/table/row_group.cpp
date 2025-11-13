@@ -352,24 +352,29 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Vector &result) {
+                                         ExpressionExecutor &executor, Vector &result,
+                                         shared_ptr<PersistentCollectionData> stable_result) {
 	Verify();
 
 	// construct a new column data for the new column
 	auto added_column =
 	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), GetColumnCount(), start, new_column.Type());
 
-	idx_t rows_to_write = this->count;
-	if (rows_to_write > 0) {
-		DataChunk dummy_chunk;
+	if (stable_result) {
+		added_column->InitializeColumn(stable_result->row_group_data[index].column_data[0]);
+	} else {
+		idx_t rows_to_write = this->count;
+		if (rows_to_write > 0) {
+			DataChunk dummy_chunk;
 
-		ColumnAppendState state;
-		added_column->InitializeAppend(state);
-		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
-			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
-			dummy_chunk.SetCardinality(rows_in_this_vector);
-			executor.ExecuteExpression(dummy_chunk, result);
-			added_column->Append(state, result, rows_in_this_vector);
+			ColumnAppendState state;
+			added_column->InitializeAppend(state);
+			for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
+				idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
+				dummy_chunk.SetCardinality(rows_in_this_vector);
+				executor.ExecuteExpression(dummy_chunk, result);
+				added_column->Append(state, result, rows_in_this_vector);
+			}
 		}
 	}
 
@@ -1004,6 +1009,22 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
 	return std::move(result[0]);
 }
 
+void RowGroup::WriteLastColumnToDisk(RowGroupWriteInfo &info) {
+	if (columns.empty()) {
+		throw InternalException("RowGroup::WriteLastColumnToDisk - columns is empty!");
+	}
+
+	auto column_idx = GetColumnCount() - 1;
+	auto &column = GetColumn(column_idx);
+	if (column.start != start) {
+		throw InternalException("RowGroup::WriteLastColumnToDisk - child-column is unaligned with row group");
+	}
+
+	ColumnCheckpointInfo checkpoint_info(info, column_idx);
+	auto checkpoint_state = column.Checkpoint(*this, checkpoint_info);
+	D_ASSERT(checkpoint_state);
+}
+
 idx_t RowGroup::GetCommittedRowCount() {
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
@@ -1204,11 +1225,18 @@ bool RowGroup::IsPersistent() const {
 	return true;
 }
 
-PersistentRowGroupData RowGroup::SerializeRowGroupInfo() const {
+PersistentRowGroupData RowGroup::SerializeRowGroupInfo(bool only_last_column) const {
 	// all columns are persistent - serialize
 	PersistentRowGroupData result;
-	for (auto &col : columns) {
-		result.column_data.push_back(col->Serialize());
+	if (only_last_column) {
+		if (columns.empty()) {
+			throw InternalException("RowGroup::SerializeRowGroupInfo - columns is empty!");
+		}
+		result.column_data.push_back(columns.back()->Serialize());
+	} else {
+		for (auto &col : columns) {
+			result.column_data.push_back(col->Serialize());
+		}
 	}
 	result.start = start;
 	result.count = count;

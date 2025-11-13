@@ -21,6 +21,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/add_column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
@@ -70,7 +71,8 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	row_groups->Verify();
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value)
+DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value,
+                     bool is_replay_wal, unique_ptr<AddColumnCheckpointState> add_column_checkpoint_state)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
 	// add the column definitions from this DataTable
 	for (auto &column_def : parent.column_definitions) {
@@ -86,7 +88,19 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 
-	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
+	shared_ptr<PersistentCollectionData> stable_result = nullptr;
+	if (add_column_checkpoint_state && is_replay_wal) {
+		// Use `stable_result` to restore `row_groups`
+		stable_result = add_column_checkpoint_state->GetStableResult();
+	}
+
+	this->row_groups = parent.row_groups->AddColumn(context, new_column, default_executor, stable_result);
+
+	if (add_column_checkpoint_state && !is_replay_wal) {
+		// When `ADD COLUMN`, if FUNCTION is bound, we need to persist the execution result
+		add_column_checkpoint_state->FlushToDisk(*this->row_groups);
+		persist_added_column = true;
+	}
 
 	// also add this column to client local storage
 	local_storage.AddColumn(parent, *this, new_column, default_executor);
@@ -1641,6 +1655,13 @@ void DataTable::CommitDropTable() {
 		index.Cast<BoundIndex>().CommitDrop();
 		return false;
 	});
+}
+
+void DataTable::RollbackAddedColumnIfNeeded() {
+	if (persist_added_column) {
+		// ROLLBACK the last column we previously added and persisted
+		CommitDropColumn(column_definitions.size() - 1);
+	}
 }
 
 //===--------------------------------------------------------------------===//

@@ -561,6 +561,7 @@ void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &inf
 	if (only_deserialize) {
 		return;
 	}
+	info.is_replay_wal = true;
 	catalog.Alter(context, info);
 }
 
@@ -594,10 +595,29 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	});
 }
 
+static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data);
+
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
 	if (!alter_info.IsAddPrimaryKey()) {
+		if (DeserializeOnly()) {
+			if (alter_info.type == AlterType::ALTER_TABLE &&
+			    alter_info.Cast<AlterTableInfo>().alter_table_type == AlterTableType::ADD_COLUMN) {
+				auto &add_column_info = alter_info.Cast<AddColumnInfo>();
+				auto &block_manager = db.GetStorageManager().GetBlockManager();
+				if (add_column_info.stable_result) {
+					// label blocks in stable_result as used - they will be used after the WAL replay is finished
+					// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
+					// by previous deserialization steps
+					for (auto &group : add_column_info.stable_result->row_group_data) {
+						for (auto &col_data : group.column_data) {
+							MarkBlocksAsUsed(block_manager, col_data);
+						}
+					}
+				}
+			}
+		}
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
