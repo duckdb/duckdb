@@ -74,13 +74,13 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
-	// Returns true if alias_ref('name') references are allowed in this binder context
+	// Returns true if alias.name references are allowed in this binder context
 	virtual bool SupportsAliasReference() const {
 		return false;
 	}
-	// Try to resolve alias_ref('name') in contexts that support it; default returns nullptr to defer
+	// Try to resolve alias.name in contexts that support it; default returns nullptr to defer
 	virtual unique_ptr<Expression> TryResolveAliasReference(const string &alias_name,
-	                                                        const FunctionExpression &function) {
+	                                                        const ColumnRefExpression &col_ref_p) {
 		return nullptr;
 	}
 

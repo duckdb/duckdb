@@ -21,7 +21,7 @@ public:
 		return true;
 	}
 	unique_ptr<Expression> TryResolveAliasReference(const string &alias_name,
-	                                                const FunctionExpression &function) override;
+	                                                const ColumnRefExpression &column_ref_p) override;
 
 protected:
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;

@@ -510,6 +510,21 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 
+	if (col_ref_p.IsQualified() && StringUtil::CIEquals(col_ref_p.GetTableName(), "alias")) {
+		if (!SupportsAliasReference()) {
+			throw BinderException(col_ref_p, "alias.* references are only valid in a SELECT projection list");
+		}
+		const auto &alias_name = col_ref_p.GetColumnName();
+
+		auto resolved = TryResolveAliasReference(alias_name, col_ref_p);
+		if (!resolved) {
+			throw BinderException(col_ref_p,
+				"alias.%s refers to an unknown or not-yet-defined alias in SELECT list", alias_name);
+		}
+		resolved->SetQueryLocation(col_ref_p.GetQueryLocation());
+		return BindResult(std::move(resolved));
+	}
+
 	ErrorData error;
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
