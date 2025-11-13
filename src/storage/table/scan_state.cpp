@@ -70,42 +70,45 @@ void AddRowGroups(multimap<Value, RowGroupMapEntry> &row_group_map, It it, End e
 	auto last_unresolved_boundary = RowGroupReorderer::RetrieveStat(*it->second.stats, opposite_stat_type, column_type);
 
 	// Try to find row groups that can be excluded with offset
-	idx_t seen_tuples = 0;
-	idx_t new_row_offset = row_offset;
-	auto offset_it = it;
-	vector<It> delete_row_group_its;
+	if (row_offset > 0) {
+		idx_t seen_tuples = 0;
+		idx_t new_row_offset = row_offset;
+		auto offset_it = it;
+		vector<It> delete_row_group_its;
 
-	for (; offset_it != end; ++offset_it) {
-		auto &current_key = offset_it->first;
-		auto &row_group = *offset_it->second.row_group.get().node;
-		seen_tuples += row_group.count;
+		for (; offset_it != end; ++offset_it) {
+			auto &current_key = offset_it->first;
+			auto &row_group = *offset_it->second.row_group.get().node;
+			seen_tuples += row_group.count;
 
-		while (last_unresolved_entry != offset_it) {
-			if (!CompareValues(current_key, last_unresolved_boundary, stat_type)) {
+			while (last_unresolved_entry != offset_it) {
+				if (!CompareValues(current_key, last_unresolved_boundary, stat_type)) {
+					break;
+				}
+				// Row groups do not overlap
+				auto &current_stats = offset_it->second.stats;
+				if (!current_stats->CanHaveNull()) {
+					// This row group has exactly row_group.count valid values. We can exclude those
+					delete_row_group_its.push_back(last_unresolved_entry);
+					new_row_offset -= row_group.count;
+				}
+
+				++last_unresolved_entry;
+				auto &upcoming_stats = *last_unresolved_entry->second.stats;
+				last_unresolved_boundary =
+				    RowGroupReorderer::RetrieveStat(upcoming_stats, opposite_stat_type, column_type);
+			}
+
+			if (seen_tuples > row_offset) {
 				break;
 			}
-			// Row groups do not overlap
-			auto &current_stats = offset_it->second.stats;
-			if (!current_stats->CanHaveNull()) {
-				// This row group has exactly row_group.count valid values. We can exclude those
-				delete_row_group_its.push_back(last_unresolved_entry);
-				new_row_offset -= row_group.count;
-			}
-
-			++last_unresolved_entry;
-			auto &upcoming_stats = *last_unresolved_entry->second.stats;
-			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(upcoming_stats, opposite_stat_type, column_type);
 		}
 
-		if (seen_tuples > row_offset) {
-			break;
+		for (auto &delete_it : delete_row_group_its) {
+			EraseFromMultiMap(row_group_map, delete_it);
 		}
+		ResetIterator(row_group_map, it);
 	}
-
-	for (auto &delete_it : delete_row_group_its) {
-		EraseFromMultiMap(row_group_map, delete_it);
-	}
-	ResetIterator(row_group_map, it);
 
 	last_unresolved_entry = it;
 	auto &last_stats = it->second.stats;
