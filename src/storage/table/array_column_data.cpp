@@ -8,20 +8,20 @@
 
 namespace duckdb {
 
-ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                 LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                 LogicalType type_p, ColumnDataType data_type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
+      validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
 	auto &child_type = ArrayType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
-	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, start_row, child_type, this);
+	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, child_type, data_type, this);
 }
 
-void ArrayColumnData::SetStart(idx_t new_start) {
-	this->start = new_start;
-	child_column->SetStart(new_start);
-	validity.SetStart(new_start);
+void ArrayColumnData::SetDataType(ColumnDataType data_type) {
+	ColumnData::SetDataType(data_type);
+	child_column->SetDataType(data_type);
+	validity.SetDataType(data_type);
 }
 
 FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -41,7 +41,7 @@ void ArrayColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
 
-	state.row_index = 0;
+	state.offset_in_column = 0;
 	state.current = nullptr;
 
 	validity.InitializeScan(state.child_states[0]);
@@ -59,18 +59,18 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 		return;
 	}
 
-	state.row_index = row_idx;
+	state.offset_in_column = row_idx;
 	state.current = nullptr;
 
 	// initialize the validity segment
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	auto array_size = ArrayType::GetSize(type);
-	auto child_count = (row_idx - start) * array_size;
+	auto child_count = row_idx * array_size;
 
 	D_ASSERT(child_count <= child_column->GetMaxEntry());
 	if (child_count < child_column->GetMaxEntry()) {
-		const auto child_offset = start + child_count;
+		const auto child_offset = child_count;
 		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
 }
@@ -210,14 +210,14 @@ void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Ve
 	this->count += count;
 }
 
-void ArrayColumnData::RevertAppend(row_t start_row) {
+void ArrayColumnData::RevertAppend(row_t new_count) {
 	// Revert validity
-	validity.RevertAppend(start_row);
+	validity.RevertAppend(new_count);
 	// Revert child column
 	auto array_size = ArrayType::GetSize(type);
-	child_column->RevertAppend(start_row * UnsafeNumericCast<row_t>(array_size));
+	child_column->RevertAppend(new_count * UnsafeNumericCast<row_t>(array_size));
 
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
+	this->count = UnsafeNumericCast<idx_t>(new_count);
 }
 
 idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -225,13 +225,13 @@ idx_t ArrayColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 }
 
 void ArrayColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
-                             Vector &update_vector, row_t *row_ids, idx_t update_count) {
+                             Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw NotImplementedException("Array Update is not supported.");
 }
 
 void ArrayColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
                                    const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
-                                   idx_t update_count, idx_t depth) {
+                                   idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw NotImplementedException("Array Update Column is not supported");
 }
 
@@ -255,14 +255,14 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	auto array_size = ArrayType::GetSize(type);
 
 	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
-	auto child_state = make_uniq<ColumnScanState>();
-	child_state->Initialize(state.context, child_type, nullptr);
+	ColumnScanState child_state(nullptr);
+	child_state.Initialize(state.context, child_type, nullptr);
 
-	const auto child_offset = start + (UnsafeNumericCast<idx_t>(row_id) - start) * array_size;
+	const auto child_offset = UnsafeNumericCast<idx_t>(row_id) * array_size;
 
-	child_column->InitializeScanWithOffset(*child_state, child_offset);
+	child_column->InitializeScanWithOffset(child_state, child_offset);
 	Vector child_scan(child_type, array_size);
-	child_column->ScanCount(*child_state, child_scan, array_size);
+	child_column->ScanCount(child_state, child_scan, array_size);
 	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
 }
 

@@ -16,11 +16,9 @@ namespace duckdb {
 template <class T>
 class SegmentBase {
 public:
-	SegmentBase(idx_t start, idx_t count) : start(start), count(count) {
+	explicit SegmentBase(idx_t count) : count(count) {
 	}
 
-	//! The start row id of this chunk
-	idx_t start;
 	//! The amount of entries in this storage chunk
 	atomic<idx_t> count;
 };

@@ -14,7 +14,7 @@ namespace duckdb {
 
 class RowIdColumnData : public ColumnData {
 public:
-	RowIdColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t start_row);
+	RowIdColumnData(BlockManager &block_manager, DataTableInfo &info);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
@@ -46,12 +46,13 @@ public:
 	void InitializeAppend(ColumnAppendState &state) override;
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
-	void RevertAppend(row_t start_row) override;
+	void RevertAppend(row_t new_count) override;
 
 	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
-	            row_t *row_ids, idx_t update_count) override;
+	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
 	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
-	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) override;
+	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
+	                  idx_t row_group_start) override;
 
 	void CommitDropColumn() override;
 
@@ -59,8 +60,7 @@ public:
 	                                                        PartialBlockManager &partial_block_manager) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
 
-	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
-	                    Vector &scan_vector) override;
+	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) override;
 
 	bool IsPersistent() override;
 };

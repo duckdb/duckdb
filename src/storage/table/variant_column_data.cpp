@@ -14,16 +14,16 @@
 namespace duckdb {
 
 VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                     idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+                                     LogicalType type_p, ColumnDataType data_type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
+      validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
 	auto unshredded_type = VariantShredding::GetUnshreddedType();
 	sub_columns.push_back(
-	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index++, start_row, unshredded_type, this));
+	    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index++, unshredded_type, data_type, this));
 }
 
 void VariantColumnData::ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded) {
@@ -40,24 +40,18 @@ void VariantColumnData::ReplaceColumns(unique_ptr<ColumnData> &&unshredded, uniq
 void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	//! Re-initialize the scan state, since VARIANT can have a different shape for every RowGroup
 	state.child_states.clear();
-	state.child_states.resize(sub_columns.size() + 1);
+
+	state.child_states.emplace_back(state.parent);
+	state.child_states[0].scan_options = state.scan_options;
 
 	auto unshredded_type = VariantShredding::GetUnshreddedType();
+	state.child_states.emplace_back(state.parent);
 	state.child_states[1].Initialize(state.context, unshredded_type, state.scan_options);
 	if (is_shredded) {
 		auto &shredded_column = sub_columns[1];
+		state.child_states.emplace_back(state.parent);
 		state.child_states[2].Initialize(state.context, shredded_column->type, state.scan_options);
 	}
-	state.child_states[0].scan_options = state.scan_options;
-}
-
-void VariantColumnData::SetStart(idx_t new_start) {
-	this->start = new_start;
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		auto &sub_column = sub_columns[i];
-		sub_column->SetStart(new_start);
-	}
-	validity.SetStart(new_start);
 }
 
 idx_t VariantColumnData::GetMaxEntry() {
@@ -73,7 +67,6 @@ void VariantColumnData::InitializePrefetch(PrefetchState &prefetch_state, Column
 
 void VariantColumnData::InitializeScan(ColumnScanState &state) {
 	CreateScanStates(state);
-	state.row_index = 0;
 	state.current = nullptr;
 
 	// initialize the validity segment
@@ -87,7 +80,6 @@ void VariantColumnData::InitializeScan(ColumnScanState &state) {
 
 void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	CreateScanStates(state);
-	state.row_index = row_idx;
 	state.current = nullptr;
 
 	// initialize the validity segment
@@ -250,13 +242,13 @@ void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, 
 	this->count += count;
 }
 
-void VariantColumnData::RevertAppend(row_t start_row) {
-	validity.RevertAppend(start_row);
+void VariantColumnData::RevertAppend(row_t new_count) {
+	validity.RevertAppend(new_count);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		auto &sub_column = sub_columns[i];
-		sub_column->RevertAppend(start_row);
+		sub_column->RevertAppend(new_count);
 	}
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
+	this->count = UnsafeNumericCast<idx_t>(new_count);
 }
 
 idx_t VariantColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -264,13 +256,13 @@ idx_t VariantColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 }
 
 void VariantColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
-                               Vector &update_vector, row_t *row_ids, idx_t update_count) {
+                               Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw NotImplementedException("VARIANT Update is not supported.");
 }
 
 void VariantColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
                                      const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
-                                     idx_t update_count, idx_t depth) {
+                                     idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw NotImplementedException("VARIANT Update Column is not supported");
 }
 
@@ -379,8 +371,8 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	auto &typed_value_type = child_types[1].second;
 
 	vector<unique_ptr<ColumnData>> ret(2);
-	ret[0] = CreateColumnUnique(block_manager, info, 1, start, unshredded_type, this);
-	ret[1] = CreateColumnUnique(block_manager, info, 2, start, typed_value_type, this);
+	ret[0] = CreateColumnUnique(block_manager, info, 1, unshredded_type, GetDataType(), this);
+	ret[1] = CreateColumnUnique(block_manager, info, 2, typed_value_type, GetDataType(), this);
 	auto &unshredded = ret[0];
 	auto &shredded = ret[1];
 
@@ -390,7 +382,7 @@ vector<unique_ptr<ColumnData>> VariantColumnData::WriteShreddedData(RowGroup &ro
 	ColumnAppendState shredded_append_state;
 	shredded->InitializeAppend(shredded_append_state);
 
-	ColumnScanState scan_state;
+	ColumnScanState scan_state(nullptr);
 
 	InitializeScan(scan_state);
 	//! Scan + transform + append
@@ -423,7 +415,7 @@ LogicalType VariantColumnData::GetShreddedType() {
 	scan_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::VARIANT()}, STANDARD_VECTOR_SIZE);
 	auto &scan_vector = scan_chunk.data[0];
 
-	ColumnScanState scan_state;
+	ColumnScanState scan_state(nullptr);
 	InitializeScan(scan_state);
 	idx_t total_count = count.load();
 	idx_t vector_index = 0;
@@ -525,7 +517,8 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 		auto &shredded_type = column_data.variant_shredded_type;
 		if (!is_shredded) {
 			VariantStats::SetShreddedStats(target_stats, BaseStatistics::CreateEmpty(shredded_type));
-			sub_columns.push_back(ColumnData::CreateColumnUnique(block_manager, info, 2, start, shredded_type, this));
+			sub_columns.push_back(
+			    ColumnData::CreateColumnUnique(block_manager, info, 2, shredded_type, GetDataType(), this));
 			is_shredded = true;
 		}
 		auto &shredded_stats = VariantStats::GetShreddedStats(target_stats);
