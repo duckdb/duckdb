@@ -35,13 +35,13 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(PEGT
 	transformer.TransformOptional<string>(list_pr, 7, index_info->index_type);
 	auto index_elements_opt = list_pr.Child<OptionalParseResult>(8);
 	if (index_elements_opt.HasResult()) {
-        auto extract_parens = ExtractResultFromParens(index_elements_opt.optional_result);
-        auto index_element_list = ExtractParseResultsFromList(extract_parens);
-        for (auto index_element : index_element_list) {
-            auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(index_element);
-            index_info->expressions.push_back(expr->Copy());
-            index_info->parsed_expressions.push_back(expr->Copy());
-        }
+		auto extract_parens = ExtractResultFromParens(index_elements_opt.optional_result);
+		auto index_element_list = ExtractParseResultsFromList(extract_parens);
+		for (auto index_element : index_element_list) {
+			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(index_element);
+			index_info->expressions.push_back(expr->Copy());
+			index_info->parsed_expressions.push_back(expr->Copy());
+		}
 	}
 
 	transformer.TransformOptional<case_insensitive_map_t<Value>>(list_pr, 9, index_info->options);
@@ -71,12 +71,14 @@ case_insensitive_map_t<Value> PEGTransformerFactory::TransformWithList(PEGTransf
 	return transformer.Transform<case_insensitive_map_t<Value>>(list_pr.Child<ListParseResult>(1));
 }
 
-case_insensitive_map_t<Value> PEGTransformerFactory::TransformRelOptionOrOids(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+case_insensitive_map_t<Value> PEGTransformerFactory::TransformRelOptionOrOids(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<case_insensitive_map_t<Value>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-case_insensitive_map_t<Value> PEGTransformerFactory::TransformRelOptionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+case_insensitive_map_t<Value> PEGTransformerFactory::TransformRelOptionList(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	case_insensitive_map_t<Value> result;
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
@@ -88,11 +90,13 @@ case_insensitive_map_t<Value> PEGTransformerFactory::TransformRelOptionList(PEGT
 	return result;
 }
 
-case_insensitive_map_t<Value> PEGTransformerFactory::TransformOids(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+case_insensitive_map_t<Value> PEGTransformerFactory::TransformOids(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
 	throw NotImplementedException("Oids for index are not yet implemented.");
 }
 
-pair<string, Value> PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+pair<string, Value> PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer,
+                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
 	auto option_name = StringUtil::Join(dotted_identifier, ".");
@@ -123,7 +127,6 @@ pair<string, Value> PEGTransformerFactory::TransformRelOption(PEGTransformer &tr
 	}
 	return {option_name, option};
 }
-
 
 string PEGTransformerFactory::TransformIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
