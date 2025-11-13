@@ -115,7 +115,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 						data_ptr_t read_ptr;
 						actually_read = NumericCast<idx_t>(bytes_to_read);
 						auto buffer_handle = file_handle->Read(read_ptr, actually_read);
-						state.stream->ReadData(read_ptr, actually_read);
+						state.stream->WriteData(read_ptr, actually_read);
 					} else {
 						// Local file: non-caching read
 						actually_read = NumericCast<idx_t>(file_handle->GetFileHandle().Read(
