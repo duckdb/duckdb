@@ -1,51 +1,46 @@
 # name: test/sql/binder/alias_function_errors.test
-# description: Negative tests for alias_ref('name') resolution
+# description: Negative tests for alias.name resolution
 # group: [binder]
 
 # forward reference should error
 statement error
-SELECT alias_ref('x') + 1 AS y, 1 AS x
+SELECT alias.x + 1 AS y, 1 AS x
 ----
-alias_ref('x') references an alias defined after the current expression
+alias.x references an alias defined after the current expression
 
 # unknown alias should error
 statement error
-SELECT alias_ref('nope')
+SELECT alias.nope;
 ----
-no such alias exists in the SELECT list
+Binder Error: alias.nope referenced, but no such alias exists in the SELECT list
 
 # alias to a subquery should error
 statement error
-SELECT (SELECT 1) AS x, alias_ref('x')
+SELECT (SELECT 1) AS x, alias.x
 ----
 Alias "x" referenced in a SELECT clause - but the expression has a subquery. This is not yet supported
 
-# alias_ref() not allowed in WHERE
+# alias. is not allowed in WHERE
 statement error
-SELECT 1 AS x WHERE alias_ref('x') = 1
+SELECT 1 AS x WHERE alias.x = 1
 ----
-can only be used inside a SELECT projection list
+Binder Error: alias.* references are only valid in a SELECT projection list
 
-# alias_ref() not allowed in GROUP BY
+# alias. not allowed in GROUP BY
 statement error
-SELECT 1 AS x GROUP BY alias_ref('x')
+SELECT 1 AS x GROUP BY alias.x
 ----
-can only be used inside a SELECT projection list
+Binder Error: alias.* references are only valid in a SELECT projection list
 
-# alias_ref with multiple arguments should error
+# alias ref with non-string argument should error already in the parsing phase
 statement error
-SELECT 5 as x, 8 as y, alias_ref('x', 'y');
+SELECT 5 as x, alias.123;
 ----
-alias_ref(name): must be called with a single string literal argument
+Parser Error: syntax error at or near ".123"
 
-# alias_ref with non-string argument should error
+# alias ref with NULL argument will actually be considered as a column name, but since no such alias exists, it should
+# error
 statement error
-SELECT 5 as x, alias_ref(123);
+SELECT 5 as x, alias.NULL;
 ----
-alias_ref(name): argument must be a non-NULL string literal
-
-# alias_ref with NULL argument should error
-statement error
-SELECT 5 as x, alias_ref(NULL);
-----
-alias_ref(name): argument must be a non-NULL string literal
+Binder Error: alias.NULL referenced, but no such alias exists in the SELECT list
