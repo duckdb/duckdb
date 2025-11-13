@@ -49,6 +49,10 @@ StorageManager &ColumnData::GetStorageManager() const {
 	return info.GetDB().GetStorageManager();
 }
 
+shared_ptr<ValidityColumnData> &ColumnData::GetValidityData() {
+	throw InternalException("ColumnData::GetValidityData - ColumnData does not have validity data");
+}
+
 const LogicalType &ColumnData::RootType() const {
 	if (parent) {
 		return parent->RootType();
@@ -92,11 +96,6 @@ bool ColumnData::HasChanges() const {
 
 bool ColumnData::HasAnyChanges() const {
 	return HasChanges();
-}
-
-void ColumnData::ClearUpdates() {
-	lock_guard<mutex> update_guard(update_lock);
-	updates.reset();
 }
 
 idx_t ColumnData::GetMaxEntry() {
@@ -1012,7 +1011,7 @@ shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, Dat
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		return make_shared_ptr<ArrayColumnData>(block_manager, info, column_index, type, data_type, parent);
 	} else if (type.id() == LogicalTypeId::VALIDITY) {
-		return make_shared_ptr<ValidityColumnData>(block_manager, info, column_index, *parent);
+		return make_shared_ptr<ValidityColumnData>(block_manager, info, column_index, data_type, parent);
 	}
 	return make_shared_ptr<StandardColumnData>(block_manager, info, column_index, type, data_type, parent);
 }

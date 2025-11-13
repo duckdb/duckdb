@@ -905,9 +905,9 @@ struct VacuumState {
 class VacuumTask : public BaseCheckpointTask {
 public:
 	VacuumTask(CollectionCheckpointState &checkpoint_state, VacuumState &vacuum_state, idx_t segment_idx,
-	           idx_t merge_count, idx_t target_count, idx_t merge_rows, idx_t row_start)
+	           idx_t merge_count, idx_t target_count, idx_t merge_rows)
 	    : BaseCheckpointTask(checkpoint_state), vacuum_state(vacuum_state), segment_idx(segment_idx),
-	      merge_count(merge_count), target_count(target_count), merge_rows(merge_rows), row_start(row_start) {
+	      merge_count(merge_count), target_count(target_count), merge_rows(merge_rows) {
 	}
 
 	void ExecuteTask() override {
@@ -918,7 +918,6 @@ public:
 		vector<unique_ptr<RowGroup>> new_row_groups;
 		vector<idx_t> append_counts;
 		idx_t row_group_rows = merge_rows;
-		idx_t start = row_start;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, row_group_size);
 			auto new_row_group = make_uniq<RowGroup>(collection, current_row_group_rows);
@@ -927,7 +926,6 @@ public:
 			append_counts.push_back(0);
 
 			row_group_rows -= current_row_group_rows;
-			start += current_row_group_rows;
 		}
 
 		DataChunk scan_chunk;
@@ -1019,7 +1017,6 @@ private:
 	idx_t merge_count;
 	idx_t target_count;
 	idx_t merge_rows;
-	idx_t row_start;
 };
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
@@ -1122,8 +1119,8 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// schedule the vacuum task
 	DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx, merge_count,
 	           target_count, merge_rows, state.row_start);
-	auto vacuum_task = make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count,
-	                                         merge_rows, state.row_start);
+	auto vacuum_task =
+	    make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count, merge_rows);
 	checkpoint_state.executor->ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
 	state.next_vacuum_idx = next_idx;

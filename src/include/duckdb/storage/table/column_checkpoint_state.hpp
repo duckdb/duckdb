@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "validity_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -25,19 +26,43 @@ class PartialBlockManager;
 class TableDataWriter;
 
 struct ColumnCheckpointState {
-	ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager);
+	ColumnCheckpointState(RowGroup &row_group, ColumnData &original_column, PartialBlockManager &partial_block_manager);
 	virtual ~ColumnCheckpointState();
 
 	RowGroup &row_group;
-	ColumnData &column_data;
-	ColumnSegmentTree new_tree;
+	ColumnData &original_column;
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
+	optional_ptr<ColumnCheckpointState> parent_state;
 
 protected:
 	PartialBlockManager &partial_block_manager;
+	shared_ptr<ColumnData> result_column;
 
 public:
+	void SetUnchanged() {
+		result_column = original_column.shared_from_this();
+	}
+	virtual ColumnData &GetResultColumn() {
+		if (!result_column) {
+			if (parent_state) {
+				D_ASSERT(original_column.GetType().id() == LogicalTypeId::VALIDITY);
+				auto &parent = parent_state->GetResultColumn();
+				result_column = shared_ptr_cast<ValidityColumnData, ColumnData>(parent.GetValidityData());
+			} else {
+				result_column =
+				    ColumnData::CreateColumn(original_column.GetBlockManager(), original_column.GetTableInfo(),
+				                             original_column.column_index, original_column.type);
+			}
+		}
+		return *result_column;
+	}
+	virtual shared_ptr<ColumnData> GetResultColumnPointer() {
+		// ensure the column is loaded
+		GetResultColumn();
+		return result_column;
+	}
+
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);

@@ -14,12 +14,16 @@ namespace duckdb {
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                        LogicalType type, ColumnDataType data_type, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, std::move(type), data_type, parent),
-      validity_data(make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this)), validity(*validity_data) {
+      validity(make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this)) {
+}
+
+shared_ptr<ValidityColumnData> &StandardColumnData::GetValidityData() {
+	return validity;
 }
 
 void StandardColumnData::SetDataType(ColumnDataType data_type) {
 	ColumnData::SetDataType(data_type);
-	validity.SetDataType(data_type);
+	validity->SetDataType(data_type);
 }
 
 ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
@@ -31,12 +35,12 @@ ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx
 	if (state.child_states.empty()) {
 		return scan_type;
 	}
-	return validity.GetVectorScanType(state.child_states[0], scan_count, result);
+	return validity->GetVectorScanType(state.child_states[0], scan_count, result);
 }
 
 void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
-	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 }
 
 void StandardColumnData::InitializeScan(ColumnScanState &state) {
@@ -44,7 +48,7 @@ void StandardColumnData::InitializeScan(ColumnScanState &state) {
 
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 1);
-	validity.InitializeScan(state.child_states[0]);
+	validity->InitializeScan(state.child_states[0]);
 }
 
 void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
@@ -52,7 +56,7 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 1);
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
+	validity->InitializeScanWithOffset(state.child_states[0], row_idx);
 }
 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -61,7 +65,7 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	auto mode = ScanVectorMode::REGULAR_SCAN;
 	auto scan_count = ScanVector(transaction, vector_index, state, result, target_count, scan_type, mode);
-	validity.ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type, mode);
+	validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type, mode);
 	return scan_count;
 }
 
@@ -69,13 +73,13 @@ idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &sta
                                         idx_t target_count) {
 	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
 	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates, target_count);
-	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
+	validity->ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
 	return scan_count;
 }
 
 idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	auto scan_count = ColumnData::ScanCount(state, result, count, result_offset);
-	validity.ScanCount(state.child_states[0], result, count, result_offset);
+	validity->ScanCount(state.child_states[0], result, count, result_offset);
 	return scan_count;
 }
 
@@ -86,7 +90,7 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();
 	bool has_filter = compression && compression->filter;
-	auto validity_compression = validity.GetCompressionFunction();
+	auto validity_compression = validity->GetCompressionFunction();
 	bool validity_has_filter = validity_compression && validity_compression->filter;
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
@@ -98,7 +102,7 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 		return;
 	}
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
-	validity.FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -107,7 +111,7 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();
 	bool has_select = compression && compression->select;
-	auto validity_compression = validity.GetCompressionFunction();
+	auto validity_compression = validity->GetCompressionFunction();
 	bool validity_has_select = validity_compression && validity_compression->select;
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
@@ -118,25 +122,25 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
 		return;
 	}
 	SelectVector(state, result, target_count, sel, sel_count);
-	validity.SelectVector(state.child_states[0], result, target_count, sel, sel_count);
+	validity->SelectVector(state.child_states[0], result, target_count, sel, sel_count);
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 	ColumnData::InitializeAppend(state);
 	ColumnAppendState child_append;
-	validity.InitializeAppend(child_append);
+	validity->InitializeAppend(child_append);
 	state.child_appends.push_back(std::move(child_append));
 }
 
 void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
                                     idx_t count) {
 	ColumnData::AppendData(stats, state, vdata, count);
-	validity.AppendData(stats, state.child_appends[0], vdata, count);
+	validity->AppendData(stats, state.child_appends[0], vdata, count);
 }
 
 void StandardColumnData::RevertAppend(row_t new_count) {
 	ColumnData::RevertAppend(new_count);
-	validity.RevertAppend(new_count);
+	validity->RevertAppend(new_count);
 }
 
 idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -147,7 +151,7 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 		state.child_states.push_back(std::move(child_state));
 	}
 	auto scan_count = ColumnData::Fetch(state, row_id, result);
-	validity.Fetch(state.child_states[0], row_id, result);
+	validity->Fetch(state.child_states[0], row_id, result);
 	return scan_count;
 }
 
@@ -157,14 +161,14 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
 	ColumnScanState validity_state(nullptr);
 	Vector base_vector(type);
 	auto standard_fetch = FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
-	auto validity_fetch = validity.FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
+	auto validity_fetch = validity->FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
 	if (standard_fetch != validity_fetch) {
 		throw InternalException("Unaligned fetch in validity and main column data for update");
 	}
 
 	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
-	validity.UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	validity->UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
 	                        row_group_start);
 }
 
@@ -177,14 +181,14 @@ void StandardColumnData::UpdateColumn(TransactionData transaction, DataTable &da
 		                   row_group_start);
 	} else {
 		// update the child column (i.e. the validity column)
-		validity.UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
+		validity->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
 		                      row_group_start);
 	}
 }
 
 unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	auto stats = updates ? updates->GetStatistics() : nullptr;
-	auto validity_stats = validity.GetUpdateStatistics();
+	auto validity_stats = validity->GetUpdateStatistics();
 	if (!stats && !validity_stats) {
 		return nullptr;
 	}
@@ -204,13 +208,13 @@ void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState 
 		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
-	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
 }
 
 void StandardColumnData::CommitDropColumn() {
 	ColumnData::CommitDropColumn();
-	validity.CommitDropColumn();
+	validity->CommitDropColumn();
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
@@ -249,8 +253,9 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto base_state = CreateCheckpointState(row_group, partial_block_manager);
 	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
-	auto validity_state_p = validity.CreateCheckpointState(row_group, partial_block_manager);
-	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
+	auto validity_state_p = validity->CreateCheckpointState(row_group, partial_block_manager);
+	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity->type).ToUnique();
+	validity_state_p->parent_state = base_state.get();
 
 	auto &validity_state = *validity_state_p;
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
@@ -278,26 +283,26 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	ColumnData::CheckpointScan(segment, state, count, scan_vector);
 
 	idx_t offset_in_row_group = state.offset_in_column;
-	validity.ScanCommittedRange(0, offset_in_row_group, count, scan_vector);
+	validity->ScanCommittedRange(0, offset_in_row_group, count, scan_vector);
 }
 
 bool StandardColumnData::IsPersistent() {
-	return ColumnData::IsPersistent() && validity.IsPersistent();
+	return ColumnData::IsPersistent() && validity->IsPersistent();
 }
 
 bool StandardColumnData::HasAnyChanges() const {
-	return ColumnData::HasAnyChanges() || validity.HasAnyChanges();
+	return ColumnData::HasAnyChanges() || validity->HasAnyChanges();
 }
 
 PersistentColumnData StandardColumnData::Serialize() {
 	auto persistent_data = ColumnData::Serialize();
-	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(validity->Serialize());
 	return persistent_data;
 }
 
 void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	ColumnData::InitializeColumn(column_data, target_stats);
-	validity.InitializeColumn(column_data.child_columns[0], target_stats);
+	validity->InitializeColumn(column_data.child_columns[0], target_stats);
 }
 
 void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
@@ -305,13 +310,13 @@ void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckd
                                               vector<duckdb::ColumnSegmentInfo> &result) {
 	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
+	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	ColumnData::Verify(parent);
-	validity.Verify(parent);
+	validity->Verify(parent);
 #endif
 }
 

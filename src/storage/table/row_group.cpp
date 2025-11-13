@@ -1008,6 +1008,9 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			auto stats = checkpoint_state->GetStatistics();
 			D_ASSERT(stats);
 
+			// FIXME: temporary - we shouldn't be modifying the row group in-place but emitting a new one
+			AssignSharedPointer(row_group.GetColumns()[column_idx], checkpoint_state->GetResultColumnPointer());
+
 			row_group_write_data.statistics.push_back(stats->Copy());
 			row_group_write_data.states.push_back(std::move(checkpoint_state));
 		}

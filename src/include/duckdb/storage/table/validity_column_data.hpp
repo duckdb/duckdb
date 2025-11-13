@@ -17,7 +17,10 @@ class ValidityColumnData : public ColumnData {
 	friend class StandardColumnData;
 
 public:
-	ValidityColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, ColumnData &parent);
+	ValidityColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+					   ColumnData &parent);
+	ValidityColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+					   ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 public:
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;

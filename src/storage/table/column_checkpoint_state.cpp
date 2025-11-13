@@ -9,9 +9,9 @@
 
 namespace duckdb {
 
-ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
+ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &original_column,
                                              PartialBlockManager &partial_block_manager)
-    : row_group(row_group), column_data(column_data), partial_block_manager(partial_block_manager) {
+    : row_group(row_group), original_column(original_column), partial_block_manager(partial_block_manager) {
 }
 
 ColumnCheckpointState::~ColumnCheckpointState() {
@@ -136,10 +136,9 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	if (segment->stats.statistics.IsConstant()) {
 		// Constant block.
 		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
-
 	} else if (segment_size != 0) {
 		// Non-constant block with data that has to go to disk.
-		auto &db = column_data.GetDatabase();
+		auto &db = original_column.GetDatabase();
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		partial_block_lock = partial_block_manager.GetLock();
 
@@ -158,7 +157,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 			auto new_handle = buffer_manager.Pin(pstate.block_handle);
 			// memcpy the contents of the old block to the new block
 			memcpy(new_handle.Ptr() + offset_in_block, old_handle.Ptr(), segment_size);
-			pstate.AddSegmentToTail(column_data, *segment, offset_in_block);
+			pstate.AddSegmentToTail(*result_column, *segment, offset_in_block);
 		} else {
 			// Create a new block for future reuse.
 			if (segment->SegmentSize() != block_size) {
@@ -168,8 +167,8 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 				segment->Resize(block_size);
 			}
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block = partial_block_manager.CreatePartialBlock(column_data, *segment, allocation.state,
-			                                                                    *allocation.block_manager);
+			allocation.partial_block = partial_block_manager.CreatePartialBlock(
+			    *result_column, *segment, allocation.state, *allocation.block_manager);
 		}
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));
@@ -198,12 +197,12 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	}
 
 	// append the segment to the new segment tree
-	new_tree.AppendSegment(std::move(segment));
+	GetResultColumn().GetSegmentTree().AppendSegment(std::move(segment));
 	data_pointers.push_back(std::move(data_pointer));
 }
 
 PersistentColumnData ColumnCheckpointState::ToPersistentData() {
-	PersistentColumnData data(column_data.type.InternalType());
+	PersistentColumnData data(result_column->type.InternalType());
 	data.pointers = std::move(data_pointers);
 	return data;
 }

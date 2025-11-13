@@ -20,6 +20,7 @@ public:
 	                 ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 public:
+	shared_ptr<ValidityColumnData> &GetValidityData() override;
 	void SetDataType(ColumnDataType data_type) override;
 	idx_t GetMaxEntry() override;
 
@@ -68,8 +69,7 @@ protected:
 	//! The sub-columns of the struct
 	vector<shared_ptr<ColumnData>> sub_columns;
 	//! The validity column data of the struct
-	shared_ptr<ValidityColumnData> validity_data;
-	ValidityColumnData &validity;
+	shared_ptr<ValidityColumnData> validity;
 };
 
 } // namespace duckdb

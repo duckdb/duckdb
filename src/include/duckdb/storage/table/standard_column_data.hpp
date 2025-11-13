@@ -20,6 +20,7 @@ public:
 	                   ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 public:
+	shared_ptr<ValidityColumnData> &GetValidityData() override;
 	void SetDataType(ColumnDataType data_type) override;
 
 	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
@@ -70,8 +71,7 @@ public:
 
 protected:
 	//! The validity column data
-	shared_ptr<ValidityColumnData> validity_data;
-	ValidityColumnData &validity;
+	shared_ptr<ValidityColumnData> validity;
 };
 
 } // namespace duckdb

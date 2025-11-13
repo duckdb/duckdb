@@ -11,17 +11,21 @@ namespace duckdb {
 ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                  LogicalType type_p, ColumnDataType data_type, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
-      validity_data(make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this)), validity(*validity_data) {
+      validity(make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this)) {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
 	auto &child_type = ArrayType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
 	child_column = CreateColumn(block_manager, info, 1, child_type, data_type, this);
 }
 
+shared_ptr<ValidityColumnData> &ArrayColumnData::GetValidityData() {
+	return validity;
+}
+
 void ArrayColumnData::SetDataType(ColumnDataType data_type) {
 	ColumnData::SetDataType(data_type);
 	child_column->SetDataType(data_type);
-	validity.SetDataType(data_type);
+	validity->SetDataType(data_type);
 }
 
 FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -32,7 +36,7 @@ FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, Tabl
 
 void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
-	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 	auto array_size = ArrayType::GetSize(type);
 	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * array_size);
 }
@@ -44,7 +48,7 @@ void ArrayColumnData::InitializeScan(ColumnScanState &state) {
 	state.offset_in_column = 0;
 	state.current = nullptr;
 
-	validity.InitializeScan(state.child_states[0]);
+	validity->InitializeScan(state.child_states[0]);
 
 	// initialize the child scan
 	child_column->InitializeScan(state.child_states[1]);
@@ -63,7 +67,7 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	state.current = nullptr;
 
 	// initialize the validity segment
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
+	validity->InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	auto array_size = ArrayType::GetSize(type);
 	auto child_count = row_idx * array_size;
@@ -87,7 +91,7 @@ idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state,
 
 idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	// Scan validity
-	auto scan_count = validity.ScanCount(state.child_states[0], result, count, result_offset);
+	auto scan_count = validity->ScanCount(state.child_states[0], result, count, result_offset);
 	auto array_size = ArrayType::GetSize(type);
 	// Scan child column
 	auto &child_vec = ArrayVector::GetEntry(result);
@@ -155,12 +159,12 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 		if (start_idx > current_position) {
 			// skip forward
 			idx_t skip_amount = start_idx - current_position;
-			validity.Skip(state.child_states[0], skip_amount);
+			validity->Skip(state.child_states[0], skip_amount);
 			child_column->Skip(state.child_states[1], skip_amount * array_size);
 		}
 		// scan into the result array
 		idx_t scan_count = end_idx - start_idx;
-		validity.ScanCount(state.child_states[0], result, scan_count, current_offset);
+		validity->ScanCount(state.child_states[0], result, scan_count, current_offset);
 		child_column->ScanCount(state.child_states[1], child_vec, scan_count * array_size, current_offset * array_size);
 		// move the current position forward
 		current_offset += scan_count;
@@ -169,14 +173,14 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 	// if there is any remaining at the end - skip any trailing rows
 	if (current_position < target_count) {
 		idx_t skip_amount = target_count - current_position;
-		validity.Skip(state.child_states[0], skip_amount);
+		validity->Skip(state.child_states[0], skip_amount);
 		child_column->Skip(state.child_states[1], skip_amount * array_size);
 	}
 }
 
 void ArrayColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// Skip validity
-	validity.Skip(state.child_states[0], count);
+	validity->Skip(state.child_states[0], count);
 	// Skip child column
 	auto array_size = ArrayType::GetSize(type);
 	child_column->Skip(state.child_states[1], count * array_size);
@@ -184,7 +188,7 @@ void ArrayColumnData::Skip(ColumnScanState &state, idx_t count) {
 
 void ArrayColumnData::InitializeAppend(ColumnAppendState &state) {
 	ColumnAppendState validity_append;
-	validity.InitializeAppend(validity_append);
+	validity->InitializeAppend(validity_append);
 	state.child_appends.push_back(std::move(validity_append));
 
 	ColumnAppendState child_append;
@@ -201,7 +205,7 @@ void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Ve
 	}
 
 	// Append validity
-	validity.Append(stats, state.child_appends[0], vector, count);
+	validity->Append(stats, state.child_appends[0], vector, count);
 	// Append child column
 	auto array_size = ArrayType::GetSize(type);
 	auto &child_vec = ArrayVector::GetEntry(vector);
@@ -212,7 +216,7 @@ void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Ve
 
 void ArrayColumnData::RevertAppend(row_t new_count) {
 	// Revert validity
-	validity.RevertAppend(new_count);
+	validity->RevertAppend(new_count);
 	// Revert child column
 	auto array_size = ArrayType::GetSize(type);
 	child_column->RevertAppend(new_count * UnsafeNumericCast<row_t>(array_size));
@@ -247,7 +251,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	}
 
 	// Fetch validity
-	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetEntry(result);
@@ -267,7 +271,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 }
 
 void ArrayColumnData::CommitDropColumn() {
-	validity.CommitDropColumn();
+	validity->CommitDropColumn();
 	child_column->CommitDropColumn();
 }
 
@@ -304,38 +308,38 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
                                                               ColumnCheckpointInfo &checkpoint_info) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info);
 	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
 	return std::move(checkpoint_state);
 }
 
 bool ArrayColumnData::IsPersistent() {
-	return validity.IsPersistent() && child_column->IsPersistent();
+	return validity->IsPersistent() && child_column->IsPersistent();
 }
 
 bool ArrayColumnData::HasAnyChanges() const {
-	return child_column->HasAnyChanges() || validity.HasAnyChanges();
+	return child_column->HasAnyChanges() || validity->HasAnyChanges();
 }
 
 PersistentColumnData ArrayColumnData::Serialize() {
 	PersistentColumnData persistent_data(PhysicalType::ARRAY);
-	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(validity->Serialize());
 	persistent_data.child_columns.push_back(child_column->Serialize());
 	return persistent_data;
 }
 
 void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	D_ASSERT(column_data.pointers.empty());
-	validity.InitializeColumn(column_data.child_columns[0], target_stats);
+	validity->InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &child_stats = ArrayStats::GetChildStats(target_stats);
 	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
-	this->count = validity.count.load();
+	this->count = validity->count.load();
 }
 
 void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                            vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.back() = 1;
 	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 }
@@ -343,7 +347,7 @@ void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t ro
 void ArrayColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	ColumnData::Verify(parent);
-	validity.Verify(parent);
+	validity->Verify(parent);
 	child_column->Verify(parent);
 #endif
 }

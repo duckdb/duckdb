@@ -49,7 +49,7 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 	D_ASSERT(!states.empty());
 
 	auto &first_state = states[0];
-	auto &col_data = first_state.get().column_data;
+	auto &col_data = first_state.get().original_column;
 	auto &type = col_data.type;
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		return Vector(LogicalType::BOOLEAN, true, /* initialize_to_zero = */ true);
@@ -69,7 +69,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 	auto &config = DBConfig::GetConfig(db);
 	compression_functions.resize(checkpoint_states.size());
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		auto &col_data = checkpoint_states[i].get().column_data;
+		auto &col_data = checkpoint_states[i].get().original_column;
 		auto to_add = config.GetCompressionFunctions(col_data.type.InternalType());
 		auto &functions = compression_functions[i];
 		for (auto &func : to_add) {
@@ -81,7 +81,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	auto &first_state = checkpoint_states[0];
-	auto &col_data = first_state.get().column_data;
+	auto &col_data = first_state.get().original_column;
 	auto &nodes = col_data.data.ReferenceSegments();
 
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
@@ -151,7 +151,8 @@ void ColumnDataCheckpointer::InitAnalyze() {
 		auto &functions = compression_functions[i];
 		auto &states = analyze_states[i];
 		auto &checkpoint_state = checkpoint_states[i];
-		auto &coldata = checkpoint_state.get().column_data;
+		auto &coldata = checkpoint_state.get().GetResultColumn();
+		coldata.count = checkpoint_state.get().original_column.count.load();
 		states.resize(functions.size());
 		for (idx_t j = 0; j < functions.size(); j++) {
 			auto &func = functions[j];
@@ -254,7 +255,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		}
 
 		auto &checkpoint_state = checkpoint_states[i];
-		auto &col_data = checkpoint_state.get().column_data;
+		auto &col_data = checkpoint_state.get().GetResultColumn();
 		if (!chosen_state) {
 			throw FatalException("No suitable compression/storage method found to store column of type %s",
 			                     col_data.type.ToString());
@@ -281,7 +282,7 @@ void ColumnDataCheckpointer::DropSegments() {
 		}
 
 		auto &state = checkpoint_states[i];
-		auto &col_data = state.get().column_data;
+		auto &col_data = state.get().original_column;
 		auto &nodes = col_data.data.ReferenceSegments();
 
 		// Drop the segments, as we'll be replacing them with new ones, because there are changes
@@ -332,7 +333,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		auto &function = analyze_result[i].function;
 
 		auto &checkpoint_state = checkpoint_states[i];
-		auto &col_data = checkpoint_state.get().column_data;
+		auto &col_data = checkpoint_state.get().GetResultColumn();
 
 		checkpoint_data[i] = ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group,
 		                                              checkpoint_info, storage_manager);
@@ -370,8 +371,8 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	// all segments are persistent and there are no updates
 	// we only need to write the metadata
 
-	auto &col_data = state.column_data;
-	auto nodes = col_data.data.MoveSegments();
+	auto &col_data = state.original_column;
+	auto &nodes = col_data.data.ReferenceSegments();
 
 	idx_t current_row = 0;
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
@@ -381,7 +382,7 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 			string extra_info;
 			for (auto &s : nodes) {
 				extra_info += "\n";
-				extra_info += StringUtil::Format("Start %d, count %d", segment_start, segment.count.load());
+				extra_info += StringUtil::Format("Start %d, count %d", s->row_start, s->node->count.load());
 			}
 			const_reference<ColumnData> root = col_data;
 			while (root.get().HasParent()) {
@@ -399,10 +400,6 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment.stats.statistics);
-
-		// directly append the current segment to the new tree
-		state.new_tree.AppendSegment(std::move(nodes[segment_idx]->node));
-
 		state.data_pointers.push_back(std::move(pointer));
 	}
 }
@@ -410,7 +407,7 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 void ColumnDataCheckpointer::Checkpoint() {
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i];
-		auto &col_data = state.get().column_data;
+		auto &col_data = state.get().original_column;
 		has_changes.push_back(HasChanges(col_data));
 	}
 
@@ -433,24 +430,11 @@ void ColumnDataCheckpointer::Checkpoint() {
 void ColumnDataCheckpointer::FinalizeCheckpoint() {
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i].get();
-		auto &col_data = state.column_data;
-		if (has_changes[i]) {
-			// Move the existing segments out of the column data
-			// they will be destructed at the end of the scope
-			auto to_delete = col_data.data.MoveSegments();
-		} else {
+		if (!has_changes[i]) {
+			// no changes - copy over the original column
+			state.SetUnchanged();
 			WritePersistentSegments(state);
 		}
-
-		// reset the compression function
-		col_data.compression.reset();
-		// replace the old tree with the new one
-		auto new_segments = state.new_tree.MoveSegments();
-		auto l = col_data.data.Lock();
-		for (auto &new_segment : new_segments) {
-			col_data.AppendSegment(l, std::move(new_segment->node));
-		}
-		col_data.ClearUpdates();
 	}
 }
 

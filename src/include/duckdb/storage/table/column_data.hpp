@@ -35,6 +35,7 @@ struct RowGroupWriteInfo;
 struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
+class ValidityColumnData;
 
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
@@ -81,6 +82,7 @@ public:
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
 	StorageManager &GetStorageManager() const;
+	virtual shared_ptr<ValidityColumnData> &GetValidityData();
 	virtual idx_t GetMaxEntry();
 
 	idx_t GetAllocationSize() const {
@@ -103,6 +105,9 @@ public:
 	}
 	const LogicalType &GetType() const {
 		return type;
+	}
+	ColumnSegmentTree &GetSegmentTree() {
+		return data;
 	}
 
 	//! The root type of the column
@@ -220,7 +225,6 @@ protected:
 	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
 	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
 
-	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
 	                  bool allow_updates, bool scan_committed);
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
@@ -255,6 +259,18 @@ private:
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
 	atomic_ptr<const CompressionFunction> compression;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct PersistentColumnData {
