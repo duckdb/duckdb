@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <duckdb/common/types/timestamp.hpp>
+
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/common/types.hpp"
@@ -50,6 +52,8 @@ struct FileHandle;
 #define DUCKDB_LOG(SOURCE, LOG_TYPE_CLASS, ...)                                                                        \
 	DUCKDB_LOG_INTERNAL(SOURCE, LOG_TYPE_CLASS::NAME, LOG_TYPE_CLASS::LEVEL,                                           \
 	                    LOG_TYPE_CLASS::ConstructLogMessage(__VA_ARGS__))
+
+typedef std::function<void(const char *log_type, LogLevel log_level, const char *message)> custom_callback_t;
 
 //! Main logging interface
 class Logger {
@@ -202,6 +206,33 @@ public:
 	const LogConfig &GetConfig() const override {
 		throw InternalException("Called GetConfig on NopLogger");
 	}
+};
+
+class CallbackLogger : public Logger {
+public:
+	explicit CallbackLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager);
+	explicit CallbackLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager);
+
+	// Main Logger API
+	bool ShouldLog(const char *log_type, LogLevel log_level) override;
+	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override;
+
+	void Flush() override;
+	bool IsThreadSafe() override {
+		return false;
+	}
+	const LogConfig &GetConfig() const override {
+		return config;
+	}
+
+private:
+	void DefaultCallback(const char *log_type, LogLevel log_level, const char *message) const;
+
+private:
+	custom_callback_t callback;
+
+	const LogConfig config;
+	const RegisteredLoggingContext context;
 };
 
 } // namespace duckdb

@@ -25,6 +25,7 @@ class LogManager {
 	friend class ThreadSafeLogger;
 	friend class ThreadLocalLogger;
 	friend class MutableLogger;
+	friend class CallbackLogger;
 
 public:
 	// Note: two step initialization because Logger needs shared pointer to log manager TODO: can we clean up?
@@ -33,7 +34,8 @@ public:
 	void Initialize();
 
 	DUCKDB_API static LogManager &Get(ClientContext &context);
-	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false);
+	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false,
+	                                bool custom_callback = false);
 
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
 
