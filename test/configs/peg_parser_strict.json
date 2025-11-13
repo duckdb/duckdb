@@ -35,6 +35,8 @@
         "test/sql/index/art/scan/test_art_scan_coverage.test",
         "test/sql/index/art/storage/test_art_storage.test",
         "test/sql/cte/materialized/dml_materialized_cte.test",
+        "test/sql/storage/wal/wal_index_delete_gen.test",
+        "test/sql/cte/materialized/dml_materialized_cte.test",
         "test/issues/general/test_15432.test",
         "test/sql/types/list/unnest_aggregate.test",
         "test/sql/generated_columns/virtual/create_table.test",

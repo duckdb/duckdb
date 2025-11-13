@@ -40,9 +40,18 @@ unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_pt
 		}
 		break;
 	}
-	// TODO: For ANTI joins, if the right child is empty, you can replace the whole join with
-	//  the left child
-	case JoinType::ANTI:
+	// For ANTI joins, if the right child is empty, the whole join collapses to the left child
+	case JoinType::ANTI: {
+		if (op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT &&
+		    op->type != LogicalOperatorType::LOGICAL_EXCEPT) {
+			op = std::move(op->children[0]);
+			break;
+		}
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+		}
+		break;
+	}
 	case JoinType::MARK:
 	case JoinType::SINGLE:
 	case JoinType::LEFT: {

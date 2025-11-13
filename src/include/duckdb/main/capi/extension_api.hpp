@@ -475,6 +475,7 @@ typedef struct {
 	duckdb_state (*duckdb_appender_create_query)(duckdb_connection connection, const char *query, idx_t column_count,
 	                                             duckdb_logical_type *types, const char *table_name,
 	                                             const char **column_names, duckdb_appender *out_appender);
+	duckdb_state (*duckdb_appender_clear)(duckdb_appender appender);
 	// New arrow interface functions
 
 	duckdb_error_data (*duckdb_to_arrow_schema)(duckdb_arrow_options arrow_options, duckdb_logical_type *types,
@@ -487,6 +488,17 @@ typedef struct {
 	                                                  duckdb_arrow_converted_schema converted_schema,
 	                                                  duckdb_data_chunk *out_chunk);
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
+	// New functions for interacting with catalog entries
+
+	duckdb_catalog (*duckdb_client_context_get_catalog)(duckdb_client_context context, const char *catalog_name);
+	const char *(*duckdb_catalog_get_type_name)(duckdb_catalog catalog);
+	duckdb_catalog_entry (*duckdb_catalog_get_entry)(duckdb_catalog catalog, duckdb_client_context context,
+	                                                 duckdb_catalog_entry_type entry_type, const char *schema_name,
+	                                                 const char *entry_name);
+	void (*duckdb_destroy_catalog)(duckdb_catalog *catalog);
+	duckdb_catalog_entry_type (*duckdb_catalog_entry_get_type)(duckdb_catalog_entry entry);
+	const char *(*duckdb_catalog_entry_get_name)(duckdb_catalog_entry entry);
+	void (*duckdb_destroy_catalog_entry)(duckdb_catalog_entry *entry);
 	// New configuration options functions
 
 	duckdb_config_option (*duckdb_create_config_option)();
@@ -1057,11 +1069,19 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_appender_error_data = duckdb_appender_error_data;
 	result.duckdb_appender_create_query = duckdb_appender_create_query;
+	result.duckdb_appender_clear = duckdb_appender_clear;
 	result.duckdb_to_arrow_schema = duckdb_to_arrow_schema;
 	result.duckdb_data_chunk_to_arrow = duckdb_data_chunk_to_arrow;
 	result.duckdb_schema_from_arrow = duckdb_schema_from_arrow;
 	result.duckdb_data_chunk_from_arrow = duckdb_data_chunk_from_arrow;
 	result.duckdb_destroy_arrow_converted_schema = duckdb_destroy_arrow_converted_schema;
+	result.duckdb_client_context_get_catalog = duckdb_client_context_get_catalog;
+	result.duckdb_catalog_get_type_name = duckdb_catalog_get_type_name;
+	result.duckdb_catalog_get_entry = duckdb_catalog_get_entry;
+	result.duckdb_destroy_catalog = duckdb_destroy_catalog;
+	result.duckdb_catalog_entry_get_type = duckdb_catalog_entry_get_type;
+	result.duckdb_catalog_entry_get_name = duckdb_catalog_entry_get_name;
+	result.duckdb_destroy_catalog_entry = duckdb_destroy_catalog_entry;
 	result.duckdb_create_config_option = duckdb_create_config_option;
 	result.duckdb_destroy_config_option = duckdb_destroy_config_option;
 	result.duckdb_config_option_set_name = duckdb_config_option_set_name;

@@ -8,6 +8,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -88,6 +89,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
     DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
+    DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyVectorSetting),
     DUCKDB_SETTING_CALLBACK(DebugWindowModeSetting),
     DUCKDB_GLOBAL(DefaultBlockSizeSetting),
@@ -181,12 +183,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 85),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 35),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 104),
-                                                     DUCKDB_SETTING_ALIAS("user", 119),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 86),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 36),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 105),
+                                                     DUCKDB_SETTING_ALIAS("user", 120),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 21),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 118),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 119),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

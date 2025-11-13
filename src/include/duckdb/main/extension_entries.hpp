@@ -549,6 +549,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"sin", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"sinh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"skewness", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"sleep_ms", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"sql_auto_complete", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_attach", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_query", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -601,6 +602,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_envelope", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_envelope_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_equals", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_expand", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_extent", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_extent_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_extent_approx", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1083,7 +1085,6 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ui_remote_url", "ui"},
     {"unsafe_disable_etag_checks", "httpfs"},
     {"unsafe_enable_version_guessing", "iceberg"},
-    {"variant_legacy_encoding", "parquet"},
 }; // END_OF_EXTENSION_SETTINGS
 
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {

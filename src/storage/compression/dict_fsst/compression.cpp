@@ -4,6 +4,10 @@
 #include "fsst.h"
 #include "duckdb/common/fsst.hpp"
 
+#if defined(__MVS__) && !defined(alloca)
+#define alloca __builtin_alloca
+#endif
+
 namespace duckdb {
 namespace dict_fsst {
 
