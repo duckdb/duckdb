@@ -60,6 +60,9 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 		if (get.function.name == "unnest") {
 			is_unnest_or_get_with_unnest = true;
 		}
+		if (get.function.name == "json_each") {
+			is_unnest_or_get_with_unnest = true;
+		}
 	}
 	if (table_indexes.empty()) {
 		// relation represents a non-reorderable relation, most likely a join relation
