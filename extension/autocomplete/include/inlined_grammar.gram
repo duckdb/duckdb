@@ -892,7 +892,7 @@ GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete
 PreserveOrDelete <- ('PRESERVE' / 'DELETE') 'ROWS'
 
-CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName IndexType? Parens(List(IndexElement)) WithList? WhereClause?
+CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?
 
 WithList <- 'WITH' Parens(List(RelOption)) / Oids
 Oids <- ('WITH' / 'WITHOUT') 'OIDS'

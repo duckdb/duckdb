@@ -1239,22 +1239,26 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	// rule overrides
 	AddRuleOverride("Identifier", Variable());
 	AddRuleOverride("ReservedIdentifier", ReservedVariable());
-	AddRuleOverride("TypeName", TypeName());
-	AddRuleOverride("TableName", TableName());
-	AddRuleOverride("ReservedTableName", ReservedTableName());
+
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
+	AddRuleOverride("TableName", TableName());
+	AddRuleOverride("ReservedTableName", ReservedTableName());
 	AddRuleOverride("ColumnName", ColumnName());
-	AddRuleOverride("IndexName", Variable());
 	AddRuleOverride("ReservedColumnName", ReservedColumnName());
-	AddRuleOverride("TableFunctionName", TableFunctionName());
+	AddRuleOverride("IndexName", Variable());
+	AddRuleOverride("SequenceName", Variable());
+
 	AddRuleOverride("FunctionName", ScalarFunctionName());
 	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
+	AddRuleOverride("TableFunctionName", TableFunctionName());
+
+	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("PragmaName", PragmaName());
-	AddRuleOverride("SequenceName", Variable());
 	AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("CopyOptionName", CopyOptionName());
+
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());

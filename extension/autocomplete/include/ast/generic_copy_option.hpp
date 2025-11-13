@@ -1,5 +1,7 @@
 #pragma once
 
+#include <duckdb/parser/expression/constant_expression.hpp>
+
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/value.hpp"
 
@@ -36,6 +38,16 @@ struct GenericCopyOption {
 	}
 	GenericCopyOption(GenericCopyOption &&other) noexcept = default;
 	GenericCopyOption &operator=(GenericCopyOption &&other) noexcept = default;
+
+	unique_ptr<ParsedExpression> GetFirstChildOrExpression() {
+		if (!children.empty()) {
+			return make_uniq<ConstantExpression>(children[0]);
+		}
+		if (!expression) {
+			throw InvalidInputException("No expression in GenericCopyOption");
+		}
+		return expression->Copy();
+	}
 };
 
 } // namespace duckdb

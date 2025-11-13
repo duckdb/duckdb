@@ -14,7 +14,6 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 	info->schema = qualified_name.schema;
 	info->name = qualified_name.name;
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-
 	auto opt_sequence_options = list_pr.Child<OptionalParseResult>(3);
 	case_insensitive_map_t<unique_ptr<SequenceOption>> sequence_options;
 	if (opt_sequence_options.HasResult()) {
@@ -29,8 +28,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 	}
 	bool no_min = sequence_options.find("nominvalue") != sequence_options.end();
 	bool no_max = sequence_options.find("nomaxvalue") != sequence_options.end();
-	int64_t default_start_value = info->start_value;
 	bool has_start_value = false;
+	bool min_value_set = false;
+	bool max_value_set = false;
 
 	for (auto &option : sequence_options) {
 		if (option.first == "increment") {
@@ -39,11 +39,19 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 			if (info->increment == 0) {
 				throw ParserException("Increment must not be zero");
 			} else if (info->increment < 0) {
-				default_start_value = info->max_value = -1;
-				info->min_value = NumericLimits<int64_t>::Minimum();
+				if (!min_value_set) {
+					info->min_value = NumericLimits<int64_t>::Minimum();
+				}
+				if (!max_value_set) {
+					info->max_value = -1;
+				}
 			} else {
-				default_start_value = info->min_value = 0;
-				info->max_value = NumericLimits<int64_t>::Maximum();
+				if (!max_value_set) {
+					info->max_value = NumericLimits<int64_t>::Maximum();
+				}
+				if (!min_value_set) {
+					info->min_value = 1;
+				}
 			}
 		} else if (option.first == "minvalue") {
 			if (no_min) {
@@ -51,18 +59,14 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 			}
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
 			info->min_value = seq_val_option->value.GetValue<int64_t>();
-			if (info->increment > 0) {
-				default_start_value = info->min_value;
-			}
+			min_value_set = true;
 		} else if (option.first == "maxvalue") {
 			if (no_max) {
 				continue;
 			}
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
 			info->max_value = seq_val_option->value.GetValue<int64_t>();
-			if (info->increment < 0) {
-				default_start_value = info->max_value;
-			}
+			max_value_set = true;
 		} else if (option.first == "start") {
 			auto seq_val_option = unique_ptr_cast<SequenceOption, ValueSequenceOption>(std::move(option.second));
 			info->start_value = seq_val_option->value.GetValue<int64_t>();
@@ -75,7 +79,11 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSequenceStmt(P
 		}
 	}
 	if (!has_start_value) {
-		info->start_value = default_start_value;
+		if (info->increment < 0) {
+			info->start_value = info->max_value;
+		} else {
+			info->start_value = info->min_value;
+		}
 	}
 	if (info->max_value <= info->min_value) {
 		throw ParserException("MINVALUE (%lld) must be less than MAXVALUE (%lld)", info->min_value, info->max_value);
@@ -111,6 +119,19 @@ pair<string, unique_ptr<SequenceOption>>
 PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
+	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expr));
+		if (func_expr->function_name != "-") {
+			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
+		}
+		D_ASSERT(!func_expr->children.empty());
+		if (func_expr->children[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+			throw InvalidInputException("Expected constant expression as child of minus function");
+		}
+		auto const_expr = unique_ptr_cast<ParsedExpression, ConstantExpression>(std::move(func_expr->children[0]));
+		const_expr->value = Value::Numeric(LogicalType::BIGINT, -const_expr->value.GetValue<hugeint_t>());
+		expr = std::move(const_expr);
+	}
 	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Expected constant expression.");
 	}
@@ -123,6 +144,20 @@ PEGTransformerFactory::TransformSeqSetMinMax(PEGTransformer &transformer, option
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
 	auto rule_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+
+	if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expr));
+		if (func_expr->function_name != "-") {
+			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
+		}
+		D_ASSERT(!func_expr->children.empty());
+		if (func_expr->children[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+			throw InvalidInputException("Expected constant expression as child of minus function");
+		}
+		auto const_expr = unique_ptr_cast<ParsedExpression, ConstantExpression>(std::move(func_expr->children[0]));
+		const_expr->value = Value::Numeric(LogicalType::BIGINT, -const_expr->value.GetValue<hugeint_t>());
+		expr = std::move(const_expr);
+	}
 
 	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Expected constant expression.");

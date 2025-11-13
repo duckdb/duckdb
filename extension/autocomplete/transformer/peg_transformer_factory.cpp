@@ -150,6 +150,7 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformIntervalType);
 	REGISTER_TRANSFORM(TransformIntervalInterval);
 	REGISTER_TRANSFORM(TransformInterval);
+	REGISTER_TRANSFORM(TransformSetofType);
 }
 
 void PEGTransformerFactory::RegisterCopy() {
@@ -199,6 +200,7 @@ void PEGTransformerFactory::RegisterCreateSecret() {
 	// create_secret.gram
 	REGISTER_TRANSFORM(TransformCreateSecretStmt);
 	REGISTER_TRANSFORM(TransformSecretStorageSpecifier);
+	REGISTER_TRANSFORM(TransformSecretName);
 }
 
 void PEGTransformerFactory::RegisterCreateSequence() {

@@ -59,7 +59,8 @@
         "test/sql/catalog/function/test_recursive_macro.test",
         "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
         "test/sql/catalog/function/test_macro_default_arg_with_dependencies.test",
-        "test/sql/attach/reattach_schema.test"
+        "test/sql/attach/reattach_schema.test",
+        "test/sql/pivot/pivot_enum.test"
       ]
     },
     {
@@ -126,7 +127,8 @@
         "test/sql/keywords/keywords_in_expressions.test",
         "test/sql/show_select/test_describe_quoted.test",
         "test/sql/show_select/test_summarize_quoted.test",
-        "test/sql/pragma/test_show_tables.test"
+        "test/sql/pragma/test_show_tables.test",
+        "test/sql/export/export_quoted_enum.test"
       ]
     },
     {
