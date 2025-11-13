@@ -287,13 +287,16 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 	}
 
 	if (is_shredded) {
-		auto intermediate = CreateUnshreddingIntermediate(1);
+		auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		// fetch the validity state
 		validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 		// fetch the sub-column states
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
 			sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], row_id, *child_vectors[i], result_idx);
+		}
+		if (result_idx) {
+			intermediate.SetValue(0, intermediate.GetValue(result_idx));
 		}
 
 		//! FIXME: adjust UnshredVariantData so we can write the value in place into 'result' directly.
