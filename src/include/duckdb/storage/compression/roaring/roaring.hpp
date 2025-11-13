@@ -333,7 +333,8 @@ private:
 		for (idx_t i = 0; i < count; i++) {
 			if (src[i] == 1) {
 				*dst |= (uint64_t(1) << (i % 8));
-			} else if (src[i] == 0 || i == 0) { // If first value is null, write false, as it's probably the most common value
+			} else if (src[i] == 0 ||
+			           i == 0) { // If first value is null, write false, as it's probably the most common value
 				*dst &= ~(uint64_t(1) << (i % 8));
 			} else { // TODO: Is this a sure way to know it's null? Can the underlying data be trusted here? On my
 				     // machine is was always 0xbe.

@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/roaring/bool/roaring_bool_array_simple.test
+# name: test/sql/storage/compression/roaring/bool/roaring_bool_array_simple_w_null.test
 # description: Test bitpacking with nulls
 # group: [bool]
 

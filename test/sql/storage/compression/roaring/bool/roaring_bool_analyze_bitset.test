@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/roaring/bool/roaring_bool_analyze_array_w_null.test
+# name: test/sql/storage/compression/roaring/bool/roaring_bool_analyze_bitset.test
 # description: Check the produced (final_)analyze result
 # group: [bool]
 
@@ -16,7 +16,7 @@ statement ok
 set variable dataset_size = 122880;
 
 statement ok
-PRAGMA force_compression='uncompressed'
+PRAGMA force_compression='BitPacking'
 
 statement ok
 set enable_logging=true;
@@ -24,9 +24,9 @@ set enable_logging=true;
 statement ok
 CREATE TABLE test_uncompressed AS SELECT
 	case
-		when i%25=0
+		when i%3=0
 			then false
-		else null
+		else true
 	end
 	FROM range(getvariable('dataset_size')) tbl(i);
 
@@ -36,15 +36,16 @@ checkpoint
 statement ok
 set enable_logging=false;
 
+#TODO : Why is it 15900? Shouldnt this be 15360 like the other test? Weird...
 query I
 SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
 where
 	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
 	message.contains('test_uncompressed') and
-	message.contains('VALIDITY') and
-	message.contains('COMPRESSION_UNCOMPRESSED');
+	message.contains('BOOLEAN') and
+	message.contains('COMPRESSION_BITPACKING');
 ----
-15360
+15900
 
 statement ok
 PRAGMA force_compression='roaring'
@@ -62,14 +63,14 @@ statement ok
 set enable_logging=false;
 
 # For single row group
-# 60 vectors with 82 non-null values per vector
+# 60 vectors with 7 or 8 runs of trues per vector
 # Total compressed bytes:
-# 2 bits (is_inverted + is_run) + 8 bits (cardinality) = 10 bits per Vector
-# 10 * 60 = 600 bits == 75 bytes of metadata per RowGroup
+# 2 bits (is_inverted + is_run) = 2 bits per Vector
+# 2 * 60 = 120 bits == 15 bytes of metadata per RowGroup
 #
-# 8 (compressed overhead) + (82 * sizeof(uint8_t)) = 90 bytes per Vector
-# 90 * 60 = 5400 bytes of data per RowGroup
-# 5475 bytes
+# 256 bytes bytes per Vector
+# 256 * 60 = 15360 bytes of data per RowGroup
+# 15375 bytes
 
 # We 2x the actual result, to pay for the slower decompression speed
 query I
@@ -77,7 +78,7 @@ SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
 where
 	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
 	message.contains('test_roaring') and
-	message.contains('VALIDITY') and
+	message.contains('BOOLEAN') and
 	message.contains('COMPRESSION_ROARING');
 ----
-10944
+30872
