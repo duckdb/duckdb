@@ -88,6 +88,10 @@ unique_ptr<RowGroupPrunerParameters> RowGroupPruner::CanOptimize(LogicalOperator
 		current_op = *current_op.get().children[0];
 	}
 
+	if (logical_order.orders[0].expression->type != ExpressionType::BOUND_COLUMN_REF) {
+		return nullptr;
+	}
+
 	auto &colref = logical_order.orders[0].expression->Cast<BoundColumnRefExpression>();
 
 	vector<JoinFilterPushdownColumn> columns {JoinFilterPushdownColumn {colref.binding}};
@@ -124,7 +128,8 @@ unique_ptr<RowGroupPrunerParameters> RowGroupPruner::CanOptimize(LogicalOperator
 				// TODO: set this somewhere else. Also, set a value in options so that we know to prune the first N
 				// rowgroups
 				if (new_offset == row_offset.GetIndex()) {
-					options->row_offset = optional_idx();
+					options->row_offset = 0;
+					options->row_limit = options->row_limit.GetIndex() + new_offset;
 				}
 				logical_limit.offset_val = BoundLimitNode::ConstantValue(static_cast<int64_t>(new_offset));
 			}

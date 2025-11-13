@@ -124,7 +124,7 @@ struct RowGroupOrderOptions {
 	const OrderByStatistics order_by;
 	const RowGroupOrderType order_type;
 	const OrderByColumnType column_type;
-	const optional_idx row_limit;
+	optional_idx row_limit;
 	optional_idx row_offset;
 };
 
