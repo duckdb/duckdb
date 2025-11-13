@@ -140,6 +140,8 @@ private:
 	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
 	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
 
+	template <class BLOCK>
+	void ReadSingleBlock(BLOCK &block, QueryContext &context, FileHandle &handle, const idx_t location) const;
 	void ReadAndChecksum(QueryContext context, FileBuffer &handle, uint64_t location,
 	                     bool skip_block_header = false) const;
 	void ChecksumAndWrite(QueryContext context, FileBuffer &handle, uint64_t location,

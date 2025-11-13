@@ -676,6 +676,11 @@ unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, uniq
 bool FileSystem::OnDiskFile(FileHandle &handle) {
 	throw NotImplementedException("%s: OnDiskFile is not implemented!", GetName());
 }
+
+bool FileSystem::IsInvalidated(FileHandle &handle) {
+	// Base case is files are never invalidated
+	return false;
+}
 // LCOV_EXCL_STOP
 
 FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags flags)
@@ -779,6 +784,10 @@ string FileHandle::ReadLine(QueryContext context) {
 
 bool FileHandle::OnDiskFile() {
 	return file_system.OnDiskFile(*this);
+}
+
+bool FileHandle::IsInvalidated() {
+	return file_system.IsInvalidated(*this);
 }
 
 idx_t FileHandle::GetFileSize() {

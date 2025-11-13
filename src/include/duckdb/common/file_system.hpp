@@ -85,6 +85,7 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API bool IsInvalidated();
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
 
@@ -266,6 +267,7 @@ public:
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);
+	DUCKDB_API virtual bool IsInvalidated(FileHandle &handle);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                             bool write);
