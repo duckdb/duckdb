@@ -507,10 +507,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLikeClause(PEGTrans
 	auto escape_opt = list_pr.Child<OptionalParseResult>(2);
 	if (escape_opt.HasResult()) {
 		throw NotImplementedException("Escape is not yet implemented.");
-		// auto escape_expr = transformer.Transform<unique_ptr<ParsedExpression>>(escape_opt.optional_result);
 	}
 	auto result = make_uniq<FunctionExpression>(like_variation, std::move(like_children));
-	return result;
+	return std::move(result);
 }
 
 string PEGTransformerFactory::TransformLikeVariations(PEGTransformer &transformer,
@@ -1262,7 +1261,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 	auto string_literal = list_pr.Child<StringLiteralParseResult>(1).result;
 	auto child = make_uniq<ConstantExpression>(Value(string_literal));
 	auto result = make_uniq<CastExpression>(type, std::move(child));
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb

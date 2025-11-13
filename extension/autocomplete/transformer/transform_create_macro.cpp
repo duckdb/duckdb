@@ -79,7 +79,7 @@ unique_ptr<MacroFunction> PEGTransformerFactory::TransformTableMacroDefinition(P
 	auto result = make_uniq<TableMacroFunction>();
 	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
 	result->query_node = std::move(select_statement->node);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<MacroFunction>
