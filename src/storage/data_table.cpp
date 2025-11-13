@@ -578,6 +578,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Global constraint verification.
 	auto &data_table = table_entry.GetStorage();
+	data_table.BindIndexes(context);
 	data_table.info->indexes.VerifyForeignKey(storage, dst_keys_ptr, dst_chunk, global_conflict_manager);
 
 	// Check if we can insert the chunk into the local storage.

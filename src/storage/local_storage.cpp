@@ -12,6 +12,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -20,6 +21,11 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
       optimistic_writer(context, table), merged_storage(false) {
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
+	// Constraint indexes might still be unbound (e.g., after loading from disk or creation).
+	// Bind them now so the local storage mirrors all unique/FK indexes and can track deletes.
+	if (DatabaseManager::Get(context).HasDefaultDatabase()) {
+		data_table_info->BindIndexes(context);
+	}
 	row_groups = optimistic_writer.CreateCollection(table, types, OptimisticWritePartialManagers::GLOBAL);
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();

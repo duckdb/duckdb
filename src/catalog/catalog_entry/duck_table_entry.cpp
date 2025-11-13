@@ -4,10 +4,13 @@
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
@@ -22,6 +25,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
@@ -37,6 +41,41 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 		index_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
 	return index_info;
+}
+
+static unique_ptr<CreateIndexInfo>
+CreateConstraintIndexInfo(const string &table_name, const string &schema_name, Catalog &catalog,
+                          const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
+                          const string &index_name, IndexConstraintType constraint_type) {
+	auto create_info = make_uniq<CreateIndexInfo>();
+	create_info->table = table_name;
+	create_info->schema = schema_name;
+	create_info->catalog = catalog.GetName();
+	create_info->index_name = index_name;
+	create_info->index_type = ART::TYPE_NAME;
+	create_info->constraint_type = constraint_type;
+
+	create_info->column_ids.reserve(column_indexes.size());
+	for (auto &column_index : column_indexes) {
+		auto &column = columns.GetColumn(column_index);
+		create_info->column_ids.push_back(column.Physical().index);
+		auto colref = make_uniq<ColumnRefExpression>(column.Name());
+		colref->SetAlias(column.Name());
+		create_info->expressions.push_back(colref->Copy());
+		create_info->parsed_expressions.push_back(std::move(colref));
+	}
+	return create_info;
+}
+
+static void AddConstraintIndex(DataTable &table, Catalog &catalog, const ColumnList &columns,
+                               const vector<LogicalIndex> &column_indexes, IndexConstraintType constraint_type,
+                               const string &schema_name, const string &table_name, IndexStorageInfo index_info) {
+	auto create_info = CreateConstraintIndexInfo(table_name, schema_name, catalog, columns, column_indexes,
+	                                             index_info.name, constraint_type);
+	auto &io_manager = TableIOManager::Get(table);
+	auto unbound_index =
+	    make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, catalog.GetAttached());
+	table.AddIndex(std::move(unbound_index));
 }
 
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
@@ -76,7 +115,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, index_info);
+				AddConstraintIndex(*storage, catalog, columns, column_indexes, constraint_type, schema.name, name,
+				                   std::move(index_info));
 				continue;
 			}
 
@@ -87,7 +127,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			}
 
 			// Now we can add the index.
-			storage->AddIndex(columns, column_indexes, constraint_type, info.indexes[indexes_idx++]);
+			auto stored_index_info = info.indexes[indexes_idx++];
+			AddConstraintIndex(*storage, catalog, columns, column_indexes, constraint_type, schema.name, name,
+			                   std::move(stored_index_info));
 			continue;
 		}
 
@@ -105,7 +147,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddIndex(columns, column_indexes, constraint_type, index_info);
+					AddConstraintIndex(*storage, catalog, columns, column_indexes, constraint_type, schema.name, name,
+					                   std::move(index_info));
 					continue;
 				}
 
@@ -116,7 +159,9 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				}
 
 				// Now we can add the index.
-				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, info.indexes[indexes_idx++]);
+				auto stored_index_info = info.indexes[indexes_idx++];
+				AddConstraintIndex(*storage, catalog, columns, column_indexes, IndexConstraintType::FOREIGN,
+				                   schema.name, name, std::move(stored_index_info));
 			}
 		}
 	}

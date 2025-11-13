@@ -57,12 +57,19 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 			// not a combinable collation - ignore
 			return false;
 		}
-		vector<unique_ptr<Expression>> children;
-		children.push_back(std::move(source));
+	string alias;
+	if (source) {
+		alias = source->GetAlias();
+	}
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(source));
 
-		FunctionBinder function_binder(context);
-		auto function = function_binder.BindScalarFunction(collation_entry.function, std::move(children));
-		source = std::move(function);
+	FunctionBinder function_binder(context);
+	auto function = function_binder.BindScalarFunction(collation_entry.function, std::move(children));
+	if (!alias.empty()) {
+		function->SetAlias(alias);
+	}
+	source = std::move(function);
 	}
 	return true;
 }
@@ -80,11 +87,18 @@ bool PushTimeTZCollation(ClientContext &context, unique_ptr<Expression> &source,
 		throw InternalException("timetz_byte_comparable should only have a single overload");
 	}
 	auto &scalar_function = function_entry.functions.GetFunctionReferenceByOffset(0);
+	string alias;
+	if (source) {
+		alias = source->GetAlias();
+	}
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
 
 	FunctionBinder function_binder(context);
 	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
+	if (!alias.empty()) {
+		function->SetAlias(alias);
+	}
 	source = std::move(function);
 	return true;
 }
@@ -101,11 +115,18 @@ bool PushIntervalCollation(ClientContext &context, unique_ptr<Expression> &sourc
 		throw InternalException("normalized_interval should only have a single overload");
 	}
 	auto &scalar_function = function_entry.functions.GetFunctionReferenceByOffset(0);
+	string alias;
+	if (source) {
+		alias = source->GetAlias();
+	}
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
 
 	FunctionBinder function_binder(context);
 	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
+	if (!alias.empty()) {
+		function->SetAlias(alias);
+	}
 	source = std::move(function);
 	return true;
 }

@@ -38,7 +38,11 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
 		auto copy = expr->Copy();
-		unbound_expressions.push_back(Bind(copy));
+		auto bound_expr = Bind(copy);
+		if (bound_expr) {
+			ExpressionBinder::PushCollation(context, bound_expr, bound_expr->return_type);
+		}
+		unbound_expressions.push_back(std::move(bound_expr));
 	}
 
 	CreateIndexInput input(unbound_index.table_io_manager, unbound_index.db, create_info.constraint_type,

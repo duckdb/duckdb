@@ -1,0 +1,28 @@
+# name: test/sql/constraints/unique_collation.test
+# description: UNIQUE/PK constraints must honor column collations
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unique_nocase(str VARCHAR COLLATE NOCASE UNIQUE);
+
+statement ok
+INSERT INTO unique_nocase VALUES ('A');
+
+# The second insert should violate the UNIQUE constraint because NOCASE collation treats 'A' == 'a'
+statement error
+INSERT INTO unique_nocase VALUES ('a');
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+query I
+SELECT COUNT(*) FROM unique_nocase;
+----
+1
+
+query I
+SELECT str FROM unique_nocase;
+----
+A
