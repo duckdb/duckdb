@@ -43,4 +43,9 @@ ValidityColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManag
 	return make_uniq<ValidityColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
+void ValidityColumnData::Verify(RowGroup &parent) {
+	D_ASSERT(HasParent());
+	ColumnData::Verify(parent);
+}
+
 } // namespace duckdb

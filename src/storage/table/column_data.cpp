@@ -22,10 +22,11 @@
 namespace duckdb {
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
-                       ColumnDataType data_type_p, optional_ptr<ColumnData> parent)
+                       ColumnDataType data_type_p, optional_ptr<ColumnData> parent_p)
     : count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
       allocation_size(0),
-      data_type(data_type_p == ColumnDataType::CHECKPOINT_TARGET ? ColumnDataType::MAIN_TABLE : data_type_p) {
+      data_type(data_type_p == ColumnDataType::CHECKPOINT_TARGET ? ColumnDataType::MAIN_TABLE : data_type_p),
+      parent(parent_p) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
