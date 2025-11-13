@@ -2,6 +2,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 namespace duckdb {
 
