@@ -206,7 +206,7 @@ typedef unique_ptr<CompressionAppendState> (*compression_init_append_t)(ColumnSe
 typedef idx_t (*compression_append_t)(CompressionAppendState &append_state, ColumnSegment &segment,
                                       SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset, idx_t count);
 typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, SegmentStatistics &stats);
-typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t start_row);
+typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t new_count);
 
 //===--------------------------------------------------------------------===//
 // Serialization (optional)
