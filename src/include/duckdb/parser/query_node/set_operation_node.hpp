@@ -11,7 +11,6 @@
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 

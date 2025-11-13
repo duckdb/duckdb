@@ -171,6 +171,12 @@ TEST_CASE("Test file operations", "[file_system]") {
 	}
 	// now open the file for reading
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname, FileFlags::FILE_FLAGS_READ));
+	// Check file stats.
+	const auto file_metadata = fs->Stats(*handle);
+	REQUIRE(file_metadata.file_size == 4096);
+	REQUIRE(file_metadata.file_type == FileType::FILE_TYPE_REGULAR);
+	REQUIRE(file_metadata.last_modification_time > timestamp_t {-1});
+
 	// read the 10 integers back
 	REQUIRE_NOTHROW(handle->Read(QueryContext(), (void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// check the values of the integers
