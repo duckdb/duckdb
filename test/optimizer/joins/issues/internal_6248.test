@@ -1,14 +1,8 @@
-# name: test/optimizer/joins/reported_issues/internal_6248.test
-# description: \
-# group: [reported_issues]
+# name: test/optimizer/joins/issues/internal_6248.test
+# description: Extract all child bindings of logical gets if they have children. Usually the case with table functions
+# group: [issues]
 
 require json
-
-statement ok
-CREATE TABLE tbl AS SELECT 42 AS i;
-
-statement ok
-SELECT SUM(i) OVER (ROWS BETWEEN (SELECT UNNEST([1])) PRECEDING AND 1 FOLLOWING) FROM tbl;
 
 statement ok
 CREATE OR REPLACE TABLE foo("field1" VARCHAR, "field2" INTEGER, "company-id" VARCHAR, "field3" VARCHAR);
