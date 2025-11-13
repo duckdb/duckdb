@@ -24,7 +24,11 @@ statement ok
 CHECKPOINT;
 
 query I
-SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOL' AND compression != 'Roaring';
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' AND compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' AND compression != 'Roaring';
 ----
 
 query I

@@ -31,6 +31,10 @@ SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VA
 ----
 
 query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOL' and compression != 'Roaring';
+----
+
+query I
 select count(*) from test WHERE a IS true;
 ----
 1000

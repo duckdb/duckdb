@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/roaring/bool/roaring_bool_appends.test_slow
+# name: test/sql/storage/compression/roaring/bool/roaring_bool_appends_w_null.test_slow
 # group: [bool]
 
 require block_size 262144

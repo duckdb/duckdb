@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/roaring/bool/roaring_bool_array_simple_w_null.test
+# name: test/sql/storage/compression/roaring/bool/roaring_bool_array_simple.test
 # description: Test bitpacking with nulls
 # group: [bool]
 
@@ -11,9 +11,13 @@ PRAGMA force_compression='roaring'
 statement ok
 CREATE TABLE test (a BOOL);
 
-# 82 values stored in the Array Container
+# 82 values stored in the Array Container - with nulls
 statement ok
-INSERT INTO test SELECT case when i%25=0 then false else true end FROM range(0,10000) tbl(i);
+INSERT INTO test SELECT case
+    when i%25=0 then false
+    when i%30=0 then true
+    else NULL
+end FROM range(0,72) tbl(i);
 
 statement ok
 checkpoint
@@ -25,33 +29,55 @@ SELECT compression FROM pragma_storage_info('test') WHERE  segment_type ILIKE 'B
 query I
 select count(*) from test WHERE a IS NOT true;
 ----
+667
+
+query I
+select count(*) from test WHERE a IS NULL;
+----
+267
+
+query I
+select count(*) from test WHERE a IS false;
+----
 400
+
+query I
+select count(*) from test WHERE a IS true;
+----
+9333
 
 statement ok
 delete from test
 
-# 5 non-null values per Vector, uses uncompressed arrays
+# 5 non-null values per Vector, uses uncompressed arrays - with nulls
 statement ok
 with intermediates as (
-	select i % 2048 as i
-	from range(0, 10_000) t(i)
+    select i % 2048 as i
+    from range(0, 10_000) t(i)
 )
-insert into test select case when
-	i = 0 or
-	i = 6 or
-	i = 1000 or
-	i = 1500 or
-	i = 2000
-	then false
-else true end from intermediates;
+insert into test select case
+    when i = 0 or i = 6 or i = 1000 or i = 1500 or i = 2000 then false
+    when i = 3 or i = 10 or i = 1001 or i = 1501 then NULL
+    else true
+end from intermediates;
 
 statement ok
 checkpoint;
 
 query I
-select count(*) from test WHERE a IS NOT true;
+select count(*) from test WHERE a IS NULL;
+----
+20
+
+query I
+select count(*) from test WHERE a IS false;
 ----
 24
+
+query I
+select count(*) from test WHERE a IS true;
+----
+9956
 
 statement ok
 DROP TABLE test;
