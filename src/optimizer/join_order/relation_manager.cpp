@@ -72,16 +72,16 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	} else if (get_all_child_bindings) {
 		// logical get has a logical_get index, but if a function is present other bindings can refer to
 		// columns that are not unnested, and from the child of the logical get.
-		 auto bindings = op.GetColumnBindings();
-		 for (auto &binding : bindings) {
-		 	relation_mapping[binding.table_index] = relation_id;
-		 }
+		auto bindings = op.GetColumnBindings();
+		for (auto &binding : bindings) {
+			relation_mapping[binding.table_index] = relation_id;
+		}
 	} else {
 		// Relations should never return more than 1 table index
-	    D_ASSERT(table_indexes.size() == 1);
-	    idx_t table_index = table_indexes.at(0);
-	    D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
-	    relation_mapping[table_index] = relation_id;
+		D_ASSERT(table_indexes.size() == 1);
+		idx_t table_index = table_indexes.at(0);
+		D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
+		relation_mapping[table_index] = relation_id;
 	}
 	relations.push_back(std::move(relation));
 	op.estimated_cardinality = stats.cardinality;
@@ -186,10 +186,10 @@ static void ModifyStatsIfLimit(optional_ptr<LogicalOperator> limit_op, RelationS
 	}
 }
 
-void RelationManager::AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
-                                        optional_ptr<LogicalOperator> parent, RelationStats &child_stats,
-                                        optional_ptr<LogicalOperator> limit_op,
-                                        vector<reference<LogicalOperator>> &datasource_filters) {
+void RelationManager::AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op,
+                                              LogicalOperator &input_op, optional_ptr<LogicalOperator> parent,
+                                              RelationStats &child_stats, optional_ptr<LogicalOperator> limit_op,
+                                              vector<reference<LogicalOperator>> &datasource_filters) {
 	D_ASSERT(!op.children.empty());
 	auto child_optimizer = optimizer.CreateChildOptimizer();
 	op.children[0] = child_optimizer.Optimize(std::move(op.children[0]), &child_stats);
