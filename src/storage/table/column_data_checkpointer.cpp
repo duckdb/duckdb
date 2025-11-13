@@ -152,7 +152,6 @@ void ColumnDataCheckpointer::InitAnalyze() {
 		auto &states = analyze_states[i];
 		auto &checkpoint_state = checkpoint_states[i];
 		auto &coldata = checkpoint_state.get().GetResultColumn();
-		coldata.count = checkpoint_state.get().original_column.count.load();
 		states.resize(functions.size());
 		for (idx_t j = 0; j < functions.size(); j++) {
 			auto &func = functions[j];
@@ -385,9 +384,6 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 				extra_info += StringUtil::Format("Start %d, count %d", s->row_start, s->node->count.load());
 			}
 			const_reference<ColumnData> root = col_data;
-			while (root.get().HasParent()) {
-				root = root.get().Parent();
-			}
 			throw InternalException(
 			    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
 			    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "

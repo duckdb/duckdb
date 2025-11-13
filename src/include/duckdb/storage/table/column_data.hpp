@@ -99,7 +99,6 @@ public:
 		return parent != nullptr;
 	}
 	void SetParent(optional_ptr<ColumnData> parent) {
-		D_ASSERT(!HasParent());
 		this->parent = parent;
 	}
 	const ColumnData &Parent() const {
@@ -112,9 +111,10 @@ public:
 	ColumnSegmentTree &GetSegmentTree() {
 		return data;
 	}
+	void SetCount(idx_t new_count) {
+		this->count = new_count;
+	}
 
-	//! The root type of the column
-	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
 	bool HasChanges(idx_t start_row, idx_t end_row) const;

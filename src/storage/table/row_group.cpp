@@ -1003,13 +1003,15 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			auto &column = row_group.GetColumn(column_idx);
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
 			auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
-			D_ASSERT(checkpoint_state);
 
+			auto result_col = checkpoint_state->GetFinalResult();
+			// FIXME: we should get rid of the checkpoint state statistics - and instead use the stats in the ColumnData
+			// directly
 			auto stats = checkpoint_state->GetStatistics();
-			D_ASSERT(stats);
+			result_col->MergeIntoStatistics(*stats);
 
 			// FIXME: temporary - we shouldn't be modifying the row group in-place but emitting a new one
-			AssignSharedPointer(row_group.GetColumns()[column_idx], checkpoint_state->GetFinalResult());
+			row_group.GetColumns()[column_idx] = std::move(result_col);
 
 			row_group_write_data.statistics.push_back(stats->Copy());
 			row_group_write_data.states.push_back(std::move(checkpoint_state));

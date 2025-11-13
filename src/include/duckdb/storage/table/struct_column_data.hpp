@@ -64,6 +64,9 @@ public:
 
 	void Verify(RowGroup &parent) override;
 
+	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
+	void SetChildData(idx_t i, shared_ptr<ColumnData> child_column_p);
+
 protected:
 	//! The sub-columns of the struct
 	vector<shared_ptr<ColumnData>> sub_columns;

@@ -10,12 +10,14 @@ namespace duckdb {
 
 ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                  LogicalType type_p, ColumnDataType data_type, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
-      validity(make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this)) {
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent) {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
-	auto &child_type = ArrayType::GetChildType(type);
-	// the child column, with column index 1 (0 is the validity mask)
-	child_column = CreateColumn(block_manager, info, 1, child_type, data_type, this);
+	if (data_type != ColumnDataType::CHECKPOINT_TARGET) {
+		auto &child_type = ArrayType::GetChildType(type);
+		validity = make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this);
+		// the child column, with column index 1 (0 is the validity mask)
+		child_column = CreateColumn(block_manager, info, 1, child_type, data_type, this);
+	}
 }
 
 void ArrayColumnData::SetDataType(ColumnDataType data_type) {
@@ -271,6 +273,22 @@ void ArrayColumnData::CommitDropColumn() {
 	child_column->CommitDropColumn();
 }
 
+void ArrayColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
+	if (validity) {
+		throw InternalException("ArrayColumnData::SetValidityData cannot be used to overwrite existing validity");
+	}
+	validity_p->SetParent(this);
+	this->validity = std::move(validity_p);
+}
+
+void ArrayColumnData::SetChildData(shared_ptr<ColumnData> child_column_p) {
+	if (child_column) {
+		throw InternalException("ArrayColumnData::SetChildData cannot be used to overwrite existing data");
+	}
+	child_column_p->SetParent(this);
+	this->child_column = std::move(child_column_p);
+}
+
 struct ArrayColumnCheckpointState : public ColumnCheckpointState {
 	ArrayColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
@@ -281,6 +299,23 @@ struct ArrayColumnCheckpointState : public ColumnCheckpointState {
 	unique_ptr<ColumnCheckpointState> child_state;
 
 public:
+	shared_ptr<ColumnData> CreateEmptyColumnData() override {
+		return make_shared_ptr<ArrayColumnData>(original_column.GetBlockManager(), original_column.GetTableInfo(),
+		                                        original_column.column_index, original_column.type,
+		                                        ColumnDataType::CHECKPOINT_TARGET, nullptr);
+	}
+
+	shared_ptr<ColumnData> GetFinalResult() override {
+		if (!result_column) {
+			result_column = CreateEmptyColumnData();
+		}
+		auto &column_data = result_column->Cast<ArrayColumnData>();
+		auto validity_child = validity_state->GetFinalResult();
+		column_data.SetValidityData(shared_ptr_cast<ColumnData, ValidityColumnData>(std::move(validity_child)));
+		column_data.SetChildData(child_state->GetFinalResult());
+		return ColumnCheckpointState::GetFinalResult();
+	}
+
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
 		ArrayStats::SetChildStats(stats, child_state->GetStatistics());

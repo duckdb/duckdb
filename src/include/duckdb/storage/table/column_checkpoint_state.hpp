@@ -54,6 +54,7 @@ public:
 			// original column
 			return original_column.shared_from_this();
 		}
+		result_column->SetCount(original_column.count.load());
 		return result_column;
 	}
 

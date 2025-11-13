@@ -11,8 +11,7 @@ namespace duckdb {
 
 StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                    LogicalType type_p, ColumnDataType data_type, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
-      validity(make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this)) {
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(!child_types.empty());
@@ -22,12 +21,18 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	if (type.id() == LogicalTypeId::VARIANT) {
 		throw NotImplementedException("A table cannot be created from a VARIANT column yet");
 	}
-	// the sub column index, starting at 1 (0 is the validity mask)
-	idx_t sub_column_index = 1;
-	for (auto &child_type : child_types) {
-		sub_columns.push_back(
-		    ColumnData::CreateColumn(block_manager, info, sub_column_index, child_type.second, data_type, this));
-		sub_column_index++;
+	if (data_type != ColumnDataType::CHECKPOINT_TARGET) {
+		validity = make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this);
+		// the sub column index, starting at 1 (0 is the validity mask)
+		idx_t sub_column_index = 1;
+		for (auto &child_type : child_types) {
+			sub_columns.push_back(
+			    ColumnData::CreateColumn(block_manager, info, sub_column_index, child_type.second, data_type, this));
+			sub_column_index++;
+		}
+	} else {
+		// initialize to empty
+		sub_columns.resize(child_types.size());
 	}
 }
 
@@ -279,6 +284,22 @@ void StructColumnData::CommitDropColumn() {
 	}
 }
 
+void StructColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
+	if (validity) {
+		throw InternalException("StructColumnData::SetValidityData cannot be used to overwrite existing validity");
+	}
+	validity_p->SetParent(this);
+	this->validity = std::move(validity_p);
+}
+
+void StructColumnData::SetChildData(idx_t i, shared_ptr<ColumnData> child_column_p) {
+	if (sub_columns[i]) {
+		throw InternalException("StructColumnData::SetChildData cannot be used to overwrite existing data");
+	}
+	child_column_p->SetParent(this);
+	this->sub_columns[i] = std::move(child_column_p);
+}
+
 struct StructColumnCheckpointState : public ColumnCheckpointState {
 	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
 	                            PartialBlockManager &partial_block_manager)
@@ -290,6 +311,24 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 	vector<unique_ptr<ColumnCheckpointState>> child_states;
 
 public:
+	shared_ptr<ColumnData> CreateEmptyColumnData() override {
+		return make_shared_ptr<StructColumnData>(original_column.GetBlockManager(), original_column.GetTableInfo(),
+		                                         original_column.column_index, original_column.type,
+		                                         ColumnDataType::CHECKPOINT_TARGET, nullptr);
+	}
+
+	shared_ptr<ColumnData> GetFinalResult() override {
+		if (!result_column) {
+			result_column = CreateEmptyColumnData();
+		}
+		auto &column_data = result_column->Cast<StructColumnData>();
+		auto validity_child = validity_state->GetFinalResult();
+		column_data.SetValidityData(shared_ptr_cast<ColumnData, ValidityColumnData>(std::move(validity_child)));
+		for (idx_t i = 0; i < child_states.size(); i++) {
+			column_data.SetChildData(i, child_states[i]->GetFinalResult());
+		}
+		return ColumnCheckpointState::GetFinalResult();
+	}
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
 		for (idx_t i = 0; i < child_states.size(); i++) {

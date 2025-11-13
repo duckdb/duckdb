@@ -25,8 +25,7 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
                        ColumnDataType data_type_p, optional_ptr<ColumnData> parent)
     : count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
       allocation_size(0),
-      data_type(data_type_p == ColumnDataType::CHECKPOINT_TARGET ? ColumnDataType::MAIN_TABLE : data_type_p),
-      parent(parent) {
+      data_type(data_type_p == ColumnDataType::CHECKPOINT_TARGET ? ColumnDataType::MAIN_TABLE : data_type_p) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -49,13 +48,6 @@ DataTableInfo &ColumnData::GetTableInfo() const {
 
 StorageManager &ColumnData::GetStorageManager() const {
 	return info.GetDB().GetStorageManager();
-}
-
-const LogicalType &ColumnData::RootType() const {
-	if (parent) {
-		return parent->RootType();
-	}
-	return type;
 }
 
 bool ColumnData::HasUpdates() const {
@@ -403,7 +395,7 @@ void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, 
 }
 
 void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_count) {
-	if (parent || !stats) {
+	if (!stats) {
 		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
 	}
 	lock_guard<mutex> l(stats_lock);

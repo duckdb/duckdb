@@ -66,6 +66,9 @@ public:
 
 	void Verify(RowGroup &parent) override;
 
+	void SetValidityData(shared_ptr<ValidityColumnData> validity);
+	void SetChildData(shared_ptr<ColumnData> child_column);
+
 protected:
 	//! The child-column of the list
 	shared_ptr<ColumnData> child_column;
