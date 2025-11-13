@@ -7,6 +7,7 @@ add_library_unity(
   appender-c.cpp
   arrow-c.cpp
   cast_function-c.cpp
+  catalog-c.cpp
   config-c.cpp
   data_chunk-c.cpp
   datetime-c.cpp

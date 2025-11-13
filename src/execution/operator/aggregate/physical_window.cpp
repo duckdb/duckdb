@@ -953,11 +953,6 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 
 bool WindowLocalSourceState::TryAssignTask() {
 	D_ASSERT(TaskFinished());
-	if (task && task->stage == WindowGroupStage::GETDATA) {
-		// If this state completed the last block in the previous iteration,
-		// release our local state memory.
-		ReleaseLocalStates();
-	}
 	// Because downstream operators may be using our internal buffers,
 	// we can't "finish" a task until we are about to get the next one.
 

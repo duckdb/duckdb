@@ -859,3 +859,32 @@ TEST_CASE("Interrupted QueryAppender flow: interrupt -> clear -> close finishes"
 		FAIL("app.Close() did not finish within a second");
 	}
 }
+
+TEST_CASE("Test appender_allocator_flush_threshold", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	const size_t blob_size = 100 * 1024;
+	std::vector<uint8_t> data(blob_size, 'A');
+	auto value = duckdb::Value::BLOB(data.data(), data.size());
+	REQUIRE_NO_FAIL(con.Query("SET GLOBAL memory_limit='1GB'"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE my_table (b BLOB)"));
+
+	// Flush when call `EndRow`
+	Appender appender_1(con, "my_table", 16 * 1024 * 1024);
+	for (int i = 0; i < 10000; i++) {
+		appender_1.BeginRow();
+		appender_1.Append(value);
+		appender_1.EndRow();
+	}
+	appender_1.Close();
+
+	// Flush when call `FlushChunk`
+	Appender appender_2(con, "my_table", 64 * 1024);
+	for (int i = 0; i < 10000; i++) {
+		appender_2.BeginRow();
+		appender_2.Append(value);
+		appender_2.EndRow();
+	}
+	appender_2.Close();
+}
