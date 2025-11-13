@@ -7,7 +7,10 @@ create table tbl (a VARIANT)
 statement ok
 insert into tbl VALUES (42)
 
-statement error
+statement ok
 update tbl SET a = 21
+
+query I
+select * from tbl
 ----
-Not implemented Error: VARIANT Update is not supported.
+21
