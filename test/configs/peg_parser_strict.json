@@ -72,6 +72,20 @@
       ]
     },
     {
+      "reason": "Case insensitive preservation",
+      "paths": [
+        "test/sql/settings/setting_preserve_identifier_case.test"
+      ]
+    },
+    {
+      "reason": "Create Table Statement",
+      "paths": [
+        "test/sql/export/parquet/export_parquet_enum.test",
+        "test/sql/export/export_generated_columns.test",
+        "test/sql/export/export_database.test"
+      ]
+    },
+    {
       "reason": "Parser exception because of dollar-quoted strings",
       "paths": [
         "test/sql/peg_parser/parser/create_macro.test",
