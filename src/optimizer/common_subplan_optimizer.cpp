@@ -200,16 +200,19 @@ private:
 				for (idx_t col_idx = 0; col_idx < get.names.size(); col_idx++) {
 					get.GetMutableColumnIds().push_back(ColumnIndex(col_idx));
 				}
+				for (const auto &vc : get.virtual_columns) {
+					get.GetMutableColumnIds().push_back(ColumnIndex(vc.first));
+				}
 
-				// Also temporarily don't project any columns out
-				projection_ids = std::move(get.projection_ids);
-
-				// FIXME: can probably work for virtual columns in the future
+				// FIXME: can probably work for nested columns in the future
 				for (const auto &col_id : column_ids) {
-					if (col_id.IsVirtualColumn()) {
+					if (col_id.IsVirtualColumn() || col_id.HasChildren()) {
 						return false;
 					}
 				}
+
+				// Also temporarily don't project any columns out
+				projection_ids = std::move(get.projection_ids);
 
 				// Store mapping for base tables
 				auto &column_index_map = table_index_map.at(table_indices[0]);
@@ -219,9 +222,9 @@ private:
 						column_index_map.Insert(col_idx, primary_index);
 					}
 				} else {
-					for (idx_t col_idx = 0; col_idx < projection_ids.size(); col_idx++) {
-						const auto primary_index = column_ids[projection_ids[col_idx]].GetPrimaryIndex();
-						column_index_map.Insert(col_idx, primary_index);
+					for (const auto &proj_id : projection_ids) {
+						const auto primary_index = column_ids[proj_id].GetPrimaryIndex();
+						column_index_map.Insert(proj_id, primary_index);
 					}
 				}
 				break;
