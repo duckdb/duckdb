@@ -39,9 +39,16 @@ unique_ptr<MacroFunction> PEGTransformerFactory::TransformMacroDefinition(PEGTra
 	    transformer.Transform<unique_ptr<MacroFunction>>(nested_list.Child<ChoiceParseResult>(0).result);
 	auto parameters_pr = ExtractResultFromParens(list_pr.Child<ListParseResult>(0))->Cast<OptionalParseResult>();
 	if (parameters_pr.HasResult()) {
+		bool default_value_found = false;
 		auto parameters = transformer.Transform<vector<MacroParameter>>(parameters_pr.optional_result);
+		case_insensitive_string_set_t parameter_names;
 		for (auto &parameter : parameters) {
-			if (!parameter.name.empty()) {
+			D_ASSERT(!parameter.name.empty());
+			if (parameter_names.find(parameter.name) != parameter_names.end()) {
+				throw ParserException("Duplicate parameter '%s' in macro definition", parameter.name);
+			}
+			parameter_names.insert(parameter.name);
+			if (parameter.is_default) {
 				Value default_value;
 				if (!ConstructConstantFromExpression(*parameter.expression, default_value)) {
 					throw ParserException("Invalid default value for parameter '%s': %s", parameter.name,
@@ -52,7 +59,11 @@ unique_ptr<MacroFunction> PEGTransformerFactory::TransformMacroDefinition(PEGTra
 				macro_function->default_parameters[parameter.name] = std::move(default_expr);
 				macro_function->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));
 				macro_function->default_parameters.insert(parameter.name, std::move(default_expr));
+				default_value_found = true;
 			} else {
+				if (default_value_found) {
+					throw ParserException("Parameter without a default follows parameter with a default");
+				}
 				macro_function->parameters.push_back(std::move(parameter.expression));
 			}
 			macro_function->types.push_back(parameter.type);
@@ -103,8 +114,10 @@ MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &t
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto parameter = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	MacroParameter result;
+	result.name = parameter;
 	result.expression = make_uniq<ColumnRefExpression>(parameter);
 	transformer.TransformOptional<LogicalType>(list_pr, 1, result.type);
+	result.is_default = false;
 	return result;
 }
 
