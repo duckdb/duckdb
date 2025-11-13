@@ -20,7 +20,6 @@ public:
 	                   ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 public:
-	shared_ptr<ValidityColumnData> &GetValidityData() override;
 	void SetDataType(ColumnDataType data_type) override;
 
 	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
@@ -68,6 +67,8 @@ public:
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void Verify(RowGroup &parent) override;
+
+	void SetValidityData(shared_ptr<ValidityColumnData> validity);
 
 protected:
 	//! The validity column data

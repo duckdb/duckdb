@@ -52,7 +52,7 @@ private:
 	RowGroupWriteInfo &info;
 };
 
-enum class ColumnDataType { MAIN_TABLE, INITIAL_TRANSACTION_LOCAL, TRANSACTION_LOCAL };
+enum class ColumnDataType { MAIN_TABLE, INITIAL_TRANSACTION_LOCAL, TRANSACTION_LOCAL, CHECKPOINT_TARGET };
 
 class ColumnData : public enable_shared_from_this<ColumnData> {
 	friend class ColumnDataCheckpointer;
@@ -82,7 +82,6 @@ public:
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
 	StorageManager &GetStorageManager() const;
-	virtual shared_ptr<ValidityColumnData> &GetValidityData();
 	virtual idx_t GetMaxEntry();
 
 	idx_t GetAllocationSize() const {
@@ -98,6 +97,10 @@ public:
 
 	bool HasParent() const {
 		return parent != nullptr;
+	}
+	void SetParent(optional_ptr<ColumnData> parent) {
+		D_ASSERT(!HasParent());
+		this->parent = parent;
 	}
 	const ColumnData &Parent() const {
 		D_ASSERT(HasParent());

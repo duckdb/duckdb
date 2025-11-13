@@ -18,10 +18,6 @@ ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &inf
 	child_column = CreateColumn(block_manager, info, 1, child_type, data_type, this);
 }
 
-shared_ptr<ValidityColumnData> &ArrayColumnData::GetValidityData() {
-	return validity;
-}
-
 void ArrayColumnData::SetDataType(ColumnDataType data_type) {
 	ColumnData::SetDataType(data_type);
 	child_column->SetDataType(data_type);

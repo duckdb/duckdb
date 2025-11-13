@@ -432,7 +432,6 @@ void ColumnDataCheckpointer::FinalizeCheckpoint() {
 		auto &state = checkpoint_states[i].get();
 		if (!has_changes[i]) {
 			// no changes - copy over the original column
-			state.SetUnchanged();
 			WritePersistentSegments(state);
 		}
 	}

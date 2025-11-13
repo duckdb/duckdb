@@ -202,7 +202,8 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 }
 
 PersistentColumnData ColumnCheckpointState::ToPersistentData() {
-	PersistentColumnData data(result_column->type.InternalType());
+	auto &type = result_column ? result_column->type : original_column.type;
+	PersistentColumnData data(type.InternalType());
 	data.pointers = std::move(data_pointers);
 	return data;
 }

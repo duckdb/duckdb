@@ -20,7 +20,6 @@ public:
 	               ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 public:
-	shared_ptr<ValidityColumnData> &GetValidityData() override;
 	void SetDataType(ColumnDataType data_type) override;
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 

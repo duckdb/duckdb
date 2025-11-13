@@ -18,10 +18,6 @@ ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info,
 	child_column = CreateColumn(block_manager, info, 1, child_type, data_type, this);
 }
 
-shared_ptr<ValidityColumnData> &ListColumnData::GetValidityData() {
-	return validity;
-}
-
 void ListColumnData::SetDataType(ColumnDataType data_type) {
 	ColumnData::SetDataType(data_type);
 	child_column->SetDataType(data_type);

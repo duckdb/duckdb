@@ -13,12 +13,11 @@ namespace duckdb {
 
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                        LogicalType type, ColumnDataType data_type, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, std::move(type), data_type, parent),
-      validity(make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this)) {
-}
-
-shared_ptr<ValidityColumnData> &StandardColumnData::GetValidityData() {
-	return validity;
+    : ColumnData(block_manager, info, column_index, std::move(type), data_type, parent) {
+	if (data_type != ColumnDataType::CHECKPOINT_TARGET) {
+		// don't initialize the child entry if this is a checkpoint target
+		validity = make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this);
+	}
 }
 
 void StandardColumnData::SetDataType(ColumnDataType data_type) {
@@ -169,7 +168,7 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
 	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
 	validity->UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
-	                        row_group_start);
+	                         row_group_start);
 }
 
 void StandardColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
@@ -182,7 +181,7 @@ void StandardColumnData::UpdateColumn(TransactionData transaction, DataTable &da
 	} else {
 		// update the child column (i.e. the validity column)
 		validity->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
-		                      row_group_start);
+		                       row_group_start);
 	}
 }
 
@@ -217,6 +216,14 @@ void StandardColumnData::CommitDropColumn() {
 	validity->CommitDropColumn();
 }
 
+void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
+	if (validity) {
+		throw InternalException("StandardColumnData::SetValidityData cannot be used to overwrite existing validity");
+	}
+	validity_p->SetParent(this);
+	this->validity = std::move(validity_p);
+}
+
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
 	                              PartialBlockManager &partial_block_manager)
@@ -226,6 +233,21 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	unique_ptr<ColumnCheckpointState> validity_state;
 
 public:
+	shared_ptr<ColumnData> CreateEmptyColumnData() override {
+		return make_shared_ptr<StandardColumnData>(original_column.GetBlockManager(), original_column.GetTableInfo(),
+		                                           original_column.column_index, original_column.type,
+		                                           ColumnDataType::CHECKPOINT_TARGET, nullptr);
+	}
+
+	shared_ptr<ColumnData> GetFinalResult() override {
+		if (result_column) {
+			auto &column_data = result_column->Cast<StandardColumnData>();
+			auto validity_child = validity_state->GetFinalResult();
+			column_data.SetValidityData(shared_ptr_cast<ColumnData, ValidityColumnData>(std::move(validity_child)));
+		}
+		return ColumnCheckpointState::GetFinalResult();
+	}
+
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		D_ASSERT(global_stats);
 		return std::move(global_stats);
@@ -255,7 +277,6 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 	auto validity_state_p = validity->CreateCheckpointState(row_group, partial_block_manager);
 	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity->type).ToUnique();
-	validity_state_p->parent_state = base_state.get();
 
 	auto &validity_state = *validity_state_p;
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();

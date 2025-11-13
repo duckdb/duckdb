@@ -31,10 +31,6 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	}
 }
 
-shared_ptr<ValidityColumnData> &StructColumnData::GetValidityData() {
-	return validity;
-}
-
 void StructColumnData::SetDataType(ColumnDataType data_type) {
 	ColumnData::SetDataType(data_type);
 	for (auto &sub_column : sub_columns) {
@@ -233,7 +229,7 @@ void StructColumnData::UpdateColumn(TransactionData transaction, DataTable &data
 	if (update_column == 0) {
 		// update the validity column
 		validity->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
-		                      row_group_start);
+		                       row_group_start);
 	} else {
 		if (update_column > sub_columns.size()) {
 			throw InternalException("Update column_path out of range");

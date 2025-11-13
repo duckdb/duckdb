@@ -33,33 +33,27 @@ struct ColumnCheckpointState {
 	ColumnData &original_column;
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
-	optional_ptr<ColumnCheckpointState> parent_state;
 
 protected:
 	PartialBlockManager &partial_block_manager;
 	shared_ptr<ColumnData> result_column;
 
 public:
-	void SetUnchanged() {
-		result_column = original_column.shared_from_this();
+	virtual shared_ptr<ColumnData> CreateEmptyColumnData() {
+		throw InternalException("CreateEmptyColumnData not implemented for this column checkpoint state");
 	}
 	virtual ColumnData &GetResultColumn() {
 		if (!result_column) {
-			if (parent_state) {
-				D_ASSERT(original_column.GetType().id() == LogicalTypeId::VALIDITY);
-				auto &parent = parent_state->GetResultColumn();
-				result_column = shared_ptr_cast<ValidityColumnData, ColumnData>(parent.GetValidityData());
-			} else {
-				result_column =
-				    ColumnData::CreateColumn(original_column.GetBlockManager(), original_column.GetTableInfo(),
-				                             original_column.column_index, original_column.type);
-			}
+			result_column = CreateEmptyColumnData();
 		}
 		return *result_column;
 	}
-	virtual shared_ptr<ColumnData> GetResultColumnPointer() {
-		// ensure the column is loaded
-		GetResultColumn();
+	virtual shared_ptr<ColumnData> GetFinalResult() {
+		if (!result_column) {
+			// no result column instantiated - that means we haven't changed anything and can directly return the
+			// original column
+			return original_column.shared_from_this();
+		}
 		return result_column;
 	}
 

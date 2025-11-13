@@ -24,7 +24,9 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
                        ColumnDataType data_type_p, optional_ptr<ColumnData> parent)
     : count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
-      allocation_size(0), data_type(data_type_p), parent(parent) {
+      allocation_size(0),
+      data_type(data_type_p == ColumnDataType::CHECKPOINT_TARGET ? ColumnDataType::MAIN_TABLE : data_type_p),
+      parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -47,10 +49,6 @@ DataTableInfo &ColumnData::GetTableInfo() const {
 
 StorageManager &ColumnData::GetStorageManager() const {
 	return info.GetDB().GetStorageManager();
-}
-
-shared_ptr<ValidityColumnData> &ColumnData::GetValidityData() {
-	throw InternalException("ColumnData::GetValidityData - ColumnData does not have validity data");
 }
 
 const LogicalType &ColumnData::RootType() const {
