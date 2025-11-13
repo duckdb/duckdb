@@ -202,18 +202,18 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups);
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
 
+	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
+
 private:
 	const column_t column_idx;
 	const OrderByStatistics order_by;
 	const RowGroupOrderType order_type;
 	const OrderByColumnType column_type;
+	const optional_idx row_limit;
 
 	idx_t offset;
 	bool initialized;
 	vector<reference<SegmentNode<RowGroup>>> ordered_row_groups;
-
-private:
-	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
 };
 
 class CollectionScanState {
