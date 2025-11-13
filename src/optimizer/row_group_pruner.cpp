@@ -123,6 +123,9 @@ unique_ptr<RowGroupPrunerParameters> RowGroupPruner::CanOptimize(LogicalOperator
 				auto new_offset = RowGroupReorderer::GetOffsetAfterPruning(*options, partition_stats);
 				// TODO: set this somewhere else. Also, set a value in options so that we know to prune the first N
 				// rowgroups
+				if (new_offset == row_offset.GetIndex()) {
+					options->row_offset = optional_idx();
+				}
 				logical_limit.offset_val = BoundLimitNode::ConstantValue(static_cast<int64_t>(new_offset));
 			}
 		}

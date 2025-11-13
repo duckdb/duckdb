@@ -125,7 +125,7 @@ struct RowGroupOrderOptions {
 	const RowGroupOrderType order_type;
 	const OrderByColumnType column_type;
 	const optional_idx row_limit;
-	const optional_idx row_offset;
+	optional_idx row_offset;
 };
 
 struct TableFunctionInitInput {
