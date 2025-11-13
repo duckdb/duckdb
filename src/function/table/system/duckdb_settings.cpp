@@ -197,7 +197,6 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
-	// It should be Boolean, but if we do so, we cannot have the validation we have in `extract_in_bytes_argument`
 	fun.named_parameters["in_bytes"] = LogicalType::BOOLEAN;
 	set.AddFunction(fun);
 }
