@@ -14,8 +14,13 @@ class IndentedFileWriter:
         mode = 'r' if read_only else 'w'
         self.file = open(file_path, mode, encoding='utf-8', newline='\n')
 
+    def write_indented(self, indent_level, text):
+        """Write text to file with the specified indentation level."""
+        indent = '\t' * indent_level
+        self.file.write(f"{indent}{text}\n")
+
     def write(self, text):
-        """Delegate write to the underlying file object."""
+        """Delegate write to the underlying file object, add a new line at the end."""
         self.file.write(text)
 
     def write_header(self, file):
