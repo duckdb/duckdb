@@ -1350,8 +1350,6 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 	if (config.render_mode == RenderMode::ROWS) {
 		render_rows.push_back(std::move(type_row));
 	}
-	// add a separator if there are any rows
-	render_rows.emplace_back(RenderRowType::SEPARATOR);
 	// prepare the values
 	bool first_render = true;
 	bool invert = false;
@@ -1359,7 +1357,10 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 		if (collection.Count() == 0) {
 			continue;
 		}
-		if (!first_render) {
+		if (first_render) {
+			// add a separator if there are any rows
+			render_rows.emplace_back(RenderRowType::SEPARATOR);
+		} else {
 			// render divider between top and bottom collection
 			render_rows.emplace_back(RenderRowType::DIVIDER);
 		}
@@ -1894,10 +1895,8 @@ void BoxRendererImplementation::RenderFooter(idx_t row_count, idx_t column_count
 		render_anything = false;
 	}
 	// render the bottom of the result values, if there are any
-	if (row_count > 0) {
-		RenderLayoutLine(config.HORIZONTAL, config.DMIDDLE, render_anything ? config.LMIDDLE : config.LDCORNER,
-		                 render_anything ? config.RMIDDLE : config.RDCORNER);
-	}
+	RenderLayoutLine(config.HORIZONTAL, config.DMIDDLE, render_anything ? config.LMIDDLE : config.LDCORNER,
+	                 render_anything ? config.RMIDDLE : config.RDCORNER);
 	if (!render_anything) {
 		return;
 	}
