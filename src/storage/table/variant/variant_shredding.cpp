@@ -72,7 +72,27 @@ struct VariantStatsVisitor {
 	template <typename T>
 	static void VisitDecimal(T val, uint32_t width, uint32_t scale, VariantShreddingStats &stats,
 	                         idx_t stats_column_index) {
-		//! FIXME: need to visit to be able to shred on DECIMAL values
+		auto &column_stats = stats.GetColumnStats(stats_column_index);
+
+		auto decimal_count = column_stats.type_counts[static_cast<uint8_t>(VariantLogicalType::DECIMAL)];
+		D_ASSERT(decimal_count);
+		//! Visit is called after VisitMetadata, so even for the first DECIMAL value, count will already be 1
+		decimal_count--;
+
+		if (!decimal_count) {
+			column_stats.decimal_width = width;
+			column_stats.decimal_scale = scale;
+			column_stats.decimal_consistent = true;
+			return;
+		}
+
+		if (!column_stats.decimal_consistent) {
+			return;
+		}
+
+		if (width != column_stats.decimal_width || scale != column_stats.decimal_scale) {
+			column_stats.decimal_consistent = false;
+		}
 	}
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
@@ -365,8 +385,8 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 
 	//! Skip the 'VARIANT_NULL' type, we can't shred on NULL
 	for (uint8_t i = 1; i < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE); i++) {
-		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL)) {
-			//! Can't shred on DECIMAL currently
+		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL) && !column.decimal_consistent) {
+			//! Can't shred on DECIMAL, not consistent
 			continue;
 		}
 		idx_t count = column.type_counts[i];
@@ -404,6 +424,11 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 			return false;
 		}
 		auto shredded_type = LogicalType::LIST(element_type);
+		out_type = SetShreddedType(shredded_type);
+		return true;
+	}
+	if (type_index == static_cast<uint8_t>(VariantLogicalType::DECIMAL)) {
+		auto shredded_type = LogicalType::DECIMAL(column.decimal_width, column.decimal_scale);
 		out_type = SetShreddedType(shredded_type);
 		return true;
 	}

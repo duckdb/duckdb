@@ -23,6 +23,10 @@ public:
 	idx_t index;
 	//! Count of each variant type encountered
 	idx_t type_counts[static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE)] = {0};
+	uint32_t decimal_width;
+	uint32_t decimal_scale;
+	bool decimal_consistent = false;
+
 	idx_t total_count = 0;
 	//! indices into the top-level 'columns' vector where the stats for the field/element live
 	case_insensitive_map_t<idx_t> field_stats;

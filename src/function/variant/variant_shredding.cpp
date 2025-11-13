@@ -119,6 +119,10 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 	case LogicalTypeId::DECIMAL: {
 		const auto physical_type = type.InternalType();
 		switch (physical_type) {
+		//! DECIMAL2 (doesn't exist in Parquet for some reason)
+		case PhysicalType::INT16:
+			WriteShreddedDecimal<int16_t>(variant, result, sel, value_index_sel, result_sel, count);
+			break;
 		//! DECIMAL4
 		case PhysicalType::INT32:
 			WriteShreddedDecimal<int32_t>(variant, result, sel, value_index_sel, result_sel, count);
