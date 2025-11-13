@@ -4,6 +4,9 @@
 statement ok
 PRAGMA enable_verification
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
 ----
@@ -59,17 +62,11 @@ FROM encrypted.fuu
 statement ok
 DETACH encrypted
 
-# or open it without specifying the cipher, it will be read from file
-statement ok
+# opening the database without cipher for CTR is not possible for security reasons
+statement error
 ATTACH '__TEST_DIR__/encrypted_default_cipher.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
-
-query I
-FROM encrypted.fuu
 ----
-42
-
-statement ok
-DETACH encrypted
+Catalog Error: Cannot open encrypted database
 
 # but it will fail if we specify the wrong one
 statement error
