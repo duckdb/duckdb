@@ -76,52 +76,51 @@ def _write_function(
     case_logic: Callable[[str], Optional[str]],
 ) -> None:
     # set metric to default
-    cpp_f.write_indented(0, f"void {class_name}::{function_name} {{")
-    cpp_f.write_indented(1, "switch(type) {")
+    cpp_f.write(f"void {class_name}::{function_name} {{")
+    cpp_f.write("switch(type) {")
     for t in types:
         for m in types[t]:
-            cpp_f.write_indented(2, f"case MetricType::{m}:")
+            cpp_f.write(f"case MetricType::{m}:")
 
         res = case_logic(t)
         if res is not None:
-            cpp_f.write_indented(3, res)
-        cpp_f.write_indented(3, "break;")
+            cpp_f.write(res)
+        cpp_f.write("break;")
 
-    cpp_f.write_indented(2, "default:")
-    cpp_f.write_indented(3, "throw InternalException(\"Unknown metric type %s\", EnumUtil::ToString(type));")
-    cpp_f.write_indented(1, "}")
-    cpp_f.write_indented(0, "}\n")
+    cpp_f.write("default:")
+    cpp_f.write("throw InternalException(\"Unknown metric type %s\", EnumUtil::ToString(type));")
+    cpp_f.write("}")
+    cpp_f.write("}\n")
 
 
 def _generate_collection_methods(
     cpp_f: IndentedFileWriter, class_name: str, function_name: str, metric_index: MetricIndex
 ) -> None:
-    cpp_f.write_indented(0, f"void {class_name}::{function_name} {{")
-    cpp_f.write_indented(1, "switch(type) {")
+    cpp_f.write(f"void {class_name}::{function_name} {{")
+    cpp_f.write("switch(type) {")
     for c in metric_index.collection_index():
         for m in metric_index.metrics_per_collection(c):
-            cpp_f.write_indented(2, f"case MetricType::{m}:")
+            cpp_f.write(f"case MetricType::{m}:")
             if c == "timer":
-                cpp_f.write_indented(3, f"metric = query_metrics.{m.lower()}.Elapsed();")
+                cpp_f.write(f"metric = query_metrics.{m.lower()}.Elapsed();")
             elif c == "child":
-                cpp_f.write_indented(3, f"metric = child_info.metrics[MetricType::{metric_index.metric_child(m)}];")
+                cpp_f.write(f"metric = child_info.metrics[MetricType::{metric_index.metric_child(m)}];")
             elif c == "cumulative_operators":
-                cpp_f.write_indented(3, f"metric = GetCumulativeOptimizers(node);")
+                cpp_f.write(f"metric = GetCumulativeOptimizers(node);")
             elif c == "query_metric" and metric_index.metric_type(m) == "uint64_t":
-                cpp_f.write_indented(3, f"metric = Value::UBIGINT(query_metrics.{m.lower()});")
+                cpp_f.write(f"metric = Value::UBIGINT(query_metrics.{m.lower()});")
             elif c == "cumulative":
-                cpp_f.write_indented(
-                    3,
+                cpp_f.write(
                     f"GetCumulativeMetric<{metric_index.metric_type(m)}>(node, MetricType::{m}, MetricType::{metric_index.metric_child(m)});",
                 )
             else:
                 raise Exception(f"Unknown collection type {c} or metric {m}")
-            cpp_f.write_indented(3, f"break;")
+            cpp_f.write(f"break;")
 
-    cpp_f.write_indented(2, "default:")
-    cpp_f.write_indented(3, "return;")
-    cpp_f.write_indented(1, "}")
-    cpp_f.write_indented(0, "}\n")
+    cpp_f.write("default:")
+    cpp_f.write("return;")
+    cpp_f.write("}")
+    cpp_f.write("}\n")
 
 
 def generate_profiling_utils(
@@ -147,4 +146,4 @@ def generate_profiling_utils(
 
         _generate_collection_methods(cpp_f, class_name, collect_metrics, metric_index)
 
-        cpp_f.write_indented(0, "}")
+        cpp_f.write("}")

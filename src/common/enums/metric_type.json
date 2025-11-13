@@ -1,13 +1,14 @@
 [
   {
-    "group": "default",
-    "description": "metrics that are collected by default",
+    "group": "core",
+    "description": "core metrics",
     "metrics": [
       {
         "name": "CPU_TIME",
         "description": "CPU time spent on the query",
         "type": "double",
         "unit": "seconds",
+        "is_default": true,
         "collection_method": "cumulative",
         "child": "OPERATOR_TIMING"
       },
@@ -16,6 +17,7 @@
         "description": "Cumulative cardinality of the query",
         "type": "uint64",
         "unit": "absolute",
+        "is_default": true,
         "collection_method": "cumulative",
         "child": "OPERATOR_CARDINALITY"
       },
@@ -24,19 +26,22 @@
         "description": "Cumulative number of rows scanned by the query",
         "type": "uint64",
         "unit": "absolute",
+        "is_default": true,
         "collection_method": "cumulative",
         "child": "OPERATOR_ROWS_SCANNED"
       },
       {
         "name": "EXTRA_INFO",
         "description": "Unique operator metrics",
-        "type": "Value::MAP"
+        "type": "Value::MAP",
+        "is_default": true
       },
       {
         "name": "LATENCY",
         "description": "The total elapsed query execution time",
         "type": "double",
         "unit": "seconds",
+        "is_default": true,
         "query_root": true,
         "collection_method": "timer"
       },
@@ -44,6 +49,7 @@
         "name": "QUERY_NAME",
         "description": "The query string",
         "type": "string",
+        "is_default": true,
         "query_root": true
       },
       {
@@ -51,6 +57,7 @@
         "description": "The size of the result",
         "type": "uint64",
         "unit": "bytes",
+        "is_default": true,
         "collection_method": "child",
         "child": "RESULT_SET_SIZE"
       },
@@ -59,6 +66,7 @@
         "description": "The number of rows returned by the query",
         "type": "uint64",
         "unit": "absolute",
+        "is_default": true,
         "query_root": true,
         "collection_method": "child",
         "child": "OPERATOR_CARDINALITY"
@@ -74,19 +82,22 @@
         "description": "Time spent waiting for a thread to become available",
         "type": "double",
         "unit": "seconds",
+        "is_default": true,
         "query_root": true
       },
       {
         "name": "SYSTEM_PEAK_BUFFER_MEMORY",
         "description": "Peak memory usage of the system",
         "type": "uint64",
-        "unit": "bytes"
+        "unit": "bytes",
+        "is_default": true
       },
       {
         "name": "SYSTEM_PEAK_TEMP_DIR_SIZE",
         "description": "Peak size of the temporary directory",
         "type": "uint64",
-        "unit": "bytes"
+        "unit": "bytes",
+        "is_default": true
       }
     ]
   },
@@ -99,6 +110,7 @@
         "description": "Time spent loading a storage engine",
         "type": "double",
         "unit": "seconds",
+        "is_default": true,
         "query_root": true,
         "collection_method": "timer"
       },
@@ -107,6 +119,7 @@
         "description": "Time spent replaying the WAL",
         "type": "double",
         "unit": "seconds",
+        "is_default": true,
         "query_root": true,
         "collection_method": "timer"
       },
@@ -115,6 +128,7 @@
         "description": "Time spent performing a checkpoint",
         "type": "double",
         "unit": "seconds",
+        "is_default": true,
         "query_root": true,
         "collection_method": "timer"
       },
@@ -123,6 +137,7 @@
         "description": "The timer for the WAL writes during COMMIT.",
         "type": "double",
         "unit": "seconds",
+        "is_default": true,
         "query_root": true,
         "collection_method": "timer"
       },
@@ -131,6 +146,7 @@
         "description": "Total number of bytes read from disk",
         "type": "uint64",
         "unit": "bytes",
+        "is_default": true,
         "query_root": true,
         "collection_method": "query_metric"
       },
@@ -139,6 +155,7 @@
         "description": "Total number of bytes written to disk",
         "type": "uint64",
         "unit": "bytes",
+        "is_default": true,
         "query_root": true,
         "collection_method": "query_metric"
       },
@@ -147,6 +164,7 @@
         "description": "Time spent waiting for a storage engine to attach",
         "type": "double",
         "unit": "seconds",
+        "is_default": true,
         "query_root": true,
         "collection_method": "timer"
       },
@@ -155,6 +173,7 @@
         "description": "The total number of entries to replay in the WAL.",
         "type": "uint64",
         "unit": "absolute",
+        "is_default": true,
         "query_root": true,
         "collection_method": "query_metric"
       }
@@ -221,29 +240,34 @@
         "name": "OPERATOR_CARDINALITY",
         "description": "Cardinality of the operator",
         "type": "uint64",
-        "unit": "absolute"
+        "unit": "absolute",
+        "is_default": true
       },
       {
         "name": "OPERATOR_NAME",
         "description": "Name of the operator",
-        "type": "string"
+        "type": "string",
+        "is_default": true
       },
       {
         "name": "OPERATOR_ROWS_SCANNED",
         "description": "Number of rows scanned by the operator",
         "type": "uint64",
-        "unit": "absolute"
+        "unit": "absolute",
+        "is_default": true
       },
       {
         "name": "OPERATOR_TIMING",
         "description": "Time spent in the operator",
         "type": "double",
-        "unit": "seconds"
+        "unit": "seconds",
+        "is_default": true
       },
       {
         "name": "OPERATOR_TYPE",
         "description": "Type of the operator",
-        "type": "string"
+        "type": "string",
+        "is_default": true
       }
     ]
   },

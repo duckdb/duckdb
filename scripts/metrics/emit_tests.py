@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List
 
-from .paths import REPO_ROOT
+from .paths import REPO_ROOT, path_from_duckdb, format_file
 from .writer import IndentedFileWriter
 
 
@@ -173,7 +173,10 @@ def _generate_group_test(f, groups: list[str], all_metrics: Dict[str, List[str]]
 
 
 def _generate_metric_group_test_file(out_path, all_metrics: Dict[str, List[str]]):
-    top = """# name: test/sql/pragma/profiling/test_custom_profiling_using_groups.test
+    name = path_from_duckdb(out_path)
+    print(f"  * {name}")
+
+    top = f"""# name: {name}
 # description: Test default profiling settings using groups.
 # group: [profiling]
 
@@ -190,6 +193,7 @@ require json
         _generate_group_test(f, ["default", "file"], all_metrics)
         _generate_group_test(f, ["file", "optimizer"], all_metrics)
         _generate_group_test(f, ["phase_timing", "execution", "file"], all_metrics)
+    format_file(out_path)
 
 
 def _generate_profiling_setting_tests(out_dir: Path, all_metrics: Dict[str, List[str]]):
@@ -203,6 +207,7 @@ def _generate_profiling_setting_tests(out_dir: Path, all_metrics: Dict[str, List
     metrics_group = ["default", "default", "all"]
 
     for test_file, name, description, group in zip(test_paths, test_names, test_descriptions, metrics_group):
+        print(f"  * {path_from_duckdb(test_file)}")
         with IndentedFileWriter(test_file) as f:
             display_name = test_file.relative_to(REPO_ROOT).as_posix()
             f.write(f"# name: {display_name}\n")
@@ -232,6 +237,7 @@ def _generate_profiling_setting_tests(out_dir: Path, all_metrics: Dict[str, List
                 f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
             )
             _write_statement(f, "ok", "SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;")
+        format_file(test_file)
 
 
 def generate_test_files(out_dir: Path, all_metrics: Dict[str, List[str]]):

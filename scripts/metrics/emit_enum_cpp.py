@@ -48,12 +48,12 @@ def _setup_hpp(out_hpp: Path, f: IndentedFileWriter, metric_index: MetricIndex):
 
     groups = metric_index.group_names + ["INVALID"]
     for g in groups:
-        f.write_indented(1, f"{g.upper()},")
+        f.write(f"{g.upper()},")
     f.write("};\n\n")
 
     f.write("enum class MetricType : uint8_t {\n")
     for metric in metric_index.all_metrics():
-        f.write_indented(1, f"{metric},")
+        f.write(f"{metric},")
     f.write("};\n")
 
     f.write(HPP_TYPEDEFS)
@@ -68,16 +68,16 @@ def _generate_standard_functions(
     get_fn = f"Get{formatted}Metrics"
 
     hpp_f.write('\n')
-    hpp_f.write_indented(1, f"// {formatted} metrics")
-    hpp_f.write_indented(1, f"static profiler_settings_t {get_fn}();")
+    hpp_f.write(f"// {formatted} metrics")
+    hpp_f.write(f"static profiler_settings_t {get_fn}();")
 
     metrics = metric_index.metrics_per_group(group) if group != "root_scope" else metric_index.root_scope_metrics()
 
     cpp_f.write(f"profiler_settings_t MetricsUtils::{get_fn}() {{\n")
-    cpp_f.write_indented(1, "return {")
+    cpp_f.write("return {")
     for m in metrics:
-        cpp_f.write_indented(2, f"MetricType::{m},")
-    cpp_f.write_indented(1, "};")
+        cpp_f.write(f"MetricType::{m},")
+    cpp_f.write("};")
     cpp_f.write('}\n\n')
 
     if group == "all":
@@ -85,16 +85,16 @@ def _generate_standard_functions(
         return
 
     check_fn = f"Is{formatted}Metric"
-    hpp_f.write_indented(1, f"static bool {check_fn}(MetricType type);")
+    hpp_f.write(f"static bool {check_fn}(MetricType type);")
 
     cpp_f.write(f"bool MetricsUtils::{check_fn}(MetricType type) {{\n")
-    cpp_f.write_indented(1, "switch(type) {")
+    cpp_f.write("switch(type) {")
     for m in metrics:
-        cpp_f.write_indented(2, f"case MetricType::{m}:")
-    cpp_f.write_indented(3, "return true;")
-    cpp_f.write_indented(2, "default:")
-    cpp_f.write_indented(3, "return false;")
-    cpp_f.write_indented(1, "}")
+        cpp_f.write(f"case MetricType::{m}:")
+    cpp_f.write("return true;")
+    cpp_f.write("default:")
+    cpp_f.write("return false;")
+    cpp_f.write("}")
     cpp_f.write("}\n\n")
 
 
@@ -102,29 +102,29 @@ def _generate_custom_optimizer_functions(optimizers: List[str], hpp_f: IndentedF
     by_type = "GetOptimizerMetricByType(OptimizerType type)"
     by_metric = "GetOptimizerTypeByMetric(MetricType type)"
 
-    hpp_f.write_indented(1, f"static MetricType {by_type};")
-    hpp_f.write_indented(1, f"static OptimizerType {by_metric};")
+    hpp_f.write(f"static MetricType {by_type};")
+    hpp_f.write(f"static OptimizerType {by_metric};")
 
     cpp_f.write(f"MetricType MetricsUtils::{by_type} {{\n")
-    cpp_f.write_indented(1, "switch(type) {")
+    cpp_f.write("switch(type) {")
     for o in optimizers:
-        cpp_f.write_indented(2, f"case OptimizerType::{o}:")
-        cpp_f.write_indented(3, f"return MetricType::OPTIMIZER_{o};")
-    cpp_f.write_indented(2, "default:")
-    cpp_f.write_indented(
-        3, 'throw InternalException("OptimizerType %s cannot be converted to a MetricType", EnumUtil::ToString(type));'
+        cpp_f.write(f"case OptimizerType::{o}:")
+        cpp_f.write(f"return MetricType::OPTIMIZER_{o};")
+    cpp_f.write("default:")
+    cpp_f.write(
+        'throw InternalException("OptimizerType %s cannot be converted to a MetricType", EnumUtil::ToString(type));'
     )
-    cpp_f.write_indented(1, "}")
+    cpp_f.write("}")
     cpp_f.write('}\n\n')
 
     cpp_f.write(f"OptimizerType MetricsUtils::{by_metric} {{\n")
-    cpp_f.write_indented(1, "switch(type) {")
+    cpp_f.write("switch(type) {")
     for o in optimizers:
-        cpp_f.write_indented(2, f"case MetricType::OPTIMIZER_{o}:")
-        cpp_f.write_indented(3, f"return OptimizerType::{o};")
-    cpp_f.write_indented(2, "default:")
-    cpp_f.write_indented(3, "return OptimizerType::INVALID;")
-    cpp_f.write_indented(1, "}")
+        cpp_f.write(f"case MetricType::OPTIMIZER_{o}:")
+        cpp_f.write(f"return OptimizerType::{o};")
+    cpp_f.write("default:")
+    cpp_f.write("return OptimizerType::INVALID;")
+    cpp_f.write("}")
     cpp_f.write('}\n\n')
 
 
@@ -132,17 +132,17 @@ def _generate_get_metric_by_group_function(
     hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter, metric_index: MetricIndex
 ):
     fn = "GetMetricsByGroupType(MetricGroup type)"
-    hpp_f.write_indented(1, f"static profiler_settings_t {fn};")
+    hpp_f.write(f"static profiler_settings_t {fn};")
 
     cpp_f.write(f"profiler_settings_t MetricsUtils::{fn} {{\n")
-    cpp_f.write_indented(1, "switch(type) {")
+    cpp_f.write("switch(type) {")
     for group in metric_index.group_names:
         formatted = group.upper()
-        cpp_f.write_indented(1, f"case MetricGroup::{formatted}:")
-        cpp_f.write_indented(2, "return Get" + _to_pascal_case(group) + "Metrics();")
-    cpp_f.write_indented(1, "default:")
-    cpp_f.write_indented(2, 'throw InternalException("The MetricGroup passed is invalid");')
-    cpp_f.write_indented(1, "}")
+        cpp_f.write(f"case MetricGroup::{formatted}:")
+        cpp_f.write("return Get" + _to_pascal_case(group) + "Metrics();")
+    cpp_f.write("default:")
+    cpp_f.write('throw InternalException("The MetricGroup passed is invalid");')
+    cpp_f.write("}")
     cpp_f.write('}\n')
 
 

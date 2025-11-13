@@ -18,80 +18,10 @@
 namespace duckdb {
 
 enum class MetricGroup : uint8_t {
-	ALL,
-	DEFAULT,
-	EXECUTION,
-	FILE,
-	OPERATOR,
-	OPTIMIZER,
-	PHASE_TIMING,
-	INVALID,
-};
+ALL,CORE,DEFAULT,EXECUTION,FILE,OPERATOR,OPTIMIZER,PHASE_TIMING,INVALID,};
 
 enum class MetricType : uint8_t {
-	ALL_OPTIMIZERS,
-	ATTACH_LOAD_STORAGE_LATENCY,
-	ATTACH_REPLAY_WAL_LATENCY,
-	BLOCKED_THREAD_TIME,
-	CHECKPOINT_LATENCY,
-	COMMIT_WRITE_WAL_LATENCY,
-	CPU_TIME,
-	CUMULATIVE_CARDINALITY,
-	CUMULATIVE_OPTIMIZER_TIMING,
-	CUMULATIVE_ROWS_SCANNED,
-	EXTRA_INFO,
-	LATENCY,
-	OPERATOR_CARDINALITY,
-	OPERATOR_NAME,
-	OPERATOR_ROWS_SCANNED,
-	OPERATOR_TIMING,
-	OPERATOR_TYPE,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-	OPTIMIZER_COLUMN_LIFETIME,
-	OPTIMIZER_COMMON_AGGREGATE,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS,
-	OPTIMIZER_COMMON_SUBPLAN,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION,
-	OPTIMIZER_CTE_FILTER_PUSHER,
-	OPTIMIZER_CTE_INLINING,
-	OPTIMIZER_DELIMINATOR,
-	OPTIMIZER_DUPLICATE_GROUPS,
-	OPTIMIZER_EMPTY_RESULT_PULLUP,
-	OPTIMIZER_EXPRESSION_REWRITER,
-	OPTIMIZER_EXTENSION,
-	OPTIMIZER_FILTER_PULLUP,
-	OPTIMIZER_FILTER_PUSHDOWN,
-	OPTIMIZER_IN_CLAUSE,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-	OPTIMIZER_JOIN_ORDER,
-	OPTIMIZER_LATE_MATERIALIZATION,
-	OPTIMIZER_LIMIT_PUSHDOWN,
-	OPTIMIZER_MATERIALIZED_CTE,
-	OPTIMIZER_REGEX_RANGE,
-	OPTIMIZER_REORDER_FILTER,
-	OPTIMIZER_SAMPLING_PUSHDOWN,
-	OPTIMIZER_STATISTICS_PROPAGATION,
-	OPTIMIZER_SUM_REWRITER,
-	OPTIMIZER_TOP_N,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-	OPTIMIZER_UNNEST_REWRITER,
-	OPTIMIZER_UNUSED_COLUMNS,
-	PHYSICAL_PLANNER,
-	PHYSICAL_PLANNER_COLUMN_BINDING,
-	PHYSICAL_PLANNER_CREATE_PLAN,
-	PHYSICAL_PLANNER_RESOLVE_TYPES,
-	PLANNER,
-	PLANNER_BINDING,
-	QUERY_NAME,
-	RESULT_SET_SIZE,
-	ROWS_RETURNED,
-	SYSTEM_PEAK_BUFFER_MEMORY,
-	SYSTEM_PEAK_TEMP_DIR_SIZE,
-	TOTAL_BYTES_READ,
-	TOTAL_BYTES_WRITTEN,
-	WAITING_TO_ATTACH_LATENCY,
-	WAL_REPLAY_ENTRY_COUNT,
-};
+ALL_OPTIMIZERS,ATTACH_LOAD_STORAGE_LATENCY,ATTACH_REPLAY_WAL_LATENCY,BLOCKED_THREAD_TIME,CHECKPOINT_LATENCY,COMMIT_WRITE_WAL_LATENCY,CPU_TIME,CUMULATIVE_CARDINALITY,CUMULATIVE_OPTIMIZER_TIMING,CUMULATIVE_ROWS_SCANNED,EXTRA_INFO,LATENCY,OPERATOR_CARDINALITY,OPERATOR_NAME,OPERATOR_ROWS_SCANNED,OPERATOR_TIMING,OPERATOR_TYPE,OPTIMIZER_BUILD_SIDE_PROBE_SIDE,OPTIMIZER_COLUMN_LIFETIME,OPTIMIZER_COMMON_AGGREGATE,OPTIMIZER_COMMON_SUBEXPRESSIONS,OPTIMIZER_COMMON_SUBPLAN,OPTIMIZER_COMPRESSED_MATERIALIZATION,OPTIMIZER_CTE_FILTER_PUSHER,OPTIMIZER_CTE_INLINING,OPTIMIZER_DELIMINATOR,OPTIMIZER_DUPLICATE_GROUPS,OPTIMIZER_EMPTY_RESULT_PULLUP,OPTIMIZER_EXPRESSION_REWRITER,OPTIMIZER_EXTENSION,OPTIMIZER_FILTER_PULLUP,OPTIMIZER_FILTER_PUSHDOWN,OPTIMIZER_IN_CLAUSE,OPTIMIZER_JOIN_FILTER_PUSHDOWN,OPTIMIZER_JOIN_ORDER,OPTIMIZER_LATE_MATERIALIZATION,OPTIMIZER_LIMIT_PUSHDOWN,OPTIMIZER_MATERIALIZED_CTE,OPTIMIZER_REGEX_RANGE,OPTIMIZER_REORDER_FILTER,OPTIMIZER_SAMPLING_PUSHDOWN,OPTIMIZER_STATISTICS_PROPAGATION,OPTIMIZER_SUM_REWRITER,OPTIMIZER_TOP_N,OPTIMIZER_TOP_N_WINDOW_ELIMINATION,OPTIMIZER_UNNEST_REWRITER,OPTIMIZER_UNUSED_COLUMNS,PHYSICAL_PLANNER,PHYSICAL_PLANNER_COLUMN_BINDING,PHYSICAL_PLANNER_CREATE_PLAN,PHYSICAL_PLANNER_RESOLVE_TYPES,PLANNER,PLANNER_BINDING,QUERY_NAME,RESULT_SET_SIZE,ROWS_RETURNED,SYSTEM_PEAK_BUFFER_MEMORY,SYSTEM_PEAK_TEMP_DIR_SIZE,TOTAL_BYTES_READ,TOTAL_BYTES_WRITTEN,WAITING_TO_ATTACH_LATENCY,WAL_REPLAY_ENTRY_COUNT,};
 
 struct MetricTypeHashFunction {
     uint64_t operator()(const MetricType &index) const {
@@ -105,38 +35,13 @@ typedef unordered_map<MetricType, Value, MetricTypeHashFunction> profiler_metric
 class MetricsUtils {
 public:
 
-	// All metrics
-	static profiler_settings_t GetAllMetrics();
-	static profiler_settings_t GetMetricsByGroupType(MetricGroup type);
-
-	// Default metrics
-	static profiler_settings_t GetDefaultMetrics();
-	static bool IsDefaultMetric(MetricType type);
-
-	// Execution metrics
-	static profiler_settings_t GetExecutionMetrics();
-	static bool IsExecutionMetric(MetricType type);
-
-	// File metrics
-	static profiler_settings_t GetFileMetrics();
-	static bool IsFileMetric(MetricType type);
-
-	// Operator metrics
-	static profiler_settings_t GetOperatorMetrics();
-	static bool IsOperatorMetric(MetricType type);
-
-	// Optimizer metrics
-	static profiler_settings_t GetOptimizerMetrics();
-	static bool IsOptimizerMetric(MetricType type);
-	static MetricType GetOptimizerMetricByType(OptimizerType type);
-	static OptimizerType GetOptimizerTypeByMetric(MetricType type);
-
-	// PhaseTiming metrics
-	static profiler_settings_t GetPhaseTimingMetrics();
-	static bool IsPhaseTimingMetric(MetricType type);
-
-	// RootScope metrics
-	static profiler_settings_t GetRootScopeMetrics();
-	static bool IsRootScopeMetric(MetricType type);
-};
+// All metricsstatic profiler_settings_t GetAllMetrics();static profiler_settings_t GetMetricsByGroupType(MetricGroup type);
+// Core metricsstatic profiler_settings_t GetCoreMetrics();static bool IsCoreMetric(MetricType type);
+// Default metricsstatic profiler_settings_t GetDefaultMetrics();static bool IsDefaultMetric(MetricType type);
+// Execution metricsstatic profiler_settings_t GetExecutionMetrics();static bool IsExecutionMetric(MetricType type);
+// File metricsstatic profiler_settings_t GetFileMetrics();static bool IsFileMetric(MetricType type);
+// Operator metricsstatic profiler_settings_t GetOperatorMetrics();static bool IsOperatorMetric(MetricType type);
+// Optimizer metricsstatic profiler_settings_t GetOptimizerMetrics();static bool IsOptimizerMetric(MetricType type);static MetricType GetOptimizerMetricByType(OptimizerType type);static OptimizerType GetOptimizerTypeByMetric(MetricType type);
+// PhaseTiming metricsstatic profiler_settings_t GetPhaseTimingMetrics();static bool IsPhaseTimingMetric(MetricType type);
+// RootScope metricsstatic profiler_settings_t GetRootScopeMetrics();static bool IsRootScopeMetric(MetricType type);};
 } // namespace duckdb

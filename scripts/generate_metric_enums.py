@@ -11,6 +11,8 @@ from metrics.paths import (
     TEST_PROFILING_DIR,
     OUT_PROFILING_HPP,
     OUT_PROFILING_CPP,
+    path_from_duckdb,
+    format_file,
 )
 
 if __name__ == "__main__":
@@ -21,9 +23,30 @@ if __name__ == "__main__":
 
     metric_index = build_all_metrics(metrics_json, optimizers)
 
+    print(f"Metric Information:")
+    print(f"  * Total Metrics: {len(metric_index.metrics_by_group['all'])}")
+    print(f"  * Default Metrics: {len(metric_index.metrics_by_group['default'])}")
+    print(f"  * Total Groups: {len(metric_index.group_names)}")
+    print(f"  * Metric Groups and Total Metrics per Group:")
+    for group in metric_index.group_names:
+        if group == "all" or group == "default":
+            continue
+        print(f"    * {group}: {len(metric_index.metrics_by_group[group])}")
+
+    print("\nGenerating files:")
     # emit C++ files
     generate_metric_type_files(OUT_METRIC_HPP, OUT_METRIC_CPP, metric_index, optimizers)
-    generate_profiling_utils(OUT_PROFILING_HPP, OUT_PROFILING_CPP, metric_index)
+    print(f"  * {path_from_duckdb(OUT_METRIC_HPP)}")
+    format_file(OUT_METRIC_HPP)
+    print(f"  * {path_from_duckdb(OUT_METRIC_CPP)}")
+    format_file(OUT_METRIC_CPP)
 
+    generate_profiling_utils(OUT_PROFILING_HPP, OUT_PROFILING_CPP, metric_index)
+    print(f"  * {path_from_duckdb(OUT_PROFILING_HPP)}")
+    format_file(OUT_PROFILING_HPP)
+    print(f"  * {path_from_duckdb(OUT_PROFILING_CPP)}")
+    format_file(OUT_PROFILING_CPP)
+
+    print("\nGenerating tests:")
     # emit test files
     generate_test_files(TEST_PROFILING_DIR, metric_index.metrics_by_group)

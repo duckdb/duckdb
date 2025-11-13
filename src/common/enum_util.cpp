@@ -2862,6 +2862,7 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetMetricGroupValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MetricGroup::ALL), "ALL" },
+		{ static_cast<uint32_t>(MetricGroup::CORE), "CORE" },
 		{ static_cast<uint32_t>(MetricGroup::DEFAULT), "DEFAULT" },
 		{ static_cast<uint32_t>(MetricGroup::EXECUTION), "EXECUTION" },
 		{ static_cast<uint32_t>(MetricGroup::FILE), "FILE" },
@@ -2875,12 +2876,12 @@ const StringUtil::EnumStringLiteral *GetMetricGroupValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value) {
-	return StringUtil::EnumToString(GetMetricGroupValues(), 8, "MetricGroup", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricGroupValues(), 9, "MetricGroup", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricGroup EnumUtil::FromString<MetricGroup>(const char *value) {
-	return static_cast<MetricGroup>(StringUtil::StringToEnum(GetMetricGroupValues(), 8, "MetricGroup", value));
+	return static_cast<MetricGroup>(StringUtil::StringToEnum(GetMetricGroupValues(), 9, "MetricGroup", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMetricTypeValues() {

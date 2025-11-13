@@ -12,6 +12,7 @@ class MetricDef:
     group: str  # e.g., "file", "default", ...
     type: str  # e.g., "double", "uint64", "string", "map", "uint8"
     query_root: bool = False
+    is_default: bool = False
     collection_method: Optional[str] = None
     child: Optional[str] = None
 
@@ -34,6 +35,11 @@ class MetricIndex:
         # Add "all"
         all_set = set().union(*by_group.values()) if by_group else set()
         by_group["all"] = sorted(all_set)
+
+        # Add "default" based on "is_default" flag
+        for d in self.defs:
+            if d.is_default:
+                by_group["default"].append(d.name)
 
         # Deterministic order of groups
         self.metrics_by_group: Dict[str, List[str]] = OrderedDict(sorted(by_group.items()))
@@ -111,6 +117,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
             name = metric["name"]
             validate_identifier(name, gname)
             mtype = metric.get("type", "double")
+            is_default = metric.get("is_default", False)
             query_root = "query_root" in metric
             collection_method = metric.get("collection_method")
             child = metric.get("child")
@@ -119,6 +126,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
                     name=name,
                     group=gname,
                     type=mtype if name != "OPERATOR_TYPE" else "uint8",
+                    is_default=is_default,
                     query_root=query_root,
                     collection_method=collection_method,
                     child=child,
