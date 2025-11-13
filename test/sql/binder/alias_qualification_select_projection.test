@@ -84,3 +84,22 @@ SELECT
 FROM (VALUES (1)) t(a);
 ----
 hi	hi!
+
+# making sure that SELECT on a table under the name of `alias` works correctly
+statement ok
+CREATE TABLE alias (col1 INT, col2 INT);
+
+statement ok
+INSERT INTO alias VALUES (11, 22);
+
+query II
+SELECT alias.col1, alias.col2 FROM alias;
+----
+11	22
+
+# even if we have an alias reference in the projection, it should not conflict with the table named `alias`,
+# but the table columns should be prioritised
+query II
+SELECT col1 * 10 AS col2, alias.col2 AS projected_col2 FROM alias;
+----
+110	22
