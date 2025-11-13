@@ -409,6 +409,13 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 
+	if (!HasAnyChanges()) {
+		for (idx_t i = 0; i < sub_columns.size(); i++) {
+			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
+		}
+		return std::move(checkpoint_state);
+	}
+
 	auto shredded_type = GetShreddedType();
 	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
 	auto &type_entries = StructType::GetChildTypes(shredded_type);

@@ -146,7 +146,7 @@ private:
 
 private:
 	//! The type of the logical segment
-	LogicalType type;
+	LogicalType type = LogicalType::INVALID;
 	//! Whether or not the segment can contain NULL values
 	bool has_null;
 	//! Whether or not the segment can contain values that are not null

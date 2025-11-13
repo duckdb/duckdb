@@ -1,4 +1,6 @@
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 
@@ -56,7 +58,6 @@ BaseStatistics VariantStats::CreateEmpty(LogicalType type) {
 BaseStatistics VariantStats::CreateShredded(const LogicalType &shredded_type) {
 	BaseStatistics result(LogicalType::VARIANT());
 	result.InitializeEmpty();
-	auto &variant_stats = GetDataUnsafe(result);
 
 	CreateShreddedStats(result, shredded_type);
 	result.child_stats[0].Copy(BaseStatistics::CreateEmpty(VariantShredding::GetUnshreddedType()));
@@ -178,6 +179,75 @@ string VariantStats::ToString(const BaseStatistics &stats) {
 	return result;
 }
 
+bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &other) {
+	//! shredded_type:
+	//! STRUCT(untyped_value_index UINTEGER, typed_value <shredding>)
+
+	//! shredding, 1 of:
+	//! - <primitive type>
+	//! - <shredded_type>
+	//! - <shredded_type>[]
+
+	D_ASSERT(stats.type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(other.type.id() == LogicalTypeId::STRUCT);
+
+	auto &stats_children = StructType::GetChildTypes(stats.type);
+	auto &other_children = StructType::GetChildTypes(other.type);
+	D_ASSERT(stats_children.size() == 2);
+	D_ASSERT(other_children.size() == 2);
+
+	auto &stats_typed_value_type = stats_children[1].second;
+	auto &other_typed_value_type = other_children[1].second;
+
+	auto &stats_typed_value = StructStats::GetChildStats(stats, 1);
+	auto &other_typed_value = StructStats::GetChildStats(other, 1);
+
+	if (stats_typed_value_type.id() == LogicalTypeId::STRUCT) {
+		if (stats_typed_value_type.id() != other_typed_value_type.id()) {
+			//! other is not an OBJECT, can't merge
+			return false;
+		}
+		auto &stats_object_children = StructType::GetChildTypes(stats_typed_value_type);
+		auto &other_object_children = StructType::GetChildTypes(other_typed_value_type);
+		if (stats_object_children.size() != other_object_children.size()) {
+			//! FIXME: implement merging of overlapping children
+			return false;
+		}
+		for (idx_t i = 0; i < stats_object_children.size(); i++) {
+			auto &stats_object_child = stats_object_children[i];
+			auto &other_object_child = other_object_children[i];
+
+			if (stats_object_child.first != other_object_child.first) {
+				//! FIXME: implement merging of overlapping children
+				return false;
+			}
+
+			auto &stats_child = StructStats::GetChildStats(stats_typed_value, i);
+			auto &other_child = StructStats::GetChildStats(other_typed_value, i);
+			if (!MergeShredding(stats_child, other_child)) {
+				return false;
+			}
+		}
+		return true;
+	} else if (stats_typed_value_type.id() == LogicalTypeId::LIST) {
+		if (stats_typed_value_type.id() != other_typed_value_type.id()) {
+			//! other is not an ARRAY, can't merge
+			return false;
+		}
+		auto &stats_child = ListStats::GetChildStats(stats_typed_value);
+		auto &other_child = ListStats::GetChildStats(other_typed_value);
+		return MergeShredding(stats_child, other_child);
+	} else {
+		D_ASSERT(!stats_typed_value_type.IsNested());
+		if (stats_typed_value_type.id() != other_typed_value_type.id()) {
+			//! other is not the same type, can't merge
+			return false;
+		}
+		stats_typed_value.Merge(other_typed_value);
+		return true;
+	}
+}
+
 void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
@@ -190,23 +260,26 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other_data.is_shredded) {
 		if (!data.is_shredded) {
 			stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
+			stats.child_stats[1].Copy(other.child_stats[1]);
 			data.is_shredded = true;
+		} else {
+			//! FIXME: assumes equal shredding type?
+			if (!MergeShredding(stats.child_stats[1], other.child_stats[1])) {
+				data.is_shredded = false;
+			}
 		}
-		//! FIXME: assumes equal shredding type?
-		stats.child_stats[1].Merge(other.child_stats[1]);
 	}
 }
 
 void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
-	auto &data = VariantStats::GetDataUnsafe(stats);
 	auto &other_data = VariantStats::GetDataUnsafe(other);
 
 	stats.child_stats[0].Copy(other.child_stats[0]);
 	if (other_data.is_shredded) {
-		if (stats.child_stats[1].type.id() == LogicalTypeId::INVALID) {
-			stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
-		}
+		stats.child_stats[1] = BaseStatistics::CreateUnknown(other.child_stats[1].GetType());
 		stats.child_stats[1].Copy(other.child_stats[1]);
+	} else {
+		stats.child_stats[1].type = LogicalType::INVALID;
 	}
 }
 
