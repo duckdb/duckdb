@@ -9,3 +9,78 @@ SELECT
 FROM (VALUES (42)) t(a);
 ----
 43	45
+
+# chained alias references within SELECT projection
+query IIII
+SELECT
+  a AS a,
+  a + 1 AS x,
+  alias.x + 2 AS y,
+  alias.y * 2 AS z
+FROM (VALUES (10)) t(a);
+----
+10	11	13	26
+
+# multiple references to the same alias
+query III
+SELECT
+  a + 1 AS x,
+  alias.x AS x2,
+  alias.x + alias.x AS xsum
+FROM (VALUES (5)) t(a);
+----
+6	6	12
+
+# quoted alias names with mixed case
+query II
+SELECT
+  a + 1 AS "MiXeD",
+  alias."MiXeD" + 1 AS y
+FROM (VALUES (1)) t(a);
+----
+2	3
+
+# alias usage with window function in earlier alias
+query III
+SELECT
+  a,
+  row_number() OVER (ORDER BY a) AS rn,
+  alias.rn + 1 AS rn2
+FROM (VALUES (3),(1),(2)) t(a)
+ORDER BY a;
+----
+1	1	2
+2	2	3
+3	3	4
+
+# alias with DISTINCT and deterministic ordering
+query II
+SELECT DISTINCT
+  a AS x,
+  alias.x + 0 AS y
+FROM (VALUES (1),(1),(2)) t(a)
+ORDER BY x;
+----
+1	1
+2	2
+
+# alias inside CASE expression across multiple rows
+query IT
+SELECT
+  a AS x,
+  CASE WHEN alias.x % 2 = 0 THEN 'even' ELSE 'odd' END AS parity
+FROM (VALUES (1),(2),(3)) t(a)
+ORDER BY a;
+----
+1	odd
+2	even
+3	odd
+
+# string alias usage
+query TT
+SELECT
+  'hi' AS s,
+  alias.s || '!' AS ex
+FROM (VALUES (1)) t(a);
+----
+hi	hi!
