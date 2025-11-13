@@ -5,7 +5,7 @@
 query II
 SELECT
   a + 1 AS x,
-  alias_ref('x') + 2 AS y
+  alias.x + 2 AS y
 FROM (VALUES (42)) t(a);
 ----
 43	45
