@@ -49,6 +49,7 @@
         "test/sql/catalog/function/test_cte_macro.test",
         "test/sql/catalog/function/test_subquery_macro.test",
         "test/sql/catalog/function/test_macro_with_unknown_types.test",
+        "test/sql/catalog/function/test_macro_issue_14276.test",
         "test/sql/catalog/function/test_sequence_macro.test",
         "test/sql/catalog/function/test_simple_macro.test",
         "test/sql/function/list/lambdas/arrow/test_lambda_arrow_storage_deprecated.test",
