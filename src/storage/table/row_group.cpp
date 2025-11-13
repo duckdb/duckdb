@@ -1008,7 +1008,7 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			// FIXME: we should get rid of the checkpoint state statistics - and instead use the stats in the ColumnData
 			// directly
 			auto stats = checkpoint_state->GetStatistics();
-			result_col->MergeIntoStatistics(*stats);
+			result_col->MergeStatistics(*stats);
 
 			// FIXME: temporary - we shouldn't be modifying the row group in-place but emitting a new one
 			row_group.GetColumns()[column_idx] = std::move(result_col);
