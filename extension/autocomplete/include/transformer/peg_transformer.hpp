@@ -370,6 +370,10 @@ private:
 	                                                          optional_ptr<ParseResult> parse_result);
 	static case_insensitive_map_t<Value> TransformWithList(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<Value> TransformRelOptionOrOids(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<Value> TransformRelOptionList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<Value> TransformOids(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, Value> TransformRelOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_macro.gram
@@ -702,6 +706,7 @@ private:
 	static unique_ptr<ParsedExpression> TransformCaseElse(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 	static CaseCheck TransformCaseWhenThen(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,

@@ -1251,4 +1251,18 @@ CaseCheck PEGTransformerFactory::TransformCaseWhenThen(PEGTransformer &transform
 	return result;
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto colid = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	auto type = LogicalType(TransformStringToLogicalTypeId(colid));
+	if (type == LogicalTypeId::USER) {
+		type = LogicalType::USER(colid);
+	}
+	auto string_literal = list_pr.Child<StringLiteralParseResult>(1).result;
+	auto child = make_uniq<ConstantExpression>(Value(string_literal));
+	auto result = make_uniq<CastExpression>(type, std::move(child));
+	return result;
+}
+
+
 } // namespace duckdb

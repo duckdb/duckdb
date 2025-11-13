@@ -178,6 +178,10 @@ void PEGTransformerFactory::RegisterCreateIndex() {
 	REGISTER_TRANSFORM(TransformIndexType);
 	REGISTER_TRANSFORM(TransformIndexElement);
 	REGISTER_TRANSFORM(TransformWithList);
+	REGISTER_TRANSFORM(TransformRelOptionOrOids);
+	REGISTER_TRANSFORM(TransformRelOptionList);
+	REGISTER_TRANSFORM(TransformOids);
+	REGISTER_TRANSFORM(TransformRelOption);
 	REGISTER_TRANSFORM(TransformIndexName);
 }
 
@@ -397,6 +401,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformCaseExpression);
 	REGISTER_TRANSFORM(TransformCaseElse);
 	REGISTER_TRANSFORM(TransformCaseWhenThen);
+	REGISTER_TRANSFORM(TransformTypeLiteral);
 }
 
 void PEGTransformerFactory::RegisterImport() {

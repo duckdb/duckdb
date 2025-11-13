@@ -60,7 +60,8 @@
         "test/sql/catalog/function/test_recursive_macro_no_dependency.test",
         "test/sql/catalog/function/test_macro_default_arg_with_dependencies.test",
         "test/sql/attach/reattach_schema.test",
-        "test/sql/pivot/pivot_enum.test"
+        "test/sql/pivot/pivot_enum.test",
+        "test/sql/types/enum/test_5983.test"
       ]
     },
     {
