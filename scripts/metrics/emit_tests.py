@@ -143,6 +143,7 @@ def _generate_group_test(f, groups: list[str], all_metrics: Dict[str, List[str]]
     if "all" not in groups and "ALL_OPTIMIZERS" in metrics:
         metrics.extend(all_metrics.get("optimizer", []))
 
+    metrics = list(set(metrics))
     metrics.sort()
     for m in metrics:
         f.write(f'"{m}": "true"\n')
@@ -207,9 +208,9 @@ def _generate_profiling_setting_tests(out_dir: Path, all_metrics: Dict[str, List
     metrics_group = ["default", "default", "all"]
 
     for test_file, name, description, group in zip(test_paths, test_names, test_descriptions, metrics_group):
-        print(f"  * {path_from_duckdb(test_file)}")
+        display_name = path_from_duckdb(test_file)
+        print(f"  * {display_name}")
         with IndentedFileWriter(test_file) as f:
-            display_name = test_file.relative_to(REPO_ROOT).as_posix()
             f.write(f"# name: {display_name}\n")
             f.write(f"# description: Test {description} profiling settings.\n")
             f.write("# group: [profiling]\n\n")

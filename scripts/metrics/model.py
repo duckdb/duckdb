@@ -37,9 +37,12 @@ class MetricIndex:
         by_group["all"] = sorted(all_set)
 
         # Add "default" based on "is_default" flag
+        self.is_default_metrics: List[str] = []
         for d in self.defs:
             if d.is_default:
-                by_group["default"].append(d.name)
+                self.is_default_metrics.append(d.name)
+        self.is_default_metrics.sort()
+        by_group["default"] = self.is_default_metrics
 
         # Deterministic order of groups
         self.metrics_by_group: Dict[str, List[str]] = OrderedDict(sorted(by_group.items()))

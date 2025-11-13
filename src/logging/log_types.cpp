@@ -163,7 +163,7 @@ LogicalType MetricsLogType::GetLogType() {
 	return LogicalType::STRUCT(child_list);
 }
 
-string MetricsLogType::ConstructLogMessage(const MetricsType &metric, const Value &value) {
+string MetricsLogType::ConstructLogMessage(const MetricType &metric, const Value &value) {
 	child_list_t<Value> child_list = {
 	    {"metric", EnumUtil::ToString(metric)},
 	    {"value", value.ToString()},

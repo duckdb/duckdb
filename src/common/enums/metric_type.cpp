@@ -127,59 +127,59 @@ bool MetricsUtils::IsCoreMetric(MetricType type) {
 
 profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 	return {
+		MetricType::ATTACH_LOAD_STORAGE_LATENCY,
+		MetricType::ATTACH_REPLAY_WAL_LATENCY,
+		MetricType::BLOCKED_THREAD_TIME,
+		MetricType::CHECKPOINT_LATENCY,
+		MetricType::COMMIT_WRITE_WAL_LATENCY,
 		MetricType::CPU_TIME,
 		MetricType::CUMULATIVE_CARDINALITY,
 		MetricType::CUMULATIVE_ROWS_SCANNED,
 		MetricType::EXTRA_INFO,
 		MetricType::LATENCY,
-		MetricType::QUERY_NAME,
-		MetricType::RESULT_SET_SIZE,
-		MetricType::ROWS_RETURNED,
-		MetricType::BLOCKED_THREAD_TIME,
-		MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
-		MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
-		MetricType::ATTACH_LOAD_STORAGE_LATENCY,
-		MetricType::ATTACH_REPLAY_WAL_LATENCY,
-		MetricType::CHECKPOINT_LATENCY,
-		MetricType::COMMIT_WRITE_WAL_LATENCY,
-		MetricType::TOTAL_BYTES_READ,
-		MetricType::TOTAL_BYTES_WRITTEN,
-		MetricType::WAITING_TO_ATTACH_LATENCY,
-		MetricType::WAL_REPLAY_ENTRY_COUNT,
 		MetricType::OPERATOR_CARDINALITY,
 		MetricType::OPERATOR_NAME,
 		MetricType::OPERATOR_ROWS_SCANNED,
 		MetricType::OPERATOR_TIMING,
 		MetricType::OPERATOR_TYPE,
+		MetricType::QUERY_NAME,
+		MetricType::RESULT_SET_SIZE,
+		MetricType::ROWS_RETURNED,
+		MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
+		MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+		MetricType::TOTAL_BYTES_READ,
+		MetricType::TOTAL_BYTES_WRITTEN,
+		MetricType::WAITING_TO_ATTACH_LATENCY,
+		MetricType::WAL_REPLAY_ENTRY_COUNT,
 	};
 }
 
 bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	switch(type) {
+		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
+		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
+		case MetricType::BLOCKED_THREAD_TIME:
+		case MetricType::CHECKPOINT_LATENCY:
+		case MetricType::COMMIT_WRITE_WAL_LATENCY:
 		case MetricType::CPU_TIME:
 		case MetricType::CUMULATIVE_CARDINALITY:
 		case MetricType::CUMULATIVE_ROWS_SCANNED:
 		case MetricType::EXTRA_INFO:
 		case MetricType::LATENCY:
-		case MetricType::QUERY_NAME:
-		case MetricType::RESULT_SET_SIZE:
-		case MetricType::ROWS_RETURNED:
-		case MetricType::BLOCKED_THREAD_TIME:
-		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
-		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-		case MetricType::CHECKPOINT_LATENCY:
-		case MetricType::COMMIT_WRITE_WAL_LATENCY:
-		case MetricType::TOTAL_BYTES_READ:
-		case MetricType::TOTAL_BYTES_WRITTEN:
-		case MetricType::WAITING_TO_ATTACH_LATENCY:
-		case MetricType::WAL_REPLAY_ENTRY_COUNT:
 		case MetricType::OPERATOR_CARDINALITY:
 		case MetricType::OPERATOR_NAME:
 		case MetricType::OPERATOR_ROWS_SCANNED:
 		case MetricType::OPERATOR_TIMING:
 		case MetricType::OPERATOR_TYPE:
+		case MetricType::QUERY_NAME:
+		case MetricType::RESULT_SET_SIZE:
+		case MetricType::ROWS_RETURNED:
+		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
+		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
+		case MetricType::TOTAL_BYTES_READ:
+		case MetricType::TOTAL_BYTES_WRITTEN:
+		case MetricType::WAITING_TO_ATTACH_LATENCY:
+		case MetricType::WAL_REPLAY_ENTRY_COUNT:
 			return true;
 		default:
 			return false;
