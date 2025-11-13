@@ -135,7 +135,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	vector<BoundOrderByNode> orders;
 	for (const auto &type : sort_types) {
 		auto expr = make_uniq<BoundReferenceExpression>(type, orders.size());
-		orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(expr)));
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(expr));
 		sort_cols.emplace_back(sort_cols.size());
 	}
 
