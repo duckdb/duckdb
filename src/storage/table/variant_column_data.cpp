@@ -99,15 +99,22 @@ void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 	}
 }
 
+Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) {
+	D_ASSERT(is_shredded);
+	D_ASSERT(sub_columns.size() == 2);
+
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("unshredded", sub_columns[0]->type);
+	child_types.emplace_back("shredded", sub_columns[1]->type);
+	auto intermediate_type = LogicalType::STRUCT(child_types);
+	Vector intermediate(intermediate_type, count);
+	return intermediate;
+}
+
 idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                               idx_t target_count) {
 	if (is_shredded) {
-		child_list_t<LogicalType> child_types;
-		child_types.emplace_back("unshredded", sub_columns[0]->type);
-		child_types.emplace_back("shredded", sub_columns[1]->type);
-		auto intermediate_type = LogicalType::STRUCT(child_types);
-		Vector intermediate(intermediate_type, target_count);
-
+		auto intermediate = CreateUnshreddingIntermediate(target_count);
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], *child_vectors[0], target_count);
 		sub_columns[1]->Scan(transaction, vector_index, state.child_states[2], *child_vectors[1], target_count);
@@ -124,17 +131,15 @@ idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 idx_t VariantColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
                                        idx_t target_count) {
 	if (is_shredded) {
-		child_list_t<LogicalType> child_types;
-		child_types.emplace_back("unshredded", sub_columns[0]->type);
-		child_types.emplace_back("shredded", sub_columns[1]->type);
-		auto intermediate_type = LogicalType::STRUCT(child_types);
-		Vector intermediate(intermediate_type, target_count);
+		auto intermediate = CreateUnshreddingIntermediate(target_count);
 
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		sub_columns[0]->ScanCommitted(vector_index, state.child_states[1], *child_vectors[0], allow_updates,
 		                              target_count);
-		auto scan_count = sub_columns[1]->ScanCommitted(vector_index, state.child_states[2], *child_vectors[1],
-		                                                allow_updates, target_count);
+		sub_columns[1]->ScanCommitted(vector_index, state.child_states[2], *child_vectors[1], allow_updates,
+		                              target_count);
+		auto scan_count =
+		    validity.ScanCommitted(vector_index, state.child_states[0], intermediate, allow_updates, target_count);
 
 		VariantColumnData::UnshredVariantData(intermediate, result, target_count);
 		return scan_count;
@@ -275,7 +280,31 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 
 void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-	throw NotImplementedException("VARIANT Fetch Row");
+	// insert any child states that are required
+	for (idx_t i = state.child_states.size(); i < sub_columns.size() + 1; i++) {
+		auto child_state = make_uniq<ColumnFetchState>();
+		state.child_states.push_back(std::move(child_state));
+	}
+
+	if (is_shredded) {
+		auto intermediate = CreateUnshreddingIntermediate(1);
+		auto &child_vectors = StructVector::GetEntries(intermediate);
+		// fetch the validity state
+		validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+		// fetch the sub-column states
+		for (idx_t i = 0; i < sub_columns.size(); i++) {
+			sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], row_id, *child_vectors[i], result_idx);
+		}
+
+		//! FIXME: adjust UnshredVariantData so we can write the value in place into 'result' directly.
+		Vector unshredded(result.GetType(), 1);
+		VariantColumnData::UnshredVariantData(intermediate, unshredded, 1);
+		result.SetValue(result_idx, unshredded.GetValue(0));
+		return;
+	}
+
+	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	sub_columns[0]->FetchRow(transaction, *state.child_states[1], row_id, result, result_idx);
 }
 
 void VariantColumnData::CommitDropColumn() {
