@@ -490,11 +490,14 @@ template <>
 void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count) {
 	auto &self = *this;
 	input.Flatten(count);
-	Vector bitpacked_input(LogicalType::UBIGINT, count);
-	auto bitpacked_data = FlatVector::GetData<uint64_t>(bitpacked_input);
+	data_ptr_t input_data = FlatVector::GetData<uint8_t>(input);
 
-	auto input_data = FlatVector::GetData<uint8_t>(input);
-	BitpackingPrimitives::PackBuffer<uint8_t, true>(data_ptr_cast(bitpacked_data), data_ptr_cast(input_data), count, 1);
+	Vector bitpacked_input(LogicalType::UBIGINT, count);
+	data_ptr_t bitpacking_ptr = data_ptr_t(FlatVector::GetData<uint64_t>(bitpacked_input));
+
+	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity mask.
+	BitPackBooleans(bitpacking_ptr, input_data, count);
+	// BitpackingPrimitives::PackBuffer<uint8_t, true>(data_ptr_cast(bitpacked_data), data_ptr_cast(input_data), count, 1);
 	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_input, count);
 }
 

@@ -327,6 +327,29 @@ public:
 };
 
 struct RoaringCompressState : public CompressionState {
+private:
+	//! For null values, makes sure
+	static void BitPackBooleans(data_ptr_t dst, data_ptr_t src, idx_t count) {
+		for (idx_t i = 0; i<count; i++) {
+			if (src[i] == 1) {
+				*dst |= (uint64_t(1) << (i % 8));
+			} else if (src[i] == 0) {
+				*dst &= ~(uint64_t(1) << (i % 8));
+			} else { //TODO: Is this a sure way to know it's null? Can the underlying data be trusted here? On my machine is was always 0xbe.
+				// If not 0 or 1, it's a placeholder value for null, so copy previous bit to form longer runs for RLE
+				bool is_last_bit_true = (i > 0) ? src[i-1] : false;
+				if (is_last_bit_true)
+					*dst |= (uint64_t(1) << (i % 8));
+				else
+					*dst &= ~(uint64_t(1) << (i % 8));
+			}
+
+			if ((i + 1) % 8 == 0) {
+				dst++;
+			}
+		}
+
+	}
 public:
 	explicit RoaringCompressState(ColumnDataCheckpointData &checkpoint_data, unique_ptr<AnalyzeState> analyze_state_p);
 
@@ -492,7 +515,6 @@ public:
 		if (!INVERTED) {
 			// If we are mapping valid entries, that means the majority of the bits are invalid
 			// so we set everything to invalid and only flip the bits that are present in the array
-			printf("\nArrayContainerScanState::ScanPartial");
 			SetInvalidRange(result_mask, result_offset, result_offset + to_scan);
 		}
 
