@@ -151,8 +151,9 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
-
-	bool use_custom_rowgroup_order = !nulls_first && CanReorderRowGroups(op) &&
+	
+	bool use_limit = false;
+	bool use_custom_rowgroup_order = !nulls_first && CanReorderRowGroups(op, use_limit) &&
 	                                 (colref.return_type.IsNumeric() || colref.return_type.IsTemporal());
 
 	for (auto &target : pushdown_targets) {
