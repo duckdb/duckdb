@@ -14,10 +14,10 @@ CREATE TABLE test (a BOOL);
 # 82 values stored in the Array Container - with nulls
 statement ok
 INSERT INTO test SELECT case
-    when i%25=0 then false
-    when i%30=0 then true
+    when i%50=0 then false
+    when i%25=0 then true
     else NULL
-end FROM range(0,72) tbl(i);
+end FROM range(0,10000) tbl(i);
 
 statement ok
 checkpoint
@@ -27,24 +27,19 @@ SELECT compression FROM pragma_storage_info('test') WHERE  segment_type ILIKE 'B
 ----
 
 query I
-select count(*) from test WHERE a IS NOT true;
-----
-667
-
-query I
-select count(*) from test WHERE a IS NULL;
-----
-267
-
-query I
 select count(*) from test WHERE a IS false;
 ----
-400
+200
 
 query I
 select count(*) from test WHERE a IS true;
 ----
-9333
+200
+
+query I
+select count(*) from test WHERE a IS NULL;
+----
+9600
 
 statement ok
 delete from test
