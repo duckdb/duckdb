@@ -994,7 +994,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	flags.Verify();
 
 	DWORD desired_access;
-	DWORD share_mode;
+	// For windows platform, by default deletion fails when the file is accessed by other thread/process.
+	// To keep deletion behavior compatible with unix platform, which physically deletes a file when reference count
+	// drops to 0, open files with [`FILE_SHARE_DELETE`].
+	DWORD share_mode = FILE_SHARE_DELETE;
 	DWORD creation_disposition = OPEN_EXISTING;
 	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL;
 	bool open_read = flags.OpenForReading();
