@@ -2656,6 +2656,10 @@ struct ShellColumnInfo {
 	optional_idx column_type_length;
 };
 
+struct ColumnRenderRow {
+	vector<ShellColumnInfo> columns;
+};
+
 struct ShellTableInfo {
 	string database_name;
 	string schema_name;
@@ -2663,19 +2667,23 @@ struct ShellTableInfo {
 	optional_idx estimated_size;
 	bool is_view = false;
 	optional_idx table_name_length;
+	optional_idx render_width;
 	optional_idx max_column_name_length;
 	optional_idx max_column_type_length;
-	optional_idx render_width;
 	string estimated_size_text;
 	optional_idx estimated_size_length;
-	vector<ShellColumnInfo> columns;
+	vector<ColumnRenderRow> column_renders;
 
 	idx_t LineCount() const {
 		idx_t constant_count = 4;
 		if (estimated_size.IsValid()) {
 			constant_count += 2;
 		}
-		return columns.size() + constant_count;
+		return ColumnLines() + constant_count;
+	}
+
+	idx_t ColumnLines() const {
+		return column_renders[0].columns.size();
 	}
 };
 
@@ -2745,25 +2753,49 @@ void ShellTableLineInfo::RenderLine(ShellHighlight &highlight, const vector<Shel
 		highlight.PrintText(table_line, PrintOutput::STDOUT, layout_type);
 		return;
 	}
-	if (line_idx > 2 && line_idx < table.columns.size() + 3) {
+	if (line_idx > 2 && line_idx < table.ColumnLines() + 3) {
+		idx_t column_idx = line_idx - 3;
 		// column line
-		auto &col = table.columns[line_idx - 3];
-		idx_t col_name_length = col.column_name_length.GetIndex();
-		idx_t col_type_length = col.column_type_length.GetIndex();
 
-		string column_line = config.VERTICAL;
-		column_line += " ";
-		highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
-		highlight.PrintText(col.column_name, PrintOutput::STDOUT, HighlightElementType::COLUMN_NAME);
-		column_line = string(max_column_name_length - col_name_length + 1, ' ');
-		highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
-		highlight.PrintText(col.column_type, PrintOutput::STDOUT, HighlightElementType::COLUMN_TYPE);
-		column_line = string(max_column_type_length - col_type_length + 1, ' ');
-		column_line += config.VERTICAL;
-		highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
+		// if we have a long table name the table name might have stretched out the box
+		// in that case we need to add padding here
+		// compute the required padding
+		idx_t total_render_width = render_width;
+		idx_t per_column_render_width = max_column_name_length + max_column_type_length + 5;
+		idx_t column_render_width = table.column_renders.size() * per_column_render_width;
+		idx_t extra_render_width = total_render_width - column_render_width;
+		idx_t render_width_per_column = extra_render_width / table.column_renders.size();
+
+		for (idx_t render_idx = 0; render_idx < table.column_renders.size(); render_idx++) {
+			auto &column_render = table.column_renders[render_idx];
+			string column_line = render_idx == 0 ? config.VERTICAL : " ";
+			bool is_last = render_idx + 1 == table.column_renders.size();
+			if (column_idx < column_render.columns.size()) {
+				auto &col = column_render.columns[column_idx];
+				idx_t col_name_length = col.column_name_length.GetIndex();
+				idx_t col_type_length = col.column_type_length.GetIndex();
+				column_line += " ";
+				highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
+				highlight.PrintText(col.column_name, PrintOutput::STDOUT, HighlightElementType::COLUMN_NAME);
+				column_line = string(max_column_name_length - col_name_length + 1, ' ');
+				if (extra_render_width > 0) {
+					idx_t render_count = is_last ? extra_render_width : render_width_per_column;
+					column_line += string(render_count, ' ');
+					extra_render_width -= render_count;
+				}
+				highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
+				highlight.PrintText(col.column_type, PrintOutput::STDOUT, HighlightElementType::COLUMN_TYPE);
+				column_line = string(max_column_type_length - col_type_length + 1, ' ');
+			} else {
+				// we have already rendered all columns for this line - pad with spaces
+				column_line += string(max_column_name_length + max_column_type_length + 3, ' ');
+			}
+			column_line += is_last ? config.VERTICAL : " ";
+			highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
+		}
 		return;
 	}
-	if (line_idx == 2 || (table.estimated_size.IsValid() && line_idx == table.columns.size() + 3)) {
+	if (line_idx == 2 || (table.estimated_size.IsValid() && line_idx == table.ColumnLines() + 3)) {
 		// blank line after table name
 		string blank_line = config.VERTICAL;
 		blank_line += string(render_width - 2, ' ');
@@ -2771,7 +2803,7 @@ void ShellTableLineInfo::RenderLine(ShellHighlight &highlight, const vector<Shel
 		highlight.PrintText(blank_line, PrintOutput::STDOUT, layout_type);
 		return;
 	}
-	if (table.estimated_size.IsValid() && line_idx == table.columns.size() + 4) {
+	if (table.estimated_size.IsValid() && line_idx == table.ColumnLines() + 4) {
 		idx_t space_count = render_width - table.estimated_size_length.GetIndex() - 2;
 		idx_t lspace = space_count / 2;
 		idx_t rspace = space_count - lspace;
@@ -2798,7 +2830,7 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	// FIXME: copy pasted from beow
+	// FIXME: copy pasted from below
 	// Parse the filter pattern to check for schema qualification
 	string filter_pattern = args.size() > 1 ? args[1] : string();
 	string schema_filter = "";
@@ -2846,6 +2878,7 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		table.table_name = row.GetValue<string>(2);
 
 		auto column_val = row.GetBaseValue(3);
+		ColumnRenderRow column_render_row;
 		for (auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
 			ShellColumnInfo column;
 			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
@@ -2854,8 +2887,9 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 			if (StringUtil::StartsWith(column.column_type, "decimal")) {
 				column.column_type = "decimal";
 			}
-			table.columns.push_back(std::move(column));
+			column_render_row.columns.push_back(std::move(column));
 		}
+		table.column_renders.push_back(std::move(column_render_row));
 		if (!row.IsNull(4)) {
 			table.estimated_size = row.GetValue<idx_t>(4);
 		}
@@ -2873,11 +2907,13 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		table.table_name_length = RenderLength(table.table_name);
 		idx_t max_col_name_length = 0;
 		idx_t max_col_type_length = 0;
-		for (auto &col : table.columns) {
-			col.column_name_length = RenderLength(col.column_name);
-			col.column_type_length = RenderLength(col.column_type);
-			max_col_name_length = duckdb::MaxValue<idx_t>(col.column_name_length.GetIndex(), max_col_name_length);
-			max_col_type_length = duckdb::MaxValue<idx_t>(col.column_type_length.GetIndex(), max_col_type_length);
+		for (auto &column_render : table.column_renders) {
+			for (auto &col : column_render.columns) {
+				col.column_name_length = RenderLength(col.column_name);
+				col.column_type_length = RenderLength(col.column_type);
+				max_col_name_length = duckdb::MaxValue<idx_t>(col.column_name_length.GetIndex(), max_col_name_length);
+				max_col_type_length = duckdb::MaxValue<idx_t>(col.column_type_length.GetIndex(), max_col_type_length);
+			}
 		}
 		table.max_column_name_length = max_col_name_length;
 		table.max_column_type_length = max_col_type_length;
@@ -2899,14 +2935,43 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		}
 		table.render_width = table.render_width.GetIndex() + 4;
 	}
-
-	// sort from biggest to smallest table
-	std::sort(result.begin(), result.end(),
-	          [](const ShellTableInfo &a, const ShellTableInfo &b) { return a.columns.size() > b.columns.size(); });
 	idx_t max_render_width = max_width == 0 ? duckdb::Printer::TerminalWidth() : max_width;
 	if (max_render_width == 0) {
 		max_render_width = 80;
 	}
+	// try to split up large tables
+	for (auto &table : result) {
+		static constexpr const idx_t SPLIT_THRESHOLD = 20;
+		D_ASSERT(table.column_renders.size() == 1);
+		if (table.column_renders[0].columns.size() <= SPLIT_THRESHOLD) {
+			// not that many columns - keep it as-is
+			continue;
+		}
+		// try to split up columns if possible
+		idx_t max_split_count = (table.column_renders[0].columns.size() + SPLIT_THRESHOLD - 1) / SPLIT_THRESHOLD;
+		idx_t width_per_split = table.max_column_name_length.GetIndex() + table.max_column_type_length.GetIndex() + 5;
+		idx_t max_splits = max_render_width / width_per_split;
+		D_ASSERT(max_split_count > 1);
+		if (max_splits <= 1) {
+			// too wide - cannot split
+			continue;
+		}
+		idx_t split_count = duckdb::MinValue<idx_t>(max_split_count, max_splits);
+
+		vector<ColumnRenderRow> new_renders;
+		new_renders.resize(split_count);
+		idx_t split_idx = 0;
+		for (auto &col : table.column_renders[0].columns) {
+			new_renders[split_idx % split_count].columns.push_back(std::move(col));
+			split_idx++;
+		}
+		table.column_renders = std::move(new_renders);
+		table.render_width = duckdb::MaxValue<idx_t>(table.render_width.GetIndex(), split_count * width_per_split);
+	}
+
+	// sort from biggest to smallest table
+	std::sort(result.begin(), result.end(),
+	          [](const ShellTableInfo &a, const ShellTableInfo &b) { return a.LineCount() > b.LineCount(); });
 
 	// try to colocate different tables on the same lines in a greedy manner
 	vector<ShellTableDisplayInfo> display_lines;
@@ -2998,6 +3063,8 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 				displayed_tables.insert(next_idx);
 			}
 		}
+		std::sort(display_line.display_lines.begin(), display_line.display_lines.end(),
+		          [](ShellTableLineInfo &a, ShellTableLineInfo &b) { return a.render_height > b.render_height; });
 		display_lines.push_back(std::move(display_line));
 	}
 
