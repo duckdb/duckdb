@@ -130,10 +130,9 @@ void SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map,
 	}
 }
 
-
 template <typename It, typename End>
-OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatistics order_by, const OrderByColumnType column_type,
-                                 const idx_t row_offset) {
+OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatistics order_by,
+                                             const OrderByColumnType column_type, const idx_t row_offset) {
 	const auto opposite_stat_type =
 	    order_by == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 
@@ -219,9 +218,11 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 	}
 
 	if (order_type == RowGroupOrderType::ASC) {
-		return FindOffsetPrunableChunks(ordered_row_groups.begin(), ordered_row_groups.end(), order_by, column_type, row_offset);
+		return FindOffsetPrunableChunks(ordered_row_groups.begin(), ordered_row_groups.end(), order_by, column_type,
+		                                row_offset);
 	}
-	return FindOffsetPrunableChunks(ordered_row_groups.rbegin(), ordered_row_groups.rend(), order_by, column_type, row_offset);
+	return FindOffsetPrunableChunks(ordered_row_groups.rbegin(), ordered_row_groups.rend(), order_by, column_type,
+	                                row_offset);
 }
 
 optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
@@ -241,7 +242,6 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 		auto entry = RowGroupSegmentNodeEntry {row_group, std::move(stats)};
 		row_group_map.emplace(comparison_value, std::move(entry));
 	}
-
 
 	if (row_group_map.empty()) {
 		return nullptr;
