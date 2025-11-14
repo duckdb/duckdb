@@ -88,7 +88,11 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	// Bind the index expressions.
 	vector<unique_ptr<Expression>> expressions;
 	for (auto &expr : create_index_info->expressions) {
-		expressions.push_back(Bind(expr));
+		auto bound_expr = Bind(expr);
+		if (bound_expr) {
+			ExpressionBinder::PushCollation(context, bound_expr, bound_expr->return_type);
+		}
+		expressions.push_back(std::move(bound_expr));
 	}
 
 	auto &get = plan->Cast<LogicalGet>();

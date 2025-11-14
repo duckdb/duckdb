@@ -26,3 +26,47 @@ query I
 SELECT str FROM unique_nocase;
 ----
 A
+
+# Explicit UNIQUE index should also respect collations specified in the index expression
+statement ok
+CREATE TABLE nocase_index_tbl(str VARCHAR);
+
+statement ok
+CREATE UNIQUE INDEX nocase_idx ON nocase_index_tbl((str COLLATE NOCASE));
+
+statement ok
+INSERT INTO nocase_index_tbl VALUES ('Hello');
+
+statement error
+INSERT INTO nocase_index_tbl VALUES ('hello');
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+query I
+SELECT COUNT(*) FROM nocase_index_tbl;
+----
+1
+
+# Multi-column UNIQUE constraints mix collated and non-collated columns
+statement ok
+CREATE TABLE multi_unique (
+    first VARCHAR COLLATE NOCASE,
+    second INTEGER,
+    UNIQUE(first, second)
+);
+
+statement ok
+INSERT INTO multi_unique VALUES ('Key', 1);
+
+statement ok
+INSERT INTO multi_unique VALUES ('key', 2);
+
+statement error
+INSERT INTO multi_unique VALUES ('KEY', 1);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+query I
+SELECT COUNT(*) FROM multi_unique;
+----
+2
