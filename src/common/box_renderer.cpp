@@ -459,7 +459,7 @@ ValueRenderAlignment BoxRendererImplementation::TypeAlignment(const LogicalType 
 	}
 }
 
-string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
+string BoxRenderer::TryFormatLargeNumber(const string &numeric, char decimal_sep) {
 	// we only return a readable rendering if the number is > 1 million
 	if (numeric.size() <= 5) {
 		// number too small for sure
@@ -520,11 +520,15 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 		result += "-";
 	}
 	result += decimal_str.substr(0, decimal_str.size() - 2);
-	result += config.decimal_separator == '\0' ? '.' : config.decimal_separator;
+	result += decimal_sep == '\0' ? '.' : decimal_sep;
 	result += decimal_str.substr(decimal_str.size() - 2, 2);
 	result += " ";
 	result += unit;
 	return result;
+}
+
+string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
+	return BoxRenderer::TryFormatLargeNumber(numeric, config.decimal_separator);
 }
 
 list<ColumnDataCollection> BoxRendererImplementation::FetchRenderCollections(const ColumnDataCollection &result,

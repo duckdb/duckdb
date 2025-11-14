@@ -141,6 +141,8 @@ public:
 	            BaseResultRenderer &ss);
 	void Print(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
 
+	static string TryFormatLargeNumber(const string &numeric, char decimal_sep);
+
 private:
 	//! The configuration used for rendering
 	BoxRendererConfig config;

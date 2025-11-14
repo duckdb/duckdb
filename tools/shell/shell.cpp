@@ -2660,11 +2660,23 @@ struct ShellTableInfo {
 	string database_name;
 	string schema_name;
 	string table_name;
+	optional_idx estimated_size;
+	bool is_view = false;
 	optional_idx table_name_length;
 	optional_idx max_column_name_length;
 	optional_idx max_column_type_length;
 	optional_idx render_width;
+	string estimated_size_text;
+	optional_idx estimated_size_length;
 	vector<ShellColumnInfo> columns;
+
+	idx_t LineCount() const {
+		idx_t constant_count = 4;
+		if (estimated_size.IsValid()) {
+			constant_count += 2;
+		}
+		return columns.size() + constant_count;
+	}
 };
 
 struct ShellTableLineInfo {
@@ -2674,7 +2686,7 @@ struct ShellTableLineInfo {
 	idx_t max_column_type_length = 0;
 	vector<idx_t> tables;
 
-	string RenderLine(const vector<ShellTableInfo> &tables, idx_t line_idx, bool last_line);
+	void RenderLine(ShellHighlight &highlight, const vector<ShellTableInfo> &tables, idx_t line_idx, bool last_line);
 };
 
 struct ShellTableDisplayInfo {
@@ -2683,11 +2695,12 @@ struct ShellTableDisplayInfo {
 	vector<ShellTableLineInfo> display_lines;
 };
 
-string ShellTableLineInfo::RenderLine(const vector<ShellTableInfo> &table_list, idx_t line_idx, bool last_line) {
+void ShellTableLineInfo::RenderLine(ShellHighlight &highlight, const vector<ShellTableInfo> &table_list, idx_t line_idx,
+                                    bool last_line) {
 	// figure out the table to render
 	idx_t table_idx = 0;
 	for (; table_idx < tables.size(); table_idx++) {
-		idx_t line_count = table_list[tables[table_idx]].columns.size() + 4;
+		idx_t line_count = table_list[tables[table_idx]].LineCount();
 		if (line_idx < line_count) {
 			// line belongs to this table - render it
 			break;
@@ -2697,13 +2710,14 @@ string ShellTableLineInfo::RenderLine(const vector<ShellTableInfo> &table_list, 
 	}
 	if (table_idx == tables.size()) {
 		// we didn't render any table - break
-		if (last_line) {
-			return string();
+		if (!last_line) {
+			// we need to add spaces if this is not the last line
+			highlight.PrintText(string(render_width, ' '), PrintOutput::STDOUT, HighlightElementType::LAYOUT);
 		}
-		// we need to add spaces if this is not the last line
-		return string(render_width, ' ');
+		return;
 	}
 	auto &table = table_list[tables[table_idx]];
+	auto layout_type = table.is_view ? HighlightElementType::VIEW_LAYOUT : HighlightElementType::TABLE_LAYOUT;
 	duckdb::BoxRendererConfig config;
 	if (line_idx == 0) {
 		// first line - render layout
@@ -2713,7 +2727,8 @@ string ShellTableLineInfo::RenderLine(const vector<ShellTableInfo> &table_list, 
 			top_line += config.HORIZONTAL;
 		}
 		top_line += config.RTCORNER;
-		return top_line;
+		highlight.PrintText(top_line, PrintOutput::STDOUT, layout_type);
+		return;
 	}
 	if (line_idx == 1) {
 		// table name
@@ -2723,42 +2738,60 @@ string ShellTableLineInfo::RenderLine(const vector<ShellTableInfo> &table_list, 
 		idx_t rspace = space_count - lspace;
 		string table_line = config.VERTICAL;
 		table_line += string(lspace, ' ');
-		table_line += table.table_name;
-		table_line += string(rspace, ' ');
+		highlight.PrintText(table_line, PrintOutput::STDOUT, layout_type);
+		highlight.PrintText(table.table_name, PrintOutput::STDOUT, HighlightElementType::TABLE_NAME);
+		table_line = string(rspace, ' ');
 		table_line += config.VERTICAL;
-		return table_line;
+		highlight.PrintText(table_line, PrintOutput::STDOUT, layout_type);
+		return;
 	}
-	if (line_idx == 2) {
+	if (line_idx > 2 && line_idx < table.columns.size() + 3) {
+		// column line
+		auto &col = table.columns[line_idx - 3];
+		idx_t col_name_length = col.column_name_length.GetIndex();
+		idx_t col_type_length = col.column_type_length.GetIndex();
+
+		string column_line = config.VERTICAL;
+		column_line += " ";
+		highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
+		highlight.PrintText(col.column_name, PrintOutput::STDOUT, HighlightElementType::COLUMN_NAME);
+		column_line = string(max_column_name_length - col_name_length + 1, ' ');
+		highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
+		highlight.PrintText(col.column_type, PrintOutput::STDOUT, HighlightElementType::COLUMN_TYPE);
+		column_line = string(max_column_type_length - col_type_length + 1, ' ');
+		column_line += config.VERTICAL;
+		highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
+		return;
+	}
+	if (line_idx == 2 || (table.estimated_size.IsValid() && line_idx == table.columns.size() + 3)) {
 		// blank line after table name
 		string blank_line = config.VERTICAL;
 		blank_line += string(render_width - 2, ' ');
 		blank_line += config.VERTICAL;
-		return blank_line;
+		highlight.PrintText(blank_line, PrintOutput::STDOUT, layout_type);
+		return;
 	}
-	if (line_idx >= table.columns.size() + 3) {
-		// bottom line
-		string bottom_line;
-		bottom_line = config.LDCORNER;
-		for (idx_t i = 0; i < render_width - 2; i++) {
-			bottom_line += config.HORIZONTAL;
-		}
-		bottom_line += config.RDCORNER;
-		return bottom_line;
+	if (table.estimated_size.IsValid() && line_idx == table.columns.size() + 4) {
+		idx_t space_count = render_width - table.estimated_size_length.GetIndex() - 2;
+		idx_t lspace = space_count / 2;
+		idx_t rspace = space_count - lspace;
+		string estimated_size_line = config.VERTICAL;
+		estimated_size_line += string(lspace, ' ');
+		highlight.PrintText(estimated_size_line, PrintOutput::STDOUT, layout_type);
+		highlight.PrintText(table.estimated_size_text, PrintOutput::STDOUT, HighlightElementType::COMMENT);
+		estimated_size_line = string(rspace, ' ');
+		estimated_size_line += config.VERTICAL;
+		highlight.PrintText(estimated_size_line, PrintOutput::STDOUT, layout_type);
+		return;
 	}
-
-	// column line
-	auto &col = table.columns[line_idx - 3];
-	idx_t col_name_length = col.column_name_length.GetIndex();
-	idx_t col_type_length = col.column_type_length.GetIndex();
-
-	string column_line = config.VERTICAL;
-	column_line += " ";
-	column_line += col.column_name;
-	column_line += string(max_column_name_length - col_name_length + 1, ' ');
-	column_line += col.column_type;
-	column_line += string(max_column_type_length - col_type_length + 1, ' ');
-	column_line += config.VERTICAL;
-	return column_line;
+	// bottom line
+	string bottom_line;
+	bottom_line = config.LDCORNER;
+	for (idx_t i = 0; i < render_width - 2; i++) {
+		bottom_line += config.HORIZONTAL;
+	}
+	bottom_line += config.RDCORNER;
+	highlight.PrintText(bottom_line, PrintOutput::STDOUT, layout_type);
 }
 
 MetadataResult ShellState::DisplayTables(const vector<string> &args) {
@@ -2785,17 +2818,16 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 	string schema_filter_str;
 	string name_filter;
 	if (!table_filter.empty()) {
-		name_filter = StringUtil::Format(" AND table_name ILIKE %s", SQLString(table_filter));
-		;
+		name_filter = StringUtil::Format(" AND columns.table_name ILIKE %s", SQLString(table_filter));
 	}
 	if (!schema_filter.empty()) {
-		schema_filter_str = StringUtil::Format(" AND schema_name ILIKE %s", SQLString(schema_filter));
-		;
+		schema_filter_str = StringUtil::Format(" AND columns.schema_name ILIKE %s", SQLString(schema_filter));
 	}
 	auto query = StringUtil::Format(R"(
-	SELECT database_name, schema_name, table_name, list(struct_pack(column_name, data_type) order by column_index)
-	FROM duckdb_columns()
-	WHERE NOT internal%s%s
+	SELECT columns.database_name, columns.schema_name, columns.table_name, list(struct_pack(column_name, data_type) order by column_index), t.estimated_size AS estimated_size, t.table_oid AS table_oid
+	FROM duckdb_columns() columns
+	LEFT JOIN duckdb_tables() t USING (table_oid)
+	WHERE NOT columns.internal%s%s
 	GROUP BY ALL
 )",
 	                                schema_filter_str, name_filter);
@@ -2804,6 +2836,7 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 	auto query_result = con.Query(query);
 	if (query_result->HasError()) {
 		PrintDatabaseError(query_result->GetError());
+		return MetadataResult::FAIL;
 	}
 	vector<ShellTableInfo> result;
 	for (auto &row : *query_result) {
@@ -2817,8 +2850,18 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 			ShellColumnInfo column;
 			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
 			column.column_name = struct_children[0].GetValue<string>();
-			column.column_type = struct_children[1].GetValue<string>();
+			column.column_type = StringUtil::Lower(struct_children[1].GetValue<string>());
+			if (StringUtil::StartsWith(column.column_type, "decimal")) {
+				column.column_type = "decimal";
+			}
 			table.columns.push_back(std::move(column));
+		}
+		if (!row.IsNull(4)) {
+			table.estimated_size = row.GetValue<idx_t>(4);
+		}
+		if (row.IsNull(5)) {
+			// view
+			table.is_view = true;
 		}
 
 		result.push_back(std::move(table));
@@ -2838,9 +2881,23 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		}
 		table.max_column_name_length = max_col_name_length;
 		table.max_column_type_length = max_col_type_length;
-		table.render_width =
-		    duckdb::MaxValue<idx_t>(table.table_name_length.GetIndex(), max_col_name_length + max_col_type_length + 1) +
-		    4;
+		table.render_width = table.table_name_length.GetIndex();
+		if (max_col_name_length + max_col_type_length + 1 > table.render_width.GetIndex()) {
+			table.render_width = max_col_name_length + max_col_type_length + 1;
+		}
+		if (table.estimated_size.IsValid()) {
+			table.estimated_size_text = to_string(table.estimated_size.GetIndex());
+			auto formatted = duckdb::BoxRenderer::TryFormatLargeNumber(table.estimated_size_text, decimal_separator);
+			if (!formatted.empty()) {
+				table.estimated_size_text = std::move(formatted);
+			}
+			table.estimated_size_text += " rows";
+			table.estimated_size_length = RenderLength(table.estimated_size_text);
+			if (table.estimated_size_length.GetIndex() > table.render_width.GetIndex()) {
+				table.render_width = table.estimated_size_length.GetIndex();
+			}
+		}
+		table.render_width = table.render_width.GetIndex() + 4;
 	}
 
 	// sort from biggest to smallest table
@@ -2866,7 +2923,7 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		ShellTableLineInfo initial_line;
 		initial_line.tables.push_back(table_idx);
 		display_line.render_width = initial_line.render_width = initial_table.render_width.GetIndex();
-		display_line.render_height = initial_line.render_height = initial_table.columns.size() + 4;
+		display_line.render_height = initial_line.render_height = initial_table.LineCount();
 		initial_line.max_column_name_length = initial_table.max_column_name_length.GetIndex();
 		initial_line.max_column_type_length = initial_table.max_column_type_length.GetIndex();
 		display_line.display_lines.push_back(std::move(initial_line));
@@ -2875,7 +2932,7 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		for (idx_t next_idx = table_idx + 1; next_idx < result.size(); next_idx++) {
 			auto &current_table = result[next_idx];
 			auto render_width = current_table.render_width.GetIndex();
-			auto render_height = current_table.columns.size() + 4;
+			auto render_height = current_table.LineCount();
 			// we have two choices with co-locating
 			// we can EITHER add a new line
 			// OR add it to an existing line
@@ -2945,17 +3002,15 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 	}
 
 	// render the display lines
+	ShellHighlight highlight(*this);
 	for (auto &display_line : display_lines) {
 		for (idx_t line_idx = 0; line_idx < display_line.render_height; line_idx++) {
-			string line;
 			// construct the line
 			for (idx_t table_line_idx = 0; table_line_idx < display_line.display_lines.size(); table_line_idx++) {
 				bool is_last = table_line_idx + 1 == display_line.display_lines.size();
-				line += display_line.display_lines[table_line_idx].RenderLine(result, line_idx, is_last);
+				display_line.display_lines[table_line_idx].RenderLine(highlight, result, line_idx, is_last);
 			}
-
-			line += "\n";
-			Print(PrintOutput::STDOUT, line);
+			highlight.PrintText("\n", PrintOutput::STDOUT, HighlightElementType::LAYOUT);
 		}
 	}
 	return MetadataResult::SUCCESS;
