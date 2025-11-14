@@ -13,7 +13,7 @@ USE db
 # 0 1 2 3 4 5 6 7 8 9	 ASC     DESC
 # [     ]              : 0       10240
 # [     ]              : 2       4097
-#   [     ]            : 4097    4097
+#   [       ]          : 4097    4097
 #         [   ]        : 8192    2049
 #               [ ]    : 10240   2048
 
@@ -24,7 +24,7 @@ statement ok
 INSERT INTO t SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
 
 statement ok
-INSERT INTO t SELECT 1 i UNION ALL SELECT i FROM repeat(4, 2047) t1(i)
+INSERT INTO t SELECT 1 i UNION ALL SELECT i FROM repeat(5, 2047) t1(i)
 
 statement ok
 INSERT INTO t SELECT i FROM repeat(4, 2047) t1(i) UNION ALL SELECT 6 i

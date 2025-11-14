@@ -337,7 +337,7 @@ public:
 	idx_t GetRemainingSpace();
 	bool CanStore(idx_t container_size, const ContainerMetadata &metadata);
 	void InitializeContainer();
-	void CreateEmptySegment(idx_t row_start);
+	void CreateEmptySegment();
 	void FlushSegment();
 	void Finalize();
 	void FlushContainer();

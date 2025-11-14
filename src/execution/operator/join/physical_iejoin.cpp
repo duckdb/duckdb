@@ -381,13 +381,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 
 	DataChunk scanned;
 	source.InitializeScanChunk(scanner, scanned);
-
-	// TODO: Random access into TupleDataCollection (NextScanIndex is private...)
-	idx_t table_idx = 0;
-	for (idx_t i = 0; i < chunk_begin; ++i) {
-		source.Scan(scanner, scanned);
-		table_idx += scanned.size();
-	}
+	idx_t table_idx = source.Seek(scanner, chunk_begin);
 
 	// Writing
 	auto &sort = *marked.sort;
