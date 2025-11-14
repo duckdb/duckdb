@@ -199,7 +199,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 				if (!state) {
 					continue;
 				}
-
 				if (!func->analyze(*state, scan_vector, count)) {
 					state = nullptr;
 					func = nullptr;
@@ -268,7 +267,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		                col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
-	return result; // Here I can see which compression was chosen for what.
+	return result;
 }
 
 void ColumnDataCheckpointer::DropSegments() {
@@ -348,7 +347,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 			}
 			auto &function = analyze_result[i].function;
 			auto &compression_state = compression_states[i];
-			// == HERE THE COMPRESSION HAPPENS ==
 			function->compress(*compression_state, scan_vector, count);
 		}
 	});

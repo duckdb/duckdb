@@ -80,6 +80,7 @@ Data layout per segment:
 namespace duckdb {
 
 namespace roaring {
+
 // Set all the bits from start (inclusive) to end (exclusive) to 0
 void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	if (end <= start) {
@@ -96,7 +97,6 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 		copy_for_verification.GetData()[i] = result.GetData()[i];
 	}
 #endif
-
 	idx_t index = start;
 
 	if ((index % ValidityMask::BITS_PER_VALUE) != 0) {
@@ -197,6 +197,7 @@ unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &ch
                                                     unique_ptr<AnalyzeState> state) {
 	return make_uniq<RoaringCompressState>(checkpoint_data, std::move(state));
 }
+
 template <PhysicalType TYPE>
 void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<RoaringCompressState>();
@@ -234,7 +235,7 @@ void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_coun
 }
 
 void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// dummy vector, only created to capture the booleans in the validity mask, as the current RoaringScan populates the
+	// Dummy vector, only created to capture the booleans in the validity mask, as the current RoaringScan populates the
 	// scanned data in the vector's validity mask
 	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
 	RoaringScan(segment, state, scan_count, dummy);
@@ -256,7 +257,6 @@ void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 // Fetch
 //===--------------------------------------------------------------------===//
 void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	printf("\nroaring::RoaringFetchRow");
 	RoaringScanState scan_state(segment);
 
 	idx_t internal_offset;
@@ -287,7 +287,6 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	compression_analyze_t analyze = nullptr;
 	compression_compress_data_t compress = nullptr;
 	compression_scan_vector_t scan = nullptr;
-	// compression_fetch_row_t fetch_row = nullptr;
 
 	switch (data_type) {
 	case PhysicalType::BIT: {

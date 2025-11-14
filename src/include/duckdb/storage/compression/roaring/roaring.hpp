@@ -327,7 +327,6 @@ public:
 };
 
 struct RoaringCompressState : public CompressionState {
-private:
 public:
 	explicit RoaringCompressState(ColumnDataCheckpointData &checkpoint_data, unique_ptr<AnalyzeState> analyze_state_p);
 
@@ -447,7 +446,7 @@ protected:
 	bool finished = false;
 	idx_t run_index = 0;
 	idx_t count;
-	data_ptr_t data; // point ergens in een block, in disk
+	data_ptr_t data;
 };
 
 struct CompressedRunContainerScanState : public RunContainerScanState {

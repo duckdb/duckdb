@@ -36,7 +36,6 @@ checkpoint
 statement ok
 set enable_logging=false;
 
-#TODO : Why is it 15900? Shouldnt this be 15360 like the other test? Weird...
 query I
 SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
 where
