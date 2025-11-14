@@ -3,7 +3,7 @@
 # group: [duckfuzz]
 
 statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+create table all_types as select * exclude(time_ns, small_enum, medium_enum, large_enum) from test_all_types() limit 0;
 
 # Issue 1142
 query I
@@ -55,7 +55,7 @@ SELECT NULL FROM (SELECT ref_0."int" AS c3 FROM main.all_types AS ref_0 RIGHT JO
 
 # try statements with data 
 statement ok
-insert into all_types select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
+insert into all_types select * exclude(time_ns, small_enum, medium_enum, large_enum) from test_all_types();
 
 # check again with data
 statement error

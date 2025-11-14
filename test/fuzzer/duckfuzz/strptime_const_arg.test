@@ -4,7 +4,7 @@
 
 statement ok
 CREATE TABLE all_types AS
-SELECT * EXCLUDE(small_enum, medium_enum, large_enum) FROM test_all_types() LIMIT 0;
+SELECT * EXCLUDE(time_ns, small_enum, medium_enum, large_enum) FROM test_all_types() LIMIT 0;
 
 statement error
 SELECT COLUMNS(list_filter(*, (lambda c43: try_strptime('c29', 'c24'))))

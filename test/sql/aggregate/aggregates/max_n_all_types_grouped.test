@@ -17,7 +17,7 @@ GROUP BY ALL
 ORDER BY ALL;
 
 statement ok
-create table all_types as from test_all_types()
+create table all_types as select * exclude(time_ns) from test_all_types()
 
 foreach val_col bool int bigint hugeint date time timestamp float double dec_4_1 uuid interval varchar
 

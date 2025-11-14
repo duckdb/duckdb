@@ -10,7 +10,7 @@ PRAGMA enable_verification
 # intervals are saved with ms precision -> truncate microsecond precision to millisecond
 statement ok
 CREATE TABLE all_types AS
-SELECT * EXCLUDE (bit, "union") REPLACE (
+SELECT * EXCLUDE (time_ns, bit, "union") REPLACE (
 	case when extract(month from interval) <> 0 then interval '1 month 1 day 12:13:34.123' else interval end AS interval
 )
 FROM test_all_types();
