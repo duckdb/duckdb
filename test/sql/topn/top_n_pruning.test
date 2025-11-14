@@ -1,4 +1,4 @@
-# name: test/sql/topn/top_n_hard_limit.test
+# name: test/sql/topn/top_n_pruning.test
 # description: Test Top N with ordered row groups and row limits
 # group: [topn]
 
@@ -115,9 +115,19 @@ EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 1
 analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
 
 query II
-EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2 OFFSET 2
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 2
 ----
 analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2 OFFSET 6144
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 8192
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
 
 statement ok
 INSERT INTO t SELECT 9 i UNION ALL SELECT i FROM repeat(NULL, 2046) t1(i) UNION ALL SELECT 10 i
