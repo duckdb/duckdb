@@ -265,9 +265,9 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 
 			if (!bdata.validity.RowIsValid(bidx)) {
 				if (bind_data.null_handling == ArgMinMaxNullHandling::HANDLE_ANY_NULL && !state.is_initialized) {
-					state.is_initialized = true;
 					state.val_null = true;
 					if (!arg_null) {
+						state.is_initialized = true;
 						if (&state == last_state) {
 							assign_count--;
 						}

@@ -96,7 +96,7 @@ SELECT CAST(yes AS BOOLEAN) FROM tbl
 statement error
 SELECT CAST(yes AS BOOLEAN)
 ----
-Binder Error: Referenced column "yes" not found in FROM clause!
+Binder Error: Referenced column "yes" was not found because the FROM clause
 
 query T
 SELECT CAST(CAST('12345' AS INTEGER) AS BOOLEAN)

@@ -13,6 +13,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -40,10 +41,18 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 	auto &base = info.base->Cast<CreateTableInfo>();
 	for (auto &col : base.columns.Logical()) {
 		auto compression_type = col.CompressionType();
-		if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
-			throw BinderException("Can't compress using user-provided compression type '%s', that type is deprecated "
-			                      "and only has decompress support",
-			                      CompressionTypeToString(compression_type));
+		auto compression_availability_result = CompressionTypeIsAvailable(compression_type, storage_manager);
+		if (!compression_availability_result.IsAvailable()) {
+			if (compression_availability_result.IsDeprecated()) {
+				throw BinderException(
+				    "Can't compress using user-provided compression type '%s', that type is deprecated "
+				    "and only has decompress support",
+				    CompressionTypeToString(compression_type));
+			} else {
+				throw BinderException(
+				    "Can't compress using user-provided compression type '%s', that type is not available yet",
+				    CompressionTypeToString(compression_type));
+			}
 		}
 		auto logical_type = col.GetType();
 		if (logical_type.id() == LogicalTypeId::USER && logical_type.HasAlias()) {

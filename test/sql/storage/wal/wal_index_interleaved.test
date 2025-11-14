@@ -1,0 +1,133 @@
+# name: test/sql/storage/wal/wal_index_interleaved.test
+# description: Test WAL replay with interleaved inserts and deletes on a single column index
+# group: [wal]
+
+load __TEST_DIR__/index_interleaved_test.db
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 1;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE tbl(a INTEGER);
+
+statement ok
+CREATE INDEX idx_a ON tbl(a);
+
+loop i 0 15
+
+statement ok
+INSERT INTO tbl VALUES (${i} * 10);
+
+statement ok
+DELETE FROM tbl WHERE a = ${i} * 10 AND (${i} * 10) % 30 = 0;
+
+endloop
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+10
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 10;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 0;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 0;
+----
+
+restart
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 1;
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+10
+
+loop i 0 15
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = ${i} * 10;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+endloop
+
+query I
+SELECT * FROM tbl WHERE a = 10;
+----
+10
+
+query I
+SELECT * FROM tbl WHERE a = 70;
+----
+70
+
+query I
+SELECT * FROM tbl WHERE a = 140;
+----
+140
+
+query I
+SELECT * FROM tbl WHERE a = 0;
+----
+
+query I
+SELECT * FROM tbl WHERE a = 30;
+----
+
+query I
+SELECT * FROM tbl WHERE a = 90;
+----
+
+statement ok
+INSERT INTO tbl VALUES (150);
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 150;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 150;
+----
+150
+
+statement ok
+INSERT INTO tbl VALUES (0);
+
+query II
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 0;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT * FROM tbl WHERE a = 0;
+----
+0
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+12
+

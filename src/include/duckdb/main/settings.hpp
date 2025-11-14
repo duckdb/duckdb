@@ -372,6 +372,15 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
+struct DebugVerifyBlocksSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_blocks";
+	static constexpr const char *Description = "DEBUG SETTING: verify block metadata during checkpointing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
 struct DebugVerifyVectorSetting {
 	using RETURN_TYPE = DebugVectorVerification;
 	static constexpr const char *Name = "debug_verify_vector";

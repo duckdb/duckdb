@@ -43,6 +43,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"late_materialization", OptimizerType::LATE_MATERIALIZATION},
     {"cte_inlining", OptimizerType::CTE_INLINING},
     {"common_subplan", OptimizerType::COMMON_SUBPLAN},
+    {"join_elimination", OptimizerType::JOIN_ELIMINATION},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

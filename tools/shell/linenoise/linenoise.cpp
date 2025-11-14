@@ -195,6 +195,7 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 				break;
 			}
 			default:
+				next_key = key_press;
 				accept_completion = true;
 				stop = true;
 				break;
@@ -1284,11 +1285,11 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 				if (key_press.sequence != EscapeSequence::INVALID) {
 					key_press.action = ESC;
 				} else {
-					key_press.action = (KEY_ACTION)c;
+					key_press.action = c;
 				}
 				// add the key press to the list of key presses
 			} else {
-				key_press.action = (KEY_ACTION)c;
+				key_press.action = c;
 			}
 			remaining_presses.push_back(key_press);
 		}
@@ -1312,7 +1313,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 	if (!has_more_data) {
 		HandleTerminalResize();
 	}
-	key_press.action = (KEY_ACTION)c;
+	key_press.action = c;
 	if (key_press.action == ESC) {
 		// for ESC we need to read an escape sequence
 		key_press.sequence = Terminal::ReadEscapeSequence(ifd);

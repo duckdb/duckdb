@@ -466,7 +466,7 @@ void Executor::WaitForTask() {
 	std::unique_lock<mutex> l(executor_lock);
 	auto end = std::chrono::high_resolution_clock::now();
 	auto dur = end - begin;
-	auto ms = std::chrono::duration_cast<std::chrono::microseconds>(dur).count();
+	auto ms = NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(dur).count());
 	if (to_be_rescheduled_tasks.empty()) {
 		blocked_thread_time += ms;
 		return;

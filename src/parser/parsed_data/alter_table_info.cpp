@@ -1,7 +1,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/common/extra_type_info.hpp"
-
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 

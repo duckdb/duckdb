@@ -172,6 +172,32 @@ void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &sour
 	    op, [&](unique_ptr<Expression> *child) { RewriteMergeBindings(*child, source_bindings, new_table_index); });
 }
 
+LogicalGet &ExtractLogicalGet(LogicalOperator &op) {
+	reference<LogicalOperator> current_op(op);
+	while (current_op.get().type == LogicalOperatorType::LOGICAL_FILTER) {
+		current_op = *current_op.get().children[0];
+	}
+	if (current_op.get().type != LogicalOperatorType::LOGICAL_GET) {
+		throw InvalidInputException("BindMerge - expected to find an operator of type LOGICAL_GET but got %s",
+		                            op.ToString());
+	}
+	return current_op.get().Cast<LogicalGet>();
+}
+
+void CheckMergeAction(MergeActionCondition condition, MergeActionType action_type) {
+	if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) {
+		switch (action_type) {
+		case MergeActionType::MERGE_UPDATE:
+		case MergeActionType::MERGE_DELETE:
+			throw ParserException("WHEN NOT MATCHED (BY TARGET) cannot be combined with UPDATE or DELETE actions - as "
+			                      "there is no corresponding row in the target to update or delete.\nDid you mean to "
+			                      "use WHEN MATCHED or WHEN NOT MATCHED BY SOURCE?");
+		default:
+			break;
+		}
+	}
+}
+
 BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
@@ -246,7 +272,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
 	bool inverted = join.type == JoinType::RIGHT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
-	auto &get = join_ref.get().children[inverted ? 0 : 1]->Cast<LogicalGet>();
+	auto &get = ExtractLogicalGet(*join_ref.get().children[inverted ? 0 : 1]);
 
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
 	merge_into->table_index = GenerateTableIndex();
@@ -268,6 +294,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	for (auto &entry : stmt.actions) {
 		vector<unique_ptr<BoundMergeIntoAction>> bound_actions;
 		for (auto &action : entry.second) {
+			CheckMergeAction(entry.first, action->action_type);
 			bound_actions.push_back(BindMergeAction(*merge_into, table, get, proj_index, projection_expressions, root,
 			                                        *action, source_aliases, source_names));
 		}

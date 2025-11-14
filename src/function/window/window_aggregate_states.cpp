@@ -2,8 +2,9 @@
 
 namespace duckdb {
 
-WindowAggregateStates::WindowAggregateStates(const AggregateObject &aggr)
-    : aggr(aggr), state_size(aggr.function.state_size(aggr.function)), allocator(Allocator::DefaultAllocator()) {
+WindowAggregateStates::WindowAggregateStates(ClientContext &client, const AggregateObject &aggr)
+    : client(client), aggr(aggr), state_size(aggr.function.state_size(aggr.function)),
+      allocator(Allocator::Get(client)) {
 }
 
 void WindowAggregateStates::Initialize(idx_t count) {
@@ -25,7 +26,7 @@ void WindowAggregateStates::Initialize(idx_t count) {
 	statef->SetVectorType(VectorType::FLAT_VECTOR);
 }
 
-void WindowAggregateStates::Combine(WindowAggregateStates &target, AggregateCombineType combine_type) {
+void WindowAggregateStates::Combine(WindowAggregateStates &target) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 	aggr.function.combine(*statef, *target.statef, aggr_input_data, GetCount());
 }

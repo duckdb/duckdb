@@ -179,7 +179,7 @@ RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manag
 	Initialize();
 }
 
-RadixPartitionedTupleData::RadixPartitionedTupleData(const RadixPartitionedTupleData &other)
+RadixPartitionedTupleData::RadixPartitionedTupleData(RadixPartitionedTupleData &other)
     : PartitionedTupleData(other), radix_bits(other.radix_bits), hash_col_idx(other.hash_col_idx) {
 	Initialize();
 }
@@ -190,7 +190,7 @@ RadixPartitionedTupleData::~RadixPartitionedTupleData() {
 void RadixPartitionedTupleData::Initialize() {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		partitions.emplace_back(CreatePartitionCollection(i));
+		partitions.emplace_back(CreatePartitionCollection());
 		partitions.back()->SetPartitionIndex(i);
 	}
 }

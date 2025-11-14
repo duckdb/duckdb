@@ -254,6 +254,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verify_blocks",
+        "description": "DEBUG SETTING: verify block metadata during checkpointing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_vector",
         "description": "DEBUG SETTING: enable vector verification",
         "type": "ENUM<DebugVectorVerification>",

@@ -15,4 +15,4 @@ FROM
     (SELECT 1) _(x),
     LATERAL (SELECT * FROM cte) b(x)
 ----
-Referenced column "x" not found in FROM clause!
+Referenced column "x" was not found because the FROM clause is missing

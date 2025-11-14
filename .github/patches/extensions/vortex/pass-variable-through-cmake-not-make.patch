@@ -1,0 +1,36 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9f92376..20d6bf8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.22)
+ set(TARGET_NAME vortex)
+ project(${TARGET_NAME}_project)
+ 
++set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0)
++if(UNIX AND NOT APPLE)
++    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ftls-model=global-dynamic")
++endif()
++
+ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+ set(CMAKE_CXX_STANDARD 17)
+ 
+diff --git a/Makefile b/Makefile
+index 3017d3f..808f019 100644
+--- a/Makefile
++++ b/Makefile
+@@ -2,15 +2,7 @@ PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+ 
+ EXT_NAME=vortex_duckdb
+ EXT_CONFIG=${PROJ_DIR}extension_config.cmake
+-EXT_FLAGS=-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+-export MACOSX_DEPLOYMENT_TARGET=12.0
+ export VCPKG_FEATURE_FLAGS=-binarycaching
+-export VCPKG_OSX_DEPLOYMENT_TARGET=12.0
+ export VCPKG_TOOLCHAIN_PATH := ${PROJ_DIR}vcpkg/scripts/buildsystems/vcpkg.cmake
+ 
+-# This is not needed on macOS, we don't see a tls error on load there.
+-ifeq ($(shell uname), Linux)
+-    export CFLAGS=-ftls-model=global-dynamic
+-endif
+-
+ include extension-ci-tools/makefiles/duckdb_extension.Makefile
