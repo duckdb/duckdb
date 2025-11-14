@@ -1036,7 +1036,14 @@ void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, ve
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
                                 DataChunk &result) const {
-	D_ASSERT(result.GetTypes() == types);
+	for (idx_t i = 0; i < types.size(); i++) {
+		auto result_type = result.GetTypes()[i];
+		auto type = types[i];
+		if (!((result_type.id() == LogicalTypeId::TIMESTAMP || result_type.id() == LogicalTypeId::TIMESTAMP_TZ) &&
+		      (type.id() == LogicalTypeId::TIMESTAMP || type.id() == LogicalTypeId::TIMESTAMP_TZ))) {
+			D_ASSERT(result_type == type);
+		}
+	}
 	result.Reset();
 
 	idx_t chunk_index;
@@ -1128,10 +1135,14 @@ void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, Colum
 	lstate.current_row_index = row_index;
 	result.Verify();
 }
-
 bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
 	for (idx_t i = 0; i < state.column_ids.size(); i++) {
-		D_ASSERT(result.GetTypes()[i] == types[state.column_ids[i]]);
+		auto result_type = result.GetTypes()[i];
+		auto type = types[state.column_ids[i]];
+		if (!((result_type.id() == LogicalTypeId::TIMESTAMP || result_type.id() == LogicalTypeId::TIMESTAMP_TZ) &&
+		      (type.id() == LogicalTypeId::TIMESTAMP || type.id() == LogicalTypeId::TIMESTAMP_TZ))) {
+			D_ASSERT(result_type == type);
+		}
 	}
 
 	result.Reset();
@@ -1218,7 +1229,14 @@ idx_t ColumnDataCollection::ChunkCount() const {
 }
 
 void ColumnDataCollection::FetchChunk(idx_t chunk_idx, DataChunk &result) const {
-	D_ASSERT(result.GetTypes() == types);
+	for (idx_t i = 0; i < types.size(); i++) {
+		auto result_type = result.GetTypes()[i];
+		auto type = types[i];
+		if (!((result_type.id() == LogicalTypeId::TIMESTAMP || result_type.id() == LogicalTypeId::TIMESTAMP_TZ) &&
+		      (type.id() == LogicalTypeId::TIMESTAMP || type.id() == LogicalTypeId::TIMESTAMP_TZ))) {
+			D_ASSERT(result_type == type);
+		}
+	}
 	D_ASSERT(chunk_idx < ChunkCount());
 	for (auto &segment : segments) {
 		if (chunk_idx >= segment->ChunkCount()) {
