@@ -1,9 +1,12 @@
 #include "catch.hpp"
+
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/profiler.hpp"
+#include "duckdb/common/vector.hpp"
+
 #include "test_helpers.hpp"
 
 #include <unordered_set>
@@ -14,6 +17,25 @@ using namespace duckdb;
 enum class AttachTaskType { CREATE_TABLE, LOOKUP, APPEND, APPLY_CHANGES, DESCRIBE_TABLE, CHECKPOINT };
 
 namespace {
+
+string AttachTaskTypeToString(AttachTaskType task_type) {
+	switch (task_type) {
+	case AttachTaskType::CREATE_TABLE:
+		return "CREATE";
+	case AttachTaskType::LOOKUP:
+		return "LOOKUP";
+	case AttachTaskType::APPEND:
+		return "APPEND";
+	case AttachTaskType::APPLY_CHANGES:
+		return "UPSERT";
+	case AttachTaskType::DESCRIBE_TABLE:
+		return "DESCRIBE";
+	case AttachTaskType::CHECKPOINT:
+		return "CHECKPOINT";
+	default:
+		return "Unknown";
+	}
+}
 
 string test_dir_path;
 const string prefix = "db_";
@@ -35,7 +57,7 @@ const idx_t nr_initial_rows = 2050;
 vector<vector<string>> logging;
 atomic<bool> success {true};
 
-duckdb::unique_ptr<MaterializedQueryResult> execQuery(Connection &conn, const string &query) {
+unique_ptr<MaterializedQueryResult> execQuery(Connection &conn, const string &query) {
 	auto result = conn.Query(query);
 	if (result->HasError()) {
 		Printer::PrintF("Failed to execute query %s:\n------\n%s\n-------", query, result->GetError());
@@ -56,10 +78,10 @@ struct DBInfo {
 
 struct AttachTask {
 	AttachTaskType type;
-	duckdb::optional_idx db_id;
-	duckdb::optional_idx tbl_id;
-	duckdb::optional_idx tbl_size;
-	std::vector<idx_t> ids;
+	optional_idx db_id;
+	optional_idx tbl_id;
+	optional_idx tbl_size;
+	vector<idx_t> ids;
 	bool actual_describe = false;
 };
 
@@ -83,7 +105,7 @@ public:
 	}
 
 public:
-	duckdb::unique_ptr<MaterializedQueryResult> execQuery(const string &query) {
+	unique_ptr<MaterializedQueryResult> execQuery(const string &query) {
 		return ::execQuery(conn, query);
 	}
 	void Work();
@@ -92,7 +114,7 @@ private:
 	AttachTask RandomTask();
 	void createTbl(AttachTask &task);
 	void lookup(AttachTask &task);
-	void append_internal(AttachTask &task);
+	void append_internal(AttachTask &task, const bool is_upsert);
 	void append(AttachTask &task);
 	void delete_internal(AttachTask &task);
 	void apply_changes(AttachTask &task);
@@ -146,8 +168,7 @@ void AttachWorker::createTbl(AttachTask &task) {
 
 	string tbl_path = StringUtil::Format("%s.tbl_%d", getDBName(db_id), tbl_id);
 	string create_sql = StringUtil::Format(
-	    "CREATE TABLE %s(i BIGINT PRIMARY KEY, s VARCHAR, ts TIMESTAMP, obj STRUCT(key1 UBIGINT, key2 VARCHAR))",
-	    tbl_path);
+	    "CREATE TABLE %s(i BIGINT, s VARCHAR, ts TIMESTAMP, obj STRUCT(key1 UBIGINT, key2 VARCHAR))", tbl_path);
 	addLog("; q: " + create_sql);
 	execQuery(create_sql);
 	string insert_sql = "INSERT INTO " + tbl_path +
@@ -179,6 +200,7 @@ void AttachWorker::lookup(AttachTask &task) {
 	if (result->RowCount() == 0) {
 		addLog("FAILURE - No rows returned from query");
 		success = false;
+		return;
 	}
 	if (!CHECK_COLUMN(result, 0, {Value::UBIGINT(expected_max_val)})) {
 		success = false;
@@ -196,11 +218,10 @@ void AttachWorker::lookup(AttachTask &task) {
 	        result, 3,
 	        {Value::STRUCT({{"key1", Value::UBIGINT(expected_max_val)}, {"key2", to_string(expected_max_val)}})})) {
 		success = false;
-		return;
 	}
 }
 
-void AttachWorker::append_internal(AttachTask &task) {
+void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 	auto db_id = task.db_id.GetIndex();
 	auto tbl_id = task.tbl_id.GetIndex();
 	auto tbl_str = "tbl_" + to_string(tbl_id);
@@ -208,18 +229,33 @@ void AttachWorker::append_internal(AttachTask &task) {
 	addLog("db: " + getDBName(db_id) + "; table: " + tbl_str + "; append rows");
 
 	try {
-		Appender appender(conn, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
-		DataChunk chunk;
-
+		// QueryAppender
 		child_list_t<LogicalType> struct_children;
 		struct_children.emplace_back(make_pair("key1", LogicalTypeId::UBIGINT));
 		struct_children.emplace_back(make_pair("key2", LogicalTypeId::VARCHAR));
 
 		const vector<LogicalType> types = {LogicalType::UBIGINT, LogicalType::VARCHAR, LogicalType::TIMESTAMP,
 		                                   LogicalType::STRUCT(struct_children)};
+		unique_ptr<BaseAppender> base_appender;
+		if (is_upsert) {
+			auto query = StringUtil::Format("MERGE INTO %s.main.%s USING appended_data USING (i) WHEN MATCHED THEN "
+			                                "UPDATE WHEN NOT MATCHED THEN INSERT",
+			                                SQLIdentifier(getDBName(db_id)), SQLIdentifier(tbl_str));
+			vector<string> names;
+			names.push_back("i");
+			names.push_back("s");
+			names.push_back("ts");
+			names.push_back("obj");
+			base_appender = make_uniq<QueryAppender>(conn, query, types, names);
+		} else {
+			base_appender = make_uniq<Appender>(conn, getDBName(db_id), DEFAULT_SCHEMA, tbl_str);
+		}
+		auto &appender = *base_appender;
 
-		// fill up datachunk
+		// Fill the data chunk.
+		DataChunk chunk;
 		chunk.Initialize(*conn.context, types);
+
 		// int
 		auto &col_ubigint = chunk.data[0];
 		auto data_ubigint = FlatVector::GetData<uint64_t>(col_ubigint);
@@ -253,11 +289,9 @@ void AttachWorker::append_internal(AttachTask &task) {
 	} catch (const std::exception &e) {
 		addLog("Caught exception when using Appender: " + string(e.what()));
 		success = false;
-		return;
 	} catch (...) {
 		addLog("Caught error when using Appender!");
 		success = false;
-		return;
 	}
 }
 
@@ -276,7 +310,7 @@ void AttachWorker::append(AttachTask &task) {
 		task.ids.push_back(current_num_rows + i);
 	}
 
-	append_internal(task);
+	append_internal(task, false);
 	db_infos[db_id].tables[tbl_id].size += append_count;
 }
 
@@ -308,8 +342,7 @@ void AttachWorker::apply_changes(AttachTask &task) {
 	auto &db_infos = db_pool.db_infos;
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	execQuery("BEGIN");
-	delete_internal(task);
-	append_internal(task);
+	append_internal(task, true);
 	execQuery("COMMIT");
 }
 
@@ -347,7 +380,6 @@ void AttachWorker::GetRandomTable(AttachTask &task) {
 	auto db_id = task.db_id.GetIndex();
 	lock_guard<mutex> lock(db_infos[db_id].mu);
 	auto max_tbl_id = db_infos[db_id].table_count;
-
 	if (max_tbl_id == 0) {
 		return;
 	}
@@ -360,7 +392,6 @@ AttachTask AttachWorker::RandomTask() {
 	AttachTask result;
 	idx_t scenario_id = std::rand() % 10;
 	result.db_id = std::rand() % db_count;
-	auto db_id = result.db_id.GetIndex();
 	switch (scenario_id) {
 	case 0:
 		result.type = AttachTaskType::CREATE_TABLE;
@@ -410,6 +441,9 @@ AttachTask AttachWorker::RandomTask() {
 }
 
 void AttachWorker::Work() {
+	Profiler profiler;
+	AttachTask slowest_task;
+
 	for (idx_t i = 0; i < iteration_count; i++) {
 		if (!success) {
 			return;
@@ -417,9 +451,9 @@ void AttachWorker::Work() {
 
 		try {
 			auto task = RandomTask();
-
 			db_pool.addWorker(*this, task.db_id.GetIndex());
 
+			profiler.Start();
 			switch (task.type) {
 			case AttachTaskType::CREATE_TABLE:
 				createTbl(task);
@@ -444,8 +478,12 @@ void AttachWorker::Work() {
 				success = false;
 				return;
 			}
+			profiler.End();
 			db_pool.removeWorker(*this, task.db_id.GetIndex());
-
+			auto elapsed = profiler.Elapsed();
+			if (elapsed >= 0.1) {
+				Printer::PrintF("Slow task %s - took %lf seconds\n", AttachTaskTypeToString(task.type), elapsed);
+			}
 		} catch (const std::exception &e) {
 			addLog("Caught exception when running iterations: " + string(e.what()));
 			success = false;
