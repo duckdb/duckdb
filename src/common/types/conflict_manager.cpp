@@ -87,7 +87,7 @@ optional_idx ConflictManager::GetFirstInvalidIndex(const idx_t count, const bool
 	for (idx_t i = 0; i < count; i++) {
 		if (negate && !validity.RowIsValid(i)) {
 			return i;
-		} else if (validity.RowIsValid(i)) {
+		} else if (!negate && validity.RowIsValid(i)) {
 			return i;
 		}
 	}
