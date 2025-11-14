@@ -1894,7 +1894,7 @@ string ShellState::GetSystemPager() {
 #endif
 }
 
-bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+bool ShellState::ShouldUsePager() {
 	if (out != stdout || !stdout_is_console || !outfile.empty()) {
 		// if we have an outfile specified we don't set up the pager
 		return false;
@@ -1910,6 +1910,25 @@ bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
 			                           "or supply a command like `.pager 'less -SR'` or `.pager 'pspg --csv'`.\n");
 			return false;
 		}
+	}
+	return true;
+}
+
+bool ShellState::ShouldUsePager(idx_t line_count) {
+	if (!ShouldUsePager()) {
+		return false;
+	}
+	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
+		if (line_count < pager_min_rows) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+	if (!ShouldUsePager()) {
+		return false;
 	}
 	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
 		// in automatic mode we only use a pager when the output is large enough
@@ -3068,6 +3087,15 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		display_lines.push_back(std::move(display_line));
 	}
 
+	idx_t line_count = 0;
+	for (auto &display_line : display_lines) {
+		line_count += display_line.render_height;
+	}
+	unique_ptr<PagerState> pager_setup;
+	if (ShouldUsePager(line_count)) {
+		// we should use a pager
+		pager_setup = SetupPager();
+	}
 	// render the display lines
 	ShellHighlight highlight(*this);
 	for (auto &display_line : display_lines) {
