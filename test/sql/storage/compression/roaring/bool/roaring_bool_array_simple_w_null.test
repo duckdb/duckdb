@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/roaring/bool/roaring_bool_array_simple.test
+# name: test/sql/storage/compression/roaring/bool/roaring_bool_array_simple_w_null.test
 # description: Test bitpacking with nulls
 # group: [bool]
 
@@ -17,7 +17,7 @@ INSERT INTO test SELECT case
     when i%50=0 then false
     when i%25=0 then true
     else NULL
-end FROM range(0,128) tbl(i);
+end FROM range(0,10_000) tbl(i);
 
 statement ok
 checkpoint
@@ -27,24 +27,19 @@ SELECT compression FROM pragma_storage_info('test') WHERE  segment_type ILIKE 'B
 ----
 
 query I
+select count(*) from test WHERE a IS NULL;
+----
+9600
+
+query I
 select count(*) from test WHERE a IS true;
 ----
-3
+200
 
-# query I
-# select count(*) from test WHERE a IS NULL;
-# ----
-# 1966
-#
-# query I
-# select count(*) from test WHERE a IS true;
-# ----
-# 40
-#
-# query I
-# select count(*) from test WHERE a IS false;
-# ----
-# 40
+query I
+select count(*) from test WHERE a IS false;
+----
+200
 
 statement ok
 delete from test
