@@ -175,7 +175,7 @@ public:
 	//! Initializes a chunk with the correct types that can be used to call Append/Scan for the given columns
 	void InitializeChunk(DataChunk &chunk, const vector<column_t> &columns) const;
 	//! Initializes a chunk with the correct types for a given scan state
-	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
+	void InitializeScanChunk(const TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
 	void InitializeScan(TupleDataScanState &state,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
@@ -196,6 +196,8 @@ public:
 	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
 	//! Whether the last scan has been completed on this TupleDataCollection
 	bool ScanComplete(const TupleDataScanState &state) const;
+	//! Seeks to the specified chunk index, returning the total row count before it
+	idx_t Seek(TupleDataScanState &state, const idx_t target_chunk);
 
 	//! Gathers a DataChunk from the TupleDataCollection, given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count, DataChunk &result,

@@ -25,6 +25,8 @@ public:
 	unique_ptr<GlobalSinkState> sort_global;
 
 	//	Source
+	mutex scan_lock;
+	TupleDataParallelScanState parallel_scan;
 	atomic<idx_t> tasks_completed;
 	unique_ptr<GlobalSourceState> sort_source;
 
@@ -74,6 +76,7 @@ public:
 	shared_ptr<TupleDataLayout> grouping_types_ptr;
 	//! The number of radix bits if this partition is being synced with another
 	idx_t fixed_bits;
+	vector<column_t> scan_ids;
 
 	// OVER(...) (sorting)
 	vector<HashGroupPtr> hash_groups;
@@ -111,6 +114,9 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, cons
 			types.push_back(LogicalType::HASH);
 			grouping_types_ptr->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			Rehash(hashed_sort.estimated_cardinality);
+			for (column_t i = 0; i < payload_types.size(); ++i) {
+				scan_ids.emplace_back(i);
+			}
 		}
 	}
 }
@@ -216,6 +222,9 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 			hash_group = make_uniq<HashedSortGroup>(hashed_sort.client, *hashed_sort.sort, group_idx);
 		}
 	}
+
+	//	Combine the thread data into the global data
+	grouping_data->Combine(*local_partition);
 }
 
 ProgressData HashedSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
@@ -255,14 +264,36 @@ SinkFinalizeType HashedSort::Finalize(ClientContext &client, OperatorSinkFinaliz
 		return SinkFinalizeType::READY;
 	}
 
-	// OVER(...)
+	//	OVER(ORDER BY...)
+	if (partitions.empty()) {
+		auto &hash_group = gsink.hash_groups[0];
+		if (hash_group) {
+			auto &global_sink = *hash_group->sort_global;
+			OperatorSinkFinalizeInput hfinalize {global_sink, finalize.interrupt_state};
+			sort->Finalize(client, hfinalize);
+			hash_group->sort_source = sort->GetGlobalSourceState(client, global_sink);
+			return SinkFinalizeType::READY;
+		}
+		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	}
+
+	// OVER(PARTITION BY...)
+	auto &partitions = gsink.grouping_data->GetPartitions();
 	D_ASSERT(!gsink.hash_groups.empty());
-	for (auto &hash_group : gsink.hash_groups) {
+	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
+		auto &partition = *partitions[hash_bin];
+		if (!partition.Count()) {
+			continue;
+		}
+
+		auto &hash_group = gsink.hash_groups[hash_bin];
 		if (!hash_group) {
 			continue;
 		}
-		OperatorSinkFinalizeInput hfinalize {*hash_group->sort_global, finalize.interrupt_state};
-		sort->Finalize(client, hfinalize);
+
+		// Prepare to scan into the sort
+		auto &parallel_scan = hash_group->parallel_scan;
+		partition.InitializeScan(parallel_scan, gsink.scan_ids);
 	}
 
 	return SinkFinalizeType::READY;
@@ -308,7 +339,6 @@ public:
 
 	// OVER(ORDER BY...) (only sorting)
 	LocalSortStatePtr sort_local;
-	InterruptState interrupt;
 
 	// OVER() (no sorting)
 	unique_ptr<ColumnDataCollection> unsorted;
@@ -490,40 +520,60 @@ SinkCombineResultType HashedSort::Combine(ExecutionContext &context, OperatorSin
 	auto &grouping_append = lstate.grouping_append;
 	gstate.CombineLocalPartition(local_grouping, grouping_append);
 
-	//	Don't scan the hash column
-	vector<column_t> column_ids;
-	for (column_t i = 0; i < payload_types.size(); ++i) {
-		column_ids.emplace_back(i);
+	return SinkCombineResultType::FINISHED;
+}
+
+void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) {
+	auto &gstate = finalize.global_state.Cast<HashedSortGlobalSinkState>();
+
+	// OVER()
+	if (sort_col_count == 0) {
+		//	Nothing to sort
+		return;
+	}
+
+	//	OVER(ORDER BY...)
+	if (partitions.empty()) {
+		//	Already sorted in Combine
+		return;
 	}
 
 	//	Loop over the partitions and add them to each hash group's global sort state
-	TupleDataScanState scan_state;
-	DataChunk chunk;
-	auto &partitions = local_grouping->GetPartitions();
-	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
+	auto &partitions = gstate.grouping_data->GetPartitions();
+	if (hash_bin < partitions.size()) {
 		auto &partition = *partitions[hash_bin];
 		if (!partition.Count()) {
-			continue;
-		}
-
-		partition.InitializeScan(scan_state, column_ids, TupleDataPinProperties::DESTROY_AFTER_DONE);
-		if (chunk.data.empty()) {
-			partition.InitializeScanChunk(scan_state, chunk);
+			return;
 		}
 
 		auto &hash_group = *gstate.hash_groups[hash_bin];
-		lstate.sort_local = sort->GetLocalSinkState(context);
-		OperatorSinkInput sink {*hash_group.sort_global, *lstate.sort_local, combine.interrupt_state};
-		while (partition.Scan(scan_state, chunk)) {
+		auto &parallel_scan = hash_group.parallel_scan;
+
+		DataChunk chunk;
+		partition.InitializeScanChunk(parallel_scan.scan_state, chunk);
+		TupleDataLocalScanState local_scan;
+		partition.InitializeScan(local_scan);
+
+		auto sort_local = sort->GetLocalSinkState(context);
+		OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
+		idx_t combined = 0;
+		while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
 			sort->Sink(context, chunk, sink);
-			hash_group.count += chunk.size();
+			combined += chunk.size();
 		}
 
-		OperatorSinkCombineInput lcombine {*hash_group.sort_global, *lstate.sort_local, combine.interrupt_state};
-		sort->Combine(context, lcombine);
-	}
+		OperatorSinkCombineInput combine {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
+		sort->Combine(context, combine);
+		hash_group.count += combined;
 
-	return SinkCombineResultType::FINISHED;
+		//	Whoever finishes last can Finalize
+		lock_guard<mutex> finalize_guard(hash_group.scan_lock);
+		if (hash_group.count == partition.Count() && !hash_group.sort_source) {
+			OperatorSinkFinalizeInput lfinalize {*hash_group.sort_global, finalize.interrupt_state};
+			sort->Finalize(context.client, lfinalize);
+			hash_group.sort_source = sort->GetGlobalSourceState(client, *hash_group.sort_global);
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -536,37 +586,64 @@ public:
 	using ChunkRow = HashedSort::ChunkRow;
 	using ChunkRows = HashedSort::ChunkRows;
 
-	HashedSortGlobalSourceState(ClientContext &client, HashedSortGlobalSinkState &gsink) : gsink(gsink) {
-		if (!gsink.count) {
-			return;
-		}
-		for (auto &hash_group : gsink.hash_groups) {
-			ChunkRow chunk_row;
-
-			if (!hash_group) {
-				chunk_rows.emplace_back(chunk_row);
-				continue;
-			}
-
-			chunk_row.count = hash_group->count;
-			if (gsink.hashed_sort.sort) {
-				auto &sort = *gsink.hashed_sort.sort;
-				auto &global_sink = *hash_group->sort_global;
-				hash_group->sort_source = sort.GetGlobalSourceState(client, global_sink);
-				//	Sorted data produces dense chunks
-				chunk_row.chunks = (chunk_row.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
-				;
-			} else if (hash_group->columns) {
-				//	Unsorted data can have unrelated chunk counts
-				chunk_row.chunks = hash_group->columns->ChunkCount();
-			}
-			chunk_rows.emplace_back(chunk_row);
-		}
-	}
+	HashedSortGlobalSourceState(ClientContext &client, HashedSortGlobalSinkState &gsink);
 
 	HashedSortGlobalSinkState &gsink;
 	ChunkRows chunk_rows;
 };
+
+HashedSortGlobalSourceState::HashedSortGlobalSourceState(ClientContext &client, HashedSortGlobalSinkState &gsink)
+    : gsink(gsink) {
+	if (!gsink.count) {
+		return;
+	}
+
+	auto &hashed_sort = gsink.hashed_sort;
+
+	// OVER()
+	if (hashed_sort.sort_col_count == 0) {
+		//	One unsorted group. We have the count and chunks.
+		ChunkRow chunk_row;
+
+		auto &hash_group = gsink.hash_groups[0];
+		if (hash_group) {
+			chunk_row.count = hash_group->count;
+			chunk_row.chunks = hash_group->columns->ChunkCount();
+		}
+
+		chunk_rows.emplace_back(chunk_row);
+		return;
+	}
+
+	//	OVER(ORDER BY...)
+	if (hashed_sort.partitions.empty()) {
+		//	One sorted group
+		ChunkRow chunk_row;
+
+		auto &hash_group = gsink.hash_groups[0];
+		if (hash_group) {
+			chunk_row.count = hash_group->count;
+			chunk_row.chunks = (chunk_row.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		}
+
+		chunk_rows.emplace_back(chunk_row);
+		return;
+	}
+
+	//	OVER(PARTITION BY...)
+	auto &partitions = gsink.grouping_data->GetPartitions();
+	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
+		ChunkRow chunk_row;
+
+		auto &hash_group = gsink.hash_groups[hash_bin];
+		if (hash_group) {
+			chunk_row.count = partitions[hash_bin]->Count();
+			chunk_row.chunks = (chunk_row.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		}
+
+		chunk_rows.emplace_back(chunk_row);
+	}
+}
 
 //===--------------------------------------------------------------------===//
 // HashedSort
@@ -676,6 +753,16 @@ static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_
 		return hash_group.get_columns++ ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 	}
 
+	//	OVER(PARTITION BY...)
+	if (gsink.grouping_data) {
+		lock_guard<mutex> reset_guard(hash_group.scan_lock);
+		auto &partitions = gsink.grouping_data->GetPartitions();
+		if (hash_bin < partitions.size()) {
+			//	Release the memory now that we have finished scanning it.
+			partitions[hash_bin].reset();
+		}
+	}
+
 	auto &sort = *hash_group.sort;
 	auto &sort_global = *hash_group.sort_source;
 	auto sort_local = sort.GetLocalSourceState(context, sort_global);
@@ -709,6 +796,7 @@ HashedSort::HashGroupPtr HashedSort::GetColumnData(idx_t hash_bin, OperatorSourc
 
 	OperatorSourceInput input {sort_global, source.local_state, source.interrupt_state};
 	auto result = sort.GetColumnData(input);
+	hash_group.sort_source.reset();
 
 	//	Just because MaterializeColumnData returned FINISHED doesn't mean that the same thread will
 	//	get the result...
@@ -737,8 +825,11 @@ HashedSort::SortedRunPtr HashedSort::GetSortedRun(ClientContext &client, idx_t h
 
 	auto result = sort.GetSortedRun(sort_global);
 	if (!result) {
+		D_ASSERT(hash_group.count == 0);
 		result = make_uniq<SortedRun>(client, sort, false);
 	}
+
+	hash_group.sort_source.reset();
 
 	return result;
 }

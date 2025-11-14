@@ -549,6 +549,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"sin", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"sinh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"skewness", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"sleep_ms", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"sql_auto_complete", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_attach", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_query", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},

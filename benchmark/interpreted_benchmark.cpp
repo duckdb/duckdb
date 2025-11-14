@@ -11,6 +11,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 #include <fstream>
 #include <sstream>

@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {

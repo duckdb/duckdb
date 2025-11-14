@@ -1,6 +1,7 @@
 import os
 import subprocess
 from typing import List, Union
+import sys
 
 import pytest
 
@@ -40,13 +41,17 @@ class TestResult:
         if isinstance(expected, list):
             expected = "\n".join(expected)
         assert self.status_code == 0
-        assert is_needle_in_haystack(expected, self.stdout)
+        if not is_needle_in_haystack(expected, self.stdout):
+            print(self.stdout, file=sys.stderr)
+            assert is_needle_in_haystack(expected, self.stdout)
 
     def check_not_exist(self, not_exist: Union[str, List[str], bytes]):
         if isinstance(not_exist, list):
             not_exist = "\n".join(not_exist)
         assert self.status_code == 0
-        assert not is_needle_in_haystack(not_exist, self.stdout)
+        if is_needle_in_haystack(not_exist, self.stdout):
+            print(self.stdout, file=sys.stderr)
+            assert not is_needle_in_haystack(not_exist, self.stdout)
 
     def check_stderr(self, expected):
         if expected is None:
