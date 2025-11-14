@@ -66,51 +66,49 @@ function(ensure_variable_is_number INPUT_VERSION OUT_RESULT)
 endfunction()
 
 add_definitions(-DDUCKDB_MAIN_LIBRARY)
-#
-#add_subdirectory(optimizer)
-#add_subdirectory(planner)
-#add_subdirectory(parser)
-#add_subdirectory(function)
-#add_subdirectory(catalog)
-#add_subdirectory(common)
-#add_subdirectory(logging)
-#add_subdirectory(execution)
-#add_subdirectory(main)
-#add_subdirectory(parallel)
-#add_subdirectory(storage)
-#add_subdirectory(transaction)
-#add_subdirectory(verification)
-#
-#set(DUCKDB_LINK_LIBS
-#    duckdb_fsst
-#    duckdb_fmt
-#    duckdb_pg_query
-#    duckdb_re2
-#    duckdb_miniz
-#    duckdb_utf8proc
-#    duckdb_hyperloglog
-#    duckdb_fastpforlib
-#    duckdb_skiplistlib
-#    duckdb_mbedtls
-#    duckdb_yyjson
-#    duckdb_zstd)
-#
-#foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
-#  list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
-#endforeach(LINK_LIB)
-#
-#add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
-#target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
-#link_threads(duckdb_static PUBLIC)
-#
 
-# FIXME
-file(COPY ${CMAKE_SOURCE_DIR}/libduckdb_static.a  DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-add_library(duckdb_static STATIC IMPORTED GLOBAL)
-set_property(TARGET duckdb_static PROPERTY
-        IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
+add_subdirectory(optimizer)
+add_subdirectory(planner)
+add_subdirectory(parser)
+add_subdirectory(function)
+add_subdirectory(catalog)
+add_subdirectory(common)
+add_subdirectory(logging)
+add_subdirectory(execution)
+add_subdirectory(main)
+add_subdirectory(parallel)
+add_subdirectory(storage)
+add_subdirectory(transaction)
+add_subdirectory(verification)
 
+set(DUCKDB_LINK_LIBS
+    duckdb_fsst
+    duckdb_fmt
+    duckdb_pg_query
+    duckdb_re2
+    duckdb_miniz
+    duckdb_utf8proc
+    duckdb_hyperloglog
+    duckdb_fastpforlib
+    duckdb_skiplistlib
+    duckdb_mbedtls
+    duckdb_yyjson
+    duckdb_zstd)
 
+foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
+  list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
+endforeach(LINK_LIB)
+
+add_library(duckdb_static STATIC ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
+target_link_libraries(duckdb_static PUBLIC ${DUCKDB_SYSTEM_LIBS})
+link_threads(duckdb_static PUBLIC)
+
+#
+# FIXME file(COPY ${CMAKE_SOURCE_DIR}/libduckdb_static.a  DESTINATION
+# ${CMAKE_CURRENT_BINARY_DIR}) add_library(duckdb_static STATIC IMPORTED GLOBAL)
+# set_property(TARGET duckdb_static PROPERTY IMPORTED_LOCATION
+# ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
+#
 
 add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
 target_link_libraries(duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS})
@@ -156,7 +154,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb.hpp"
         DESTINATION "${INSTALL_INCLUDE_DIR}")
 
 install(
-  TARGETS duckdb
+  TARGETS duckdb duckdb_static
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
