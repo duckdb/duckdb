@@ -57,19 +57,19 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 			// not a combinable collation - ignore
 			return false;
 		}
-	string alias;
-	if (source) {
-		alias = source->GetAlias();
-	}
-	vector<unique_ptr<Expression>> children;
-	children.push_back(std::move(source));
+		string alias;
+		if (source) {
+			alias = source->GetAlias();
+		}
+		vector<unique_ptr<Expression>> children;
+		children.push_back(std::move(source));
 
-	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(collation_entry.function, std::move(children));
-	if (!alias.empty()) {
-		function->SetAlias(alias);
-	}
-	source = std::move(function);
+		FunctionBinder function_binder(context);
+		auto function = function_binder.BindScalarFunction(collation_entry.function, std::move(children));
+		if (!alias.empty()) {
+			function->SetAlias(alias);
+		}
+		source = std::move(function);
 	}
 	return true;
 }

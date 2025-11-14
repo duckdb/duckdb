@@ -43,10 +43,11 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 	return index_info;
 }
 
-static unique_ptr<CreateIndexInfo>
-CreateConstraintIndexInfo(const string &table_name, const string &schema_name, Catalog &catalog,
-                          const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
-                          const string &index_name, IndexConstraintType constraint_type) {
+static unique_ptr<CreateIndexInfo> CreateConstraintIndexInfo(const string &table_name, const string &schema_name,
+                                                             Catalog &catalog, const ColumnList &columns,
+                                                             const vector<LogicalIndex> &column_indexes,
+                                                             const string &index_name,
+                                                             IndexConstraintType constraint_type) {
 	auto create_info = make_uniq<CreateIndexInfo>();
 	create_info->table = table_name;
 	create_info->schema = schema_name;
