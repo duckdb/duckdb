@@ -63,7 +63,7 @@ set variable max_ratio = 2.8;
 
 query I
 SELECT
-    CASE 
+    CASE
         WHEN (bitpacked::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (bitpacked::FLOAT / compressed::FLOAT) <= getvariable('max_ratio')
             THEN True::test_result
         ELSE {
@@ -132,7 +132,7 @@ set variable max_ratio = 8.8;
 
 query I
 SELECT
-    CASE 
+    CASE
         WHEN (bitpacked::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (bitpacked::FLOAT / compressed::FLOAT) <= getvariable('max_ratio')
             THEN True::test_result
         ELSE {
@@ -196,7 +196,7 @@ set variable max_ratio = 1;
 
 query I
 SELECT
-    CASE 
+    CASE
         WHEN (bitpacked::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (bitpacked::FLOAT / compressed::FLOAT) <= getvariable('max_ratio')
             THEN True::test_result
         ELSE {
