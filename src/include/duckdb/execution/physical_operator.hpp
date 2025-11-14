@@ -123,7 +123,12 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+
+private:
 	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
+
+public:
+	SourceResultType GetOperatorData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 
 	virtual OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk,
 	                                               GlobalSourceState &gstate, LocalSourceState &lstate,

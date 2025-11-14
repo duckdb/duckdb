@@ -476,7 +476,7 @@ SourceResultType PhysicalMergeInto::GetData(ExecutionContext &context, DataChunk
 		auto &child_lstate = *lstate.local_states[lstate.index];
 		OperatorSourceInput source_input {child_gstate, child_lstate, input.interrupt_state};
 
-		auto result = action.op->GetData(context, lstate.scan_chunk, source_input);
+		auto result = action.op->GetOperatorData(context, lstate.scan_chunk, source_input);
 		if (lstate.scan_chunk.size() > 0) {
 			// construct the result chunk
 			for (idx_t c = 0; c < lstate.scan_chunk.ColumnCount(); c++) {

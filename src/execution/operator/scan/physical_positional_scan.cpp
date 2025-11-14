@@ -66,7 +66,7 @@ public:
 
 				InterruptState interrupt_state;
 				OperatorSourceInput source_input {global_state, *local_state, interrupt_state};
-				auto source_result = table.GetData(context, source, source_input);
+				auto source_result = table.GetOperatorData(context, source, source_input);
 				if (source_result == SourceResultType::BLOCKED) {
 					throw NotImplementedException(
 					    "Unexpected interrupt from table Source in PositionalTableScanner refill");

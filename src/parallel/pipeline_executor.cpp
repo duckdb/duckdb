@@ -502,7 +502,7 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 	}
 #endif
 
-	return pipeline.source->GetData(context, chunk, input);
+	return pipeline.source->GetOperatorData(context, chunk, input);
 }
 
 SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input) {
