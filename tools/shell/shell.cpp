@@ -2895,6 +2895,9 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		table.database_name = row.GetValue<string>(0);
 		table.schema_name = row.GetValue<string>(1);
 		table.table_name = row.GetValue<string>(2);
+		if (table.schema_name != DEFAULT_SCHEMA) {
+			table.table_name = table.schema_name + "." + table.table_name;
+		}
 
 		auto column_val = row.GetBaseValue(3);
 		ColumnRenderRow column_render_row;
