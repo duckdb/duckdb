@@ -2649,6 +2649,172 @@ void ShellState::ShowConfiguration() {
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
 }
 
+struct ShellColumnInfo {
+	string column_name;
+	string column_type;
+};
+
+struct ShellTableInfo {
+	string database_name;
+	string schema_name;
+	string table_name;
+	vector<ShellColumnInfo> columns;
+};
+
+MetadataResult ShellState::DisplayTables(const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	// FIXME: copy pasted from beow
+	// Parse the filter pattern to check for schema qualification
+	string filter_pattern = args.size() > 1 ? args[1] : string();
+	string schema_filter = "";
+	string table_filter = filter_pattern;
+
+	// Parse the filter pattern to check for schema qualification
+	try {
+		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
+		if (components.size() >= 2) {
+			// e.g : "schema.table" or "schema.%"
+			schema_filter = components[0];
+			table_filter = components[1];
+		}
+	} catch (const duckdb::ParserException &) {
+		// If parsing fails, treat as a simple table pattern
+		schema_filter = "";
+		table_filter = filter_pattern;
+	}
+	string schema_filter_str;
+	string name_filter;
+	if (!table_filter.empty()) {
+		name_filter = StringUtil::Format(" AND table_name LIKE %s", SQLString(table_filter));;
+	}
+	if (!schema_filter.empty()) {
+		schema_filter_str = StringUtil::Format(" AND schema_name LIKE %s", SQLString(schema_filter));;
+	}
+	auto query = StringUtil::Format(R"(
+	SELECT database_name, schema_name, table_name, list(struct_pack(column_name, data_type) order by column_index)
+	FROM duckdb_columns()
+	WHERE NOT internal%s%s
+	GROUP BY ALL
+)", schema_filter_str, name_filter);
+
+
+	auto &con = *conn;
+	auto query_result = con.Query(query);
+	if (query_result->HasError()) {
+		PrintDatabaseError(query_result->GetError());
+	}
+	vector<ShellTableInfo> result;
+	for (auto &row : *query_result) {
+		ShellTableInfo table;
+		table.database_name = row.GetValue<string>(0);
+		table.schema_name = row.GetValue<string>(1);
+		table.table_name = row.GetValue<string>(2);
+
+		auto column_val = row.GetBaseValue(3);
+		for(auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
+			ShellColumnInfo column;
+			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
+			column.column_name = struct_children[0].GetValue<string>();
+			column.column_type = struct_children[1].GetValue<string>();
+			table.columns.push_back(std::move(column));
+		}
+
+		result.push_back(std::move(table));
+	}
+	// print every table and their columns in a box
+	duckdb::BoxRendererConfig config;
+	for(auto &table : result) {
+		// figure out the render width
+		auto table_render_length = RenderLength(table.table_name);
+		idx_t max_col_name_length = 0;
+		idx_t max_col_type_length = 0;
+		for(auto &col : table.columns) {
+			idx_t col_name_length = RenderLength(col.column_name);
+			idx_t col_type_length = RenderLength(col.column_type);
+			max_col_name_length = duckdb::MaxValue<idx_t>(col_name_length, max_col_name_length);
+			max_col_type_length = duckdb::MaxValue<idx_t>(col_type_length, max_col_type_length);
+		}
+
+		idx_t render_width = duckdb::MaxValue<idx_t>(table_render_length, max_col_name_length + max_col_type_length + 1) + 4;
+
+		// render the table
+		// top line
+		string top_line;
+		top_line = config.LTCORNER;
+		for(idx_t i = 0; i < render_width - 2; i++) {
+			top_line += config.HORIZONTAL;
+		}
+		top_line += config.RTCORNER;
+		top_line += "\n";
+
+		Print(PrintOutput::STDOUT, top_line);
+
+		// table name
+		idx_t space_count = render_width - table_render_length - 2;
+		idx_t lspace = space_count / 2;
+		idx_t rspace = space_count - lspace;
+		string table_line = config.VERTICAL;
+		table_line += string(lspace, ' ');
+		table_line += table.table_name;
+		table_line += string(rspace, ' ');
+		table_line += config.VERTICAL;
+		table_line += "\n";
+
+		Print(PrintOutput::STDOUT, table_line);
+
+		// blank line
+		string blank_line = config.VERTICAL;
+		blank_line += string(render_width - 2, ' ');
+		blank_line += config.VERTICAL;
+		blank_line += "\n";
+		Print(PrintOutput::STDOUT, blank_line);
+
+		// column lines
+		for(auto &col : table.columns) {
+			idx_t col_name_length = RenderLength(col.column_name);
+			idx_t col_type_length = RenderLength(col.column_type);
+
+			string column_line = config.VERTICAL;
+			column_line += " ";
+			column_line += col.column_name;
+			column_line += string(max_col_name_length - col_name_length + 1, ' ');
+			column_line += col.column_type;
+			column_line += string(max_col_type_length - col_type_length + 1, ' ');
+			column_line += config.VERTICAL;
+			column_line += "\n";
+			Print(PrintOutput::STDOUT, column_line);
+		}
+
+		// bottom line
+		string bottom_line;
+		bottom_line = config.LDCORNER;
+		for(idx_t i = 0; i < render_width - 2; i++) {
+			bottom_line += config.HORIZONTAL;
+		}
+		bottom_line += config.RDCORNER;
+		bottom_line += "\n";
+
+		Print(PrintOutput::STDOUT, bottom_line);
+	}
+
+	// const char *LTCORNER = "\342\224\214"; // NOLINT: "┌";
+	// const char *RTCORNER = "\342\224\220"; // NOLINT: "┐";
+	// const char *LDCORNER = "\342\224\224"; // NOLINT: "└";
+	// const char *RDCORNER = "\342\224\230"; // NOLINT: "┘";
+	//
+	// const char *MIDDLE = "\342\224\274";  // NOLINT: "┼";
+	// const char *TMIDDLE = "\342\224\254"; // NOLINT: "┬";
+	// const char *LMIDDLE = "\342\224\234"; // NOLINT: "├";
+	// const char *RMIDDLE = "\342\224\244"; // NOLINT: "┤";
+	// const char *DMIDDLE = "\342\224\264"; // NOLINT: "┴";
+	//
+	// const char *VERTICAL = "\342\224\202";   // NOLINT: "│";
+	// const char *HORIZONTAL = "\342\224\200"; // NOLINT: "─";
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
 	string s;
 

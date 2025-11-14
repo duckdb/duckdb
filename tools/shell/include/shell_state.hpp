@@ -276,6 +276,7 @@ public:
 	bool ReadFromFile(const string &file);
 	bool DisplaySchemas(const vector<string> &args);
 	MetadataResult DisplayEntries(const vector<string> &args, char type);
+	MetadataResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
 
 	idx_t RenderLength(const char *z);
