@@ -36,6 +36,19 @@ INSERT INTO t SELECT 7 i UNION ALL SELECT i FROM repeat(8, 2047) t1(i)
 statement ok
 INSERT INTO t SELECT i FROM repeat(NULL, 2000000) t1(i)
 
+# Work-around for unsetting version info
+statement ok
+USE memory
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
 query II
 EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2
 ----
@@ -95,6 +108,16 @@ query II
 EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 4098
 ----
 analyzed_plan	<REGEX>:.*TABLE_SCAN.*10,240 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 1
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2 OFFSET 2
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 statement ok
 INSERT INTO t SELECT 9 i UNION ALL SELECT i FROM repeat(NULL, 2046) t1(i) UNION ALL SELECT 10 i

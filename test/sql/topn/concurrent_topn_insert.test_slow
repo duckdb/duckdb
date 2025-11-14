@@ -25,11 +25,11 @@ INSERT INTO integers SELECT * FROM range(245000 + ${k} * 100000, 345000 + ${k} *
 
 onlyif threadid>=1&&threadid<=10
 statement ok
-SELECT * FROM integers ORDER BY i ASC LIMIT 100;
+SELECT * FROM integers ORDER BY i ASC LIMIT 100 OFFSET 246000;
 
 onlyif threadid>=11
 statement ok
-SELECT * FROM integers ORDER BY i DESC LIMIT 100;
+SELECT * FROM integers ORDER BY i DESC LIMIT 100 OFFSET 246000;
 
 endloop
 
@@ -46,7 +46,7 @@ DELETE FROM integers WHERE i BETWEEN (245000 + ${k} * 100000) AND (345000 + ${k}
 
 onlyif threadid>=1&&threadid<=10
 statement ok
-SELECT * FROM integers ORDER BY i ASC LIMIT 100;
+SELECT * FROM integers ORDER BY i ASC LIMIT 100 OFFSET 246000;
 
 onlyif threadid>=11
 statement ok
