@@ -71,7 +71,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		return false; // Dictionary is too large, bail
 	}
 
-	if (input_dictionary_id != current_input_dictionary_id) {
+	if (!output_dictionary || current_input_dictionary_id != input_dictionary_id) {
 		// We haven't seen this dictionary before
 		const auto chunk_fill_ratio = static_cast<double>(args.size()) / STANDARD_VECTOR_SIZE;
 		if (input_dictionary_size > STANDARD_VECTOR_SIZE && chunk_fill_ratio <= CHUNK_FILL_RATIO_THRESHOLD) {
@@ -82,9 +82,8 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		}
 
 		// We can do dictionary optimization! Re-initialize
+		output_dictionary = DictionaryVector::CreateReusableDictionary(result.GetType(), input_dictionary_size);
 		current_input_dictionary_id = input_dictionary_id;
-		output_dictionary = make_uniq<Vector>(result.GetType(), input_dictionary_size);
-		output_dictionary_id = UUID::ToString(UUID::GenerateRandomUUID());
 
 		// Set up the input chunk
 		DataChunk input_chunk;
@@ -105,16 +104,14 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			input_chunk.SetCardinality(count);
 
 			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
-			Vector output_intermediate(output_dictionary->GetType());
+			Vector output_intermediate(result.GetType());
 			expr.function.function(input_chunk, state, output_intermediate);
-			VectorOperations::Copy(output_intermediate, *output_dictionary, count, 0, offset);
+			VectorOperations::Copy(output_intermediate, output_dictionary->data, count, 0, offset);
 		}
 	}
 
-	// Create a dictionary result vector and give it an ID
-	const auto &input_sel_vector = DictionaryVector::SelVector(unary_input);
-	result.Dictionary(*output_dictionary, input_dictionary_size, input_sel_vector, args.size());
-	DictionaryVector::SetDictionaryId(result, output_dictionary_id);
+	// Result references the dictionary
+	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input));
 
 	return true;
 }
@@ -135,7 +132,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunct
 
 static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &args, Vector &result) {
 #ifdef DEBUG
-	if (args.data.empty() || expr.function.null_handling != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+	if (args.data.empty() || expr.function.GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		return;
 	}
 

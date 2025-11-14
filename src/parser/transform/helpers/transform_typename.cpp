@@ -17,7 +17,6 @@ struct SizeModifiers {
 };
 
 static SizeModifiers GetSizeModifiers(duckdb_libpgquery::PGTypeName &type_name, LogicalTypeId base_type) {
-
 	SizeModifiers result;
 
 	if (base_type == LogicalTypeId::DECIMAL) {
@@ -97,6 +96,11 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 	// transform it to the SQL type
 	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);
 
+	if (base_type == LogicalTypeId::GEOMETRY) {
+		// Always return a type with GeoTypeInfo
+		return LogicalType::GEOMETRY();
+	}
+
 	if (base_type == LogicalTypeId::LIST) {
 		throw ParserException("LIST is not valid as a stand-alone type");
 	}
@@ -148,6 +152,9 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		}
 		D_ASSERT(!children.empty());
 		return LogicalType::STRUCT(children);
+	}
+	if (base_type == LogicalTypeId::VARIANT) {
+		return LogicalType::VARIANT();
 	}
 	if (base_type == LogicalTypeId::MAP) {
 		if (!type_name.typmods || type_name.typmods->length != 2) {

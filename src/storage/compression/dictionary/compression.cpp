@@ -1,25 +1,31 @@
 #include "duckdb/storage/compression/dictionary/compression.hpp"
-#include "duckdb/storage/segment/uncompressed.hpp"
 
 namespace duckdb {
 
 DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
-                                                                       const CompressionInfo &info)
+                                                                       const CompressionInfo &info,
+                                                                       const idx_t max_unique_count_across_all_segments)
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)) {
-	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+      current_string_map(
+          info.GetBlockManager().buffer_manager.GetBufferAllocator(),
+          max_unique_count_across_all_segments * 2, // * 2 results in less linear probing, improving performance
+          1 // maximum_target_capacity_p, 1 because we don't care about target for our use-case, as we
+            // only use PrimitiveDictionary for duplicate checks, and not for writing to any target
+      ) {
+	CreateEmptySegment();
 }
 
-void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
+void DictionaryCompressionCompressState::CreateEmptySegment() {
 	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
-	                                                                info.GetBlockManager());
+	auto compressed_segment =
+	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 	current_segment = std::move(compressed_segment);
 
 	// Reset the buffers and the string map.
-	current_string_map.clear();
+	current_string_map.Clear();
 	index_buffer.clear();
 
 	// Reserve index 0 for null strings.
@@ -42,15 +48,14 @@ void DictionaryCompressionCompressState::Verify() {
 	D_ASSERT(DictionaryCompression::HasEnoughSpace(current_segment->count.load(), index_buffer.size(),
 	                                               current_dictionary.size, current_width, info.GetBlockSize()));
 	D_ASSERT(current_dictionary.end == info.GetBlockSize());
-	D_ASSERT(index_buffer.size() == current_string_map.size() + 1); // +1 is for null value
+	D_ASSERT(index_buffer.size() == current_string_map.GetSize() + 1); // +1 is for null value
 }
 
 bool DictionaryCompressionCompressState::LookupString(string_t str) {
-	auto search = current_string_map.find(str);
-	auto has_result = search != current_string_map.end();
-
+	const auto &entry = current_string_map.Lookup(str);
+	const auto has_result = !entry.IsEmpty();
 	if (has_result) {
-		latest_lookup_result = search->second;
+		latest_lookup_result = entry.index + 1;
 	}
 	return has_result;
 }
@@ -69,11 +74,11 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 	index_buffer.push_back(current_dictionary.size);
 	selection_buffer.push_back(UnsafeNumericCast<uint32_t>(index_buffer.size() - 1));
 	if (str.IsInlined()) {
-		current_string_map.insert({str, index_buffer.size() - 1});
+		current_string_map.Insert(str);
 	} else {
 		string_t dictionary_string((const char *)dict_pos, UnsafeNumericCast<uint32_t>(str.GetSize())); // NOLINT
 		D_ASSERT(!dictionary_string.IsInlined());
-		current_string_map.insert({dictionary_string, index_buffer.size() - 1});
+		current_string_map.Insert(dictionary_string);
 	}
 	DictionaryCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
 
@@ -103,14 +108,12 @@ bool DictionaryCompressionCompressState::CalculateSpaceRequirements(bool new_str
 }
 
 void DictionaryCompressionCompressState::Flush(bool final) {
-	auto next_start = current_segment->start + current_segment->count;
-
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 	if (!final) {
-		CreateEmptySegment(next_start);
+		CreateEmptySegment();
 	}
 }
 

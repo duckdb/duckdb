@@ -39,26 +39,28 @@ struct PersistentColumnData;
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
 struct ColumnCheckpointInfo {
-	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
-	}
+	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx);
 
-	RowGroupWriteInfo &info;
 	idx_t column_idx;
 
 public:
+	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
+
+private:
+	RowGroupWriteInfo &info;
 };
+
+enum class ColumnDataType { MAIN_TABLE, INITIAL_TRANSACTION_LOCAL, TRANSACTION_LOCAL };
 
 class ColumnData {
 	friend class ColumnDataCheckpointer;
 
 public:
-	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	           optional_ptr<ColumnData> parent);
+	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
+	           ColumnDataType data_type, optional_ptr<ColumnData> parent);
 	virtual ~ColumnData();
 
-	//! The start row
-	idx_t start;
 	//! The count of the column data
 	atomic<idx_t> count;
 	//! The block manager
@@ -87,6 +89,10 @@ public:
 	optional_ptr<const CompressionFunction> GetCompressionFunction() const {
 		return compression.get();
 	}
+	virtual void SetDataType(ColumnDataType data_type);
+	ColumnDataType GetDataType() const {
+		return data_type;
+	}
 
 	bool HasParent() const {
 		return parent != nullptr;
@@ -96,7 +102,6 @@ public:
 		return *parent;
 	}
 
-	virtual void SetStart(idx_t new_start);
 	//! The root type of the column
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
@@ -146,7 +151,7 @@ public:
 	void Append(ColumnAppendState &state, Vector &vector, idx_t count);
 	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
 	//! Revert a set of appends to the ColumnData
-	virtual void RevertAppend(row_t start_row);
+	virtual void RevertAppend(row_t new_count);
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);
@@ -154,10 +159,11 @@ public:
 	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	                      idx_t result_idx);
 
-	virtual void Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-	                    idx_t update_count);
-	virtual void UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-	                          row_t *row_ids, idx_t update_count, idx_t depth);
+	virtual void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	                    row_t *row_ids, idx_t update_count, idx_t row_group_start);
+	virtual void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+	                          Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
+	                          idx_t row_group_start);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
 
 	virtual void CommitDropColumn();
@@ -166,8 +172,7 @@ public:
 	                                                                PartialBlockManager &partial_block_manager);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info);
 
-	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
-	                            Vector &scan_vector);
+	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector);
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
@@ -176,18 +181,21 @@ public:
 	void InitializeColumn(PersistentColumnData &column_data);
 	virtual void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
+	                                          ReadStream &source, const LogicalType &type);
 
-	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
+	virtual void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+	                                  vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
 	FilterPropagateResult CheckZonemap(TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                           idx_t start_row, const LogicalType &type,
+	                                           const LogicalType &type,
+	                                           ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
 	                                           optional_ptr<ColumnData> parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
-	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
+	                                                 idx_t column_index, const LogicalType &type,
+	                                                 ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
 	                                                 optional_ptr<ColumnData> parent = nullptr);
 
 	void MergeStatistics(const BaseStatistics &other);
@@ -217,9 +225,9 @@ protected:
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
 	                  bool allow_updates, bool scan_committed);
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
-	void UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-	                    idx_t update_count, Vector &base_vector);
-	idx_t FetchUpdateData(row_t *row_ids, Vector &base_vector);
+	void UpdateInternal(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	                    row_t *row_ids, idx_t update_count, Vector &base_vector, idx_t row_group_start);
+	idx_t FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
 
@@ -241,6 +249,8 @@ protected:
 	atomic<idx_t> allocation_size;
 
 private:
+	//! Whether or not this column data belongs to a main table or if it is transaction local
+	atomic<ColumnDataType> data_type;
 	//! The parent column (if any)
 	optional_ptr<ColumnData> parent;
 	//!	The compression function used by the ColumnData

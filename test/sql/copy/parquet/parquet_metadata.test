@@ -5,40 +5,40 @@
 require parquet
 
 statement ok
-SELECT * FROM parquet_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet');
+SELECT * FROM parquet_metadata('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet');
 
 statement ok
-SELECT * FROM parquet_schema('data/parquet-testing/lineitem-top10000.gzip.parquet');
+SELECT * FROM parquet_schema('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet');
 
 query I
-SELECT COUNT(*) > 0 FROM parquet_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet');
+SELECT COUNT(*) > 0 FROM parquet_metadata('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet');
 ----
 true
 
 query I
-SELECT COUNT(*) > 0 FROM parquet_schema('data/parquet-testing/lineitem-top10000.gzip.parquet');
+SELECT COUNT(*) > 0 FROM parquet_schema('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet');
 ----
 true
 
 statement ok
-select * from parquet_schema('data/parquet-testing/decimal/decimal_dc.parquet');
+select * from parquet_schema('{DATA_DIR}/parquet-testing/decimal/decimal_dc.parquet');
 
 statement ok
-select * from parquet_schema('data/parquet-testing/decimal/int64_decimal.parquet');
+select * from parquet_schema('{DATA_DIR}/parquet-testing/decimal/int64_decimal.parquet');
 
 # with globs
 statement ok
-select * from parquet_metadata('data/parquet-testing/glob/*.parquet');
+select * from parquet_metadata('{DATA_DIR}/parquet-testing/glob/*.parquet');
 
 statement ok
-select * from parquet_schema('data/parquet-testing/glob/*.parquet');
+select * from parquet_schema('{DATA_DIR}/parquet-testing/glob/*.parquet');
 
 # list parameters
 statement ok
-select * from parquet_schema(['data/parquet-testing/decimal/int64_decimal.parquet', 'data/parquet-testing/decimal/int64_decimal.parquet']);
+select * from parquet_schema(['{DATA_DIR}/parquet-testing/decimal/int64_decimal.parquet', '{DATA_DIR}/parquet-testing/decimal/int64_decimal.parquet']);
 
 query III
-SELECT name, type, duckdb_type FROM parquet_schema('data/parquet-testing/lineitem-top10000.gzip.parquet') WHERE type IS NOT NULL;
+SELECT name, type, duckdb_type FROM parquet_schema('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet') WHERE type IS NOT NULL;
 ----
 l_orderkey	INT64	BIGINT
 l_partkey	INT64	BIGINT
@@ -56,3 +56,39 @@ l_receiptdate	BYTE_ARRAY	VARCHAR
 l_shipinstruct	BYTE_ARRAY	VARCHAR
 l_shipmode	BYTE_ARRAY	VARCHAR
 l_comment	BYTE_ARRAY	VARCHAR
+
+# column_id
+query II
+SELECT column_id, name FROM parquet_schema('data/parquet-testing/lineitem-top10000.gzip.parquet') ORDER BY column_id;
+----
+0	spark_schema
+1	l_orderkey
+2	l_partkey
+3	l_suppkey
+4	l_linenumber
+5	l_quantity
+6	l_extendedprice
+7	l_discount
+8	l_tax
+9	l_returnflag
+10	l_linestatus
+11	l_shipdate
+12	l_commitdate
+13	l_receiptdate
+14	l_shipinstruct
+15	l_shipmode
+16	l_comment
+
+query III
+WITH per_file AS (
+    SELECT file_name, COUNT(*) AS rows_per_file
+    FROM parquet_schema('data/parquet-testing/glob3/**/*.parquet')
+    GROUP BY file_name
+)
+SELECT
+    SUM(rows_per_file) AS total_rows,
+    MAX(rows_per_file) AS max_rows_per_filename,
+    (SELECT COUNT(DISTINCT column_id) FROM parquet_schema('data/parquet-testing/glob3/**/*.parquet')) AS distinct_column_ids
+FROM per_file;
+----
+9	3	3

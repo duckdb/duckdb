@@ -123,8 +123,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
                                                                          const WindowDistinctAggregator &aggregator,
                                                                          idx_t group_count)
     : WindowAggregatorGlobalState(client, aggregator, group_count), stage(WindowDistinctSortStage::INIT),
-      tasks_assigned(0), tasks_completed(0), merge_sort_tree(*this, group_count), levels_flat_native(aggr) {
-
+      tasks_assigned(0), tasks_completed(0), merge_sort_tree(*this, group_count), levels_flat_native(client, aggr) {
 	//	1:	functionComputePrevIdcs(𝑖𝑛)
 	//	2:		sorted ← []
 	//	We sort the aggregate arguments and use the partition index as a tie-breaker.
@@ -136,7 +135,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	vector<BoundOrderByNode> orders;
 	for (const auto &type : sort_types) {
 		auto expr = make_uniq<BoundReferenceExpression>(type, orders.size());
-		orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(expr)));
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(expr));
 		sort_cols.emplace_back(sort_cols.size());
 	}
 
@@ -238,7 +237,7 @@ WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
     ExecutionContext &context, const WindowDistinctAggregatorGlobalState &gdstate)
     : WindowAggregatorLocalState(context), tree_allocator(gdstate.CreateTreeAllocator()),
       update_v(LogicalType::POINTER), source_v(LogicalType::POINTER), target_v(LogicalType::POINTER), gdstate(gdstate),
-      statef(gdstate.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
+      statef(context.client, gdstate.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
 	InitSubFrames(frames, gdstate.aggregator.exclude_mode);
 
 	sort_chunk.Initialize(Allocator::DefaultAllocator(), gdstate.sort_types);
@@ -704,7 +703,6 @@ unique_ptr<LocalSinkState> WindowDistinctAggregator::GetLocalState(ExecutionCont
 
 void WindowDistinctAggregator::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
                                         idx_t row_idx, OperatorSinkInput &sink) const {
-
 	const auto &gdstate = sink.global_state.Cast<WindowDistinctAggregatorGlobalState>();
 	auto &ldstate = sink.local_state.Cast<WindowDistinctAggregatorLocalState>();
 	ldstate.Evaluate(context, gdstate, bounds, result, count, row_idx);

@@ -1,6 +1,7 @@
 {
     "group": "vector_interface",
     "deprecated": false,
+    "description": "Functions to interact with `duckdb_vector`. A vector typically (but not always) lives in a data chunk and contains a subset of the rows of a column.",
     "entries": [
         {
             "name": "duckdb_create_vector",
@@ -212,12 +213,12 @@
                 }
             ],
             "comment": {
-                "description": "Sets the total size of the underlying child-vector of a list vector.\n\n",
+                "description": "Sets the size of the underlying child-vector of a list vector.\nNote that this does NOT reserve the memory in the child buffer,\nand that it is possible to set a size exceeding the capacity.\nTo set the capacity, use `duckdb_list_vector_reserve`.\n\n",
                 "param_comments": {
                     "vector": "The list vector.",
                     "size": "The size of the child list."
                 },
-                "return_value": "The duckdb state. Returns DuckDBError if the vector is nullptr."
+                "return_value": "The duckdb state. Returns DuckDBError, if the vector is nullptr."
             }
         },
         {
@@ -234,12 +235,12 @@
                 }
             ],
             "comment": {
-                "description": "Sets the total capacity of the underlying child-vector of a list.\n\nAfter calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current\ndata and validity pointers\n\n",
+                "description": "Sets the capacity of the underlying child-vector of a list vector.\nWe increment to the next power of two, based on the required capacity.\nThus, the capacity might not match the size of the list (capacity >= size),\nwhich is set via `duckdb_list_vector_set_size`.\n\n",
                 "param_comments": {
                     "vector": "The list vector.",
-                    "required_capacity": "the total capacity to reserve."
+                    "required_capacity": "The child buffer capacity to reserve."
                 },
-                "return_value": "The duckdb state. Returns DuckDBError if the vector is nullptr."
+                "return_value": "The duckdb state. Returns DuckDBError, if the vector is nullptr."
             }
         },
         {

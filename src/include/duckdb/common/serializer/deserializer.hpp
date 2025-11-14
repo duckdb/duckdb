@@ -15,6 +15,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
@@ -179,15 +180,30 @@ public:
 	}
 
 	template <class FUNC>
-	void ReadList(const field_id_t field_id, const char *tag, FUNC func) {
-		OnPropertyBegin(field_id, tag);
+	void ReadListInternal(FUNC func) {
 		auto size = OnListBegin();
 		List list {*this};
 		for (idx_t i = 0; i < size; i++) {
 			func(list, i);
 		}
 		OnListEnd();
+	}
+
+	template <class FUNC>
+	void ReadList(const field_id_t field_id, const char *tag, FUNC func) {
+		OnPropertyBegin(field_id, tag);
+		ReadListInternal(func);
 		OnPropertyEnd();
+	}
+
+	template <class FUNC>
+	void ReadOptionalList(const field_id_t field_id, const char *tag, FUNC func) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		ReadListInternal(func);
+		OnOptionalPropertyEnd(true);
 	}
 
 	template <class FUNC>

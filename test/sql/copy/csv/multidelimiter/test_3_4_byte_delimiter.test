@@ -9,7 +9,7 @@ PRAGMA enable_verification
 loop buffer_size 10 15
 
 query II
-FROM read_csv('data/csv/multidelimiter/aaa_delim.csv', delim = 'aaa', header = False, buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = 'aaa', header = False, buffer_size = ${buffer_size})
 ----
 1	2
 1	2
@@ -32,7 +32,7 @@ FROM read_csv('data/csv/multidelimiter/aaa_delim.csv', delim = 'aaa', header = F
 1ab	2
 
 query II
-FROM read_csv('data/csv/multidelimiter/aaaa_delim.csv', delim = 'aaaa', header = False, buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim.csv', delim = 'aaaa', header = False, buffer_size = ${buffer_size})
 ----
 1	2
 1	2
@@ -55,7 +55,7 @@ FROM read_csv('data/csv/multidelimiter/aaaa_delim.csv', delim = 'aaaa', header =
 1ab	2
 
 query II
-FROM read_csv('data/csv/multidelimiter/aaaa_delim_rn.csv', delim = 'aaaa', header = False, buffer_size = ${buffer_size})
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim_rn.csv', delim = 'aaaa', header = False, buffer_size = ${buffer_size})
 ----
 1	2
 1	2

@@ -5,7 +5,7 @@
 require parquet
 
 query II
-SELECT * FROM  'data/parquet-testing/hive-partitioning/ci-column-names/**/*.parquet' ORDER BY ALL
+SELECT * FROM  '{DATA_DIR}/parquet-testing/hive-partitioning/ci-column-names/**/*.parquet' ORDER BY ALL
 ----
 Hannes	2
 Mark	1

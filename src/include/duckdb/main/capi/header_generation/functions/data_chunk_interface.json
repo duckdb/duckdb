@@ -1,6 +1,7 @@
 {
     "group": "data_chunk_interface",
     "deprecated": false,
+    "description": "Functions to interact with `duckdb_data_chunk`. Data chunks pass through the different operators of DuckDB's execution engine, when, e.g., executing a scalar function. Additionally, a query result is composed of a sequence of data chunks.\n//\n// A data chunk contains a number of vectors, which, in turn, contain data in a columnar format. For the query result, the vectors are the result columns, and they contain the query result for each row.",
     "entries": [
         {
             "name": "duckdb_create_data_chunk",

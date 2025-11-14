@@ -49,7 +49,10 @@ class TupleDataCollection {
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
-	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr);
+	TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr,
+	                    shared_ptr<ArenaAllocator> stl_allocator = nullptr);
+	TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr,
+	                    shared_ptr<ArenaAllocator> stl_allocator = nullptr);
 
 	~TupleDataCollection();
 
@@ -172,7 +175,7 @@ public:
 	//! Initializes a chunk with the correct types that can be used to call Append/Scan for the given columns
 	void InitializeChunk(DataChunk &chunk, const vector<column_t> &columns) const;
 	//! Initializes a chunk with the correct types for a given scan state
-	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
+	void InitializeScanChunk(const TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
 	void InitializeScan(TupleDataScanState &state,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
@@ -185,14 +188,16 @@ public:
 	//! Initialize a parallel scan over the tuple data collection over a subset of the columns
 	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
 	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
-	//! Grab the chunk state for the given segment and chunk index, returns the count of the chunk
-	idx_t FetchChunk(TupleDataScanState &state, idx_t segment_idx, idx_t chunk_idx, bool init_heap);
+	//! Grab the chunk state for the given chunk index, returns the count of the chunk
+	idx_t FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
 	//! Whether the last scan has been completed on this TupleDataCollection
 	bool ScanComplete(const TupleDataScanState &state) const;
+	//! Seeks to the specified chunk index, returning the total row count before it
+	idx_t Seek(TupleDataScanState &state, const idx_t target_chunk);
 
 	//! Gathers a DataChunk from the TupleDataCollection, given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count, DataChunk &result,
@@ -221,7 +226,7 @@ private:
 	//! Gets all column ids
 	void GetAllColumnIDs(vector<column_t> &column_ids);
 	//! Adds a segment to this TupleDataCollection
-	void AddSegment(unsafe_unique_ptr<TupleDataSegment> segment);
+	void AddSegment(unsafe_arena_ptr<TupleDataSegment> segment);
 
 	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,
@@ -262,6 +267,8 @@ private:
 	void Verify() const;
 
 private:
+	//! Shared allocator for STL allocations
+	shared_ptr<ArenaAllocator> stl_allocator;
 	//! The layout of the TupleDataCollection
 	shared_ptr<TupleDataLayout> layout_ptr;
 	const TupleDataLayout &layout;
@@ -272,11 +279,11 @@ private:
 	//! The size (in bytes) of this TupleDataCollection
 	idx_t data_size;
 	//! The data segments of the TupleDataCollection
-	unsafe_vector<unsafe_unique_ptr<TupleDataSegment>> segments;
+	unsafe_arena_vector<unsafe_arena_ptr<TupleDataSegment>> segments;
 	//! The set of scatter functions
-	vector<TupleDataScatterFunction> scatter_functions;
+	unsafe_arena_vector<TupleDataScatterFunction> scatter_functions;
 	//! The set of gather functions
-	vector<TupleDataGatherFunction> gather_functions;
+	unsafe_arena_vector<TupleDataGatherFunction> gather_functions;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 };

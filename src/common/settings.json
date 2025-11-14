@@ -50,6 +50,16 @@
         "default_value": "false"
     },
     {
+        "name": "allow_parser_override_extension",
+        "description": "Allow extensions to override the current parser",
+        "type": "VARCHAR",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "allow_persistent_secrets",
         "description": "Allow the creation of persistent secrets, that are stored and loaded on restarts",
         "type": "BOOLEAN",
@@ -219,8 +229,22 @@
         "default_value": "false"
     },
     {
+        "name": "debug_physical_table_scan_execution_strategy",
+        "description": "DEBUG SETTING: force use of given strategy for executing physical table scans",
+        "type": "ENUM<PhysicalTableScanExecutionStrategy>",
+        "default_scope": "global",
+        "default_value": "DEFAULT"
+    },
+    {
         "name": "debug_skip_checkpoint_on_commit",
         "description": "DEBUG SETTING: skip checkpointing on commit",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_blocks",
+        "description": "DEBUG SETTING: verify block metadata during checkpointing",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -455,6 +479,13 @@
         "type": "BOOLEAN",
         "scope": "local",
         "struct": "ErrorsAsJSONSetting"
+    },
+    {
+        "name": "experimental_metadata_reuse",
+        "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
     },
     {
         "name": "explain_output",
@@ -840,6 +871,13 @@
         "custom_implementation": true
     },
     {
+        "name": "storage_block_prefetch",
+        "description": "In which scenarios to use storage block prefetching",
+        "type": "ENUM<StorageBlockPrefetch>",
+        "default_scope": "global",
+        "default_value": "REMOTE_ONLY"
+    },
+    {
         "name": "storage_compatibility_version",
         "description": "Serialize on checkpoint with compatibility for a given duckdb version",
         "type": "VARCHAR",
@@ -886,6 +924,13 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "write_buffer_row_group_count",
+        "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "5"
     },
     {
         "name": "zstd_min_string_length",

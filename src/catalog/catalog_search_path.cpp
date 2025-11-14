@@ -8,6 +8,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
 
+#include "duckdb/common/exception/parser_exception.hpp"
+
 namespace duckdb {
 
 CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p)
@@ -24,8 +26,8 @@ string CatalogSearchEntry::ToString() const {
 
 string CatalogSearchEntry::WriteOptionallyQuoted(const string &input) {
 	for (idx_t i = 0; i < input.size(); i++) {
-		if (input[i] == '.' || input[i] == ',') {
-			return "\"" + input + "\"";
+		if (input[i] == '.' || input[i] == ',' || input[i] == '"') {
+			return "\"" + StringUtil::Replace(input, "\"", "\"\"") + "\"";
 		}
 	}
 	return input;

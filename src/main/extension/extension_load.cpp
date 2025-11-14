@@ -76,7 +76,7 @@ struct ExtensionAccess {
 		load_state.has_error = true;
 		load_state.error_data =
 		    error ? ErrorData(error)
-		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occured during "
+		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occurred during "
 		                                                   "initialization, but did not set an error message.");
 	}
 
@@ -522,6 +522,17 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	if (!info) {
 		return;
 	}
+	try {
+		LoadExternalExtensionInternal(db, fs, extension, *info);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		info->LoadFail(error);
+		throw;
+	}
+}
+
+void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
+                                                    ExtensionActiveLoad &info) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -538,7 +549,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		}
 
 		try {
-			ExtensionLoader loader(*info);
+			ExtensionLoader loader(info);
 			(*init_fun)(loader);
 			loader.FinalizeLoad();
 		} catch (std::exception &e) {
@@ -549,7 +560,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		info->FinishLoad(*extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 
@@ -580,7 +591,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		if (result == false) {
 			throw FatalException(
 			    "Extension '%s' failed to initialize but did not return an error. This indicates an "
-			    "error in the extension: C API extensions should return a boolean `true` to indicate succesful "
+			    "error in the extension: C API extensions should return a boolean `true` to indicate successful "
 			    "initialization. "
 			    "This means that the Extension may be partially initialized resulting in an inconsistent state of "
 			    "DuckDB.",
@@ -589,7 +600,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 
 		D_ASSERT(extension_init_result.install_info);
 
-		info->FinishLoad(*extension_init_result.install_info);
+		info.FinishLoad(*extension_init_result.install_info);
 		return;
 	}
 

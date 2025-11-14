@@ -1,4 +1,6 @@
 #include "duckdb/function/table/direct_file_reader.hpp"
+
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/function/table/read_file.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 
@@ -44,16 +46,18 @@ static inline void VERIFY(const string &filename, const string_t &content) {
 	}
 }
 
-void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                            LocalTableFunctionState &local_state, DataChunk &output) {
+AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                                   LocalTableFunctionState &local_state, DataChunk &output) {
 	auto &state = global_state.Cast<ReadFileGlobalState>();
 	if (done || file_list_idx.GetIndex() >= state.file_list->GetTotalFileCount()) {
-		return;
+		return AsyncResult(SourceResultType::FINISHED);
 	}
 
 	auto files = state.file_list;
+
+	auto &regular_fs = FileSystem::GetFileSystem(context);
 	auto fs = CachingFileSystem::Get(context);
-	idx_t out_idx = 0;
+	const idx_t out_idx = 0;
 
 	// We utilize projection pushdown here to only read the file content if the 'data' column is requested
 	unique_ptr<CachingFileHandle> file_handle = nullptr;
@@ -65,6 +69,14 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		}
 		file_handle = fs.OpenFile(QueryContext(context), file, flags);
+	} else {
+		// At least verify that the file exist
+		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
+		if (FileSystem::IsRemoteFile(file.path) && !regular_fs.FileExists(file.path)) {
+			output.SetCardinality(0);
+			done = true;
+			return SourceResultType::FINISHED;
+		}
 	}
 
 	for (idx_t col_idx = 0; col_idx < state.column_ids.size(); col_idx++) {
@@ -81,19 +93,21 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 				FlatVector::GetData<string_t>(file_name_vector)[out_idx] = file_name_string;
 			} break;
 			case ReadFileBindData::FILE_CONTENT_COLUMN: {
-				auto file_size_raw = file_handle->GetFileSize();
-				AssertMaxFileSize(file.path, file_size_raw);
-				auto file_size = UnsafeNumericCast<int64_t>(file_size_raw);
-				auto &file_content_vector = output.data[col_idx];
-				auto content_string = StringVector::EmptyString(file_content_vector, file_size_raw);
+				const auto file_size = file_handle->GetFileSize();
+				AssertMaxFileSize(file.path, file_size);
 
-				auto remaining_bytes = UnsafeNumericCast<int64_t>(file_size);
+				// Initialize write stream if not yet done
+				if (!state.stream) {
+					state.stream = make_uniq<MemoryStream>(BufferAllocator::Get(context), NextPowerOfTwo(file_size));
+				}
+				state.stream->Rewind();
 
-				// Read in batches of 100mb
-				constexpr auto MAX_READ_SIZE = 100LL * 1024 * 1024;
+				// Read in batches of 128mb
+				constexpr idx_t MAX_READ_SIZE = 128LL * 1024 * 1024;
+				auto remaining_bytes = file_handle->GetFileHandle().IsPipe() ? MAX_READ_SIZE : file_size;
 				while (remaining_bytes > 0) {
-					const auto bytes_to_read = MinValue<int64_t>(remaining_bytes, MAX_READ_SIZE);
-					const auto content_string_ptr = content_string.GetDataWriteable() + (file_size - remaining_bytes);
+					const auto bytes_to_read = MinValue(remaining_bytes, MAX_READ_SIZE);
+					state.stream->GrowCapacity(bytes_to_read);
 
 					idx_t actually_read;
 					if (file_handle->IsRemoteFile()) {
@@ -101,11 +115,20 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 						data_ptr_t read_ptr;
 						actually_read = NumericCast<idx_t>(bytes_to_read);
 						auto buffer_handle = file_handle->Read(read_ptr, actually_read);
-						memcpy(content_string_ptr, read_ptr, actually_read);
+						state.stream->WriteData(read_ptr, actually_read);
 					} else {
 						// Local file: non-caching read
 						actually_read = NumericCast<idx_t>(file_handle->GetFileHandle().Read(
-						    content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
+						    state.stream->GetData() + state.stream->GetPosition(), bytes_to_read));
+						state.stream->SetPosition(state.stream->GetPosition() + actually_read);
+					}
+					AssertMaxFileSize(file.path, state.stream->GetPosition());
+
+					if (file_handle->GetFileHandle().IsPipe()) {
+						if (actually_read == 0) {
+							remaining_bytes = 0;
+						}
+						continue;
 					}
 
 					if (actually_read == 0) {
@@ -113,16 +136,17 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 						throw IOException("Failed to read file '%s' at offset %lu, unexpected EOF", file.path,
 						                  file_size - remaining_bytes);
 					}
-					remaining_bytes -= NumericCast<int64_t>(actually_read);
+					remaining_bytes -= actually_read;
 				}
 
-				content_string.Finalize();
+				auto &file_content_vector = output.data[col_idx];
+				auto &content_string = FlatVector::GetData<string_t>(file_content_vector)[out_idx];
+				content_string = string_t(char_ptr_cast(state.stream->GetData()),
+				                          NumericCast<uint32_t>(state.stream->GetPosition()));
 
 				if (type == LogicalType::VARCHAR) {
 					VERIFY(file.path, content_string);
 				}
-
-				FlatVector::GetData<string_t>(file_content_vector)[out_idx] = content_string;
 			} break;
 			case ReadFileBindData::FILE_SIZE_COLUMN: {
 				auto &file_size_vector = output.data[col_idx];
@@ -163,6 +187,7 @@ void DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gl
 	}
 	output.SetCardinality(1);
 	done = true;
+	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 };
 
 void DirectFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {

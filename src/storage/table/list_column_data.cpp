@@ -8,20 +8,20 @@
 
 namespace duckdb {
 
-ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                               LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
+                               ColumnDataType data_type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
+      validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
-	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, start_row, child_type, this);
+	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, child_type, data_type, this);
 }
 
-void ListColumnData::SetStart(idx_t new_start) {
-	ColumnData::SetStart(new_start);
-	child_column->SetStart(new_start);
-	validity.SetStart(new_start);
+void ListColumnData::SetDataType(ColumnDataType data_type) {
+	ColumnData::SetDataType(data_type);
+	child_column->SetDataType(data_type);
+	validity.SetDataType(data_type);
 }
 
 FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -58,7 +58,8 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(LogicalType::UBIGINT, 1);
-	segment->FetchRow(fetch_state, UnsafeNumericCast<row_t>(row_idx), result, 0U);
+	auto index_in_segment = UnsafeNumericCast<row_t>(row_idx - segment->row_start);
+	segment->node->FetchRow(fetch_state, index_in_segment, result, 0U);
 
 	// initialize the child scan with the required offset
 	return FlatVector::GetData<uint64_t>(result)[0];
@@ -76,10 +77,10 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
-	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
+	auto child_offset = FetchListOffset(row_idx - 1);
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
+		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
 	state.last_offset = child_offset;
 }
@@ -133,7 +134,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 		auto &child_entry = ListVector::GetEntry(result);
 		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
 		    child_entry.GetType().InternalType() != PhysicalType::ARRAY &&
-		    state.child_states[1].row_index + child_scan_count > child_column->start + child_column->GetMaxEntry()) {
+		    state.child_states[1].offset_in_column + child_scan_count > child_column->GetMaxEntry()) {
 			throw InternalException("ListColumnData::ScanCount - internal list scan offset is out of range");
 		}
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
@@ -248,11 +249,11 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	validity.AppendData(stats, state.child_appends[0], vdata, count);
 }
 
-void ListColumnData::RevertAppend(row_t start_row) {
-	ColumnData::RevertAppend(start_row);
-	validity.RevertAppend(start_row);
+void ListColumnData::RevertAppend(row_t new_count) {
+	ColumnData::RevertAppend(new_count);
+	validity.RevertAppend(new_count);
 	auto column_count = GetMaxEntry();
-	if (column_count > start) {
+	if (column_count > 0) {
 		// revert append in the child column
 		auto list_offset = FetchListOffset(column_count - 1);
 		child_column->RevertAppend(UnsafeNumericCast<row_t>(list_offset));
@@ -263,13 +264,14 @@ idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result
 	throw NotImplementedException("List Fetch");
 }
 
-void ListColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                            idx_t update_count) {
+void ListColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                            Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
-void ListColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void ListColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+                                  const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                                  idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw NotImplementedException("List Update Column is not supported");
 }
 
@@ -289,7 +291,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	}
 
 	// now perform the fetch within the segment
-	auto start_offset = idx_t(row_id) == this->start ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
+	auto start_offset = row_id == 0 ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
 	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 
@@ -308,15 +310,15 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	// now we need to read from the child all the elements between [offset...length]
 	auto child_scan_count = list_entry.length;
 	if (child_scan_count > 0) {
-		auto child_state = make_uniq<ColumnScanState>();
+		ColumnScanState child_state(nullptr);
 		auto &child_type = ListType::GetChildType(result.GetType());
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
-		child_state->Initialize(child_type, nullptr);
-		child_column->InitializeScanWithOffset(*child_state, start + start_offset);
+		child_state.Initialize(state.context, child_type, nullptr);
+		child_column->InitializeScanWithOffset(child_state, start_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state->row_index + child_scan_count - this->start <= child_column->GetMaxEntry());
-		child_column->ScanCount(*child_state, child_scan, child_scan_count);
+		         child_state.offset_in_column + child_scan_count <= child_column->GetMaxEntry());
+		child_column->ScanCount(child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);
 	}
@@ -391,13 +393,13 @@ void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSta
 	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 }
 
-void ListColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
-                                          vector<duckdb::ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(row_group_index, col_path, result);
+void ListColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+                                          vector<ColumnSegmentInfo> &result) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 }
 
 } // namespace duckdb

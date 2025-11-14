@@ -12,6 +12,7 @@
 #include "duckdb/main/extension_install_info.hpp"
 
 namespace duckdb {
+class ErrorData;
 
 class ExtensionInfo {
 public:
@@ -34,6 +35,7 @@ public:
 
 public:
 	void FinishLoad(ExtensionInstallInfo &install_info);
+	void LoadFail(const ErrorData &error);
 };
 
 class ExtensionManager {

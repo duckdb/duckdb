@@ -93,9 +93,16 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	}
 
 	vector<string> result_values_string;
-	DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
-	if (runner.output_result_mode) {
-		logger.OutputResult(result, result_values_string);
+	try {
+		DuckDBConvertResult(result, runner.original_sqlite_test, result_values_string);
+		if (runner.output_result_mode) {
+			logger.OutputResult(result, result_values_string);
+		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		auto &original_error = error.Message();
+		logger.LogFailure(original_error);
+		return false;
 	}
 
 	SortQueryResult(sort_style, result_values_string, column_count);
@@ -296,13 +303,17 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			logger.InternalException(result);
 			return false;
 		}
-		if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
+		if (expected_result == ExpectedResult::RESULT_UNKNOWN || expected_result == ExpectedResult::RESULT_DONT_CARE) {
 			error = false;
 		} else {
 			error = !error;
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
-			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
+			// We run both comparions on purpose, we might move to only the second but might require some changes in
+			// tests
+			// This is due to some errors containing absolute paths, some relatives
+			if (!StringUtil::Contains(result.GetError(), statement.expected_error) &&
+			    !StringUtil::Contains(result.GetError(), runner.ReplaceKeywords(statement.expected_error))) {
 				bool success = false;
 				if (StringUtil::StartsWith(statement.expected_error, "<REGEX>:") ||
 				    StringUtil::StartsWith(statement.expected_error, "<!REGEX>:")) {
@@ -480,7 +491,9 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly
-	if (lvalue_str == rvalue_str) {
+	// We run both comparions on purpose, we might move to only the second but might require some changes in tests
+	// This is due to some results containing absolute paths, some relatives
+	if (lvalue_str == rvalue_str || lvalue_str == runner.ReplaceKeywords(rvalue_str)) {
 		return true;
 	}
 	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {

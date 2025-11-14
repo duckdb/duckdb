@@ -197,6 +197,7 @@ public:
 
 		const bool check_parent_empty = parent && !parent->is_empty.empty();
 		const idx_t parent_index = state.definition_levels.size();
+		D_ASSERT(!check_parent_empty || parent_index < parent->is_empty.size());
 
 		const idx_t vcount =
 		    check_parent_empty ? parent->definition_levels.size() - state.definition_levels.size() : count;
@@ -207,7 +208,7 @@ public:
 			// Fast path
 			for (; vector_index < vcount; vector_index++) {
 				const auto &src_value = data_ptr[vector_index];
-				state.dictionary.Insert(src_value);
+				state.dictionary.template Insert<true>(src_value);
 				state.total_value_count++;
 				state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 			}
@@ -218,7 +219,7 @@ public:
 				}
 				if (validity.RowIsValid(vector_index)) {
 					const auto &src_value = data_ptr[vector_index];
-					state.dictionary.Insert(src_value);
+					state.dictionary.template Insert<true>(src_value);
 					state.total_value_count++;
 					state.total_string_size += DlbaEncoder::GetStringSize(src_value);
 				}

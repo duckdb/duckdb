@@ -70,7 +70,6 @@ void LogicalComparisonJoin::ExtractJoinConditions(
     unique_ptr<LogicalOperator> &right_child, const unordered_set<idx_t> &left_bindings,
     const unordered_set<idx_t> &right_bindings, vector<unique_ptr<Expression>> &expressions,
     vector<JoinCondition> &conditions, vector<unique_ptr<Expression>> &arbitrary_expressions) {
-
 	for (auto &expr : expressions) {
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
@@ -298,8 +297,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// Set the flag to ensure that children do not flatten before the root
 		is_outside_flattened = false;
 	}
-	auto left = CreatePlan(*ref.left);
-	auto right = CreatePlan(*ref.right);
+	auto left = std::move(ref.left.plan);
+	auto right = std::move(ref.right.plan);
 	is_outside_flattened = old_is_outside_flattened;
 
 	// For joins, depth of the bindings will be one higher on the right because of the lateral binder

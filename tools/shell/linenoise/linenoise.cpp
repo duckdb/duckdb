@@ -1,8 +1,12 @@
+#if defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#else
 #include <sys/stat.h>
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <signal.h>
 #include <unistd.h>
+#endif
 #include "linenoise.h"
 #include "linenoise.hpp"
 #include "history.hpp"
@@ -11,10 +15,9 @@
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
 #include <vector>
-#include "duckdb_shell_wrapper.h"
 #include <string>
-#include "sqlite3.h"
 #include "duckdb/common/string_util.hpp"
+#include "shell_state.hpp"
 #ifdef __MVS__
 #include <strings.h>
 #include <sys/time.h>
@@ -37,17 +40,6 @@ static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 int linenoiseHistoryAdd(const char *line);
 
 /* ============================== Completion ================================ */
-
-/* Free a list of completion option populated by linenoiseAddCompletion(). */
-static void freeCompletions(linenoiseCompletions *lc) {
-	size_t i;
-	for (i = 0; i < lc->len; i++) {
-		free(lc->cvec[i]);
-	}
-	if (lc->cvec != nullptr) {
-		free(lc->cvec);
-	}
-}
 
 /* Register a callback function to be called for tab-completion. */
 void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
@@ -74,57 +66,85 @@ linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
 	return freeHintsCallback;
 }
 
+CompletionType Linenoise::GetCompletionType(const char *type) {
+	if (StringUtil::Equals(type, "keyword")) {
+		return CompletionType::KEYWORD;
+	}
+	if (StringUtil::Equals(type, "catalog")) {
+		return CompletionType::CATALOG_NAME;
+	}
+	if (StringUtil::Equals(type, "schema")) {
+		return CompletionType::SCHEMA_NAME;
+	}
+	if (StringUtil::Equals(type, "table")) {
+		return CompletionType::TABLE_NAME;
+	}
+	if (StringUtil::Equals(type, "column")) {
+		return CompletionType::COLUMN_NAME;
+	}
+	if (StringUtil::Equals(type, "type")) {
+		return CompletionType::TYPE_NAME;
+	}
+	if (StringUtil::Equals(type, "file_name")) {
+		return CompletionType::FILE_NAME;
+	}
+	if (StringUtil::Equals(type, "directory")) {
+		return CompletionType::DIRECTORY_NAME;
+	}
+	if (StringUtil::Equals(type, "scalar_function")) {
+		return CompletionType::SCALAR_FUNCTION;
+	}
+	if (StringUtil::Equals(type, "table_function")) {
+		return CompletionType::TABLE_FUNCTION;
+	}
+	if (StringUtil::Equals(type, "setting")) {
+		return CompletionType::SETTING_NAME;
+	}
+	return CompletionType::UNKNOWN;
+}
+
 TabCompletion Linenoise::TabComplete() const {
 	TabCompletion result;
 	if (!completionCallback) {
 		return result;
 	}
-	linenoiseCompletions lc;
-	lc.cvec = nullptr;
-	lc.len = 0;
 	// complete based on the cursor position
 	auto prev_char = buf[pos];
 	buf[pos] = '\0';
-	completionCallback(buf, &lc);
+	completionCallback(buf, reinterpret_cast<linenoiseCompletions *>(&result));
 	buf[pos] = prev_char;
-	result.completions.reserve(lc.len);
-	for (idx_t i = 0; i < lc.len; i++) {
-		Completion c;
-		c.completion = lc.cvec[i];
-		c.cursor_pos = c.completion.size();
-		c.completion += buf + pos;
-		result.completions.emplace_back(std::move(c));
-	}
-	freeCompletions(&lc);
 	return result;
 }
+
 /* This is an helper function for linenoiseEdit() and is called when the
  * user types the <tab> key in order to complete the string currently in the
  * input.
  *
  * The state of the editing is encapsulated into the pointed linenoiseState
  * structure as described in the structure definition. */
-int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
-	int nread, nwritten;
-	char c = 0;
+bool Linenoise::CompleteLine(KeyPress &next_key) {
+	int nwritten;
 
-	auto completion_list = TabComplete();
+	completion_list = TabComplete();
 	auto &completions = completion_list.completions;
+	// we only start rendering completion suggestions once we start tabbing through them
+	render_completion_suggestion = false;
 	if (completions.empty()) {
 		Terminal::Beep();
 	} else {
 		bool stop = false;
 		bool accept_completion = false;
-		idx_t i = 0;
+		completion_idx = 0;
 
 		while (!stop) {
+			HandleTerminalResize();
 			/* Show completion or original buffer */
-			if (i < completions.size()) {
+			if (completion_idx < completions.size()) {
 				Linenoise saved = *this;
 
-				len = completions[i].completion.size();
-				pos = completions[i].cursor_pos;
-				buf = (char *)completions[i].completion.c_str();
+				len = completions[completion_idx].completion.size();
+				pos = completions[completion_idx].cursor_pos;
+				buf = (char *)completions[completion_idx].completion.c_str();
 				RefreshLine();
 				len = saved.len;
 				pos = saved.pos;
@@ -133,38 +153,41 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				RefreshLine();
 			}
 
-			nread = read(ifd, &c, 1);
-			if (nread <= 0) {
-				return -1;
+			KeyPress key_press;
+			if (!TryGetKeyPress(ifd, key_press)) {
+				// no longer completing - clear list of completions
+				completion_list.completions.clear();
+				return false;
 			}
 
-			Linenoise::Log("\nComplete Character %d\n", (int)c);
-			switch (c) {
+			Linenoise::Log("\nComplete Character %d\n", (int)key_press.action);
+			switch (key_press.action) {
 			case TAB: /* tab */
-				i = (i + 1) % completions.size();
+				completion_idx = (completion_idx + 1) % completions.size();
+				render_completion_suggestion = true;
 				break;
 			case ESC: { /* escape */
-				auto escape = Terminal::ReadEscapeSequence(ifd);
-				switch (escape) {
+				switch (key_press.sequence) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
-					if (i == 0) {
+					if (completion_idx == 0) {
 						// pressing shift-tab at the first completion cancels completion
 						RefreshLine();
-						current_sequence = escape;
+						next_key.action = ENTER;
 						stop = true;
 					} else {
-						i--;
+						completion_idx--;
 					}
+					render_completion_suggestion = true;
 					break;
 				case EscapeSequence::ESCAPE:
 					/* Re-show original buffer */
 					RefreshLine();
-					current_sequence = escape;
+					next_key = key_press;
 					stop = true;
 					break;
 				default:
-					current_sequence = escape;
+					next_key = key_press;
 					accept_completion = true;
 					stop = true;
 					break;
@@ -172,21 +195,49 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				break;
 			}
 			default:
+				next_key = key_press;
 				accept_completion = true;
 				stop = true;
 				break;
 			}
-			if (stop && accept_completion && i < completions.size()) {
+			if (stop && accept_completion && completion_idx < completions.size()) {
 				/* Update buffer and return */
-				if (i < completions.size()) {
-					nwritten = snprintf(buf, buflen, "%s", completions[i].completion.c_str());
-					pos = completions[i].cursor_pos;
+				if (completion_idx < completions.size()) {
+					nwritten = snprintf(buf, buflen, "%s", completions[completion_idx].completion.c_str());
+					pos = completions[completion_idx].cursor_pos;
 					len = nwritten;
 				}
 			}
 		}
 	}
-	return c; /* Return last read character */
+	// no longer completing - clear list of completions
+	completion_list.completions.clear();
+	if (next_key.action == ENTER) {
+		// if we accepted the completion by pressing ENTER
+		next_key.action = KEY_NULL;
+	}
+	return true; /* Return last read character */
+}
+
+bool Linenoise::HandleANSIEscape(const char *buf, size_t len, size_t &cpos) {
+	// --- Handle ANSI escape sequences ---
+	if (buf[cpos] != '\033') {
+		// not an escape sequence
+		return false;
+	}
+	cpos++;
+	if (cpos < len && buf[cpos] == '[') { // CSI sequence
+		cpos++;
+		while (cpos < len && !(buf[cpos] >= '@' && buf[cpos] <= '~')) {
+			cpos++;
+		}
+		if (cpos < len)
+			cpos++; // skip final letter
+	} else {
+		// standalone ESC
+		cpos++;
+	}
+	return true;
 }
 
 size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
@@ -195,7 +246,29 @@ size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
 	size_t render_width = 0;
 	int sz;
 	while (cpos < len) {
-		if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
+		// --- 1. Handle newline ---
+		if (buf[cpos] == '\n') {
+			render_width = 0; // reset width for new line
+			cpos++;
+			continue;
+		}
+
+		// --- 2. Handle tab (optional, usually 8-space tab stops) ---
+		if (buf[cpos] == '\t') {
+			render_width += 8 - (render_width % 8);
+			cpos++;
+			continue;
+		}
+
+		// --- 3. Handle ANSI escape sequences ---
+		if (HandleANSIEscape(buf, len, cpos)) {
+			continue;
+		}
+
+		// --- 4. Handle UTF-8 grapheme clusters ---
+		int codepoint = duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz);
+		if (codepoint < 0) {
+			// invalid byte, treat as width 1
 			cpos++;
 			render_width++;
 			continue;
@@ -234,105 +307,6 @@ int Linenoise::GetRenderPosition(const char *buf, size_t len, int max_width, int
 	}
 }
 
-int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error) {
-	if (strcmp(azArg[0], "highlight") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Highlighting::Disable();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Highlighting::Enable();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .highlight [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "render_errors") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Linenoise::DisableErrorRendering();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Linenoise::EnableErrorRendering();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .render_errors [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "render_completion") == 0) {
-		if (nArg == 2) {
-			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				Linenoise::DisableCompletionRendering();
-				return 1;
-			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				Linenoise::EnableCompletionRendering();
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .render_completion [off|on]";
-		return 1;
-	} else if (strcmp(azArg[0], "keyword") == 0 || strcmp(azArg[0], "constant") == 0 ||
-	           strcmp(azArg[0], "comment") == 0 || strcmp(azArg[0], "error") == 0 || strcmp(azArg[0], "cont") == 0 ||
-	           strcmp(azArg[0], "cont_sel") == 0) {
-		if (nArg == 2) {
-			const char *option = Highlighting::GetColorOption(azArg[1]);
-			if (option) {
-				HighlightingType type;
-				if (strcmp(azArg[0], "keyword") == 0) {
-					type = HighlightingType::KEYWORD;
-				} else if (strcmp(azArg[0], "constant") == 0) {
-					type = HighlightingType::CONSTANT;
-				} else if (strcmp(azArg[0], "comment") == 0) {
-					type = HighlightingType::COMMENT;
-				} else if (strcmp(azArg[0], "error") == 0) {
-					type = HighlightingType::ERROR;
-				} else if (strcmp(azArg[0], "cont") == 0) {
-					type = HighlightingType::CONTINUATION;
-				} else {
-					type = HighlightingType::CONTINUATION_SELECTED;
-				}
-				Highlighting::SetHighlightingColor(type, option);
-				return 1;
-			}
-		}
-		*out_error = "Expected usage: .[keyword|constant|comment|error|cont|cont_sel] "
-		             "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
-		             "brightblue|brightmagenta|brightcyan|brightwhite]";
-		return 1;
-	} else if (strcmp(azArg[0], "keywordcode") == 0 || strcmp(azArg[0], "constantcode") == 0 ||
-	           strcmp(azArg[0], "commentcode") == 0 || strcmp(azArg[0], "errorcode") == 0 ||
-	           strcmp(azArg[0], "contcode") == 0 || strcmp(azArg[0], "cont_selcode") == 0) {
-		if (nArg == 2) {
-			HighlightingType type;
-			if (strcmp(azArg[0], "keywordcode") == 0) {
-				type = HighlightingType::KEYWORD;
-			} else if (strcmp(azArg[0], "constantcode") == 0) {
-				type = HighlightingType::CONSTANT;
-			} else if (strcmp(azArg[0], "commentcode") == 0) {
-				type = HighlightingType::COMMENT;
-			} else if (strcmp(azArg[0], "errorcode") == 0) {
-				type = HighlightingType::ERROR;
-			} else if (strcmp(azArg[0], "contcode") == 0) {
-				type = HighlightingType::CONTINUATION;
-			} else {
-				type = HighlightingType::CONTINUATION_SELECTED;
-			}
-			Highlighting::SetHighlightingColor(type, azArg[1]);
-			return 1;
-		}
-		*out_error =
-		    "Expected usage: .[keywordcode|constantcode|commentcode|errorcode|contcode|cont_selcode] [terminal_code]";
-		return 1;
-	} else if (strcmp(azArg[0], "multiline") == 0) {
-		linenoiseSetMultiLine(1);
-		return 1;
-	} else if (strcmp(azArg[0], "singleline") == 0) {
-		linenoiseSetMultiLine(0);
-		return 1;
-	}
-	return 0;
-}
-
 bool Linenoise::IsNewline(char c) {
 	return c == '\r' || c == '\n';
 }
@@ -346,6 +320,9 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 		if (buf[cpos - 1] == '\r' && cpos < len && buf[cpos] == '\n') {
 			cpos++;
 		}
+		return;
+	}
+	if (HandleANSIEscape(buf, len, cpos)) {
 		return;
 	}
 	int sz;
@@ -365,15 +342,15 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 	cols += char_render_width;
 }
 
-void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const {
-	int plen = GetPromptWidth();
+void Linenoise::PositionToColAndRow(int prompt_len, const char *render_buf, idx_t render_len, size_t target_pos,
+                                    int &out_row, int &out_col, int &rows, int &cols) const {
 	out_row = -1;
 	out_col = 0;
 	rows = 1;
-	cols = plen;
+	cols = prompt_len;
 	size_t cpos = 0;
-	while (cpos < len) {
-		if (cols >= ws.ws_col && !IsNewline(buf[cpos])) {
+	while (cpos < render_len) {
+		if (cols >= ws.ws_col && !IsNewline(render_buf[cpos])) {
 			// exceeded width - move to next line
 			rows++;
 			cols = 0;
@@ -382,12 +359,17 @@ void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_co
 			out_row = rows;
 			out_col = cols;
 		}
-		NextPosition(buf, len, cpos, rows, cols, plen);
+		NextPosition(render_buf, render_len, cpos, rows, cols, prompt_len);
 	}
-	if (target_pos == len) {
+	if (target_pos == render_len) {
 		out_row = rows;
 		out_col = cols;
 	}
+}
+
+void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const {
+	int plen = GetPromptWidth();
+	PositionToColAndRow(plen, buf, len, target_pos, out_row, out_col, rows, cols);
 }
 
 size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
@@ -575,7 +557,7 @@ void Linenoise::EditMoveEnd() {
 
 /* Move cursor to the start of the line. */
 void Linenoise::EditMoveStartOfLine() {
-	while (pos > 0 && buf[pos] != '\n') {
+	while (pos > 0 && buf[pos - 1] != '\n') {
 		pos--;
 	}
 	RefreshLine();
@@ -859,7 +841,7 @@ void Linenoise::CancelSearch() {
 	RefreshLine();
 }
 
-char Linenoise::AcceptSearch(char nextCommand) {
+void Linenoise::AcceptSearch() {
 	if (search_index < search_matches.size()) {
 		// if there is a match - copy it into the buffer
 		auto match = search_matches[search_index];
@@ -871,7 +853,6 @@ char Linenoise::AcceptSearch(char nextCommand) {
 		len = history_len;
 	}
 	CancelSearch();
-	return nextCommand;
 }
 
 void Linenoise::PerformSearch() {
@@ -923,23 +904,24 @@ void Linenoise::SearchNext() {
 	}
 }
 
-char Linenoise::Search(char c) {
-	switch (c) {
+KeyPress Linenoise::Search(KeyPress key_press) {
+	switch (key_press.action) {
 	case CTRL_J:
 	case ENTER: /* enter */
 		// accept search and run
-		return AcceptSearch(ENTER);
+		AcceptSearch();
+		return ENTER;
 	case CTRL_R:
 	case CTRL_S:
 		// move to the next match index
 		SearchNext();
 		break;
 	case ESC: /* escape sequence */ {
-		auto escape = Terminal::ReadEscapeSequence(ifd);
-		switch (escape) {
+		switch (key_press.sequence) {
 		case EscapeSequence::ESCAPE:
 			// double escape accepts search without any additional command
-			return AcceptSearch(0);
+			AcceptSearch();
+			return KEY_NULL;
 		case EscapeSequence::UP:
 			SearchPrev();
 			break;
@@ -947,35 +929,47 @@ char Linenoise::Search(char c) {
 			SearchNext();
 			break;
 		case EscapeSequence::HOME:
-			return AcceptSearch(CTRL_A);
+			AcceptSearch();
+			return CTRL_A;
 		case EscapeSequence::END:
-			return AcceptSearch(CTRL_E);
+			AcceptSearch();
+			return CTRL_E;
 		case EscapeSequence::LEFT:
-			return AcceptSearch(CTRL_B);
+			AcceptSearch();
+			return CTRL_B;
 		case EscapeSequence::RIGHT:
-			return AcceptSearch(CTRL_F);
+			AcceptSearch();
+			return CTRL_F;
 		default:
 			break;
 		}
 		break;
 	}
 	case CTRL_A: // accept search, move to start of line
-		return AcceptSearch(CTRL_A);
+		AcceptSearch();
+		return CTRL_A;
 	case '\t':
 	case CTRL_E: // accept search - move to end of line
-		return AcceptSearch(CTRL_E);
+		AcceptSearch();
+		return CTRL_E;
 	case CTRL_B: // accept search - move cursor left
-		return AcceptSearch(CTRL_B);
+		AcceptSearch();
+		return CTRL_B;
 	case CTRL_F: // accept search - move cursor right
-		return AcceptSearch(CTRL_F);
+		AcceptSearch();
+		return CTRL_F;
 	case CTRL_T: // accept search: swap character
-		return AcceptSearch(CTRL_T);
+		AcceptSearch();
+		return CTRL_T;
 	case CTRL_U: // accept search, clear buffer
-		return AcceptSearch(CTRL_U);
+		AcceptSearch();
+		return CTRL_U;
 	case CTRL_K: // accept search, clear after cursor
-		return AcceptSearch(CTRL_K);
+		AcceptSearch();
+		return CTRL_K;
 	case CTRL_D: // accept search, delete a character
-		return AcceptSearch(CTRL_D);
+		AcceptSearch();
+		return CTRL_D;
 	case CTRL_L:
 		linenoiseClearScreen();
 		break;
@@ -989,7 +983,7 @@ char Linenoise::Search(char c) {
 	case CTRL_G:
 		// abort search
 		CancelSearch();
-		return 0;
+		return KEY_NULL;
 	case BACKSPACE: /* backspace */
 	case CTRL_H:    /* ctrl-h */
 	case CTRL_W:    /* ctrl-w */
@@ -1005,13 +999,13 @@ char Linenoise::Search(char c) {
 		break;
 	default:
 		// add input to search buffer
-		search_buf += c;
+		search_buf += key_press.action;
 		// perform the search
 		PerformSearch();
 		break;
 	}
 	RefreshSearch();
-	return 0;
+	return KEY_NULL;
 }
 
 bool Linenoise::AllWhitespace(const char *z) {
@@ -1060,12 +1054,289 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	continuation_markers = true;
 	insert = false;
 	search_index = 0;
+	completion_idx = 0;
+	rendered_completion_lines = 0;
+	render_completion_suggestion = false;
 
 	/* Buffer starts empty. */
 	buf[0] = '\0';
 	buflen--; /* Make sure there is always space for the nulterm */
 }
 
+void Linenoise::HandleTerminalResize() {
+	if (!Terminal::IsMultiline()) {
+		return;
+	}
+	TerminalSize new_size = Terminal::GetTerminalSize();
+	if (new_size.ws_col == ws.ws_col && new_size.ws_row == ws.ws_row) {
+		return;
+	}
+	// terminal resize! re-compute max lines
+	ws = new_size;
+	int rows, cols;
+	int cursor_row, cursor_col;
+	PositionToColAndRow(pos, cursor_row, cursor_col, rows, cols);
+	old_cursor_rows = cursor_row;
+	maxrows = rows;
+
+	if (rendered_completion_lines > 0) {
+		// if we have rendered completions - figure out how many rows this takes up post-resize
+		string completion_text;
+		for (idx_t i = 0; i < completion_list.completions.size(); i++) {
+			if (i > 0) {
+				completion_text += " ";
+			}
+			auto &completion = completion_list.completions[i];
+			auto &rendered_text = completion.original_completion;
+			completion_text += rendered_text;
+		}
+		PositionToColAndRow(0, completion_text.c_str(), completion_text.size(), 0, cursor_row, cursor_col, rows, cols);
+		rendered_completion_lines = rows;
+	}
+}
+
+#if defined(_WIN32) || defined(WIN32)
+struct KeyPressEntry {
+	KeyPressEntry(KeyPress key_press) : is_unicode(false), key_press(key_press) {
+	}
+	KeyPressEntry(WCHAR w, bool control_pressed, bool alt_pressed)
+	    : is_unicode(true), control_pressed(control_pressed), alt_pressed(alt_pressed) {
+		unicode += w;
+	}
+
+	bool is_unicode = false;
+	KeyPress key_press;
+	std::wstring unicode;
+	bool control_pressed = false;
+	bool alt_pressed = false;
+};
+#endif
+
+bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
+#if defined(_WIN32) || defined(WIN32)
+	if (!remaining_presses.empty()) {
+		// there are still characters left to consume
+		key_press = remaining_presses.back();
+		remaining_presses.pop_back();
+		Linenoise::Log("Consumed 1 press, leaving %d presses to be processed", int(remaining_presses.size()));
+		has_more_data = !remaining_presses.empty();
+		return true;
+	}
+	INPUT_RECORD rec;
+	DWORD count;
+	has_more_data = false;
+	vector<KeyPressEntry> key_presses;
+	do {
+		key_press.action = KEY_NULL;
+		key_press.sequence = EscapeSequence::INVALID;
+		if (!key_presses.empty()) {
+			// we already have output that we can emit
+			// check if there is more input to process
+			// if there are no events anymore, then just break and return our current set of input
+			DWORD event_count = 0;
+			if (!GetNumberOfConsoleInputEvents(Terminal::GetConsoleInput(), &event_count)) {
+				break;
+			}
+			if (event_count == 0) {
+				break;
+			}
+		}
+		if (!ReadConsoleInputW(Terminal::GetConsoleInput(), &rec, 1, &count)) {
+			return false;
+		}
+		if (rec.EventType == WINDOW_BUFFER_SIZE_EVENT) {
+			// resizing buffer - handle resize and continue processing
+			HandleTerminalResize();
+			continue;
+		}
+		if (rec.EventType != KEY_EVENT) {
+			// not a key press - continue
+			continue;
+		}
+		auto &key_event = rec.Event.KeyEvent;
+		if (!key_event.bKeyDown) {
+			// releasing a key - ignore
+			continue;
+		}
+		bool control_pressed = false;
+		bool alt_pressed = false;
+		Linenoise::Log("Unicode character %d, ascii character %d, control state %d", key_event.uChar.UnicodeChar,
+		               key_event.uChar.AsciiChar, key_event.dwControlKeyState);
+
+		if (key_event.dwControlKeyState & (RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED)) {
+			control_pressed = true;
+		}
+		if (key_event.dwControlKeyState & (RIGHT_ALT_PRESSED | LEFT_ALT_PRESSED)) {
+			alt_pressed = true;
+		}
+		if (key_event.uChar.UnicodeChar == 0) {
+			switch (key_event.wVirtualKeyCode) {
+			case VK_LEFT:
+				key_press.action = ESC;
+				if (control_pressed) {
+					key_press.sequence = EscapeSequence::CTRL_MOVE_BACKWARDS;
+				} else if (alt_pressed) {
+					key_press.sequence = EscapeSequence::ALT_LEFT_ARROW;
+				} else {
+					key_press.sequence = EscapeSequence::LEFT;
+				}
+				break;
+			case VK_RIGHT:
+				key_press.action = ESC;
+				if (control_pressed) {
+					key_press.sequence = EscapeSequence::CTRL_MOVE_FORWARDS;
+				} else if (alt_pressed) {
+					key_press.sequence = EscapeSequence::ALT_RIGHT_ARROW;
+				} else {
+					key_press.sequence = EscapeSequence::RIGHT;
+				}
+				break;
+			case VK_UP:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::UP;
+				break;
+			case VK_DOWN:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::DOWN;
+				break;
+			case VK_DELETE:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::DELETE_KEY;
+				break;
+			case VK_HOME:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::HOME;
+				break;
+			case VK_END:
+				key_press.action = ESC;
+				key_press.sequence = EscapeSequence::END;
+				break;
+			case VK_PRIOR:
+				key_press.action = CTRL_A;
+				break;
+			case VK_NEXT:
+				key_press.action = CTRL_E;
+				break;
+			default:
+				continue; // in raw mode, ReadConsoleInput shows shift, ctrl ...
+			}             //  ... ignore them
+			if (key_press.action != KEY_NULL) {
+				// add the key press to the list of key presses
+				key_presses.emplace_back(key_press);
+			}
+		} else {
+			// we got a character - push it to the stack
+			// in this phase we gather all unicode characters together as much as possible
+			// because of surrogate pairs we might need to convert characters together in groups, rather than
+			// individually
+			auto wc = key_event.uChar.UnicodeChar;
+			if (key_presses.empty() || !key_presses.back().is_unicode ||
+			    key_presses.back().control_pressed != control_pressed ||
+			    key_presses.back().alt_pressed != alt_pressed) {
+				key_presses.emplace_back(wc, control_pressed, alt_pressed);
+			} else {
+				key_presses.back().unicode += wc;
+			}
+		}
+	} while (true);
+	if (key_presses.empty()) {
+		return false;
+	}
+	// we have key actions - turn them into KeyPress objects
+	// first invert the list
+	std::reverse(key_presses.begin(), key_presses.end());
+	// now process the key presses
+	for (auto &key_action : key_presses) {
+		if (!key_action.is_unicode) {
+			// standard key press - just add it
+			remaining_presses.push_back(key_action.key_press);
+			continue;
+		}
+		auto allocate_size = key_action.unicode.size() * 10;
+		auto data = unique_ptr<char[]>(new char[allocate_size]);
+		// unicode - need to convert
+		int len = WideCharToMultiByte(CP_UTF8,                    // Target code page (UTF-8)
+		                              0,                          // Flags
+		                              key_action.unicode.c_str(), // Input UTF-16 string
+		                              key_action.unicode.size(),  // One wchar_t
+		                              data.get(),                 // Output buffer
+		                              allocate_size,              // Output buffer size
+		                              NULL, NULL);
+		// process the characters in REVERSE order and add the key presses
+		for (int i = len - 1; i >= 0; i--) {
+			char c = data[i];
+			key_press.sequence = EscapeSequence::INVALID;
+			if (c > 0 && c <= BACKSPACE) {
+				// ascii character
+				if (key_action.alt_pressed && !key_action.control_pressed) {
+					// support ALT codes
+					if (c >= 'a' && c <= 'z') {
+						key_press.sequence =
+						    static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'a'));
+					} else if (c >= 'A' && c <= 'Z') {
+						key_press.sequence =
+						    static_cast<EscapeSequence>(static_cast<int>(EscapeSequence::ALT_A) + (c - 'A'));
+					} else if (c == BACKSPACE) {
+						key_press.sequence = EscapeSequence::ALT_BACKSPACE;
+					} else if (c == '\\') {
+						key_press.sequence = EscapeSequence::ALT_BACKSLASH;
+					}
+				}
+				if (key_press.sequence != EscapeSequence::INVALID) {
+					key_press.action = ESC;
+				} else {
+					key_press.action = c;
+				}
+				// add the key press to the list of key presses
+			} else {
+				key_press.action = c;
+			}
+			remaining_presses.push_back(key_press);
+		}
+	}
+
+	// emit the first key press on the stack
+	key_press = remaining_presses.back();
+	remaining_presses.pop_back();
+	has_more_data = !remaining_presses.empty();
+	return true;
+
+#else
+	char c;
+	int nread;
+
+	nread = read(ifd, &c, 1);
+	if (nread <= 0) {
+		return false;
+	}
+	has_more_data = Terminal::HasMoreData(ifd);
+	if (!has_more_data) {
+		HandleTerminalResize();
+	}
+	key_press.action = c;
+	if (key_press.action == ESC) {
+		// for ESC we need to read an escape sequence
+		key_press.sequence = Terminal::ReadEscapeSequence(ifd);
+	}
+	return true;
+#endif
+}
+
+bool Linenoise::Write(int fd, const char *data, idx_t size) {
+#if defined(_WIN32) || defined(WIN32)
+	// convert to character encoding in Windows shell
+	auto unicode_text = duckdb_shell::ShellState::Win32Utf8ToUnicode(data);
+	auto out_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (!WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL)) {
+		return false;
+	}
+#else
+	if (write(fd, data, size) == -1) {
+		return false;
+	}
+#endif
+	return true;
+}
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
  * will be returned ASAP to read().
@@ -1079,48 +1350,31 @@ int Linenoise::Edit() {
 	 * initially is just an empty string. */
 	History::Add("");
 
-	if (write(ofd, prompt, plen) == -1) {
+	if (!Write(ofd, prompt, plen)) {
 		return -1;
 	}
 	while (true) {
-		EscapeSequence current_sequence = EscapeSequence::INVALID;
-		char c;
-		int nread;
-
-		nread = read(ifd, &c, 1);
-		if (nread <= 0) {
+		KeyPress key_press;
+		if (!TryGetKeyPress(ifd, key_press)) {
 			return len;
 		}
-		has_more_data = Terminal::HasMoreData(ifd);
 		render = true;
 		insert = false;
-		if (Terminal::IsMultiline() && !has_more_data) {
-			TerminalSize new_size = Terminal::GetTerminalSize();
-			if (new_size.ws_col != ws.ws_col || new_size.ws_row != ws.ws_row) {
-				// terminal resize! re-compute max lines
-				ws = new_size;
-				int rows, cols;
-				int cursor_row, cursor_col;
-				PositionToColAndRow(pos, cursor_row, cursor_col, rows, cols);
-				old_cursor_rows = cursor_row;
-				maxrows = rows;
-			}
-		}
 
 		if (search) {
-			char ret = Search(c);
-			if (search || ret == '\0') {
+			auto next_action = Search(key_press);
+			if (search || next_action.action == KEY_NULL) {
 				// still searching - continue searching
 				continue;
 			}
 			// run subsequent command
-			c = ret;
+			key_press = next_action;
 		}
 
 		/* Only autocomplete when the callback is set. It returns < 0 when
 		 * there was an error reading from fd. Otherwise it will return the
 		 * character that should be handled next. */
-		if (c == TAB && completionCallback != NULL) {
+		if (key_press.action == TAB && completionCallback != NULL) {
 			if (has_more_data) {
 				// if there is more data, this tab character was added as part of copy-pasting data
 				// instead insert some spaces
@@ -1129,19 +1383,19 @@ int Linenoise::Edit() {
 				}
 				continue;
 			}
-			c = CompleteLine(current_sequence);
-			/* Return on errors */
-			if (c < 0) {
+			if (!CompleteLine(key_press)) {
+				/* Return on errors */
 				return len;
 			}
 			/* Read next character when 0 */
-			if (c == 0) {
+			if (key_press.action == KEY_NULL) {
+				RefreshLine();
 				continue;
 			}
 		}
 
-		Linenoise::Log("%d\n", (int)c);
-		switch (c) {
+		Linenoise::Log("%d\n", (int)key_press.action);
+		switch (key_press.action) {
 		case CTRL_G:
 		case CTRL_J:
 		case ENTER: { /* enter */
@@ -1177,10 +1431,10 @@ int Linenoise::Edit() {
 			if (Terminal::IsMultiline() && len > 0) {
 				// check if this forms a complete SQL statement or not
 				buf[len] = '\0';
-				if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
+				if (buf[0] != '.' && !AllWhitespace(buf) && !duckdb_shell::ShellState::SQLIsComplete(buf)) {
 					// not a complete SQL statement yet! continuation
 					pos = len;
-					if (c != CTRL_G) {
+					if (key_press.action != CTRL_G) {
 						// insert "\r\n" at the end if this is enter/ctrl+j
 						if (EditInsertMulti("\r\n")) {
 							return -1;
@@ -1262,9 +1516,12 @@ int Linenoise::Edit() {
 			}
 			break;
 		case CTRL_Z: /* ctrl-z, suspends shell */
+#if defined(_WIN32) || defined(WIN32)
+#else
 			Terminal::DisableRawMode();
 			raise(SIGTSTP);
 			Terminal::EnableRawMode();
+#endif
 			RefreshLine();
 			break;
 		case CTRL_T: /* ctrl-t, swaps current character with previous. */
@@ -1288,15 +1545,7 @@ int Linenoise::Edit() {
 			break;
 		}
 		case ESC: /* escape sequence */ {
-			EscapeSequence escape;
-			if (current_sequence == EscapeSequence::INVALID) {
-				// read escape sequence
-				escape = Terminal::ReadEscapeSequence(ifd);
-			} else {
-				// use stored sequence
-				escape = current_sequence;
-				current_sequence = EscapeSequence::INVALID;
-			}
+			EscapeSequence escape = key_press.sequence;
 			switch (escape) {
 			case EscapeSequence::ALT_LEFT_ARROW:
 				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_START);
@@ -1364,7 +1613,7 @@ int Linenoise::Edit() {
 			case EscapeSequence::LEFT:
 				EditMoveLeft();
 				break;
-			case EscapeSequence::DELETE:
+			case EscapeSequence::DELETE_KEY:
 				EditDelete();
 				break;
 			default:
@@ -1402,7 +1651,7 @@ int Linenoise::Edit() {
 			// unsupported
 			break;
 		default: {
-			if (EditInsert(c)) {
+			if (EditInsert(key_press.action)) {
 				return -1;
 			}
 			break;
@@ -1416,7 +1665,13 @@ int Linenoise::Edit() {
 void Linenoise::LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values) {
 	static FILE *lndebug_fp = NULL;
 	if (!lndebug_fp) {
-		lndebug_fp = fopen("/tmp/lndebug.txt", "a");
+		string path;
+#if defined(_WIN32) || defined(WIN32)
+		path = GetTemporaryDirectory() + "\\lndebug.txt";
+#else
+		path = "/tmp/lndebug.txt";
+#endif
+		lndebug_fp = fopen(path.c_str(), "a");
 	}
 	auto log_message = Exception::ConstructMessageRecursive(msg, values);
 	fprintf(lndebug_fp, "%s", log_message.c_str());
@@ -1507,28 +1762,36 @@ bool Linenoise::EditFileWithEditor(const string &file_name, const char *editor) 
 	return result == 0;
 }
 
-bool Linenoise::EditBufferWithEditor(const char *editor) {
-	/* make a temp file to edit */
+string Linenoise::GetTemporaryDirectory() {
 #ifndef WIN32
+	/* make a temp file to edit */
 	const char *tmpdir = getenv("TMPDIR");
 	if (!tmpdir) {
 		tmpdir = "/tmp";
 	}
+	return tmpdir;
 #else
+	static constexpr const idx_t MAX_PATH_LENGTH = 261;
 	char tmpdir[MAX_PATH_LENGTH];
 	int ret;
 
+	// FIXME: use GetTempPathW
 	ret = GetTempPath(MAX_PATH_LENGTH, tmpdir);
 	if (ret == 0 || ret > MAX_PATH_LENGTH) {
 		Log("cannot locate temporary directory: %s", !ret ? strerror(errno) : "");
-		return false;
+		return string();
 	}
+	return tmpdir;
 #endif
+}
+
+bool Linenoise::EditBufferWithEditor(const char *editor) {
+	auto tmpdir = GetTemporaryDirectory();
 	string temporary_file_name;
 #ifndef WIN32
-	temporary_file_name = string(tmpdir) + "/duckdb.edit." + std::to_string(getpid()) + ".sql";
+	temporary_file_name = tmpdir + "/duckdb.edit." + std::to_string(getpid()) + ".sql";
 #else
-	temporary_file_name = string(tmpdir) + "duckdb.edit." + std::to_string(getpid()) + ".sql";
+	temporary_file_name = tmpdir + "duckdb.edit." + std::to_string(getpid()) + ".sql";
 #endif
 
 	FILE *f = fopen(temporary_file_name.c_str(), "w+");

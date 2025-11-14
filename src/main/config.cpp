@@ -8,6 +8,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -63,6 +64,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
     DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),
     DUCKDB_SETTING(AllowExtensionsMetadataMismatchSetting),
+    DUCKDB_GLOBAL(AllowParserOverrideExtensionSetting),
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
     DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
@@ -85,7 +87,9 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_LOCAL(DebugForceExternalSetting),
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
+    DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
+    DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyVectorSetting),
     DUCKDB_SETTING_CALLBACK(DebugWindowModeSetting),
     DUCKDB_GLOBAL(DefaultBlockSizeSetting),
@@ -115,6 +119,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(EnableViewDependenciesSetting),
     DUCKDB_GLOBAL(EnabledLogTypes),
     DUCKDB_LOCAL(ErrorsAsJSONSetting),
+    DUCKDB_SETTING(ExperimentalMetadataReuseSetting),
     DUCKDB_LOCAL(ExplainOutputSetting),
     DUCKDB_GLOBAL(ExtensionDirectorySetting),
     DUCKDB_GLOBAL(ExternalThreadsSetting),
@@ -167,21 +172,23 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
     DUCKDB_GLOBAL(SecretDirectorySetting),
+    DUCKDB_SETTING_CALLBACK(StorageBlockPrefetchSetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
     DUCKDB_LOCAL(StreamingBufferSizeSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),
     DUCKDB_GLOBAL(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
+    DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 82),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 33),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 101),
-                                                     DUCKDB_SETTING_ALIAS("user", 115),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 20),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 114),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 86),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 36),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 105),
+                                                     DUCKDB_SETTING_ALIAS("user", 120),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 21),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 119),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -323,9 +330,9 @@ void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const Configuratio
 	option.reset_global(db.get(), *this);
 }
 
-void DBConfig::SetOption(const string &name, Value value) {
+void DBConfig::SetOption(const String &name, Value value) {
 	lock_guard<mutex> l(config_lock);
-	options.set_variables[name] = std::move(value);
+	options.set_variables[name.ToStdString()] = std::move(value);
 }
 
 void DBConfig::ResetOption(const String &name) {
@@ -437,8 +444,14 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	return type_id;
 }
 
+bool DBConfig::HasExtensionOption(const string &name) {
+	lock_guard<mutex> l(config_lock);
+	return extension_parameters.find(name) != extension_parameters.end();
+}
+
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope) {
+	lock_guard<mutex> l(config_lock);
 	extension_parameters.insert(make_pair(
 	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope)));
 	// copy over unrecognized options, if they match the new extension option
@@ -496,6 +509,8 @@ void DBConfig::SetDefaultTempDirectory() {
 		options.temporary_directory = string();
 	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
+	} else if (StringUtil::Contains(options.database_path, "?")) {
+		options.temporary_directory = StringUtil::Split(options.database_path, "?")[0] + ".tmp";
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
 	}
@@ -512,8 +527,7 @@ void DBConfig::CheckLock(const String &name) {
 		return;
 	}
 	// not allowed!
-	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked",
-	                            name.ToStdString());
+	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
 
 idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
@@ -536,6 +550,10 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 }
 
 idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
+	// System memory detection
+	auto memory = FileSystem::GetAvailableMemory();
+	auto available_memory = memory.IsValid() ? memory.GetIndex() : DBConfigOptions().maximum_memory;
+
 #ifdef __linux__
 	// Check SLURM environment variables first
 	const char *slurm_mem_per_node = getenv("SLURM_MEM_PER_NODE");
@@ -557,16 +575,12 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	// Check cgroup memory limit
 	auto cgroup_memory_limit = CGroups::GetMemoryLimit(fs);
 	if (cgroup_memory_limit.IsValid()) {
-		return cgroup_memory_limit.GetIndex();
+		auto cgroup_memory_limit_value = cgroup_memory_limit.GetIndex();
+		return std::min(cgroup_memory_limit_value, available_memory);
 	}
 #endif
 
-	// System memory detection
-	auto memory = FileSystem::GetAvailableMemory();
-	if (!memory.IsValid()) {
-		return DBConfigOptions().maximum_memory;
-	}
-	return memory.GetIndex();
+	return available_memory;
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {

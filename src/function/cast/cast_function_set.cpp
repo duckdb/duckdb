@@ -109,6 +109,8 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.find(LogicalType::UNION({{"any", LogicalType::ANY}}));
 	case LogicalTypeId::ARRAY:
 		return map.find(LogicalType::ARRAY(LogicalType::ANY, optional_idx()));
+	case LogicalTypeId::DECIMAL:
+		return map.find(LogicalTypeId::DECIMAL);
 	default:
 		return map.find(LogicalType::ANY);
 	}
@@ -182,7 +184,9 @@ int64_t CastFunctionSet::ImplicitCastCost(optional_ptr<ClientContext> context, c
 			old_implicit_casting = DBConfig::GetSetting<OldImplicitCastingSetting>(*config);
 		}
 		if (old_implicit_casting) {
-			score = 149;
+			// very high cost to avoid choosing this cast if any other option is available
+			// (it should be more costly than casting to TEMPLATE if that is available)
+			score = 10000000000;
 		}
 	}
 	return score;

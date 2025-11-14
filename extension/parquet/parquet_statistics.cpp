@@ -322,7 +322,6 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
                                                                              const vector<ColumnChunk> &columns,
                                                                              bool can_have_nan) {
-
 	// Not supported types
 	auto &type = schema.type;
 	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP || type.id() == LogicalTypeId::LIST) {
@@ -395,24 +394,69 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 		break;
 	case LogicalTypeId::VARCHAR: {
-		auto string_stats = StringStats::CreateEmpty(type);
+		auto string_stats = StringStats::CreateUnknown(type);
 		if (parquet_stats.__isset.min_value) {
 			StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min_value);
+			StringStats::SetMin(string_stats, parquet_stats.min_value);
 		} else if (parquet_stats.__isset.min) {
 			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min);
+			StringStats::SetMin(string_stats, parquet_stats.min);
 		}
 		if (parquet_stats.__isset.max_value) {
 			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max_value);
+			StringStats::SetMax(string_stats, parquet_stats.max_value);
 		} else if (parquet_stats.__isset.max) {
 			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max);
+			StringStats::SetMax(string_stats, parquet_stats.max);
 		}
-		StringStats::SetContainsUnicode(string_stats);
-		StringStats::ResetMaxStringLength(string_stats);
 		row_group_stats = string_stats.ToUnique();
+		break;
+	}
+	case LogicalTypeId::GEOMETRY: {
+		auto geo_stats = GeometryStats::CreateUnknown(type);
+		if (column_chunk.meta_data.__isset.geospatial_statistics) {
+			if (column_chunk.meta_data.geospatial_statistics.__isset.bbox) {
+				auto &bbox = column_chunk.meta_data.geospatial_statistics.bbox;
+				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
+
+				// xmin > xmax is allowed if the geometry crosses the antimeridian,
+				// but we don't handle this right now
+				if (bbox.xmin <= bbox.xmax) {
+					stats_bbox.x_min = bbox.xmin;
+					stats_bbox.x_max = bbox.xmax;
+				}
+
+				if (bbox.ymin <= bbox.ymax) {
+					stats_bbox.y_min = bbox.ymin;
+					stats_bbox.y_max = bbox.ymax;
+				}
+
+				if (bbox.__isset.zmin && bbox.__isset.zmax && bbox.zmin <= bbox.zmax) {
+					stats_bbox.z_min = bbox.zmin;
+					stats_bbox.z_max = bbox.zmax;
+				}
+
+				if (bbox.__isset.mmin && bbox.__isset.mmax && bbox.mmin <= bbox.mmax) {
+					stats_bbox.m_min = bbox.mmin;
+					stats_bbox.m_max = bbox.mmax;
+				}
+			}
+			if (column_chunk.meta_data.geospatial_statistics.__isset.geospatial_types) {
+				auto &types = column_chunk.meta_data.geospatial_statistics.geospatial_types;
+				auto &stats_types = GeometryStats::GetTypes(geo_stats);
+
+				// if types are set but empty, that still means "any type" - so we leave stats_types as-is (unknown)
+				// otherwise, clear and set to the actual types
+
+				if (!types.empty()) {
+					stats_types.Clear();
+					for (auto &geom_type : types) {
+						stats_types.AddWKBType(geom_type);
+					}
+				}
+			}
+		}
+		row_group_stats = geo_stats.ToUnique();
 		break;
 	}
 	default:
@@ -580,7 +624,6 @@ bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filte
 }
 
 ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_false_positive_ratio) {
-
 	// aim for hit ratio of 0.01%
 	// see http://tfk.mit.edu/pdf/bloom.pdf
 	double f = bloom_filter_false_positive_ratio;

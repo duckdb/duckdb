@@ -29,7 +29,6 @@ class DatabaseInstance;
 class TableFilter;
 class Transaction;
 class UpdateSegment;
-
 struct ColumnAppendState;
 struct ColumnFetchState;
 struct ColumnScanState;
@@ -43,24 +42,23 @@ class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	//! Construct a column segment.
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
-	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
-	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
-	              const idx_t offset, const idx_t segment_size_p,
-	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	              const ColumnSegmentType segment_type, const idx_t count, CompressionFunction &function_p,
+	              BaseStatistics statistics, const block_id_t block_id_p, const idx_t offset,
+	              const idx_t segment_size_p, unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
-	ColumnSegment(ColumnSegment &other, const idx_t start);
+	ColumnSegment(ColumnSegment &other);
 	~ColumnSegment();
 
 public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
 	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
-	                                                         idx_t start, idx_t count, CompressionType compression_type,
+	                                                         idx_t count, CompressionType compression_type,
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
-	                                                        const LogicalType &type, const idx_t start,
-	                                                        const idx_t segment_size, BlockManager &block_manager);
+	                                                        const LogicalType &type, const idx_t segment_size,
+	                                                        BlockManager &block_manager);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
@@ -97,7 +95,7 @@ public:
 	//! Returns the number of bytes occupied within the segment
 	idx_t FinalizeAppend(ColumnAppendState &state);
 	//! Revert an append made to this segment
-	void RevertAppend(idx_t start_row);
+	void RevertAppend(idx_t new_count);
 
 	//! Convert a transient in-memory segment to a persistent segment backed by an on-disk block.
 	//! Only used during checkpointing.
@@ -107,7 +105,7 @@ public:
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
 	void SetBlock(shared_ptr<BlockHandle> block, uint32_t offset);
 	//! Gets a data pointer from a persistent column segment
-	DataPointer GetDataPointer();
+	DataPointer GetDataPointer(idx_t row_start);
 
 	block_id_t GetBlockId() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
@@ -124,12 +122,6 @@ public:
 	idx_t GetBlockOffset() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
 		return offset;
-	}
-
-	idx_t GetRelativeIndex(idx_t row_index) {
-		D_ASSERT(row_index >= this->start);
-		D_ASSERT(row_index <= this->start + this->count);
-		return row_index - this->start;
 	}
 
 	optional_ptr<CompressedSegmentState> GetSegmentState() {

@@ -31,6 +31,8 @@ EncryptionKey::~EncryptionKey() {
 void EncryptionKey::LockEncryptionKey(data_ptr_t key, idx_t key_len) {
 #if defined(_WIN32)
 	VirtualLock(key, key_len);
+#elif defined(__MVS__)
+	__mlockall(_BPX_NONSWAP);
 #else
 	mlock(key, key_len);
 #endif
@@ -40,6 +42,8 @@ void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, idx_t key_len) {
 	memset(key, 0, key_len);
 #if defined(_WIN32)
 	VirtualUnlock(key, key_len);
+#elif defined(__MVS__)
+	__mlockall(_BPX_SWAP);
 #else
 	munlock(key, key_len);
 #endif
@@ -92,7 +96,7 @@ void EncryptionKeyManager::KeyDerivationFunctionSHA256(const_data_ptr_t key, idx
                                                        data_ptr_t derived_key) {
 	//! For now, we are only using SHA256 for key derivation
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
-	state.AddSalt(salt, MainHeader::SALT_LEN);
+	state.AddSalt(salt, MainHeader::DB_IDENTIFIER_LEN);
 	state.AddBytes(key, key_size);
 	state.FinalizeDerivedKey(derived_key);
 }

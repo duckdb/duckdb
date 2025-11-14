@@ -58,7 +58,7 @@
  * (this has been observed to be constant-time on latest gcc, clang and MSVC
  * as of May 2023).
  *
- * For readability, the inline definitions are separated out into
+ * For readability, the static inline definitions are separated out into
  * constant_time_impl.h.
  */
 
@@ -96,7 +96,7 @@ typedef int32_t   mbedtls_ct_int_t;
  * \return MBEDTLS_CT_TRUE if \p x != 0, or MBEDTLS_CT_FALSE if \p x == 0
  *
  */
-inline mbedtls_ct_condition_t mbedtls_ct_bool(mbedtls_ct_uint_t x);
+static inline mbedtls_ct_condition_t mbedtls_ct_bool(mbedtls_ct_uint_t x);
 
 /** Boolean "not equal" operation.
  *
@@ -109,7 +109,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool(mbedtls_ct_uint_t x);
  *
  * \return      MBEDTLS_CT_TRUE if \p x != \p y, otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_uint_ne(mbedtls_ct_uint_t x, mbedtls_ct_uint_t y);
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_ne(mbedtls_ct_uint_t x, mbedtls_ct_uint_t y);
 
 /** Boolean "equals" operation.
  *
@@ -122,7 +122,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_uint_ne(mbedtls_ct_uint_t x, mbedtls_ct
  *
  * \return      MBEDTLS_CT_TRUE if \p x == \p y, otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_uint_eq(mbedtls_ct_uint_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_eq(mbedtls_ct_uint_t x,
                                                         mbedtls_ct_uint_t y);
 
 /** Boolean "less than" operation.
@@ -136,7 +136,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_uint_eq(mbedtls_ct_uint_t x,
  *
  * \return      MBEDTLS_CT_TRUE if \p x < \p y, otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_uint_lt(mbedtls_ct_uint_t x, mbedtls_ct_uint_t y);
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_lt(mbedtls_ct_uint_t x, mbedtls_ct_uint_t y);
 
 /** Boolean "greater than" operation.
  *
@@ -149,7 +149,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_uint_lt(mbedtls_ct_uint_t x, mbedtls_ct
  *
  * \return      MBEDTLS_CT_TRUE if \p x > \p y, otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_uint_gt(mbedtls_ct_uint_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_gt(mbedtls_ct_uint_t x,
                                                         mbedtls_ct_uint_t y);
 
 /** Boolean "greater or equal" operation.
@@ -164,7 +164,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_uint_gt(mbedtls_ct_uint_t x,
  * \return      MBEDTLS_CT_TRUE if \p x >= \p y,
  *              otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_uint_ge(mbedtls_ct_uint_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_ge(mbedtls_ct_uint_t x,
                                                         mbedtls_ct_uint_t y);
 
 /** Boolean "less than or equal" operation.
@@ -179,7 +179,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_uint_ge(mbedtls_ct_uint_t x,
  * \return      MBEDTLS_CT_TRUE if \p x <= \p y,
  *              otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_uint_le(mbedtls_ct_uint_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_uint_le(mbedtls_ct_uint_t x,
                                                         mbedtls_ct_uint_t y);
 
 /** Boolean not-equals operation.
@@ -197,7 +197,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_uint_le(mbedtls_ct_uint_t x,
  * \return      MBEDTLS_CT_TRUE if \p x != \p y,
  *              otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_bool_ne(mbedtls_ct_condition_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_ne(mbedtls_ct_condition_t x,
                                                         mbedtls_ct_condition_t y);
 
 /** Boolean "and" operation.
@@ -212,7 +212,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool_ne(mbedtls_ct_condition_t x,
  * \return      MBEDTLS_CT_TRUE if \p x && \p y,
  *              otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_bool_and(mbedtls_ct_condition_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_and(mbedtls_ct_condition_t x,
                                                          mbedtls_ct_condition_t y);
 
 /** Boolean "or" operation.
@@ -227,7 +227,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool_and(mbedtls_ct_condition_t x,
  * \return      MBEDTLS_CT_TRUE if \p x || \p y,
  *              otherwise MBEDTLS_CT_FALSE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_bool_or(mbedtls_ct_condition_t x,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_or(mbedtls_ct_condition_t x,
                                                         mbedtls_ct_condition_t y);
 
 /** Boolean "not" operation.
@@ -240,7 +240,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool_or(mbedtls_ct_condition_t x,
  *
  * \return      MBEDTLS_CT_FALSE if \p x, otherwise MBEDTLS_CT_TRUE.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_bool_not(mbedtls_ct_condition_t x);
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_not(mbedtls_ct_condition_t x);
 
 
 /* ============================================================================
@@ -259,7 +259,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool_not(mbedtls_ct_condition_t x);
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise \c if0.
  */
-inline size_t mbedtls_ct_size_if(mbedtls_ct_condition_t condition,
+static inline size_t mbedtls_ct_size_if(mbedtls_ct_condition_t condition,
                                         size_t if1,
                                         size_t if0);
 
@@ -275,7 +275,7 @@ inline size_t mbedtls_ct_size_if(mbedtls_ct_condition_t condition,
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise \c if0.
  */
-inline unsigned mbedtls_ct_uint_if(mbedtls_ct_condition_t condition,
+static inline unsigned mbedtls_ct_uint_if(mbedtls_ct_condition_t condition,
                                           unsigned if1,
                                           unsigned if0);
 
@@ -291,7 +291,7 @@ inline unsigned mbedtls_ct_uint_if(mbedtls_ct_condition_t condition,
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise \c if0.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_bool_if(mbedtls_ct_condition_t condition,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_if(mbedtls_ct_condition_t condition,
                                                         mbedtls_ct_condition_t if1,
                                                         mbedtls_ct_condition_t if0);
 
@@ -309,7 +309,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool_if(mbedtls_ct_condition_t conditio
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise \c if0.
  */
-inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if(mbedtls_ct_condition_t condition, \
+static inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if(mbedtls_ct_condition_t condition, \
                                                       mbedtls_mpi_uint if1, \
                                                       mbedtls_mpi_uint if0);
 
@@ -329,7 +329,7 @@ inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if(mbedtls_ct_condition_t condition,
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise 0.
  */
-inline unsigned mbedtls_ct_uint_if_else_0(mbedtls_ct_condition_t condition, unsigned if1);
+static inline unsigned mbedtls_ct_uint_if_else_0(mbedtls_ct_condition_t condition, unsigned if1);
 
 /** Choose between an mbedtls_ct_condition_t and 0.
  *
@@ -345,7 +345,7 @@ inline unsigned mbedtls_ct_uint_if_else_0(mbedtls_ct_condition_t condition, unsi
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise 0.
  */
-inline mbedtls_ct_condition_t mbedtls_ct_bool_if_else_0(mbedtls_ct_condition_t condition,
+static inline mbedtls_ct_condition_t mbedtls_ct_bool_if_else_0(mbedtls_ct_condition_t condition,
                                                                mbedtls_ct_condition_t if1);
 
 /** Choose between a size_t value and 0.
@@ -362,7 +362,7 @@ inline mbedtls_ct_condition_t mbedtls_ct_bool_if_else_0(mbedtls_ct_condition_t c
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise 0.
  */
-inline size_t mbedtls_ct_size_if_else_0(mbedtls_ct_condition_t condition, size_t if1);
+static inline size_t mbedtls_ct_size_if_else_0(mbedtls_ct_condition_t condition, size_t if1);
 
 #if defined(MBEDTLS_BIGNUM_C)
 
@@ -380,7 +380,7 @@ inline size_t mbedtls_ct_size_if_else_0(mbedtls_ct_condition_t condition, size_t
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise 0.
  */
-inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if_else_0(mbedtls_ct_condition_t condition,
+static inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if_else_0(mbedtls_ct_condition_t condition,
                                                              mbedtls_mpi_uint if1);
 
 #endif
@@ -394,7 +394,7 @@ inline mbedtls_mpi_uint mbedtls_ct_mpi_uint_if_else_0(mbedtls_ct_condition_t con
  *
  * \return      \p t if \p low <= \p c <= \p high, 0 otherwise.
  */
-inline unsigned char mbedtls_ct_uchar_in_range_if(unsigned char low,
+static inline unsigned char mbedtls_ct_uchar_in_range_if(unsigned char low,
                                                          unsigned char high,
                                                          unsigned char c,
                                                          unsigned char t);
@@ -411,7 +411,7 @@ inline unsigned char mbedtls_ct_uchar_in_range_if(unsigned char low,
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise \c if0.
  */
-inline int mbedtls_ct_error_if(mbedtls_ct_condition_t condition, int if1, int if0);
+static inline int mbedtls_ct_error_if(mbedtls_ct_condition_t condition, int if1, int if0);
 
 /** Choose between an error value and 0. The error value must be in the range [-32767..0].
  *
@@ -427,7 +427,7 @@ inline int mbedtls_ct_error_if(mbedtls_ct_condition_t condition, int if1, int if
  *
  * \return  \c if1 if \p condition == MBEDTLS_CT_TRUE, otherwise 0.
  */
-inline int mbedtls_ct_error_if_else_0(mbedtls_ct_condition_t condition, int if1);
+static inline int mbedtls_ct_error_if_else_0(mbedtls_ct_condition_t condition, int if1);
 
 /* ============================================================================
  * Block memory operations
@@ -573,7 +573,7 @@ int mbedtls_ct_memcmp_partial(const void *a,
 
 #endif
 
-/* Include the implementation of inline functions above. */
+/* Include the implementation of static inline functions above. */
 #include "constant_time_impl.h"
 
 #endif /* MBEDTLS_CONSTANT_TIME_INTERNAL_H */

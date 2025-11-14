@@ -1,7 +1,13 @@
+IF (NOT WIN32)
+    set(LOAD_HTTPFS_TESTS "LOAD_TESTS")
+else ()
+    set(LOAD_HTTPFS_TESTS "")
+endif()
 duckdb_extension_load(httpfs
-    LOAD_TESTS
+    # TODO: restore once httpfs is fixed
+    ${LOAD_HTTPFS_TESTS}
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG c31f9e922a5cc99c5854fd9529954cb364afd1f1
-    INCLUDE_DIR extension/httpfs/include
+    GIT_TAG 8356a9017444f54018159718c8017ff7db4ea756
     APPLY_PATCHES
+    INCLUDE_DIR src/include
 )

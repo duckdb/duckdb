@@ -9,18 +9,41 @@
 #pragma once
 
 #include "duckdb/common/types/row/tuple_data_states.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
+class Sort;
+class SortedRun;
 class BufferManager;
 class DataChunk;
 class TupleDataCollection;
 class TupleDataLayout;
 
+class SortedRunScanState {
+public:
+	SortedRunScanState(ClientContext &context, const Sort &sort);
+
+public:
+	void Scan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count, DataChunk &chunk);
+
+private:
+	template <SortKeyType sort_key_type>
+	void TemplatedScan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count,
+	                   DataChunk &chunk);
+
+private:
+	const Sort &sort;
+	ExpressionExecutor key_executor;
+	DataChunk key;
+	DataChunk decoded_key;
+	TupleDataScanState payload_state;
+	vector<char> key_buffer;
+};
+
 class SortedRun {
 public:
-	SortedRun(ClientContext &context, shared_ptr<TupleDataLayout> key_layout,
-	          shared_ptr<TupleDataLayout> payload_layout, bool is_index_sort);
+	SortedRun(ClientContext &context, const Sort &sort, bool is_index_sort);
 	unique_ptr<SortedRun> CreateRunForMaterialization() const;
 	~SortedRun();
 
@@ -36,8 +59,13 @@ public:
 	//! Size of this sorted run
 	idx_t SizeInBytes() const;
 
+private:
+	mutex merger_global_state_lock;
+	unique_ptr<GlobalSourceState> merge_global_state;
+
 public:
 	ClientContext &context;
+	const Sort &sort;
 
 	//! Key and payload collections (and associated append states)
 	unique_ptr<TupleDataCollection> key_data;

@@ -167,29 +167,45 @@ public:
 	};
 };
 
-static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
+static FileMetadata StatsInternal(int fd, const string &path) {
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
-		return FileType::FILE_TYPE_INVALID;
+		throw IOException({{"errno", std::to_string(errno)}}, "Failed to get stats for file \"%s\": %s", path,
+		                  strerror(errno));
 	}
+
+	FileMetadata file_metadata;
+	file_metadata.file_size = s.st_size;
+	file_metadata.last_modification_time = Timestamp::FromEpochSeconds(s.st_mtime);
+
 	switch (s.st_mode & S_IFMT) {
 	case S_IFBLK:
-		return FileType::FILE_TYPE_BLOCKDEV;
+		file_metadata.file_type = FileType::FILE_TYPE_BLOCKDEV;
+		break;
 	case S_IFCHR:
-		return FileType::FILE_TYPE_CHARDEV;
+		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
+		break;
 	case S_IFIFO:
-		return FileType::FILE_TYPE_FIFO;
+		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
+		break;
 	case S_IFDIR:
-		return FileType::FILE_TYPE_DIR;
+		file_metadata.file_type = FileType::FILE_TYPE_DIR;
+		break;
 	case S_IFLNK:
-		return FileType::FILE_TYPE_LINK;
+		file_metadata.file_type = FileType::FILE_TYPE_LINK;
+		break;
 	case S_IFREG:
-		return FileType::FILE_TYPE_REGULAR;
+		file_metadata.file_type = FileType::FILE_TYPE_REGULAR;
+		break;
 	case S_IFSOCK:
-		return FileType::FILE_TYPE_SOCKET;
+		file_metadata.file_type = FileType::FILE_TYPE_SOCKET;
+		break;
 	default:
-		return FileType::FILE_TYPE_INVALID;
+		file_metadata.file_type = FileType::FILE_TYPE_INVALID;
+		break;
 	}
+
+	return file_metadata;
 } // LCOV_EXCL_STOP
 
 #if __APPLE__ && !TARGET_OS_IPHONE
@@ -369,7 +385,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		if (flags.ReturnNullIfExists() && errno == EEXIST) {
 			return nullptr;
 		}
-		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
+		throw IOException({{"errno", std::to_string(errno)}}, "Cannot open file \"%s\": %s", path, strerror(errno));
 	}
 
 #if defined(__DARWIN__) || defined(__APPLE__)
@@ -385,7 +401,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	if (flags.Lock() != FileLockType::NO_LOCK) {
 		// set lock on file
 		// but only if it is not an input/output stream
-		auto file_type = GetFileTypeInternal(fd);
+		auto file_type = StatsInternal(fd, path_p).file_type;
 		if (file_type != FileType::FILE_TYPE_FIFO && file_type != FileType::FILE_TYPE_SOCKET) {
 			struct flock fl;
 			memset(&fl, 0, sizeof fl);
@@ -436,7 +452,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 					extended_error += ". Also, failed closing file";
 				}
 				extended_error += ". See also https://duckdb.org/docs/stable/connect/concurrency";
-				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
+				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
 				                  path, extended_error);
 			}
 		}
@@ -454,7 +470,7 @@ void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t offset = lseek(fd, UnsafeNumericCast<off_t>(location), SEEK_SET);
 	if (offset == (off_t)-1) {
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not seek to location %lld for file \"%s\": %s",
 		                  location, handle.path, strerror(errno));
 	}
 }
@@ -463,7 +479,7 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t position = lseek(fd, 0, SEEK_CUR);
 	if (position == (off_t)-1) {
-		throw IOException("Could not get file position file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not get file position file \"%s\": %s",
 		                  handle.path, strerror(errno));
 	}
 	return UnsafeNumericCast<idx_t>(position);
@@ -477,7 +493,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		int64_t bytes_read =
 		    pread(fd, read_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
 		if (bytes_read == -1) {
-			throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			throw IOException({{"errno", std::to_string(errno)}}, "Could not read from file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
 		if (bytes_read == 0) {
@@ -498,7 +514,7 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 	int fd = unix_handle.fd;
 	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
-		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not read from file \"%s\": %s", handle.path,
 		                  strerror(errno));
 	}
 
@@ -519,12 +535,13 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		int64_t bytes_written = pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write),
 		                               UnsafeNumericCast<off_t>(current_location));
 		if (bytes_written < 0) {
-			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
 		if (bytes_written == 0) {
-			throw IOException("Could not write to file \"%s\" - attempted to write 0 bytes: %s",
-			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
+			throw IOException({{"errno", std::to_string(errno)}},
+			                  "Could not write to file \"%s\" - attempted to write 0 bytes: %s", handle.path,
+			                  strerror(errno));
 		}
 		write_buffer += bytes_written;
 		bytes_to_write -= bytes_written;
@@ -544,7 +561,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 		    MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
 		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
 		if (current_bytes_written <= 0) {
-			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
 		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
@@ -574,34 +591,30 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException("Failed to get file size for file \"%s\": %s", {{"errno", std::to_string(errno)}},
-		                  handle.path, strerror(errno));
-	}
-	return s.st_size;
+	const auto file_metadata = Stats(handle);
+	return file_metadata.file_size;
 }
 
 timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		throw IOException("Failed to get last modified time for file \"%s\": %s", {{"errno", std::to_string(errno)}},
-		                  handle.path, strerror(errno));
-	}
-	return Timestamp::FromEpochSeconds(s.st_mtime);
+	const auto file_metadata = Stats(handle);
+	return file_metadata.last_modification_time;
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
+	const auto file_metadata = Stats(handle);
+	return file_metadata.file_type;
+}
+
+FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	return GetFileTypeInternal(fd);
+	auto file_metadata = StatsInternal(fd, handle.GetPath());
+	return file_metadata;
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (ftruncate(fd, new_size) != 0) {
-		throw IOException("Could not truncate file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not truncate file \"%s\": %s", handle.path,
 		                  strerror(errno));
 	}
 }
@@ -612,7 +625,7 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 		if (access(normalized_dir, 0) == 0) {
 			struct stat status;
 			stat(normalized_dir, &status);
-			if (status.st_mode & S_IFDIR) {
+			if (S_ISDIR(status.st_mode)) {
 				return true;
 			}
 		}
@@ -628,12 +641,12 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	if (stat(normalized_dir, &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(normalized_dir, 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed to create directory \"%s\": %s", {{"errno", std::to_string(errno)}}, directory,
+			throw IOException({{"errno", std::to_string(errno)}}, "Failed to create directory \"%s\": %s", directory,
 			                  strerror(errno));
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!",
-		                  {{"errno", std::to_string(errno)}}, directory);
+		throw IOException({{"errno", std::to_string(errno)}},
+		                  "Failed to create directory \"%s\": path exists but is not a directory!", directory);
 	}
 }
 
@@ -685,7 +698,7 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	auto normalized_file = NormalizeLocalPath(filename);
 	if (std::remove(normalized_file) != 0) {
-		throw IOException("Could not remove file \"%s\": %s", {{"errno", std::to_string(errno)}}, filename,
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not remove file \"%s\": %s", filename,
 		                  strerror(errno));
 	}
 }
@@ -718,7 +731,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		if (res != 0) {
 			continue;
 		}
-		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
+		if (!S_ISREG(status.st_mode) && !S_ISDIR(status.st_mode)) {
 			// not a file or directory: skip
 			continue;
 		}
@@ -726,7 +739,7 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 		auto &options = info.extended_info->options;
 		// file type
-		Value file_type(status.st_mode & S_IFDIR ? "directory" : "file");
+		Value file_type(S_ISDIR(status.st_mode) ? "directory" : "file");
 		options.emplace("type", std::move(file_type));
 		// file size
 		options.emplace("file_size", Value::BIGINT(UnsafeNumericCast<int64_t>(status.st_size)));
@@ -767,8 +780,7 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 
 	// For other types of errors, throw normal IO exception.
-	throw IOException("Could not fsync file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.GetPath(),
-	                  strerror(errno));
+	throw IOException("Could not fsync file \"%s\": %s", handle.GetPath(), strerror(errno));
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
@@ -776,7 +788,7 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	auto normalized_target = NormalizeLocalPath(target);
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(normalized_source, normalized_target) != 0) {
-		throw IOException("Could not rename file!", {{"errno", std::to_string(errno)}});
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not rename file!");
 	}
 }
 
@@ -812,6 +824,72 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 	LocalFree(messageBuffer);
 
 	return message;
+}
+
+static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
+	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
+	ULARGE_INTEGER ul;
+	ul.LowPart = file_time.dwLowDateTime;
+	ul.HighPart = file_time.dwHighDateTime;
+	int64_t fileTime64 = ul.QuadPart;
+
+	// fileTime64 contains a 64-bit value representing the number of
+	// 100-nanosecond intervals since January 1, 1601 (UTC).
+	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
+
+	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
+	const auto WINDOWS_TICK = 10000000;
+	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
+	return Timestamp::FromTimeT(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+}
+
+static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
+	FileMetadata file_metadata;
+
+	DWORD handle_type = GetFileType(hFile);
+	if (handle_type == FILE_TYPE_CHAR) {
+		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
+		file_metadata.file_size = 0;
+		file_metadata.last_modification_time = Timestamp::FromTimeT(0);
+		return file_metadata;
+	}
+	if (handle_type == FILE_TYPE_PIPE) {
+		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
+		file_metadata.file_size = 0;
+		file_metadata.last_modification_time = Timestamp::FromTimeT(0);
+		return file_metadata;
+	}
+
+	BY_HANDLE_FILE_INFORMATION file_info;
+	if (!GetFileInformationByHandle(hFile, &file_info)) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get stats for file \"%s\": %s", path, error);
+	}
+
+	// Get file size from high and low parts.
+	file_metadata.file_size =
+	    (static_cast<int64_t>(file_info.nFileSizeHigh) << 32) | static_cast<int64_t>(file_info.nFileSizeLow);
+
+	// Get last modification time
+	file_metadata.last_modification_time = FiletimeToTimeStamp(file_info.ftLastWriteTime);
+
+	// Get file type from attributes
+	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
+		// pipes in windows are just files in '\\.\pipe\' folder
+		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
+	} else if (file_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+		file_metadata.file_type = FileType::FILE_TYPE_DIR;
+	} else if (file_info.dwFileAttributes & FILE_ATTRIBUTE_DEVICE) {
+		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
+	} else if (file_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+		file_metadata.file_type = FileType::FILE_TYPE_LINK;
+	} else if (file_info.dwFileAttributes != INVALID_FILE_ATTRIBUTES) {
+		file_metadata.file_type = FileType::FILE_TYPE_REGULAR;
+	} else {
+		file_metadata.file_type = FileType::FILE_TYPE_INVALID;
+	}
+
+	return file_metadata;
 }
 
 struct WindowsFileHandle : public FileHandle {
@@ -1052,7 +1130,7 @@ static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t n
 		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
 		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
 		if (current_bytes_written <= 0) {
-			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
 		bytes_written += current_bytes_written;
@@ -1088,42 +1166,13 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-	LARGE_INTEGER result;
-	if (!GetFileSizeEx(hFile, &result)) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, error);
-	}
-	return result.QuadPart;
-}
-
-timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
-	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime
-	ULARGE_INTEGER ul;
-	ul.LowPart = file_time.dwLowDateTime;
-	ul.HighPart = file_time.dwHighDateTime;
-	int64_t fileTime64 = ul.QuadPart;
-
-	// fileTime64 contains a 64-bit value representing the number of
-	// 100-nanosecond intervals since January 1, 1601 (UTC).
-	// https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime
-
-	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
-	const auto WINDOWS_TICK = 10000000;
-	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
-	return Timestamp::FromTimeT(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+	const auto file_metadata = Stats(handle);
+	return file_metadata.file_size;
 }
 
 timestamp_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-
-	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
-	FILETIME last_write;
-	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
-		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
-	}
-	return FiletimeToTimeStamp(last_write);
+	const auto file_metadata = Stats(handle);
+	return file_metadata.last_modification_time;
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -1257,21 +1306,14 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
-	auto path = handle.Cast<WindowsFileHandle>().path;
-	// pipes in windows are just files in '\\.\pipe\' folder
-	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
-		return FileType::FILE_TYPE_FIFO;
-	}
-	auto normalized_path = NormalizePathAndConvertToUnicode(path);
-	DWORD attrs = WindowsGetFileAttributes(normalized_path);
-	if (attrs != INVALID_FILE_ATTRIBUTES) {
-		if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
-			return FileType::FILE_TYPE_DIR;
-		} else {
-			return FileType::FILE_TYPE_REGULAR;
-		}
-	}
-	return FileType::FILE_TYPE_INVALID;
+	const auto file_metadata = Stats(handle);
+	return file_metadata.file_type;
+}
+
+FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto file_metadata = StatsInternal(hFile, handle.GetPath());
+	return file_metadata;
 }
 #endif
 
@@ -1319,7 +1361,6 @@ static bool IsSymbolicLink(const string &path) {
 
 static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<OpenFileInfo> &result,
                                      bool match_directory, bool join_path) {
-
 	fs.ListFiles(path, [&](OpenFileInfo &info) {
 		if (join_path) {
 			info.path = fs.JoinPath(path, info.path);

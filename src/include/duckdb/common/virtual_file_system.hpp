@@ -11,6 +11,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,7 @@ public:
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
 	string GetVersionTag(FileHandle &handle) override;
 	FileType GetFileType(FileHandle &handle) override;
+	FileMetadata Stats(FileHandle &handle) override;
 
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
@@ -82,8 +84,10 @@ protected:
 	}
 
 private:
+	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
+	FileSystem &FindFileSystem(const string &path, optional_ptr<DatabaseInstance> database_instance);
 	FileSystem &FindFileSystem(const string &path);
-	FileSystem &FindFileSystemInternal(const string &path);
+	optional_ptr<FileSystem> FindFileSystemInternal(const string &path);
 
 private:
 	vector<unique_ptr<FileSystem>> sub_systems;

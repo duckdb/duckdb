@@ -31,6 +31,8 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/main/database_file_path_manager.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -86,6 +88,7 @@ DatabaseInstance::~DatabaseInstance() {
 	log_manager.reset();
 
 	external_file_cache.reset();
+	result_set_manager.reset();
 
 	buffer_manager.reset();
 
@@ -198,10 +201,8 @@ void DatabaseInstance::CreateMainDatabase() {
 	Connection con(*this);
 	con.BeginTransaction();
 	AttachOptions options(config.options);
-	auto initial_database = db_manager->AttachDatabase(*con.context, info, options);
-	initial_database->SetInitialDatabase();
-	initial_database->Initialize(*con.context);
-	db_manager->FinalizeAttach(*con.context, info, std::move(initial_database));
+	options.is_main_database = true;
+	db_manager->AttachDatabase(*con.context, info, options);
 	con.Commit();
 }
 
@@ -284,10 +285,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
 
-	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
+	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
 	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
+	result_set_manager = make_uniq<ResultSetManager>(*this);
 
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
@@ -297,17 +299,14 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
 
-	// resolve the type of teh database we are opening
+	// resolve the type of the database we are opening
 	auto &fs = FileSystem::GetFileSystem(*this);
 	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
 
-	if (config.options.database_type == "duckdb") {
-		config.options.database_type = string();
-	}
-	if (!config.options.database_type.empty()) {
+	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
@@ -384,6 +383,10 @@ FileSystem &DatabaseInstance::GetFileSystem() {
 
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 	return *external_file_cache;
+}
+
+ResultSetManager &DatabaseInstance::GetResultSetManager() {
+	return *result_set_manager;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {
@@ -476,6 +479,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
 	config.db_cache_entry = std::move(new_config.db_cache_entry);
+	config.path_manager = std::move(new_config.path_manager);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

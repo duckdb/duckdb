@@ -18,6 +18,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/arrow_format_version.hpp"
+#include "duckdb/common/enums/storage_block_prefetch.hpp"
 
 namespace duckdb {
 
@@ -92,6 +93,18 @@ struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
+struct AllowParserOverrideExtensionSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "allow_parser_override_extension";
+	static constexpr const char *Description = "Allow extensions to override the current parser";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);
+	static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AllowPersistentSecretsSetting {
@@ -328,10 +341,30 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
+struct DebugPhysicalTableScanExecutionStrategySetting {
+	using RETURN_TYPE = PhysicalTableScanExecutionStrategy;
+	static constexpr const char *Name = "debug_physical_table_scan_execution_strategy";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: force use of given strategy for executing physical table scans";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DebugSkipCheckpointOnCommitSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_skip_checkpoint_on_commit";
 	static constexpr const char *Description = "DEBUG SETTING: skip checkpointing on commit";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+};
+
+struct DebugVerifyBlocksSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_blocks";
+	static constexpr const char *Description = "DEBUG SETTING: verify block metadata during checkpointing";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
@@ -637,6 +670,15 @@ struct ErrorsAsJSONSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct ExperimentalMetadataReuseSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "experimental_metadata_reuse";
+	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct ExplainOutputSetting {
@@ -1172,6 +1214,16 @@ struct SecretDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct StorageBlockPrefetchSetting {
+	using RETURN_TYPE = StorageBlockPrefetch;
+	static constexpr const char *Name = "storage_block_prefetch";
+	static constexpr const char *Description = "In which scenarios to use storage block prefetching";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "REMOTE_ONLY";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct StorageCompatibilityVersionSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "storage_compatibility_version";
@@ -1231,6 +1283,16 @@ struct UsernameSetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct WriteBufferRowGroupCountSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "write_buffer_row_group_count";
+	static constexpr const char *Description = "The amount of row groups to buffer in bulk ingestion prior to flushing "
+	                                           "them together. Reducing this setting can reduce memory consumption.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "5";
+	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
 struct ZstdMinStringLengthSetting {

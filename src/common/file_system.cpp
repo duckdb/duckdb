@@ -30,10 +30,7 @@
 #include <unistd.h>
 
 #ifdef __MVS__
-#define _XOPEN_SOURCE_EXTENDED 1
 #include <sys/resource.h>
-// enjoy - https://reviews.llvm.org/D92110
-#define PATH_MAX _XOPEN_PATH_MAX
 #endif
 
 #else
@@ -453,6 +450,10 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
+FileMetadata FileSystem::Stats(FileHandle &handle) {
+	throw NotImplementedException("%s: Stats is not implemented!", GetName());
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
@@ -628,39 +629,9 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-static string LookupExtensionForPattern(const string &pattern) {
-	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
-		if (StringUtil::StartsWith(pattern, entry.name)) {
-			return entry.extension;
-		}
-	}
-	return "";
-}
-
 vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
-		string required_extension = LookupExtensionForPattern(pattern);
-		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
-			auto &dbconfig = DBConfig::GetConfig(context);
-			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
-			    !dbconfig.options.autoload_known_extensions) {
-				auto error_message =
-				    "File " + pattern + " requires the extension " + required_extension + " to be loaded";
-				error_message =
-				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
-				throw MissingExtensionException(error_message);
-			}
-			// an extension is required to read this file, but it is not loaded - try to load it
-			ExtensionHelper::AutoLoadExtension(context, required_extension);
-			// success! glob again
-			// check the extension is loaded just in case to prevent an infinite loop here
-			if (!context.db->ExtensionIsLoaded(required_extension)) {
-				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
-				                        required_extension);
-			}
-			return GlobFiles(pattern, context, input);
-		}
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
 			if (!HasGlob(pattern)) {
@@ -724,7 +695,7 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -744,7 +715,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -752,7 +723,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_WRITTEN, nr_bytes);
 	}
 
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -828,6 +799,10 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+FileMetadata FileHandle::Stats() {
+	return file_system.Stats(*this);
 }
 
 void FileHandle::TryAddLogger(FileOpener &opener) {

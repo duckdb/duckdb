@@ -49,9 +49,9 @@ do
         # upload compressed extension binary to S3
 	if [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
 		#AWS_SECRET_ACCESS_KEY is empty -> dry run
-		aws s3 cp $f.brotli s3://duckdb-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm" --dryrun
+		aws s3 cp $f.brotli s3://duckdb-core-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm" --dryrun
 	else
-		aws s3 cp $f.brotli s3://duckdb-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
+		aws s3 cp $f.brotli s3://duckdb-core-extensions/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
 	fi
 done
 
