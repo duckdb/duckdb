@@ -116,12 +116,16 @@
 #include "linenoise.h"
 #endif
 
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
+
 #include "duckdb.hpp"
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 using namespace duckdb_shell;
 
@@ -1446,7 +1450,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	auto &con = *conn;
 	unique_ptr<duckdb::QueryResult> result;
-	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX) {
+	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX &&
+	    cMode != RenderMode::DESCRIBE) {
 		// for row-wise rendering we can use streaming results
 		result = con.SendQuery(std::move(statement));
 	} else {
@@ -1490,6 +1495,10 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	if (ShellRenderer::IsColumnar(cMode)) {
 		RenderColumnarResult(res);
+		return SuccessState::SUCCESS;
+	}
+	if (cMode == RenderMode::DESCRIBE) {
+		RenderDescribe(res);
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::DUCKBOX) {
@@ -1562,6 +1571,28 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			cMode = mode;
 			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
+			}
+			if (statement->type == duckdb::StatementType::SELECT_STATEMENT) {
+				auto &select = statement->Cast<duckdb::SelectStatement>();
+				if (select.node->type == duckdb::QueryNodeType::SELECT_NODE) {
+					auto &select_node = select.node->Cast<duckdb::SelectNode>();
+					if (select_node.from_table->type == duckdb::TableReferenceType::SHOW_REF) {
+						auto &showref = select_node.from_table->Cast<duckdb::ShowRef>();
+						if (showref.show_type != duckdb::ShowType::SUMMARY) {
+							cMode = RenderMode::DESCRIBE;
+							describe_table_name = "Describe";
+							if (!showref.table_name.empty()) {
+								describe_table_name = showref.table_name;
+							} else if (showref.query && showref.query->type == duckdb::QueryNodeType::SELECT_NODE) {
+								auto &show_select = showref.query->Cast<duckdb::SelectNode>();
+								if (show_select.from_table->type == duckdb::TableReferenceType::BASE_TABLE) {
+									auto &base_table = show_select.from_table->Cast<duckdb::BaseTableRef>();
+									describe_table_name = base_table.table_name;
+								}
+							}
+						}
+					}
+				}
 			}
 
 			auto rc = ExecuteStatement(std::move(statement));
@@ -2668,6 +2699,7 @@ void ShellState::ShowConfiguration() {
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
 }
 
+namespace duckdb_shell {
 struct ShellColumnInfo {
 	string column_name;
 	string column_type;
@@ -2721,6 +2753,7 @@ struct ShellTableDisplayInfo {
 	idx_t render_width = 0;
 	vector<ShellTableLineInfo> display_lines;
 };
+} // namespace duckdb_shell
 
 void ShellTableLineInfo::RenderLine(ShellHighlight &highlight, const vector<ShellTableInfo> &table_list, idx_t line_idx,
                                     bool last_line) {
@@ -2845,83 +2878,15 @@ void ShellTableLineInfo::RenderLine(ShellHighlight &highlight, const vector<Shel
 	highlight.PrintText(bottom_line, PrintOutput::STDOUT, layout_type);
 }
 
-MetadataResult ShellState::DisplayTables(const vector<string> &args) {
-	if (args.size() > 2) {
-		return MetadataResult::PRINT_USAGE;
+string FormatTableMetadataType(const string &type) {
+	auto result = StringUtil::Lower(type);
+	if (StringUtil::StartsWith(result, "decimal")) {
+		return "decimal";
 	}
-	// FIXME: copy pasted from below
-	// Parse the filter pattern to check for schema qualification
-	string filter_pattern = args.size() > 1 ? args[1] : string();
-	string schema_filter = "";
-	string table_filter = "%" + filter_pattern + "%";
+	return result;
+}
 
-	// Parse the filter pattern to check for schema qualification
-	try {
-		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
-		if (components.size() >= 2) {
-			// e.g : "schema.table" or "schema.%"
-			schema_filter = "%" + components[0] + "%";
-			table_filter = "%" + components[1] + "%";
-		}
-	} catch (const duckdb::ParserException &) {
-		// If parsing fails, treat as a simple table pattern
-	}
-	string schema_filter_str;
-	string name_filter;
-	if (!table_filter.empty()) {
-		name_filter = StringUtil::Format(" AND columns.table_name ILIKE %s", SQLString(table_filter));
-	}
-	if (!schema_filter.empty()) {
-		schema_filter_str = StringUtil::Format(" AND columns.schema_name ILIKE %s", SQLString(schema_filter));
-	}
-	auto query = StringUtil::Format(R"(
-	SELECT columns.database_name, columns.schema_name, columns.table_name, list(struct_pack(column_name, data_type) order by column_index), t.estimated_size AS estimated_size, t.table_oid AS table_oid
-	FROM duckdb_columns() columns
-	LEFT JOIN duckdb_tables() t USING (table_oid)
-	WHERE NOT columns.internal%s%s
-	GROUP BY ALL
-)",
-	                                schema_filter_str, name_filter);
-
-	auto &con = *conn;
-	auto query_result = con.Query(query);
-	if (query_result->HasError()) {
-		PrintDatabaseError(query_result->GetError());
-		return MetadataResult::FAIL;
-	}
-	vector<ShellTableInfo> result;
-	for (auto &row : *query_result) {
-		ShellTableInfo table;
-		table.database_name = row.GetValue<string>(0);
-		table.schema_name = row.GetValue<string>(1);
-		table.table_name = row.GetValue<string>(2);
-		if (table.schema_name != DEFAULT_SCHEMA) {
-			table.table_name = table.schema_name + "." + table.table_name;
-		}
-
-		auto column_val = row.GetBaseValue(3);
-		ColumnRenderRow column_render_row;
-		for (auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
-			ShellColumnInfo column;
-			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
-			column.column_name = struct_children[0].GetValue<string>();
-			column.column_type = StringUtil::Lower(struct_children[1].GetValue<string>());
-			if (StringUtil::StartsWith(column.column_type, "decimal")) {
-				column.column_type = "decimal";
-			}
-			column_render_row.columns.push_back(std::move(column));
-		}
-		table.column_renders.push_back(std::move(column_render_row));
-		if (!row.IsNull(4)) {
-			table.estimated_size = row.GetValue<idx_t>(4);
-		}
-		if (row.IsNull(5)) {
-			// view
-			table.is_view = true;
-		}
-
-		result.push_back(std::move(table));
-	}
+void ShellState::RenderTableMetadata(vector<ShellTableInfo> &result) {
 	// figure out the render width of every table
 	duckdb::BoxRendererConfig config;
 	for (auto &table : result) {
@@ -2931,6 +2896,7 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		idx_t max_col_type_length = 0;
 		for (auto &column_render : table.column_renders) {
 			for (auto &col : column_render.columns) {
+				col.column_type = FormatTableMetadataType(col.column_type);
 				col.column_name_length = RenderLength(col.column_name);
 				col.column_type_length = RenderLength(col.column_type);
 				max_col_name_length = duckdb::MaxValue<idx_t>(col.column_name_length.GetIndex(), max_col_name_length);
@@ -3111,6 +3077,100 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 			highlight.PrintText("\n", PrintOutput::STDOUT, HighlightElementType::LAYOUT);
 		}
 	}
+}
+
+SuccessState ShellState::RenderDescribe(duckdb::QueryResult &res) {
+	vector<ShellTableInfo> result;
+	ShellTableInfo table;
+	ColumnRenderRow column_render_row;
+	table.table_name = describe_table_name;
+	for (auto &row : res) {
+		ShellColumnInfo column;
+		column.column_name = row.GetValue<string>(0);
+		column.column_type = row.GetValue<string>(1);
+		column_render_row.columns.push_back(std::move(column));
+	}
+	table.column_renders.push_back(std::move(column_render_row));
+	result.push_back(std::move(table));
+	RenderTableMetadata(result);
+	return SuccessState::SUCCESS;
+}
+
+MetadataResult ShellState::DisplayTables(const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	// FIXME: copy pasted from below
+	// Parse the filter pattern to check for schema qualification
+	string filter_pattern = args.size() > 1 ? args[1] : string();
+	string schema_filter = "";
+	string table_filter = "%" + filter_pattern + "%";
+
+	// Parse the filter pattern to check for schema qualification
+	try {
+		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
+		if (components.size() >= 2) {
+			// e.g : "schema.table" or "schema.%"
+			schema_filter = "%" + components[0] + "%";
+			table_filter = "%" + components[1] + "%";
+		}
+	} catch (const duckdb::ParserException &) {
+		// If parsing fails, treat as a simple table pattern
+	}
+	string schema_filter_str;
+	string name_filter;
+	if (!table_filter.empty()) {
+		name_filter = StringUtil::Format(" AND columns.table_name ILIKE %s", SQLString(table_filter));
+	}
+	if (!schema_filter.empty()) {
+		schema_filter_str = StringUtil::Format(" AND columns.schema_name ILIKE %s", SQLString(schema_filter));
+	}
+	auto query = StringUtil::Format(R"(
+	SELECT columns.database_name, columns.schema_name, columns.table_name, list(struct_pack(column_name, data_type) order by column_index), t.estimated_size AS estimated_size, t.table_oid AS table_oid
+	FROM duckdb_columns() columns
+	LEFT JOIN duckdb_tables() t USING (table_oid)
+	WHERE NOT columns.internal%s%s
+	GROUP BY ALL
+)",
+	                                schema_filter_str, name_filter);
+
+	auto &con = *conn;
+	auto query_result = con.Query(query);
+	if (query_result->HasError()) {
+		PrintDatabaseError(query_result->GetError());
+		return MetadataResult::FAIL;
+	}
+	vector<ShellTableInfo> result;
+	for (auto &row : *query_result) {
+		ShellTableInfo table;
+		table.database_name = row.GetValue<string>(0);
+		table.schema_name = row.GetValue<string>(1);
+		table.table_name = row.GetValue<string>(2);
+		if (table.schema_name != DEFAULT_SCHEMA) {
+			table.table_name = table.schema_name + "." + table.table_name;
+		}
+
+		auto column_val = row.GetBaseValue(3);
+		ColumnRenderRow column_render_row;
+		for (auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
+			ShellColumnInfo column;
+			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
+			column.column_name = struct_children[0].GetValue<string>();
+			column.column_type = struct_children[1].GetValue<string>();
+			column_render_row.columns.push_back(std::move(column));
+		}
+		table.column_renders.push_back(std::move(column_render_row));
+		if (!row.IsNull(4)) {
+			table.estimated_size = row.GetValue<idx_t>(4);
+		}
+		if (row.IsNull(5)) {
+			// view
+			table.is_view = true;
+		}
+
+		result.push_back(std::move(table));
+	}
+	RenderTableMetadata(result);
 	return MetadataResult::SUCCESS;
 }
 

@@ -46,6 +46,7 @@ using duckdb::to_string;
 struct Prompt;
 struct ShellProgressBar;
 struct PagerState;
+struct ShellTableInfo;
 
 using idx_t = uint64_t;
 
@@ -60,6 +61,7 @@ enum class RenderMode : uint32_t {
 	TCL,       /* Generate ANSI-C or TCL quoted elements */
 	CSV,       /* Quote strings, numbers are plain */
 	EXPLAIN,   /* Like RenderMode::Column, but do not truncate data */
+	DESCRIBE,  /* Special DESCRIBE Renderer */
 	ASCII,     /* Use ASCII unit and record separators (0x1F/0x1E) */
 	PRETTY,    /* Pretty-print schemas */
 	EQP,       /* Converts EXPLAIN QUERY PLAN output into a graph */
@@ -308,6 +310,8 @@ public:
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
 	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
+	SuccessState RenderDescribe(duckdb::QueryResult &res);
+	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
 	void PrintDatabaseError(const string &zErr);
 	int RunInitialCommand(const char *sql, bool bail);
@@ -403,6 +407,9 @@ public:
 private:
 	ShellState();
 	~ShellState();
+
+private:
+	string describe_table_name;
 };
 
 } // namespace duckdb_shell
