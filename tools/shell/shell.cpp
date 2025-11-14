@@ -2652,14 +2652,114 @@ void ShellState::ShowConfiguration() {
 struct ShellColumnInfo {
 	string column_name;
 	string column_type;
+	optional_idx column_name_length;
+	optional_idx column_type_length;
 };
 
 struct ShellTableInfo {
 	string database_name;
 	string schema_name;
 	string table_name;
+	optional_idx table_name_length;
+	optional_idx max_column_name_length;
+	optional_idx max_column_type_length;
+	optional_idx render_width;
 	vector<ShellColumnInfo> columns;
 };
+
+struct ShellTableLineInfo {
+	idx_t render_height = 0;
+	idx_t render_width = 0;
+	idx_t max_column_name_length = 0;
+	idx_t max_column_type_length = 0;
+	vector<idx_t> tables;
+
+	string RenderLine(const vector<ShellTableInfo> &tables, idx_t line_idx, bool last_line);
+};
+
+struct ShellTableDisplayInfo {
+	idx_t render_height = 0;
+	idx_t render_width = 0;
+	vector<ShellTableLineInfo> display_lines;
+};
+
+string ShellTableLineInfo::RenderLine(const vector<ShellTableInfo> &table_list, idx_t line_idx, bool last_line) {
+	// figure out the table to render
+	idx_t table_idx = 0;
+	for (; table_idx < tables.size(); table_idx++) {
+		idx_t line_count = table_list[tables[table_idx]].columns.size() + 4;
+		if (line_idx < line_count) {
+			// line belongs to this table - render it
+			break;
+		}
+		// line belongs to a subsequent table - subtract line count and move to next table
+		line_idx -= line_count;
+	}
+	if (table_idx == tables.size()) {
+		// we didn't render any table - break
+		if (last_line) {
+			return string();
+		}
+		// we need to add spaces if this is not the last line
+		return string(render_width, ' ');
+	}
+	auto &table = table_list[tables[table_idx]];
+	duckdb::BoxRendererConfig config;
+	if (line_idx == 0) {
+		// first line - render layout
+		string top_line;
+		top_line = config.LTCORNER;
+		for (idx_t i = 0; i < render_width - 2; i++) {
+			top_line += config.HORIZONTAL;
+		}
+		top_line += config.RTCORNER;
+		return top_line;
+	}
+	if (line_idx == 1) {
+		// table name
+		string table_name;
+		idx_t space_count = render_width - table.table_name_length.GetIndex() - 2;
+		idx_t lspace = space_count / 2;
+		idx_t rspace = space_count - lspace;
+		string table_line = config.VERTICAL;
+		table_line += string(lspace, ' ');
+		table_line += table.table_name;
+		table_line += string(rspace, ' ');
+		table_line += config.VERTICAL;
+		return table_line;
+	}
+	if (line_idx == 2) {
+		// blank line after table name
+		string blank_line = config.VERTICAL;
+		blank_line += string(render_width - 2, ' ');
+		blank_line += config.VERTICAL;
+		return blank_line;
+	}
+	if (line_idx >= table.columns.size() + 3) {
+		// bottom line
+		string bottom_line;
+		bottom_line = config.LDCORNER;
+		for (idx_t i = 0; i < render_width - 2; i++) {
+			bottom_line += config.HORIZONTAL;
+		}
+		bottom_line += config.RDCORNER;
+		return bottom_line;
+	}
+
+	// column line
+	auto &col = table.columns[line_idx - 3];
+	idx_t col_name_length = col.column_name_length.GetIndex();
+	idx_t col_type_length = col.column_type_length.GetIndex();
+
+	string column_line = config.VERTICAL;
+	column_line += " ";
+	column_line += col.column_name;
+	column_line += string(max_column_name_length - col_name_length + 1, ' ');
+	column_line += col.column_type;
+	column_line += string(max_column_type_length - col_type_length + 1, ' ');
+	column_line += config.VERTICAL;
+	return column_line;
+}
 
 MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 	if (args.size() > 2) {
@@ -2669,36 +2769,36 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 	// Parse the filter pattern to check for schema qualification
 	string filter_pattern = args.size() > 1 ? args[1] : string();
 	string schema_filter = "";
-	string table_filter = filter_pattern;
+	string table_filter = "%" + filter_pattern + "%";
 
 	// Parse the filter pattern to check for schema qualification
 	try {
 		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
 		if (components.size() >= 2) {
 			// e.g : "schema.table" or "schema.%"
-			schema_filter = components[0];
-			table_filter = components[1];
+			schema_filter = "%" + components[0] + "%";
+			table_filter = "%" + components[1] + "%";
 		}
 	} catch (const duckdb::ParserException &) {
 		// If parsing fails, treat as a simple table pattern
-		schema_filter = "";
-		table_filter = filter_pattern;
 	}
 	string schema_filter_str;
 	string name_filter;
 	if (!table_filter.empty()) {
-		name_filter = StringUtil::Format(" AND table_name LIKE %s", SQLString(table_filter));;
+		name_filter = StringUtil::Format(" AND table_name ILIKE %s", SQLString(table_filter));
+		;
 	}
 	if (!schema_filter.empty()) {
-		schema_filter_str = StringUtil::Format(" AND schema_name LIKE %s", SQLString(schema_filter));;
+		schema_filter_str = StringUtil::Format(" AND schema_name ILIKE %s", SQLString(schema_filter));
+		;
 	}
 	auto query = StringUtil::Format(R"(
 	SELECT database_name, schema_name, table_name, list(struct_pack(column_name, data_type) order by column_index)
 	FROM duckdb_columns()
 	WHERE NOT internal%s%s
 	GROUP BY ALL
-)", schema_filter_str, name_filter);
-
+)",
+	                                schema_filter_str, name_filter);
 
 	auto &con = *conn;
 	auto query_result = con.Query(query);
@@ -2713,7 +2813,7 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		table.table_name = row.GetValue<string>(2);
 
 		auto column_val = row.GetBaseValue(3);
-		for(auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
+		for (auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
 			ShellColumnInfo column;
 			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
 			column.column_name = struct_children[0].GetValue<string>();
@@ -2723,95 +2823,141 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 
 		result.push_back(std::move(table));
 	}
-	// print every table and their columns in a box
+	// figure out the render width of every table
 	duckdb::BoxRendererConfig config;
-	for(auto &table : result) {
+	for (auto &table : result) {
 		// figure out the render width
-		auto table_render_length = RenderLength(table.table_name);
+		table.table_name_length = RenderLength(table.table_name);
 		idx_t max_col_name_length = 0;
 		idx_t max_col_type_length = 0;
-		for(auto &col : table.columns) {
-			idx_t col_name_length = RenderLength(col.column_name);
-			idx_t col_type_length = RenderLength(col.column_type);
-			max_col_name_length = duckdb::MaxValue<idx_t>(col_name_length, max_col_name_length);
-			max_col_type_length = duckdb::MaxValue<idx_t>(col_type_length, max_col_type_length);
+		for (auto &col : table.columns) {
+			col.column_name_length = RenderLength(col.column_name);
+			col.column_type_length = RenderLength(col.column_type);
+			max_col_name_length = duckdb::MaxValue<idx_t>(col.column_name_length.GetIndex(), max_col_name_length);
+			max_col_type_length = duckdb::MaxValue<idx_t>(col.column_type_length.GetIndex(), max_col_type_length);
 		}
-
-		idx_t render_width = duckdb::MaxValue<idx_t>(table_render_length, max_col_name_length + max_col_type_length + 1) + 4;
-
-		// render the table
-		// top line
-		string top_line;
-		top_line = config.LTCORNER;
-		for(idx_t i = 0; i < render_width - 2; i++) {
-			top_line += config.HORIZONTAL;
-		}
-		top_line += config.RTCORNER;
-		top_line += "\n";
-
-		Print(PrintOutput::STDOUT, top_line);
-
-		// table name
-		idx_t space_count = render_width - table_render_length - 2;
-		idx_t lspace = space_count / 2;
-		idx_t rspace = space_count - lspace;
-		string table_line = config.VERTICAL;
-		table_line += string(lspace, ' ');
-		table_line += table.table_name;
-		table_line += string(rspace, ' ');
-		table_line += config.VERTICAL;
-		table_line += "\n";
-
-		Print(PrintOutput::STDOUT, table_line);
-
-		// blank line
-		string blank_line = config.VERTICAL;
-		blank_line += string(render_width - 2, ' ');
-		blank_line += config.VERTICAL;
-		blank_line += "\n";
-		Print(PrintOutput::STDOUT, blank_line);
-
-		// column lines
-		for(auto &col : table.columns) {
-			idx_t col_name_length = RenderLength(col.column_name);
-			idx_t col_type_length = RenderLength(col.column_type);
-
-			string column_line = config.VERTICAL;
-			column_line += " ";
-			column_line += col.column_name;
-			column_line += string(max_col_name_length - col_name_length + 1, ' ');
-			column_line += col.column_type;
-			column_line += string(max_col_type_length - col_type_length + 1, ' ');
-			column_line += config.VERTICAL;
-			column_line += "\n";
-			Print(PrintOutput::STDOUT, column_line);
-		}
-
-		// bottom line
-		string bottom_line;
-		bottom_line = config.LDCORNER;
-		for(idx_t i = 0; i < render_width - 2; i++) {
-			bottom_line += config.HORIZONTAL;
-		}
-		bottom_line += config.RDCORNER;
-		bottom_line += "\n";
-
-		Print(PrintOutput::STDOUT, bottom_line);
+		table.max_column_name_length = max_col_name_length;
+		table.max_column_type_length = max_col_type_length;
+		table.render_width =
+		    duckdb::MaxValue<idx_t>(table.table_name_length.GetIndex(), max_col_name_length + max_col_type_length + 1) +
+		    4;
 	}
 
-	// const char *LTCORNER = "\342\224\214"; // NOLINT: "┌";
-	// const char *RTCORNER = "\342\224\220"; // NOLINT: "┐";
-	// const char *LDCORNER = "\342\224\224"; // NOLINT: "└";
-	// const char *RDCORNER = "\342\224\230"; // NOLINT: "┘";
-	//
-	// const char *MIDDLE = "\342\224\274";  // NOLINT: "┼";
-	// const char *TMIDDLE = "\342\224\254"; // NOLINT: "┬";
-	// const char *LMIDDLE = "\342\224\234"; // NOLINT: "├";
-	// const char *RMIDDLE = "\342\224\244"; // NOLINT: "┤";
-	// const char *DMIDDLE = "\342\224\264"; // NOLINT: "┴";
-	//
-	// const char *VERTICAL = "\342\224\202";   // NOLINT: "│";
-	// const char *HORIZONTAL = "\342\224\200"; // NOLINT: "─";
+	// sort from biggest to smallest table
+	std::sort(result.begin(), result.end(),
+	          [](const ShellTableInfo &a, const ShellTableInfo &b) { return a.columns.size() > b.columns.size(); });
+	idx_t max_render_width = max_width == 0 ? duckdb::Printer::TerminalWidth() : max_width;
+	if (max_render_width == 0) {
+		max_render_width = 80;
+	}
+
+	// try to colocate different tables on the same lines in a greedy manner
+	vector<ShellTableDisplayInfo> display_lines;
+	duckdb::unordered_set<idx_t> displayed_tables;
+	for (idx_t table_idx = 0; table_idx < result.size(); table_idx++) {
+		if (displayed_tables.find(table_idx) != displayed_tables.end()) {
+			// already displayed
+			continue;
+		}
+		displayed_tables.insert(table_idx);
+		auto &initial_table = result[table_idx];
+		ShellTableDisplayInfo display_line;
+		// the first line always has only one table (this table)
+		ShellTableLineInfo initial_line;
+		initial_line.tables.push_back(table_idx);
+		display_line.render_width = initial_line.render_width = initial_table.render_width.GetIndex();
+		display_line.render_height = initial_line.render_height = initial_table.columns.size() + 4;
+		initial_line.max_column_name_length = initial_table.max_column_name_length.GetIndex();
+		initial_line.max_column_type_length = initial_table.max_column_type_length.GetIndex();
+		display_line.display_lines.push_back(std::move(initial_line));
+
+		// now for each table, check if we can co-locate it
+		for (idx_t next_idx = table_idx + 1; next_idx < result.size(); next_idx++) {
+			auto &current_table = result[next_idx];
+			auto render_width = current_table.render_width.GetIndex();
+			auto render_height = current_table.columns.size() + 4;
+			// we have two choices with co-locating
+			// we can EITHER add a new line
+			// OR add it to an existing line
+			// we prefer to add it to an existing line if possible
+			if (render_height > display_line.render_height) {
+				// if this table is bigger than the current render height we can never add it - so just skip it
+				continue;
+			}
+			bool added = false;
+			for (auto &existing_line : display_line.display_lines) {
+				if (existing_line.render_height + render_height > display_line.render_height) {
+					// does not fit!
+					continue;
+				}
+				// adding the table here works out height wise - we could potentially add it here
+				// however, we do need to "stretch" the line to fit the current unit
+				idx_t max_col_name_width = existing_line.max_column_name_length;
+				idx_t max_col_type_width = existing_line.max_column_type_length;
+				if (current_table.max_column_name_length.GetIndex() > max_col_name_width) {
+					max_col_name_width = current_table.max_column_name_length.GetIndex();
+				}
+				if (current_table.max_column_type_length.GetIndex() > max_col_type_width) {
+					max_col_type_width = current_table.max_column_type_length.GetIndex();
+				}
+				idx_t new_rendering_width = duckdb::MaxValue<idx_t>(render_width, existing_line.render_width);
+				new_rendering_width =
+				    duckdb::MaxValue<idx_t>(new_rendering_width, max_col_name_width + max_col_type_width + 5);
+
+				D_ASSERT(new_rendering_width >= existing_line.render_width);
+				idx_t extra_width = new_rendering_width - existing_line.render_width;
+
+				if (display_line.render_width + extra_width > max_render_width) {
+					// the extra width makes us exceed the rendering width limit - we cannot add it here
+					continue;
+				}
+				// we can add it here! extend the line and add the table
+				existing_line.max_column_name_length = max_col_name_width;
+				existing_line.max_column_type_length = max_col_type_width;
+				existing_line.render_width += extra_width;
+				existing_line.render_height += render_height;
+				existing_line.tables.push_back(next_idx);
+				added = true;
+				break;
+			}
+			if (!added) {
+				// if we couldn't add it to an existing line we might still be able to add a new line
+				// but only if that fits width wise
+				if (display_line.render_width + render_width <= max_render_width) {
+					// it does! add an extra line
+					ShellTableLineInfo new_line;
+					new_line.tables.push_back(next_idx);
+					new_line.render_width = render_width;
+					new_line.render_height = render_height;
+					new_line.max_column_name_length = current_table.max_column_name_length.GetIndex();
+					new_line.max_column_type_length = current_table.max_column_type_length.GetIndex();
+					display_line.render_width += render_width;
+					display_line.display_lines.push_back(std::move(new_line));
+					added = true;
+				}
+			}
+			if (added) {
+				// we added this table for rendering - add to the displayed tables list
+				displayed_tables.insert(next_idx);
+			}
+		}
+		display_lines.push_back(std::move(display_line));
+	}
+
+	// render the display lines
+	for (auto &display_line : display_lines) {
+		for (idx_t line_idx = 0; line_idx < display_line.render_height; line_idx++) {
+			string line;
+			// construct the line
+			for (idx_t table_line_idx = 0; table_line_idx < display_line.display_lines.size(); table_line_idx++) {
+				bool is_last = table_line_idx + 1 == display_line.display_lines.size();
+				line += display_line.display_lines[table_line_idx].RenderLine(result, line_idx, is_last);
+			}
+
+			line += "\n";
+			Print(PrintOutput::STDOUT, line);
+		}
+	}
 	return MetadataResult::SUCCESS;
 }
 
