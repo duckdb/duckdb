@@ -10,16 +10,19 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
-#include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
+
 #include <functional>
 
 #undef CreateDirectory
@@ -55,6 +58,15 @@ enum class FileType {
 	FILE_TYPE_INVALID,
 };
 
+struct FileMetadata {
+	int64_t file_size = -1;
+	timestamp_t last_modification_time = timestamp_t::ninfinity();
+	FileType file_type = FileType::FILE_TYPE_INVALID;
+
+	// A key-value pair of the extended file metadata, which could store any attributes.
+	unordered_map<string, Value> extended_file_info;
+};
+
 struct FileHandle {
 public:
 	DUCKDB_API FileHandle(FileSystem &file_system, string path, FileOpenFlags flags);
@@ -87,6 +99,7 @@ public:
 	DUCKDB_API bool OnDiskFile();
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
+	DUCKDB_API FileMetadata Stats();
 
 	DUCKDB_API void TryAddLogger(FileOpener &opener);
 
@@ -158,6 +171,8 @@ public:
 	DUCKDB_API virtual string GetVersionTag(FileHandle &handle);
 	//! Returns the file type of the attached handle
 	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
+	//! Returns the file stats of the attached handle.
+	DUCKDB_API virtual FileMetadata Stats(FileHandle &handle);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);

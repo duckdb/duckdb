@@ -52,6 +52,7 @@ class ScanFilterInfo;
 class StorageCommitState;
 template <class T>
 struct SegmentNode;
+enum class ColumnDataType;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -85,7 +86,7 @@ public:
 	friend class ColumnData;
 
 public:
-	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
+	RowGroup(RowGroupCollection &collection, idx_t count);
 	RowGroup(RowGroupCollection &collection, RowGroupPointer pointer);
 	RowGroup(RowGroupCollection &collection, PersistentRowGroupData &data);
 	~RowGroup();
@@ -101,7 +102,7 @@ private:
 	vector<shared_ptr<ColumnData>> columns;
 
 public:
-	void MoveToCollection(RowGroupCollection &collection, idx_t new_start);
+	void MoveToCollection(RowGroupCollection &collection);
 	RowGroupCollection &GetCollection() {
 		return collection.get();
 	}
@@ -127,7 +128,7 @@ public:
 	void CommitDrop();
 	void CommitDropColumn(const idx_t column_index);
 
-	void InitializeEmpty(const vector<LogicalType> &types);
+	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;
 
 	//! Initialize a scan over this row_group
@@ -157,12 +158,12 @@ public:
 	//! Commit a previous append made by RowGroup::AppendVersionInfo
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
 	//! Revert a previous append made by RowGroup::AppendVersionInfo
-	void RevertAppend(idx_t start);
+	void RevertAppend(idx_t new_count);
 	//! Clean up append states that can either be compressed or deleted
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 
 	//! Delete the given set of rows in the version manager
-	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
+	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count, idx_t row_group_start);
 
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
 	                                             const vector<reference<RowGroup>> &row_groups);
@@ -170,19 +171,20 @@ public:
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
-	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats);
+	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
+	                           idx_t row_group_start);
 	bool IsPersistent() const;
-	PersistentRowGroupData SerializeRowGroupInfo() const;
+	PersistentRowGroupData SerializeRowGroupInfo(idx_t row_group_start) const;
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
 	void Update(TransactionData transaction, DataTable &data_table, DataChunk &updates, row_t *ids, idx_t offset,
-	            idx_t count, const vector<PhysicalIndex> &column_ids);
+	            idx_t count, const vector<PhysicalIndex> &column_ids, idx_t row_group_start);
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
 	void UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
-	                  idx_t offset, idx_t count, const vector<column_t> &column_path);
+	                  idx_t offset, idx_t count, const vector<column_t> &column_path, idx_t row_group_start);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
@@ -190,7 +192,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
-	PartitionStatistics GetPartitionStats() const;
+	PartitionStatistics GetPartitionStats(idx_t row_group_start) const;
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
