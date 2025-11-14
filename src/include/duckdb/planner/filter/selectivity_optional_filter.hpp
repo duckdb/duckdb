@@ -15,10 +15,10 @@ namespace duckdb {
 class SelectivityOptionalFilter final : public OptionalFilter {
 public:
 	static constexpr auto MIN_MAX_THRESHOLD = 0.75f;
-	static constexpr idx_t MIN_MAX_CHECK_N = 20;
+	static constexpr idx_t MIN_MAX_CHECK_N = 30;
 
 	static constexpr float BF_THRESHOLD = 0.25f;
-	static constexpr idx_t BF_CHECK_N = 30;
+	static constexpr idx_t BF_CHECK_N = 75;
 
 	float selectivity_threshold;
 	idx_t n_vectors_to_check;
