@@ -43,6 +43,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
         MetricsType::OPTIMIZER_CTE_INLINING,
         MetricsType::OPTIMIZER_COMMON_SUBPLAN,
+        MetricsType::OPTIMIZER_JOIN_ELIMINATION,
     };
 }
 
@@ -121,6 +122,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_CTE_INLINING;
         case OptimizerType::COMMON_SUBPLAN:
             return MetricsType::OPTIMIZER_COMMON_SUBPLAN;
+        case OptimizerType::JOIN_ELIMINATION:
+            return MetricsType::OPTIMIZER_JOIN_ELIMINATION;
        default:
             throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
     };
@@ -188,6 +191,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::CTE_INLINING;
         case MetricsType::OPTIMIZER_COMMON_SUBPLAN:
             return OptimizerType::COMMON_SUBPLAN;
+        case MetricsType::OPTIMIZER_JOIN_ELIMINATION:
+            return OptimizerType::JOIN_ELIMINATION;
     default:
             return OptimizerType::INVALID;
     };
@@ -225,6 +230,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
         case MetricsType::OPTIMIZER_CTE_INLINING:
         case MetricsType::OPTIMIZER_COMMON_SUBPLAN:
+        case MetricsType::OPTIMIZER_JOIN_ELIMINATION:
             return true;
         default:
             return false;

@@ -166,7 +166,6 @@ std::string Utf8Proc::RemoveInvalid(const char *s, size_t len) {
 	std::string result;
 	result.reserve(len); // Reserve the maximum possible size
 
-	UnicodeType type = UnicodeType::ASCII;
 	for (size_t i = 0; i < len; i++) {
 		int c = (int)s[i];
 		if ((c & 0x80) == 0) {
@@ -179,15 +178,15 @@ std::string Utf8Proc::RemoveInvalid(const char *s, size_t len) {
 		if ((c & 0xE0) == 0xC0) {
 			/* 2 byte sequence */
 			int utf8char = c & 0x1F;
-			type = UTF8ExtraByteLoop<1, 0x000780>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+			UTF8ExtraByteLoop<1, 0x000780>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
 		} else if ((c & 0xF0) == 0xE0) {
 			/* 3 byte sequence */
 			int utf8char = c & 0x0F;
-			type = UTF8ExtraByteLoop<2, 0x00F800>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+			UTF8ExtraByteLoop<2, 0x00F800>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
 		} else if ((c & 0xF8) == 0xF0) {
 			/* 4 byte sequence */
 			int utf8char = c & 0x07;
-			type = UTF8ExtraByteLoop<3, 0x1F0000>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
+			UTF8ExtraByteLoop<3, 0x1F0000>(first_pos_seq, utf8char, i, s, len, nullptr, nullptr);
 		} else {
 			// invalid, do not write to output
 			continue;

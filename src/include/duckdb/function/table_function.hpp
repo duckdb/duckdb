@@ -114,14 +114,16 @@ struct TableFunctionBindInput {
 
 struct RowGroupOrderOptions {
 	RowGroupOrderOptions(column_t column_idx_p, OrderByStatistics order_by_p, RowGroupOrderType order_type_p,
-	                     OrderByColumnType column_type_p)
-	    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p) {
+	                     OrderByColumnType column_type_p, optional_idx row_limit_p = optional_idx())
+	    : column_idx(column_idx_p), order_by(order_by_p), order_type(order_type_p), column_type(column_type_p),
+	      row_limit(row_limit_p) {
 	}
 
 	const column_t column_idx;
 	const OrderByStatistics order_by;
 	const RowGroupOrderType order_type;
 	const OrderByColumnType column_type;
+	const optional_idx row_limit;
 };
 
 struct TableFunctionInitInput {

@@ -270,6 +270,20 @@ typedef enum duckdb_config_option_scope {
 	DUCKDB_CONFIG_OPTION_SCOPE_GLOBAL = 3,
 } duckdb_config_option_scope;
 
+//! An enum over DuckDB's catalog entry types.
+typedef enum duckdb_catalog_entry_type {
+	DUCKDB_CATALOG_ENTRY_TYPE_INVALID = 0,
+	DUCKDB_CATALOG_ENTRY_TYPE_TABLE = 1,
+	DUCKDB_CATALOG_ENTRY_TYPE_SCHEMA = 2,
+	DUCKDB_CATALOG_ENTRY_TYPE_VIEW = 3,
+	DUCKDB_CATALOG_ENTRY_TYPE_INDEX = 4,
+	DUCKDB_CATALOG_ENTRY_TYPE_PREPARED_STATEMENT = 5,
+	DUCKDB_CATALOG_ENTRY_TYPE_SEQUENCE = 6,
+	DUCKDB_CATALOG_ENTRY_TYPE_COLLATION = 7,
+	DUCKDB_CATALOG_ENTRY_TYPE_TYPE = 8,
+	DUCKDB_CATALOG_ENTRY_TYPE_DATABASE = 9,
+} duckdb_catalog_entry_type;
+
 //===--------------------------------------------------------------------===//
 // General type definitions
 //===--------------------------------------------------------------------===//
@@ -846,6 +860,23 @@ typedef struct _duckdb_file_system {
 typedef struct _duckdb_file_handle {
 	void *internal_ptr;
 } * duckdb_file_handle;
+
+
+//===--------------------------------------------------------------------===//
+// Catalog Interface
+//===--------------------------------------------------------------------===//
+
+//! A handle to a database catalog.
+//! Must be destroyed with `duckdb_destroy_catalog`.
+typedef struct _duckdb_catalog {
+	void *internal_ptr;
+} * duckdb_catalog;
+
+//! A handle to a catalog entry (e.g., table, view, index, etc.).
+//! Must be destroyed with `duckdb_destroy_catalog_entry`.
+typedef struct _duckdb_catalog_entry {
+	void *internal_ptr;
+} * duckdb_catalog_entry;
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access

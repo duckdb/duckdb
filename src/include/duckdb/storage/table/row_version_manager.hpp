@@ -37,7 +37,7 @@ public:
 
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
 	void CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count);
-	void RevertAppend(idx_t start_row);
+	void RevertAppend(idx_t new_count);
 	void CleanupAppend(transaction_t lowest_active_transaction, idx_t row_group_start, idx_t count);
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
