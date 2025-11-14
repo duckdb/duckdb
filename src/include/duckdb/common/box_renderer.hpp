@@ -142,6 +142,7 @@ public:
 	void Print(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
 
 	static string TryFormatLargeNumber(const string &numeric, char decimal_sep);
+	static string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);
 
 private:
 	//! The configuration used for rendering

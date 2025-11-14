@@ -310,8 +310,7 @@ void BoxRendererImplementation::Render() {
 	RenderFooter(row_count, column_count);
 }
 
-string BoxRendererImplementation::TruncateValue(const string &value, idx_t column_width, idx_t &pos,
-                                                idx_t &current_render_width) {
+string BoxRenderer::TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width) {
 	idx_t start_pos = pos;
 	while (pos < value.size()) {
 		if (value[pos] == '\n') {
@@ -331,6 +330,11 @@ string BoxRendererImplementation::TruncateValue(const string &value, idx_t colum
 		pos = Utf8Proc::NextGraphemeCluster(value.c_str(), value.size(), pos);
 	}
 	return value.substr(start_pos, pos - start_pos);
+}
+
+string BoxRendererImplementation::TruncateValue(const string &value, idx_t column_width, idx_t &pos,
+                                                idx_t &current_render_width) {
+	return BoxRenderer::TruncateValue(value, column_width, pos, current_render_width);
 }
 
 void BoxRendererImplementation::RenderValue(const string &value, idx_t column_width, ResultRenderType render_mode,
