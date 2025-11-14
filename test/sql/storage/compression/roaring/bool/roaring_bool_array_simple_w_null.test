@@ -51,9 +51,9 @@ with intermediates as (
     from range(0, 10_000) t(i)
 )
 insert into test select case
-    when i = 0 or i = 6 or i = 1000 or i = 1500 or i = 2000 then false
-    when i = 3 or i = 10 or i = 1001 or i = 1501 then NULL
-    else true
+    when i = 0 or i = 6 or i = 1000 then false
+    when i = 1500 or i = 2000 then true
+    else null
 end from intermediates;
 
 statement ok
@@ -62,17 +62,17 @@ checkpoint;
 query I
 select count(*) from test WHERE a IS NULL;
 ----
-20
+9976
 
 query I
 select count(*) from test WHERE a IS false;
 ----
-24
+15
 
 query I
 select count(*) from test WHERE a IS true;
 ----
-9956
+9
 
 statement ok
 DROP TABLE test;

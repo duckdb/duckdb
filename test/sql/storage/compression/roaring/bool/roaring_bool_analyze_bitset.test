@@ -25,8 +25,8 @@ statement ok
 CREATE TABLE test_uncompressed AS SELECT
 	case
 		when i%3=0
-			then false
-		else true
+			then true
+		else false
 	end
 	FROM range(getvariable('dataset_size')) tbl(i);
 

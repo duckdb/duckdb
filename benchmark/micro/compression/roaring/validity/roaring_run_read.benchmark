@@ -1,6 +1,6 @@
-# name: benchmark/micro/compression/roaring/roaring_run_read.benchmark
+# name: benchmark/micro/compression/roaring/validity/roaring_run_read.benchmark
 # description: Scanning 1GB of ints compressed with Run Containers (inverted)
-# group: [roaring]
+# group: [validity]
 
 name Roaring Scan Run Container Inverted
 group roaring

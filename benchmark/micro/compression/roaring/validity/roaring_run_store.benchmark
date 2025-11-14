@@ -1,6 +1,6 @@
-# name: benchmark/micro/compression/roaring/roaring_run_store.benchmark
+# name: benchmark/micro/compression/roaring/validity/roaring_run_store.benchmark
 # description: Writing 250m tuples, with validity masks compressed with Roaring Bitmap Compression (Run Containers)
-# group: [roaring]
+# group: [validity]
 
 name Roaring Write Run Container
 group roaring

@@ -112,19 +112,18 @@ public:
 		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - NumericCast<idx_t>(remainder);
 	}
 
-	static void BitPackBooleans(data_ptr_t dst, const data_ptr_t src, const idx_t count,
-	                            const ValidityMask &validity_mask) {
+	inline static void BitPackBooleans(data_ptr_t dst, const data_ptr_t src, const idx_t count,
+	                                   const ValidityMask &validity_mask) {
+		bool is_last_bit_true = false; // If first value is null, write false, as it's probably the most common value
 		for (idx_t i = 0; i < count; i++) {
 			if (src[i] == 1) {
 				*dst |= (uint64_t(1) << (i % 8));
-			} else if (src[i] == 0 ||
-			           i == 0) { // If first value is null, write false, as it's probably the most common value
+				is_last_bit_true = true;
+			} else if (src[i] == 0) {
 				*dst &= ~(uint64_t(1) << (i % 8));
+				is_last_bit_true = false;
 			} else if (validity_mask.RowIsValid(i) == false) {
-				// If not 0 or 1, it's a placeholder value for null, so copy previous bit to form longer runs for RLE
-				idx_t prev_bit_idx = (i - 1) % 8;
-				data_ptr_t prev_dst = dst - ((i % 8 == 0) ? 1 : 0);
-				bool is_last_bit_true = (*prev_dst & (uint64_t(1) << prev_bit_idx)) != 0;
+				// If not 0 or 1, it's a placeholder value for null, so copy previous bit, forming longer runs for RLE
 				if (is_last_bit_true) {
 					*dst |= (uint64_t(1) << (i % 8));
 				} else {

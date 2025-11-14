@@ -25,8 +25,8 @@ statement ok
 CREATE TABLE test_uncompressed AS SELECT
 	case
 		when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450)
-			then true
-		else false
+			then false
+		else true
 	end
 	FROM range(getvariable('dataset_size')) tbl(i);
 
@@ -62,8 +62,6 @@ checkpoint
 statement ok
 set enable_logging=false;
 
-# TODO: It gets tricky to calculate how many runs there are because of null values. With the handrolled approach we can know it, but otherwise it depends on what the underlying data was.
-
 # For single row group
 # 60 vectors with 7 or 8 runs of trues per vector
 # Total compressed bytes:
@@ -83,4 +81,4 @@ where
 	message.contains('BOOLEAN') and
 	message.contains('COMPRESSION_ROARING');
 ----
-3020
+3024

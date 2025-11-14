@@ -12,7 +12,7 @@ statement ok
 CREATE TABLE test (a BOOL);
 
 statement ok
-INSERT INTO test SELECT case when i%25=0 then true else false end FROM range(0,10000) tbl(i);
+INSERT INTO test SELECT case when i%25=0 then false else true end FROM range(0,10000) tbl(i);
 
 statement ok
 checkpoint
@@ -40,8 +40,8 @@ insert into test select case when
 	i = 1000 or
 	i = 1500 or
 	i = 2000
-	then true
-else false end from intermediates;
+	then false
+else true end from intermediates;
 
 statement ok
 checkpoint;

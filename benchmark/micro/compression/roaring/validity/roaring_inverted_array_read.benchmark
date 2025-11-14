@@ -1,6 +1,6 @@
-# name: benchmark/micro/compression/roaring/roaring_inverted_array_read.benchmark
+# name: benchmark/micro/compression/roaring/validity/roaring_inverted_array_read.benchmark
 # description: Scanning 1GB of ints compressed with Array Containers (inverted)
-# group: [roaring]
+# group: [validity]
 
 name Roaring Scan Array Container Inverted
 group roaring

@@ -13,7 +13,7 @@ CREATE TABLE test (a BOOL);
 
 # 8 runs per Vector
 statement ok
-INSERT INTO test SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then true else false end FROM range(0,10000) tbl(i);
+INSERT INTO test SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then false else true end FROM range(0,10000) tbl(i);
 # runs:
 # (0,350)
 # (451,512)
@@ -28,7 +28,11 @@ statement ok
 checkpoint
 
 query I
-select count(*) from test WHERE a IS NOT true;
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' and compression != 'Roaring';
+----
+
+query I
+select count(*) from test WHERE a IS true;
 ----
 1938
 
@@ -41,7 +45,7 @@ with intermediates as (
 	select i % 2048 as i
 	from range(0, 10_000) t(i)
 )
-INSERT INTO test SELECT case when (i >= 0 and i < 110) or (i >= 1500 and i < 1800) or (i >= 2000) then true else false end FROM intermediates;
+INSERT INTO test SELECT case when (i >= 0 and i < 110) or (i >= 1500 and i < 1800) or (i >= 2000) then false else true end FROM intermediates;
 # (0,110)
 # (1500,1800)
 # (2000,2048)
@@ -50,7 +54,7 @@ statement ok
 checkpoint;
 
 query I
-select count(*) from test WHERE a IS NOT true;
+select count(*) from test WHERE a IS true;
 ----
 7758
 
