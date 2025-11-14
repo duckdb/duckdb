@@ -15,6 +15,7 @@ blacklist = [
     "DictionaryAppendState",
     "DictFSSTMode",
     "ComplexJSONType",
+    "UnavailableReason",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
@@ -36,8 +37,8 @@ overrides = {
     },
     "OrderByNullType": {
         "ORDER_DEFAULT": ["ORDER_DEFAULT", "DEFAULT"],
-        "NULLS_FIRST": ["NULLS_FIRST", "NULLS FIRST"],
-        "NULLS_LAST": ["NULLS_LAST", "NULLS LAST"],
+        "NULLS_FIRST": ["NULLS FIRST", "NULLS_FIRST"],
+        "NULLS_LAST": ["NULLS LAST", "NULLS_LAST"],
     },
     "CheckpointAbort": {
         "NO_ABORT": "NONE",
@@ -62,6 +63,7 @@ overrides = {
         "DELETE_REQUEST": "DELETE",
         "POST_REQUEST": "POST",
     },
+    "ArrowFormatVersion": {"V1_0": "1.0", "V1_1": "1.1", "V1_2": "1.2", "V1_3": "1.3", "V1_4": "1.4", "V1_5": "1.5"},
 }
 
 # get all the headers

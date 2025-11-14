@@ -12,14 +12,14 @@
 namespace duckdb {
 
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                       idx_t start_row, LogicalType type, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+                                       LogicalType type, ColumnDataType data_type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, std::move(type), data_type, parent),
+      validity(block_manager, info, 0, *this) {
 }
 
-void StandardColumnData::SetStart(idx_t new_start) {
-	ColumnData::SetStart(new_start);
-	validity.SetStart(new_start);
+void StandardColumnData::SetDataType(ColumnDataType data_type) {
+	ColumnData::SetDataType(data_type);
+	validity.SetDataType(data_type);
 }
 
 ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
@@ -57,7 +57,7 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                                idx_t target_count) {
-	D_ASSERT(state.row_index == state.child_states[0].row_index);
+	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	auto mode = ScanVectorMode::REGULAR_SCAN;
 	auto scan_count = ScanVector(transaction, vector_index, state, result, target_count, scan_type, mode);
@@ -67,7 +67,7 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
 
 idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
                                         idx_t target_count) {
-	D_ASSERT(state.row_index == state.child_states[0].row_index);
+	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
 	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates, target_count);
 	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
 	return scan_count;
@@ -134,16 +134,15 @@ void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &st
 	validity.AppendData(stats, state.child_appends[0], vdata, count);
 }
 
-void StandardColumnData::RevertAppend(row_t start_row) {
-	ColumnData::RevertAppend(start_row);
-
-	validity.RevertAppend(start_row);
+void StandardColumnData::RevertAppend(row_t new_count) {
+	ColumnData::RevertAppend(new_count);
+	validity.RevertAppend(new_count);
 }
 
 idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// fetch validity mask
 	if (state.child_states.empty()) {
-		ColumnScanState child_state;
+		ColumnScanState child_state(state.parent);
 		child_state.scan_options = state.scan_options;
 		state.child_states.push_back(std::move(child_state));
 	}
@@ -152,20 +151,34 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 	return scan_count;
 }
 
-void StandardColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                                idx_t update_count) {
-	ColumnData::Update(transaction, column_index, update_vector, row_ids, update_count);
-	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
+void StandardColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                                Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
+	ColumnScanState standard_state(nullptr);
+	ColumnScanState validity_state(nullptr);
+	Vector base_vector(type);
+	auto standard_fetch = FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
+	auto validity_fetch = validity.FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
+	if (standard_fetch != validity_fetch) {
+		throw InternalException("Unaligned fetch in validity and main column data for update");
+	}
+
+	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	               row_group_start);
+	validity.UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	                        row_group_start);
 }
 
-void StandardColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                      Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void StandardColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+                                      const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                                      idx_t update_count, idx_t depth, idx_t row_group_start) {
 	if (depth >= column_path.size()) {
 		// update this column
-		ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+		ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count,
+		                   row_group_start);
 	} else {
 		// update the child column (i.e. the validity column)
-		validity.UpdateColumn(transaction, column_path, update_vector, row_ids, update_count, depth + 1);
+		validity.UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
+		                      row_group_start);
 	}
 }
 
@@ -233,9 +246,10 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
-	auto base_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto base_state = CreateCheckpointState(row_group, partial_block_manager);
 	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
-	auto validity_state_p = validity.CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto validity_state_p = validity.CreateCheckpointState(row_group, partial_block_manager);
 	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
 
 	auto &validity_state = *validity_state_p;
@@ -259,16 +273,20 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	return base_state;
 }
 
-void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start,
-                                        idx_t count, Vector &scan_vector) {
-	ColumnData::CheckpointScan(segment, state, row_group_start, count, scan_vector);
+void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
+                                        Vector &scan_vector) {
+	ColumnData::CheckpointScan(segment, state, count, scan_vector);
 
-	idx_t offset_in_row_group = state.row_index - row_group_start;
-	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
+	idx_t offset_in_row_group = state.offset_in_column;
+	validity.ScanCommittedRange(0, offset_in_row_group, count, scan_vector);
 }
 
 bool StandardColumnData::IsPersistent() {
 	return ColumnData::IsPersistent() && validity.IsPersistent();
+}
+
+bool StandardColumnData::HasAnyChanges() const {
+	return ColumnData::HasAnyChanges() || validity.HasAnyChanges();
 }
 
 PersistentColumnData StandardColumnData::Serialize() {
@@ -282,11 +300,12 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 	validity.InitializeColumn(column_data.child_columns[0], target_stats);
 }
 
-void StandardColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
+                                              vector<duckdb::idx_t> col_path,
                                               vector<duckdb::ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(row_group_index, col_path, result);
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, std::move(col_path), result);
+	validity.GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {

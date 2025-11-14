@@ -21,10 +21,10 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                       LogicalType type_p, optional_ptr<ColumnData> parent)
-    : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), allocation_size(0), parent(parent) {
+ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
+                       ColumnDataType data_type_p, optional_ptr<ColumnData> parent)
+    : count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
+      allocation_size(0), data_type(data_type_p), parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -33,14 +33,8 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
 ColumnData::~ColumnData() {
 }
 
-void ColumnData::SetStart(idx_t new_start) {
-	this->start = new_start;
-	idx_t offset = 0;
-	for (auto &segment : data.Segments()) {
-		segment.start = start + offset;
-		offset += segment.count;
-	}
-	data.Reinitialize();
+void ColumnData::SetDataType(ColumnDataType data_type_p) {
+	this->data_type = data_type_p;
 }
 
 DatabaseInstance &ColumnData::GetDatabase() const {
@@ -77,6 +71,29 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 	return false;
 }
 
+bool ColumnData::HasChanges() const {
+	auto l = data.Lock();
+	auto &nodes = data.ReferenceLoadedSegments(l);
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto &segment = *nodes[segment_idx]->node;
+		if (segment.segment_type == ColumnSegmentType::TRANSIENT) {
+			// transient segment: always need to write to disk
+			return true;
+		}
+		// persistent segment; check if there were any updates or deletions in this segment
+		idx_t start_row_idx = nodes[segment_idx]->row_start;
+		idx_t end_row_idx = start_row_idx + segment.count;
+		if (HasChanges(start_row_idx, end_row_idx)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ColumnData::HasAnyChanges() const {
+	return HasChanges();
+}
+
 void ColumnData::ClearUpdates() {
 	lock_guard<mutex> update_guard(update_lock);
 	updates.reset();
@@ -89,18 +106,21 @@ idx_t ColumnData::GetMaxEntry() {
 void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = data.GetRootSegment();
 	state.segment_tree = &data;
-	state.row_index = state.current ? state.current->start : 0;
-	state.internal_index = state.row_index;
+	state.offset_in_column = state.current ? state.current->row_start : 0;
+	state.internal_index = state.offset_in_column;
 	state.initialized = false;
 	state.scan_state.reset();
 	state.last_offset = 0;
 }
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+	if (row_idx > count) {
+		throw InternalException("row_idx in InitializeScanWithOffset out of range");
+	}
 	state.current = data.GetSegment(row_idx);
 	state.segment_tree = &data;
-	state.row_index = row_idx;
-	state.internal_index = state.current->start;
+	state.offset_in_column = row_idx;
+	state.internal_index = state.current->row_start;
 	state.initialized = false;
 	state.scan_state.reset();
 	state.last_offset = 0;
@@ -116,7 +136,8 @@ ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_
 		return ScanVectorType::SCAN_FLAT_VECTOR;
 	}
 	// check if the current segment has enough data remaining
-	idx_t remaining_in_segment = state.current->start + state.current->count - state.row_index;
+	auto &current = *state.current->node;
+	idx_t remaining_in_segment = state.current->row_start + current.count - state.offset_in_column;
 	if (remaining_in_segment < scan_count) {
 		// there is not enough data remaining in the current segment so we need to scan across segments
 		// we need flat vectors here
@@ -132,19 +153,20 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 	}
 	if (!scan_state.initialized) {
 		// need to prefetch for the current segment if we have not yet initialized the scan for this segment
-		scan_state.current->InitializePrefetch(prefetch_state, scan_state);
+		current_segment->node->InitializePrefetch(prefetch_state, scan_state);
 	}
-	idx_t row_index = scan_state.row_index;
+	idx_t row_index = scan_state.offset_in_column;
 	while (remaining > 0) {
-		idx_t scan_count = MinValue<idx_t>(remaining, current_segment->start + current_segment->count - row_index);
+		auto &current = *current_segment->node;
+		idx_t scan_count = MinValue<idx_t>(remaining, current_segment->row_start + current.count - row_index);
 		remaining -= scan_count;
 		row_index += scan_count;
 		if (remaining > 0) {
-			auto next = data.GetNextSegment(current_segment);
+			auto next = data.GetNextSegment(*current_segment);
 			if (!next) {
 				break;
 			}
-			next->InitializePrefetch(prefetch_state, scan_state);
+			next->node->InitializePrefetch(prefetch_state, scan_state);
 			current_segment = next;
 		}
 	}
@@ -153,17 +175,18 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 	state.previous_states.clear();
 	if (!state.initialized) {
-		D_ASSERT(state.current);
-		state.current->InitializeScan(state);
-		state.internal_index = state.current->start;
+		auto &current = *state.current->node;
+		current.InitializeScan(state);
+		state.internal_index = state.current->row_start;
 		state.initialized = true;
 	}
-	D_ASSERT(data.HasSegment(state.current));
-	D_ASSERT(state.internal_index <= state.row_index);
-	if (state.internal_index < state.row_index) {
-		state.current->Skip(state);
+	D_ASSERT(data.HasSegment(*state.current));
+	D_ASSERT(state.internal_index <= state.offset_in_column);
+	if (state.internal_index < state.offset_in_column) {
+		auto &current = *state.current->node;
+		current.Skip(state);
 	}
-	D_ASSERT(state.current->type == type);
+	D_ASSERT(state.current->node->type == type);
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
@@ -174,70 +197,73 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 	BeginScanVectorInternal(state);
 	idx_t initial_remaining = remaining;
 	while (remaining > 0) {
-		D_ASSERT(state.row_index >= state.current->start &&
-		         state.row_index <= state.current->start + state.current->count);
-		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
+		auto &current = *state.current->node;
+		auto current_start = state.current->row_start;
+		D_ASSERT(state.offset_in_column >= current_start && state.offset_in_column <= current_start + current.count);
+		idx_t scan_count = MinValue<idx_t>(remaining, current_start + current.count - state.offset_in_column);
 		idx_t result_offset = base_result_offset + initial_remaining - remaining;
 		if (scan_count > 0) {
 			if (state.scan_options && state.scan_options->force_fetch_row) {
 				for (idx_t i = 0; i < scan_count; i++) {
 					ColumnFetchState fetch_state;
-					state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + i), result,
-					                        result_offset + i);
+					current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i - current_start),
+					                 result, result_offset + i);
 				}
 			} else {
-				state.current->Scan(state, scan_count, result, result_offset, scan_type);
+				current.Scan(state, scan_count, result, result_offset, scan_type);
 			}
 
-			state.row_index += scan_count;
+			state.offset_in_column += scan_count;
 			remaining -= scan_count;
 		}
 
 		if (remaining > 0) {
-			auto next = data.GetNextSegment(state.current);
+			auto next = data.GetNextSegment(*state.current);
 			if (!next) {
 				break;
 			}
 			state.previous_states.emplace_back(std::move(state.scan_state));
 			state.current = next;
-			state.current->InitializeScan(state);
+			state.current->node->InitializeScan(state);
 			state.segment_checked = false;
-			D_ASSERT(state.row_index >= state.current->start &&
-			         state.row_index <= state.current->start + state.current->count);
+			D_ASSERT(state.offset_in_column >= state.current->row_start &&
+			         state.offset_in_column <= state.current->row_start + state.current->node->count);
 		}
 	}
-	state.internal_index = state.row_index;
+	state.internal_index = state.offset_in_column;
 	return initial_remaining - remaining;
 }
 
 void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
                               idx_t sel_count) {
 	BeginScanVectorInternal(state);
-	if (state.current->start + state.current->count - state.row_index < target_count) {
+	auto &current = *state.current->node;
+	if (state.current->row_start + current.count - state.offset_in_column < target_count) {
 		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
 	}
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < sel_count; i++) {
 			auto source_idx = sel.get_index(i);
 			ColumnFetchState fetch_state;
-			state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + source_idx), result, i);
+			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + source_idx), result, i);
 		}
 	} else {
-		state.current->Select(state, target_count, result, sel, sel_count);
+		current.Select(state, target_count, result, sel, sel_count);
 	}
-	state.row_index += target_count;
-	state.internal_index = state.row_index;
+	state.offset_in_column += target_count;
+	state.internal_index = state.offset_in_column;
 }
 
 void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
                               idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	BeginScanVectorInternal(state);
-	if (state.current->start + state.current->count - state.row_index < target_count) {
+	auto &current = *state.current->node;
+	if (state.current->row_start + current.count - state.offset_in_column < target_count) {
 		throw InternalException("ColumnData::Filter should be able to fetch everything from one segment");
 	}
-	state.current->Filter(state, target_count, result, sel, sel_count, filter, filter_state);
-	state.row_index += target_count;
-	state.internal_index = state.row_index;
+	current.Filter(state, target_count, result, sel, sel_count, filter, filter_state);
+	state.offset_in_column += target_count;
+	state.internal_index = state.offset_in_column;
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
@@ -270,13 +296,15 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
 }
 
-void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                                idx_t update_count, Vector &base_vector) {
+void ColumnData::UpdateInternal(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                                Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector,
+                                idx_t row_group_start) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_uniq<UpdateSegment>(*this);
 	}
-	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	                row_group_start);
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -325,8 +353,8 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 }
 
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
-	ColumnScanState child_state;
-	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
+	ColumnScanState child_state(nullptr);
+	InitializeScanWithOffset(child_state, offset_in_row_group);
 	bool has_updates = HasUpdates();
 	auto scan_count = ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
 	if (has_updates) {
@@ -397,7 +425,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
-		prune_result = filter.CheckStatistics(state.current->stats.statistics);
+		prune_result = filter.CheckStatistics(state.current->node->stats.statistics);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -452,31 +480,34 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(l, start);
+		AppendTransientSegment(l, 0);
 	}
 	auto segment = data.GetLastSegment(l);
-	if (segment->segment_type == ColumnSegmentType::PERSISTENT || !segment->GetCompressionFunction().init_append) {
+	auto &last_segment = *segment->node;
+	if (last_segment.segment_type == ColumnSegmentType::PERSISTENT ||
+	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
-		auto total_rows = segment->start + segment->count;
+		auto total_rows = segment->row_start + last_segment.count;
 		AppendTransientSegment(l, total_rows);
 		state.current = data.GetLastSegment(l);
 	} else {
 		state.current = segment;
 	}
-
-	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
-	state.current->InitializeAppend(state);
-	D_ASSERT(state.current->GetCompressionFunction().append);
+	auto &append_segment = *state.current->node;
+	D_ASSERT(append_segment.segment_type == ColumnSegmentType::TRANSIENT);
+	append_segment.InitializeAppend(state);
+	D_ASSERT(append_segment.GetCompressionFunction().append);
 }
 
 void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
                             idx_t append_count) {
 	idx_t offset = 0;
-	this->count += append_count;
 	while (true) {
 		// append the data from the vector
-		idx_t copied_elements = state.current->Append(state, vdata, offset, append_count);
-		append_stats.Merge(state.current->stats.statistics);
+		auto &append_segment = *state.current->node;
+		idx_t copied_elements = append_segment.Append(state, vdata, offset, append_count);
+		this->count += copied_elements;
+		append_stats.Merge(append_segment.stats.statistics);
 		if (copied_elements == append_count) {
 			// finished copying everything
 			break;
@@ -485,87 +516,109 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
 			auto l = data.Lock();
-			AppendTransientSegment(l, state.current->start + state.current->count);
+			AppendTransientSegment(l, state.current->row_start + append_segment.count);
 			state.current = data.GetLastSegment(l);
-			state.current->InitializeAppend(state);
+			state.current->node->InitializeAppend(state);
 		}
 		offset += copied_elements;
 		append_count -= copied_elements;
 	}
 }
 
-void ColumnData::RevertAppend(row_t start_row) {
+void ColumnData::RevertAppend(row_t new_count_p) {
+	idx_t new_count = NumericCast<idx_t>(new_count_p);
 	auto l = data.Lock();
 	// check if this row is in the segment tree at all
-	auto last_segment = data.GetLastSegment(l);
-	if (!last_segment) {
+	auto last_segment_node = data.GetLastSegment(l);
+	if (!last_segment_node) {
 		return;
 	}
-	if (NumericCast<idx_t>(start_row) >= last_segment->start + last_segment->count) {
+	auto &last_segment = *last_segment_node->node;
+	if (new_count >= last_segment_node->row_start + last_segment.count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(NumericCast<idx_t>(start_row) == last_segment->start + last_segment->count);
+		D_ASSERT(new_count == last_segment_node->row_start + last_segment.count);
 		return;
 	}
 	// find the segment index that the current row belongs to
-	idx_t segment_index = data.GetSegmentIndex(l, UnsafeNumericCast<idx_t>(start_row));
+	idx_t segment_index = data.GetSegmentIndex(l, new_count);
 	auto segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-	auto &transient = *segment;
-	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+	if (segment->row_start == new_count) {
+		// we are truncating exactly this segment - erase it entirely
+		data.EraseSegments(l, segment_index);
+	} else {
+		// we need to truncate within the segment
+		// remove any segments AFTER this segment: they should be deleted entirely
+		data.EraseSegments(l, segment_index + 1);
 
-	// remove any segments AFTER this segment: they should be deleted entirely
-	data.EraseSegments(l, segment_index);
+		auto &transient = *segment->node;
+		D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+		segment->next = nullptr;
+		transient.RevertAppend(new_count - segment->row_start);
+	}
 
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
-	segment->next = nullptr;
-	transient.RevertAppend(UnsafeNumericCast<idx_t>(start_row));
+	this->count = new_count;
 }
 
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+	if (UnsafeNumericCast<idx_t>(row_id) > count) {
+		throw InternalException("ColumnData::Fetch - row_id out of range");
+	}
 	D_ASSERT(row_id >= 0);
-	D_ASSERT(NumericCast<idx_t>(row_id) >= start);
 	// perform the fetch within the segment
-	state.row_index =
-	    start + ((UnsafeNumericCast<idx_t>(row_id) - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
-	state.current = data.GetSegment(state.row_index);
-	state.internal_index = state.current->start;
+	state.offset_in_column = UnsafeNumericCast<idx_t>(row_id) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	state.current = data.GetSegment(state.offset_in_column);
+	state.internal_index = state.current->row_start;
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
 void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                           idx_t result_idx) {
+	if (UnsafeNumericCast<idx_t>(row_id) > count) {
+		throw InternalException("ColumnData::FetchRow - row_id out of range");
+	}
 	auto segment = data.GetSegment(UnsafeNumericCast<idx_t>(row_id));
 
 	// now perform the fetch within the segment
-	segment->FetchRow(state, row_id, result, result_idx);
+	auto index_in_segment = row_id - UnsafeNumericCast<row_t>(segment->row_start);
+	segment->node->FetchRow(state, index_in_segment, result, result_idx);
 	// merge any updates made to this row
 
 	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
-void ColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                        idx_t update_count) {
-	Vector base_vector(type);
-	ColumnScanState state;
-	auto fetch_count = Fetch(state, row_ids[0], base_vector);
-
+idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start) {
+	if (row_ids[0] < UnsafeNumericCast<row_t>(row_group_start)) {
+		throw InternalException("ColumnData::FetchUpdateData out of range");
+	}
+	auto fetch_count = ColumnData::Fetch(state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
 	base_vector.Flatten(fetch_count);
-	UpdateInternal(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	return fetch_count;
 }
 
-void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
-                              row_t *row_ids, idx_t update_count, idx_t depth) {
+void ColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+                        row_t *row_ids, idx_t update_count, idx_t row_group_start) {
+	Vector base_vector(type);
+	ColumnScanState state(nullptr);
+	FetchUpdateData(state, row_ids, base_vector, row_group_start);
+
+	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	               row_group_start);
+}
+
+void ColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
+                              idx_t row_group_start) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+	ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count, row_group_start);
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-
 	const auto block_size = block_manager.GetBlockSize();
 	const auto type_size = GetTypeIdSize(type.InternalType());
 	auto vector_segment_size = block_size;
 
-	if (start_row == NumericCast<idx_t>(MAX_ROW_ID)) {
+	if (data_type == ColumnDataType::INITIAL_TRANSACTION_LOCAL && start_row == 0) {
 #if STANDARD_VECTOR_SIZE < 1024
 		vector_segment_size = 1024 * type_size;
 #else
@@ -581,8 +634,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
-	auto new_segment =
-	    ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_manager);
+	auto new_segment = ColumnSegment::CreateTransientSegment(db, *function, type, segment_size, block_manager);
 	AppendSegment(l, std::move(new_segment));
 }
 
@@ -618,12 +670,12 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &ro
 	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
-                                Vector &scan_vector) {
+void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) {
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
-			segment.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + i), scan_vector, i);
+			fetch_state.row_group = state.parent->row_group;
+			segment.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i), scan_vector, i);
 		}
 	} else {
 		segment.Scan(state, count, scan_vector, 0, ScanVectorType::SCAN_FLAT_VECTOR);
@@ -631,14 +683,15 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 
 	if (updates) {
 		D_ASSERT(scan_vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		updates->FetchCommittedRange(state.row_index - row_group_start, count, scan_vector);
+		updates->FetchCommittedRange(state.offset_in_column, count, scan_vector);
 	}
 }
 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto &nodes = data.ReferenceSegments();
@@ -664,6 +717,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	this->count = 0;
 	for (auto &data_pointer : column_data.pointers) {
 		// Update the count and statistics
+		data_pointer.row_start = count;
 		this->count += data_pointer.tuple_count;
 
 		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
@@ -674,8 +728,8 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
 		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
-		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
-		    std::move(data_pointer.statistics), std::move(data_pointer.segment_state));
+		    data_pointer.tuple_count, data_pointer.compression_type, std::move(data_pointer.statistics),
+		    std::move(data_pointer.segment_state));
 
 		auto l = data.Lock();
 		AppendSegment(l, std::move(segment));
@@ -693,8 +747,10 @@ bool ColumnData::IsPersistent() {
 
 vector<DataPointer> ColumnData::GetDataPointers() {
 	vector<DataPointer> pointers;
+	idx_t row_start = 0;
 	for (auto &segment : data.Segments()) {
-		pointers.push_back(segment.GetDataPointer());
+		pointers.push_back(segment.GetDataPointer(row_start));
+		row_start += segment.count;
 	}
 	return pointers;
 }
@@ -839,8 +895,8 @@ PersistentColumnData ColumnData::Serialize() {
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                               idx_t start_row, ReadStream &source, const LogicalType &type) {
-	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, nullptr);
+                                               ReadStream &source, const LogicalType &type) {
+	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, type);
 
 	// deserialize the persistent column data
 	BinaryDeserializer deserializer(source);
@@ -860,7 +916,7 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	return entry;
 }
 
-void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
                                       vector<ColumnSegmentInfo> &result) {
 	D_ASSERT(!col_path.empty());
 
@@ -876,40 +932,40 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 
 	// iterate over the segments
 	idx_t segment_idx = 0;
-	auto segment = data.GetRootSegment();
-	while (segment) {
+	for (auto &segment_node : data.SegmentNodes()) {
+		auto &segment = *segment_node.node;
 		ColumnSegmentInfo column_info;
 		column_info.row_group_index = row_group_index;
 		column_info.column_id = col_path[0];
 		column_info.column_path = col_path_str;
 		column_info.segment_idx = segment_idx;
 		column_info.segment_type = type.ToString();
-		column_info.segment_start = segment->start;
-		column_info.segment_count = segment->count;
-		column_info.compression_type = CompressionTypeToString(segment->GetCompressionFunction().type);
+		column_info.segment_start = segment_node.row_start;
+		column_info.segment_count = segment.count;
+		column_info.compression_type = CompressionTypeToString(segment.GetCompressionFunction().type);
 		{
 			lock_guard<mutex> l(stats_lock);
-			column_info.segment_stats = segment->stats.statistics.ToString();
+			column_info.segment_stats = segment.stats.statistics.ToString();
 		}
 		column_info.has_updates = ColumnData::HasUpdates();
 		// persistent
 		// block_id
 		// block_offset
-		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+		if (segment.segment_type == ColumnSegmentType::PERSISTENT) {
 			column_info.persistent = true;
-			column_info.block_id = segment->GetBlockId();
-			column_info.block_offset = segment->GetBlockOffset();
+			column_info.block_id = segment.GetBlockId();
+			column_info.block_offset = segment.GetBlockOffset();
 		} else {
 			column_info.persistent = false;
 		}
-		auto &compression_function = segment->GetCompressionFunction();
-		auto segment_state = segment->GetSegmentState();
+		auto &compression_function = segment.GetCompressionFunction();
+		auto segment_state = segment.GetSegmentState();
 		if (segment_state) {
 			column_info.segment_info = segment_state->GetSegmentInfo();
 			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
 		}
 		if (compression_function.get_segment_info) {
-			auto segment_info = compression_function.get_segment_info(*segment);
+			auto segment_info = compression_function.get_segment_info(context, segment);
 			vector<string> sinfo;
 			for (auto &item : segment_info) {
 				auto &mode = item.first;
@@ -921,13 +977,11 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		result.emplace_back(column_info);
 
 		segment_idx++;
-		segment = data.GetNextSegment(segment);
 	}
 }
 
 void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
-	D_ASSERT(this->start == parent.start);
 	data.Verify();
 	if (type.InternalType() == PhysicalType::STRUCT || type.InternalType() == PhysicalType::ARRAY) {
 		// structs and fixed size lists don't have segments
@@ -935,13 +989,13 @@ void ColumnData::Verify(RowGroup &parent) {
 		return;
 	}
 	idx_t current_index = 0;
-	idx_t current_start = this->start;
+	idx_t current_start = 0;
 	idx_t total_count = 0;
-	for (auto &segment : data.Segments()) {
+	for (auto &segment : data.SegmentNodes()) {
 		D_ASSERT(segment.index == current_index);
-		D_ASSERT(segment.start == current_start);
-		current_start += segment.count;
-		total_count += segment.count;
+		D_ASSERT(segment.row_start == current_start);
+		current_start += segment.node->count;
+		total_count += segment.node->count;
 		current_index++;
 	}
 	D_ASSERT(this->count == total_count);
@@ -949,32 +1003,32 @@ void ColumnData::Verify(RowGroup &parent) {
 }
 
 template <class RET, class OP>
-static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                const LogicalType &type, optional_ptr<ColumnData> parent) {
+static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+                                const LogicalType &type, ColumnDataType data_type, optional_ptr<ColumnData> parent) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
-		return OP::template Create<StructColumnData>(block_manager, info, column_index, start_row, type, parent);
+		return OP::template Create<StructColumnData>(block_manager, info, column_index, type, data_type, parent);
 	} else if (type.InternalType() == PhysicalType::LIST) {
-		return OP::template Create<ListColumnData>(block_manager, info, column_index, start_row, type, parent);
+		return OP::template Create<ListColumnData>(block_manager, info, column_index, type, data_type, parent);
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
-		return OP::template Create<ArrayColumnData>(block_manager, info, column_index, start_row, type, parent);
+		return OP::template Create<ArrayColumnData>(block_manager, info, column_index, type, data_type, parent);
 	} else if (type.id() == LogicalTypeId::VALIDITY) {
-		return OP::template Create<ValidityColumnData>(block_manager, info, column_index, start_row, *parent);
+		return OP::template Create<ValidityColumnData>(block_manager, info, column_index, *parent);
 	}
-	return OP::template Create<StandardColumnData>(block_manager, info, column_index, start_row, type, parent);
+	return OP::template Create<StandardColumnData>(block_manager, info, column_index, type, data_type, parent);
 }
 
 shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                                idx_t start_row, const LogicalType &type,
+                                                const LogicalType &type, ColumnDataType data_type,
                                                 optional_ptr<ColumnData> parent) {
-	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, start_row,
-	                                                                       type, parent);
+	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, type,
+	                                                                       data_type, parent);
 }
 
 unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
-                                                      idx_t column_index, idx_t start_row, const LogicalType &type,
-                                                      optional_ptr<ColumnData> parent) {
-	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, start_row,
-	                                                                       type, parent);
+                                                      idx_t column_index, const LogicalType &type,
+                                                      ColumnDataType data_type, optional_ptr<ColumnData> parent) {
+	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, type,
+	                                                                       data_type, parent);
 }
 
 } // namespace duckdb

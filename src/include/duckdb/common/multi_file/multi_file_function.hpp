@@ -20,6 +20,7 @@ namespace duckdb {
 struct MultiFileReaderInterface {
 	virtual ~MultiFileReaderInterface();
 
+	virtual void InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list);
 	virtual unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                            optional_ptr<TableFunctionInfo> info) = 0;
 	virtual bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
@@ -55,6 +56,7 @@ struct MultiFileReaderInterface {
 	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
+	virtual FileGlobInput GetGlobInput();
 };
 
 template <class OP>
@@ -159,10 +161,13 @@ public:
 
 	static unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
+		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
-		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
-		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
+		auto glob_input = multi_file_reader->GetGlobInput(*interface);
+		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], glob_input);
+
+		interface->InitializeInterface(context, *multi_file_reader, *file_list);
 
 		MultiFileOptions file_options;
 
@@ -181,19 +186,22 @@ public:
 		                             std::move(file_options), std::move(options), std::move(interface));
 	}
 
-	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
+	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyFromFunctionBindInput &input,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
+		auto interface = OP::CreateInterface(context);
 		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
-		vector<string> paths = {info.file_path};
-		auto file_list = multi_file_reader->CreateFileList(context, paths);
+		vector<string> paths = {input.info.file_path};
+		auto glob_input = multi_file_reader->GetGlobInput(*interface);
+		auto file_list = multi_file_reader->CreateFileList(context, paths, glob_input);
 
-		auto interface = OP::InitializeInterface(context, *multi_file_reader, *file_list);
+		interface->InitializeInterface(context, *multi_file_reader, *file_list);
 
 		auto options = interface->InitializeOptions(context, nullptr);
 		MultiFileOptions file_options;
+		file_options.auto_detect_hive_partitioning = false;
 
-		for (auto &option : info.options) {
+		for (auto &option : input.info.options) {
 			auto loption = StringUtil::Lower(option.first);
 			if (interface->ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
 				continue;
@@ -582,28 +590,77 @@ public:
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
+			data_p.async_result = SourceResultType::FINISHED;
 			return;
 		}
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 
+		if (gstate.finished) {
+			data_p.async_result = SourceResultType::FINISHED;
+			return;
+		}
+
 		do {
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
 
-			data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+
+			if (res.GetResultType() == AsyncResultType::BLOCKED) {
+				if (scan_chunk.size() != 0) {
+					throw InternalException("Unexpected behaviour from Scan, no rows should be returned");
+				}
+				switch (data_p.results_execution_mode) {
+				case AsyncResultsExecutionMode::TASK_EXECUTOR:
+					data_p.async_result = std::move(res);
+					return;
+				case AsyncResultsExecutionMode::SYNCHRONOUS:
+					res.ExecuteTasksSynchronously();
+					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
+						throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
+					}
+					// scan_chunk.size() is 0, see check above, and result is HAVE_MORE_OUTPUT, we need to loop again
+					continue;
+				}
+			}
+
 			output.SetCardinality(scan_chunk.size());
+
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
+			}
+			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
+				// Loop back to the same block
+				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					continue;
+				}
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				return;
 			}
-			scan_chunk.Reset();
+
+			if (res.GetResultType() != AsyncResultType::FINISHED) {
+				throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
+				                        EnumUtil::ToChars(res.GetResultType()));
+			}
+
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				return;
+				if (scan_chunk.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					gstate.finished = true;
+					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+				} else {
+					data_p.async_result = SourceResultType::FINISHED;
+				}
+			} else {
+				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					continue;
+				}
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 			}
+			return;
 		} while (true);
 	}
 
@@ -664,7 +721,8 @@ public:
 				continue;
 			}
 			auto &reader_data = *reader_data_ptr;
-			double progress_in_file;
+			// Initialize progress_in_file with a default value to avoid uninitialized variable usage
+			double progress_in_file = 0.0;
 			if (reader_data.file_state == MultiFileFileState::OPEN) {
 				// file is currently open - get the progress within the file
 				progress_in_file = reader_data.reader->GetProgressInFile(context);
@@ -678,9 +736,6 @@ public:
 					// file is still being read
 					progress_in_file = reader->GetProgressInFile(context);
 				}
-			} else {
-				// file has not been opened yet - progress in this file is zero
-				progress_in_file = 0;
 			}
 			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
 			total_progress += progress_in_file;

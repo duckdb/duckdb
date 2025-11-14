@@ -1,3 +1,9 @@
+# # # # # # # # # # # # # # # # # #
+#
+# WARNING: DEPRECATED!
+#
+# # # # # # # # # # # # # # # # # #
+
 name: "Build Extensions"
 description: "Build, test and deploy the DuckDB extensions"
 inputs:
@@ -160,8 +166,6 @@ runs:
 
       run: |
         ls
-        mkdir -p ~/.ssh
-        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
         ls -al
         pwd
@@ -217,6 +221,8 @@ runs:
         python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
         python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
         ${{ inputs.unittest_script }} '-f test.list'
+        rm -rf build/release/extension
+        mv build/extension_tmp build/release/extension
 
     - name: Run tests with auto loading with VS2019 C++ stdlib
       if: ${{ inputs.run_autoload_tests == '1' && inputs.vcpkg_target_triplet == 'x64-windows-static-md' }}
@@ -224,6 +230,8 @@ runs:
       env:
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == '1' && github.workspace || ''}}
       run: |
+        rm -rf build/extension_tmp
+        mv build/release/extension build/extension_tmp
         choco install wget -y --no-progress
         cd  ${{ inputs.build_dir }}
         TEST_RUNNER_DIR=./build/release/test/Release

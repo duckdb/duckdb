@@ -18,7 +18,6 @@ BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstr
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
       index_constraint_type(index_constraint_type) {
-
 	for (auto &expr : unbound_expressions_p) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);
@@ -79,10 +78,16 @@ bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
 	return MergeIndexes(state, other_index);
 }
 
-string BoundIndex::VerifyAndToString(const bool only_verify) {
+void BoundIndex::Verify() {
 	IndexLock l;
 	InitializeLock(l);
-	return VerifyAndToString(l, only_verify);
+	Verify(l);
+}
+
+string BoundIndex::ToString(bool display_ascii) {
+	IndexLock l;
+	InitializeLock(l);
+	return ToString(l, display_ascii);
 }
 
 void BoundIndex::VerifyAllocations() {
@@ -152,6 +157,43 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 		error += input.GetValue(c, index).ToString();
 	}
 	return error;
+}
+
+void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
+                                      vector<BufferedIndexData> &buffered_replays,
+                                      const vector<StorageIndex> &mapped_column_ids) {
+	for (auto &replay : buffered_replays) {
+		ColumnDataScanState state;
+		auto &buffered_data = *replay.data;
+		buffered_data.InitializeScan(state);
+
+		DataChunk scan_chunk;
+		buffered_data.InitializeScanChunk(scan_chunk);
+		DataChunk table_chunk;
+		table_chunk.InitializeEmpty(table_types);
+
+		while (buffered_data.Scan(state, scan_chunk)) {
+			for (idx_t i = 0; i < scan_chunk.ColumnCount() - 1; i++) {
+				auto col_id = mapped_column_ids[i].GetPrimaryIndex();
+				table_chunk.data[col_id].Reference(scan_chunk.data[i]);
+			}
+			table_chunk.SetCardinality(scan_chunk.size());
+
+			switch (replay.type) {
+			case BufferedIndexReplay::INSERT_ENTRY: {
+				IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+				auto error = Append(table_chunk, scan_chunk.data.back(), index_append_info);
+				if (error.HasError()) {
+					throw InternalException("error while applying buffered appends: " + error.Message());
+				}
+				continue;
+			}
+			case BufferedIndexReplay::DEL_ENTRY: {
+				Delete(table_chunk, scan_chunk.data.back());
+			}
+			}
+		}
+	}
 }
 
 } // namespace duckdb

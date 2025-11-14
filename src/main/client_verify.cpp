@@ -22,7 +22,7 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 }
 
 ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                     optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
+                                     PendingQueryParameters query_parameters) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
 
@@ -31,6 +31,10 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 #else
 	bool run_slow_verifiers = false;
 #endif
+
+	auto parameters = query_parameters.parameters;
+	query_parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	query_parameters.query_parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
 
 	// The purpose of this function is to test correctness of otherwise hard to test features:
 	// Copy() of statements and expressions
@@ -98,7 +102,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	bool any_failed = original->Run(*this, query,
 	                                [&](const string &q, unique_ptr<SQLStatement> s,
 	                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-		                                return RunStatementInternal(lock, q, std::move(s), false, params, false);
+		                                return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 	                                });
 	if (!any_failed) {
 		statement_verifiers.emplace_back(
@@ -109,7 +113,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		bool failed = verifier->Run(*this, query,
 		                            [&](const string &q, unique_ptr<SQLStatement> s,
 		                                optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			                            return RunStatementInternal(lock, q, std::move(s), false, params, false);
+			                            return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 		                            });
 		any_failed = any_failed || failed;
 	}
@@ -120,7 +124,7 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		    *this, query,
 		    [&](const string &q, unique_ptr<SQLStatement> s,
 		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), false, params, false);
+			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 		    });
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
@@ -148,12 +152,20 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		auto original_named_param_map = statement_copy_for_explain->named_param_map;
 		auto explain_stmt = make_uniq<ExplainStatement>(std::move(statement_copy_for_explain));
 		explain_stmt->named_param_map = original_named_param_map;
-		try {
-			RunStatementInternal(lock, explain_q, std::move(explain_stmt), false, parameters, false);
-		} catch (std::exception &ex) { // LCOV_EXCL_START
-			ErrorData error(ex);
-			interrupted = false;
-			return ErrorData("EXPLAIN failed but query did not (" + error.RawMessage() + ")");
+
+		auto explain_statement_verifier =
+		    StatementVerifier::Create(VerificationType::EXPLAIN, *explain_stmt, parameters);
+		const auto explain_failed = explain_statement_verifier->Run(
+		    *this, explain_q,
+		    [&](const string &q, unique_ptr<SQLStatement> s,
+		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
+			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
+		    });
+
+		if (explain_failed) { // LCOV_EXCL_START
+			const auto &explain_error = explain_statement_verifier->materialized_result->error;
+			return ErrorData(explain_error.Type(), StringUtil::Format("Query succeeded but EXPLAIN failed with: %s",
+			                                                          explain_error.RawMessage()));
 		} // LCOV_EXCL_STOP
 
 #ifdef DUCKDB_VERIFY_BOX_RENDERER
@@ -165,7 +177,8 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 		// test with a random width
 		config.max_width = random.NextRandomInteger() % 500;
 		BoxRenderer renderer(config);
-		renderer.ToString(*this, original->materialized_result->names, original->materialized_result->Collection());
+		auto pinned_result_set = original->materialized_result->Pin();
+		renderer.ToString(*this, original->materialized_result->names, pinned_result_set->collection);
 #endif
 	}
 

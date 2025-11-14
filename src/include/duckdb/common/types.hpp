@@ -186,6 +186,15 @@ enum class LogicalTypeId : uint8_t {
 	UNKNOWN = 2, /* unknown type, used for parameter expressions */
 	ANY = 3,     /* ANY type, used for functions that accept any type as parameter */
 	USER = 4,    /* A User Defined Type (e.g., ENUMs before the binder) */
+
+
+	// A "template" type functions as a "placeholder" type for function arguments and return types.
+	// Templates only exist during the binding phase, in the scope of a function, and are replaced with concrete types
+	// before execution. When defining a template, you provide a name to distinguish between different template types,
+	// specifying to the binder that they dont need to resolve to the same concrete type. Two templates with the same
+	// name are always resolved to the same concrete type.
+	TEMPLATE = 5,
+
 	BOOLEAN = 10,
 	TINYINT = 11,
 	SMALLINT = 12,
@@ -214,12 +223,14 @@ enum class LogicalTypeId : uint8_t {
 	BIT = 36,
 	STRING_LITERAL = 37, /* string literals, used for constant strings - only exists while binding */
 	INTEGER_LITERAL = 38,/* integer literals, used for constant integers - only exists while binding */
-	VARINT = 39,
+	BIGNUM = 39,
 	UHUGEINT = 49,
 	HUGEINT = 50,
 	POINTER = 51,
 	VALIDITY = 53,
 	UUID = 54,
+
+	GEOMETRY = 60,
 
 	STRUCT = 100,
 	LIST = 101,
@@ -229,7 +240,8 @@ enum class LogicalTypeId : uint8_t {
 	AGGREGATE_STATE = 105,
 	LAMBDA = 106,
 	UNION = 107,
-	ARRAY = 108
+	ARRAY = 108,
+	VARIANT = 109
 };
 
 struct ExtraTypeInfo;
@@ -355,6 +367,7 @@ struct LogicalType {
 
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;
+	DUCKDB_API bool IsTemplated() const;
 
 	//! True, if this type supports in-place updates.
 	bool SupportsRegularUpdate() const;
@@ -395,7 +408,7 @@ public:
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;
 	static constexpr const LogicalTypeId BLOB = LogicalTypeId::BLOB;
 	static constexpr const LogicalTypeId BIT = LogicalTypeId::BIT;
-	static constexpr const LogicalTypeId VARINT = LogicalTypeId::VARINT;
+	static constexpr const LogicalTypeId BIGNUM = LogicalTypeId::BIGNUM;
 
 	static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
 	static constexpr const LogicalTypeId HUGEINT = LogicalTypeId::HUGEINT;
@@ -419,8 +432,11 @@ public:
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
+	DUCKDB_API static LogicalType GEOMETRY(); // NOLINT
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
+	DUCKDB_API static LogicalType TEMPLATE(const string &name);							// NOLINT
+	DUCKDB_API static LogicalType VARIANT(); // NOLINT
 	//! Integer literal of the specified value
 	DUCKDB_API static LogicalType INTEGER_LITERAL(const Value &constant);               // NOLINT
 	// DEPRECATED - provided for backwards compatibility
@@ -521,6 +537,11 @@ struct IntegerLiteral {
 	DUCKDB_API static LogicalType GetType(const LogicalType &type);
 	//! Whether or not the integer literal fits into the target numeric type
 	DUCKDB_API static bool FitsInType(const LogicalType &type, const LogicalType &target);
+};
+
+struct TemplateType {
+	// Get the name of the template type
+	DUCKDB_API static const string &GetName(const LogicalType &type);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.

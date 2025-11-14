@@ -2,9 +2,6 @@
 # description: Test ART fuzzer issue with persisted database
 # group: [issues]
 
-statement ok
-PRAGMA enable_verification
-
 # issue 5984, number 41
 
 # load the DB from disk
@@ -17,7 +14,7 @@ statement ok
 CREATE INDEX i1 ON t1 (c1);
 
 statement ok
-PRAGMA MEMORY_LIMIT='2MB';
+PRAGMA MEMORY_LIMIT='4MB';
 
 statement ok
 CHECKPOINT;

@@ -61,7 +61,7 @@ struct CheckpointOptions {
 //! StorageManager is responsible for managing the physical storage of a persistent database.
 class StorageManager {
 public:
-	StorageManager(AttachedDatabase &db, string path, bool read_only);
+	StorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
 	virtual ~StorageManager();
 
 public:
@@ -71,10 +71,10 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(QueryContext context, StorageOptions &options);
+	void Initialize(QueryContext context);
 
 	DatabaseInstance &GetDatabase();
-	AttachedDatabase &GetAttached() {
+	AttachedDatabase &GetAttached() const {
 		return db;
 	}
 
@@ -93,8 +93,8 @@ public:
 		return load_complete;
 	}
 	//! The path to the WAL, derived from the database file path
-	string GetWALPath();
-	bool InMemory();
+	string GetWALPath() const;
+	bool InMemory() const;
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(WriteAheadLog &wal) = 0;
@@ -104,6 +104,7 @@ public:
 	virtual vector<MetadataBlockInfo> GetMetadataInfo() = 0;
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 	virtual BlockManager &GetBlockManager() = 0;
+	virtual void Destroy();
 
 	void SetStorageVersion(idx_t version) {
 		storage_version = version;
@@ -115,9 +116,31 @@ public:
 		D_ASSERT(HasStorageVersion());
 		return storage_version.GetIndex();
 	}
+	void AddInMemoryChange(idx_t size) {
+		in_memory_change_size += size;
+	}
+	void ResetInMemoryChange() {
+		in_memory_change_size = 0;
+	}
+	bool CompressionIsEnabled() const {
+		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
+	}
+	EncryptionTypes::CipherType GetCipher() const {
+		return storage_options.encryption_cipher;
+	}
+	void SetCipher(EncryptionTypes::CipherType cipher_p) {
+		D_ASSERT(cipher_p != EncryptionTypes::INVALID);
+		if (cipher_p == EncryptionTypes::CBC) {
+			throw InvalidInputException("CBC cipher is disabled");
+		}
+		storage_options.encryption_cipher = cipher_p;
+	}
+	bool IsEncrypted() const {
+		return storage_options.encryption;
+	}
 
 protected:
-	virtual void LoadDatabase(QueryContext context, StorageOptions &options) = 0;
+	virtual void LoadDatabase(QueryContext context) = 0;
 
 protected:
 	//! The attached database managed by this storage manager.
@@ -133,6 +156,11 @@ protected:
 	bool load_complete = false;
 	//! The serialization compatibility version when reading and writing from this database
 	optional_idx storage_version;
+	//! Estimated size of changes for determining automatic checkpointing on in-memory databases and databases without a
+	//! WAL.
+	atomic<idx_t> in_memory_change_size;
+	//! Storage options passed in through configuration
+	StorageOptions storage_options;
 
 public:
 	template <class TARGET>
@@ -151,7 +179,7 @@ public:
 class SingleFileStorageManager : public StorageManager {
 public:
 	SingleFileStorageManager() = delete;
-	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only);
+	SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
 
 	//! The BlockManager to read from and write to blocks (meta data and data).
 	unique_ptr<BlockManager> block_manager;
@@ -167,8 +195,11 @@ public:
 	vector<MetadataBlockInfo> GetMetadataInfo() override;
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 	BlockManager &GetBlockManager() override;
+	void Destroy() override;
 
 protected:
-	void LoadDatabase(QueryContext context, StorageOptions &options) override;
+	void LoadDatabase(QueryContext context) override;
+
+	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options);
 };
 } // namespace duckdb

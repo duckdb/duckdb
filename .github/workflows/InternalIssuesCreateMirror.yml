@@ -1,15 +1,12 @@
 name: Create or Label Mirror Issue
 on:
-  discussion:
-    types:
-      - labeled
   issues:
     types:
       - labeled
 
 env:
   GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
-  TITLE_PREFIX: "[duckdb/#${{ github.event.issue.number || github.event.discussion.number }}]"
+  TITLE_PREFIX: "[duckdb/#${{ github.event.issue.number }}]"
   PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
 
 jobs:
@@ -19,7 +16,7 @@ jobs:
     steps:
       - name: Remove 'needs triage' label
         run: |
-          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number || github.event.discussion.number }} --remove-label "needs triage"
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
 
   add_needs_reproducible_example_comment:
     if: github.event.label.name == 'needs reproducible example'
@@ -37,7 +34,7 @@ jobs:
 
           For more detailed guidelines on how to create reproducible examples, please visit Stack Overflow's [“Minimal, Reproducible Example”](https://stackoverflow.com/help/minimal-reproducible-example) page.
           EOF
-          gh issue comment --repo duckdb/duckdb ${{ github.event.issue.number || github.event.discussion.number }} --body-file needs-reproducible-example-comment.md
+          gh issue comment --repo duckdb/duckdb ${{ github.event.issue.number }} --body-file needs-reproducible-example-comment.md
 
   create_or_label_mirror_issue:
     if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
@@ -46,17 +43,17 @@ jobs:
       - name: Remove 'needs triage' / 'under review' if 'reproduced'
         if: github.event.label.name == 'reproduced'
         run: |
-          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number || github.event.discussion.number }} --remove-label "needs triage" --remove-label "under review" --remove-label "needs reproducible example"
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "under review" --remove-label "needs reproducible example"
 
       - name: Remove 'needs triage' / 'reproduced' if 'under review'
         if: github.event.label.name == 'under review'
         run: |
-          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number || github.event.discussion.number }} --remove-label "needs triage" --remove-label "reproduced"
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "reproduced"
 
       - name: Remove 'needs triage' if 'expected behavior'
         if: github.event.label.name == 'expected behavior'
         run: |
-          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number || github.event.discussion.number }} --remove-label "needs triage"
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
 
       - name: Get mirror issue number
         run: |
@@ -84,7 +81,7 @@ jobs:
       - name: Create or label issue
         run: |
           if [ "$MIRROR_ISSUE_NUMBER" == "" ]; then
-            gh issue create --repo duckdblabs/duckdb-internal --label "$LABEL" --title "$TITLE_PREFIX - $PUBLIC_ISSUE_TITLE" --body "See https://github.com/duckdb/duckdb/issues/${{ github.event.issue.number || github.event.discussion.number }}"
+            gh issue create --repo duckdblabs/duckdb-internal --label "$LABEL" --title "$TITLE_PREFIX - $PUBLIC_ISSUE_TITLE" --body "See https://github.com/duckdb/duckdb/issues/${{ github.event.issue.number }}"
           else
             gh issue edit --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --remove-label "$UNLABEL" --add-label "$LABEL"
           fi

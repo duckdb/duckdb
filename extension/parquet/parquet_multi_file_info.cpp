@@ -105,7 +105,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 #endif
 
 		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
-		reader_bind.schema.emplace_back(std::move(res));
+		reader_bind.schema.emplace_back(res);
 	}
 	ParseFileRowNumberOption(reader_bind, options, return_types, names);
 	if (options.file_row_number) {
@@ -113,7 +113,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 		res.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
 		schema_col_names.push_back(res.name);
 		schema_col_types.push_back(res.type);
-		reader_bind.schema.emplace_back(std::move(res));
+		reader_bind.schema.emplace_back(res);
 	}
 
 	if (match_by_field_id) {
@@ -131,8 +131,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	D_ASSERT(names.size() == return_types.size());
 }
 
-unique_ptr<MultiFileReaderInterface>
-ParquetMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::CreateInterface(ClientContext &context) {
 	return make_uniq<ParquetMultiFileInfo>();
 }
 
@@ -244,10 +243,10 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 	for (auto &path : files) {
 		file_path.emplace_back(path);
 	}
+	FileGlobInput input(FileGlobOptions::FALLBACK_GLOB, "parquet");
 
 	auto multi_file_reader = MultiFileReader::Create(function);
-	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
-	                                                   FileGlobOptions::DISALLOW_EMPTY);
+	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), input);
 	auto parquet_options = make_uniq<ParquetFileReaderOptions>(std::move(serialization.parquet_options));
 	auto interface = make_uniq<ParquetMultiFileInfo>();
 	auto bind_data = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindInternal(
@@ -396,10 +395,6 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 	}
 	if (key == "binary_as_string") {
 		options.binary_as_string = BooleanValue::Get(val);
-		return true;
-	}
-	if (key == "variant_legacy_encoding") {
-		options.variant_legacy_encoding = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "file_row_number") {
@@ -576,16 +571,29 @@ void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState 
 	gstate.row_group_index = 0;
 }
 
-void ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                         LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	{
+		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
+		if (!tasks.empty()) {
+			return AsyncResult(std::move(tasks));
+		}
+	}
+#endif
+
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
-	Scan(context, local_state.scan_state, chunk);
+	return Scan(context, local_state.scan_state, chunk);
 }
 
 unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {
 	return make_uniq<ParquetMultiFileInfo>();
+}
+
+FileGlobInput ParquetMultiFileInfo::GetGlobInput() {
+	return FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "parquet");
 }
 
 } // namespace duckdb

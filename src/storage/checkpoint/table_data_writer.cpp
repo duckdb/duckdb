@@ -4,9 +4,11 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 
 namespace duckdb {
 
@@ -53,33 +55,57 @@ CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
 	return checkpoint_manager.GetCheckpointType();
 }
 
-void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
-                                              Serializer &serializer) {
+MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
+	return checkpoint_manager.GetMetadataManager();
+}
 
-	// store the current position in the metadata writer
-	// this is where the row groups for this table start
-	auto pointer = table_data_writer.GetMetaBlockPointer();
+void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, idx_t total_rows) {
+	existing_pointer = pointer;
+	existing_rows = total_rows;
+}
 
-	// Serialize statistics as a single unit
-	BinarySerializer stats_serializer(table_data_writer, serializer.GetOptions());
-	stats_serializer.Begin();
-	global_stats.Serialize(stats_serializer);
-	stats_serializer.End();
+void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
+                                              RowGroupCollection &collection, Serializer &serializer) {
+	MetaBlockPointer pointer;
+	idx_t total_rows;
+	if (!existing_pointer.IsValid()) {
+		// write the metadata
+		// store the current position in the metadata writer
+		// this is where the row groups for this table start
+		pointer = table_data_writer.GetMetaBlockPointer();
 
-	// now start writing the row group pointers to disk
-	table_data_writer.Write<uint64_t>(row_group_pointers.size());
-	idx_t total_rows = 0;
-	for (auto &row_group_pointer : row_group_pointers) {
-		auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
-		if (row_group_count > total_rows) {
-			total_rows = row_group_count;
+		// Serialize statistics as a single unit
+		BinarySerializer stats_serializer(table_data_writer, serializer.GetOptions());
+		stats_serializer.Begin();
+		global_stats.Serialize(stats_serializer);
+		stats_serializer.End();
+
+		// now start writing the row group pointers to disk
+		table_data_writer.Write<uint64_t>(row_group_pointers.size());
+		total_rows = 0;
+		for (auto &row_group_pointer : row_group_pointers) {
+			auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
+			if (row_group_count > total_rows) {
+				total_rows = row_group_count;
+			}
+
+			// Each RowGroup is its own unit
+			BinarySerializer row_group_serializer(table_data_writer, serializer.GetOptions());
+			row_group_serializer.Begin();
+			RowGroup::Serialize(row_group_pointer, row_group_serializer);
+			row_group_serializer.End();
 		}
+		collection.FinalizeCheckpoint(pointer);
+	} else {
+		// we have existing metadata and the table is unchanged - write a pointer to the existing metadata
+		pointer = existing_pointer;
+		total_rows = existing_rows.GetIndex();
 
-		// Each RowGroup is its own unit
-		BinarySerializer row_group_serializer(table_data_writer, serializer.GetOptions());
-		row_group_serializer.Begin();
-		RowGroup::Serialize(row_group_pointer, row_group_serializer);
-		row_group_serializer.End();
+		// label the blocks as used again to prevent them from being freed
+		auto &metadata_manager = checkpoint_manager.GetMetadataManager();
+		MetadataReader reader(metadata_manager, pointer);
+		auto blocks = reader.GetRemainingBlocks();
+		metadata_manager.ClearModifiedBlocks(blocks);
 	}
 
 	// Now begin the metadata as a unit
@@ -92,17 +118,18 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	auto index_storage_infos = info->GetIndexes().SerializeToDisk(context, options);
+	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
 
-#ifdef DUCKDB_BLOCK_VERIFICATION
-	for (auto &entry : index_storage_infos) {
-		for (auto &allocator : entry.allocator_infos) {
-			for (auto &block : allocator.block_pointers) {
-				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
+	if (debug_verify_blocks) {
+		for (auto &entry : index_storage_infos) {
+			for (auto &allocator : entry.allocator_infos) {
+				for (auto &block : allocator.block_pointers) {
+					checkpoint_manager.verify_block_usage_count[block.block_id]++;
+				}
 			}
 		}
 	}
-#endif
 
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;

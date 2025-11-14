@@ -1,11 +1,11 @@
 #include "json_multi_file_info.hpp"
 #include "json_scan.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/parallel/async_result.hpp"
 
 namespace duckdb {
 
-unique_ptr<MultiFileReaderInterface>
-JSONMultiFileInfo::InitializeInterface(ClientContext &context, MultiFileReader &reader, MultiFileList &file_list) {
+unique_ptr<MultiFileReaderInterface> JSONMultiFileInfo::CreateInterface(ClientContext &context) {
 	return make_uniq<JSONMultiFileInfo>();
 }
 
@@ -531,8 +531,17 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 	output.SetCardinality(count);
 }
 
-void JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-                      LocalTableFunctionState &local_state, DataChunk &output) {
+AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+                             LocalTableFunctionState &local_state, DataChunk &output) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	{
+		vector<unique_ptr<AsyncTask>> tasks = AsyncResult::GenerateTestTasks();
+		if (!tasks.empty()) {
+			return AsyncResult(std::move(tasks));
+		}
+	}
+#endif
+
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
 	auto &json_data = gstate.bind_data.bind_data->Cast<JSONScanData>();
@@ -546,6 +555,7 @@ void JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_s
 	default:
 		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
 	}
+	return AsyncResult(output.size() ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED);
 }
 
 void JSONReader::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {
@@ -577,6 +587,10 @@ optional_idx JSONMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, c
 	// get the max threads from the bind data (if it is set)
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 	return json_data.max_threads;
+}
+
+FileGlobInput JSONMultiFileInfo::GetGlobInput() {
+	return FileGlobInput(FileGlobOptions::FALLBACK_GLOB, "json");
 }
 
 } // namespace duckdb

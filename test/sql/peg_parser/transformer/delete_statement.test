@@ -1,0 +1,81 @@
+# name: test/sql/peg_parser/transformer/delete_statement.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [transformer]
+
+require tpch
+
+require autocomplete
+
+require skip_reload
+
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
+# statement ok
+# PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers (i bigint);
+
+statement ok
+INSERT INTO integers values (1), (2), (3);
+
+statement ok
+set allow_parser_override_extension=strict_when_supported;
+
+query I
+DELETE FROM integers WHERE i%2 AND i<157353;
+----
+2
+
+statement ok
+DELETE FROM integers WHERE i=2;
+
+statement ok
+create table test (pk bigint);
+
+statement ok
+DELETE FROM test WHERE pk > 738645 AND pk < 978908;
+
+statement ok
+DELETE FROM integers WHERE i=(1-1)*100+0;
+
+statement ok
+DELETE FROM integers WHERE i <> i::DECIMAL(9,1);
+
+statement ok
+DELETE FROM integers WHERE i%3=0;
+
+statement ok
+DELETE FROM integers WHERE i IS NULL;
+
+statement ok
+DELETE FROM integers WHERE i BETWEEN 200 AND 300;
+
+statement ok
+DELETE FROM integers
+WHERE i < 5 RETURNING i;
+
+statement ok
+DELETE FROM integers WHERE integers.rowid;
+
+statement ok
+DELETE FROM integers WHERE i = 7 RETURNING *;
+
+statement ok
+DELETE FROM integers
+WHERE i>=10 AND i <=13  RETURNING i as aliasc;
+
+statement ok
+CREATE TABLE integers2 (i bigint);
+
+statement ok
+DELETE FROM integers USING integers2;
+
+statement ok
+DELETE FROM integers WHERE i < 5 RETURNING i;
+
+statement ok
+CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
+
+statement ok
+DELETE FROM a WHERE (b).i=1;

@@ -8,9 +8,9 @@ statement ok
 pragma enable_verification
 
 query I
-SELECT backlink_count FROM parquet_scan('data/parquet-testing/bug1589.parquet') LIMIT 1
+SELECT backlink_count FROM parquet_scan('{DATA_DIR}/parquet-testing/bug1589.parquet') LIMIT 1
 ----
 NULL
 
 statement ok
-SELECT * FROM parquet_scan('data/parquet-testing/bug1589.parquet')
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/bug1589.parquet')

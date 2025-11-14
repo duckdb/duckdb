@@ -52,7 +52,7 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGPragm
 			throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 		}
 		if (!info.named_parameters.empty()) {
-			throw InternalException("PRAGMA statement with assignment cannot have named parameters");
+			throw ParserException("PRAGMA statement with assignment cannot have named parameters");
 		}
 		// SQLite does not distinguish between:
 		// "PRAGMA table_info='integers'"

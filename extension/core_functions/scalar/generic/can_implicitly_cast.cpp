@@ -9,7 +9,7 @@ namespace duckdb {
 namespace {
 
 bool CanCastImplicitly(ClientContext &context, const LogicalType &source, const LogicalType &target) {
-	return CastFunctionSet::Get(context).ImplicitCastCost(source, target) >= 0;
+	return CastFunctionSet::ImplicitCastCost(context, source, target) >= 0;
 }
 
 void CanCastImplicitlyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -36,7 +36,7 @@ unique_ptr<Expression> BindCanCastImplicitlyExpression(FunctionBindExpressionInp
 
 ScalarFunction CanCastImplicitlyFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::BOOLEAN, CanCastImplicitlyFunction);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.bind_expression = BindCanCastImplicitlyExpression;
 	return fun;
 }

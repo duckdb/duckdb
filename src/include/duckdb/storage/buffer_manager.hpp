@@ -58,6 +58,7 @@ public:
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	//! Pin a block handle.
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
+	virtual BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) = 0;
 	//! Pre-fetch a series of blocks.
 	//! Using this function is a performance suggestion.
 	virtual void Prefetch(vector<shared_ptr<BlockHandle>> &handles) = 0;
@@ -100,6 +101,8 @@ public:
 	//! Set a new swap limit.
 	virtual void SetSwapLimit(optional_idx limit = optional_idx());
 
+	//! Get the block manager used for in-memory data
+	virtual BlockManager &GetTemporaryBlockManager() = 0;
 	//! Get the temporary file information of each temporary file.
 	virtual vector<TemporaryFileInformation> GetTemporaryFiles();
 	//! Get the path to the temporary file directory.
@@ -129,7 +132,7 @@ public:
 	//! Write a temporary file buffer.
 	virtual void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
 	//! Read a temporary buffer.
-	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                                   unique_ptr<FileBuffer> buffer);
 	//! Delete the temporary file containing the block.
 	virtual void DeleteTemporaryFile(BlockHandle &block);

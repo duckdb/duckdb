@@ -1,16 +1,10 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-#include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -18,9 +12,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <errno.h>
-#include <limits>
-#include <type_traits>
 
 namespace duckdb {
 
@@ -168,7 +159,7 @@ unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFuncti
 		break;
 	}
 	bound_function.arguments[0] = decimal_type;
-	bound_function.return_type = decimal_type;
+	bound_function.SetReturnType(decimal_type);
 	return nullptr;
 }
 
@@ -201,7 +192,7 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		}
 	}
 	for (auto &func : abs.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return abs;
 }
@@ -365,7 +356,7 @@ static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &c
 		}
 	}
 	bound_function.arguments[0] = decimal_type;
-	bound_function.return_type = LogicalType::DECIMAL(width, 0);
+	bound_function.SetReturnType(LogicalType::DECIMAL(width, 0));
 	return nullptr;
 }
 
@@ -474,6 +465,116 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 namespace {
 
+struct RoundPrecisionFunctionData : public FunctionData {
+	explicit RoundPrecisionFunctionData(int32_t target_scale) : target_scale(target_scale) {
+	}
+
+	int32_t target_scale;
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<RoundPrecisionFunctionData>(target_scale);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<RoundPrecisionFunctionData>();
+		return target_scale == other.target_scale;
+	}
+};
+
+template <class T, class POWERS_OF_TEN, class OP>
+static void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
+	OP::template Operation<T, POWERS_OF_TEN>(input, state, result);
+}
+
+template <typename NEGOP, typename POSOP>
+static unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
+                                                          vector<unique_ptr<Expression>> &arguments) {
+	auto &decimal_type = arguments[0]->return_type;
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	auto fname = StringUtil::Upper(bound_function.name);
+	if (!arguments[1]->IsFoldable()) {
+		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
+	}
+	Value val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]).DefaultCastAs(LogicalType::INTEGER);
+	if (val.IsNull()) {
+		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
+	}
+	// our new precision becomes the round value
+	// e.g. ROUND(DECIMAL(18,3), 1) -> DECIMAL(18,1)
+	// but ONLY if the round value is positive
+	// if it is negative the scale becomes zero
+	// i.e. ROUND(DECIMAL(18,3), -1) -> DECIMAL(18,0)
+	int32_t round_value = IntegerValue::Get(val);
+	uint8_t target_scale;
+	auto width = DecimalType::GetWidth(decimal_type);
+	auto scale = DecimalType::GetScale(decimal_type);
+	if (round_value < 0) {
+		target_scale = 0;
+		switch (decimal_type.InternalType()) {
+		case PhysicalType::INT16:
+			bound_function.function = GenericRoundPrecisionDecimal<int16_t, NumericHelper, NEGOP>;
+			break;
+		case PhysicalType::INT32:
+			bound_function.function = GenericRoundPrecisionDecimal<int32_t, NumericHelper, NEGOP>;
+			break;
+		case PhysicalType::INT64:
+			bound_function.function = GenericRoundPrecisionDecimal<int64_t, NumericHelper, NEGOP>;
+			break;
+		default:
+			bound_function.function = GenericRoundPrecisionDecimal<hugeint_t, Hugeint, NEGOP>;
+			break;
+		}
+	} else {
+		if (round_value >= (int32_t)scale) {
+			// if round_value is bigger than or equal to scale we do nothing
+			bound_function.function = ScalarFunction::NopFunction;
+			target_scale = scale;
+		} else {
+			target_scale = NumericCast<uint8_t>(round_value);
+			switch (decimal_type.InternalType()) {
+			case PhysicalType::INT16:
+				bound_function.function = GenericRoundPrecisionDecimal<int16_t, NumericHelper, POSOP>;
+				break;
+			case PhysicalType::INT32:
+				bound_function.function = GenericRoundPrecisionDecimal<int32_t, NumericHelper, POSOP>;
+				break;
+			case PhysicalType::INT64:
+				bound_function.function = GenericRoundPrecisionDecimal<int64_t, NumericHelper, POSOP>;
+				break;
+			default:
+				bound_function.function = GenericRoundPrecisionDecimal<hugeint_t, Hugeint, POSOP>;
+				break;
+			}
+		}
+	}
+	bound_function.arguments[0] = decimal_type;
+	bound_function.SetReturnType(LogicalType::DECIMAL(width, target_scale));
+	return make_uniq<RoundPrecisionFunctionData>(round_value);
+}
+
+struct TruncOperatorPrecision {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA input, TB precision) {
+		double trunc_value;
+		if (precision < 0) {
+			double modifier = std::pow(10, -TA(precision));
+			trunc_value = (std::trunc(input / modifier)) * modifier;
+			if (std::isinf(trunc_value) || std::isnan(trunc_value)) {
+				return input;
+			}
+		} else {
+			double modifier = std::pow(10, TA(precision));
+			trunc_value = (std::trunc(input * modifier)) / modifier;
+			if (std::isinf(trunc_value) || std::isnan(trunc_value)) {
+				return input;
+			}
+		}
+		return LossyNumericCast<TR>(trunc_value);
+	}
+};
+
 struct TruncOperator {
 	// Integer truncation is a NOP
 	template <class TA, class TR>
@@ -493,40 +594,134 @@ struct TruncDecimalOperator {
 	}
 };
 
+struct TruncDecimalNegativePrecisionOperator {
+	template <class T, class POWERS_OF_TEN_CLASS>
+	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
+		auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
+		auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
+		if (info.target_scale <= -int32_t(width - source_scale)) {
+			// scale too big for width
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			result.SetValue(0, Value::INTEGER(0));
+			return;
+		}
+		T divide_power_of_ten =
+		    UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
+		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
+
+		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+			return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
+		});
+	}
+};
+
+struct TruncDecimalPositivePrecisionOperator {
+	template <class T, class POWERS_OF_TEN_CLASS>
+	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
+		auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
+		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(),
+		                             [&](T input) { return UnsafeNumericCast<T>(input / power_of_ten); });
+	}
+};
+
+struct TruncIntegerOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA input, TB precision) {
+		if (precision < 0) {
+			//	Do all the arithmetic at higher precision
+			using POWERS_OF_TEN_CLASS = typename DecimalCastTraits<TA>::POWERS_OF_TEN_CLASS;
+			if (precision <= -POWERS_OF_TEN_CLASS::CACHED_POWERS_OF_TEN) {
+				return 0;
+			}
+			const auto power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-precision];
+			auto result = input;
+			result /= power_of_ten;
+			if (result) {
+				return UnsafeNumericCast<TR>(result * power_of_ten);
+			} else {
+				return 0;
+			}
+		} else {
+			//	Truncating integers to higher precision is a NOP
+			return input;
+		}
+	}
+};
+
 } // namespace
 
 ScalarFunctionSet TruncFun::GetFunctions() {
 	ScalarFunctionSet trunc;
 	for (auto &type : LogicalType::Numeric()) {
-		scalar_function_t func = nullptr;
+		scalar_function_t trunc_func = nullptr;
+		scalar_function_t trunc_prec_func = nullptr;
 		bind_scalar_function_t bind_func = nullptr;
+		bind_scalar_function_t bind_prec_func = nullptr;
 		//	Truncation of integers gets generated by some tools (e.g., Tableau/JDBC:Postgres)
 		switch (type.id()) {
 		case LogicalTypeId::FLOAT:
-			func = ScalarFunction::UnaryFunction<float, float, TruncOperator>;
+			trunc_func = ScalarFunction::UnaryFunction<float, float, TruncOperator>;
+			trunc_prec_func = ScalarFunction::BinaryFunction<float, int32_t, float, TruncOperatorPrecision>;
 			break;
 		case LogicalTypeId::DOUBLE:
-			func = ScalarFunction::UnaryFunction<double, double, TruncOperator>;
+			trunc_func = ScalarFunction::UnaryFunction<double, double, TruncOperator>;
+			trunc_prec_func = ScalarFunction::BinaryFunction<double, int32_t, double, TruncOperatorPrecision>;
 			break;
 		case LogicalTypeId::DECIMAL:
 			bind_func = BindGenericRoundFunctionDecimal<TruncDecimalOperator>;
+			bind_prec_func =
+			    BindDecimalRoundPrecision<TruncDecimalNegativePrecisionOperator, TruncDecimalPositivePrecisionOperator>;
 			break;
 		case LogicalTypeId::TINYINT:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<int8_t, int32_t, int8_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::SMALLINT:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<int16_t, int32_t, int16_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::INTEGER:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::BIGINT:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<int64_t, int32_t, int64_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::HUGEINT:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<hugeint_t, int32_t, hugeint_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::UTINYINT:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<uint8_t, int32_t, uint8_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::USMALLINT:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<uint16_t, int32_t, uint16_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::UINTEGER:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<uint32_t, int32_t, uint32_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::UBIGINT:
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<uint64_t, int32_t, uint64_t, TruncIntegerOperator>;
+			break;
 		case LogicalTypeId::UHUGEINT:
-			func = ScalarFunction::NopFunction;
+			trunc_func = ScalarFunction::NopFunction;
+			trunc_prec_func = ScalarFunction::BinaryFunction<uhugeint_t, int32_t, uhugeint_t, TruncIntegerOperator>;
 			break;
 		default:
 			throw InternalException("Unimplemented numeric type for function \"trunc\"");
 		}
-		trunc.AddFunction(ScalarFunction({type}, type, func, bind_func));
+		trunc.AddFunction(ScalarFunction({type}, type, trunc_func, bind_func));
+		trunc.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, trunc_prec_func, bind_prec_func));
 	}
 	return trunc;
 }
@@ -618,132 +813,55 @@ struct RoundIntegerOperator {
 	}
 };
 
-struct RoundPrecisionFunctionData : public FunctionData {
-	explicit RoundPrecisionFunctionData(int32_t target_scale) : target_scale(target_scale) {
-	}
+} // namespace
 
-	int32_t target_scale;
+struct DecimalRoundNegativePrecisionOperator {
+	template <class T, class POWERS_OF_TEN_CLASS>
+	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
+		auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
+		auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
+		if (info.target_scale <= -int32_t(width - source_scale)) {
+			// scale too big for width
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			result.SetValue(0, Value::INTEGER(0));
+			return;
+		}
+		T divide_power_of_ten =
+		    UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
+		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
+		T addition = divide_power_of_ten / 2;
 
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<RoundPrecisionFunctionData>(target_scale);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<RoundPrecisionFunctionData>();
-		return target_scale == other.target_scale;
+		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+			if (input < 0) {
+				input -= addition;
+			} else {
+				input += addition;
+			}
+			return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
+		});
 	}
 };
 
-} // namespace
-
-template <class T, class POWERS_OF_TEN_CLASS>
-static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
-	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
-	auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
-	if (info.target_scale <= -int32_t(width - source_scale)) {
-		// scale too big for width
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		result.SetValue(0, Value::INTEGER(0));
-		return;
-	}
-	T divide_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
-	T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
-	T addition = divide_power_of_ten / 2;
-
-	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
-		if (input < 0) {
-			input -= addition;
-		} else {
-			input += addition;
-		}
-		return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
-	});
-}
-
-template <class T, class POWERS_OF_TEN_CLASS>
-static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
-	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
-	T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
-	T addition = power_of_ten / 2;
-	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
-		if (input < 0) {
-			input -= addition;
-		} else {
-			input += addition;
-		}
-		return UnsafeNumericCast<T>(input / power_of_ten);
-	});
-}
-
-static unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
-                                                          vector<unique_ptr<Expression>> &arguments) {
-	auto &decimal_type = arguments[0]->return_type;
-	if (arguments[1]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
-	}
-	Value val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]).DefaultCastAs(LogicalType::INTEGER);
-	if (val.IsNull()) {
-		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
-	}
-	// our new precision becomes the round value
-	// e.g. ROUND(DECIMAL(18,3), 1) -> DECIMAL(18,1)
-	// but ONLY if the round value is positive
-	// if it is negative the scale becomes zero
-	// i.e. ROUND(DECIMAL(18,3), -1) -> DECIMAL(18,0)
-	int32_t round_value = IntegerValue::Get(val);
-	uint8_t target_scale;
-	auto width = DecimalType::GetWidth(decimal_type);
-	auto scale = DecimalType::GetScale(decimal_type);
-	if (round_value < 0) {
-		target_scale = 0;
-		switch (decimal_type.InternalType()) {
-		case PhysicalType::INT16:
-			bound_function.function = DecimalRoundNegativePrecisionFunction<int16_t, NumericHelper>;
-			break;
-		case PhysicalType::INT32:
-			bound_function.function = DecimalRoundNegativePrecisionFunction<int32_t, NumericHelper>;
-			break;
-		case PhysicalType::INT64:
-			bound_function.function = DecimalRoundNegativePrecisionFunction<int64_t, NumericHelper>;
-			break;
-		default:
-			bound_function.function = DecimalRoundNegativePrecisionFunction<hugeint_t, Hugeint>;
-			break;
-		}
-	} else {
-		if (round_value >= (int32_t)scale) {
-			// if round_value is bigger than or equal to scale we do nothing
-			bound_function.function = ScalarFunction::NopFunction;
-			target_scale = scale;
-		} else {
-			target_scale = NumericCast<uint8_t>(round_value);
-			switch (decimal_type.InternalType()) {
-			case PhysicalType::INT16:
-				bound_function.function = DecimalRoundPositivePrecisionFunction<int16_t, NumericHelper>;
-				break;
-			case PhysicalType::INT32:
-				bound_function.function = DecimalRoundPositivePrecisionFunction<int32_t, NumericHelper>;
-				break;
-			case PhysicalType::INT64:
-				bound_function.function = DecimalRoundPositivePrecisionFunction<int64_t, NumericHelper>;
-				break;
-			default:
-				bound_function.function = DecimalRoundPositivePrecisionFunction<hugeint_t, Hugeint>;
-				break;
+struct DecimalRoundPositivePrecisionOperator {
+	template <class T, class POWERS_OF_TEN_CLASS>
+	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
+		auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
+		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
+		T addition = power_of_ten / 2;
+		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+			if (input < 0) {
+				input -= addition;
+			} else {
+				input += addition;
 			}
-		}
+			return UnsafeNumericCast<T>(input / power_of_ten);
+		});
 	}
-	bound_function.arguments[0] = decimal_type;
-	bound_function.return_type = LogicalType::DECIMAL(width, target_scale);
-	return make_uniq<RoundPrecisionFunctionData>(round_value);
-}
+};
 
 ScalarFunctionSet RoundFun::GetFunctions() {
 	ScalarFunctionSet round;
@@ -763,7 +881,8 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			break;
 		case LogicalTypeId::DECIMAL:
 			bind_func = BindGenericRoundFunctionDecimal<RoundDecimalOperator>;
-			bind_prec_func = BindDecimalRoundPrecision;
+			bind_prec_func =
+			    BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator, DecimalRoundPositivePrecisionOperator>;
 			break;
 		case LogicalTypeId::TINYINT:
 			round_func = ScalarFunction::NopFunction;
@@ -790,7 +909,7 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 				// no round for integral numbers
 				continue;
 			}
-			throw InternalException("Unimplemented numeric type for function \"floor\"");
+			throw InternalException("Unimplemented numeric type for function \"round\"");
 		}
 		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
 		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
@@ -853,7 +972,7 @@ struct SqrtOperator {
 ScalarFunction SqrtFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, SqrtOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -898,7 +1017,7 @@ struct LnOperator {
 ScalarFunction LnFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, LnOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -925,7 +1044,7 @@ struct Log10Operator {
 ScalarFunction Log10Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, Log10Operator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -954,7 +1073,7 @@ ScalarFunctionSet LogFun::GetFunctions() {
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                                 ScalarFunction::BinaryFunction<double, double, double, LogBaseOperator>));
 	for (auto &function : funcs.functions) {
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 	}
 	return funcs;
 }
@@ -980,7 +1099,7 @@ struct Log2Operator {
 ScalarFunction Log2Fun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, Log2Operator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1170,7 +1289,7 @@ struct SinOperator {
 ScalarFunction SinFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1189,7 +1308,7 @@ struct CosOperator {
 ScalarFunction CosFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1208,7 +1327,7 @@ struct TanOperator {
 ScalarFunction TanFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1230,7 +1349,7 @@ struct ASinOperator {
 ScalarFunction AsinFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1286,7 +1405,7 @@ struct ACos {
 ScalarFunction AcosFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1396,7 +1515,7 @@ struct AtanhOperator {
 ScalarFunction AtanhFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, AtanhOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1431,7 +1550,7 @@ struct CotOperator {
 ScalarFunction CotFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteNoZeroDoubleWrapper<CotOperator>>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1453,7 +1572,7 @@ struct GammaOperator {
 ScalarFunction GammaFun::GetFunction() {
 	auto func = ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                           ScalarFunction::UnaryFunction<double, double, GammaOperator>);
-	BaseScalarFunction::SetReturnsError(func);
+	func.SetFallible();
 	return func;
 }
 
@@ -1475,7 +1594,7 @@ struct LogGammaOperator {
 ScalarFunction LogGammaFun::GetFunction() {
 	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                        ScalarFunction::UnaryFunction<double, double, LogGammaOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1500,7 +1619,7 @@ struct FactorialOperator {
 ScalarFunction FactorialOperatorFun::GetFunction() {
 	ScalarFunction function({LogicalType::INTEGER}, LogicalType::HUGEINT,
 	                        ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -1616,7 +1735,7 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LeastCommonMultipleOperator>));
 	for (auto &function : funcs.functions) {
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 	}
 	return funcs;
 }

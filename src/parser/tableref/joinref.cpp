@@ -2,7 +2,6 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -22,7 +21,7 @@ string JoinRef::ToString() const {
 		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::CROSS:
-		result += ", ";
+		result += is_implicit ? ", " : "CROSS JOIN ";
 		break;
 	case JoinRefType::POSITIONAL:
 		result += "POSITIONAL JOIN ";
@@ -82,6 +81,7 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	for (auto &col : duplicate_eliminated_columns) {
 		copy->duplicate_eliminated_columns.emplace_back(col->Copy());
 	}
+	copy->is_implicit = is_implicit;
 	return std::move(copy);
 }
 

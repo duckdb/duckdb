@@ -51,85 +51,6 @@ const vector<LogicalType> &BaseAppender::GetActiveTypes() const {
 	return active_types;
 }
 
-InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p, const idx_t flush_count_p)
-    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL, flush_count_p),
-      context(context_p), table(table_p) {
-}
-
-InternalAppender::~InternalAppender() {
-	Destructor();
-}
-
-Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name)
-    : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
-
-	description = con.TableInfo(database_name, schema_name, table_name);
-	if (!description) {
-		throw CatalogException(
-		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
-	}
-	if (description->readonly) {
-		throw InvalidInputException("Cannot append to a readonly database.");
-	}
-
-	vector<optional_ptr<const ParsedExpression>> defaults;
-	for (auto &column : description->columns) {
-		if (column.Generated()) {
-			continue;
-		}
-		types.push_back(column.Type());
-		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
-	}
-
-	auto binder = Binder::CreateBinder(*context);
-	context->RunFunctionInTransaction([&]() {
-		for (idx_t i = 0; i < types.size(); i++) {
-			auto &type = types[i];
-			auto &expr = defaults[i];
-
-			if (!expr) {
-				// The default value is NULL.
-				default_values[i] = Value(type);
-				continue;
-			}
-
-			auto default_copy = expr->Copy();
-			D_ASSERT(!default_copy->HasParameter());
-
-			ConstantBinder default_binder(*binder, *context, "DEFAULT value");
-			default_binder.target_type = type;
-			auto bound_default = default_binder.Bind(default_copy);
-
-			if (!bound_default->IsFoldable()) {
-				// Not supported yet.
-				continue;
-			}
-
-			Value result_value;
-			auto eval_success = ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value);
-			// Insert the default Value.
-			if (eval_success) {
-				default_values[i] = result_value;
-			}
-		}
-	});
-
-	InitializeChunk();
-	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
-}
-
-Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
-    : Appender(con, INVALID_CATALOG, schema_name, table_name) {
-}
-
-Appender::Appender(Connection &con, const string &table_name)
-    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name) {
-}
-
-Appender::~Appender() {
-	Destructor();
-}
-
 void BaseAppender::InitializeChunk() {
 	chunk.Destroy();
 	chunk.Initialize(allocator, GetActiveTypes());
@@ -145,7 +66,7 @@ void BaseAppender::EndRow() {
 	}
 	column = 0;
 	chunk.SetCardinality(chunk.size() + 1);
-	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
+	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
 }
@@ -417,7 +338,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	// Early-out, if types match.
 	if (chunk_types == appender_types) {
 		collection->Append(chunk_p);
-		if (collection->Count() >= flush_count) {
+		if (ShouldFlush()) {
 			Flush();
 		}
 		return;
@@ -450,7 +371,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	}
 
 	collection->Append(cast_chunk);
-	if (collection->Count() >= flush_count) {
+	if (ShouldFlush()) {
 		Flush();
 	}
 }
@@ -461,7 +382,7 @@ void BaseAppender::FlushChunk() {
 	}
 	collection->Append(chunk);
 	chunk.Reset();
-	if (collection->Count() >= flush_count) {
+	if (ShouldFlush()) {
 		Flush();
 	}
 }
@@ -482,8 +403,106 @@ void BaseAppender::Flush() {
 	column = 0;
 }
 
+void BaseAppender::AppendDefault() {
+	throw NotImplementedException("AppendDefault is only supported when directly appending to a table");
+}
+
+void BaseAppender::AppendDefault(DataChunk &chunk, idx_t col, idx_t row) {
+	throw NotImplementedException("AppendDefault is only supported when directly appending to a table");
+}
+
+void BaseAppender::AddColumn(const string &name) {
+	throw NotImplementedException("AddColumn is only supported when directly appending to a table");
+}
+
+void BaseAppender::ClearColumns() {
+	throw NotImplementedException("ClearColumns is only supported when directly appending to a table");
+}
+
+//===--------------------------------------------------------------------===//
+// Table Appender
+//===--------------------------------------------------------------------===//
+Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name,
+                   const idx_t flush_memory_threshold_p)
+    : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
+	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
+	                             ? optional_idx::Invalid()
+	                             : optional_idx(flush_memory_threshold_p);
+
+	description = con.TableInfo(database_name, schema_name, table_name);
+	if (!description) {
+		throw CatalogException(
+		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
+	}
+	if (description->readonly) {
+		throw InvalidInputException("Cannot append to a readonly database.");
+	}
+
+	vector<optional_ptr<const ParsedExpression>> defaults;
+	for (auto &column : description->columns) {
+		if (column.Generated()) {
+			continue;
+		}
+		types.push_back(column.Type());
+		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
+	}
+	auto &context_ref = *con.context;
+	auto binder = Binder::CreateBinder(context_ref);
+	context_ref.RunFunctionInTransaction([&]() {
+		for (idx_t i = 0; i < types.size(); i++) {
+			auto &type = types[i];
+			auto &expr = defaults[i];
+
+			if (!expr) {
+				// The default value is NULL.
+				default_values[i] = Value(type);
+				continue;
+			}
+
+			auto default_copy = expr->Copy();
+			D_ASSERT(!default_copy->HasParameter());
+
+			ConstantBinder default_binder(*binder, context_ref, "DEFAULT value");
+			default_binder.target_type = type;
+			auto bound_default = default_binder.Bind(default_copy);
+
+			if (!bound_default->IsFoldable()) {
+				// Not supported yet.
+				continue;
+			}
+
+			Value result_value;
+			auto eval_success = ExpressionExecutor::TryEvaluateScalar(context_ref, *bound_default, result_value);
+			// Insert the default Value.
+			if (eval_success) {
+				default_values[i] = result_value;
+			}
+		}
+	});
+
+	InitializeChunk();
+	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
+}
+
+Appender::Appender(Connection &con, const string &schema_name, const string &table_name,
+                   const idx_t flush_memory_threshold_p)
+    : Appender(con, INVALID_CATALOG, schema_name, table_name, flush_memory_threshold_p) {
+}
+
+Appender::Appender(Connection &con, const string &table_name, const idx_t flush_memory_threshold_p)
+    : Appender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name, flush_memory_threshold_p) {
+}
+
+Appender::~Appender() {
+	Destructor();
+}
+
 void Appender::FlushInternal(ColumnDataCollection &collection) {
-	context->Append(*description, collection, &column_ids);
+	auto context_ref = context.lock();
+	if (!context_ref) {
+		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
+	}
+	context_ref->Append(*description, collection, &column_ids);
 }
 
 void Appender::AppendDefault() {
@@ -559,24 +578,92 @@ void Appender::ClearColumns() {
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
 
+//===--------------------------------------------------------------------===//
+// Query Appender
+//===--------------------------------------------------------------------===//
+QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType> types_p, vector<string> names_p,
+                             string table_name_p, const idx_t flush_memory_threshold_p)
+    : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context),
+      query(std::move(query_p)), names(std::move(names_p)), table_name(std::move(table_name_p)) {
+	types = std::move(types_p);
+	InitializeChunk();
+	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
+	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
+	                             ? optional_idx::Invalid()
+	                             : optional_idx(flush_memory_threshold_p);
+}
+
+QueryAppender::~QueryAppender() {
+}
+
+void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
+	auto context_ref = context.lock();
+	if (!context_ref) {
+		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
+	}
+	context_ref->Append(collection, query, names, table_name);
+}
+
+//===--------------------------------------------------------------------===//
+// Internal Appender
+//===--------------------------------------------------------------------===//
+InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p, const idx_t flush_count_p,
+                                   const idx_t flush_memory_threshold_p)
+    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL, flush_count_p),
+      context(context_p), table(table_p) {
+	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
+	                             ? optional_idx::Invalid()
+	                             : optional_idx(flush_memory_threshold_p);
+}
+
+InternalAppender::~InternalAppender() {
+	Destructor();
+}
+
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(table);
 	table.GetStorage().LocalAppend(table, context, collection, bound_constraints, nullptr);
 }
 
-void InternalAppender::AddColumn(const string &name) {
-	throw InternalException("AddColumn not implemented for InternalAppender");
-}
-
-void InternalAppender::ClearColumns() {
-	throw InternalException("ClearColumns not implemented for InternalAppender");
-}
-
 void BaseAppender::Close() {
 	if (column == 0 || column == GetActiveTypes().size()) {
 		Flush();
 	}
+}
+
+void BaseAppender::Clear() {
+	chunk.Reset();
+
+	if (collection) {
+		collection->Reset();
+	}
+
+	column = 0;
+}
+
+bool BaseAppender::ShouldFlushChunk() const {
+	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
+		return true;
+	}
+
+	if (!flush_memory_threshold.IsValid()) {
+		return false;
+	}
+
+	return (collection->AllocationSize() >= flush_memory_threshold.GetIndex());
+}
+
+bool BaseAppender::ShouldFlush() const {
+	if (collection->Count() >= flush_count) {
+		return true;
+	}
+
+	if (!flush_memory_threshold.IsValid()) {
+		return false;
+	}
+
+	return (collection->AllocationSize() >= flush_memory_threshold.GetIndex());
 }
 
 } // namespace duckdb

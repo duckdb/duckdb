@@ -6,5 +6,6 @@ require parquet
 
 # file is corrupt
 statement error
-SELECT type_param_constraints FROM 'data/parquet-testing/bug4903.parquet' limit 10
+SELECT type_param_constraints FROM '{DATA_DIR}/parquet-testing/bug4903.parquet' limit 10
 ----
+<REGEX>:.*Binder Error.*not found in FROM clause.*

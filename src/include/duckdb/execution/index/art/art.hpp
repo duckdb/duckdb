@@ -16,7 +16,7 @@ namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
-enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2 };
+enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
 class ConflictManager;
 class ARTKey;
@@ -92,8 +92,8 @@ public:
 	//! Drop the ART.
 	void CommitDrop(IndexLock &index_lock) override;
 
-	//! Construct an ART from a vector of sorted keys and their row IDs.
-	bool Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
+	//! Build an ART from a vector of sorted keys and their row IDs.
+	ARTConflictType Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
 
 	//! Merge another ART into this ART. Both must be locked.
 	//! FIXME: Return ARTConflictType instead of a boolean.
@@ -116,12 +116,15 @@ public:
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
 	                        unsafe_vector<ARTKey> &row_id_keys);
 
-	//! Verifies the nodes and optionally returns a string of the ART.
-	string VerifyAndToString(IndexLock &l, const bool only_verify) override;
+	//! Verifies the nodes.
+	void Verify(IndexLock &l) override;
 	//! Verifies that the node allocations match the node counts.
 	void VerifyAllocations(IndexLock &l) override;
 	//! Verifies the index buffers.
 	void VerifyBuffers(IndexLock &l) override;
+
+	//! Returns string representation of the ART.
+	string ToString(IndexLock &l, bool display_ascii = false) override;
 
 private:
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
@@ -138,11 +141,6 @@ private:
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 
-	void Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<const ARTKey> row_id, GateStatus status);
-
-	bool ConstructInternal(const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids, Node &node,
-	                       ARTKeySection &section);
-
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
 	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);
 
@@ -156,7 +154,8 @@ private:
 	void WritePartialBlocks(QueryContext context, const bool v1_0_0_storage);
 	void SetPrefixCount(const IndexStorageInfo &info);
 
-	string VerifyAndToStringInternal(const bool only_verify);
+	string ToStringInternal(bool display_ascii);
+	void VerifyInternal();
 	void VerifyAllocationsInternal();
 };
 

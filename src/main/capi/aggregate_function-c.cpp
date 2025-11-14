@@ -153,8 +153,13 @@ duckdb_aggregate_function duckdb_create_aggregate_function() {
 	                                              duckdb::CAPIAggregateStateInit, duckdb::CAPIAggregateUpdate,
 	                                              duckdb::CAPIAggregateCombine, duckdb::CAPIAggregateFinalize, nullptr,
 	                                              duckdb::CAPIAggregateBind);
-	function->function_info = duckdb::make_shared_ptr<duckdb::CAggregateFunctionInfo>();
-	return reinterpret_cast<duckdb_aggregate_function>(function);
+	try {
+		function->function_info = duckdb::make_shared_ptr<duckdb::CAggregateFunctionInfo>();
+		return reinterpret_cast<duckdb_aggregate_function>(function);
+	} catch (...) {
+		delete function;
+		return nullptr;
+	}
 }
 
 void duckdb_destroy_aggregate_function(duckdb_aggregate_function *function) {
@@ -188,7 +193,7 @@ void duckdb_aggregate_function_set_return_type(duckdb_aggregate_function functio
 	}
 	auto &aggregate_function = GetCAggregateFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	aggregate_function.return_type = *logical_type;
+	aggregate_function.SetReturnType(*logical_type);
 }
 
 void duckdb_aggregate_function_set_functions(duckdb_aggregate_function function, duckdb_aggregate_state_size state_size,
@@ -232,7 +237,7 @@ void duckdb_aggregate_function_set_special_handling(duckdb_aggregate_function fu
 		return;
 	}
 	auto &aggregate_function = GetCAggregateFunction(function);
-	aggregate_function.null_handling = duckdb::FunctionNullHandling::SPECIAL_HANDLING;
+	aggregate_function.SetNullHandling(duckdb::FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 void duckdb_aggregate_function_set_extra_info(duckdb_aggregate_function function, void *extra_info,
@@ -266,8 +271,12 @@ duckdb_aggregate_function_set duckdb_create_aggregate_function_set(const char *n
 	if (!name || !*name) {
 		return nullptr;
 	}
-	auto function_set = new duckdb::AggregateFunctionSet(name);
-	return reinterpret_cast<duckdb_aggregate_function_set>(function_set);
+	try {
+		auto function_set = new duckdb::AggregateFunctionSet(name);
+		return reinterpret_cast<duckdb_aggregate_function_set>(function_set);
+	} catch (...) {
+		return nullptr;
+	}
 }
 
 void duckdb_destroy_aggregate_function_set(duckdb_aggregate_function_set *set) {
@@ -302,8 +311,8 @@ duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection
 		if (aggregate_function.name.empty() || !info.update || !info.combine || !info.finalize) {
 			return DuckDBError;
 		}
-		if (duckdb::TypeVisitor::Contains(aggregate_function.return_type, duckdb::LogicalTypeId::INVALID) ||
-		    duckdb::TypeVisitor::Contains(aggregate_function.return_type, duckdb::LogicalTypeId::ANY)) {
+		if (duckdb::TypeVisitor::Contains(aggregate_function.GetReturnType(), duckdb::LogicalTypeId::INVALID) ||
+		    duckdb::TypeVisitor::Contains(aggregate_function.GetReturnType(), duckdb::LogicalTypeId::ANY)) {
 			return DuckDBError;
 		}
 		for (const auto &argument : aggregate_function.arguments) {
@@ -318,6 +327,7 @@ duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection
 		con->context->RunFunctionInTransaction([&]() {
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(*con->context);
 			duckdb::CreateAggregateFunctionInfo sf_info(set);
+			sf_info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			catalog.CreateFunction(*con->context, sf_info);
 		});
 	} catch (...) {

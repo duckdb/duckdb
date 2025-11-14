@@ -1,5 +1,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 
+#include "duckdb/main/settings.hpp"
+
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/cast_rules.hpp"
@@ -107,6 +109,8 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.find(LogicalType::UNION({{"any", LogicalType::ANY}}));
 	case LogicalTypeId::ARRAY:
 		return map.find(LogicalType::ARRAY(LogicalType::ANY, optional_idx()));
+	case LogicalTypeId::DECIMAL:
+		return map.find(LogicalTypeId::DECIMAL);
 	default:
 		return map.find(LogicalType::ANY);
 	}
@@ -161,7 +165,8 @@ private:
 	type_id_map_t<type_map_t<type_id_map_t<type_map_t<MapCastNode>>>> casts;
 };
 
-int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const LogicalType &target) {
+int64_t CastFunctionSet::ImplicitCastCost(optional_ptr<ClientContext> context, const LogicalType &source,
+                                          const LogicalType &target) {
 	// check if a cast has been registered
 	if (map_info) {
 		auto entry = map_info->GetEntry(source, target);
@@ -171,12 +176,29 @@ int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const Logic
 	}
 	// if not, fallback to the default implicit cast rules
 	auto score = CastRules::ImplicitCast(source, target);
-	if (score < 0 && config && config->options.old_implicit_casting) {
-		if (source.id() != LogicalTypeId::BLOB && target.id() == LogicalTypeId::VARCHAR) {
-			score = 149;
+	if (score < 0 && source.id() != LogicalTypeId::BLOB && target.id() == LogicalTypeId::VARCHAR) {
+		bool old_implicit_casting = false;
+		if (context) {
+			old_implicit_casting = DBConfig::GetSetting<OldImplicitCastingSetting>(*context);
+		} else if (config) {
+			old_implicit_casting = DBConfig::GetSetting<OldImplicitCastingSetting>(*config);
+		}
+		if (old_implicit_casting) {
+			// very high cost to avoid choosing this cast if any other option is available
+			// (it should be more costly than casting to TEMPLATE if that is available)
+			score = 10000000000;
 		}
 	}
 	return score;
+}
+
+int64_t CastFunctionSet::ImplicitCastCost(ClientContext &context, const LogicalType &source,
+                                          const LogicalType &target) {
+	return CastFunctionSet::Get(context).ImplicitCastCost(&context, source, target);
+}
+
+int64_t CastFunctionSet::ImplicitCastCost(DatabaseInstance &db, const LogicalType &source, const LogicalType &target) {
+	return CastFunctionSet::Get(db).ImplicitCastCost(nullptr, source, target);
 }
 
 static BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {

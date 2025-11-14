@@ -46,7 +46,7 @@ public:
 	UncompressedCompressState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info);
 
 public:
-	virtual void CreateEmptySegment(idx_t row_start);
+	virtual void CreateEmptySegment();
 	void FlushSegment(idx_t segment_size);
 	void Finalize(idx_t segment_size);
 
@@ -61,20 +61,23 @@ UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointData &c
                                                      const CompressionInfo &info)
     : CompressionState(info), checkpoint_data(checkpoint_data),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED)) {
-	UncompressedCompressState::CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+	UncompressedCompressState::CreateEmptySegment();
 }
 
-void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
+void UncompressedCompressState::CreateEmptySegment() {
 	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
-	                                                                info.GetBlockManager());
+	auto compressed_segment =
+	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
-		auto &partial_block_manager = checkpoint_data.GetCheckpointState().GetPartialBlockManager();
-		state.block_manager = partial_block_manager.GetBlockManager();
-		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(partial_block_manager);
+		auto &storage_manager = checkpoint_data.GetStorageManager();
+		if (!storage_manager.InMemory()) {
+			auto &partial_block_manager = checkpoint_data.GetCheckpointState().GetPartialBlockManager();
+			state.block_manager = partial_block_manager.GetBlockManager();
+			state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(partial_block_manager);
+		}
 	}
 	current_segment = std::move(compressed_segment);
 	current_segment->InitializeAppend(append_state);
@@ -84,8 +87,10 @@ void UncompressedCompressState::FlushSegment(idx_t segment_size) {
 	auto &state = checkpoint_data.GetCheckpointState();
 	if (current_segment->type.InternalType() == PhysicalType::VARCHAR) {
 		auto &segment_state = current_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
-		segment_state.overflow_writer->Flush();
-		segment_state.overflow_writer.reset();
+		if (segment_state.overflow_writer) {
+			segment_state.overflow_writer->Flush();
+			segment_state.overflow_writer.reset();
+		}
 	}
 	append_state.child_appends.clear();
 	append_state.append_state.reset();
@@ -115,12 +120,11 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 			// appended everything: finished
 			return;
 		}
-		auto next_start = state.current_segment->start + state.current_segment->count;
 		// the segment is full: flush it to disk
 		state.FlushSegment(state.current_segment->FinalizeAppend(state.append_state));
 
 		// now create a new segment and continue appending
-		state.CreateEmptySegment(next_start);
+		state.CreateEmptySegment();
 		offset += appended;
 		count -= appended;
 	}
@@ -138,10 +142,10 @@ struct FixedSizeScanState : public SegmentScanState {
 	BufferHandle handle;
 };
 
-unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> FixedSizeInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<FixedSizeScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	result->handle = buffer_manager.Pin(segment.block);
+	result->handle = buffer_manager.Pin(context, segment.block);
 	return std::move(result);
 }
 
@@ -152,7 +156,7 @@ template <class T>
 void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                           idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
@@ -165,7 +169,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 template <class T>
 void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &scan_state = state.scan_state->template Cast<FixedSizeScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);

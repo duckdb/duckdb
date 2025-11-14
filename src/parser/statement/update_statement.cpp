@@ -1,5 +1,4 @@
 #include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
 
@@ -49,7 +48,6 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 }
 
 string UpdateStatement::ToString() const {
-
 	string result;
 	result = cte_map.ToString();
 	result += "UPDATE ";

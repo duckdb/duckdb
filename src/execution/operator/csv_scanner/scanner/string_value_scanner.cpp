@@ -373,9 +373,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			success = timestamp_format.TryParseTimestamp(
 			    value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]);
 		} else {
+			const bool use_offset = (parse_types[chunk_col_id].type_id == LogicalTypeId::TIMESTAMP_TZ);
 			success = Timestamp::TryConvertTimestamp(
-			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
-			          TimestampCastResult::SUCCESS;
+			              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+			              use_offset) == TimestampCastResult::SUCCESS;
 		}
 		break;
 	}
@@ -504,8 +505,9 @@ void StringValueResult::Reset() {
 	}
 	// We keep a reference to the buffer from our current iteration if it already exists
 	shared_ptr<CSVBufferHandle> cur_buffer;
-	if (buffer_handles.find(iterator.GetBufferIdx()) != buffer_handles.end()) {
-		cur_buffer = buffer_handles[iterator.GetBufferIdx()];
+	auto handle_iter = buffer_handles.find(iterator.GetBufferIdx());
+	if (handle_iter != buffer_handles.end()) {
+		cur_buffer = handle_iter->second;
 	}
 	buffer_handles.clear();
 	idx_t actual_size = 0;
@@ -637,7 +639,6 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_position) {
-
 	bool first_nl = false;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles, PrintErrorLine());
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
@@ -795,7 +796,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel; We error.
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch, path);
-		error_handler.Error(csv_error, try_row);
+		error_handler.Error(csv_error, true);
 	}
 }
 

@@ -12,12 +12,14 @@
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 
 namespace duckdb {
 
 class ClientContext;
+class QueryContext;
 class BufferHandle;
 class FileOpenFlags;
 class FileSystem;
@@ -31,8 +33,8 @@ public:
 	using CachedFile = ExternalFileCache::CachedFile;
 
 public:
-	DUCKDB_API CachingFileHandle(CachingFileSystem &caching_file_system, const OpenFileInfo &path, FileOpenFlags flags,
-	                             CachedFile &cached_file);
+	DUCKDB_API CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
+	                             FileOpenFlags flags, CachedFile &cached_file);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -59,7 +61,8 @@ private:
 	//! Tries to read from the cache, filling "overlapping_ranges" with ranges that overlap with the request.
 	//! Returns an invalid BufferHandle if it fails
 	BufferHandle TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-	                              vector<shared_ptr<CachedFileRange>> &overlapping_ranges);
+	                              vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
+	                              optional_idx &start_location_of_next_range);
 	//! Try to read from the specified range, return an invalid BufferHandle if it fails
 	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
 	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
@@ -73,6 +76,8 @@ private:
 	                             idx_t location, bool actually_read);
 
 private:
+	QueryContext context;
+
 	//! The client caching file system that was used to create this CachingFileHandle
 	CachingFileSystem &caching_file_system;
 	//! The DB external file cache
@@ -111,6 +116,8 @@ public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags);
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(QueryContext context, const OpenFileInfo &path,
+	                                                  FileOpenFlags flags);
 
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)

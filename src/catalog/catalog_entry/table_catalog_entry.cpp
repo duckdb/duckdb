@@ -19,6 +19,8 @@
 
 namespace duckdb {
 
+constexpr const char *TableCatalogEntry::Name;
+
 TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
@@ -247,26 +249,26 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 		}
 	}
 	if (found_column_count > 0 && found_column_count != bound_columns.size()) {
-		// columns in this CHECK constraint were referenced, but not all were part of the UPDATE
+		// columns that were required are not all part of the UPDATE
 		// add them to the scan and update set
-		for (auto &check_column_id : bound_columns) {
-			if (found_columns.find(check_column_id) != found_columns.end()) {
+		for (auto &physical_id : bound_columns) {
+			if (found_columns.find(physical_id) != found_columns.end()) {
 				// column is already projected
 				continue;
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
-			auto &column = table.GetColumns().GetColumn(check_column_id);
+			auto &column = table.GetColumns().GetColumn(physical_id);
 			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(get.table_index, get.GetColumnIds().size())));
-			get.AddColumnId(check_column_id.index);
-			update.columns.push_back(check_column_id);
+			get.AddColumnId(column.Logical().index);
+			update.columns.push_back(physical_id);
 		}
 	}
 }
 
-vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo() {
+vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(const QueryContext &context) {
 	return {};
 }
 

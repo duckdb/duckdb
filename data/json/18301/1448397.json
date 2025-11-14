@@ -1,0 +1,19 @@
+{
+  "info": {
+    "balls_per_over": 6,
+    "city": "Nottingham",
+    "dates": [
+      "2025-06-28"
+    ],
+    "outcome": {
+      "winner": "India",
+      "by": {
+        "runs": 97
+      }
+    },
+    "overs": 20,
+    "player_of_match": [
+      "S Mandhana"
+    ]
+  }
+}

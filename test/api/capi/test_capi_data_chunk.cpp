@@ -403,7 +403,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 }
 
 TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
-
 	auto elem_type = duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER);
 	auto array_type = duckdb_create_array_type(elem_type, 3);
 	duckdb_logical_type schema[] = {array_type};
@@ -524,18 +523,18 @@ TEST_CASE("Test DataChunk write BLOB", "[capi]") {
 	duckdb_destroy_logical_type(&type);
 }
 
-TEST_CASE("Test DataChunk write VARINT", "[capi]") {
-	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARINT);
+TEST_CASE("Test DataChunk write BIGNUM", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGNUM);
 	REQUIRE(type);
-	REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_VARINT);
+	REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_BIGNUM);
 	duckdb_logical_type types[] = {type};
 	auto chunk = duckdb_create_data_chunk(types, 1);
 	duckdb_data_chunk_set_size(chunk, 1);
 	duckdb_vector vector = duckdb_data_chunk_get_vector(chunk, 0);
 	auto column_type = duckdb_vector_get_column_type(vector);
-	REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_VARINT);
+	REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_BIGNUM);
 	duckdb_destroy_logical_type(&column_type);
-	uint8_t bytes[] = {0x80, 0x00, 0x01, 0x2a}; // VARINT 42
+	uint8_t bytes[] = {0x80, 0x00, 0x01, 0x2a}; // BIGNUM 42
 	duckdb_vector_assign_string_element_len(vector, 0, (const char *)bytes, 4);
 	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
 	auto string_value = duckdb_string_t_data(string_data);

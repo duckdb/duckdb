@@ -15,6 +15,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
 
 namespace duckdb {
 struct SelectionVector;
@@ -33,7 +34,15 @@ enum class StatsInfo : uint8_t {
 	CAN_HAVE_NULL_AND_VALID_VALUES = 4
 };
 
-enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS, ARRAY_STATS };
+enum class StatisticsType : uint8_t {
+	NUMERIC_STATS,
+	STRING_STATS,
+	LIST_STATS,
+	STRUCT_STATS,
+	BASE_STATS,
+	ARRAY_STATS,
+	GEOMETRY_STATS
+};
 
 class BaseStatistics {
 	friend struct NumericStats;
@@ -41,6 +50,7 @@ class BaseStatistics {
 	friend struct StructStats;
 	friend struct ListStats;
 	friend struct ArrayStats;
+	friend struct GeometryStats;
 
 public:
 	DUCKDB_API ~BaseStatistics();
@@ -83,7 +93,7 @@ public:
 	inline void SetHasNullFast() {
 		has_null = true;
 	}
-	//! Set that the CURRENT level can have valiod values
+	//! Set that the CURRENT level can have valid values
 	//! Note that this is not correct for nested types unless this information is propagated in a different manner
 	//! Use Set(StatsInfo::CAN_HAVE_VALID_VALUES) in the general case
 	inline void SetHasNoNullFast() {
@@ -104,7 +114,7 @@ public:
 	static BaseStatistics Deserialize(Deserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
-	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
+	void Verify(Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
 	void Verify(Vector &vector, idx_t count) const;
 
 	string ToString() const;
@@ -146,6 +156,8 @@ private:
 		NumericStatsData numeric_data;
 		//! String stats data, for string stats
 		StringStatsData string_data;
+		//! Geometry stats data, for geometry stats
+		GeometryStatsData geometry_data;
 	} stats_union;
 	//! Child stats (for LIST and STRUCT)
 	unsafe_unique_array<BaseStatistics> child_stats;

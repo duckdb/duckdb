@@ -219,7 +219,6 @@ interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_dat
 }
 
 struct ICUDateAdd : public ICUDateFunc {
-
 	template <typename TA, typename TR, typename OP>
 	static void ExecuteUnary(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 1);

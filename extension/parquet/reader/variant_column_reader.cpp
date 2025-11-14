@@ -11,7 +11,17 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, ParquetReader &
                                          const ParquetColumnSchema &schema,
                                          vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
-	D_ASSERT(Type().InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
+
+	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
+		metadata_reader_idx = 0;
+		value_reader_idx = 1;
+	} else if (child_readers[1]->Schema().name == "metadata" && child_readers[0]->Schema().name == "value") {
+		metadata_reader_idx = 1;
+		value_reader_idx = 0;
+	} else {
+		throw InternalException("The Variant column must have 'metadata' and 'value' as the first two columns");
+	}
 }
 
 ColumnReader &VariantColumnReader::GetChildReader(idx_t child_idx) {
@@ -58,17 +68,19 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = *group_entries[0];
 
-	auto metadata_values = child_readers[0]->Read(num_values, define_out, repeat_out, metadata_intermediate);
-	auto value_values = child_readers[1]->Read(num_values, define_out, repeat_out, value_intermediate);
+	auto metadata_values =
+	    child_readers[metadata_reader_idx]->Read(num_values, define_out, repeat_out, metadata_intermediate);
+	auto value_values = child_readers[value_reader_idx]->Read(num_values, define_out, repeat_out, value_intermediate);
+
+	D_ASSERT(child_readers[metadata_reader_idx]->Schema().name == "metadata");
+	D_ASSERT(child_readers[value_reader_idx]->Schema().name == "value");
+
 	if (metadata_values != value_values) {
 		throw InvalidInputException(
 		    "The Variant column did not contain the same amount of values for 'metadata' and 'value'");
 	}
 
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-
-	vector<VariantValue> conversion_result;
+	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
 		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, *group_entries[1]);
 		if (typed_values != value_values) {
@@ -76,29 +88,9 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
 	}
-	conversion_result =
-	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
-
-	for (idx_t i = 0; i < conversion_result.size(); i++) {
-		auto &variant = conversion_result[i];
-		if (variant.IsNull()) {
-			result_validity.SetInvalid(i);
-			continue;
-		}
-
-		//! Write the result to a string
-		VariantDecodeResult decode_result;
-		decode_result.doc = yyjson_mut_doc_new(nullptr);
-		auto json_val = variant.ToJSON(context, decode_result.doc);
-
-		size_t len;
-		decode_result.data =
-		    yyjson_mut_val_write_opts(json_val, YYJSON_WRITE_ALLOW_INF_AND_NAN, nullptr, &len, nullptr);
-		if (!decode_result.data) {
-			throw InvalidInputException("Could not serialize the JSON to string, yyjson failed");
-		}
-		result_data[i] = StringVector::AddString(result, decode_result.data, static_cast<idx_t>(len));
-	}
+	intermediate =
+	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values, false);
+	VariantValue::ToVARIANT(intermediate, result);
 
 	read_count = value_values;
 	return read_count.GetIndex();

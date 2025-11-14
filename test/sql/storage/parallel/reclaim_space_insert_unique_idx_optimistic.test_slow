@@ -17,21 +17,12 @@ statement ok
 CREATE UNIQUE INDEX idx ON integers2(i);
 
 # For smaller block sizes (16KB) the total blocks increase (to twice the original amount) in the first
-# iteration, and then stay constant.
+# iteration, and then stay mostly constant.
 
 statement ok
-CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+CREATE TABLE total_blocks_tbl (total_blocks UBIGINT);
 
-statement ok
-CREATE TYPE test_result AS UNION (
-	ok BOOL,
-	err STRUCT(
-		old BIGINT,
-		allowed_max DECIMAL(21,1),
-		actual BIGINT)
-);
-
-loop i 0 10
+loop i 0 20
 
 statement ok
 BEGIN;
@@ -52,29 +43,32 @@ INSERT INTO integers2 SELECT * FROM integers WHERE i <= 999_998;
 statement ok
 ROLLBACK
 
-# Ensure that the total blocks don't exceed the total blocks after the first iteration by more than 1.2.
-
-query I
-SELECT
-	CASE WHEN ${i} = 0 THEN True::test_result
-	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.4 THEN True::test_result
-	ELSE {
-		'old': total_blocks_tbl.total_blocks,
-		'allowed_max': total_blocks_tbl.total_blocks * 1.4,
-		'actual': current.total_blocks
-	}::test_result
-	END
-FROM pragma_database_size() AS current, total_blocks_tbl;
-----
-true
-
-# Adjust the total_blocks_tbl once to the count after the first iteration.
+# Track the block count of each iteration.
 
 statement ok
-UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT
-		CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
-		ELSE (total_blocks)END
-	);
+INSERT INTO total_blocks_tbl SELECT current.total_blocks FROM pragma_database_size() AS current
 
 endloop
+
+# Ensure that the blocks don't grow between iterations.
+
+query I
+WITH tbl(w) AS (
+	SELECT struct_pack(
+		total_blocks := total_blocks,
+		sum := SUM (total_blocks) OVER (ROWS BETWEEN 0 PRECEDING AND 1 FOLLOWING)
+	) AS w
+	FROM total_blocks_tbl
+	LIMIT 19)
+SELECT list_filter(LIST(w), lambda x: x.total_blocks * 2.5 < x.sum) FROM tbl;
+----
+[]
+
+# Ensure that the blocks don't grow 'quietly' between iterations.
+
+query I
+WITH tbl(l) AS (
+	SELECT LIST(total_blocks) AS l FROM total_blocks_tbl)
+SELECT list_sum(l) < (list_count(l) * l[3] + 2 * l[3]) FROM tbl;
+----
+True

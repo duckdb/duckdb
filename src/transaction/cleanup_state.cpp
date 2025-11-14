@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-CleanupState::CleanupState(transaction_t lowest_active_transaction)
+CleanupState::CleanupState(const QueryContext &context, transaction_t lowest_active_transaction)
     : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
 }
 
@@ -95,10 +95,15 @@ void CleanupState::Flush() {
 	// set up the row identifiers vector
 	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
 
-	// delete the tuples from all the indexes
+	// delete the tuples from all the indexes.
+	// If there is any issue with removal, a FatalException must be thrown since there may be a corruption of
+	// data, hence the transaction cannot be guaranteed.
 	try {
-		current_table->RemoveFromIndexes(row_identifiers, count);
-	} catch (...) { // NOLINT: ignore errors here
+		current_table->RemoveFromIndexes(context, row_identifiers, count);
+	} catch (std::exception &ex) {
+		throw FatalException(ErrorData(ex).Message());
+	} catch (...) {
+		throw FatalException("unknown failure in CleanupState::Flush");
 	}
 
 	count = 0;

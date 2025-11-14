@@ -1,89 +1,67 @@
 # name: test/sql/alter/list/add_column_in_struct.test
+# description: Test adding fields to a STRUCT.
 # group: [list]
 
 query I
-WITH cte as (
-	select a::STRUCT(i INTEGER, j INTEGER)[] a from
-	VALUES
-		([ROW(1, 1)]),
-		([ROW(2, 2)])
-	t(a)
+WITH cte AS (
+	SELECT a::STRUCT(i INTEGER, j INTEGER)[] a FROM
+	VALUES ([ROW(1, 1)]), ([ROW(2, 2)]) t(a)
 )
 SELECT remap_struct(
 	a,
 	NULL::STRUCT(i INTEGER, j INTEGER, k INTEGER)[],
-	{
-		'list': (
-			'list', {
-				'i': 'i',
-				'j': 'j'
-			}
-		)
-	},
-	{
-		'list': {
-			'k': NULL::INTEGER
-		}
-	}
-) from cte;
+	{'list': ('list', {'i': 'i', 'j': 'j'})},
+	{'list': {'k': NULL::INTEGER}}
+) FROM cte;
 ----
 [{'i': 1, 'j': 1, 'k': NULL}]
 [{'i': 2, 'j': 2, 'k': NULL}]
 
 
 statement ok
-CREATE TABLE test(
-	s STRUCT(
-		i INTEGER,
-		j INTEGER
-	)[]
-)
+CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER)[])
 
 statement ok
-INSERT INTO test VALUES
-	([ROW(1, 1)]),
-	([ROW(2, 2)])
+INSERT INTO test VALUES ([ROW(1, 1)]), ([ROW(2, 2)])
 
-# add a column to a struct
+# Add a field to a STRUCT.
+
 statement ok
 ALTER TABLE test ADD COLUMN s.element.k INTEGER
 
 query I
-select * from test;
+SELECT * FROM test;
 ----
 [{'i': 1, 'j': 1, 'k': NULL}]
 [{'i': 2, 'j': 2, 'k': NULL}]
 
 statement ok
-drop table test;
+DROP TABLE test;
 
 statement ok
 CREATE TABLE test(
 	s STRUCT(
-		a STRUCT(
-			i INTEGER,
-			j INTEGER
-		)[]
+		a STRUCT(i INTEGER, j INTEGER)[]
 	)
 )
 
 statement ok
-INSERT INTO test VALUES
-	(ROW([ROW(1, 1)])),
-	(ROW([ROW(2, 2)]))
+INSERT INTO test VALUES (ROW([ROW(1, 1)])), (ROW([ROW(2, 2)]))
 
-# add a column to a struct
+# Add another (one more nesting level) STRUCT field.
+
 statement ok
 ALTER TABLE test ADD COLUMN s.a.element.k INTEGER
 
 query I
-select * from test;
+SELECT * FROM test;
 ----
 {'a': [{'i': 1, 'j': 1, 'k': NULL}]}
 {'a': [{'i': 2, 'j': 2, 'k': NULL}]}
 
-# attempt to add a field to a list
+# Try to add an element to the list.
+
 statement error
 ALTER TABLE test ADD COLUMN s.a.not_element INTEGER
 ----
-Binder Error: Column a is not a struct - ALTER TABLE can only add fields to structs
+<REGEX>:Binder Error.*Column a is not a struct - ALTER TABLE can only add fields to structs.*

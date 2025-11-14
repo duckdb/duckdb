@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 
 statement ok
-CREATE TABLE movie_info AS SELECT * FROM read_csv_auto ('data/csv/real/imdb_movie_info_escaped.csv');
+CREATE TABLE movie_info AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/real/imdb_movie_info_escaped.csv');
 
 query I
 SELECT COUNT(*) FROM movie_info;
@@ -16,7 +16,7 @@ SELECT COUNT(*) FROM movie_info;
 
 
 statement ok
-CREATE TABLE movie_info2 AS SELECT * FROM read_csv_auto ('data/csv/real/imdb_movie_info_escaped.csv');
+CREATE TABLE movie_info2 AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/real/imdb_movie_info_escaped.csv');
 
 query IIIII
 (FROM movie_info EXCEPT FROM movie_info2)

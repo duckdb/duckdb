@@ -3,6 +3,8 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
@@ -117,10 +119,33 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	case PhysicalType::VARCHAR:
 		return OP::Operation(StringValue::Get(left), StringValue::Get(right));
 	case PhysicalType::STRUCT: {
+		if (left_type.id() == LogicalTypeId::VARIANT) {
+			Vector left_vec(left.type());
+			Vector right_vec(right.type());
+			left_vec.Reference(left);
+			right_vec.Reference(right);
+
+			RecursiveUnifiedVectorFormat left_format;
+			RecursiveUnifiedVectorFormat right_format;
+			Vector::RecursiveToUnifiedFormat(left_vec, 1, left_format);
+			Vector::RecursiveToUnifiedFormat(right_vec, 1, right_format);
+
+			UnifiedVariantVectorData left_variant_data(left_format);
+			UnifiedVariantVectorData right_variant_data(right_format);
+
+			auto left_value = VariantUtils::ConvertVariantToValue(left_variant_data, 0, 0);
+			auto right_value = VariantUtils::ConvertVariantToValue(right_variant_data, 0, 0);
+			return TemplatedBooleanOperation<OP>(left_value, right_value);
+		}
 		auto &left_children = StructValue::GetChildren(left);
 		auto &right_children = StructValue::GetChildren(right);
 		// this should be enforced by the type
 		D_ASSERT(left_children.size() == right_children.size());
+		if (left_children.empty()) {
+			const auto const_true = Value::BOOLEAN(true);
+			return ValuePositionComparator::Final<OP>(const_true, const_true);
+		}
+
 		idx_t i = 0;
 		for (; i < left_children.size() - 1; ++i) {
 			if (ValuePositionComparator::Definite<OP>(left_children[i], right_children[i])) {

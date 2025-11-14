@@ -175,6 +175,14 @@ enum ConvertedType {
    * particular timezone or date.
    */
   INTERVAL = 21;
+
+  /**
+   * Non-standard NULL value
+   *
+   * This was written by old writers - it is kept here for compatibility purposes.
+   * See https://github.com/duckdb/duckdb/pull/11774
+   */
+  PARQUET_NULL = 24;
 }
 
 /**
@@ -575,7 +583,7 @@ enum Encoding {
    */
   PLAIN = 0;
 
-  /** Group VarInt encoding for INT32/INT64.
+  /** Group Bignum encoding for INT32/INT64.
    * This encoding is deprecated. It was never used
    */
   //  GROUP_VAR_INT = 1;

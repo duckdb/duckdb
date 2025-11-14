@@ -13,6 +13,7 @@
 #include "test_config.hpp"
 #include "sqllogic_test_logger.hpp"
 #include "catch.hpp"
+
 #include <list>
 #include <thread>
 #include <chrono>
@@ -23,7 +24,7 @@ static void query_break(int line) {
 	(void)line;
 }
 
-static Connection *GetConnection(DuckDB &db,
+static Connection *GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
                                  unordered_map<string, duckdb::unique_ptr<Connection>> &named_connection_map,
                                  string con_name) {
 	auto entry = named_connection_map.find(con_name);
@@ -34,9 +35,9 @@ static Connection *GetConnection(DuckDB &db,
 		auto &test_config = TestConfiguration::Get();
 		auto init_cmd = test_config.OnConnectionCommand();
 		if (!init_cmd.empty()) {
-			auto res = con->Query(init_cmd);
+			auto res = con->Query(runner.ReplaceKeywords(init_cmd));
 			if (res->HasError()) {
-				FAIL("Startup queries provided via on_init failed: " + res->GetError());
+				FAIL("Startup queries provided via on_new_connection failed: " + res->GetError());
 			}
 		}
 		auto res = con.get();
@@ -61,9 +62,14 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 			auto &test_config = TestConfiguration::Get();
 			auto init_cmd = test_config.OnConnectionCommand();
 			if (!init_cmd.empty()) {
-				auto res = context.con->Query(init_cmd);
+				auto res = context.con->Query(runner.ReplaceKeywords(init_cmd));
 				if (res->HasError()) {
-					FAIL("Startup queries provided via on_init failed: " + res->GetError());
+					string error_msg = "Startup queries provided via on_new_connection failed: " + res->GetError();
+					if (context.is_parallel) {
+						throw std::runtime_error(error_msg);
+					} else {
+						FAIL(error_msg);
+					}
 				}
 			}
 
@@ -76,7 +82,7 @@ Connection *Command::CommandConnection(ExecuteContext &context) const {
 		if (context.is_parallel) {
 			throw std::runtime_error("Named connections not supported in parallel loop");
 		}
-		return GetConnection(*runner.db, runner.named_connection_map, connection_name);
+		return GetConnection(runner, *runner.db, runner.named_connection_map, connection_name);
 	}
 }
 
@@ -89,7 +95,7 @@ bool CanRestart(Connection &conn) {
 	auto databases = db_manager.GetDatabases();
 	idx_t database_count = 0;
 	for (auto &db_ref : databases) {
-		auto &db = db_ref.get();
+		auto &db = *db_ref;
 		if (db.IsSystem()) {
 			continue;
 		}
@@ -143,10 +149,9 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 		// cannot restart in parallel
 		return;
 	}
-	vector<duckdb::unique_ptr<SQLStatement>> statements;
 	bool query_fail = false;
 	try {
-		statements = connection->context->ParseStatements(sql_query);
+		connection->context->ParseStatements(sql_query);
 	} catch (...) {
 		query_fail = true;
 	}
@@ -162,13 +167,19 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &context, Connection *connection,
                                                           string file_name, idx_t query_line) const {
 	query_break(query_line);
+
 	if (TestConfiguration::TestForceReload() && TestConfiguration::TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
 
+	QueryParameters parameters;
+	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
+
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+	parameters.output_type = QueryResultOutputType::ALLOW_STREAMING;
 	auto ccontext = connection->context;
-	auto result = ccontext->Query(context.sql_query, true);
+	auto result = ccontext->Query(context.sql_query, parameters);
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = result->Cast<StreamQueryResult>();
 		return stream_result.Materialize();
@@ -177,7 +188,8 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 #else
-	return connection->Query(context.sql_query);
+	auto res = connection->context->Query(context.sql_query, parameters);
+	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(res));
 #endif
 }
 

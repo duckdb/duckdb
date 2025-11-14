@@ -53,7 +53,7 @@ def get_file_list():
 
 
 scripts_dir = os.path.dirname(os.path.abspath(__file__))
-version_map_path = scripts_dir + '/../src/storage/version_map.json'
+version_map_path = os.path.join(scripts_dir, '..', 'src', 'storage', 'version_map.json')
 version_map_file = file = open(version_map_path)
 version_map = json.load(version_map_file)
 
@@ -90,17 +90,16 @@ def lookup_serialization_version(version: str):
                 f"Specified version ({current_version}) could not be found in the version_map.json, and it is lower than the last defined version ({last_registered_version})!"
             )
             exit(1)
-
-        if hasattr(lookup_serialization_version, 'latest_version'):
+        if hasattr(versions, 'latest'):
             # We have already mapped a version to 'latest', check that the versions match
-            latest_version = getattr(lookup_serialization_version, 'latest_version')
+            latest_version = getattr(versions, 'latest')
             if current_version != latest_version:
                 print(
-                    f"Found more than one version that is not present in the version_map.json!: {current_version}, {latest_version}"
+                    f"Found more than one version that is not present in the version_map.json!: Current: {current_version}, Latest: {latest_version}"
                 )
                 exit(1)
         else:
-            setattr(lookup_serialization_version, 'latest_version', current_version)
+            setattr(lookup_serialization_version, 'latest', current_version)
         return versions['latest']
     return versions[version]
 
@@ -375,6 +374,7 @@ supported_serialize_entries = [
     'return_type',
     'set_parameters',
     'includes',
+    'finalize_deserialization',
 ]
 
 
@@ -397,6 +397,9 @@ class SerializableClass:
         self.children: Dict[str, SerializableClass] = {}
         self.return_type = self.name
         self.return_class = self.name
+        self.finalize_deserialization = None
+        if 'finalize_deserialization' in entry:
+            self.finalize_deserialization = entry['finalize_deserialization']
         if self.is_base_class:
             self.enum_value = entry['class_type']
         if 'pointer_type' in entry:
@@ -486,8 +489,10 @@ class SerializableClass:
 
         assignment = '.' if self.pointer_type == 'none' else '->'
         default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
+        storage_version = lookup_serialization_version(entry.version)
+        conditional_serialization = storage_version != 1
         template = SERIALIZE_ELEMENT_FORMAT
-        if entry.status != MemberVariableStatus.EXISTING:
+        if entry.status != MemberVariableStatus.EXISTING and not conditional_serialization:
             template = "\t/* [Deleted] ({property_type}) \"{property_name}\" */\n"
         elif entry.has_default:
             template = template.replace('WriteProperty', 'WritePropertyWithDefault')
@@ -500,10 +505,14 @@ class SerializableClass:
             assignment=assignment,
         )
 
-        storage_version = lookup_serialization_version(entry.version)
-        if storage_version != 1:
+        if conditional_serialization:
             code = []
-            code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
+            if entry.status != MemberVariableStatus.EXISTING:
+                # conditional delete
+                code.append(f'\tif (!serializer.ShouldSerialize({storage_version})) {{')
+            else:
+                # conditional serialization
+                code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
             code.append('\t' + serialization_code)
 
             result = '\n'.join(code) + '\t}\n'
@@ -596,6 +605,9 @@ def generate_base_class_code(base_class: SerializableClass):
             )
         else:
             base_class_deserialize += f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
+    if base_class.finalize_deserialization is not None:
+        for line in base_class.finalize_deserialization:
+            base_class_deserialize += "\t" + line + "\n"
     base_class_deserialize += generate_return(base_class)
     base_class_generation = ''
     serialization = ''
@@ -721,6 +733,11 @@ def generate_class_code(class_entry: SerializableClass):
         class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(
             property_type=entry.type, property_name=entry.name
         )
+    if class_entry.finalize_deserialization is not None:
+        class_deserialize += class_entry.finalize_deserialization
+    if class_entry.finalize_deserialization is not None:
+        for line in class_entry.finalize_deserialization:
+            class_deserialize += "\t" + line + "\n"
     class_deserialize += generate_return(class_entry)
     deserialize_return = get_return_value(class_entry.pointer_type, class_entry.return_type)
 

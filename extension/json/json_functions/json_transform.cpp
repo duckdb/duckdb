@@ -1028,7 +1028,7 @@ BoundCastInfo JSONToAnyCastBind(BindCastInput &input, const LogicalType &source,
 	return BoundCastInfo(JSONToAnyCast, nullptr, JSONFunctionLocalState::InitCastLocalState);
 }
 
-void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
+void JSONFunctions::RegisterJSONTransformCastFunctions(ExtensionLoader &loader) {
 	// JSON can be cast to anything
 	for (const auto &type : LogicalType::AllTypes()) {
 		LogicalType target_type;
@@ -1055,8 +1055,9 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 			target_type = type;
 		}
 		// Going from JSON to another type has the same cost as going from VARCHAR to that type
-		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
-		casts.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
+		const auto json_to_target_cost =
+		    CastFunctionSet::ImplicitCastCost(loader.GetDatabaseInstance(), LogicalType::VARCHAR, target_type);
+		loader.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
 	}
 }
 

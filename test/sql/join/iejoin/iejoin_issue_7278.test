@@ -25,11 +25,25 @@ create table snapshot_data as
 	from generate_series(1,1000) t(i)
 ;
 
-query I
-with cal_last_13 as (
+# IEJoin is disabled for CTEs for some reason
+statement ok
+create table cal_last_13 as(
 	select * from calendar where yyyyww in (SELECT yyyyww
 	FROM calendar)
-)
+);
+
+query II
+explain
+select
+	count(*)
+from snapshot_data data
+join cal_last_13 cal
+	on data.snapshot_ts >= cal.start_ts
+	and data.snapshot_ts <= cal.end_ts
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query I
 select
 	count(*)
 from snapshot_data data
@@ -39,14 +53,27 @@ join cal_last_13 cal
 ----
 1000
 
-query I
-with cal_last_13 as (
+statement ok
+create or replace table cal_last_13 as (
 	select * from calendar where yyyyww in (SELECT yyyyww
 	FROM calendar)
 	union all
 	select * from calendar where yyyyww in (SELECT yyyyww
 	FROM calendar)
-)
+);
+
+query II
+explain
+select
+	count(*)
+from snapshot_data data
+join cal_last_13 cal
+	on data.snapshot_ts >= cal.start_ts
+	and data.snapshot_ts <= cal.end_ts
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query I
 select
 	count(*)
 from snapshot_data data
@@ -56,17 +83,30 @@ join cal_last_13 cal
 ----
 2000
 
+statement ok
+create or replace table cal_last_13 as (
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+	union all
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+	union all
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+);
+
+query II
+explain
+select
+	count(*)
+from snapshot_data data
+join cal_last_13 cal
+	on data.snapshot_ts >= cal.start_ts
+	and data.snapshot_ts <= cal.end_ts
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 query I
-with cal_last_13 as (
-	select * from calendar where yyyyww in (SELECT yyyyww
-	FROM calendar)
-	union all
-	select * from calendar where yyyyww in (SELECT yyyyww
-	FROM calendar)
-	union all
-	select * from calendar where yyyyww in (SELECT yyyyww
-	FROM calendar)
-)
 select
 	count(*)
 from snapshot_data data
@@ -76,17 +116,33 @@ join cal_last_13 cal
 ----
 3000
 
+statement ok
+create or replace table cal_last_13 as (
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+	union all
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+	union all
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+);
+
+query II
+explain
+select
+	count(*)
+from snapshot_data data
+join cal_last_13 cal
+	on data.snapshot_ts >= cal.start_ts
+	and data.snapshot_ts <= cal.end_ts
+join cal_last_13 cal2
+	on data.snapshot_ts >= cal2.start_ts
+	and data.snapshot_ts <= cal2.end_ts
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
 query I
-with cal_last_13 as (
-	select * from calendar where yyyyww in (SELECT yyyyww
-	FROM calendar)
-	union all
-	select * from calendar where yyyyww in (SELECT yyyyww
-	FROM calendar)
-	union all
-	select * from calendar where yyyyww in (SELECT yyyyww
-	FROM calendar)
-)
 select
 	count(*)
 from snapshot_data data

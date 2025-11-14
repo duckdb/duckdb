@@ -7,6 +7,9 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
+constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
+
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
                                              vector<string> schema_path, bool can_have_nulls)
     : ColumnWriter(writer, column_schema, std::move(schema_path), can_have_nulls) {
@@ -36,15 +39,15 @@ unique_ptr<ColumnWriterPageState> PrimitiveColumnWriter::InitializePageState(Pri
 void PrimitiveColumnWriter::FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state) {
 }
 
-void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector,
-                                    idx_t count) {
+void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count,
+                                    bool vector_can_span_multiple_pages) {
 	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
 	auto &col_chunk = state.row_group.columns[state.col_idx];
 
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
 	auto &validity = FlatVector::Validity(vector);
-	HandleRepeatLevels(state, parent, count, MaxRepeat());
+	HandleRepeatLevels(state, parent, count);
 	HandleDefineLevels(state, parent, validity, count, MaxDefine(), MaxDefine() - 1);
 
 	idx_t vector_index = 0;
@@ -70,6 +73,10 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 			if (validity.RowIsValid(vector_index)) {
 				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
 				if (page_info.estimated_page_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
+					if (!vector_can_span_multiple_pages && i != 0) {
+						// Vector is not allowed to span multiple pages, and we already started writing it
+						continue;
+					}
 					PageInformation new_info;
 					new_info.offset = page_info.offset + page_info.row_count;
 					state.page_info.push_back(new_info);
@@ -107,7 +114,7 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.type = PageType::DATA_PAGE;
 		hdr.__isset.data_page_header = true;
 
-		hdr.data_page_header.num_values = UnsafeNumericCast<int32_t>(page_info.row_count);
+		hdr.data_page_header.num_values = NumericCast<int32_t>(page_info.row_count);
 		hdr.data_page_header.encoding = GetEncoding(state);
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
@@ -298,6 +305,27 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		column_chunk.meta_data.statistics.__isset.distinct_count = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
+
+	if (state.stats_state->HasGeoStats()) {
+		auto gpq_version = writer.GetGeoParquetVersion();
+
+		const auto has_real_stats = gpq_version == GeoParquetVersion::NONE || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
+		const auto has_json_stats = gpq_version == GeoParquetVersion::V1 || gpq_version == GeoParquetVersion::BOTH ||
+		                            gpq_version == GeoParquetVersion::V2;
+
+		if (has_real_stats) {
+			// Write the parquet native geospatial statistics
+			column_chunk.meta_data.__isset.geospatial_statistics = true;
+			state.stats_state->WriteGeoStats(column_chunk.meta_data.geospatial_statistics);
+		}
+		if (has_json_stats) {
+			// Add the geospatial statistics to the extra GeoParquet metadata
+			writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
+			                                              *state.stats_state->GetGeoStats());
+		}
+	}
+
 	for (const auto &write_info : state.write_info) {
 		// only care about data page encodings, data_page_header.encoding is meaningless for dict
 		if (write_info.page_header.type != PageType::DATA_PAGE &&

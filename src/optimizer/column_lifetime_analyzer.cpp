@@ -11,6 +11,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -80,7 +81,8 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// FIXME: for now, we only push into the projection map for equality (hash) joins
 		idx_t has_range = 0;
-		if (!comp_join.HasEquality(has_range) || optimizer.context.config.prefer_range_joins) {
+		bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(optimizer.context);
+		if (!comp_join.HasEquality(has_range) || prefer_range_joins) {
 			return;
 		}
 

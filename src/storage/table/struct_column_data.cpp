@@ -10,30 +10,33 @@
 namespace duckdb {
 
 StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                   idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, *this) {
+                                   LogicalType type_p, ColumnDataType data_type, optional_ptr<ColumnData> parent)
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
+      validity(block_manager, info, 0, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(!child_types.empty());
 	if (type.id() != LogicalTypeId::UNION && StructType::IsUnnamed(type)) {
 		throw InvalidInputException("A table cannot be created from an unnamed struct");
 	}
+	if (type.id() == LogicalTypeId::VARIANT) {
+		throw NotImplementedException("A table cannot be created from a VARIANT column yet");
+	}
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
 	for (auto &child_type : child_types) {
 		sub_columns.push_back(
-		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, start_row, child_type.second, this));
+		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, child_type.second, data_type, this));
 		sub_column_index++;
 	}
 }
 
-void StructColumnData::SetStart(idx_t new_start) {
-	this->start = new_start;
+void StructColumnData::SetDataType(ColumnDataType data_type) {
+	ColumnData::SetDataType(data_type);
 	for (auto &sub_column : sub_columns) {
-		sub_column->SetStart(new_start);
+		sub_column->SetDataType(data_type);
 	}
-	validity.SetStart(new_start);
+	validity.SetDataType(data_type);
 }
 
 idx_t StructColumnData::GetMaxEntry() {
@@ -52,7 +55,7 @@ void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnS
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {
 	D_ASSERT(state.child_states.size() == sub_columns.size() + 1);
-	state.row_index = 0;
+	state.offset_in_column = 0;
 	state.current = nullptr;
 
 	// initialize the validity segment
@@ -69,7 +72,8 @@ void StructColumnData::InitializeScan(ColumnScanState &state) {
 
 void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	D_ASSERT(state.child_states.size() == sub_columns.size() + 1);
-	state.row_index = row_idx;
+	D_ASSERT(row_idx < count);
+	state.offset_in_column = row_idx;
 	state.current = nullptr;
 
 	// initialize the validity segment
@@ -178,12 +182,12 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 	this->count += count;
 }
 
-void StructColumnData::RevertAppend(row_t start_row) {
-	validity.RevertAppend(start_row);
+void StructColumnData::RevertAppend(row_t new_count) {
+	validity.RevertAppend(new_count);
 	for (auto &sub_column : sub_columns) {
-		sub_column->RevertAppend(start_row);
+		sub_column->RevertAppend(new_count);
 	}
-	this->count = UnsafeNumericCast<idx_t>(start_row) - this->start;
+	this->count = UnsafeNumericCast<idx_t>(new_count);
 }
 
 idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -191,7 +195,7 @@ idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resu
 	auto &child_entries = StructVector::GetEntries(result);
 	// insert any child states that are required
 	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
-		ColumnScanState child_state;
+		ColumnScanState child_state(state.parent);
 		child_state.scan_options = state.scan_options;
 		state.child_states.push_back(std::move(child_state));
 	}
@@ -204,17 +208,19 @@ idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resu
 	return scan_count;
 }
 
-void StructColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                              idx_t update_count) {
-	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
+void StructColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
+	validity.Update(transaction, data_table, column_index, update_vector, row_ids, update_count, row_group_start);
 	auto &child_entries = StructVector::GetEntries(update_vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Update(transaction, column_index, *child_entries[i], row_ids, update_count);
+		sub_columns[i]->Update(transaction, data_table, column_index, *child_entries[i], row_ids, update_count,
+		                       row_group_start);
 	}
 }
 
-void StructColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                    Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void StructColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+                                    const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                                    idx_t update_count, idx_t depth, idx_t row_group_start) {
 	// we can never DIRECTLY update a struct column
 	if (depth >= column_path.size()) {
 		throw InternalException("Attempting to directly update a struct column - this should not be possible");
@@ -222,13 +228,14 @@ void StructColumnData::UpdateColumn(TransactionData transaction, const vector<co
 	auto update_column = column_path[depth];
 	if (update_column == 0) {
 		// update the validity column
-		validity.UpdateColumn(transaction, column_path, update_vector, row_ids, update_count, depth + 1);
+		validity.UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
+		                      row_group_start);
 	} else {
 		if (update_column > sub_columns.size()) {
 			throw InternalException("Update column_path out of range");
 		}
-		sub_columns[update_column - 1]->UpdateColumn(transaction, column_path, update_vector, row_ids, update_count,
-		                                             depth + 1);
+		sub_columns[update_column - 1]->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids,
+		                                             update_count, depth + 1, row_group_start);
 	}
 }
 
@@ -308,7 +315,8 @@ unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGro
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group,
                                                                ColumnCheckpointInfo &checkpoint_info) {
-	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
+	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
 		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, checkpoint_info));
@@ -326,6 +334,18 @@ bool StructColumnData::IsPersistent() {
 		}
 	}
 	return true;
+}
+
+bool StructColumnData::HasAnyChanges() const {
+	if (validity.HasAnyChanges()) {
+		return true;
+	}
+	for (auto &child_col : sub_columns) {
+		if (child_col->HasAnyChanges()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 PersistentColumnData StructColumnData::Serialize() {
@@ -346,13 +366,13 @@ void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseS
 	this->count = validity.count.load();
 }
 
-void StructColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
-                                            vector<duckdb::ColumnSegmentInfo> &result) {
+void StructColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
+                                            vector<ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetColumnSegmentInfo(row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	}
 }
 

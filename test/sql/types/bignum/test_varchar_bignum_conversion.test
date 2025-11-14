@@ -1,0 +1,74 @@
+# name: test/sql/types/bignum/test_varchar_bignum_conversion.test
+# description: Test basics of bignum type
+# group: [bignum]
+
+# Basic compatibility tests
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select '340282366920938463463374607431768211455'::UHUGEINT::bignum
+----
+340282366920938463463374607431768211455
+
+query I
+select distinct  i::varchar::bignum = i::bignum  from range(-1000, 1000) t(i);
+----
+true
+
+query I
+select '2147483646'::bignum = 2147483646::bignum
+----
+true
+
+query I
+select '340282366920938463463374607431768211455'::UHUGEINT::bignum = '340282366920938463463374607431768211455'::bignum
+----
+true
+
+query I
+select '-2147483646'::bignum = (-2147483646)::bignum
+----
+true
+
+query I
+select '100'::bignum = 100::bignum;
+----
+true
+
+query I
+select '256'::bignum = 256::bignum;
+----
+true
+
+# Now let's try to get some of these values back to strings
+query I
+select '256'::bignum;
+----
+256
+
+query I
+select '2147483646'::bignum;
+----
+2147483646
+
+query I
+select '21474836460000000000958'::bignum;
+----
+21474836460000000000958
+
+query I
+select '-21474836460000000000958'::bignum;
+----
+-21474836460000000000958
+
+query I
+select '-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000958'::bignum;
+----
+-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000958
+
+query I
+select '-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000958'::bignum < '-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000957'::bignum;
+----
+true

@@ -392,11 +392,6 @@
         "type": "vector<string>"
       },
       {
-        "id": 204,
-        "name": "materialized_cte",
-        "type": "CTEMaterialize"
-      },
-      {
         "id": 205,
         "name": "is_recurring",
         "type": "bool"
@@ -406,8 +401,7 @@
       "table_index",
       "cte_index",
       "chunk_types",
-      "bound_columns",
-      "materialized_cte"
+      "bound_columns"
     ]
   },
   {
@@ -673,63 +667,75 @@
       {
         "id": 207,
         "name": "action_type",
-        "type": "OnConflictAction"
+        "type": "OnConflictAction",
+        "property": "on_conflict_info.action_type"
       },
       {
         "id": 208,
         "name": "expected_set_types",
-        "type": "vector<LogicalType>"
+        "type": "vector<LogicalType>",
+        "property": "on_conflict_info.expected_set_types"
       },
       {
         "id": 209,
         "name": "on_conflict_filter",
-        "type": "unordered_set<idx_t>"
+        "type": "unordered_set<idx_t>",
+        "property": "on_conflict_info.on_conflict_filter"
       },
       {
         "id": 210,
         "name": "on_conflict_condition",
-        "type": "Expression*"
+        "type": "Expression*",
+        "property": "on_conflict_info.on_conflict_condition"
       },
       {
         "id": 211,
         "name": "do_update_condition",
-        "type": "Expression*"
+        "type": "Expression*",
+        "property": "on_conflict_info.do_update_condition"
       },
       {
         "id": 212,
         "name": "set_columns",
-        "type": "vector<PhysicalIndex>"
+        "type": "vector<PhysicalIndex>",
+        "property": "on_conflict_info.set_columns"
       },
       {
         "id": 213,
         "name": "set_types",
-        "type": "vector<LogicalType>"
+        "type": "vector<LogicalType>",
+        "property": "on_conflict_info.set_types"
       },
       {
         "id": 214,
         "name": "excluded_table_index",
-        "type": "idx_t"
+        "type": "idx_t",
+        "property": "on_conflict_info.excluded_table_index"
       },
       {
         "id": 215,
         "name": "columns_to_fetch",
-        "type": "vector<column_t>"
+        "type": "vector<column_t>",
+        "property": "on_conflict_info.columns_to_fetch"
       },
       {
         "id": 216,
         "name": "source_columns",
-        "type": "vector<column_t>"
+        "type": "vector<column_t>",
+        "property": "on_conflict_info.source_columns"
       },
       {
         "id": 217,
         "name": "expressions",
-        "type": "vector<Expression*>"
+        "type": "vector<Expression*>",
+        "property": "expressions"
       },
       {
         "id": 218,
         "name": "update_is_del_and_insert",
         "type": "bool",
-        "default": "false"
+        "default": "false",
+        "property": "on_conflict_info.update_is_del_and_insert"
       }
     ],
     "constructor": [

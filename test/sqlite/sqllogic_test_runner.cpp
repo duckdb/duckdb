@@ -5,6 +5,7 @@
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "sqllogic_parser.hpp"
@@ -23,12 +24,42 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	config->options.allow_unredacted_secrets = true;
 	config->options.load_extensions = false;
 
+	auto &test_config = TestConfiguration::Get();
+	autoloading_mode = test_config.GetExtensionAutoLoadingMode();
+
+	config->options.autoload_known_extensions = false;
+	config->options.autoinstall_known_extensions = false;
+	config->options.allow_unsigned_extensions = true;
+	local_extension_repo = "";
+	autoinstall_is_checked = false;
+
+	switch (autoloading_mode) {
+	case TestConfiguration::ExtensionAutoLoadingMode::NONE: {
+		break;
+	}
+	case TestConfiguration::ExtensionAutoLoadingMode::AVAILABLE: {
+		autoinstall_is_checked = true;
+		config->options.autoload_known_extensions = true;
+		break;
+	}
+	case TestConfiguration::ExtensionAutoLoadingMode::ALL: {
+		autoinstall_is_checked = false;
+		config->options.autoload_known_extensions = true;
+		config->options.autoinstall_known_extensions = true;
+		break;
+	}
+	}
+
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
-	if (!env_var) {
-		config->options.autoload_known_extensions = false;
-	} else {
+	if (env_var) {
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
+		config->options.autoinstall_known_extensions = true;
+	} else if (config->options.autoload_known_extensions) {
+		local_extension_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
+	}
+	for (auto &entry : test_config.GetConfigSettings()) {
+		config->SetOptionByName(entry.name, entry.value);
 	}
 }
 
@@ -85,6 +116,19 @@ void SQLLogicTestRunner::EndLoop() {
 	}
 }
 
+ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
+	auto &test_config = TestConfiguration::Get();
+	if (test_config.GetExtensionAutoLoadingMode() != TestConfiguration::ExtensionAutoLoadingMode::NONE) {
+		// try LOAD extension
+		Connection con(db);
+		auto result = con.Query("LOAD " + extension);
+		if (!result->HasError()) {
+			return ExtensionLoadResult::LOADED_EXTENSION;
+		}
+	}
+	return ExtensionHelper::LoadExtension(db, extension);
+}
+
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	loaded_databases.push_back(dbpath);
 
@@ -100,7 +144,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 
 		auto &test_config = TestConfiguration::Get();
 		for (auto ext : test_config.ExtensionToBeLoadedOnLoad()) {
-			ExtensionHelper::LoadExtension(*db, ext);
+			SQLLogicTestRunner::LoadExtension(*db, ext);
 		}
 	} catch (std::exception &ex) {
 		ErrorData err(ex);
@@ -112,7 +156,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	// load any previously loaded extensions again
 	if (load_extensions) {
 		for (auto &extension : extensions) {
-			ExtensionHelper::LoadExtension(*db, extension);
+			SQLLogicTestRunner::LoadExtension(*db, extension);
 		}
 	}
 }
@@ -138,7 +182,7 @@ void SQLLogicTestRunner::Reconnect() {
 	}
 
 	auto &test_config = TestConfiguration::Get();
-	auto init_cmd = test_config.OnInitCommand() + test_config.OnConnectionCommand();
+	auto init_cmd = test_config.OnInitCommand() + ";" + test_config.OnConnectionCommand();
 	if (!init_cmd.empty()) {
 		test_config.ProcessPath(init_cmd, file_name);
 		auto res = con->Query(ReplaceKeywords(init_cmd));
@@ -180,15 +224,20 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
+	// TODO: (@benfleis) Remove after ${} syntax replaced (test-env, loop vars, ???), and __BUILD_DIRECTORY__ and
+	// ProcessPath replaced, can simplify this into simple `ReplaceVariables` loop.
+	//
 	// Replace environment variables in the SQL
 	for (auto &it : environment_variables) {
 		auto &name = it.first;
 		auto &value = it.second;
 		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
+		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
 	}
-	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
-	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	auto &test_config = TestConfiguration::Get();
+	test_config.ProcessPath(input, file_name);
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+
 	return input;
 }
 
@@ -517,14 +566,6 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
-	if (param == "no_block_verification") {
-#ifdef DUCKDB_BLOCK_VERIFICATION
-		return RequireResult::MISSING;
-#else
-		return RequireResult::PRESENT;
-#endif
-	}
-
 	if (param == "no_vector_verification") {
 		auto &test_config = TestConfiguration::Get();
 		if (test_config.GetVectorVerification() != DebugVectorVerification::NONE) {
@@ -565,8 +606,17 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 	}
 
+	bool perform_install = false;
+	bool perform_load = false;
 	if (!config->options.autoload_known_extensions) {
-		auto result = ExtensionHelper::LoadExtension(*db, param);
+		auto result = ExtensionLoadResult::NOT_LOADED;
+		try {
+			result = SQLLogicTestRunner::LoadExtension(*db, param);
+		} catch (std::exception &ex) {
+			ErrorData error_data(ex);
+			parser.Fail("extension '%s' load threw an exception: %s", param, error_data.Message());
+		}
+
 		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 			// add the extension to the list of loaded extensions
 			extensions.insert(param);
@@ -577,7 +627,27 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			return RequireResult::MISSING;
 		}
 	} else if (excluded_from_autoloading) {
-		return RequireResult::MISSING;
+		if (autoloading_mode == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
+			// This is needed to still support LOCAL_EXTENSION_REPO
+			return RequireResult::MISSING;
+		}
+		perform_install = true;
+		perform_load = true;
+	} else if (autoloading_mode != TestConfiguration::ExtensionAutoLoadingMode::NONE && autoinstall_is_checked) {
+		perform_install = true;
+	}
+	if (perform_install) {
+		auto res = con->Query("INSTALL " + param + " FROM '" + local_extension_repo + "';");
+		if (res->HasError()) {
+			return RequireResult::MISSING;
+		}
+	}
+	if (perform_load) {
+		auto res = con->Query("LOAD " + param + ";");
+		if (res->HasError()) {
+			return RequireResult::MISSING;
+		}
+		extensions.insert(param);
 	}
 	return RequireResult::PRESENT;
 }
@@ -637,6 +707,14 @@ bool TryParseConditions(SQLLogicParser &parser, const string &condition_text, ve
 	return true;
 }
 
+// add implicit tags from environment variables, with value if available
+void add_env_tag(vector<string> &tags, const string &name, const string *value = nullptr) {
+	tags.emplace_back(StringUtil::Format("env[%s]", name));
+	if (value != nullptr) {
+		tags.emplace_back(StringUtil::Format("env[%s]=%s", name, *value));
+	}
+}
+
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
@@ -647,6 +725,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	file_name = script;
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
+	bool test_expr_executed = false;
+	bool file_tags_expr_seen = false;
+	vector<string> file_tags; // gets both implicit and file-spec'd
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
@@ -676,6 +757,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
 
+	if (StringUtil::EndsWith(script, ".test_slow")) {
+		file_tags.emplace_back("slow");
+	}
+	if (StringUtil::EndsWith(script, ".test_coverage")) {
+		file_tags.emplace_back("coverage");
+	}
+
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
 		// tokenize the current line
@@ -684,6 +772,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		// throw explicit error on single line statements that are not separated by a comment or newline
 		if (parser.IsSingleLineStatement(token) && !parser.NextLineEmptyOrComment()) {
 			parser.Fail("all test statements need to be separated by an empty line");
+		}
+
+		// Check tags first time we hit test statements, since all explicit & implicit tags now present
+		if (parser.IsTestCommand(token.type) && !test_expr_executed) {
+			if (test_config.GetPolicyForTagSet(file_tags) == TestConfiguration::SelectPolicy::SKIP) {
+				SKIP_TEST("select tag-set");
+				return;
+			}
+			test_expr_executed = true;
 		}
 
 		vector<Condition> conditions;
@@ -738,6 +835,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			auto command = make_uniq<Statement>(*this);
 
+			bool original_output_result_mode = output_result_mode;
+
 			// parse the first parameter
 			if (token.parameters[0] == "ok") {
 				command->expected_result = ExpectedResult::RESULT_SUCCESS;
@@ -745,6 +844,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				command->expected_result = ExpectedResult::RESULT_ERROR;
 			} else if (token.parameters[0] == "maybe") {
 				command->expected_result = ExpectedResult::RESULT_UNKNOWN;
+			} else if (token.parameters[0] == "debug") {
+				command->expected_result = ExpectedResult::RESULT_DONT_CARE;
+				output_result_mode = true;
+			} else if (token.parameters[0] == "debug_skip") {
+				command->expected_result = ExpectedResult::RESULT_DONT_CARE;
+				output_result_mode = true;
+				skip_level++;
 			} else {
 				parser.Fail("statement argument should be 'ok' or 'error");
 			}
@@ -758,8 +864,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (statement_text.empty()) {
 				parser.Fail("Unexpected empty statement text");
 			}
-			command->expected_error = parser.ExtractExpectedError(
-			    command->expected_result == ExpectedResult::RESULT_SUCCESS, original_sqlite_test);
+			command->expected_error = parser.ExtractExpectedError(command->expected_result, original_sqlite_test);
 
 			// perform any renames in the text
 			command->base_sql_query = ReplaceKeywords(std::move(statement_text));
@@ -769,6 +874,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
+			output_result_mode = original_output_result_mode;
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("query requires at least one parameter (query III)");
@@ -803,23 +909,18 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			command->values = parser.ExtractExpectedResult();
 
 			// figure out the sort style/connection style
-			command->sort_style = SortStyle::NO_SORT;
+			string sort_style = "none";
 			if (token.parameters.size() > 1) {
-				auto &sort_style = token.parameters[1];
-				if (sort_style == "nosort") {
-					/* Do no sorting */
-					command->sort_style = SortStyle::NO_SORT;
-				} else if (sort_style == "rowsort" || sort_style == "sort") {
-					/* Row-oriented sorting */
-					command->sort_style = SortStyle::ROW_SORT;
-				} else if (sort_style == "valuesort") {
-					/* Sort all values independently */
-					command->sort_style = SortStyle::VALUE_SORT;
-				} else {
+				if (!TestConfiguration::TryParseSortStyle(token.parameters[1], command->sort_style)) {
 					// if this is not a known sort style, we use this as the connection name
 					// this is a bit dirty, but well
-					command->connection_name = sort_style;
+					command->connection_name = token.parameters[1];
+				} else {
+					sort_style = token.parameters[1];
 				}
+			}
+			if (!TestConfiguration::TryParseSortStyle(sort_style, command->sort_style)) {
+				throw std::runtime_error("eek invalid sort style set, this should not happen");
 			}
 
 			// check the label of the query
@@ -971,6 +1072,25 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				SKIP_TEST("require " + token.parameters[0]);
 				return;
 			}
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TEST_ENV) {
+			if (InLoop()) {
+				parser.Fail("test-env cannot be called in a loop");
+			}
+
+			if (token.parameters.size() != 2) {
+				parser.Fail("test-env requires 2 arguments: <env name> <default env val>");
+			}
+			auto env_var = token.parameters[0];
+			auto env_actual = test_config.GetTestEnv(env_var, token.parameters[1]);
+
+			// Check if we have something defining from our test
+			if (environment_variables.count(env_var)) {
+				parser.Fail(StringUtil::Format("Environment/Test variable '%s' has already been defined", env_var));
+			}
+
+			environment_variables[env_var] = env_actual;
+			add_env_tag(file_tags, env_var, &env_actual);
+
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
 			if (InLoop()) {
 				parser.Fail("require-env cannot be called in a loop");
@@ -981,7 +1101,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 
 			auto env_var = token.parameters[0];
-			auto env_actual = std::getenv(env_var.c_str());
+			const char *env_actual = std::getenv(env_var.c_str());
+			string default_local_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
+			if (env_actual == nullptr && env_var == "LOCAL_EXTENSION_REPO" &&
+			    config->options.autoload_known_extensions) {
+				// Overriding LOCAL_EXTENSION_REPO here is a hacky
+				// More proper solution is wrapping std::getenv in a duckdb::test_getenv, and having a way to inject env
+				// variables
+				env_actual = default_local_repo.c_str();
+			}
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
 				SKIP_TEST("require-env " + token.parameters[0]);
@@ -996,12 +1124,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					SKIP_TEST("require-env " + token.parameters[0] + " " + token.parameters[1]);
 					return;
 				}
+
+				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
 			if (environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;
+			add_env_tag(file_tags, token.parameters[0], token.parameters.size() == 2 ? &token.parameters[1] : nullptr);
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			auto &test_config = TestConfiguration::Get();
@@ -1081,6 +1212,26 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			auto command = make_uniq<UnzipCommand>(*this, input_path, extraction_path);
 			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TAGS) {
+			// NOTE: tags-before-test-commands is the low bar right now
+			// 1 better: all non-command lines precede command lines
+			// Mo better: parse first, build entire context before execution; allows e.g.
+			// - implicit tag scans of e.g. strings, vars, etc., like '${ENVVAR}', '__TEST_DIR__', 'ATTACH'
+			// - faster subset runs
+			// - tag match runs to generate lists
+			if (test_expr_executed) {
+				parser.Fail("tags expression must precede test commands");
+			}
+			if (file_tags_expr_seen) {
+				parser.Fail("tags may be only specified once");
+			}
+			file_tags_expr_seen = true;
+			if (token.parameters.empty()) {
+				parser.Fail("tags requires >= 1 argument, e.g.: <tag1> [tag2 .. tagN]");
+			}
+
+			// extend file_tags for jit eval
+			file_tags.insert(file_tags.begin(), token.parameters.begin(), token.parameters.end());
 		}
 	}
 	if (InLoop()) {

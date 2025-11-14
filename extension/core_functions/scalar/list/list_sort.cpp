@@ -37,7 +37,6 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
                                    ClientContext &context_p)
     : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p),
       is_grade_up(is_grade_up_p), context(context_p) {
-
 	// get the vector types
 	types.emplace_back(LogicalType::USMALLINT);
 	types.emplace_back(child_type);
@@ -71,7 +70,6 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
                           Vector *child_vector, SelectionVector &sel, idx_t offset_lists_indices,
                           vector<LogicalType> &types, Vector &payload_vector, bool &data_to_sort,
                           Vector &lists_indices) {
-
 	// slice the child vector
 	Vector slice(*child_vector, sel, offset_lists_indices);
 
@@ -256,22 +254,22 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
-
 	LogicalType child_type;
 	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN) {
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
-		bound_function.return_type = LogicalType::SQLNULL;
-		child_type = bound_function.return_type;
-		return make_uniq<ListSortBindData>(order, null_order, false, bound_function.return_type, child_type, context);
+		bound_function.SetReturnType(LogicalType::SQLNULL);
+		child_type = bound_function.GetReturnType();
+		return make_uniq<ListSortBindData>(order, null_order, false, bound_function.GetReturnType(), child_type,
+		                                   context);
 	}
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	child_type = ListType::GetChildType(arguments[0]->return_type);
 
 	bound_function.arguments[0] = arguments[0]->return_type;
-	bound_function.return_type = arguments[0]->return_type;
+	bound_function.SetReturnType(arguments[0]->return_type);
 
-	return make_uniq<ListSortBindData>(order, null_order, false, bound_function.return_type, child_type, context);
+	return make_uniq<ListSortBindData>(order, null_order, false, bound_function.GetReturnType(), child_type, context);
 }
 
 template <class T>
@@ -286,7 +284,6 @@ static T GetOrder(ClientContext &context, Expression &expr) {
 
 static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
-
 	D_ASSERT(!arguments.empty() && arguments.size() <= 3);
 	auto order = OrderType::ORDER_DEFAULT;
 	auto null_order = OrderByNullType::ORDER_DEFAULT;
@@ -300,15 +297,15 @@ static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFu
 		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
-	null_order = config.ResolveNullOrder(order, null_order);
+	order = config.ResolveOrder(context, order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	bound_function.arguments[0] = arguments[0]->return_type;
-	bound_function.return_type = LogicalType::LIST(LogicalTypeId::BIGINT);
+	bound_function.SetReturnType(LogicalType::LIST(LogicalTypeId::BIGINT));
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);
-	return make_uniq<ListSortBindData>(order, null_order, true, bound_function.return_type, child_type, context);
+	return make_uniq<ListSortBindData>(order, null_order, true, bound_function.GetReturnType(), child_type, context);
 }
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
@@ -326,8 +323,8 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
-	null_order = config.ResolveNullOrder(order, null_order);
+	order = config.ResolveOrder(context, order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
@@ -340,7 +337,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 		null_order = GetOrder<OrderByNullType>(context, *arguments[1]);
 	}
 	auto &config = DBConfig::GetConfig(context);
-	order = config.ResolveOrder(order);
+	order = config.ResolveOrder(context, order);
 	switch (order) {
 	case OrderType::ASCENDING:
 		order = OrderType::DESCENDING;
@@ -351,7 +348,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 	default:
 		throw InternalException("Unexpected order type in list reverse sort");
 	}
-	null_order = config.ResolveNullOrder(order, null_order);
+	null_order = config.ResolveNullOrder(context, order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 

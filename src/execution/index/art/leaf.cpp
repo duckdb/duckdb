@@ -98,7 +98,7 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 	}
 
 	root.SetGateStatus(GateStatus::GATE_SET);
-	Node::Free(art, node);
+	DeprecatedFree(art, node);
 	node = root;
 }
 
@@ -116,7 +116,7 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 	it.FindMinimum(node);
 	ARTKey empty_key = ARTKey();
 	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids, false);
-	Node::Free(art, node);
+	Node::FreeTree(art, node);
 	D_ASSERT(row_ids.size() > 1);
 
 	// Create the deprecated leaves.
@@ -148,11 +148,10 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 
 void Leaf::DeprecatedFree(ART &art, Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
-
 	Node next;
 	while (node.HasMetadata()) {
 		next = Node::Ref<Leaf>(art, node, LEAF).ptr;
-		Node::GetAllocator(art, LEAF).Free(node);
+		Node::FreeNode(art, node);
 		node = next;
 	}
 	node.Clear();
@@ -163,7 +162,6 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, 
 
 	reference<const Node> ref(node);
 	while (ref.get().HasMetadata()) {
-
 		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
 		if (row_ids.size() + leaf.count > max_count) {
 			return false;
@@ -192,15 +190,12 @@ void Leaf::DeprecatedVacuum(ART &art, Node &node) {
 	}
 }
 
-string Leaf::DeprecatedVerifyAndToString(ART &art, const Node &node, const bool only_verify) {
-	D_ASSERT(node.GetType() == LEAF);
-
+string Leaf::DeprecatedToString(ART &art, const Node &node) {
 	string str = "";
 	reference<const Node> ref(node);
 
 	while (ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
-		D_ASSERT(leaf.count <= LEAF_SIZE);
 
 		str += "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
 		for (uint8_t i = 0; i < leaf.count; i++) {
@@ -210,7 +205,19 @@ string Leaf::DeprecatedVerifyAndToString(ART &art, const Node &node, const bool 
 		ref = leaf.ptr;
 	}
 
-	return only_verify ? "" : str;
+	return str;
+}
+
+void Leaf::DeprecatedVerify(ART &art, const Node &node) {
+	D_ASSERT(node.GetType() == LEAF);
+
+	reference<const Node> ref(node);
+
+	while (ref.get().HasMetadata()) {
+		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
+		D_ASSERT(leaf.count <= LEAF_SIZE);
+		ref = leaf.ptr;
+	}
 }
 
 void Leaf::DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {

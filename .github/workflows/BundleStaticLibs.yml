@@ -44,16 +44,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - version: "macos-13"
+          - xcode_target_flag: "x86_64"
             architecture: "amd64"
-          - version: "macos-14"
+          - xcode_target_flag: "arm64"
             architecture: "arm64"
-    runs-on: ${{ matrix.version }}
+    runs-on: macos-latest
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
+      OSX_BUILD_ARCH: ${{ matrix.xcode_target_flag }}
+      DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
 
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +74,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Build
         shell: bash
@@ -83,13 +85,10 @@ jobs:
         run: |
           make gather-libs
 
-      - name: Print platform
-        shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
-
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
@@ -102,6 +101,7 @@ jobs:
           name: duckdb-static-libs-osx-${{ matrix.architecture }}
           path: |
             static-libs-osx-${{ matrix.architecture }}.zip
+
 
   bundle-mingw-static-lib:
     name: Windows MingW static libs
@@ -125,6 +125,7 @@ jobs:
           update-rtools: true
           rtools-version: '42' # linker bug in 43 ^^
 
+      # TODO: this action is deprecated, can we rework this to avoid using it?
       - uses: ./.github/actions/build_extensions
         with:
           duckdb_arch: windows_amd64_mingw
@@ -148,6 +149,7 @@ jobs:
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
@@ -188,7 +190,8 @@ jobs:
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
           -e BUILD_BENCHMARK=1                                                   \
           -e FORCE_WARN_UNUSED=1                                                 \
-          quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
+          -e EXPORT_DYNAMIC_SYMBOLS=1                                            \
+          quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
           bash -c "
             set -e
             yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++
@@ -207,6 +210,7 @@ jobs:
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |

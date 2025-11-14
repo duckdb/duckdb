@@ -15,7 +15,7 @@ namespace duckdb {
 
 class VariantColumnReader : public ColumnReader {
 public:
-	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
+	static constexpr const PhysicalType TYPE = PhysicalType::STRUCT;
 
 public:
 	VariantColumnReader(ClientContext &context, ParquetReader &reader, const ParquetColumnSchema &schema,
@@ -35,6 +35,10 @@ public:
 	idx_t GroupRowsAvailable() override;
 	uint64_t TotalCompressedSize() override;
 	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override;
+
+protected:
+	idx_t metadata_reader_idx;
+	idx_t value_reader_idx;
 };
 
 } // namespace duckdb

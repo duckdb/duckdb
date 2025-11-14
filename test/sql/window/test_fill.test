@@ -88,17 +88,6 @@ order by i
 ----
 2	NULL
 
-# Non-deterministic sort
-query III
-SELECT 
-    t::${ordertype},
-    y::${filltype},
-    fill(y::${filltype}) OVER (ORDER BY t::${ordertype}) f
-FROM (VALUES (1, 1), (1, NULL), (1, 2))_(t, y)
-QUALIFY f is distinct from y
-----
-1	NULL	1
-
 foreach sense asc desc
 
 foreach nulls first last

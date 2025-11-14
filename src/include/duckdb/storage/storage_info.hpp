@@ -12,10 +12,12 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 
 struct FileHandle;
+class QueryContext;
 
 //! The standard row group size
 #define DEFAULT_ROW_GROUP_SIZE 122880ULL
@@ -26,10 +28,6 @@ struct FileHandle;
 
 //! The default block allocation size.
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
-//! The configurable block allocation size.
-#ifndef DUCKDB_BLOCK_ALLOC_SIZE
-#define DUCKDB_BLOCK_ALLOC_SIZE DEFAULT_BLOCK_ALLOC_SIZE
-#endif
 //! The default block header size.
 #define DEFAULT_BLOCK_HEADER_STORAGE_SIZE 8ULL
 //! The default block header size.
@@ -37,7 +35,7 @@ struct FileHandle;
 //! The configurable block allocation size.
 #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
 #define DUCKDB_BLOCK_HEADER_STORAGE_SIZE     DEFAULT_BLOCK_HEADER_STORAGE_SIZE
-#define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 28ULL
+#define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 32ULL
 #endif
 
 using block_id_t = int64_t;
@@ -58,8 +56,8 @@ struct Storage {
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t MAX_BLOCK_HEADER_SIZE = 128ULL;
-	//! Block header size for encrypted blocks (40 bytes)
-	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 40ULL;
+	//! Block header size for encrypted blocks (64 bytes)
+	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 64ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 
@@ -72,45 +70,47 @@ struct Storage {
 extern const uint64_t VERSION_NUMBER;
 extern const uint64_t VERSION_NUMBER_LOWER;
 extern const uint64_t VERSION_NUMBER_UPPER;
-string GetDuckDBVersion(idx_t version_number);
+string GetDuckDBVersions(const idx_t version_number);
 optional_idx GetStorageVersion(const char *version_string);
-string GetStorageVersionName(idx_t serialization_version);
+string GetStorageVersionName(const idx_t serialization_version, const bool add_suffix);
 optional_idx GetSerializationVersion(const char *version_string);
 vector<string> GetSerializationCandidates();
 
-//! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
-//! file.
-struct MainHeader {
+//! The MainHeader is the first header in the storage file.
+//! It is written only once for a database file.
+class MainHeader {
+public:
 	static constexpr idx_t MAX_VERSION_SIZE = 32;
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
 	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
-	//! Indicates whether database is encrypted
+
+	//! Indicates whether database is encrypted or not.
 	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
-	//! Encryption key length
+	//! The encryption key length.
 	static constexpr uint64_t DEFAULT_ENCRYPTION_KEY_LENGTH = 32;
-	//! The magic bytes in front of the file should be "DUCK"
+	//! The magic bytes in front of the file should be "DUCK".
 	static const char MAGIC_BYTES[];
-	//! The canary should be "DUCKKEY"
+	//! The canary should be "DUCKKEY".
 	static const char CANARY[];
-	//! The version of the database
+
+	//! The (storage) version of the database.
 	uint64_t version_number;
-	//! The set of flags used by the database
+	//! The set of flags used by the database.
 	uint64_t flags[FLAG_COUNT];
 
-	//! optional metadata for encryption
-	//! only used if encryption flag is set
+	//! The length of the unique database identifier.
+	static constexpr idx_t DB_IDENTIFIER_LEN = 16;
+	//! Optional metadata for encryption, if encryption flag is set.
 	static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
-	static constexpr idx_t SALT_LEN = 16;
-	//! The canary is  a known plaintext
-	//! this is used for early detection of a wrong key
+	//! The canary is a known plaintext for detecting wrong keys early.
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
 	//! Nonce, IV (nonce + counter) and tag length
-	static constexpr uint64_t AES_NONCE_LEN = 12;
+	static constexpr uint64_t AES_NONCE_LEN = 16;
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
-	static void CheckMagicBytes(FileHandle &handle);
+	static void CheckMagicBytes(QueryContext context, FileHandle &handle);
 
 	string LibraryGitDesc() {
 		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
@@ -120,7 +120,10 @@ struct MainHeader {
 	}
 
 	bool IsEncrypted() const {
-		return flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
+		return flags[0] & MainHeader::ENCRYPTED_DATABASE_FLAG;
+	}
+	void SetEncrypted() {
+		flags[0] |= MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
 
 	void SetEncryptionMetadata(data_ptr_t source) {
@@ -128,9 +131,13 @@ struct MainHeader {
 		memcpy(encryption_metadata, source, ENCRYPTION_METADATA_LEN);
 	}
 
-	void SetSalt(data_ptr_t source) {
-		memset(salt, 0, SALT_LEN);
-		memcpy(salt, source, SALT_LEN);
+	EncryptionTypes::CipherType GetEncryptionCipher() {
+		return static_cast<EncryptionTypes::CipherType>(encryption_metadata[2]);
+	}
+
+	void SetDBIdentifier(data_ptr_t source) {
+		memset(db_identifier, 0, DB_IDENTIFIER_LEN);
+		memcpy(db_identifier, source, DB_IDENTIFIER_LEN);
 	}
 
 	void SetEncryptedCanary(data_ptr_t source) {
@@ -138,12 +145,17 @@ struct MainHeader {
 		memcpy(encrypted_canary, source, CANARY_BYTE_SIZE);
 	}
 
-	data_ptr_t GetEncryptionMetadata() {
-		return encryption_metadata;
+	data_ptr_t GetDBIdentifier() {
+		return db_identifier;
 	}
 
-	data_ptr_t GetSalt() {
-		return salt;
+	static bool CompareDBIdentifiers(const data_ptr_t db_identifier_1, const data_ptr_t db_identifier_2) {
+		for (idx_t i = 0; i < DB_IDENTIFIER_LEN; i++) {
+			if (db_identifier_1[i] != db_identifier_2[i]) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	data_ptr_t GetEncryptedCanary() {
@@ -157,7 +169,8 @@ private:
 	data_t library_git_desc[MAX_VERSION_SIZE];
 	data_t library_git_hash[MAX_VERSION_SIZE];
 	data_t encryption_metadata[ENCRYPTION_METADATA_LEN];
-	data_t salt[SALT_LEN];
+	//! The unique database identifier and optional encryption salt.
+	data_t db_identifier[DB_IDENTIFIER_LEN];
 	data_t encrypted_canary[CANARY_BYTE_SIZE];
 };
 
@@ -196,9 +209,6 @@ struct DatabaseHeader {
 #endif
 #if (DEFAULT_BLOCK_ALLOC_SIZE & (DEFAULT_BLOCK_ALLOC_SIZE - 1) != 0)
 #error The default block allocation size must be a power of two
-#endif
-#if (DUCKDB_BLOCK_ALLOC_SIZE & (DUCKDB_BLOCK_ALLOC_SIZE - 1) != 0)
-#error The duckdb block allocation size must be a power of two
 #endif
 
 } // namespace duckdb

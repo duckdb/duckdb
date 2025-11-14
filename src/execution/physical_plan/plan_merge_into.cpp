@@ -119,7 +119,7 @@ PhysicalOperator &DuckCatalog::PlanMergeInto(ClientContext &context, PhysicalPla
 
 PhysicalOperator &Catalog::PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner, LogicalMergeInto &op,
                                          PhysicalOperator &plan) {
-	throw NotImplementedException("Database does not support merge into");
+	throw NotImplementedException("Database type \"%s\" does not support MERGE INTO or ON CONFLICT", GetCatalogType());
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMergeInto &op) {

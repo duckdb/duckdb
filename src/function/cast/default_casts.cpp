@@ -88,9 +88,13 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
                                                    const LogicalType &target) {
 	D_ASSERT(source != target);
 
-	// first check if were casting to a union
+	if (target.id() == LogicalTypeId::VARIANT) {
+		return ImplicitToVariantCast(input, source, target);
+	}
+
+	// then check if were casting to a union
 	if (source.id() != LogicalTypeId::UNION && source.id() != LogicalTypeId::SQLNULL &&
-	    target.id() == LogicalTypeId::UNION) {
+	    source.id() != LogicalTypeId::VARIANT && target.id() == LogicalTypeId::UNION) {
 		return ImplicitToUnionCast(input, source, target);
 	}
 
@@ -152,12 +156,16 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:
 		return UnionCastSwitch(input, source, target);
+	case LogicalTypeId::VARIANT:
+		return VariantCastSwitch(input, source, target);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(input, source, target);
 	case LogicalTypeId::ARRAY:
 		return ArrayCastSwitch(input, source, target);
-	case LogicalTypeId::VARINT:
-		return VarintCastSwitch(input, source, target);
+	case LogicalTypeId::GEOMETRY:
+		return GeoCastSwitch(input, source, target);
+	case LogicalTypeId::BIGNUM:
+		return BignumCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
 		return AggregateStateToBlobCast;
 	default:

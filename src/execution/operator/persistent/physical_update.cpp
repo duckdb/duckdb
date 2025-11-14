@@ -25,7 +25,6 @@ PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> 
       tableref(tableref), table(table), columns(std::move(columns)), expressions(std::move(expressions)),
       bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints)),
       return_chunk(return_chunk), index_update(false) {
-
 	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
 	auto index_columns = indexes.GetRequiredColumns();
 
@@ -67,7 +66,6 @@ public:
 	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
 	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
-
 		// Initialize the update chunk.
 		auto &allocator = Allocator::Get(context);
 		vector<LogicalType> update_types;
@@ -162,8 +160,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	lock_guard<mutex> glock(g_state.lock);
 	for (idx_t i = 0; i < update_chunk.size(); i++) {
 		auto row_id = row_id_data[i];
-		if (g_state.updated_rows.find(row_id) == g_state.updated_rows.end()) {
-			g_state.updated_rows.insert(row_id);
+		const auto is_new = g_state.updated_rows.insert(row_id).second;
+		if (is_new) {
 			sel.set_index(update_count++, i);
 		}
 	}

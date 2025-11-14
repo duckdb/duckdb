@@ -1,0 +1,107 @@
+# name: test/sql/topn/top_n_hard_limit.test
+# description: Test Top N with ordered row groups and row limits
+# group: [topn]
+
+statement ok
+ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+# Ordered row groups vs. guaranteed number of qualifying tuples
+
+# 0 1 2 3 4 5 6 7 8 9	 ASC     DESC
+# [     ]              : 0       10240
+# [     ]              : 2       4097
+#   [       ]          : 4097    4097
+#         [   ]        : 8192    2049
+#               [ ]    : 10240   2048
+
+statement ok
+CREATE TABLE t AS SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
+
+statement ok
+INSERT INTO t SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
+
+statement ok
+INSERT INTO t SELECT 1 i UNION ALL SELECT i FROM repeat(5, 2047) t1(i)
+
+statement ok
+INSERT INTO t SELECT i FROM repeat(4, 2047) t1(i) UNION ALL SELECT 6 i
+
+statement ok
+INSERT INTO t SELECT 7 i UNION ALL SELECT i FROM repeat(8, 2047) t1(i)
+
+# Fill the table with nulls to trigger the topn optimizer even for larger limits
+statement ok
+INSERT INTO t SELECT i FROM repeat(NULL, 2000000) t1(i)
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 3
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 4097
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 4098
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 8192
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 8193
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*10,240 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2048
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2049
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2050
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 4096
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query II
+EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 4097
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+statement ok
+INSERT INTO t SELECT 9 i UNION ALL SELECT i FROM repeat(NULL, 2046) t1(i) UNION ALL SELECT 10 i
+
+query II
+EXPLAIN ANALYZE SELECT i FROM t ORDER by i DESC LIMIT 3
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query I
+SELECT i FROM t ORDER BY i DESC LIMIT 3
+----
+10
+9
+8

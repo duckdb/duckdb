@@ -35,17 +35,21 @@ SELECT integers.* REPLACE (i+100 AS i) FROM integers
 statement error
 SELECT * REPLACE (i+100 AS i, i+200 AS i) FROM integers
 ----
+<REGEX>:.*Parser Error.*Duplicate entry.*
 
 # replace name that does not exist
 statement error
 SELECT * REPLACE (i+100 AS blabla) FROM integers
 ----
+<REGEX>:.*Binder Error.*not found in FROM clause.*
 
 statement error
 SELECT integers.* REPLACE (i+100 AS blabla) FROM integers
 ----
+<REGEX>:.*Binder Error.*not found in integers.*
 
 # column cannot occur in both exclude and replace list
 statement error
 SELECT * EXCLUDE (i) REPLACE (i+100 AS i) FROM integers
 ----
+<REGEX>:.*Parser Error.*cannot occur in both.*

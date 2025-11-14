@@ -33,20 +33,20 @@ CREATE TABLE tf_4 (
   FOREIGN KEY (h) REFERENCES tf_3 (h),
 );
 
-query IIIIIIIIIII
-SELECT * EXCLUDE (schema_oid, table_oid, database_oid, constraint_name) FROM duckdb_constraints();
+query IIIIIIIIII
+SELECT * EXCLUDE (database_name, schema_oid, table_oid, database_oid, constraint_name) FROM duckdb_constraints();
 ----
-memory	main	tf_1	0	PRIMARY KEY	PRIMARY KEY(a)	NULL	[0]	[a]	NULL	[]
-memory	main	tf_1	1	UNIQUE	UNIQUE("b c")	NULL	[1]	[b c]	NULL	[]
-memory	main	tf_1	2	UNIQUE	UNIQUE("d e")	NULL	[2]	[d e]	NULL	[]
-memory	main	tf_1	3	NOT NULL	NOT NULL	NULL	[0]	[a]	NULL	[]
-memory	main	tf_2	4	PRIMARY KEY	PRIMARY KEY(c)	NULL	[0]	[c]	NULL	[]
-memory	main	tf_2	5	FOREIGN KEY	FOREIGN KEY (d) REFERENCES tf_1(a)	NULL	[1]	[d]	tf_1	[a]
-memory	main	tf_2	6	FOREIGN KEY	FOREIGN KEY (e) REFERENCES tf_1("b c")	NULL	[2]	[e]	tf_1	[b c]
-memory	main	tf_2	7	FOREIGN KEY	FOREIGN KEY (f) REFERENCES tf_1("d e")	NULL	[3]	[f]	tf_1	[d e]
-memory	main	tf_2	8	FOREIGN KEY	FOREIGN KEY (g) REFERENCES tf_3(g)	NULL	[4]	[g]	tf_3	[g]
-memory	main	tf_2	9	NOT NULL	NOT NULL	NULL	[0]	[c]	NULL	[]
-memory	main	tf_3	10	PRIMARY KEY	PRIMARY KEY(g)	NULL	[0]	[g]	NULL	[]
-memory	main	tf_3	11	UNIQUE	UNIQUE(h)	NULL	[1]	[h]	NULL	[]
-memory	main	tf_3	12	NOT NULL	NOT NULL	NULL	[0]	[g]	NULL	[]
-memory	main	tf_4	13	FOREIGN KEY	FOREIGN KEY (h) REFERENCES tf_3(h)	NULL	[0]	[h]	tf_3	[h]
+main	tf_1	0	PRIMARY KEY	PRIMARY KEY(a)	NULL	[0]	[a]	NULL	[]
+main	tf_1	1	UNIQUE	UNIQUE("b c")	NULL	[1]	[b c]	NULL	[]
+main	tf_1	2	UNIQUE	UNIQUE("d e")	NULL	[2]	[d e]	NULL	[]
+main	tf_1	3	NOT NULL	NOT NULL	NULL	[0]	[a]	NULL	[]
+main	tf_2	4	PRIMARY KEY	PRIMARY KEY(c)	NULL	[0]	[c]	NULL	[]
+main	tf_2	5	FOREIGN KEY	FOREIGN KEY (d) REFERENCES tf_1(a)	NULL	[1]	[d]	tf_1	[a]
+main	tf_2	6	FOREIGN KEY	FOREIGN KEY (e) REFERENCES tf_1("b c")	NULL	[2]	[e]	tf_1	[b c]
+main	tf_2	7	FOREIGN KEY	FOREIGN KEY (f) REFERENCES tf_1("d e")	NULL	[3]	[f]	tf_1	[d e]
+main	tf_2	8	FOREIGN KEY	FOREIGN KEY (g) REFERENCES tf_3(g)	NULL	[4]	[g]	tf_3	[g]
+main	tf_2	9	NOT NULL	NOT NULL	NULL	[0]	[c]	NULL	[]
+main	tf_3	10	PRIMARY KEY	PRIMARY KEY(g)	NULL	[0]	[g]	NULL	[]
+main	tf_3	11	UNIQUE	UNIQUE(h)	NULL	[1]	[h]	NULL	[]
+main	tf_3	12	NOT NULL	NOT NULL	NULL	[0]	[g]	NULL	[]
+main	tf_4	13	FOREIGN KEY	FOREIGN KEY (h) REFERENCES tf_3(h)	NULL	[0]	[h]	tf_3	[h]

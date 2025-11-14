@@ -5,16 +5,16 @@
 require autocomplete
 
 query II
-FROM sql_auto_complete('CREATE SEQ') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SEQ') LIMIT 1;
 ----
 SEQUENCE 	7
 
 query II
-FROM sql_auto_complete('CREATE SEQUENCE seq CYC') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SEQUENCE seq CYC') LIMIT 1;
 ----
 CYCLE 	20
 
 query II
-FROM sql_auto_complete('CREATE SEQUENCE seq INC') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SEQUENCE seq INC') LIMIT 1;
 ----
 INCREMENT 	20

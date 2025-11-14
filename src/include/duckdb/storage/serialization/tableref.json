@@ -106,6 +106,13 @@
         "id": 207,
         "name": "duplicate_eliminated_columns",
         "type": "vector<unique_ptr<ParsedExpression>>"
+      },
+      {
+        "id": 208,
+        "name": "is_implicit",
+        "type": "bool",
+        "default": "true",
+        "version": "v1.4.0"
       }
     ]
   },
@@ -140,6 +147,12 @@
         "id": 201,
         "name": "column_name_alias",
         "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "with_ordinality",
+        "type": "OrdinalityType",
+        "default": "OrdinalityType::WITHOUT_ORDINALITY"
       }
     ]
   },
@@ -185,7 +198,7 @@
       {
         "id": 202,
         "name": "collection",
-        "type": "shared_ptr<ColumnDataCollection>"
+        "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
     "constructor": ["collection", "expected_names"]

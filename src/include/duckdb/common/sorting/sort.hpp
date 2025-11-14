@@ -8,23 +8,43 @@
 
 #pragma once
 
-#include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
+#include "duckdb/execution/progress_data.hpp"
 #include "duckdb/common/sorting/sort_projection_column.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
 class SortLocalSinkState;
 class SortGlobalSinkState;
+
 class SortLocalSourceState;
 class SortGlobalSourceState;
+
+class SortedRun;
+class SortedRunScanState;
+
+class SortedRunMerger;
+class SortedRunMergerLocalState;
+class SortedRunMergerGlobalState;
+
+class TupleDataLayout;
+class ColumnDataCollection;
 
 //! Class that sorts the data, follows the PhysicalOperator interface
 class Sort {
 	friend class SortLocalSinkState;
 	friend class SortGlobalSinkState;
+
 	friend class SortLocalSourceState;
 	friend class SortGlobalSourceState;
+
+	friend class SortedRun;
+	friend class SortedRunScanState;
+
+	friend class SortedRunMerger;
+	friend class SortedRunMergerLocalState;
+	friend class SortedRunMergerGlobalState;
 
 public:
 	Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
@@ -44,7 +64,7 @@ private:
 	vector<idx_t> input_projection_map;
 	vector<SortProjectionColumn> output_projection_columns;
 
-	//! Whether to force an external sort
+	//! Whether to force an approximate sort
 	bool is_index_sort;
 
 public:
@@ -69,6 +89,16 @@ public:
 	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                                       LocalSourceState &lstate, const OperatorPartitionInfo &partition_info) const;
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+
+public:
+	//===--------------------------------------------------------------------===//
+	// Non-Standard Interface
+	//===--------------------------------------------------------------------===//
+	SourceResultType MaterializeColumnData(ExecutionContext &context, OperatorSourceInput &input) const;
+	unique_ptr<ColumnDataCollection> GetColumnData(OperatorSourceInput &input) const;
+
+	SourceResultType MaterializeSortedRun(ExecutionContext &context, OperatorSourceInput &input) const;
+	unique_ptr<SortedRun> GetSortedRun(GlobalSourceState &global_state);
 };
 
 } // namespace duckdb

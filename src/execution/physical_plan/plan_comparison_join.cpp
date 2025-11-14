@@ -1,4 +1,3 @@
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
@@ -6,14 +5,12 @@
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
-#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -53,10 +50,9 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	default:
 		break;
 	}
-	auto &client_config = ClientConfig::GetConfig(context);
-
 	//	TODO: Extend PWMJ to handle all comparisons and projection maps
-	const auto prefer_range_joins = client_config.prefer_range_joins && can_iejoin;
+	bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
+	prefer_range_joins = prefer_range_joins && can_iejoin;
 	if (has_equality && !prefer_range_joins) {
 		// Equality join with small number of keys : possible perfect join optimization
 		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
@@ -67,15 +63,16 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	D_ASSERT(op.left_projection_map.empty());
-	if (left.estimated_cardinality <= client_config.nested_loop_join_threshold ||
-	    right.estimated_cardinality <= client_config.nested_loop_join_threshold) {
+	idx_t nested_loop_join_threshold = DBConfig::GetSetting<NestedLoopJoinThresholdSetting>(context);
+	if (left.estimated_cardinality < nested_loop_join_threshold ||
+	    right.estimated_cardinality < nested_loop_join_threshold) {
 		can_iejoin = false;
 		can_merge = false;
 	}
 
 	if (can_merge && can_iejoin) {
-		if (left.estimated_cardinality <= client_config.merge_join_threshold ||
-		    right.estimated_cardinality <= client_config.merge_join_threshold) {
+		idx_t merge_join_threshold = DBConfig::GetSetting<MergeJoinThresholdSetting>(context);
+		if (left.estimated_cardinality < merge_join_threshold || right.estimated_cardinality < merge_join_threshold) {
 			can_iejoin = false;
 		}
 	}

@@ -10,7 +10,7 @@ statement ok
 CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber INT NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR(1) NOT NULL, l_linestatus VARCHAR(1) NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR(25) NOT NULL, l_shipmode VARCHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);
 
 query I
-COPY lineitem FROM 'data/csv/real/lineitem_sample.csv' (FORMAT CSV, AUTO_DETECT TRUE);
+COPY lineitem FROM '{DATA_DIR}/csv/real/lineitem_sample.csv' (FORMAT CSV, AUTO_DETECT TRUE);
 ----
 10
 
@@ -36,7 +36,7 @@ statement ok
 CREATE TABLE lineitem2 AS SELECT * FROM lineitem LIMIT 0
 
 statement ok
-COPY lineitem2 FROM 'data/csv/real/lineitem_sample.csv' (FORMAT CSV, AUTO_DETECT TRUE);
+COPY lineitem2 FROM '{DATA_DIR}/csv/real/lineitem_sample.csv' (FORMAT CSV, AUTO_DETECT TRUE);
 
 query IIIIIIIIIIIIIIII
 (SELECT * FROM lineitem EXCEPT SELECT * FROM lineitem2)

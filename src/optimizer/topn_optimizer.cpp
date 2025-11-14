@@ -5,14 +5,57 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+namespace {
+
+bool CanReorderRowGroups(LogicalTopN &op, bool &use_limit) {
+	use_limit = true;
+	for (const auto &order : op.orders) {
+		// We do not support any null-first orders as this requires unimplemented logic in the row group reorderer
+		if (order.null_order == OrderByNullType::NULLS_FIRST) {
+			use_limit = false;
+			break;
+		}
+	}
+
+	// Only reorder row groups if there are no additional limit operators since they could modify the order
+	reference<LogicalOperator> current_op = op;
+
+	while (!current_op.get().children.empty()) {
+		if (current_op.get().children.size() > 1) {
+			return false;
+		}
+		const auto op_type = current_op.get().type;
+		if (op_type == LogicalOperatorType::LOGICAL_LIMIT) {
+			return false;
+		}
+		if (op_type == LogicalOperatorType::LOGICAL_FILTER ||
+		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			use_limit = false;
+		}
+		current_op = *current_op.get().children[0];
+	}
+	D_ASSERT(current_op.get().type == LogicalOperatorType::LOGICAL_GET);
+	auto &logical_get = current_op.get().Cast<LogicalGet>();
+	if (!logical_get.table_filters.filters.empty()) {
+		use_limit = false;
+	}
+
+	return true;
+}
+
+} // namespace
 
 TopN::TopN(ClientContext &context_p) : context(context_p) {
 }
@@ -39,6 +82,9 @@ bool TopN::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context)
 		if (child_op->has_estimated_cardinality) {
 			// only check if we should switch to full sorting if we have estimated cardinality
 			auto constant_limit = static_cast<double>(limit.limit_val.GetConstantValue());
+			if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+				constant_limit += static_cast<double>(limit.offset_val.GetConstantValue());
+			}
 			auto child_card = static_cast<double>(child_op->estimated_cardinality);
 
 			// if the limit is > 0.7% of the child cardinality, sorting the whole table is faster
@@ -60,11 +106,7 @@ bool TopN::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context)
 
 void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
-	if (op.orders[0].null_order == OrderByNullType::NULLS_FIRST) {
-		// FIXME: not supported for NULLS FIRST quite yet
-		// we can support NULLS FIRST by doing (x IS NULL) OR [boundary value]
-		return;
-	}
+	bool nulls_first = op.orders[0].null_order == OrderByNullType::NULLS_FIRST;
 	auto &type = op.orders[0].expression->return_type;
 	if (!TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
 		// only supported for integral types currently
@@ -110,6 +152,10 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
 
+	bool use_limit = false;
+	bool use_custom_rowgroup_order = !nulls_first && CanReorderRowGroups(op, use_limit) &&
+	                                 (colref.return_type.IsNumeric() || colref.return_type.IsTemporal());
+
 	for (auto &target : pushdown_targets) {
 		auto &get = target.get;
 		D_ASSERT(target.columns.size() == 1);
@@ -117,17 +163,36 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 
 		// create the actual dynamic filter
 		auto dynamic_filter = make_uniq<DynamicFilter>(filter_data);
-		auto optional_filter = make_uniq<OptionalFilter>(std::move(dynamic_filter));
+		unique_ptr<TableFilter> pushed_filter = std::move(dynamic_filter);
+		if (nulls_first) {
+			auto or_filter = make_uniq<ConjunctionOrFilter>();
+			or_filter->child_filters.push_back(make_uniq<IsNullFilter>());
+			or_filter->child_filters.push_back(std::move(pushed_filter));
+			pushed_filter = std::move(or_filter);
+		}
+		auto optional_filter = make_uniq<OptionalFilter>(std::move(pushed_filter));
 
 		// push the filter into the table scan
 		auto &column_index = get.GetColumnIds()[col_idx];
 		get.table_filters.PushFilter(column_index, std::move(optional_filter));
+
+		// Scan row groups in custom order
+		if (get.function.set_scan_order && use_custom_rowgroup_order) {
+			auto column_type =
+			    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
+			auto order_type =
+			    op.orders[0].type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
+			auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+			auto row_limit = use_limit ? op.limit + op.offset : optional_idx();
+			auto order_options = make_uniq<RowGroupOrderOptions>(column_index.GetPrimaryIndex(), order_by, order_type,
+			                                                     column_type, row_limit);
+			get.function.set_scan_order(std::move(order_options), get.bind_data.get());
+		}
 	}
 }
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op, &context)) {
-
 		vector<unique_ptr<LogicalOperator>> projections;
 
 		// traverse operator tree and collect all projection nodes until we reach

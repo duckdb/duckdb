@@ -40,9 +40,18 @@ unique_ptr<LogicalOperator> EmptyResultPullup::PullUpEmptyJoinChildren(unique_pt
 		}
 		break;
 	}
-	// TODO: For ANTI joins, if the right child is empty, you can replace the whole join with
-	//  the left child
-	case JoinType::ANTI:
+	// For ANTI joins, if the right child is empty, the whole join collapses to the left child
+	case JoinType::ANTI: {
+		if (op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT &&
+		    op->type != LogicalOperatorType::LOGICAL_EXCEPT) {
+			op = std::move(op->children[0]);
+			break;
+		}
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+		}
+		break;
+	}
 	case JoinType::MARK:
 	case JoinType::SINGLE:
 	case JoinType::LEFT: {
@@ -66,7 +75,6 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_WINDOW:
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_PIVOT:
@@ -77,6 +85,14 @@ unique_ptr<LogicalOperator> EmptyResultPullup::Optimize(unique_ptr<LogicalOperat
 				op = make_uniq<LogicalEmptyResult>(std::move(op));
 				break;
 			}
+		}
+		return op;
+	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		D_ASSERT(op->children.size() == 2);
+		if (op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			op = make_uniq<LogicalEmptyResult>(std::move(op));
+			break;
 		}
 		return op;
 	}
