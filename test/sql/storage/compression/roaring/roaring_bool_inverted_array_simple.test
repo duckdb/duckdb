@@ -47,7 +47,7 @@ statement ok
 checkpoint;
 
 query I
-select count(*) from test WHERE a IS false;
+select count(*) from test WHERE a IS true;
 ----
 9976
 

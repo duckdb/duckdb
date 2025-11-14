@@ -27,7 +27,7 @@ SELECT COUNT(*) FROM test WHERE a IS true;
 3334
 
 query I
-SELECT COUNT(*) FROM test WHERE a false;
+SELECT COUNT(*) FROM test WHERE a IS false;
 ----
 6666
 
