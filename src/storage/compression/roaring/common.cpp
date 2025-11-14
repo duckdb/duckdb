@@ -201,8 +201,8 @@ template <PhysicalType TYPE>
 void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<RoaringCompressState>();
 	if (TYPE == PhysicalType::BOOL) {
+		auto data_ptr = scan_vector.GetData();
 		for (idx_t i = 0; i < count; i++) {
-			auto data_ptr = scan_vector.GetData();
 			state.current_segment->stats.statistics.UpdateNumericStats<bool>(data_ptr[i]);
 		}
 	}
