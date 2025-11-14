@@ -1,0 +1,25 @@
+# name: test/optimizer/unused_columns/distinct_on_column_lifetime.test
+# description: DISTINCT ON should only reference the columns used by the target and ORDER BY lists
+# group: [unused_columns]
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+CREATE TABLE dcla(a INTEGER, b INTEGER, c INTEGER, unused INTEGER);
+
+query II
+EXPLAIN SELECT DISTINCT ON (a) b FROM dcla ORDER BY a, c;
+----
+physical_plan	<REGEX>:.*Projections:[\s\S]*b[\s\S]*a[\s\S]*c.*
+
+query II
+EXPLAIN SELECT DISTINCT ON (a) b FROM dcla ORDER BY a, c;
+----
+physical_plan	<!REGEX>:.*unused.*
+
+# regular DISTINCT still references the full projection list
+query II
+EXPLAIN SELECT DISTINCT * FROM dcla ORDER BY a, c, unused, b;
+----
+physical_plan	<REGEX>:.*unused.*
