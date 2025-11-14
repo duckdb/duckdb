@@ -17,12 +17,6 @@ public:
 
 	HashedSortGroup(ClientContext &client, optional_ptr<Sort> sort, idx_t group_idx);
 
-	bool Scan(TupleDataCollection &payload, TupleDataLocalScanState &local_scan, DataChunk &chunk) {
-		//	Despite the name, TupleDataParallelScanState is not thread safe...
-		lock_guard<mutex> guard(scan_lock);
-		return payload.Scan(parallel_scan, local_scan, chunk);
-	}
-
 	const idx_t group_idx;
 	atomic<idx_t> count;
 
@@ -563,7 +557,7 @@ void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, Oper
 		auto sort_local = sort->GetLocalSinkState(context);
 		OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
 		idx_t combined = 0;
-		while (hash_group.Scan(partition, local_scan, chunk)) {
+		while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
 			sort->Sink(context, chunk, sink);
 			combined += chunk.size();
 		}

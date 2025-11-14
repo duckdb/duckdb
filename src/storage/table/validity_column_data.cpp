@@ -5,8 +5,9 @@
 namespace duckdb {
 
 ValidityColumnData::ValidityColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                       idx_t start_row, ColumnData &parent)
-    : ColumnData(block_manager, info, column_index, start_row, LogicalType(LogicalTypeId::VALIDITY), &parent) {
+                                       ColumnData &parent)
+    : ColumnData(block_manager, info, column_index, LogicalType(LogicalTypeId::VALIDITY), parent.GetDataType(),
+                 &parent) {
 }
 
 FilterPropagateResult ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

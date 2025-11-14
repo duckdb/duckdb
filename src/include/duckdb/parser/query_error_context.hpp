@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {

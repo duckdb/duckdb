@@ -11,6 +11,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 //! Represents a function call

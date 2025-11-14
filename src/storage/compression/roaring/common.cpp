@@ -225,7 +225,7 @@ unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, Column
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }

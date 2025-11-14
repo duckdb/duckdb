@@ -488,6 +488,17 @@ typedef struct {
 	                                                  duckdb_arrow_converted_schema converted_schema,
 	                                                  duckdb_data_chunk *out_chunk);
 	void (*duckdb_destroy_arrow_converted_schema)(duckdb_arrow_converted_schema *arrow_converted_schema);
+	// New functions for interacting with catalog entries
+
+	duckdb_catalog (*duckdb_client_context_get_catalog)(duckdb_client_context context, const char *catalog_name);
+	const char *(*duckdb_catalog_get_type_name)(duckdb_catalog catalog);
+	duckdb_catalog_entry (*duckdb_catalog_get_entry)(duckdb_catalog catalog, duckdb_client_context context,
+	                                                 duckdb_catalog_entry_type entry_type, const char *schema_name,
+	                                                 const char *entry_name);
+	void (*duckdb_destroy_catalog)(duckdb_catalog *catalog);
+	duckdb_catalog_entry_type (*duckdb_catalog_entry_get_type)(duckdb_catalog_entry entry);
+	const char *(*duckdb_catalog_entry_get_name)(duckdb_catalog_entry entry);
+	void (*duckdb_destroy_catalog_entry)(duckdb_catalog_entry *entry);
 	// New configuration options functions
 
 	duckdb_config_option (*duckdb_create_config_option)();
@@ -1064,6 +1075,13 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_schema_from_arrow = duckdb_schema_from_arrow;
 	result.duckdb_data_chunk_from_arrow = duckdb_data_chunk_from_arrow;
 	result.duckdb_destroy_arrow_converted_schema = duckdb_destroy_arrow_converted_schema;
+	result.duckdb_client_context_get_catalog = duckdb_client_context_get_catalog;
+	result.duckdb_catalog_get_type_name = duckdb_catalog_get_type_name;
+	result.duckdb_catalog_get_entry = duckdb_catalog_get_entry;
+	result.duckdb_destroy_catalog = duckdb_destroy_catalog;
+	result.duckdb_catalog_entry_get_type = duckdb_catalog_entry_get_type;
+	result.duckdb_catalog_entry_get_name = duckdb_catalog_entry_get_name;
+	result.duckdb_destroy_catalog_entry = duckdb_destroy_catalog_entry;
 	result.duckdb_create_config_option = duckdb_create_config_option;
 	result.duckdb_destroy_config_option = duckdb_destroy_config_option;
 	result.duckdb_config_option_set_name = duckdb_config_option_set_name;

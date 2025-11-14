@@ -1,8 +1,6 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 

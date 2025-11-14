@@ -88,6 +88,9 @@ string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
 }
+FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
+	return handle.file_system.Stats(handle);
+}
 
 void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	handle.file_system.Truncate(handle, new_size);
