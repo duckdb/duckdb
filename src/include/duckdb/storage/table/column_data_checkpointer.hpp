@@ -86,7 +86,7 @@ private:
 	Vector intermediate;
 	ColumnCheckpointInfo &checkpoint_info;
 
-	vector<bool> has_changes;
+	bool has_changes = false;
 	//! For every column data that is being checkpointed, the applicable functions
 	vector<vector<optional_ptr<CompressionFunction>>> compression_functions;
 	//! For every column data that is being checkpointed, the analyze state of functions being tried

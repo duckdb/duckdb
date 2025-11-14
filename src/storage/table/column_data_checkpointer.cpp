@@ -144,10 +144,6 @@ CompressionType ForceCompression(StorageManager &storage_manager,
 void ColumnDataCheckpointer::InitAnalyze() {
 	analyze_states.resize(checkpoint_states.size());
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
-
 		auto &functions = compression_functions[i];
 		auto &states = analyze_states[i];
 		auto &checkpoint_state = checkpoint_states[i];
@@ -186,10 +182,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	// scan over all the segments and run the analyze step
 	ScanSegments([&](Vector &scan_vector, idx_t count) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-			if (!has_changes[i]) {
-				continue;
-			}
-
 			auto &functions = compression_functions[i];
 			auto &states = analyze_states[i];
 			for (idx_t j = 0; j < functions.size(); j++) {
@@ -211,9 +203,6 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	result.resize(checkpoint_states.size());
 
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
 		auto &functions = compression_functions[i];
 		auto &states = analyze_states[i];
 		auto &forced_method = forced_methods[i];
@@ -276,10 +265,6 @@ void ColumnDataCheckpointer::DropSegments() {
 	// since the segments will be rewritten their old on disk data is no longer required
 
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
-
 		auto &state = checkpoint_states[i];
 		auto &col_data = state.get().original_column;
 		auto &nodes = col_data.data.ReferenceSegments();
@@ -294,10 +279,6 @@ void ColumnDataCheckpointer::DropSegments() {
 
 bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result) {
 	if (result.size() != 2) {
-		return false;
-	}
-	if (!has_changes[0]) {
-		// The base data had no changes so it will not be rewritten
 		return false;
 	}
 	auto &base = result[0];
@@ -325,9 +306,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	vector<ColumnDataCheckpointData> checkpoint_data(checkpoint_states.size());
 	vector<unique_ptr<CompressionState>> compression_states(checkpoint_states.size());
 	for (idx_t i = 0; i < analyze_result.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
 		auto &analyze_state = analyze_result[i].analyze_state;
 		auto &function = analyze_result[i].function;
 
@@ -342,9 +320,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// Scan over the existing segment + changes and compress the data
 	ScanSegments([&](Vector &scan_vector, idx_t count) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-			if (!has_changes[i]) {
-				continue;
-			}
 			auto &function = analyze_result[i].function;
 			auto &compression_state = compression_states[i];
 			function->compress(*compression_state, scan_vector, count);
@@ -353,9 +328,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// Finalize the compression
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		if (!has_changes[i]) {
-			continue;
-		}
 		auto &function = analyze_result[i].function;
 		auto &compression_state = compression_states[i];
 		function->compress_finalize(*compression_state);
@@ -404,17 +376,13 @@ void ColumnDataCheckpointer::Checkpoint() {
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i];
 		auto &col_data = state.get().original_column;
-		has_changes.push_back(HasChanges(col_data));
-	}
-
-	bool any_has_changes = false;
-	for (idx_t i = 0; i < has_changes.size(); i++) {
-		if (has_changes[i]) {
-			any_has_changes = true;
+		if (HasChanges(col_data)) {
+			has_changes = true;
 			break;
 		}
 	}
-	if (!any_has_changes) {
+
+	if (!has_changes) {
 		// Nothing has undergone any changes, no need to checkpoint
 		// just move on to finalizing
 		return;
@@ -424,12 +392,15 @@ void ColumnDataCheckpointer::Checkpoint() {
 }
 
 void ColumnDataCheckpointer::FinalizeCheckpoint() {
+	if (has_changes) {
+		// something has undergone changes, we rewrote everything
+		// write the new data - not the old data
+		return;
+	}
+	// no changes - copy over the original columns
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i].get();
-		if (!has_changes[i]) {
-			// no changes - copy over the original column
-			WritePersistentSegments(state);
-		}
+		WritePersistentSegments(state);
 	}
 }
 
