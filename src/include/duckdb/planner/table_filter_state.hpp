@@ -11,7 +11,6 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "filter/selectivity_optional_filter.hpp"
 
 namespace duckdb {
 
@@ -66,27 +65,34 @@ struct BFTableFilterState final : public TableFilterState {
 	}
 };
 
+enum class SelectivityOptionalFilterStatus : uint8_t {
+	ACTIVE,
+	PAUSED_DUE_TO_ZONE_MAP_STATS, // todo: use this to disable the filter for one zone map based on CheckStatistics
+	PAUSED_DUE_TO_HIGH_SELECTIVITY
+};
+
 struct SelectivityOptionalFilterState final : public TableFilterState {
 	struct SelectivityStats {
 		idx_t tuples_accepted;
 		idx_t tuples_processed;
 		idx_t vectors_processed;
+		idx_t n_vectors_to_check;
+		float selectivity_threshold;
 		SelectivityOptionalFilterStatus status;
 
-		SelectivityStats()
-		    : tuples_accepted(0), tuples_processed(0), vectors_processed(0),
-		      status(SelectivityOptionalFilterStatus::ACTIVE) {
+		SelectivityStats(const idx_t n_vectors_to_check, const float selectivity_threshold)
+		    : tuples_accepted(0), tuples_processed(0), vectors_processed(0), n_vectors_to_check(n_vectors_to_check),
+		      selectivity_threshold(selectivity_threshold), status(SelectivityOptionalFilterStatus::ACTIVE) {
 		}
 
-		void Update(const idx_t accepted, const idx_t processed, const idx_t n_vectors_to_check_p,
-		            const float selectivity_threshold_p) {
+		void Update(const idx_t accepted, const idx_t processed) {
 			tuples_accepted += accepted;
 			tuples_processed += processed;
 			vectors_processed += 1;
 
 			// pause the filter if we processed enough vectors and the selectivity is too high
-			if (vectors_processed >= n_vectors_to_check_p) {
-				if (GetSelectivity() >= selectivity_threshold_p) {
+			if (vectors_processed >= n_vectors_to_check) {
+				if (GetSelectivity() >= selectivity_threshold) {
 					status = SelectivityOptionalFilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY;
 				}
 			}
@@ -107,8 +113,9 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 	unique_ptr<TableFilterState> child_state;
 	SelectivityStats stats;
 
-	explicit SelectivityOptionalFilterState(unique_ptr<TableFilterState> child_state)
-	    : child_state(std::move(child_state)) {
+	explicit SelectivityOptionalFilterState(unique_ptr<TableFilterState> child_state, const idx_t n_vectors_to_check,
+	                                        const float selectivity_threshold)
+	    : child_state(std::move(child_state)), stats(n_vectors_to_check, selectivity_threshold) {
 	}
 };
 

@@ -845,13 +845,6 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 		}
 		return true;
 	}
-	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
-		auto &selectivity_optional_filter = filter.Cast<SelectivityOptionalFilter>();
-		if (selectivity_optional_filter.child_filter) {
-			return EvaluateFilterAgainstConstant(*selectivity_optional_filter.child_filter, constant);
-		}
-		return true;
-	}
 	case TableFilterType::DYNAMIC_FILTER: {
 		auto &dynamic_filter = filter.Cast<DynamicFilter>();
 		if (!dynamic_filter.filter_data) {

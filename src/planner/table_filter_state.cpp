@@ -6,7 +6,6 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
-class SelectivityOptionalFilter;
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) : executor(context) {
 	executor.AddExpression(expression);
@@ -14,18 +13,16 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
 	switch (filter.filter_type) {
-	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
-		auto &sel_opt_filter = filter.Cast<SelectivityOptionalFilter>();
-		auto child_filter_state = Initialize(context, *sel_opt_filter.child_filter);
-		return make_uniq<SelectivityOptionalFilterState>(std::move(child_filter_state));
-	}
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bf = filter.Cast<BFTableFilter>();
 		return make_uniq<BFTableFilterState>(bf.GetKeyType());
 	}
-	case TableFilterType::OPTIONAL_FILTER:
-		// optional filter is not executed - create an empty filter state
-		return make_uniq<TableFilterState>();
+	case TableFilterType::OPTIONAL_FILTER: {
+		// the optional filter may be executed if it is a SelectivityOptionalFilter
+		auto &optional_filter = filter.Cast<OptionalFilter>();
+		return optional_filter.InitializeState(context);
+	}
+
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		return Initialize(context, *struct_filter.child_filter);

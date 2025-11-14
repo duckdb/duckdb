@@ -412,13 +412,6 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 		}
 		return ExtractComparisonsAndInFilters(*optional_filter.child_filter, comparisons, in_filters);
 	}
-	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
-		auto &optional_filter = filter.Cast<SelectivityOptionalFilter>();
-		if (!optional_filter.child_filter) {
-			return true; // No child filters, always OK
-		}
-		return ExtractComparisonsAndInFilters(*optional_filter.child_filter, comparisons, in_filters);
-	}
 	case TableFilterType::IN_FILTER: {
 		in_filters.push_back(filter.Cast<InFilter>());
 		return true;

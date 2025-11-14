@@ -113,11 +113,14 @@ void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool 
 	filters_valid_values = false;
 
 	switch (filter.filter_type) {
-	case TableFilterType::OPTIONAL_FILTER:
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &opt_filter = filter.Cast<OptionalFilter>();
+		const auto sel_opt_state = opt_filter.ExecuteChildFilter(filter_state);
+		if (sel_opt_state) {
+			return FiltersNullValues(type, *opt_filter.child_filter, filters_nulls, filters_valid_values,
+			                         *sel_opt_state->child_state);
+		}
 		break;
-	case TableFilterType::SELECTIVITY_OPTIONAL_FILTER: {
-		auto &opt_filter = filter.Cast<SelectivityOptionalFilter>();
-		return FiltersNullValues(type, *opt_filter.child_filter, filters_nulls, filters_valid_values, filter_state);
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();

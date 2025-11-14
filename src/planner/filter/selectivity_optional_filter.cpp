@@ -7,17 +7,23 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
-SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> filter,
-                                                     const float selectivity_threshold_p,
-                                                     const idx_t n_vectors_to_check_p)
-    : TableFilter(TYPE), selectivity_threshold(selectivity_threshold_p), n_vectors_to_check(n_vectors_to_check_p),
-      child_filter(std::move(filter)) {
+constexpr float SelectivityOptionalFilter::MIN_MAX_THRESHOLD;
+constexpr idx_t SelectivityOptionalFilter::MIN_MAX_CHECK_N;
+
+constexpr float SelectivityOptionalFilter::BF_THRESHOLD;
+constexpr idx_t SelectivityOptionalFilter::BF_CHECK_N;
+
+SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> filter, const float selectivity_threshold,
+                                                     const idx_t n_vectors_to_check)
+    : OptionalFilter(std::move(filter)), selectivity_threshold(selectivity_threshold),
+      n_vectors_to_check(n_vectors_to_check) {
 }
 
 FilterPropagateResult SelectivityOptionalFilter::CheckStatistics(BaseStatistics &stats) const {
@@ -26,13 +32,8 @@ FilterPropagateResult SelectivityOptionalFilter::CheckStatistics(BaseStatistics 
 	return child_filter->CheckStatistics(stats);
 }
 
-unique_ptr<Expression> SelectivityOptionalFilter::ToExpression(const Expression &column) const {
-	return child_filter->ToExpression(column);
-}
-
 void SelectivityOptionalFilter::Serialize(Serializer &serializer) const {
-	TableFilter::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", child_filter);
+	OptionalFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<float>(201, "selectivity_threshold", selectivity_threshold);
 	serializer.WritePropertyWithDefault<idx_t>(202, "n_vectors_to_check", n_vectors_to_check);
 }
@@ -44,10 +45,19 @@ unique_ptr<TableFilter> SelectivityOptionalFilter::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<idx_t>(202, "n_vectors_to_check", result->n_vectors_to_check);
 	return std::move(result);
 }
-
-string SelectivityOptionalFilter::ToString(const string &column_name) const {
-	const auto child_string = child_filter ? child_filter->ToString(column_name) : "NULL";
-	return string("s_optional: ") + child_string;
+unique_ptr<TableFilterState> SelectivityOptionalFilter::InitializeState(ClientContext &context) const {
+	D_ASSERT(child_filter);
+	auto child_filter_state = TableFilterState::Initialize(context, *child_filter);
+	return make_uniq<SelectivityOptionalFilterState>(std::move(child_filter_state), this->n_vectors_to_check,
+	                                                 this->selectivity_threshold);
+}
+optional_ptr<SelectivityOptionalFilterState>
+SelectivityOptionalFilter::ExecuteChildFilter(TableFilterState &filter_state) const {
+	auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
+	if (state.stats.IsActive()) {
+		return &state;
+	}
+	return nullptr;
 }
 
 unique_ptr<TableFilter> SelectivityOptionalFilter::Copy() const {
