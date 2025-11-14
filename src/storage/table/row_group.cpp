@@ -54,9 +54,8 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
-    : SegmentBase<RowGroup>(data.start, data.count), collection(collection_p), version_info(nullptr),
-      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false),
-      has_changes(false) {
+    : SegmentBase<RowGroup>(data.count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
@@ -265,7 +264,6 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 		column_scans.emplace_back(*this);
 	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn()) {
 		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn()) {
 			continue;
 		}

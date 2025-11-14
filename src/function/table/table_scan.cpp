@@ -102,7 +102,7 @@ public:
 	vector<idx_t> row_number_offsets;
 	//! row_number column index
 	idx_t row_number_col_index = DConstants::INVALID_INDEX;
-	//!
+	//! Synchronize changes to the global scan state.
 	mutex global_state_mutex;
 
 public:
@@ -303,7 +303,6 @@ public:
 					auto count = output.size();
 
 					idx_t row_group_index = l_state.scan_state.table_state.batch_index - 1;
-					D_ASSERT(row_group_index < global_state.row_number_offsets.size());
 					std::lock_guard<std::mutex> lock(global_state_mutex);
 					idx_t base = global_state.row_number_offsets[row_group_index] + l_state.row_number_count;
 

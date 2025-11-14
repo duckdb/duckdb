@@ -255,7 +255,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Rewrite window functions to emit row_numbers in parallel
 	RunOptimizer(OptimizerType::WINDOW_REWRITER, [&]() {
-		WindowRewriter window_rewriter(*this);
+		WindowRewriter window_rewriter;
 		plan = window_rewriter.Optimize(std::move(plan));
 	});
 

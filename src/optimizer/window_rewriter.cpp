@@ -10,27 +10,14 @@
 
 namespace duckdb {
 
-WindowRewriter::WindowRewriter(Optimizer &optimizer) : optimizer(optimizer) {
-}
-
 bool WindowRewriter::CanOptimize(LogicalOperator &op) {
-	// If the operator is a projection and its child is a window, check if optimization is possible
-	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		if (op.children.empty() || !op.children[0]) {
-			return false;
-		}
-		if (op.children[0]->type != LogicalOperatorType::LOGICAL_WINDOW) {
+	// If the operator is a window function and its child is a get, check if optimization is possible
+	if (op.type == LogicalOperatorType::LOGICAL_WINDOW) {
+		if (op.expressions.size() != 1) {
 			return false;
 		}
 
-		auto *child = op.children[0].get();
-		auto &window = child->Cast<LogicalWindow>();
-
-		if (window.expressions.size() != 1) {
-			return false;
-		}
-
-		auto &expression = window.expressions[0];
+		auto &expression = op.expressions[0];
 		auto &window_expr = expression->Cast<BoundWindowExpression>();
 
 		// Try to optimize simple window functions, without partitions or ordering
@@ -42,7 +29,7 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 		}
 
 		// Should be followed by a get
-		auto &window_ch = window.children[0];
+		auto &window_ch = op.children[0];
 		if (window_ch->type != LogicalOperatorType::LOGICAL_GET) {
 			return false;
 		}
@@ -61,42 +48,31 @@ bool WindowRewriter::CanOptimize(LogicalOperator &op) {
 
 unique_ptr<LogicalOperator> WindowRewriter::Optimize(unique_ptr<LogicalOperator> op) {
 	ColumnBindingReplacer replacer;
-	op = OptimizeInternal(std::move(op), replacer);
+	LogicalOperator *root = op.get();
+	op = RewritePlan(std::move(op), replacer);
 
 	if (!replacer.replacement_bindings.empty()) {
-		replacer.VisitOperator(*op);
+		replacer.VisitOperator(*root);
 	}
 
 	return op;
 }
 
-unique_ptr<LogicalOperator> WindowRewriter::Rewrite(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer) {
-	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
-	auto &proj = op->Cast<LogicalProjection>();
-	D_ASSERT(proj.children[0]->type == LogicalOperatorType::LOGICAL_WINDOW);
-	auto &window = proj.children[0]->Cast<LogicalWindow>();
+unique_ptr<LogicalOperator> WindowRewriter::RewriteGet(unique_ptr<LogicalOperator> op,
+                                                       ColumnBindingReplacer &replacer) {
+	auto &window = op->Cast<LogicalWindow>();
 	auto &child = window.children[0];
-	D_ASSERT(child->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = child->Cast<LogicalGet>();
-
-	// Find where in the projection the row_number column appears
-	idx_t row_number_index = 0;
-	for (idx_t i = 0; i < proj.expressions.size(); i++) {
-		auto &col = proj.expressions.at(i);
-		if (col->type != ExpressionType::BOUND_COLUMN_REF)
-			continue;
-		auto &col_ref = col->Cast<BoundColumnRefExpression>();
-		if (col_ref.binding.table_index == window.window_index) {
-			row_number_index = i;
-			break;
-		}
-	}
 
 	// Extend child LogicalGet output with virtual row_number column
 	auto column_ids = get.GetColumnIds();
 	auto types = get.types;
 	auto projection_ids = get.projection_ids;
 
+	if (projection_ids.size() == 0) {
+		column_ids.clear();
+		types.clear();
+	}
 	column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_NUMBER);
 	types.push_back(LogicalType::BIGINT);
 	projection_ids.push_back(column_ids.size() - 1);
@@ -106,52 +82,35 @@ unique_ptr<LogicalOperator> WindowRewriter::Rewrite(unique_ptr<LogicalOperator> 
 	get.projection_ids = std::move(projection_ids);
 
 	const auto child_bindings = get.GetColumnBindings();
-	const auto child_types = get.types;
 
-	// Replace WINDOW + PROJECTION with new PROJECTION
-	const auto old_projection_bindings = proj.GetColumnBindings();
+	// Remove WINDOW and update bindings
+	const auto old_window_bindings = window.GetColumnBindings();
 
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(child_bindings.size());
-
-	// Build projection expressions in correct order
-	for (idx_t i = 0; i < proj.expressions.size(); ++i) {
-		if (i == row_number_index) {
-			// Add virtual ROW_NUMBER() reference at this position
-			auto &row_number_binding = child_bindings.back();
-			expressions.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, row_number_binding));
+	for (idx_t i = 0; i < old_window_bindings.size(); i++) {
+		ColumnBinding target_binding;
+		if (i < child_bindings.size() - 1) {
+			// Map existing columns
+			target_binding = child_bindings[i];
 		} else {
-			// Copy the rest
-			auto &expr = proj.expressions[i];
-			expressions.push_back(expr->Copy());
+			// Map the virtual ROW_NUMBER column
+			target_binding = child_bindings.back();
 		}
+		replacer.replacement_bindings.emplace_back(old_window_bindings[i], target_binding);
 	}
 
-	// Create the new projection
-	auto new_proj_index = optimizer.binder.GenerateTableIndex();
-	auto new_projection = make_uniq<LogicalProjection>(new_proj_index, std::move(expressions));
-	new_projection->children.push_back(std::move(child));
-
-	// Update column binding replacer mapping
-	const auto new_projection_bindings = new_projection->GetColumnBindings();
-	D_ASSERT(new_projection_bindings.size() == old_projection_bindings.size());
-	for (idx_t i = 0; i < old_projection_bindings.size(); i++) {
-		replacer.replacement_bindings.emplace_back(old_projection_bindings[i], new_projection_bindings[i]);
-	}
-
-	replacer.stop_operator = new_projection.get();
-	return std::move(new_projection);
+	replacer.stop_operator = child.get();
+	return std::move(window.children[0]);
 }
 
-unique_ptr<LogicalOperator> WindowRewriter::OptimizeInternal(unique_ptr<LogicalOperator> op,
-                                                             ColumnBindingReplacer &replacer) {
+unique_ptr<LogicalOperator> WindowRewriter::RewritePlan(unique_ptr<LogicalOperator> op,
+                                                        ColumnBindingReplacer &replacer) {
 	if (CanOptimize(*op)) {
-		return Rewrite(std::move(op), replacer);
+		return RewriteGet(std::move(op), replacer);
 	}
 
 	// Recurse into children
 	for (auto &child : op->children) {
-		child = OptimizeInternal(std::move(child), replacer);
+		child = RewritePlan(std::move(child), replacer);
 	}
 	return op;
 }

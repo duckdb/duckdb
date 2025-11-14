@@ -57,9 +57,10 @@ unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, ErrorData &error) {
 	// We don't want users to be able to access row_number. Only through the window rewriter optimizer
 	if (column_name == "row_number") {
-		auto tt = binder.bind_context.GetMatchingBinding(column_name);
-		auto test = tt->Cast<TableBinding>();
-		for (auto name : test.GetNameMap()) {
+		auto matching_binding = binder.bind_context.GetMatchingBinding(column_name);
+		auto table_binding = matching_binding->Cast<TableBinding>();
+
+		for (const auto &name : table_binding.GetNameMap()) {
 			if (name.first == "row_number" && name.second == COLUMN_IDENTIFIER_ROW_NUMBER) {
 				auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 				error = ErrorData(BinderException::ColumnNotFound(column_name, similar_bindings));
@@ -67,11 +68,6 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 			}
 		}
 	}
-	// if (column_name == "row_number") {
-	// 	auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
-	// 	error = ErrorData(BinderException::ColumnNotFound(column_name, similar_bindings));
-	// 	return nullptr;
-	// }
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
 		// we are referencing a USING column

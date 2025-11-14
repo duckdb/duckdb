@@ -25,9 +25,9 @@ statement ok
 delete from foo where a < 5000;
 
 query III
-select a,rowid, row_number() over() as x from foo order by a desc limit 1;
+select row_number() over(), a, rowid from foo order by a desc limit 1;
 ----
-1299999	1299999	1295000
+1295000	1299999	1299999
 
 query II
 explain select a,rowid, row_number() over() as x from foo order by a desc limit 1;
@@ -49,3 +49,14 @@ query II
 explain SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b limit 10;
 ----
 physical_plan	<!REGEX>:.*WINDOW.*
+
+
+statement ok
+create table t1 as select range::FLOAT a, range b, range c, range d from range (3);
+
+query I
+SELECT CASE WHEN row_number() OVER () = 2 THEN 2222::BIGINT ELSE 1111::BIGINT END FROM t1;
+----
+1111
+2222
+1111
