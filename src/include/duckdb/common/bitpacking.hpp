@@ -113,9 +113,12 @@ public:
 	}
 
 	inline static void BitPackBooleans(data_ptr_t dst, const data_ptr_t src, const idx_t count,
-	                                   const ValidityMask &validity_mask) {
+	                                   const ValidityMask &validity_mask, BaseStatistics *statistics = nullptr) {
 		bool is_last_bit_true = false; // If first value is null, write false, as it's probably the most common value
 		for (idx_t i = 0; i < count; i++) {
+			if (statistics) {
+				statistics->UpdateNumericStats<bool>(src[i]);
+			}
 			if (src[i] == 1) {
 				*dst |= (uint64_t(1) << (i % 8));
 				is_last_bit_true = true;

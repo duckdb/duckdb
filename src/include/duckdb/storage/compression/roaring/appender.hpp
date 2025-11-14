@@ -10,7 +10,6 @@
 
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/bitpacking.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
