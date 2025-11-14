@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "optional_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 
 namespace duckdb {
 
