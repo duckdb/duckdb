@@ -1130,7 +1130,9 @@ void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, Colum
 }
 
 bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
-	D_ASSERT(result.GetTypes() == types);
+	for (idx_t i = 0; i < state.column_ids.size(); i++) {
+		D_ASSERT(result.GetTypes()[i] == types[state.column_ids[i]]);
+	}
 
 	result.Reset();
 
