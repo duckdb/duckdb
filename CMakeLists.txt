@@ -772,14 +772,8 @@ include(extension/extension_build_tools.cmake)
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
  add_subdirectory(src)
-# # FIXME
-# file(DOWNLOAD http://localhost:8000/libduckdb_static.a ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
-# add_library(duckdb_static STATIC IMPORTED GLOBAL)
-# set_property(TARGET duckdb_static PROPERTY
-#         IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
-
  add_subdirectory(tools)
-  add_subdirectory(extension)
+ add_subdirectory(extension)
 
 endif()
 
