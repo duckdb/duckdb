@@ -742,10 +742,53 @@ int64_t ShellState::StringToInt(const string &arg) {
 }
 
 string ShellState::ModeToString(RenderMode mode) {
-	static const char *modeDescr[] = {"line",     "column", "list",    "semi",  "html",        "insert",    "quote",
-	                                  "tcl",      "csv",    "explain", "ascii", "prettyprint", "eqp",       "json",
-	                                  "markdown", "table",  "box",     "latex", "trash",       "jsonlines", "duckbox"};
-	return modeDescr[int(mode)];
+	switch (mode) {
+	case RenderMode::LINE:
+		return "line";
+	case RenderMode::COLUMN:
+		return "column";
+	case RenderMode::LIST:
+		return "list";
+	case RenderMode::SEMI:
+		return "semi";
+	case RenderMode::HTML:
+		return "html";
+	case RenderMode::INSERT:
+		return "insert";
+	case RenderMode::QUOTE:
+		return "quote";
+	case RenderMode::TCL:
+		return "tcl";
+	case RenderMode::CSV:
+		return "csv";
+	case RenderMode::EXPLAIN:
+		return "explain";
+	case RenderMode::DESCRIBE:
+		return "describe";
+	case RenderMode::ASCII:
+		return "ascii";
+	case RenderMode::PRETTY:
+		return "prettyprint";
+	case RenderMode::EQP:
+		return "eqp";
+	case RenderMode::JSON:
+		return "json";
+	case RenderMode::MARKDOWN:
+		return "markdown";
+	case RenderMode::TABLE:
+		return "table";
+	case RenderMode::BOX:
+		return "box";
+	case RenderMode::LATEX:
+		return "latex";
+	case RenderMode::TRASH:
+		return "trash";
+	case RenderMode::JSONLINES:
+		return "jsonlines";
+	case RenderMode::DUCKBOX:
+		return "duckbox";
+	}
+	return "invalid";
 }
 
 /*
