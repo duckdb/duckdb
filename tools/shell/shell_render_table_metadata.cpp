@@ -401,6 +401,33 @@ void ShellTableRenderInfo::Truncate(idx_t max_render_width) {
 	}
 	render_width = max_render_width;
 }
+
+void RenderLineDisplay(ShellHighlight &highlight, string &text, idx_t total_render_width,
+                       HighlightElementType element_type) {
+	auto render_size = ShellState::RenderLength(text);
+	ShellTableRenderInfo::TruncateValueIfRequired(text, render_size, total_render_width - 4);
+
+	duckdb::BoxRendererConfig config;
+	idx_t total_lines = total_render_width - render_size - 4;
+	idx_t lline = total_lines / 2;
+	idx_t rline = total_lines - lline;
+
+	string middle_line;
+	middle_line += " ";
+	for (idx_t i = 0; i < lline; i++) {
+		middle_line += config.HORIZONTAL;
+	}
+	middle_line += " ";
+	middle_line += text;
+	middle_line += " ";
+	for (idx_t i = 0; i < rline; i++) {
+		middle_line += config.HORIZONTAL;
+	}
+	middle_line += " ";
+	middle_line += "\n";
+	highlight.PrintText(middle_line, PrintOutput::STDOUT, element_type);
+}
+
 void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	idx_t max_render_width = max_width == 0 ? duckdb::Printer::TerminalWidth() : max_width;
 	if (max_render_width < 80) {
@@ -572,46 +599,19 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	// render the metadata
 	ShellHighlight highlight(*this);
 	string last_displayed_database;
+	string last_displayed_schema;
 	for (auto &metadata_display : metadata_displays) {
 		// check if we should render the database and/or schema name for this batch of tables
-		if (!metadata_display.database_name.empty() || !metadata_display.schema_name.empty()) {
-			string display = metadata_display.database_name;
-			if (!metadata_display.schema_name.empty()) {
-				if (!display.empty()) {
-					display += ".";
-				}
-				display += metadata_display.schema_name;
-			}
-
-			if (!display.empty() && last_displayed_database != display) {
-				HighlightElementType highlight_element = metadata_display.database_name.empty()
-				                                             ? HighlightElementType::SCHEMA_NAME
-				                                             : HighlightElementType::DATABASE_NAME;
-
-				auto render_size = ShellState::RenderLength(display);
-				ShellTableRenderInfo::TruncateValueIfRequired(display, render_size, metadata_display.render_width - 4);
-
-				idx_t total_lines = metadata_display.render_width - render_size - 4;
-				idx_t lline = total_lines / 2;
-				idx_t rline = total_lines - lline;
-
-				string middle_line;
-				middle_line += " ";
-				for (idx_t i = 0; i < lline; i++) {
-					middle_line += config.HORIZONTAL;
-				}
-				middle_line += " ";
-				middle_line += display;
-				middle_line += " ";
-				for (idx_t i = 0; i < rline; i++) {
-					middle_line += config.HORIZONTAL;
-				}
-				middle_line += " ";
-				middle_line += "\n";
-				highlight.PrintText(middle_line, PrintOutput::STDOUT, highlight_element);
-
-				last_displayed_database = display;
-			}
+		if (!metadata_display.database_name.empty() && last_displayed_database != metadata_display.database_name) {
+			RenderLineDisplay(highlight, metadata_display.database_name, metadata_display.render_width,
+			                  HighlightElementType::DATABASE_NAME);
+			last_displayed_database = metadata_display.database_name;
+			last_displayed_schema = string();
+		}
+		if (!metadata_display.schema_name.empty() && last_displayed_schema != metadata_display.schema_name) {
+			RenderLineDisplay(highlight, metadata_display.schema_name, metadata_display.render_width,
+			                  HighlightElementType::SCHEMA_NAME);
+			last_displayed_schema = metadata_display.schema_name;
 		}
 		for (idx_t line_idx = 0; line_idx < metadata_display.render_height; line_idx++) {
 			// construct the line
