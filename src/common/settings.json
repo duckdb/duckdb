@@ -509,7 +509,9 @@
         "name": "extension_directory",
         "description": "Set the directory to store extensions in",
         "type": "VARCHAR",
-        "scope": "global"
+        "alternative_type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "external_threads",
