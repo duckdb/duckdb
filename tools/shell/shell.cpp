@@ -2717,7 +2717,7 @@ struct ShellTableInfo {
 	vector<ShellColumnInfo> columns;
 };
 
-struct ShellColumnDisplayInfo {
+struct ShellColumnRenderInfo {
 	string column_name;
 	string column_type;
 	idx_t column_name_length;
@@ -2725,7 +2725,7 @@ struct ShellColumnDisplayInfo {
 };
 
 struct ColumnRenderRow {
-	vector<ShellColumnDisplayInfo> columns;
+	vector<ShellColumnRenderInfo> columns;
 };
 
 struct ShellTableRenderInfo {
@@ -2756,7 +2756,7 @@ struct ShellTableRenderInfo {
 	void TruncateValueIfRequired(string &value, idx_t &render_length, idx_t max_render_width);
 };
 
-struct ShellTableLineInfo {
+struct TableMetadataLine {
 	idx_t render_height = 0;
 	idx_t render_width = 0;
 	idx_t max_column_name_length = 0;
@@ -2767,15 +2767,15 @@ struct ShellTableLineInfo {
 	                bool last_line);
 };
 
-struct ShellTableDisplayInfo {
+struct TableMetadataDisplayInfo {
 	idx_t render_height = 0;
 	idx_t render_width = 0;
-	vector<ShellTableLineInfo> display_lines;
+	vector<TableMetadataLine> display_lines;
 };
 } // namespace duckdb_shell
 
-void ShellTableLineInfo::RenderLine(ShellHighlight &highlight, const vector<ShellTableRenderInfo> &table_list,
-                                    idx_t line_idx, bool last_line) {
+void TableMetadataLine::RenderLine(ShellHighlight &highlight, const vector<ShellTableRenderInfo> &table_list,
+                                   idx_t line_idx, bool last_line) {
 	// figure out the table to render
 	idx_t table_idx = 0;
 	for (; table_idx < tables.size(); table_idx++) {
@@ -2912,9 +2912,9 @@ ShellTableRenderInfo::ShellTableRenderInfo(ShellTableInfo table_p, char decimal_
 	idx_t max_col_type_length = 0;
 	ColumnRenderRow render_row;
 	for (auto &col_p : table.columns) {
-		ShellColumnDisplayInfo col_display;
+		ShellColumnRenderInfo col_display;
 		col_display.column_name = std::move(col_p.column_name);
-		col_display.column_type = std::move(col_p.column_type);
+		col_display.column_type = FormatTableMetadataType(col_p.column_type);
 		col_display.column_name_length = ShellState::RenderLength(col_display.column_name);
 		col_display.column_type_length = ShellState::RenderLength(col_display.column_type);
 		max_col_name_length = duckdb::MaxValue<idx_t>(col_display.column_name_length, max_col_name_length);
@@ -3042,7 +3042,7 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	});
 
 	// try to colocate different tables on the same lines in a greedy manner
-	vector<ShellTableDisplayInfo> display_lines;
+	vector<TableMetadataDisplayInfo> metadata_displays;
 	duckdb::unordered_set<idx_t> displayed_tables;
 	for (idx_t table_idx = 0; table_idx < result.size(); table_idx++) {
 		if (displayed_tables.find(table_idx) != displayed_tables.end()) {
@@ -3051,15 +3051,15 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 		}
 		displayed_tables.insert(table_idx);
 		auto &initial_table = result[table_idx];
-		ShellTableDisplayInfo display_line;
+		TableMetadataDisplayInfo metadata_display;
 		// the first line always has only one table (this table)
-		ShellTableLineInfo initial_line;
+		TableMetadataLine initial_line;
 		initial_line.tables.push_back(table_idx);
-		display_line.render_width = initial_line.render_width = initial_table.render_width;
-		display_line.render_height = initial_line.render_height = initial_table.LineCount();
+		metadata_display.render_width = initial_line.render_width = initial_table.render_width;
+		metadata_display.render_height = initial_line.render_height = initial_table.LineCount();
 		initial_line.max_column_name_length = initial_table.max_column_name_length;
 		initial_line.max_column_type_length = initial_table.max_column_type_length;
-		display_line.display_lines.push_back(std::move(initial_line));
+		metadata_display.display_lines.push_back(std::move(initial_line));
 
 		// now for each table, check if we can co-locate it
 		for (idx_t next_idx = table_idx + 1; next_idx < result.size(); next_idx++) {
@@ -3070,13 +3070,13 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 			// we can EITHER add a new line
 			// OR add it to an existing line
 			// we prefer to add it to an existing line if possible
-			if (render_height > display_line.render_height) {
+			if (render_height > metadata_display.render_height) {
 				// if this table is bigger than the current render height we can never add it - so just skip it
 				continue;
 			}
 			bool added = false;
-			for (auto &existing_line : display_line.display_lines) {
-				if (existing_line.render_height + render_height > display_line.render_height) {
+			for (auto &existing_line : metadata_display.display_lines) {
+				if (existing_line.render_height + render_height > metadata_display.render_height) {
 					// does not fit!
 					continue;
 				}
@@ -3097,7 +3097,7 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 				D_ASSERT(new_rendering_width >= existing_line.render_width);
 				idx_t extra_width = new_rendering_width - existing_line.render_width;
 
-				if (display_line.render_width + extra_width > max_render_width) {
+				if (metadata_display.render_width + extra_width > max_render_width) {
 					// the extra width makes us exceed the rendering width limit - we cannot add it here
 					continue;
 				}
@@ -3113,16 +3113,16 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 			if (!added) {
 				// if we couldn't add it to an existing line we might still be able to add a new line
 				// but only if that fits width wise
-				if (display_line.render_width + render_width <= max_render_width) {
+				if (metadata_display.render_width + render_width <= max_render_width) {
 					// it does! add an extra line
-					ShellTableLineInfo new_line;
+					TableMetadataLine new_line;
 					new_line.tables.push_back(next_idx);
 					new_line.render_width = render_width;
 					new_line.render_height = render_height;
 					new_line.max_column_name_length = current_table.max_column_name_length;
 					new_line.max_column_type_length = current_table.max_column_type_length;
-					display_line.render_width += render_width;
-					display_line.display_lines.push_back(std::move(new_line));
+					metadata_display.render_width += render_width;
+					metadata_display.display_lines.push_back(std::move(new_line));
 					added = true;
 				}
 			}
@@ -3131,13 +3131,13 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 				displayed_tables.insert(next_idx);
 			}
 		}
-		std::sort(display_line.display_lines.begin(), display_line.display_lines.end(),
-		          [](ShellTableLineInfo &a, ShellTableLineInfo &b) { return a.render_height > b.render_height; });
-		display_lines.push_back(std::move(display_line));
+		std::sort(metadata_display.display_lines.begin(), metadata_display.display_lines.end(),
+		          [](TableMetadataLine &a, TableMetadataLine &b) { return a.render_height > b.render_height; });
+		metadata_displays.push_back(std::move(metadata_display));
 	}
 
 	idx_t line_count = 0;
-	for (auto &display_line : display_lines) {
+	for (auto &display_line : metadata_displays) {
 		line_count += display_line.render_height;
 	}
 	unique_ptr<PagerState> pager_setup;
@@ -3145,14 +3145,14 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 		// we should use a pager
 		pager_setup = SetupPager();
 	}
-	// render the display lines
+	// render the metadata
 	ShellHighlight highlight(*this);
-	for (auto &display_line : display_lines) {
-		for (idx_t line_idx = 0; line_idx < display_line.render_height; line_idx++) {
+	for (auto &metadata_display : metadata_displays) {
+		for (idx_t line_idx = 0; line_idx < metadata_display.render_height; line_idx++) {
 			// construct the line
-			for (idx_t table_line_idx = 0; table_line_idx < display_line.display_lines.size(); table_line_idx++) {
-				bool is_last = table_line_idx + 1 == display_line.display_lines.size();
-				display_line.display_lines[table_line_idx].RenderLine(highlight, result, line_idx, is_last);
+			for (idx_t table_line_idx = 0; table_line_idx < metadata_display.display_lines.size(); table_line_idx++) {
+				bool is_last = table_line_idx + 1 == metadata_display.display_lines.size();
+				metadata_display.display_lines[table_line_idx].RenderLine(highlight, result, line_idx, is_last);
 			}
 			highlight.PrintText("\n", PrintOutput::STDOUT, HighlightElementType::LAYOUT);
 		}
