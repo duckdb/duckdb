@@ -167,10 +167,30 @@ void RoaringAnalyzeState::FlushContainer() {
 	count = 0;
 }
 
-void RoaringAnalyzeState::Analyze(Vector &input, idx_t count) {
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BIT>(Vector &input, idx_t count) {
 	auto &self = *this;
+	UnifiedVectorFormat unified;
+	input.ToUnifiedFormat(count, unified);
+	auto &validity = unified.validity;
 
-	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, input, count);
+	auto input_vector = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
+	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, input_vector, count);
+	total_count += count;
+}
+
+template <>
+void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count) {
+	auto &self = *this;
+	input.Flatten(count);
+	Vector bitpacked_vector(LogicalType::UBIGINT, count);
+	auto dst = data_ptr_cast(FlatVector::GetData<uint64_t>(bitpacked_vector));
+	auto src = data_ptr_cast(FlatVector::GetData<uint8_t>(input));
+	BitpackingPrimitives::BitPackBooleans(dst, src, count, FlatVector::Validity(input));
+
+	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
+	// mask.
+	RoaringStateAppender<RoaringAnalyzeState>::AppendVector(self, bitpacked_vector, count);
 	total_count += count;
 }
 

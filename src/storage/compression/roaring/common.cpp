@@ -177,10 +177,10 @@ unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType t
 	auto state = make_uniq<RoaringAnalyzeState>(info);
 	return std::move(state);
 }
-
+template <PhysicalType TYPE>
 bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = state.Cast<RoaringAnalyzeState>();
-	analyze_state.Analyze(input, count);
+	analyze_state.Analyze<TYPE>(input, count);
 	return true;
 }
 
@@ -198,9 +198,10 @@ unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &ch
 	return make_uniq<RoaringCompressState>(checkpoint_data, std::move(state));
 }
 
+template <PhysicalType TYPE>
 void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<RoaringCompressState>();
-	state.Compress(scan_vector, count);
+	state.Compress<TYPE>(scan_vector, count);
 }
 
 void RoaringFinalizeCompress(CompressionState &state_p) {
@@ -223,9 +224,27 @@ void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
-
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	RoaringScanPartial(segment, state, scan_count, result, 0);
+}
+
+void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	// Dummy vector, only created to capture the booleans in the validity mask, as the current RoaringScan populates the
+	// scanned data in the vector's validity mask
+	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
+	RoaringScan(segment, state, scan_count, dummy);
+
+	// Get dummy's validity mask
+	UnifiedVectorFormat unified;
+	dummy.ToUnifiedFormat(scan_count, unified);
+	auto &validity = unified.validity;
+
+	if (!validity.GetData()) {                   // All bits are set implicitly, so all valid.
+		memset(result.GetData(), 1, scan_count); // 1 is for valid
+	} else {
+		// "Bit-Unpack" dummy's validity_mask and put it in result's data
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(result.GetData(), data_ptr_cast(validity.GetData()), scan_count, 1);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -259,16 +278,37 @@ unique_ptr<CompressedSegmentState> RoaringInitSegment(ColumnSegment &segment, bl
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction GetCompressionFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, roaring::RoaringInitAnalyze,
-	                           roaring::RoaringAnalyze, roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression,
-	                           roaring::RoaringCompress, roaring::RoaringFinalizeCompress, roaring::RoaringInitScan,
-	                           roaring::RoaringScan, roaring::RoaringScanPartial, roaring::RoaringFetchRow,
-	                           roaring::RoaringSkip, roaring::RoaringInitSegment);
+	compression_analyze_t analyze = nullptr;
+	compression_compress_data_t compress = nullptr;
+	compression_scan_vector_t scan = nullptr;
+
+	switch (data_type) {
+	case PhysicalType::BIT: {
+		analyze = roaring::RoaringAnalyze<PhysicalType::BIT>;
+		compress = roaring::RoaringCompress<PhysicalType::BIT>;
+		scan = roaring::RoaringScan;
+		break;
+	}
+	case PhysicalType::BOOL: {
+		analyze = roaring::RoaringAnalyze<PhysicalType::BOOL>;
+		compress = roaring::RoaringCompress<PhysicalType::BOOL>;
+		scan = roaring::RoaringScanBoolean;
+		break;
+	}
+	default:
+		throw InternalException("Roaring GetCompressionFunction, type %s not handled", EnumUtil::ToString(data_type));
+	}
+	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, roaring::RoaringInitAnalyze, analyze,
+	                           roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression, compress,
+	                           roaring::RoaringFinalizeCompress, roaring::RoaringInitScan, scan,
+	                           roaring::RoaringScanPartial, roaring::RoaringFetchRow, roaring::RoaringSkip,
+	                           roaring::RoaringInitSegment);
 }
 
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BIT:
+	case PhysicalType::BOOL:
 		return GetCompressionFunction(type);
 	default:
 		throw InternalException("Unsupported type for Roaring");
@@ -278,6 +318,7 @@ CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 bool RoaringCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
 	switch (physical_type) {
 	case PhysicalType::BIT:
+	case PhysicalType::BOOL:
 		return true;
 	default:
 		return false;
