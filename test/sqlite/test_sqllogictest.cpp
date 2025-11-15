@@ -257,8 +257,7 @@ void RegisterSqllogictests() {
 		}
 	});
 
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-	for (const auto &extension_test_path : LoadedExtensionTestPaths()) {
+	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				auto fun = testRunner<false, true>;
@@ -266,6 +265,5 @@ void RegisterSqllogictests() {
 			}
 		});
 	}
-#endif
 }
 } // namespace duckdb

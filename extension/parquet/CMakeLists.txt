@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.5...3.29)
 
 project(ParquetExtension)
 
+add_third_party(mbedtls)
+add_third_party(zstd)
+
 include_directories(
   include ../../third_party/lz4 ../../third_party/parquet
   ../../third_party/thrift ../../third_party/snappy
@@ -81,6 +84,7 @@ endif()
 
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
+
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
 target_link_libraries(parquet_loadable_extension duckdb_mbedtls duckdb_zstd)
 
