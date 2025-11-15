@@ -1,0 +1,46 @@
+# name: test/sql/binder/alias_qualification_errors.test
+# description: Negative tests for alias.name resolution
+# group: [binder]
+
+# forward reference should error
+statement error
+SELECT alias.x + 1 AS y, 1 AS x
+----
+alias.x references an alias defined after the current expression
+
+# unknown alias should error
+statement error
+SELECT alias.nope;
+----
+Binder Error: alias.nope referenced, but no such alias exists in the SELECT list
+
+# alias to a subquery should error
+statement error
+SELECT (SELECT 1) AS x, alias.x
+----
+Alias "x" referenced in a SELECT clause - but the expression has a subquery. This is not yet supported
+
+# alias. is not allowed in WHERE
+statement error
+SELECT 1 AS x WHERE alias.x = 1
+----
+Binder Error: alias.* references are only valid in a SELECT projection list
+
+# alias. not allowed in GROUP BY
+statement error
+SELECT 1 AS x GROUP BY alias.x
+----
+Binder Error: alias.* references are only valid in a SELECT projection list
+
+# alias ref with non-string argument should error already in the parsing phase
+statement error
+SELECT 5 as x, alias.123;
+----
+Parser Error: syntax error at or near ".123"
+
+# alias ref with NULL argument will actually be considered as a column name, but since no such alias exists, it should
+# error
+statement error
+SELECT 5 as x, alias.NULL;
+----
+Binder Error: alias.NULL referenced, but no such alias exists in the SELECT list
