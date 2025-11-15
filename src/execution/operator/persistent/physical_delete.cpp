@@ -212,8 +212,8 @@ unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext
 	return make_uniq<DeleteSourceState>(*this);
 }
 
-SourceResultType PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &input) const {
+SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<DeleteSourceState>();
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {

@@ -1,0 +1,52 @@
+diff --git a/src/include/storage/iceberg_delete.hpp b/src/include/storage/iceberg_delete.hpp
+index 43eeab28..e69c5d19 100644
+--- a/src/include/storage/iceberg_delete.hpp
++++ b/src/include/storage/iceberg_delete.hpp
+@@ -76,7 +76,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/iceberg_insert.hpp b/src/include/storage/iceberg_insert.hpp
+index e2e1d1a2..1c98862c 100644
+--- a/src/include/storage/iceberg_insert.hpp
++++ b/src/include/storage/iceberg_insert.hpp
+@@ -51,7 +51,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/storage/iceberg_delete.cpp b/src/storage/iceberg_delete.cpp
+index 17952f82..14f759eb 100644
+--- a/src/storage/iceberg_delete.cpp
++++ b/src/storage/iceberg_delete.cpp
+@@ -268,7 +268,7 @@ SinkFinalizeType IcebergDelete::Finalize(Pipeline &pipeline, Event &event, Clien
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType IcebergDelete::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
++SourceResultType IcebergDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+ 	auto &global_state = sink_state->Cast<IcebergDeleteGlobalState>();
+ 	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_deleted_count));
+ 	chunk.SetCardinality(1);
+diff --git a/src/storage/iceberg_insert.cpp b/src/storage/iceberg_insert.cpp
+index a49ac26a..2044fae6 100644
+--- a/src/storage/iceberg_insert.cpp
++++ b/src/storage/iceberg_insert.cpp
+@@ -251,7 +251,7 @@ SinkResultType IcebergInsert::Sink(ExecutionContext &context, DataChunk &chunk,
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType IcebergInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
++SourceResultType IcebergInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+ 	auto &global_state = sink_state->Cast<IcebergInsertGlobalState>();
+ 	auto value = Value::BIGINT(global_state.insert_count);
+ 	chunk.SetCardinality(1);

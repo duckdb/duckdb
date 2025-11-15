@@ -1,0 +1,13 @@
+diff --git a/src/include/hnsw/hnsw_index_physical_create.hpp b/src/include/hnsw/hnsw_index_physical_create.hpp
+index 2b1cc6a..0be2536 100644
+--- a/src/include/hnsw/hnsw_index_physical_create.hpp
++++ b/src/include/hnsw/hnsw_index_physical_create.hpp
+@@ -29,7 +29,7 @@ public:
+ 
+ public:
+ 	//! Source interface, NOOP for this operator
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override {
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override {
+ 		return SourceResultType::FINISHED;
+ 	}
+ 	bool IsSource() const override {

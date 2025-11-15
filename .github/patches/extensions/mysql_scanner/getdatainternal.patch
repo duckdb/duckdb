@@ -1,0 +1,78 @@
+diff --git a/src/include/storage/mysql_execute_query.hpp b/src/include/storage/mysql_execute_query.hpp
+index 412f813..a59b7b9 100644
+--- a/src/include/storage/mysql_execute_query.hpp
++++ b/src/include/storage/mysql_execute_query.hpp
+@@ -25,7 +25,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/mysql_index.hpp b/src/include/storage/mysql_index.hpp
+index a674069..56ea40e 100644
+--- a/src/include/storage/mysql_index.hpp
++++ b/src/include/storage/mysql_index.hpp
+@@ -23,7 +23,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/mysql_insert.hpp b/src/include/storage/mysql_insert.hpp
+index 98ecde3..a0c9a56 100644
+--- a/src/include/storage/mysql_insert.hpp
++++ b/src/include/storage/mysql_insert.hpp
+@@ -33,7 +33,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
+index 3bae886..2c89cb3 100644
+--- a/src/storage/mysql_execute_query.cpp
++++ b/src/storage/mysql_execute_query.cpp
+@@ -57,7 +57,7 @@ SinkFinalizeType MySQLExecuteQuery::Finalize(Pipeline &pipeline, Event &event, C
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType MySQLExecuteQuery::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType MySQLExecuteQuery::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<MySQLExecuteQueryGlobalState>();
+ 	chunk.SetCardinality(1);
+diff --git a/src/storage/mysql_index.cpp b/src/storage/mysql_index.cpp
+index 2a9be12..445c715 100644
+--- a/src/storage/mysql_index.cpp
++++ b/src/storage/mysql_index.cpp
+@@ -15,7 +15,7 @@ MySQLCreateIndex::MySQLCreateIndex(PhysicalPlan &physical_plan, unique_ptr<Creat
+ //===--------------------------------------------------------------------===//
+ // Source
+ //===--------------------------------------------------------------------===//
+-SourceResultType MySQLCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType MySQLCreateIndex::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSourceInput &input) const {
+ 	auto &catalog = table.catalog;
+ 	if (info->catalog == INVALID_CATALOG && info->schema == catalog.GetName()) {
+diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
+index 9633e19..5356b69 100644
+--- a/src/storage/mysql_insert.cpp
++++ b/src/storage/mysql_insert.cpp
+@@ -246,7 +246,7 @@ SinkFinalizeType MySQLInsert::Finalize(Pipeline &pipeline, Event &event, ClientC
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType MySQLInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
++SourceResultType MySQLInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<MySQLInsertGlobalState>();
+ 	chunk.SetCardinality(1);
+ 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));

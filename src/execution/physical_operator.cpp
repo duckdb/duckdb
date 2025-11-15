@@ -125,7 +125,12 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 // LCOV_EXCL_START
 SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSourceInput &input) const {
-	throw InternalException("Calling GetData on a node that is not a source!");
+	return GetDataInternal(context, chunk, input);
+}
+
+SourceResultType PhysicalOperator::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                   OperatorSourceInput &input) const {
+	throw InternalException("Calling GetDataInternal on a node that is not a source!");
 }
 
 OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &context, DataChunk &chunk,

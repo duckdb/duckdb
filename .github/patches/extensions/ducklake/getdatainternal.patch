@@ -1,0 +1,152 @@
+diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
+index 65793fd..dc56801 100644
+--- a/src/functions/ducklake_compaction_functions.cpp
++++ b/src/functions/ducklake_compaction_functions.cpp
+@@ -35,7 +35,7 @@ DuckLakeCompaction::DuckLakeCompaction(PhysicalPlan &physical_plan, const vector
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType DuckLakeCompaction::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType DuckLakeCompaction::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
+ 	return SourceResultType::FINISHED;
+ }
+diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
+index 0308b0e..73601b8 100644
+--- a/src/functions/ducklake_flush_inlined_data.cpp
++++ b/src/functions/ducklake_flush_inlined_data.cpp
+@@ -34,7 +34,7 @@ DuckLakeFlushData::DuckLakeFlushData(PhysicalPlan &physical_plan, const vector<L
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType DuckLakeFlushData::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType DuckLakeFlushData::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSourceInput &input) const {
+ 	return SourceResultType::FINISHED;
+ }
+diff --git a/src/include/storage/ducklake_compaction.hpp b/src/include/storage/ducklake_compaction.hpp
+index 2542578..a669b67 100644
+--- a/src/include/storage/ducklake_compaction.hpp
++++ b/src/include/storage/ducklake_compaction.hpp
+@@ -35,7 +35,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/ducklake_delete.hpp b/src/include/storage/ducklake_delete.hpp
+index c0978de..2d8e976 100644
+--- a/src/include/storage/ducklake_delete.hpp
++++ b/src/include/storage/ducklake_delete.hpp
+@@ -76,7 +76,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/ducklake_flush_data.hpp b/src/include/storage/ducklake_flush_data.hpp
+index 1a1c31d..589942e 100644
+--- a/src/include/storage/ducklake_flush_data.hpp
++++ b/src/include/storage/ducklake_flush_data.hpp
+@@ -31,7 +31,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/ducklake_insert.hpp b/src/include/storage/ducklake_insert.hpp
+index 7460cb7..29c419a 100644
+--- a/src/include/storage/ducklake_insert.hpp
++++ b/src/include/storage/ducklake_insert.hpp
+@@ -63,7 +63,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/include/storage/ducklake_update.hpp b/src/include/storage/ducklake_update.hpp
+index c2e2972..4dbb737 100644
+--- a/src/include/storage/ducklake_update.hpp
++++ b/src/include/storage/ducklake_update.hpp
+@@ -34,7 +34,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/storage/ducklake_delete.cpp b/src/storage/ducklake_delete.cpp
+index 024a1c2..69f6466 100644
+--- a/src/storage/ducklake_delete.cpp
++++ b/src/storage/ducklake_delete.cpp
+@@ -399,7 +399,7 @@ SinkFinalizeType DuckLakeDelete::Finalize(Pipeline &pipeline, Event &event, Clie
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType DuckLakeDelete::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType DuckLakeDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                          OperatorSourceInput &input) const {
+ 	auto &global_state = sink_state->Cast<DuckLakeDeleteGlobalState>();
+ 	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_deleted_count));
+diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
+index d14f968..d15212a 100644
+--- a/src/storage/ducklake_insert.cpp
++++ b/src/storage/ducklake_insert.cpp
+@@ -205,7 +205,7 @@ SinkResultType DuckLakeInsert::Sink(ExecutionContext &context, DataChunk &chunk,
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType DuckLakeInsert::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType DuckLakeInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                          OperatorSourceInput &input) const {
+ 	auto &global_state = sink_state->Cast<DuckLakeInsertGlobalState>();
+ 	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_insert_count));
+diff --git a/src/storage/ducklake_merge_into.cpp b/src/storage/ducklake_merge_into.cpp
+index 51ffef0..e55ffd0 100644
+--- a/src/storage/ducklake_merge_into.cpp
++++ b/src/storage/ducklake_merge_into.cpp
+@@ -32,7 +32,7 @@ public:
+ 
+ public:
+ 	// Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+@@ -61,7 +61,7 @@ DuckLakeMergeInsert::DuckLakeMergeInsert(PhysicalPlan &physical_plan, const vect
+     : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, types, 1), copy(copy), insert(insert) {
+ }
+ 
+-SourceResultType DuckLakeMergeInsert::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType DuckLakeMergeInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
+ 	return SourceResultType::FINISHED;
+ }
+diff --git a/src/storage/ducklake_update.cpp b/src/storage/ducklake_update.cpp
+index f0bd68e..74d645f 100644
+--- a/src/storage/ducklake_update.cpp
++++ b/src/storage/ducklake_update.cpp
+@@ -207,7 +207,7 @@ SinkFinalizeType DuckLakeUpdate::Finalize(Pipeline &pipeline, Event &event, Clie
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType DuckLakeUpdate::GetData(ExecutionContext &context, DataChunk &chunk,
++SourceResultType DuckLakeUpdate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                          OperatorSourceInput &input) const {
+ 	auto &global_state = sink_state->Cast<DuckLakeUpdateGlobalState>();
+ 	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_updated_count.load()));

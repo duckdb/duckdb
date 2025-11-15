@@ -1219,8 +1219,8 @@ ProgressData PhysicalIEJoin::GetProgress(ClientContext &context, GlobalSourceSta
 	return gsource.GetProgress();
 }
 
-SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result,
-                                         OperatorSourceInput &input) const {
+SourceResultType PhysicalIEJoin::GetDataInternal(ExecutionContext &context, DataChunk &result,
+                                                 OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<IEJoinGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<IEJoinLocalSourceState>();
 
