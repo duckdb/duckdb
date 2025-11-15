@@ -134,6 +134,9 @@ struct ShellColumnInfo {
 	string column_name;
 	string column_type;
 	bool is_primary_key = false;
+	bool is_not_null = false;
+	bool is_unique = false;
+	string default_value;
 };
 
 struct ShellTableInfo {

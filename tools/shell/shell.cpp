@@ -2667,8 +2667,15 @@ SuccessState ShellState::RenderDescribe(duckdb::QueryResult &res) {
 		ShellColumnInfo column;
 		column.column_name = row.GetValue<string>(0);
 		column.column_type = row.GetValue<string>(1);
+		if (!row.IsNull(2)) {
+			column.is_not_null = row.GetValue<string>(2) == "NO";
+		}
 		if (!row.IsNull(3)) {
 			column.is_primary_key = row.GetValue<string>(3) == "PRI";
+			column.is_unique = row.GetValue<string>(3) == "UNI";
+		}
+		if (!row.IsNull(4)) {
+			column.default_value = row.GetValue<string>(4);
 		}
 		table.columns.push_back(std::move(column));
 	}

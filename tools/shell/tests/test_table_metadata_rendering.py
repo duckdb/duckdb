@@ -22,10 +22,13 @@ CREATE TABLE partsupp(ps_partkey BIGINT NOT NULL, ps_suppkey BIGINT NOT NULL, ps
 CREATE TABLE region(r_regionkey INTEGER NOT NULL, r_name VARCHAR NOT NULL, r_comment VARCHAR NOT NULL);
 CREATE TABLE supplier(s_suppkey BIGINT NOT NULL, s_name VARCHAR NOT NULL, s_address VARCHAR NOT NULL, s_nationkey INTEGER NOT NULL, s_phone VARCHAR NOT NULL, s_acctbal DECIMAL(15,2) NOT NULL, s_comment VARCHAR NOT NULL);''')
         .statement('.tables')
+        .statement('describe lineitem')
+        .statement('show tables')
     )
 
     result = test.run()
     result.check_stdout("decimal")
+    result.check_stdout("not null")
 
 def test_long_table_name(shell):
     test = (

@@ -19,11 +19,20 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &select_node = select.node->Cast<duckdb::SelectNode>();
+	if (select_node.select_list.size() != 1 || select_node.select_list[0]->type != duckdb::ExpressionType::STAR) {
+		return false;
+	}
 	if (select_node.from_table->type != duckdb::TableReferenceType::SHOW_REF) {
 		return false;
 	}
 	auto &showref = select_node.from_table->Cast<duckdb::ShowRef>();
 	if (showref.show_type == duckdb::ShowType::SUMMARY) {
+		return false;
+	}
+	if (showref.table_name == "\"databases\"" || showref.table_name == "\"tables\"" ||
+	    showref.table_name == "\"variables\"" || showref.table_name == "__show_tables_expanded") {
+		// ignore special cases in ShowRef
+		// TODO: this is ugly, should just be using the ShowType enum...
 		return false;
 	}
 	describe_table_name = "Describe";
@@ -51,7 +60,6 @@ struct RenderComponent {
 
 struct ShellColumnRenderInfo {
 	vector<RenderComponent> components;
-	bool is_primary_key;
 };
 
 struct ColumnRenderRow {
@@ -256,6 +264,16 @@ string FormatTableMetadataType(const string &type) {
 ShellTableRenderInfo::ShellTableRenderInfo(ShellTableInfo table_p, char decimal_sep) : table(std::move(table_p)) {
 	table_name_length = ShellState::RenderLength(table.table_name);
 	ColumnRenderRow render_row;
+	// figure out if we need an extra line to render constraint info
+	bool has_constraint_component = false;
+	for (auto &col : table.columns) {
+		if (col.is_not_null || col.is_unique || !col.default_value.empty()) {
+			has_constraint_component = true;
+			break;
+		}
+	}
+
+	idx_t component_count = 2 + has_constraint_component;
 	for (auto &col_p : table.columns) {
 		ShellColumnRenderInfo col_display;
 		HighlightElementType column_name_type =
@@ -263,13 +281,32 @@ ShellTableRenderInfo::ShellTableRenderInfo(ShellTableInfo table_p, char decimal_
 		col_display.components.emplace_back(std::move(col_p.column_name), column_name_type);
 		col_display.components.emplace_back(FormatTableMetadataType(col_p.column_type),
 		                                    HighlightElementType::COLUMN_TYPE);
+		if (has_constraint_component) {
+			string constraint_text;
+			if (col_p.is_not_null) {
+				constraint_text = "not null";
+			}
+			if (col_p.is_unique) {
+				if (!constraint_text.empty()) {
+					constraint_text += " ";
+				}
+				constraint_text += "unique";
+			}
+			if (!col_p.default_value.empty()) {
+				if (!constraint_text.empty()) {
+					constraint_text += " ";
+				}
+				constraint_text += "default " + col_p.default_value;
+			}
+
+			col_display.components.emplace_back(constraint_text, HighlightElementType::COLUMN_TYPE);
+		}
 		render_row.columns.push_back(std::move(col_display));
 	}
 	table.columns.clear();
 
-	idx_t component_count = 2;
 	// iterate over the components to find the max length
-	max_component_widths.resize(2);
+	max_component_widths.resize(component_count);
 	for (auto &row : render_row.columns) {
 		if (row.components.size() != component_count) {
 			throw InternalException("Component count is misaligned");
@@ -309,7 +346,7 @@ void ShellTableRenderInfo::TruncateValueIfRequired(string &value, idx_t &render_
 	value =
 	    duckdb::BoxRenderer::TruncateValue(value, max_render_width - config.DOTDOTDOT_LENGTH, pos, value_render_width) +
 	    config.DOTDOTDOT;
-	render_length = render_width + config.DOTDOTDOT_LENGTH;
+	render_length = value_render_width + config.DOTDOTDOT_LENGTH;
 }
 
 void ShellTableRenderInfo::Truncate(idx_t max_render_width) {
@@ -325,9 +362,9 @@ void ShellTableRenderInfo::Truncate(idx_t max_render_width) {
 		// we need to truncate either column names or column types
 		// prefer to keep the name as long as possible - only truncate it if it by itself almost exceeds the
 		// width
-		static constexpr const idx_t MIN_COMPONENT_SIZE = 10;
+		static constexpr const idx_t MIN_COMPONENT_SIZE = 5;
 		idx_t component_count = max_component_widths.size();
-		idx_t min_leftover_size = (component_count - 1) * MIN_COMPONENT_SIZE;
+		idx_t min_leftover_size = component_count * MIN_COMPONENT_SIZE;
 		if (max_component_widths[0] + min_leftover_size > max_render_width) {
 			max_component_widths[0] = max_render_width - min_leftover_size;
 		}
@@ -358,8 +395,8 @@ void ShellTableRenderInfo::Truncate(idx_t max_render_width) {
 				}
 			}
 		}
-		render_width = max_render_width;
 	}
+	render_width = max_render_width;
 }
 void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	idx_t max_render_width = max_width == 0 ? duckdb::Printer::TerminalWidth() : max_width;
