@@ -39,11 +39,18 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 	return true;
 }
 
+struct RenderComponent {
+	RenderComponent(string text_p, HighlightElementType type) : text(std::move(text_p)), type(type) {
+		render_width = ShellState::RenderLength(text);
+	}
+
+	string text;
+	idx_t render_width;
+	HighlightElementType type;
+};
+
 struct ShellColumnRenderInfo {
-	string column_name;
-	string column_type;
-	idx_t column_name_length;
-	idx_t column_type_length;
+	vector<RenderComponent> components;
 	bool is_primary_key;
 };
 
@@ -57,8 +64,7 @@ struct ShellTableRenderInfo {
 	ShellTableInfo table;
 	idx_t table_name_length;
 	idx_t render_width;
-	idx_t max_column_name_length;
-	idx_t max_column_type_length;
+	vector<idx_t> max_component_widths;
 	string estimated_size_text;
 	optional_idx estimated_size_length;
 	vector<ColumnRenderRow> column_renders;
@@ -69,6 +75,14 @@ struct ShellTableRenderInfo {
 			constant_count += 2;
 		}
 		return ColumnLines() + constant_count;
+	}
+	idx_t PerColumnWidth() const {
+		idx_t width = 4;
+		for (auto &component_width : max_component_widths) {
+			width += component_width;
+		}
+		width += max_component_widths.size() - 1;
+		return width;
 	}
 
 	idx_t ColumnLines() const {
@@ -82,10 +96,17 @@ struct ShellTableRenderInfo {
 struct TableMetadataLine {
 	idx_t render_height = 0;
 	idx_t render_width = 0;
-	idx_t max_column_name_length = 0;
-	idx_t max_column_type_length = 0;
+	vector<idx_t> max_component_widths;
 	vector<idx_t> tables;
 
+	idx_t PerColumnWidth() const {
+		idx_t width = 4;
+		for (auto &component_width : max_component_widths) {
+			width += component_width;
+		}
+		width += max_component_widths.size() - 1;
+		return width;
+	}
 	void RenderLine(ShellHighlight &highlight, const vector<ShellTableRenderInfo> &tables, idx_t line_idx,
 	                bool last_line);
 };
@@ -155,7 +176,7 @@ void TableMetadataLine::RenderLine(ShellHighlight &highlight, const vector<Shell
 		// in that case we need to add padding here
 		// compute the required padding
 		idx_t total_render_width = render_width;
-		idx_t per_column_render_width = max_column_name_length + max_column_type_length + 5;
+		idx_t per_column_render_width = PerColumnWidth();
 		idx_t column_render_width = render_table.column_renders.size() * per_column_render_width;
 		idx_t extra_render_width = total_render_width - column_render_width;
 		idx_t render_width_per_column = extra_render_width / render_table.column_renders.size();
@@ -166,27 +187,29 @@ void TableMetadataLine::RenderLine(ShellHighlight &highlight, const vector<Shell
 			bool is_last = render_idx + 1 == render_table.column_renders.size();
 			if (column_idx < column_render.columns.size()) {
 				auto &col = column_render.columns[column_idx];
-				idx_t col_name_length = col.column_name_length;
-				idx_t col_type_length = col.column_type_length;
 				column_line += " ";
 				highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
-				auto highlight_type =
-				    col.is_primary_key ? HighlightElementType::PRIMARY_KEY_COLUMN : HighlightElementType::COLUMN_NAME;
-				highlight.PrintText(col.column_name, PrintOutput::STDOUT, highlight_type);
-				column_line = string(max_column_name_length - col_name_length + 1, ' ');
-				if (extra_render_width > 0) {
-					idx_t render_count = is_last ? extra_render_width : render_width_per_column;
-					column_line += string(render_count, ' ');
-					extra_render_width -= render_count;
+				// render each of the components
+				for (idx_t component_idx = 0; component_idx < col.components.size(); component_idx++) {
+					auto &component = col.components[component_idx];
+					highlight.PrintText(component.text, PrintOutput::STDOUT, component.type);
+
+					// render space padding between components
+					column_line = string(max_component_widths[component_idx] - component.render_width + 1, ' ');
+					if (extra_render_width > 0) {
+						// if we need extra spacing add it
+						idx_t render_count = is_last ? extra_render_width : render_width_per_column;
+						column_line += string(render_count, ' ');
+						extra_render_width -= render_count;
+					}
+					highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
 				}
-				highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
-				highlight.PrintText(col.column_type, PrintOutput::STDOUT, HighlightElementType::COLUMN_TYPE);
-				column_line = string(max_column_type_length - col_type_length + 1, ' ');
 			} else {
 				// we have already rendered all columns for this line - pad with spaces
-				column_line += string(max_column_name_length + max_column_type_length + 3, ' ');
+				column_line = string(per_column_render_width - 1, ' ');
+				highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
 			}
-			column_line += is_last ? config.VERTICAL : " ";
+			column_line = is_last ? config.VERTICAL : " ";
 			highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
 		}
 		return;
@@ -232,28 +255,35 @@ string FormatTableMetadataType(const string &type) {
 
 ShellTableRenderInfo::ShellTableRenderInfo(ShellTableInfo table_p, char decimal_sep) : table(std::move(table_p)) {
 	table_name_length = ShellState::RenderLength(table.table_name);
-	idx_t max_col_name_length = 0;
-	idx_t max_col_type_length = 0;
 	ColumnRenderRow render_row;
 	for (auto &col_p : table.columns) {
 		ShellColumnRenderInfo col_display;
-		col_display.column_name = std::move(col_p.column_name);
-		col_display.column_type = FormatTableMetadataType(col_p.column_type);
-		col_display.column_name_length = ShellState::RenderLength(col_display.column_name);
-		col_display.column_type_length = ShellState::RenderLength(col_display.column_type);
-		col_display.is_primary_key = col_p.is_primary_key;
-		max_col_name_length = duckdb::MaxValue<idx_t>(col_display.column_name_length, max_col_name_length);
-		max_col_type_length = duckdb::MaxValue<idx_t>(col_display.column_type_length, max_col_type_length);
+		HighlightElementType column_name_type =
+		    col_p.is_primary_key ? HighlightElementType::PRIMARY_KEY_COLUMN : HighlightElementType::COLUMN_NAME;
+		col_display.components.emplace_back(std::move(col_p.column_name), column_name_type);
+		col_display.components.emplace_back(FormatTableMetadataType(col_p.column_type),
+		                                    HighlightElementType::COLUMN_TYPE);
 		render_row.columns.push_back(std::move(col_display));
 	}
 	table.columns.clear();
+
+	idx_t component_count = 2;
+	// iterate over the components to find the max length
+	max_component_widths.resize(2);
+	for (auto &row : render_row.columns) {
+		if (row.components.size() != component_count) {
+			throw InternalException("Component count is misaligned");
+		}
+		for (idx_t component_idx = 0; component_idx < row.components.size(); component_idx++) {
+			max_component_widths[component_idx] = duckdb::MaxValue<idx_t>(max_component_widths[component_idx],
+			                                                              row.components[component_idx].render_width);
+		}
+	}
 	column_renders.push_back(std::move(render_row));
 
-	max_column_name_length = max_col_name_length;
-	max_column_type_length = max_col_type_length;
-	render_width = table_name_length;
-	if (max_col_name_length + max_col_type_length + 1 > render_width) {
-		render_width = max_col_name_length + max_col_type_length + 1;
+	render_width = table_name_length + 4;
+	if (PerColumnWidth() > render_width) {
+		render_width = PerColumnWidth();
 	}
 	if (table.estimated_size.IsValid()) {
 		estimated_size_text = to_string(table.estimated_size.GetIndex());
@@ -263,11 +293,10 @@ ShellTableRenderInfo::ShellTableRenderInfo(ShellTableInfo table_p, char decimal_
 		}
 		estimated_size_text += " rows";
 		estimated_size_length = ShellState::RenderLength(estimated_size_text);
-		if (estimated_size_length.GetIndex() > render_width) {
-			render_width = estimated_size_length.GetIndex();
+		if (estimated_size_length.GetIndex() + 4 > render_width) {
+			render_width = estimated_size_length.GetIndex() + 4;
 		}
 	}
-	render_width = render_width + 4;
 }
 
 void ShellTableRenderInfo::TruncateValueIfRequired(string &value, idx_t &render_length, idx_t max_render_width) {
@@ -276,9 +305,10 @@ void ShellTableRenderInfo::TruncateValueIfRequired(string &value, idx_t &render_
 	}
 	duckdb::BoxRendererConfig config;
 	idx_t pos = 0;
-	idx_t render_width = 0;
-	value = duckdb::BoxRenderer::TruncateValue(value, max_render_width - config.DOTDOTDOT_LENGTH, pos, render_width) +
-	        config.DOTDOTDOT;
+	idx_t value_render_width = 0;
+	value =
+	    duckdb::BoxRenderer::TruncateValue(value, max_render_width - config.DOTDOTDOT_LENGTH, pos, value_render_width) +
+	    config.DOTDOTDOT;
 	render_length = render_width + config.DOTDOTDOT_LENGTH;
 }
 
@@ -290,27 +320,42 @@ void ShellTableRenderInfo::Truncate(idx_t max_render_width) {
 	// we exceeded the render width - we need to truncate
 	TruncateValueIfRequired(table.table_name, table_name_length, max_render_width - 4);
 	// figure out what we need to truncate
-	idx_t total_column_length = max_column_name_length + max_column_type_length + 5;
+	idx_t total_column_length = PerColumnWidth();
 	if (total_column_length > max_render_width) {
 		// we need to truncate either column names or column types
 		// prefer to keep the name as long as possible - only truncate it if it by itself almost exceeds the
 		// width
-		if (max_column_name_length + 10 > max_render_width) {
-			max_column_name_length = max_render_width - 10;
+		static constexpr const idx_t MIN_COMPONENT_SIZE = 10;
+		idx_t component_count = max_component_widths.size();
+		idx_t min_leftover_size = (component_count - 1) * MIN_COMPONENT_SIZE;
+		if (max_component_widths[0] + min_leftover_size > max_render_width) {
+			max_component_widths[0] = max_render_width - min_leftover_size;
 		}
-		total_column_length = max_column_name_length + max_column_type_length + 5;
+		total_column_length = PerColumnWidth();
 		if (total_column_length > max_render_width) {
-			max_column_type_length = max_render_width - max_column_name_length - 5;
+			// truncate other components if required
+			for (idx_t i = 1; i < max_component_widths.size(); i++) {
+				if (max_component_widths[i] <= MIN_COMPONENT_SIZE) {
+					// cannot truncate below the min component size
+					continue;
+				}
+				idx_t truncate_amount = duckdb::MinValue<idx_t>(total_column_length - max_render_width,
+				                                                max_component_widths[i] - MIN_COMPONENT_SIZE);
+				max_component_widths[i] -= truncate_amount;
+				total_column_length -= truncate_amount;
+				if (total_column_length <= render_width) {
+					break;
+				}
+			}
 		}
-		// truncate all columns that we need to truncate
-		idx_t max_name_length = max_column_name_length;
-		idx_t max_type_length = max_column_type_length;
+		// truncate all column components that we need to truncate
 		for (auto &column_render : column_renders) {
 			for (auto &col : column_render.columns) {
-				// try to to truncate the name
-				TruncateValueIfRequired(col.column_name, col.column_name_length, max_name_length);
-				// try to to truncate the type
-				TruncateValueIfRequired(col.column_type, col.column_type_length, max_type_length);
+				for (idx_t component_idx = 0; component_idx < col.components.size(); component_idx++) {
+					auto &component = col.components[component_idx];
+					TruncateValueIfRequired(component.text, component.render_width,
+					                        max_component_widths[component_idx]);
+				}
 			}
 		}
 		render_width = max_render_width;
@@ -341,7 +386,7 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 		}
 		// try to split up columns if possible
 		idx_t max_split_count = (table.column_renders[0].columns.size() + SPLIT_THRESHOLD - 1) / SPLIT_THRESHOLD;
-		idx_t width_per_split = table.max_column_name_length + table.max_column_type_length + 5;
+		idx_t width_per_split = table.PerColumnWidth();
 		idx_t max_splits = max_render_width / width_per_split;
 		D_ASSERT(max_split_count > 1);
 		if (max_splits <= 1) {
@@ -382,8 +427,7 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 		initial_line.tables.push_back(table_idx);
 		metadata_display.render_width = initial_line.render_width = initial_table.render_width;
 		metadata_display.render_height = initial_line.render_height = initial_table.LineCount();
-		initial_line.max_column_name_length = initial_table.max_column_name_length;
-		initial_line.max_column_type_length = initial_table.max_column_type_length;
+		initial_line.max_component_widths = initial_table.max_component_widths;
 		metadata_display.display_lines.push_back(std::move(initial_line));
 
 		// now for each table, check if we can co-locate it
@@ -407,17 +451,20 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 				}
 				// adding the table here works out height wise - we could potentially add it here
 				// however, we do need to "stretch" the line to fit the current unit
-				idx_t max_col_name_width = existing_line.max_column_name_length;
-				idx_t max_col_type_width = existing_line.max_column_type_length;
-				if (current_table.max_column_name_length > max_col_name_width) {
-					max_col_name_width = current_table.max_column_name_length;
+				// get the maximum render width
+				vector<idx_t> new_max_component_widths;
+				for (idx_t component_idx = 0; component_idx < existing_line.max_component_widths.size();
+				     component_idx++) {
+					new_max_component_widths.push_back(
+					    duckdb::MaxValue<idx_t>(existing_line.max_component_widths[component_idx],
+					                            current_table.max_component_widths[component_idx]));
 				}
-				if (current_table.max_column_type_length > max_col_type_width) {
-					max_col_type_width = current_table.max_column_type_length;
+				idx_t new_column_render_width = 3;
+				for (auto &component_width : new_max_component_widths) {
+					new_column_render_width += component_width + 1;
 				}
 				idx_t new_rendering_width = duckdb::MaxValue<idx_t>(render_width, existing_line.render_width);
-				new_rendering_width =
-				    duckdb::MaxValue<idx_t>(new_rendering_width, max_col_name_width + max_col_type_width + 5);
+				new_rendering_width = duckdb::MaxValue<idx_t>(new_rendering_width, new_column_render_width);
 
 				D_ASSERT(new_rendering_width >= existing_line.render_width);
 				idx_t extra_width = new_rendering_width - existing_line.render_width;
@@ -427,8 +474,7 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 					continue;
 				}
 				// we can add it here! extend the line and add the table
-				existing_line.max_column_name_length = max_col_name_width;
-				existing_line.max_column_type_length = max_col_type_width;
+				existing_line.max_component_widths = std::move(new_max_component_widths);
 				existing_line.render_width += extra_width;
 				existing_line.render_height += render_height;
 				existing_line.tables.push_back(next_idx);
@@ -444,8 +490,7 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 					new_line.tables.push_back(next_idx);
 					new_line.render_width = render_width;
 					new_line.render_height = render_height;
-					new_line.max_column_name_length = current_table.max_column_name_length;
-					new_line.max_column_type_length = current_table.max_column_type_length;
+					new_line.max_component_widths = current_table.max_component_widths;
 					metadata_display.render_width += render_width;
 					metadata_display.display_lines.push_back(std::move(new_line));
 					added = true;
