@@ -76,6 +76,18 @@ public:
 		return buffer_ptr + offset;
 	}
 
+	//! Checks if a segment has been loaded into memory.
+	inline bool IsLoaded(const IndexPointer ptr) const {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+
+		auto buffer_it = buffers.find(ptr.GetBufferId());
+		if (buffer_it == buffers.end()) {
+			return false;
+		}
+
+		return buffer_it->second->InMemory();
+	}
+
 	//! Returns a pointer of type T to a segment, or nullptr, if the buffer is not in memory.
 	//! DEPRECATED. Use segment handles.
 	template <class T>
