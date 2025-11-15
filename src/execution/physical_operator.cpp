@@ -125,12 +125,6 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 // LCOV_EXCL_START
 SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSourceInput &input) const {
-#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-	// 75% of cases just return empty chunk + HAVE_MORE_OUTPUT, just to check how the system behave
-	if (rand() % 4) {
-		return SourceResultType::HAVE_MORE_OUTPUT;
-	}
-#endif
 	return GetDataInternal(context, chunk, input);
 }
 
