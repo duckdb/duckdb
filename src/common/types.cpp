@@ -811,6 +811,7 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::VARIANT:
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &child_types = StructType::GetChildTypes(*this);

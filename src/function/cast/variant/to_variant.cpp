@@ -10,7 +10,7 @@
 namespace duckdb {
 namespace variant {
 
-static void InitializeOffsets(DataChunk &offsets, idx_t count) {
+void InitializeOffsets(DataChunk &offsets, idx_t count) {
 	auto keys = OffsetData::GetKeys(offsets);
 	auto children = OffsetData::GetChildren(offsets);
 	auto values = OffsetData::GetValues(offsets);

@@ -288,7 +288,7 @@ public:
 	}
 
 	PersistentColumnData ToPersistentData() override {
-		PersistentColumnData data(PhysicalType::ARRAY);
+		PersistentColumnData data(column_data.type);
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		data.child_columns.push_back(child_state->ToPersistentData());
 		return data;
@@ -318,7 +318,7 @@ bool ArrayColumnData::HasAnyChanges() const {
 }
 
 PersistentColumnData ArrayColumnData::Serialize() {
-	PersistentColumnData persistent_data(PhysicalType::ARRAY);
+	PersistentColumnData persistent_data(type);
 	persistent_data.child_columns.push_back(validity.Serialize());
 	persistent_data.child_columns.push_back(child_column->Serialize());
 	return persistent_data;

@@ -127,6 +127,9 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	if (source_type.id() == LogicalTypeId::DOUBLE || target_type.id() == LogicalTypeId::DOUBLE) {
 		return false;
 	}
+	if (source_type.id() == LogicalTypeId::VARIANT || target_type.id() == LogicalTypeId::VARIANT) {
+		return false;
+	}
 	if (source_type.id() == LogicalTypeId::DECIMAL || target_type.id() == LogicalTypeId::DECIMAL) {
 		uint8_t source_width, target_width;
 		uint8_t source_scale, target_scale;

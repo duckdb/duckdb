@@ -19,9 +19,6 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	if (type.id() != LogicalTypeId::UNION && StructType::IsUnnamed(type)) {
 		throw InvalidInputException("A table cannot be created from an unnamed struct");
 	}
-	if (type.id() == LogicalTypeId::VARIANT) {
-		throw NotImplementedException("A table cannot be created from a VARIANT column yet");
-	}
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
 	for (auto &child_type : child_types) {
@@ -299,7 +296,7 @@ public:
 	}
 
 	PersistentColumnData ToPersistentData() override {
-		PersistentColumnData data(PhysicalType::STRUCT);
+		PersistentColumnData data(column_data.type);
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		for (auto &child_state : child_states) {
 			data.child_columns.push_back(child_state->ToPersistentData());
@@ -349,7 +346,7 @@ bool StructColumnData::HasAnyChanges() const {
 }
 
 PersistentColumnData StructColumnData::Serialize() {
-	PersistentColumnData persistent_data(PhysicalType::STRUCT);
+	PersistentColumnData persistent_data(type);
 	persistent_data.child_columns.push_back(validity.Serialize());
 	for (auto &sub_column : sub_columns) {
 		persistent_data.child_columns.push_back(sub_column->Serialize());
