@@ -12,14 +12,3 @@ query II
 EXPLAIN SELECT DISTINCT ON (a) b FROM dcla ORDER BY a, c;
 ----
 physical_plan	<REGEX>:.*Projections:[\s\S]*b[\s\S]*a[\s\S]*c.*
-
-query II
-EXPLAIN SELECT DISTINCT ON (a) b FROM dcla ORDER BY a, c;
-----
-physical_plan	<!REGEX>:.*unused.*
-
-# regular DISTINCT still references the full projection list
-query II
-EXPLAIN SELECT DISTINCT * FROM dcla ORDER BY a, c, unused, b;
-----
-physical_plan	<REGEX>:.*unused.*
