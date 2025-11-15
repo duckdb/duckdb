@@ -726,6 +726,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"strpos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"struct_insert", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"struct_update", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"struct_keys", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"sum", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sum_no_overflow", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sumkahan", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
