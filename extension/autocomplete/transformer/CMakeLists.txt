@@ -3,14 +3,18 @@ add_library_unity(
   OBJECT
   peg_transformer.cpp
   peg_transformer_factory.cpp
+  transform_alter.cpp
   transform_attach.cpp
   transform_call.cpp
   transform_checkpoint.cpp
+  transform_comment.cpp
   transform_common.cpp
+  transform_create_sequence.cpp
   transform_create_table.cpp
   transform_deallocate.cpp
   transform_delete.cpp
   transform_detach.cpp
+  transform_drop.cpp
   transform_expression.cpp
   transform_insert.cpp
   transform_load.cpp

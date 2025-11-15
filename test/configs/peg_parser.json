@@ -17,7 +17,7 @@
       ]
     },
     {
-      "reason": "Quatations",
+      "reason": "Quotations",
       "paths": [
         "test/sql/pragma/test_show_tables_from.test",
         "test/sql/attach/attach_dbname_quotes.test"

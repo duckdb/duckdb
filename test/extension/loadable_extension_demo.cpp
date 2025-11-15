@@ -250,8 +250,8 @@ public:
 				select_statement->node = std::move(select_node);
 				statements.push_back(std::move(select_statement));
 			}
-			if (StringUtil::CIEquals(query_input, "over")) {
-				auto exception = ParserException("Parser overridden, query equaled \"over\" but not \"override\"");
+			if (StringUtil::CIEquals(query_input, "overri")) {
+				auto exception = ParserException("Parser overridden, query equaled \"overri\" but not \"override\"");
 				return ParserOverrideResult(exception);
 			}
 		}
