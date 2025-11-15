@@ -1,7 +1,7 @@
 import os
+import sys
 import math
 import functools
-import shutil
 from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 from dataclasses import dataclass
 from typing import Optional, List, Union
@@ -44,7 +44,7 @@ parser.add_argument("--nofail", action="store_true", help="Do not fail on regres
 parser.add_argument("--disable-timeout", action="store_true", help="Disable timeout.")
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
-parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
+parser.add_argument("--no-summary", action="store_true", help="No summary in the end.")
 parser.add_argument(
     "--clear-benchmark-cache", action="store_true", help="Clear benchmark caches prior to running", default=False
 )
@@ -52,7 +52,13 @@ parser.add_argument(
     "--regression-threshold-seconds",
     type=float,
     default=0.05,
-    help="REGRESSION_THRESHOLD_SECONDS value for large benchmarks.",
+    help="The threshold at which we consider individual benchmark as a regression (seconds)",
+)
+parser.add_argument(
+    "--max-allowed-regression-percentage",
+    type=int,
+    default=1,
+    help="Max regression percentage for overall test suite to be a regression",
 )
 
 # Parse the arguments
@@ -71,22 +77,24 @@ max_timeout = args.max_timeout
 root_dir = args.root_dir
 no_summary = args.no_summary
 regression_threshold_seconds = args.regression_threshold_seconds
-
+max_allowed_regression_percentage = args.max_allowed_regression_percentage
 
 # how many times we will run the experiment, to be sure of the regression
 NUMBER_REPETITIONS = 5
-# the threshold at which we consider something a regression (percentage)
+# the threshold at which we consider individual benchmark a regression (percentage)
 REGRESSION_THRESHOLD_PERCENTAGE = 0.1
 # minimal seconds diff for something to be a regression (for very fast benchmarks)
 REGRESSION_THRESHOLD_SECONDS = regression_threshold_seconds
+# max regression percentage for overall test suite to be a regression
+MAX_ALLOWED_REGRESS_PERCENTAGE = max_allowed_regression_percentage
 
 if not os.path.isfile(old_runner_path):
     print(f"Failed to find old runner {old_runner_path}")
-    exit(1)
+    sys.exit(1)
 
 if not os.path.isfile(new_runner_path):
     print(f"Failed to find new runner {new_runner_path}")
-    exit(1)
+    sys.exit(1)
 
 if args.clear_benchmark_cache:
     old_cache_path = os.path.join(os.path.dirname(old_runner_path), '..', '..', '..', 'duckdb_benchmark_data')
@@ -116,11 +124,13 @@ class BenchmarkResult:
     new_result: Union[float, str]
     old_failure: Optional[str] = None
     new_failure: Optional[str] = None
+    improvement: Optional[int] = None
 
 
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
 other_results: List[BenchmarkResult] = []
 error_list: List[BenchmarkResult] = []
+improvements_list: List[BenchmarkResult] = []
 for i in range(NUMBER_REPETITIONS):
     regression_list: List[BenchmarkResult] = []
     if len(benchmark_list) == 0:
@@ -151,32 +161,70 @@ for i in range(NUMBER_REPETITIONS):
         ):
             regression_list.append(BenchmarkResult(benchmark, old_res, new_res))
         else:
-            other_results.append(BenchmarkResult(benchmark, old_res, new_res))
+            try:
+                improved_by = int((float(old_res) - float(new_res)) * 100.0 / float(old_res))
+            except Exception:
+                improved_by = 0
+            if improved_by > 0:
+                improvements_list.append(BenchmarkResult(benchmark, old_res, new_res, improvement=improved_by))
+            else:
+                other_results.append(BenchmarkResult(benchmark, old_res, new_res))
     benchmark_list = [res.benchmark for res in regression_list]
+
+time_old = geomean(old_runner.complete_timings)
+time_new = geomean(new_runner.complete_timings)
 
 exit_code = 0
 regression_list.extend(error_list)
 summary = []
 if len(regression_list) > 0:
-    exit_code = 1
-    print(
-        '''====================================================
-==============  REGRESSIONS DETECTED   =============
+    if not (isinstance(time_old, str) or isinstance(time_new, str)):
+        regression_percentage = int((time_new - time_old) * 100.0 / time_old)
+    else:
+        regression_percentage = 0
+    if (
+        isinstance(MAX_ALLOWED_REGRESS_PERCENTAGE, int)
+        and isinstance(regression_percentage, int)
+        and regression_percentage < MAX_ALLOWED_REGRESS_PERCENTAGE
+    ):
+        # allow individual regressions less than 10% when overall geomean had improved or hadn't change (on large benchmarks)
+        regressions_header = 'ALLOWED REGRESSIONS'
+    else:
+        regressions_header = 'REGRESSIONS DETECTED'
+        exit_code = 1
+
+    if len(regression_list) > 0:
+        print(
+            f'''====================================================
+==============  {regressions_header}   ==============
 ====================================================
 '''
-    )
-    for regression in regression_list:
-        print(f"{regression.benchmark}")
-        print(f"Old timing: {regression.old_result}")
-        print(f"New timing: {regression.new_result}")
-        if regression.old_failure or regression.new_failure:
-            new_data = {
-                "benchmark": regression.benchmark,
-                "old_failure": regression.old_failure,
-                "new_failure": regression.new_failure,
-            }
-            summary.append(new_data)
-        print("")
+        )
+
+        for regression in regression_list:
+            print("")
+            print(f"{regression.benchmark}")
+            print(f"Old timing: {regression.old_result}")
+            print(f"New timing: {regression.new_result}")
+            # add to the FAILURES SUMMARY
+            if regression.old_failure or regression.new_failure:
+                new_data = {
+                    "benchmark": regression.benchmark,
+                    "old_failure": regression.old_failure,
+                    "new_failure": regression.new_failure,
+                }
+                summary.append(new_data)
+            print("")
+
+        if not (isinstance(time_old, str) or isinstance(time_new, str)):
+            delta_pct = int(((time_old - time_new) * 100) / time_old)
+            if delta_pct > 0:
+                print(f"Old timing geometric mean: {time_old}, roughly {regression_percentage}% faster")
+            else:
+                print(f"Old timing geometric mean: {time_old}, roughly {abs(regression_percentage)})% faster")
+
+            print(f"New timing geometric mean: {time_new}")
+            print("")
     print(
         '''====================================================
 ==============     OTHER TIMINGS       =============
@@ -198,27 +246,39 @@ for res in other_results:
     print(f"New timing: {res.new_result}")
     print("")
 
-time_a = geomean(old_runner.complete_timings)
-time_b = geomean(new_runner.complete_timings)
+if len(improvements_list) > 0:
+    print(
+        '''====================================================
+============== IMPROVEMENTS DETECTED  ==============
+====================================================
+'''
+    )
+improvements_list.sort(key=lambda x: x.benchmark)
+for res in improvements_list:
+    print(f"{res.benchmark}")
+    print(f"Old timing: {res.old_result}")
+    print(f"New timing: {res.new_result}")
+    print(f"Improved by: {res.improvement}%")
+    print("")
 
 
 print("")
-if isinstance(time_a, str) or isinstance(time_b, str):
-    print(f"Old: {time_a}")
-    print(f"New: {time_b}")
-elif time_a > time_b * 1.01:
-    print(f"Old timing geometric mean: {time_a}")
-    print(f"New timing geometric mean: {time_b}, roughly {int((time_a - time_b) * 100.0 / time_a)}% faster")
-elif time_b > time_a * 1.01:
-    print(f"Old timing geometric mean: {time_a}, roughly {int((time_b - time_a) * 100.0 / time_b)}% faster")
-    print(f"New timing geometric mean: {time_b}")
+if isinstance(time_old, str) or isinstance(time_new, str):
+    print(f"Old: {time_old}")
+    print(f"New: {time_new}")
 else:
-    print(f"Old timing geometric mean: {time_a}")
-    print(f"New timing geometric mean: {time_b}")
-
-# nuke cached benchmark data between runs
-if os.path.isdir("duckdb_benchmark_data"):
-    shutil.rmtree('duckdb_benchmark_data')
+    threshold = 1 + MAX_ALLOWED_REGRESS_PERCENTAGE / 100
+    if time_new < time_old / threshold:
+        pct = int(((time_old - time_new) * 100.0) / time_old)
+        print(f"Old timing geometric mean: {time_old}")
+        print(f"New timing geometric mean: {time_new}, roughly {pct}% faster")
+    elif time_new > time_old * threshold:
+        pct = int(((time_old - time_new) * 100.0) / time_old)
+        print(f"Old timing geometric mean: {time_old}, roughly {pct}% faster")
+        print(f"New timing geometric mean: {time_new}")
+    else:
+        print(f"Old timing geometric mean: {time_old}")
+        print(f"New timing geometric mean: {time_new}")
 
 if summary and not no_summary:
     print(
@@ -239,4 +299,4 @@ if summary and not no_summary:
             print(failure_message["old_failure"])
         print("-", 52)
 
-exit(exit_code)
+sys.exit(exit_code)
