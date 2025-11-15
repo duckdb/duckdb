@@ -1,10 +1,12 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 namespace duckdb {
 
@@ -111,8 +113,15 @@ void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool 
 	filters_valid_values = false;
 
 	switch (filter.filter_type) {
-	case TableFilterType::OPTIONAL_FILTER:
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &opt_filter = filter.Cast<OptionalFilter>();
+		const auto sel_opt_state = opt_filter.ExecuteChildFilter(filter_state);
+		if (sel_opt_state) {
+			return FiltersNullValues(type, *opt_filter.child_filter, filters_nulls, filters_valid_values,
+			                         *sel_opt_state->child_state);
+		}
 		break;
+	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
 		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
@@ -158,6 +167,11 @@ void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool 
 		Value val(type);
 		filters_nulls = expr_filter.EvaluateWithConstant(state.executor, val);
 		filters_valid_values = false;
+		break;
+	}
+	case TableFilterType::BLOOM_FILTER: {
+		auto &bf = filter.Cast<BFTableFilter>();
+		filters_nulls = bf.FiltersNullValues();
 		break;
 	}
 	default:

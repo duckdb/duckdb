@@ -866,6 +866,10 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		return expr_filter.EvaluateWithConstant(context, constant);
 	}
+	case TableFilterType::BLOOM_FILTER: {
+		auto &bloom_filter = filter.Cast<BFTableFilter>();
+		return bloom_filter.FilterValue(constant);
+	}
 	default:
 		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",
 		                              EnumUtil::ToString(type));

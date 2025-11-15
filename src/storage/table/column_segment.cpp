@@ -14,7 +14,9 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 #include <cstring>
 
@@ -408,6 +410,15 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
                                      idx_t &approved_tuple_count) {
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER: {
+		auto &opt_filter = filter.Cast<OptionalFilter>();
+		auto sel_optional_state = opt_filter.ExecuteChildFilter(filter_state);
+		if (sel_optional_state) {
+			idx_t approved_before = approved_tuple_count;
+			FilterSelection(sel, vector, vdata, *opt_filter.child_filter, *sel_optional_state->child_state, scan_count,
+			                approved_tuple_count);
+			sel_optional_state->stats.Update(approved_tuple_count, approved_before);
+			return approved_tuple_count;
+		}
 		return scan_count;
 	}
 	case TableFilterType::CONJUNCTION_OR: {
@@ -554,6 +565,11 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		child_vec->ToUnifiedFormat(scan_count, child_data);
 		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
 		                       approved_tuple_count);
+	}
+	case TableFilterType::BLOOM_FILTER: {
+		auto &bloom_filter = filter.Cast<BFTableFilter>();
+		auto &state = filter_state.Cast<BFTableFilterState>();
+		return bloom_filter.Filter(vector, sel, approved_tuple_count, state);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();
