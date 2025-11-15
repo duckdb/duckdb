@@ -2929,6 +2929,16 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &result) {
 
 		if (table.render_width.GetIndex() > max_render_width) {
 			// we exceeded the render width - we need to truncate
+			if (table.table_name_length.GetIndex() > max_render_width - 4) {
+				// need to truncate table name
+				idx_t pos = 0;
+				idx_t render_width = 0;
+				table.table_name =
+					duckdb::BoxRenderer::TruncateValue(
+						table.table_name, max_render_width - 4 - config.DOTDOTDOT_LENGTH, pos, render_width) +
+					config.DOTDOTDOT;
+				table.table_name_length = render_width + config.DOTDOTDOT_LENGTH;
+			}
 			// figure out what we need to truncate
 			idx_t total_column_length =
 			    table.max_column_name_length.GetIndex() + table.max_column_type_length.GetIndex() + 5;
@@ -2937,7 +2947,7 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &result) {
 				// prefer to keep the name as long as possible - only truncate it if it by itself almost exceeds the
 				// width
 				if (table.max_column_name_length.GetIndex() + 10 > max_render_width) {
-					table.max_column_name_length = table.max_column_name_length.GetIndex() - 10;
+					table.max_column_name_length = max_render_width - 10;
 				}
 				total_column_length =
 				    table.max_column_name_length.GetIndex() + table.max_column_type_length.GetIndex() + 5;
