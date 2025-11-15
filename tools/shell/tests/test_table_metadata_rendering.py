@@ -70,3 +70,31 @@ def test_long_type_and_column_name(shell):
 
     result = test.run()
     result.check_stdout("…")
+
+def test_table_rendering_db(shell):
+    test = (
+        ShellTest(shell)
+        .statement('create schema s1')
+        .statement("attach ':memory:' as mydb")
+        .statement('create schema mydb.s2')
+        .statement('create table s1.my_tbl(i integer)')
+        .statement('create table mydb.s2.other_tbl(i integer)')
+        .statement('.tables')
+    )
+
+    result = test.run()
+    result.check_stdout("s1.my_tbl")
+    result.check_stdout("mydb.s2.other_tbl")
+
+def test_search_path_influences_table_name(shell):
+    test = (
+        ShellTest(shell)
+        .statement("attach ':memory:' as mydb")
+        .statement('create schema mydb.s2')
+        .statement('create table mydb.s2.other_tbl(i integer)')
+        .statement('use mydb.s2')
+        .statement('.tables')
+    )
+
+    result = test.run()
+    result.check_not_exist("s2.other_tbl")

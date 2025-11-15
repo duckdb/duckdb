@@ -2758,8 +2758,10 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 	}
 	auto query = StringUtil::Format(R"(
 SELECT columns.database_name, columns.schema_name, columns.table_name, list(
-	struct_pack(column_name, data_type,
-	is_primary_key := c.column_index IS NOT NULL) order by column_index), t.estimated_size AS estimated_size, t.table_oid AS table_oid
+	struct_pack(column_name, data_type, is_primary_key := c.column_index IS NOT NULL) order by column_index),
+	in_search_path(columns.database_name, columns.schema_name) in_search_path,
+	columns.database_name == current_database() is_current_db,
+	t.estimated_size AS estimated_size, t.table_oid AS table_oid,
 FROM duckdb_columns() columns
 LEFT JOIN duckdb_tables() t USING (table_oid)
 LEFT JOIN (
@@ -2781,12 +2783,9 @@ GROUP BY ALL;
 	vector<ShellTableInfo> result;
 	for (auto &row : *query_result) {
 		ShellTableInfo table;
-		table.database_name = row.GetValue<string>(0);
-		table.schema_name = row.GetValue<string>(1);
+		string database_name = row.GetValue<string>(0);
+		string schema_name = row.GetValue<string>(1);
 		table.table_name = row.GetValue<string>(2);
-		if (table.schema_name != DEFAULT_SCHEMA) {
-			table.table_name = table.schema_name + "." + table.table_name;
-		}
 
 		auto column_val = row.GetBaseValue(3);
 		for (auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
@@ -2797,10 +2796,21 @@ GROUP BY ALL;
 			column.is_primary_key = struct_children[2].GetValue<bool>();
 			table.columns.push_back(std::move(column));
 		}
-		if (!row.IsNull(4)) {
-			table.estimated_size = row.GetValue<idx_t>(4);
+		auto in_search_path = row.GetValue<bool>(4);
+		auto is_current_db = row.GetValue<bool>(5);
+		if (!in_search_path) {
+			// not in search path
+			if (is_current_db) {
+				table.table_name = schema_name + "." + table.table_name;
+			} else {
+				table.table_name = database_name + "." + schema_name + "." + table.table_name;
+			}
 		}
-		if (row.IsNull(5)) {
+
+		if (!row.IsNull(5)) {
+			table.estimated_size = row.GetValue<idx_t>(5);
+		}
+		if (row.IsNull(6)) {
 			// view
 			table.is_view = true;
 		}
