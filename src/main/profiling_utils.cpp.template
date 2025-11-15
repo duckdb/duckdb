@@ -1,0 +1,45 @@
+// !!!!!!!
+// WARNING: this file is used for function generation by scripts/generate_metric_enums.py after modifying the code below, rerun
+//          the script to apply changes to the generated files
+// !!!!!!!
+
+// DUCKDB_START_OF_FILE
+
+static string OperatorToString(const Value &val) {
+    const auto type = static_cast<PhysicalOperatorType>(val.GetValue<uint8_t>());
+    return EnumUtil::ToString(type);
+}
+
+template <class METRIC_TYPE>
+static void AggregateMetric(ProfilingNode &node, MetricType aggregated_metric, MetricType child_metric, const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
+	auto &info = node.GetProfilingInfo();
+	info.metrics[aggregated_metric] = info.metrics[child_metric];
+
+	for (idx_t i = 0; i < node.GetChildCount(); i++) {
+		auto child = node.GetChild(i);
+		AggregateMetric<METRIC_TYPE>(*child, aggregated_metric, child_metric, update_fun);
+
+		auto &child_info = child->GetProfilingInfo();
+		auto value = child_info.GetMetricValue<METRIC_TYPE>(aggregated_metric);
+		info.MetricUpdate<METRIC_TYPE>(aggregated_metric, value, update_fun);
+	}
+}
+
+template <class METRIC_TYPE>
+static void GetCumulativeMetric(ProfilingNode &node, MetricType cumulative_metric, MetricType child_metric) {
+	AggregateMetric<METRIC_TYPE>(
+	    node, cumulative_metric, child_metric,
+	    [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) { return old_value + new_value; });
+}
+
+static Value GetCumulativeOptimizers(ProfilingNode &node) {
+	auto &metrics = node.GetProfilingInfo().metrics;
+	double count = 0;
+	for (auto &metric : metrics) {
+		if (MetricsUtils::IsOptimizerMetric(metric.first)) {
+			count += metric.second.GetValue<double>();
+		}
+	}
+	return Value::CreateValue(count);
+}
+

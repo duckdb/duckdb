@@ -695,7 +695,7 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_READ, nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -715,7 +715,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_READ, nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -723,7 +723,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricsType::TOTAL_BYTES_WRITTEN, nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
 	}
 
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
