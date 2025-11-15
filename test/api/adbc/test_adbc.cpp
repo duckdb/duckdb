@@ -803,7 +803,8 @@ TEST_CASE("Test ADBC Statement with Zero Parameters", "[adbc]") {
 	{
 		AdbcStatement adbc_statement;
 		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "CREATE TABLE test_zero_params (id INTEGER)", &adbc_error)));
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetSqlQuery(&adbc_statement, "CREATE TABLE test_zero_params (id INTEGER)", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
 
 		// Get parameter schema - should have 0 children
