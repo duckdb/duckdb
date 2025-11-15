@@ -787,9 +787,6 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto count = prepared_wrapper->statement->data->properties.parameter_count;
-	if (count == 0) {
-		count = 1;
-	}
 	std::vector<duckdb_logical_type> types(count);
 	std::vector<std::string> owned_names;
 	owned_names.reserve(count);
@@ -860,7 +857,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		return IngestToTableFromBoundStream(wrapper, error);
 	}
 	auto stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
-	if (has_stream) {
+	// Only process the stream if there are parameters to bind
+	auto prepared_statement_params = reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)
+	                                     ->statement->data->properties.parameter_count;
+	if (has_stream && prepared_statement_params > 0) {
 		// A stream was bound to the statement, use that to bind parameters
 		ArrowArrayStream stream = wrapper->ingestion_stream;
 		ConvertedSchemaWrapper out_types;
@@ -877,8 +877,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			free(stream_wrapper);
 			return ADBC_STATUS_INTERNAL;
 		}
-		auto prepared_statement_params =
-		    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->named_param_map.size();
 
 		duckdb::ArrowArrayWrapper arrow_array_wrapper;
 
