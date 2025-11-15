@@ -574,7 +574,7 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	string last_displayed_database;
 	for (auto &metadata_display : metadata_displays) {
 		// check if we should render the database and/or schema name for this batch of tables
-		if (metadata_display.database_name.empty() || metadata_display.schema_name.empty()) {
+		if (!metadata_display.database_name.empty() || !metadata_display.schema_name.empty()) {
 			string display = metadata_display.database_name;
 			if (!metadata_display.schema_name.empty()) {
 				if (!display.empty()) {

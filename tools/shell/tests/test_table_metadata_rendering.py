@@ -83,8 +83,8 @@ def test_table_rendering_db(shell):
     )
 
     result = test.run()
-    result.check_stdout("s1.my_tbl")
-    result.check_stdout("mydb.s2.other_tbl")
+    result.check_stdout("s1")
+    result.check_stdout("mydb.s2")
 
 def test_search_path_influences_table_name(shell):
     test = (
@@ -97,4 +97,4 @@ def test_search_path_influences_table_name(shell):
     )
 
     result = test.run()
-    result.check_not_exist("s2.other_tbl")
+    result.check_not_exist("mydb.s2")
