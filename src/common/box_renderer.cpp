@@ -1124,6 +1124,9 @@ protected:
 				return;
 			}
 			AddNewline(format_state);
+			if (format_state.format_result != JSONFormattingResult::SUCCESS) {
+				return;
+			}
 		}
 		result += text;
 		line_length += render_width;
