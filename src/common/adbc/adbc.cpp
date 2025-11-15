@@ -548,7 +548,7 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 
 	auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
 
-	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names.data(), count, out);
+	auto res = duckdb_to_arrow_schema(arrow_options, types.data(), names.data(), count, out);
 	duckdb_destroy_arrow_options(&arrow_options);
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
@@ -805,7 +805,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	duckdb_arrow_options arrow_options;
 	duckdb_connection_get_arrow_options(wrapper->connection, &arrow_options);
 
-	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names.data(), count, schema);
+	auto res = duckdb_to_arrow_schema(arrow_options, types.data(), names.data(), count, schema);
 
 	for (auto &type : types) {
 		duckdb_destroy_logical_type(&type);
