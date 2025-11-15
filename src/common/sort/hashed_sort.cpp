@@ -65,6 +65,7 @@ public:
 	ProgressData GetSinkProgress(ClientContext &context, const ProgressData source_progress) const;
 
 	//! System and query state
+	ClientContext &client;
 	const HashedSort &hashed_sort;
 	BufferManager &buffer_manager;
 	Allocator &allocator;
@@ -91,7 +92,7 @@ private:
 };
 
 HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort)
-    : hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
+    : client(client), hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
       allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
 	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
@@ -107,7 +108,7 @@ HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, cons
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
 			grouping_types_ptr->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-			auto new_group = make_uniq<HashedSortGroup>(hashed_sort.client, *hashed_sort.sort, idx_t(0));
+			auto new_group = make_uniq<HashedSortGroup>(client, *hashed_sort.sort, idx_t(0));
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
@@ -156,7 +157,7 @@ void HashedSortGlobalSinkState::SyncLocalPartition(GroupingPartition &local_part
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
-	local_partition->Repartition(hashed_sort.client, *new_partition);
+	local_partition->Repartition(client, *new_partition);
 
 	local_partition = std::move(new_partition);
 	local_append = make_uniq<PartitionedTupleDataAppendState>();
@@ -219,7 +220,7 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 
 		auto &group_data = groups[group_idx];
 		if (group_data->Count()) {
-			hash_group = make_uniq<HashedSortGroup>(hashed_sort.client, *hashed_sort.sort, group_idx);
+			hash_group = make_uniq<HashedSortGroup>(client, *hashed_sort.sort, group_idx);
 		}
 	}
 
@@ -571,7 +572,7 @@ void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, Oper
 		if (hash_group.count == partition.Count() && !hash_group.sort_source) {
 			OperatorSinkFinalizeInput lfinalize {*hash_group.sort_global, finalize.interrupt_state};
 			sort->Finalize(context.client, lfinalize);
-			hash_group.sort_source = sort->GetGlobalSourceState(client, *hash_group.sort_global);
+			hash_group.sort_source = sort->GetGlobalSourceState(context.client, *hash_group.sort_global);
 		}
 	}
 }
@@ -674,7 +675,7 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
                        const vector<BoundOrderByNode> &order_bys, const Types &input_types,
                        const vector<unique_ptr<BaseStatistics>> &partition_stats, idx_t estimated_cardinality,
                        bool require_payload)
-    : client(client), estimated_cardinality(estimated_cardinality), payload_types(input_types) {
+    : SortStrategy(input_types), estimated_cardinality(estimated_cardinality) {
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	// The payload prefix is the same as the input schema
@@ -726,13 +727,8 @@ unique_ptr<LocalSinkState> HashedSort::GetLocalSinkState(ExecutionContext &conte
 	return make_uniq<HashedSortLocalSinkState>(context, *this);
 }
 
-unique_ptr<GlobalSourceState> HashedSort::GetGlobalSourceState(ClientContext &context, GlobalSinkState &sink) const {
+unique_ptr<GlobalSourceState> HashedSort::GetGlobalSourceState(ClientContext &client, GlobalSinkState &sink) const {
 	return make_uniq<HashedSortGlobalSourceState>(client, sink.Cast<HashedSortGlobalSinkState>());
-}
-
-unique_ptr<LocalSourceState> HashedSort::GetLocalSourceState(ExecutionContext &context,
-                                                             GlobalSourceState &gstate) const {
-	return make_uniq<LocalSourceState>();
 }
 
 const HashedSort::ChunkRows &HashedSort::GetHashGroups(GlobalSourceState &gstate) const {
