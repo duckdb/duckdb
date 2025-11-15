@@ -127,6 +127,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
 	case StatementType::MERGE_INTO_STATEMENT:
 		return BindWithCTE(statement.Cast<MergeIntoStatement>());
+	case StatementType::CLUSTER_STATEMENT:
+		return Bind(statement.Cast<ClusterStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));

@@ -69,6 +69,8 @@ string StatementTypeToString(StatementType type) {
 		return "MERGE_INTO";
 	case StatementType::INVALID_STATEMENT:
 		break;
+	case StatementType::CLUSTER_STATEMENT:
+		return "CLUSTER";
 	}
 	return "INVALID";
 }
