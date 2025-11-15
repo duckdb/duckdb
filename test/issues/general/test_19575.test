@@ -29,8 +29,18 @@ explain select * from aaa where name like concat(chr('0xD7FF'),'%');
 ----
 physical_plan	<!REGEX>:.*Filters.*prefix.*
 
+query I
+select count(*) from aaa where name like concat(chr('0xD7FF'),'%');
+----
+1
+
 # (0x10FFFF + 1) would be illegal utf8
 query II
 explain select * from aaa where name like concat(chr('0x10FFFF'),'%');
 ----
 physical_plan	<REGEX>:.*Filters.*prefix.*
+
+query I
+select count(*) from aaa where name like concat(chr('0x10FFFF'),'%');
+----
+1

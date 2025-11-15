@@ -427,11 +427,11 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix_string));
 	table_filters.PushFilter(column_index, std::move(lower_bound));
 	if (FilterCombiner::FindNextLegalUTF8(prefix_string)) {
-		// could not find next legal utf8 string - skip upper bound
 		auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
 		table_filters.PushFilter(column_index, std::move(upper_bound));
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
+	// could not find next legal utf8 string - skip upper bound
 	return FilterPushdownResult::NO_PUSHDOWN;
 }
 
