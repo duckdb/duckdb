@@ -1966,12 +1966,24 @@ bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
 	}
 	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
 		// in automatic mode we only use a pager when the output is large enough
-		if (mode == RenderMode::DUCKBOX) {
+		if (cMode == RenderMode::DUCKBOX) {
 			// in duckbox mode the output is automatically truncated to "max_rows"
 			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
 			if (max_rows < pager_min_rows) {
 				return false;
 			}
+		}
+		if (cMode == RenderMode::EXPLAIN) {
+			auto &materialized = result.Cast<MaterializedQueryResult>();
+			idx_t row_count = 0;
+			for (auto &row : materialized.Collection().Rows()) {
+				for (auto c : row.GetValue(1).GetValue<string>()) {
+					if (c == '\n') {
+						row_count++;
+					}
+				}
+			}
+			return row_count >= pager_min_rows;
 		}
 		// otherwise we check the size of the result set
 		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
