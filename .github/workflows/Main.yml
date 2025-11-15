@@ -373,9 +373,9 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Install Ninja
+    - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -390,12 +390,6 @@ jobs:
         CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;autocomplete"
         GEN: ninja
       run: make
-
-    - name: test/configs/encryption.json
-      if: (success() || failure()) && steps.build.conclusion == 'success'
-      shell: bash
-      run: |
-        ./build/release/test/unittest --test-config test/configs/encryption.json
 
     - name: test/configs/force_storage.json
       if: (success() || failure()) && steps.build.conclusion == 'success'
@@ -540,3 +534,21 @@ jobs:
       shell: bash
       run: |
         python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2" --new-unittest build/release/test/unittest
+
+    # TODO: clean this up: we should probably be able to run this whole test suite with httpfs
+    # We want to run the remainder of tests with httpfs
+    - name: Build with httpfs extension
+      id: build-httpfs
+      shell: bash
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      env:
+        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;httpfs"
+        GEN: ninja
+      run:
+        make
+
+    - name: test/configs/encryption.json
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/encryption.json

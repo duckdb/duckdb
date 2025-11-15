@@ -514,12 +514,18 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Va
 	return db_config.TryGetCurrentSetting(key, result);
 }
 
-shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {
+shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() {
+	if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+		ExtensionHelper::TryAutoLoadExtension(*this, "httpfs");
+	}
+
 	if (config.encryption_util) {
 		return config.encryption_util;
 	}
 
-	return make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	auto result = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+
+	return std::move(result);
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {
