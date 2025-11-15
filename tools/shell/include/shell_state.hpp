@@ -130,6 +130,21 @@ struct MetadataCommand {
 	const char *extra_description;
 };
 
+struct ShellColumnInfo {
+	string column_name;
+	string column_type;
+	bool is_primary_key = false;
+};
+
+struct ShellTableInfo {
+	string database_name;
+	string schema_name;
+	string table_name;
+	optional_idx estimated_size;
+	bool is_view = false;
+	vector<ShellColumnInfo> columns;
+};
+
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -311,6 +326,7 @@ public:
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
 	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
 	SuccessState RenderDescribe(duckdb::QueryResult &res);
+	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
 	void PrintDatabaseError(const string &zErr);
@@ -410,6 +426,20 @@ private:
 
 private:
 	string describe_table_name;
+};
+
+struct PagerState {
+	explicit PagerState(ShellState &state) : state(state) {
+	}
+	~PagerState() {
+		if (state) {
+			state->ResetOutput();
+			ShellState::FinishPagerDisplay();
+			state = nullptr;
+		}
+	}
+
+	optional_ptr<ShellState> state;
 };
 
 } // namespace duckdb_shell
