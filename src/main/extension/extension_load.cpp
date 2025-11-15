@@ -81,14 +81,14 @@ struct ExtensionAccess {
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
-	static duckdb_database *GetDatabase(duckdb_extension_info info) {
+	static duckdb_database GetDatabase(duckdb_extension_info info) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
 		try {
 			// Create the duckdb_database
 			load_state.database_data = make_uniq<DatabaseWrapper>();
 			load_state.database_data->database = make_shared_ptr<DuckDB>(load_state.db);
-			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
+			return reinterpret_cast<duckdb_database>(load_state.database_data.get());
 		} catch (std::exception &ex) {
 			load_state.has_error = true;
 			load_state.error_data = ErrorData(ex);
