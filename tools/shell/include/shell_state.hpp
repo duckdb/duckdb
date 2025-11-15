@@ -140,6 +140,8 @@ struct ShellColumnInfo {
 };
 
 struct ShellTableInfo {
+	string database_name;
+	string schema_name;
 	string table_name;
 	optional_idx estimated_size;
 	bool is_view = false;

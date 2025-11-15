@@ -2783,8 +2783,8 @@ GROUP BY ALL;
 	vector<ShellTableInfo> result;
 	for (auto &row : *query_result) {
 		ShellTableInfo table;
-		string database_name = row.GetValue<string>(0);
-		string schema_name = row.GetValue<string>(1);
+		auto database_name = row.GetValue<string>(0);
+		auto schema_name = row.GetValue<string>(1);
 		table.table_name = row.GetValue<string>(2);
 
 		auto column_val = row.GetBaseValue(3);
@@ -2800,10 +2800,18 @@ GROUP BY ALL;
 		auto is_current_db = row.GetValue<bool>(5);
 		if (!in_search_path) {
 			// not in search path
-			if (is_current_db) {
-				table.table_name = schema_name + "." + table.table_name;
+			if (schema_name != DEFAULT_SCHEMA) {
+				if (is_current_db) {
+					// display only schema name
+					table.schema_name = std::move(schema_name);
+				} else {
+					// display both schema and db name
+					table.schema_name = std::move(schema_name);
+					table.database_name = std::move(database_name);
+				}
 			} else {
-				table.table_name = database_name + "." + schema_name + "." + table.table_name;
+				// display only database name
+				table.database_name = std::move(database_name);
 			}
 		}
 

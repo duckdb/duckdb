@@ -14,6 +14,8 @@ static HighlightElement highlight_elements[] = {
     {"numeric_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"string_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"line_indicator", PrintColor::STANDARD, PrintIntensity::BOLD},
+    {"database_name", PrintColor::ORANGE3, PrintIntensity::STANDARD},
+    {"schema_name", PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD},
     {"table_name", PrintColor::STANDARD, PrintIntensity::BOLD},
     {"column_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"column_type", PrintColor::GRAY, PrintIntensity::STANDARD},
