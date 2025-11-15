@@ -678,11 +678,6 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
     : SortStrategy(input_types), estimated_cardinality(estimated_cardinality) {
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
-	// The payload prefix is the same as the input schema
-	for (column_t i = 0; i < payload_types.size(); ++i) {
-		scan_ids.emplace_back(i);
-	}
-
 	//	We have to compute ordering expressions ourselves and materialise them.
 	//	To do this, we scan the orders and add generate extra payload columns that we can reference.
 	for (auto &order : orders) {

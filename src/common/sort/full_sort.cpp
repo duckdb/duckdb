@@ -242,10 +242,14 @@ FullSortGlobalSourceState::FullSortGlobalSourceState(ClientContext &client, Full
 // FullSort
 //===--------------------------------------------------------------------===//
 FullSort::FullSort(ClientContext &client, const vector<BoundOrderByNode> &order_bys, const Types &input_types,
-                   idx_t estimated_cardinality, bool require_payload)
-    : SortStrategy(input_types), estimated_cardinality(estimated_cardinality) {
+                   bool require_payload)
+    : SortStrategy(input_types) {
 	//	We have to compute ordering expressions ourselves and materialise them.
 	//	To do this, we scan the orders and add generate extra payload columns that we can reference.
+	for (const auto &order : order_bys) {
+		orders.emplace_back(order.Copy());
+	}
+
 	for (auto &order : orders) {
 		auto &expr = *order.expression;
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {

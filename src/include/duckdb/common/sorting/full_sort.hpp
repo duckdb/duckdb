@@ -17,7 +17,7 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 
 	FullSort(ClientContext &client, const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
-	         idx_t estimated_cardinality, bool require_payload = false);
+	         bool require_payload = false);
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -52,17 +52,10 @@ public:
 	const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const override;
 
 public:
-	//! The host's estimated row count
-	const idx_t estimated_cardinality;
-
 	// OVER(...) (sorting)
 	Orders orders;
 	//! Are we creating a dummy payload column?
 	bool force_payload = false;
-	// Input columns in the sorted output
-	vector<column_t> scan_ids;
-	// Key columns in the sorted output
-	vector<column_t> sort_ids;
 	// Key columns that must be computed
 	vector<unique_ptr<Expression>> sort_exprs;
 	//! Common sort description

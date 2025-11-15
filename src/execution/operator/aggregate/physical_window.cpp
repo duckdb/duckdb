@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
-#include "duckdb/common/sorting/hashed_sort.hpp"
+#include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
@@ -48,7 +48,7 @@ public:
 	using Task = WindowSourceTask;
 	using TaskPtr = optional_ptr<Task>;
 	using ScannerPtr = unique_ptr<WindowCollectionChunkScanner>;
-	using ChunkRow = HashedSort::ChunkRow;
+	using ChunkRow = SortStrategy::ChunkRow;
 
 	template <typename T>
 	static T BinValue(T n, T val) {
@@ -208,8 +208,8 @@ public:
 	WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &context);
 
 	SinkFinalizeType Finalize(ClientContext &client, InterruptState &interrupt_state) {
-		OperatorSinkFinalizeInput finalize {*hashed_sink, interrupt_state};
-		auto result = global_partition->Finalize(client, finalize);
+		OperatorSinkFinalizeInput finalize {*strategy_sink, interrupt_state};
+		auto result = sort_strategy->Finalize(client, finalize);
 
 		return result;
 	}
@@ -219,9 +219,9 @@ public:
 	//! Client context
 	ClientContext &client;
 	//! The partitioned sunk data
-	unique_ptr<HashedSort> global_partition;
+	unique_ptr<SortStrategy> sort_strategy;
 	//! The partitioned sunk data
-	unique_ptr<GlobalSinkState> hashed_sink;
+	unique_ptr<GlobalSinkState> strategy_sink;
 	//! The number of sunk rows (for progress)
 	atomic<idx_t> count;
 	//! The execution functions
@@ -234,7 +234,7 @@ public:
 class WindowLocalSinkState : public LocalSinkState {
 public:
 	WindowLocalSinkState(ExecutionContext &context, const WindowGlobalSinkState &gstate)
-	    : local_group(gstate.global_partition->GetLocalSinkState(context)) {
+	    : local_group(gstate.sort_strategy->GetLocalSinkState(context)) {
 	}
 
 	unique_ptr<LocalSinkState> local_group;
@@ -309,9 +309,9 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 		executors.emplace_back(std::move(wexec));
 	}
 
-	global_partition = make_uniq<HashedSort>(client, wexpr.partitions, wexpr.orders, op.children[0].get().GetTypes(),
-	                                         wexpr.partitions_stats, op.estimated_cardinality);
-	hashed_sink = global_partition->GetGlobalSinkState(client);
+	sort_strategy = SortStrategy::Factory(client, wexpr.partitions, wexpr.orders, op.children[0].get().GetTypes(),
+	                                      wexpr.partitions_stats, op.estimated_cardinality);
+	strategy_sink = sort_strategy->GetGlobalSinkState(client);
 }
 
 //===--------------------------------------------------------------------===//
@@ -322,16 +322,16 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &lstate = sink.local_state.Cast<WindowLocalSinkState>();
 	gstate.count += chunk.size();
 
-	OperatorSinkInput hsink {*gstate.hashed_sink, *lstate.local_group, sink.interrupt_state};
-	return gstate.global_partition->Sink(context, chunk, hsink);
+	OperatorSinkInput hsink {*gstate.strategy_sink, *lstate.local_group, sink.interrupt_state};
+	return gstate.sort_strategy->Sink(context, chunk, hsink);
 }
 
 SinkCombineResultType PhysicalWindow::Combine(ExecutionContext &context, OperatorSinkCombineInput &combine) const {
 	auto &gstate = combine.global_state.Cast<WindowGlobalSinkState>();
 	auto &lstate = combine.local_state.Cast<WindowLocalSinkState>();
 
-	OperatorSinkCombineInput hcombine {*gstate.hashed_sink, *lstate.local_group, combine.interrupt_state};
-	return gstate.global_partition->Combine(context, hcombine);
+	OperatorSinkCombineInput hcombine {*gstate.strategy_sink, *lstate.local_group, combine.interrupt_state};
+	return gstate.sort_strategy->Combine(context, hcombine);
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
@@ -346,17 +346,17 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &cl
 SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
                                           OperatorSinkFinalizeInput &input) const {
 	auto &gsink = input.global_state.Cast<WindowGlobalSinkState>();
-	auto &global_partition = *gsink.global_partition;
-	auto &hashed_sink = *gsink.hashed_sink;
+	auto &sort_strategy = *gsink.sort_strategy;
+	auto &strategy_sink = *gsink.strategy_sink;
 
-	OperatorSinkFinalizeInput hfinalize {hashed_sink, input.interrupt_state};
-	return global_partition.Finalize(client, hfinalize);
+	OperatorSinkFinalizeInput hfinalize {strategy_sink, input.interrupt_state};
+	return sort_strategy.Finalize(client, hfinalize);
 }
 
 ProgressData PhysicalWindow::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
                                              const ProgressData source_progress) const {
 	auto &gsink = gstate.Cast<WindowGlobalSinkState>();
-	return gsink.global_partition->GetSinkProgress(context, *gsink.hashed_sink, source_progress);
+	return gsink.sort_strategy->GetSinkProgress(context, *gsink.strategy_sink, source_progress);
 }
 
 //===--------------------------------------------------------------------===//
@@ -425,9 +425,9 @@ protected:
 
 WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &client, WindowGlobalSinkState &gsink_p)
     : client(client), gsink(gsink_p), next_group(0), locals(0), started(0), finished(0), stopped(false), completed(0) {
-	auto &global_partition = *gsink.global_partition;
-	hashed_source = global_partition.GetGlobalSourceState(client, *gsink.hashed_sink);
-	auto &hash_groups = global_partition.GetHashGroups(*hashed_source);
+	auto &sort_strategy = *gsink.sort_strategy;
+	hashed_source = sort_strategy.GetGlobalSourceState(client, *gsink.strategy_sink);
+	auto &hash_groups = sort_strategy.GetHashGroups(*hashed_source);
 	window_hash_groups.resize(hash_groups.size());
 
 	for (idx_t group_idx = 0; group_idx < hash_groups.size(); ++group_idx) {
@@ -507,7 +507,7 @@ unique_ptr<WindowCollectionChunkScanner> WindowHashGroup::GetScanner(const idx_t
 		return nullptr;
 	}
 
-	auto &scan_ids = gsink.global_partition->scan_ids;
+	auto &scan_ids = gsink.sort_strategy->scan_ids;
 	return make_uniq<WindowCollectionChunkScanner>(*rows, scan_ids, begin_idx);
 }
 
@@ -552,7 +552,6 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	//	If the data is unsorted, then the chunk sizes may be < STANDARD_VECTOR_SIZE,
 	//	and the entry range may be empty.
 	if (begin_entry >= end_entry) {
-		D_ASSERT(gsink.global_partition->sort_col_count == 0);
 		return;
 	}
 
@@ -568,22 +567,23 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	}
 
 	//	If we are not sorting, then only the partition boundaries are needed.
-	if (!gsink.global_partition->sort) {
+	const auto &wexpr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
+	auto &partitions = wexpr.partitions;
+	if (partitions.empty() && wexpr.orders.empty()) {
 		return;
 	}
 
 	//	Set up the partition compare structs
-	auto &partitions = gsink.global_partition->partitions;
 	const auto key_count = partitions.size();
 
 	//	Set up the order data structures
 	auto &collection = *rows;
-	auto &scan_cols = gsink.global_partition->sort_ids;
+	auto &scan_cols = gsink.sort_strategy->sort_ids;
 	WindowCollectionChunkScanner scanner(collection, scan_cols, block_begin);
 	unordered_map<idx_t, DataChunk> prefixes;
 	for (auto &order_mask : order_masks) {
-		D_ASSERT(order_mask.first >= partitions.size());
-		auto order_type = scanner.PrefixStructType(order_mask.first, partitions.size());
+		D_ASSERT(order_mask.first >= key_count);
+		auto order_type = scanner.PrefixStructType(order_mask.first, key_count);
 		vector<LogicalType> types(2, order_type);
 		auto &keys = prefixes[order_mask.first];
 		// We can't use InitializeEmpty here because it doesn't set up all of the STRUCT internals...
@@ -714,9 +714,9 @@ void WindowLocalSourceState::Sort(ExecutionContext &context, InterruptState &int
 	D_ASSERT(task->stage == WindowGroupStage::SORT);
 
 	auto &gsink = gsource.gsink;
-	auto &hashed_sort = *gsink.global_partition;
-	OperatorSinkFinalizeInput finalize {*gsink.hashed_sink, interrupt};
-	hashed_sort.SortColumnData(context, task_local.group_idx, finalize);
+	auto &sort_strategy = *gsink.sort_strategy;
+	OperatorSinkFinalizeInput finalize {*gsink.strategy_sink, interrupt};
+	sort_strategy.SortColumnData(context, task_local.group_idx, finalize);
 
 	//	Mark this range as done
 	window_hash_group->sorted += (task->end_idx - task->begin_idx);
@@ -730,8 +730,8 @@ void WindowLocalSourceState::Materialize(ExecutionContext &context, InterruptSta
 	auto unused = make_uniq<LocalSourceState>();
 	OperatorSourceInput source {*gsource.hashed_source, *unused, interrupt};
 	auto &gsink = gsource.gsink;
-	auto &hashed_sort = *gsink.global_partition;
-	hashed_sort.MaterializeColumnData(context, task_local.group_idx, source);
+	auto &sort_strategy = *gsink.sort_strategy;
+	sort_strategy.MaterializeColumnData(context, task_local.group_idx, source);
 
 	//	Mark this range as done
 	window_hash_group->materialized += (task->end_idx - task->begin_idx);
@@ -742,7 +742,7 @@ void WindowLocalSourceState::Materialize(ExecutionContext &context, InterruptSta
 	if (window_hash_group->materialized >= window_hash_group->blocks) {
 		lock_guard<mutex> prepare_guard(window_hash_group->lock);
 		if (!window_hash_group->rows) {
-			window_hash_group->rows = hashed_sort.GetColumnData(task_local.group_idx, source);
+			window_hash_group->rows = sort_strategy.GetColumnData(task_local.group_idx, source);
 		}
 	}
 }

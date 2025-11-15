@@ -73,10 +73,6 @@ public:
 	idx_t sort_col_count;
 	//! Are we creating a dummy payload column?
 	bool force_payload = false;
-	// Input columns in the sorted output
-	vector<column_t> scan_ids;
-	// Key columns in the sorted output
-	vector<column_t> sort_ids;
 	// Key columns that must be computed
 	vector<unique_ptr<Expression>> sort_exprs;
 	//! Common sort description

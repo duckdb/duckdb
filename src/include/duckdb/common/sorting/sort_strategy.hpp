@@ -18,6 +18,11 @@ public:
 	using HashGroupPtr = unique_ptr<ColumnDataCollection>;
 	using SortedRunPtr = unique_ptr<SortedRun>;
 
+	static unique_ptr<SortStrategy> Factory(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
+	                                        const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
+	                                        const vector<unique_ptr<BaseStatistics>> &partitions_stats,
+	                                        idx_t estimated_cardinality, bool require_payload = false);
+
 	explicit SortStrategy(const Types &input_types);
 	virtual ~SortStrategy() = default;
 
@@ -65,8 +70,12 @@ public:
 	virtual const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const = 0;
 
 public:
-	// OVER(...) (sorting)
+	//! The inserted data schema
 	Types payload_types;
+	//! Input columns in the sorted output
+	vector<column_t> scan_ids;
+	// Key columns in the sorted output. Needed for prefix computations.
+	vector<column_t> sort_ids;
 };
 
 } // namespace duckdb
