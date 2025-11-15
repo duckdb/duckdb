@@ -6,12 +6,12 @@ statement ok
 create or replace table aaa(name varchar);
 
 statement ok
-insert into aaa values('绿色');
+insert into aaa values('绿色'),(chr('0x10FFFF')),(chr('0xD7FF'));
 
 query I
-select * from aaa;
+select count(*) from aaa;
 ----
-绿色
+3
 
 query I
 select * from aaa where name like '绿%';
@@ -22,3 +22,15 @@ query I
 select count(*) from aaa where name like '红%';
 ----
 0
+
+# (0xD7FF + 1) go into unicode surrogate range 
+query II
+explain select * from aaa where name like concat(chr('0xD7FF'),'%');
+----
+physical_plan	<!REGEX>:.*Filters.*prefix.*
+
+# (0x10FFFF + 1) would be illegal utf8
+query II
+explain select * from aaa where name like concat(chr('0x10FFFF'),'%');
+----
+physical_plan	<REGEX>:.*Filters.*prefix.*

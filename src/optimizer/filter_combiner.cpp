@@ -2,6 +2,7 @@
 
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -283,6 +284,32 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 	}
 }
 
+bool FilterCombiner::FindNextLegalUTF8(string &prefix_string) {
+	// find the start of the last codepoint
+	idx_t last_codepoint_start;
+	for (last_codepoint_start = prefix_string.size() - 1; last_codepoint_start >= 0; last_codepoint_start--) {
+		if (IsCharacter(prefix_string[last_codepoint_start])) {
+			break;
+		}
+	}
+	D_ASSERT(last_codepoint_start >= 0);
+	int codepoint_size;
+	auto codepoint = Utf8Proc::UTF8ToCodepoint(prefix_string.c_str() + last_codepoint_start, codepoint_size) + 1;
+	if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
+		// next codepoint falls within surrogate range increment to next valid character
+		codepoint = 0xE000;
+	}
+	char next_codepoint_text[4];
+	int next_codepoint_size;
+	if (!Utf8Proc::CodepointToUtf8(codepoint, next_codepoint_size, next_codepoint_text)) {
+		// invalid codepoint
+		return false;
+	}
+	auto s = static_cast<idx_t>(next_codepoint_size);
+	prefix_string = prefix_string.substr(0, last_codepoint_start) + string(next_codepoint_text, s);
+	return true;
+}
+
 bool TypeSupportsConstantFilter(const LogicalType &type) {
 	if (TypeIsNumeric(type.InternalType())) {
 		return true;
@@ -399,12 +426,13 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	//! Replace prefix with a set of comparisons
 	auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix_string));
 	table_filters.PushFilter(column_index, std::move(lower_bound));
-	prefix_string[prefix_string.size() - 1]++;
-	if (Utf8Proc::Analyze(prefix_string.c_str(), prefix_string.size()) != UnicodeType::INVALID) {
+	if (FilterCombiner::FindNextLegalUTF8(prefix_string)) {
+		// could not find next legal utf8 string - skip upper bound
 		auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
 		table_filters.PushFilter(column_index, std::move(upper_bound));
+		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
-	return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	return FilterPushdownResult::NO_PUSHDOWN;
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table_filters,
