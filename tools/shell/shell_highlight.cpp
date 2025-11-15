@@ -39,6 +39,7 @@ static HighlightElement highlight_elements[] = {
     {"suggestion_setting_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"table_layout", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"view_layout", PrintColor::STANDARD, PrintIntensity::STANDARD},
+    {"primary_key_column", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
     {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
 

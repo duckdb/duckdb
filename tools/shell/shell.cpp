@@ -2704,6 +2704,7 @@ namespace duckdb_shell {
 struct ShellColumnInfo {
 	string column_name;
 	string column_type;
+	bool is_primary_key = false;
 };
 
 struct ShellTableRenderInfo;
@@ -2722,6 +2723,7 @@ struct ShellColumnRenderInfo {
 	string column_type;
 	idx_t column_name_length;
 	idx_t column_type_length;
+	bool is_primary_key;
 };
 
 struct ColumnRenderRow {
@@ -2848,7 +2850,9 @@ void TableMetadataLine::RenderLine(ShellHighlight &highlight, const vector<Shell
 				idx_t col_type_length = col.column_type_length;
 				column_line += " ";
 				highlight.PrintText(column_line, PrintOutput::STDOUT, layout_type);
-				highlight.PrintText(col.column_name, PrintOutput::STDOUT, HighlightElementType::COLUMN_NAME);
+				auto highlight_type =
+				    col.is_primary_key ? HighlightElementType::PRIMARY_KEY_COLUMN : HighlightElementType::COLUMN_NAME;
+				highlight.PrintText(col.column_name, PrintOutput::STDOUT, highlight_type);
 				column_line = string(max_column_name_length - col_name_length + 1, ' ');
 				if (extra_render_width > 0) {
 					idx_t render_count = is_last ? extra_render_width : render_width_per_column;
@@ -2917,6 +2921,7 @@ ShellTableRenderInfo::ShellTableRenderInfo(ShellTableInfo table_p, char decimal_
 		col_display.column_type = FormatTableMetadataType(col_p.column_type);
 		col_display.column_name_length = ShellState::RenderLength(col_display.column_name);
 		col_display.column_type_length = ShellState::RenderLength(col_display.column_type);
+		col_display.is_primary_key = col_p.is_primary_key;
 		max_col_name_length = duckdb::MaxValue<idx_t>(col_display.column_name_length, max_col_name_length);
 		max_col_type_length = duckdb::MaxValue<idx_t>(col_display.column_type_length, max_col_type_length);
 		render_row.columns.push_back(std::move(col_display));
@@ -3167,6 +3172,9 @@ SuccessState ShellState::RenderDescribe(duckdb::QueryResult &res) {
 		ShellColumnInfo column;
 		column.column_name = row.GetValue<string>(0);
 		column.column_type = row.GetValue<string>(1);
+		if (!row.IsNull(3)) {
+			column.is_primary_key = row.GetValue<string>(3) == "PRI";
+		}
 		table.columns.push_back(std::move(column));
 	}
 	result.push_back(std::move(table));
@@ -3204,11 +3212,18 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 		schema_filter_str = StringUtil::Format(" AND columns.schema_name ILIKE %s", SQLString(schema_filter));
 	}
 	auto query = StringUtil::Format(R"(
-	SELECT columns.database_name, columns.schema_name, columns.table_name, list(struct_pack(column_name, data_type) order by column_index), t.estimated_size AS estimated_size, t.table_oid AS table_oid
-	FROM duckdb_columns() columns
-	LEFT JOIN duckdb_tables() t USING (table_oid)
-	WHERE NOT columns.internal%s%s
-	GROUP BY ALL
+SELECT columns.database_name, columns.schema_name, columns.table_name, list(
+	struct_pack(column_name, data_type,
+	is_primary_key := c.column_index IS NOT NULL) order by column_index), t.estimated_size AS estimated_size, t.table_oid AS table_oid
+FROM duckdb_columns() columns
+LEFT JOIN duckdb_tables() t USING (table_oid)
+LEFT JOIN (
+	SELECT table_oid, UNNEST(constraint_column_indexes)+1 column_index
+	FROM duckdb_constraints()
+	WHERE constraint_type='PRIMARY KEY') c
+USING (table_oid, column_index)
+WHERE NOT columns.internal%s%s
+GROUP BY ALL;
 )",
 	                                schema_filter_str, name_filter);
 
@@ -3234,6 +3249,7 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
 			column.column_name = struct_children[0].GetValue<string>();
 			column.column_type = struct_children[1].GetValue<string>();
+			column.is_primary_key = struct_children[2].GetValue<bool>();
 			table.columns.push_back(std::move(column));
 		}
 		if (!row.IsNull(4)) {

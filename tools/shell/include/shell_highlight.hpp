@@ -47,6 +47,7 @@ enum class HighlightElementType : uint32_t {
 	SUGGESTION_SETTING_NAME,
 	TABLE_LAYOUT,
 	VIEW_LAYOUT,
+	PRIMARY_KEY_COLUMN,
 	NONE
 };
 
