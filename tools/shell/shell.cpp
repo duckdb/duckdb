@@ -2736,6 +2736,9 @@ struct ShellTableInfo {
 	idx_t ColumnLines() const {
 		return column_renders[0].columns.size();
 	}
+
+	void ComputeRenderSizes(char decimal_separator);
+	void Truncate(idx_t max_render_width);
 };
 
 struct ShellTableLineInfo {
@@ -2886,6 +2889,99 @@ string FormatTableMetadataType(const string &type) {
 	return result;
 }
 
+void ShellTableInfo::ComputeRenderSizes(char decimal_separator) {
+	table_name_length = ShellState::RenderLength(table_name);
+	idx_t max_col_name_length = 0;
+	idx_t max_col_type_length = 0;
+	for (auto &column_render : column_renders) {
+		for (auto &col : column_render.columns) {
+			col.column_type = FormatTableMetadataType(col.column_type);
+			col.column_name_length = ShellState::RenderLength(col.column_name);
+			col.column_type_length = ShellState::RenderLength(col.column_type);
+			max_col_name_length = duckdb::MaxValue<idx_t>(col.column_name_length.GetIndex(), max_col_name_length);
+			max_col_type_length = duckdb::MaxValue<idx_t>(col.column_type_length.GetIndex(), max_col_type_length);
+		}
+	}
+	max_column_name_length = max_col_name_length;
+	max_column_type_length = max_col_type_length;
+	render_width = table_name_length.GetIndex();
+	if (max_col_name_length + max_col_type_length + 1 > render_width.GetIndex()) {
+		render_width = max_col_name_length + max_col_type_length + 1;
+	}
+	if (estimated_size.IsValid()) {
+		estimated_size_text = to_string(estimated_size.GetIndex());
+		auto formatted = duckdb::BoxRenderer::TryFormatLargeNumber(estimated_size_text, decimal_separator);
+		if (!formatted.empty()) {
+			estimated_size_text = std::move(formatted);
+		}
+		estimated_size_text += " rows";
+		estimated_size_length = ShellState::RenderLength(estimated_size_text);
+		if (estimated_size_length.GetIndex() > render_width.GetIndex()) {
+			render_width = estimated_size_length.GetIndex();
+		}
+	}
+	render_width = render_width.GetIndex() + 4;
+}
+
+void ShellTableInfo::Truncate(idx_t max_render_width) {
+	if (render_width.GetIndex() <= max_render_width) {
+		return;
+	}
+
+	duckdb::BoxRendererConfig config;
+	// we exceeded the render width - we need to truncate
+	if (table_name_length.GetIndex() > max_render_width - 4) {
+		// need to truncate table name
+		idx_t pos = 0;
+		idx_t render_width = 0;
+		table_name = duckdb::BoxRenderer::TruncateValue(table_name, max_render_width - 4 - config.DOTDOTDOT_LENGTH, pos,
+		                                                render_width) +
+		             config.DOTDOTDOT;
+		table_name_length = render_width + config.DOTDOTDOT_LENGTH;
+	}
+	// figure out what we need to truncate
+	idx_t total_column_length = max_column_name_length.GetIndex() + max_column_type_length.GetIndex() + 5;
+	if (total_column_length > max_render_width) {
+		// we need to truncate either column names or column types
+		// prefer to keep the name as long as possible - only truncate it if it by itself almost exceeds the
+		// width
+		if (max_column_name_length.GetIndex() + 10 > max_render_width) {
+			max_column_name_length = max_render_width - 10;
+		}
+		total_column_length = max_column_name_length.GetIndex() + max_column_type_length.GetIndex() + 5;
+		if (total_column_length > max_render_width) {
+			max_column_type_length = max_render_width - max_column_name_length.GetIndex() - 5;
+		}
+		// truncate all columns that we need to truncate
+		idx_t max_name_length = max_column_name_length.GetIndex();
+		idx_t max_type_length = max_column_type_length.GetIndex();
+		for (auto &column_render : column_renders) {
+			for (auto &col : column_render.columns) {
+				if (col.column_name_length.GetIndex() > max_name_length) {
+					// need to truncate the name
+					idx_t pos = 0;
+					idx_t render_width = 0;
+					col.column_name =
+					    duckdb::BoxRenderer::TruncateValue(col.column_name, max_name_length - config.DOTDOTDOT_LENGTH,
+					                                       pos, render_width) +
+					    config.DOTDOTDOT;
+					col.column_name_length = render_width + config.DOTDOTDOT_LENGTH;
+				}
+				if (col.column_type_length.GetIndex() > max_type_length) {
+					// need to truncate the type
+					idx_t pos = 0;
+					idx_t render_width = 0;
+					col.column_type =
+					    duckdb::BoxRenderer::TruncateValue(col.column_type, max_type_length - config.DOTDOTDOT_LENGTH,
+					                                       pos, render_width) +
+					    config.DOTDOTDOT;
+					col.column_type_length = render_width + config.DOTDOTDOT_LENGTH;
+				}
+			}
+		}
+		render_width = max_render_width;
+	}
+}
 void ShellState::RenderTableMetadata(vector<ShellTableInfo> &result) {
 	idx_t max_render_width = max_width == 0 ? duckdb::Printer::TerminalWidth() : max_width;
 	if (max_render_width < 80) {
@@ -2894,96 +2990,10 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &result) {
 	// figure out the render width of every table
 	duckdb::BoxRendererConfig config;
 	for (auto &table : result) {
-		// figure out the render width
-		table.table_name_length = RenderLength(table.table_name);
-		idx_t max_col_name_length = 0;
-		idx_t max_col_type_length = 0;
-		for (auto &column_render : table.column_renders) {
-			for (auto &col : column_render.columns) {
-				col.column_type = FormatTableMetadataType(col.column_type);
-				col.column_name_length = RenderLength(col.column_name);
-				col.column_type_length = RenderLength(col.column_type);
-				max_col_name_length = duckdb::MaxValue<idx_t>(col.column_name_length.GetIndex(), max_col_name_length);
-				max_col_type_length = duckdb::MaxValue<idx_t>(col.column_type_length.GetIndex(), max_col_type_length);
-			}
-		}
-		table.max_column_name_length = max_col_name_length;
-		table.max_column_type_length = max_col_type_length;
-		table.render_width = table.table_name_length.GetIndex();
-		if (max_col_name_length + max_col_type_length + 1 > table.render_width.GetIndex()) {
-			table.render_width = max_col_name_length + max_col_type_length + 1;
-		}
-		if (table.estimated_size.IsValid()) {
-			table.estimated_size_text = to_string(table.estimated_size.GetIndex());
-			auto formatted = duckdb::BoxRenderer::TryFormatLargeNumber(table.estimated_size_text, decimal_separator);
-			if (!formatted.empty()) {
-				table.estimated_size_text = std::move(formatted);
-			}
-			table.estimated_size_text += " rows";
-			table.estimated_size_length = RenderLength(table.estimated_size_text);
-			if (table.estimated_size_length.GetIndex() > table.render_width.GetIndex()) {
-				table.render_width = table.estimated_size_length.GetIndex();
-			}
-		}
-		table.render_width = table.render_width.GetIndex() + 4;
-
-		if (table.render_width.GetIndex() > max_render_width) {
-			// we exceeded the render width - we need to truncate
-			if (table.table_name_length.GetIndex() > max_render_width - 4) {
-				// need to truncate table name
-				idx_t pos = 0;
-				idx_t render_width = 0;
-				table.table_name =
-					duckdb::BoxRenderer::TruncateValue(
-						table.table_name, max_render_width - 4 - config.DOTDOTDOT_LENGTH, pos, render_width) +
-					config.DOTDOTDOT;
-				table.table_name_length = render_width + config.DOTDOTDOT_LENGTH;
-			}
-			// figure out what we need to truncate
-			idx_t total_column_length =
-			    table.max_column_name_length.GetIndex() + table.max_column_type_length.GetIndex() + 5;
-			if (total_column_length > max_render_width) {
-				// we need to truncate either column names or column types
-				// prefer to keep the name as long as possible - only truncate it if it by itself almost exceeds the
-				// width
-				if (table.max_column_name_length.GetIndex() + 10 > max_render_width) {
-					table.max_column_name_length = max_render_width - 10;
-				}
-				total_column_length =
-				    table.max_column_name_length.GetIndex() + table.max_column_type_length.GetIndex() + 5;
-				if (total_column_length > max_render_width) {
-					table.max_column_type_length = max_render_width - table.max_column_name_length.GetIndex() - 5;
-				}
-				// truncate all columns that we need to truncate
-				idx_t max_name_length = table.max_column_name_length.GetIndex();
-				idx_t max_type_length = table.max_column_type_length.GetIndex();
-				for (auto &column_render : table.column_renders) {
-					for (auto &col : column_render.columns) {
-						if (col.column_name_length.GetIndex() > max_name_length) {
-							// need to truncate the name
-							idx_t pos = 0;
-							idx_t render_width = 0;
-							col.column_name =
-							    duckdb::BoxRenderer::TruncateValue(
-							        col.column_name, max_name_length - config.DOTDOTDOT_LENGTH, pos, render_width) +
-							    config.DOTDOTDOT;
-							col.column_name_length = render_width + config.DOTDOTDOT_LENGTH;
-						}
-						if (col.column_type_length.GetIndex() > max_type_length) {
-							// need to truncate the type
-							idx_t pos = 0;
-							idx_t render_width = 0;
-							col.column_type =
-							    duckdb::BoxRenderer::TruncateValue(
-							        col.column_type, max_type_length - config.DOTDOTDOT_LENGTH, pos, render_width) +
-							    config.DOTDOTDOT;
-							col.column_type_length = render_width + config.DOTDOTDOT_LENGTH;
-						}
-					}
-				}
-			}
-			table.render_width = max_render_width;
-		}
+		// figure out the render width of the to-be-rendered tables
+		table.ComputeRenderSizes(decimal_separator);
+		// optionally truncate if we exceed the max render width
+		table.Truncate(max_render_width);
 	}
 	// try to split up large tables
 	for (auto &table : result) {
