@@ -584,41 +584,31 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 			}
 
 			if (!display.empty() && last_displayed_database != display) {
-				// display database and / or schema name
-				string top_line = config.LTCORNER;
-				for (idx_t i = 2; i < metadata_display.render_width; i++) {
-					top_line += config.HORIZONTAL;
-				}
-				top_line += config.RTCORNER;
-				top_line += "\n";
-
 				HighlightElementType highlight_element = metadata_display.database_name.empty()
 				                                             ? HighlightElementType::SCHEMA_NAME
 				                                             : HighlightElementType::DATABASE_NAME;
-				highlight.PrintText(top_line, PrintOutput::STDOUT, highlight_element);
 
 				auto render_size = ShellState::RenderLength(display);
 				ShellTableRenderInfo::TruncateValueIfRequired(display, render_size, metadata_display.render_width - 4);
 
-				idx_t space_count = metadata_display.render_width - render_size - 2;
-				idx_t lspace = space_count / 2;
-				idx_t rspace = space_count - lspace;
+				idx_t total_lines = metadata_display.render_width - render_size - 4;
+				idx_t lline = total_lines / 2;
+				idx_t rline = total_lines - lline;
 
-				string middle_line = config.VERTICAL;
-				middle_line += string(lspace, ' ');
+				string middle_line;
+				middle_line += " ";
+				for (idx_t i = 0; i < lline; i++) {
+					middle_line += config.HORIZONTAL;
+				}
+				middle_line += " ";
 				middle_line += display;
-				middle_line += string(rspace, ' ');
-				middle_line += config.VERTICAL;
+				middle_line += " ";
+				for (idx_t i = 0; i < rline; i++) {
+					middle_line += config.HORIZONTAL;
+				}
+				middle_line += " ";
 				middle_line += "\n";
 				highlight.PrintText(middle_line, PrintOutput::STDOUT, highlight_element);
-
-				string bottom_line = config.LDCORNER;
-				for (idx_t i = 2; i < metadata_display.render_width; i++) {
-					bottom_line += config.HORIZONTAL;
-				}
-				bottom_line += config.RDCORNER;
-				bottom_line += "\n";
-				highlight.PrintText(bottom_line, PrintOutput::STDOUT, highlight_element);
 
 				last_displayed_database = display;
 			}
