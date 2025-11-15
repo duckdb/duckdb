@@ -2,6 +2,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 
 namespace duckdb {
 
@@ -26,13 +27,32 @@ struct DuckDBSettingsData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
+static bool extract_in_bytes_argument(const TableFunctionBindInput &input) {
+	bool in_bytes = false;
+	auto it = input.named_parameters.find("in_bytes");
+	if (it != input.named_parameters.end()) {
+		const auto &param = it->second;
+		if (param.IsNull()) {
+			throw BinderException("'in_bytes' parameter cannot be NULL");
+		}
+		in_bytes = param.GetValue<bool>();
+	};
+	return in_bytes;
+}
+
 static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, TableFunctionBindInput &input,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("value");
-	return_types.emplace_back(LogicalType::VARCHAR);
+
+	bool in_bytes = extract_in_bytes_argument(input);
+	if (in_bytes) {
+		return_types.emplace_back(LogicalType::UBIGINT);
+	} else {
+		return_types.emplace_back(LogicalType::VARCHAR);
+	}
 
 	names.emplace_back("description");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -111,8 +131,25 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 	return std::move(result);
 }
 
+static optional_idx TryParseBytes(const string &str) {
+	try {
+		auto val = DBConfig::ParseMemoryLimit(str);
+		return optional_idx(val);
+	} catch (ParserException &e) {
+		return optional_idx();
+	} catch (InvalidInputException &e) {
+		return optional_idx();
+	}
+}
+
 void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBSettingsData>();
+
+	// We can infer from the value column type that we are in byte mode or not, because of the binding step
+	const auto value_column = output.data[1];
+	const auto &value_type = value_column.GetType();
+	const bool in_bytes = value_type.id() == LogicalTypeId::UBIGINT;
+
 	if (data.offset >= data.settings.size()) {
 		// finished returning values
 		return;
@@ -123,11 +160,29 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 	while (data.offset < data.settings.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.settings[data.offset++];
 
+		optional_idx parsed;
+		if (in_bytes) {
+			// memory-like setting is represented as a VARCHAR, like '128 KiB'
+			parsed = TryParseBytes(entry.value.ToString());
+			if (!parsed.IsValid()) {
+				// We will skip this row as we're in bytes-mode but the value is not memory-like, by not
+				// increasing the counter and by not assigning a new row in the output
+				continue;
+			}
+		}
+
 		// return values:
 		// name, LogicalType::VARCHAR
 		output.SetValue(0, count, Value(entry.name));
-		// value, LogicalType::VARCHAR
-		output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
+
+		// value - can vary between VARCHAR and UBIGINT according to the 'in_bytes' parameter
+		if (in_bytes) {
+			output.SetValue(1, count, Value::UBIGINT(parsed.GetIndex()));
+		} else {
+			// LogicalType::VARCHAR
+			output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
+		}
+
 		// description, LogicalType::VARCHAR
 		output.SetValue(2, count, Value(entry.description));
 		// input_type, LogicalType::VARCHAR
@@ -142,8 +197,9 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 }
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit));
+	TableFunction fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
+	fun.named_parameters["in_bytes"] = LogicalType::BOOLEAN;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb
