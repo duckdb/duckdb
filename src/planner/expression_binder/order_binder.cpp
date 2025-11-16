@@ -89,7 +89,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 		} else {
 			alias_name = colref.column_names[0];
 		}
-		// unqualified: check the alias list
+		// check the alias list
 		auto entry = bind_state.alias_map.find(alias_name);
 		if (entry == bind_state.alias_map.end()) {
 			break;
