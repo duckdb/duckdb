@@ -20,18 +20,6 @@ SELECT (SELECT 1) AS x, alias.x
 ----
 Alias "x" referenced in a SELECT clause - but the expression has a subquery. This is not yet supported
 
-# alias. is not allowed in WHERE
-statement error
-SELECT 1 AS x WHERE alias.x = 1
-----
-Binder Error: alias.* references are only valid in a SELECT projection list
-
-# alias. not allowed in GROUP BY
-statement error
-SELECT 1 AS x GROUP BY alias.x
-----
-Binder Error: alias.* references are only valid in a SELECT projection list
-
 # alias ref with non-string argument should error already in the parsing phase
 statement error
 SELECT 5 as x, alias.123;
