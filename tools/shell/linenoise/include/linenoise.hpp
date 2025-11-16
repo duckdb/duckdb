@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "terminal.hpp"
 #include "linenoise.h"
 
@@ -54,6 +55,7 @@ enum class CompletionType {
 struct Completion {
 	string completion;
 	string original_completion;
+	optional_idx original_completion_length;
 	idx_t cursor_pos;
 	CompletionType completion_type;
 	char extra_char = '\0';

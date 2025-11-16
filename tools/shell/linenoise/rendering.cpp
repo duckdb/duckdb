@@ -980,10 +980,27 @@ void Linenoise::RefreshMultiLine() {
 
 		if (!completion_list.completions.empty()) {
 			string completion_text;
-			for (idx_t i = 0; i < completion_list.completions.size(); i++) {
-				if (i > 0) {
-					completion_text += " ";
+			// figure out how to align the completions
+			// we need to figure out how many "columns" we render
+			idx_t max_length = 0;
+			for (auto &completion : completion_list.completions) {
+				auto &completion_text = completion.original_completion;
+				if (!completion.original_completion_length.IsValid()) {
+					completion.original_completion_length =
+					    linenoiseComputeRenderWidth(completion_text.c_str(), completion_text.size());
 				}
+				idx_t completion_length = completion.original_completion_length.GetIndex();
+				if (completion_length > max_length) {
+					max_length = completion_length;
+				}
+			}
+
+			// now based on the max width determine the column count
+			// we need at least one space between each entry
+			max_length++;
+			idx_t column_count = ws.ws_col / max_length;
+			idx_t column_index = 0;
+			for (idx_t i = 0; i < completion_list.completions.size(); i++) {
 				auto &completion = completion_list.completions[i];
 				auto &rendered_text = completion.original_completion;
 				auto element_type = duckdb_shell::HighlightElementType::NONE;
@@ -1037,6 +1054,25 @@ void Linenoise::RefreshMultiLine() {
 				completion_text += rendered_text;
 				if (!terminal_text.empty()) {
 					completion_text += duckdb_shell::ShellHighlight::ResetTerminalCode();
+				}
+				if (i + 1 == completion_list.completions.size()) {
+					continue;
+				}
+				if (column_count == 0) {
+					// if we cannot fit even a single column because our completion is too long
+					// just space separate the entries and don't try to align them
+					completion_text += " ";
+					continue;
+				}
+				// if we have columns - add spaces to pad so we get nicely aligned suggestions
+				column_index++;
+				if (column_index >= column_count) {
+					// have to wrap around - add a newline
+					completion_text += "\r\n";
+					column_index = 0;
+				} else {
+					idx_t space_count = max_length - completion.original_completion_length.GetIndex();
+					completion_text += string(space_count, ' ');
 				}
 			}
 
