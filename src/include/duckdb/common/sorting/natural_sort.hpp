@@ -53,10 +53,6 @@ public:
 	SortedRunPtr GetSortedRun(ClientContext &client, idx_t hash_bin, OperatorSourceInput &source) const override;
 
 	const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const override;
-
-public:
-	// OVER(...) (sorting)
-	Types payload_types;
 };
 
 } // namespace duckdb

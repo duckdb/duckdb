@@ -107,7 +107,7 @@ SinkCombineResultType NaturalSort::Combine(ExecutionContext &context, OperatorSi
 	// Only one partition, so need a global lock.
 	lock_guard<mutex> glock(gstate.lock);
 	auto &hash_group = gstate.hash_group;
-	if (!hash_group) {
+	if (hash_group) {
 		auto &unsorted = *hash_group->columns;
 		if (lstate.unsorted) {
 			hash_group->count += lstate.unsorted->Count();
@@ -138,6 +138,10 @@ public:
 
 NaturalSortGlobalSourceState::NaturalSortGlobalSourceState(ClientContext &client, NaturalSortGlobalSinkState &gsink)
     : gsink(gsink) {
+	if (!gsink.count) {
+		return;
+	}
+
 	//	One unsorted group. We have the count and chunks.
 	ChunkRow chunk_row;
 

@@ -87,9 +87,6 @@ public:
 		return stage;
 	}
 
-	void GetColumnData(ExecutionContext &context, const idx_t blocks, OperatorSourceInput &source) {
-	}
-
 	bool TryPrepareNextStage() {
 		lock_guard<mutex> prepare_guard(lock);
 		switch (stage.load()) {
