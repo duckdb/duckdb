@@ -64,13 +64,14 @@ struct AutoCompleteCandidate {
 };
 
 struct AutoCompleteSuggestion {
-	AutoCompleteSuggestion(string text_p, idx_t pos, string type_p)
-	    : text(std::move(text_p)), pos(pos), type(std::move(type_p)) {
+	AutoCompleteSuggestion(string text_p, idx_t pos, string type_p, char extra_char_p)
+	    : text(std::move(text_p)), pos(pos), type(std::move(type_p)), extra_char(extra_char_p) {
 	}
 
 	string text;
 	idx_t pos;
 	string type;
+	char extra_char;
 };
 
 enum class MatchResultType { SUCCESS, FAIL };

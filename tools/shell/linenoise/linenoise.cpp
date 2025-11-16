@@ -202,10 +202,14 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 				break;
 			}
 			if (stop && accept_completion && completion_idx < completions.size()) {
+				auto &accepted_completion = completions[completion_idx];
+				if (accepted_completion.extra_char != '\0' && key_press.action == accepted_completion.extra_char) {
+					next_key.action = KEY_NULL;
+				}
 				/* Update buffer and return */
 				if (completion_idx < completions.size()) {
-					nwritten = snprintf(buf, buflen, "%s", completions[completion_idx].completion.c_str());
-					pos = completions[completion_idx].cursor_pos;
+					nwritten = snprintf(buf, buflen, "%s", accepted_completion.completion.c_str());
+					pos = accepted_completion.cursor_pos;
 					len = nwritten;
 				}
 			}

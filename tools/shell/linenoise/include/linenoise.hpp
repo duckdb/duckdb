@@ -56,6 +56,7 @@ struct Completion {
 	string original_completion;
 	idx_t cursor_pos;
 	CompletionType completion_type;
+	char extra_char = '\0';
 };
 
 struct TabCompletion {
