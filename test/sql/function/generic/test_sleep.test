@@ -125,10 +125,13 @@ PRAGMA disable_profiling
 statement ok
 CREATE OR REPLACE TABLE sleep_profiling_multi AS SELECT * FROM read_json('__TEST_DIR__/sleep_profiling_multi.json')
 
-query T
-SELECT cpu_time >= 0.04 AND cpu_time < 0.15 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
+# Validate that cpu_time is in the expected range (0.04s to 0.15s)
+# This query returns both cpu_time and validation result so we can see the actual cpu_time value
+# The cpu_time value will vary between runs, but we can see it in the output for debugging
+query TT
+SELECT cpu_time, cpu_time >= 0.04 AND cpu_time < 0.15 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
 ----
-true
+0.05	true
 
 statement ok
 DROP TABLE sleep_profiling_multi
