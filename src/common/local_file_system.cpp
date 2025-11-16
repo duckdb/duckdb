@@ -994,10 +994,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	flags.Verify();
 
 	DWORD desired_access;
-	// For windows platform, by default deletion fails when the file is accessed by other thread/process.
-	// To keep deletion behavior compatible with unix platform, which physically deletes a file when reference count
-	// drops to 0 without interfering with already opened file handles, open files with [`FILE_SHARE_DELETE`].
-	DWORD share_mode = FILE_SHARE_DELETE;
+	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
 	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL;
 	bool open_read = flags.OpenForReading();
@@ -1013,10 +1010,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 	switch (flags.Lock()) {
 	case FileLockType::NO_LOCK:
-		share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE;
+		// Allow other handles to read, write, and delete while this handle is open
+		share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 		break;
 	case FileLockType::READ_LOCK:
-		share_mode = FILE_SHARE_READ;
+		// Allow shared reads and deletion while this handle holds a read lock
+		share_mode = FILE_SHARE_READ | FILE_SHARE_DELETE;
 		break;
 	case FileLockType::WRITE_LOCK:
 		share_mode = 0;
@@ -1024,6 +1023,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	default:
 		throw InternalException("Unknown FileLockType");
 	}
+	// For windows platform, by default deletion fails when the file is accessed by other thread/process.
+	// To keep deletion behavior compatible with unix platform, which physically deletes a file when reference count
+	// drops to 0 without interfering with already opened file handles, open files with [`FILE_SHARE_DELETE`].
+	share_mode |= FILE_SHARE_DELETE;
 
 	if (open_write) {
 		if (flags.CreateFileIfNotExists()) {
