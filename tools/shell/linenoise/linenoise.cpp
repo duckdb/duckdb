@@ -113,6 +113,13 @@ TabCompletion Linenoise::TabComplete() const {
 	buf[pos] = '\0';
 	completionCallback(buf, reinterpret_cast<linenoiseCompletions *>(&result));
 	buf[pos] = prev_char;
+	for (auto &completion : result.completions) {
+		idx_t copy_offset = pos;
+		if (completion.extra_char != '\0' && buf[pos] == completion.extra_char) {
+			copy_offset++;
+		}
+		completion.completion += buf + copy_offset;
+	}
 	return result;
 }
 
