@@ -74,7 +74,7 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
-	// legacy unqualified alias binding (e.g., SELECT x AS y; then later y)
+	// legacy unqualified alias binding
 	virtual bool TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) { return false; }
 	// explicit qualified alias reference resolution (alias.<name>) with deep-binding
 	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) { return false; }
