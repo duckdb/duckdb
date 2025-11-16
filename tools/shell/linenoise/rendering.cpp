@@ -870,9 +870,9 @@ void Linenoise::RefreshMultiLine() {
 			extra_highlighting.start = match->match_start;
 			extra_highlighting.end = match->match_end;
 			extra_highlighting.type = ExtraHighlightingType::UNDERLINE;
-		} else if (completion_idx < completion_list.completions.size()) {
+		} else if (completion_idx.IsValid()) {
 			// auto-completing - bold-face the extra character (if any)
-			auto &completion = completion_list.completions[completion_idx];
+			auto &completion = completion_list.completions[completion_idx.GetIndex()];
 			if (completion.extra_char != '\0') {
 				extra_highlighting.start = completion.extra_char_pos;
 				extra_highlighting.end = completion.extra_char_pos + 1;
@@ -1041,7 +1041,7 @@ void Linenoise::RefreshMultiLine() {
 				auto &element = duckdb_shell::ShellHighlight::GetHighlightElement(element_type);
 				auto color = element.color;
 				auto intensity = element.intensity;
-				if (i == completion_idx) {
+				if (completion_idx.IsValid() && i == completion_idx.GetIndex()) {
 					// underline selected completion
 					if (intensity == duckdb_shell::PrintIntensity::BOLD) {
 						intensity = duckdb_shell::PrintIntensity::BOLD_UNDERLINE;

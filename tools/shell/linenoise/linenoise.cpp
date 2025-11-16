@@ -135,29 +135,43 @@ TabCompletion Linenoise::TabComplete() const {
  * The state of the editing is encapsulated into the pointed linenoiseState
  * structure as described in the structure definition. */
 bool Linenoise::CompleteLine(KeyPress &next_key) {
-	int nwritten;
-
+	next_key.action = KEY_NULL;
 	completion_list = TabComplete();
 	auto &completions = completion_list.completions;
 	// we only start rendering completion suggestions once we start tabbing through them
 	render_completion_suggestion = false;
 	if (completions.empty()) {
 		Terminal::Beep();
-		next_key.action = KEY_NULL;
 	} else {
 		bool stop = false;
 		bool accept_completion = false;
-		completion_idx = 0;
+		// check if there are ties between completions
+		bool has_ties = false;
+		if (completion_list.completions.size() > 1) {
+			has_ties = completion_list.completions[0].score == completion_list.completions[1].score;
+		}
+		if (has_ties) {
+			// if there are ties we don't auto-complete immediately
+			// instead we display the list of suggestions
+			completion_idx = optional_idx();
+			render_completion_suggestion = true;
+		} else {
+			// if there are no ties we immediately accept the first completion suggestion
+			completion_idx = 0;
+			stop = true;
+			accept_completion = true;
+		}
 
 		while (!stop) {
 			HandleTerminalResize();
 			/* Show completion or original buffer */
-			if (completion_idx < completions.size()) {
+			if (completion_idx.IsValid()) {
 				Linenoise saved = *this;
 
-				len = completions[completion_idx].completion.size();
-				pos = completions[completion_idx].cursor_pos;
-				buf = (char *)completions[completion_idx].completion.c_str();
+				auto &completion = completions[completion_idx.GetIndex()];
+				len = completion.completion.size();
+				pos = completion.cursor_pos;
+				buf = (char *)completion.completion.c_str();
 				RefreshLine();
 				len = saved.len;
 				pos = saved.pos;
@@ -176,20 +190,24 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 			Linenoise::Log("\nComplete Character %d\n", (int)key_press.action);
 			switch (key_press.action) {
 			case TAB: /* tab */
-				completion_idx = (completion_idx + 1) % completions.size();
+				if (!completion_idx.IsValid()) {
+					completion_idx = 0;
+				} else {
+					completion_idx = (completion_idx.GetIndex() + 1) % completions.size();
+				}
 				render_completion_suggestion = true;
 				break;
 			case ESC: { /* escape */
 				switch (key_press.sequence) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
-					if (completion_idx == 0) {
+					if (!completion_idx.IsValid() || completion_idx.GetIndex() == 0) {
 						// pressing shift-tab at the first completion cancels completion
 						RefreshLine();
 						next_key.action = ENTER;
 						stop = true;
 					} else {
-						completion_idx--;
+						completion_idx = completion_idx.GetIndex() - 1;
 					}
 					render_completion_suggestion = true;
 					break;
@@ -213,22 +231,21 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 				stop = true;
 				break;
 			}
-			if (stop && accept_completion && completion_idx < completions.size()) {
-				auto &accepted_completion = completions[completion_idx];
-				if (accepted_completion.extra_char != '\0' && key_press.action == accepted_completion.extra_char) {
-					next_key.action = KEY_NULL;
-				}
-				/* Update buffer and return */
-				if (completion_idx < completions.size()) {
-					nwritten = snprintf(buf, buflen, "%s", accepted_completion.completion.c_str());
-					pos = accepted_completion.cursor_pos;
-					len = nwritten;
-				}
+		}
+		if (accept_completion && completion_idx.IsValid()) {
+			auto &accepted_completion = completions[completion_idx.GetIndex()];
+			if (accepted_completion.extra_char != '\0' && next_key.action == accepted_completion.extra_char) {
+				next_key.action = KEY_NULL;
 			}
+			/* Update buffer and return */
+			int nwritten = snprintf(buf, buflen, "%s", accepted_completion.completion.c_str());
+			pos = accepted_completion.cursor_pos;
+			len = nwritten;
 		}
 	}
 	// no longer completing - clear list of completions
 	completion_list.completions.clear();
+	completion_idx = optional_idx();
 	if (next_key.action == ENTER) {
 		// if we accepted the completion by pressing ENTER
 		next_key.action = KEY_NULL;
@@ -1071,7 +1088,7 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	continuation_markers = true;
 	insert = false;
 	search_index = 0;
-	completion_idx = 0;
+	completion_idx = optional_idx();
 	rendered_completion_lines = 0;
 	render_completion_suggestion = false;
 

@@ -61,16 +61,19 @@ struct AutoCompleteCandidate {
 	char extra_char = '\0';
 	//! Suggestion position
 	idx_t suggestion_pos = 0;
+	//! The final score
+	optional_idx score;
 };
 
 struct AutoCompleteSuggestion {
-	AutoCompleteSuggestion(string text_p, idx_t pos, string type_p, char extra_char_p)
-	    : text(std::move(text_p)), pos(pos), type(std::move(type_p)), extra_char(extra_char_p) {
+	AutoCompleteSuggestion(string text_p, idx_t pos, string type_p, idx_t score, char extra_char_p)
+	    : text(std::move(text_p)), pos(pos), type(std::move(type_p)), score(score), extra_char(extra_char_p) {
 	}
 
 	string text;
 	idx_t pos;
 	string type;
+	idx_t score;
 	char extra_char;
 };
 
