@@ -1,0 +1,28 @@
+# name: test/sql/copy/csv/test_19788.test
+# description: Test that read_csv with comment option works correctly for small files
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# Test comment option with small file (2 columns, 1 data row)
+# This tests the fix for issue #19788 where small files with comments were returning 0 rows
+
+# Create a test file with a comment line and header
+query II
+SELECT * FROM read_csv('results_ck.csv', HEADER=TRUE, comment='#')
+----
+252055	POLYGON ((30116.589519650654 16139.305312954875, 30115.125053556585 16135.769779048942, 30111.589519650654 16134.305312954875, 30108.053985744722 16135.769779048942, 30106.589519650654 16139.305312954875, 30108.053985744722 16142.840846860809, 30111.589519650654 16144.305312954875, 30115.125053556585 16142.840846860809, 30116.589519650654 16139.305312954875))
+
+# Test with auto_detect=true (should also work)
+query II
+SELECT * FROM read_csv('results_ck.csv', HEADER=TRUE, comment='#', auto_detect=true)
+----
+252055	POLYGON ((30116.589519650654 16139.305312954875, 30115.125053556585 16135.769779048942, 30111.589519650654 16134.305312954875, 30108.053985744722 16135.769779048942, 30106.589519650654 16139.305312954875, 30108.053985744722 16142.840846860809, 30111.589519650654 16144.305312954875, 30115.125053556585 16142.840846860809, 30116.589519650654 16139.305312954875))
+
+# Test with small file - comment line and 2 data rows
+query II
+SELECT * FROM read_csv('data/csv/comments/simple_with_header.csv', HEADER=TRUE, comment='#')
+----
+1	3
+6	7
