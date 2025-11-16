@@ -67,10 +67,12 @@ public:
 	//! The host's estimated row count
 	const idx_t estimated_cardinality;
 
-	// OVER(...) (sorting)
+	//! The PARTITION BY sorting
 	Orders partitions;
+	//! The ORDER BY sorting
 	Orders orders;
-	idx_t sort_col_count;
+	//! The partition columns
+	vector<column_t> partition_ids;
 	//! Are we creating a dummy payload column?
 	bool force_payload = false;
 	// Key columns that must be computed
