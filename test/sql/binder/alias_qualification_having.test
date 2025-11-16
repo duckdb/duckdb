@@ -1,0 +1,50 @@
+# name: test/sql/binder/alias_qualification_having.test
+# description: Test alias.name resolution in HAVING clause
+# group: [binder]
+
+# basic HAVING filter using a projection alias
+query II
+SELECT a % 2 AS x, SUM(a) AS s
+FROM (VALUES (1),(2),(3),(4)) t(a)
+GROUP BY alias.x
+HAVING alias.s >= 6
+ORDER BY x;
+----
+0	6
+
+# chaining aliases and using the later alias in HAVING
+query III
+SELECT a + 1 AS x, alias.x % 2 AS y, SUM(a) AS s
+FROM (VALUES (1),(2),(3),(4)) t(a)
+GROUP BY alias.y
+HAVING alias.s > 5
+ORDER BY y;
+----
+1	1	6
+
+# quoted alias in HAVING
+query II
+SELECT (a/2)::INT AS "Half", COUNT(*) AS c
+FROM (VALUES (1),(2),(3),(4)) t(a)
+GROUP BY alias."Half"
+HAVING alias.c >= 1
+ORDER BY "Half";
+----
+0	1
+1	1
+2	2
+
+# Table actually named `alias` should be prioritized over alias references
+statement ok
+CREATE TABLE alias (g INT);
+
+statement ok
+INSERT INTO alias VALUES (1), (1), (2);
+
+query II
+SELECT g AS x, COUNT(*) c FROM alias
+GROUP BY alias.g
+HAVING alias.c = 2
+ORDER BY x;
+----
+1	2
