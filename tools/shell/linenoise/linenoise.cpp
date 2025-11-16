@@ -158,11 +158,11 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 		} else {
 			// if there are no ties we immediately accept the first completion suggestion
 			completion_idx = 0;
-			stop = true;
-			accept_completion = true;
 		}
 
+		idx_t action_count = 0;
 		while (!stop) {
+			action_count++;
 			HandleTerminalResize();
 			/* Show completion or original buffer */
 			if (completion_idx.IsValid()) {
@@ -190,6 +190,14 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 			Linenoise::Log("\nComplete Character %d\n", (int)key_press.action);
 			switch (key_press.action) {
 			case TAB: /* tab */
+				if (action_count == 1 && !has_ties) {
+					// if we had an "instant complete" as we had a clear winner - tab complete again from this position
+					// instead of cycling through this series of completions
+					next_key = key_press;
+					accept_completion = true;
+					stop = true;
+					break;
+				}
 				if (!completion_idx.IsValid()) {
 					completion_idx = 0;
 				} else {
@@ -201,11 +209,13 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 				switch (key_press.sequence) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
-					if (!completion_idx.IsValid() || completion_idx.GetIndex() == 0) {
-						// pressing shift-tab at the first completion cancels completion
+					if (!completion_idx.IsValid()) {
+						// pressing shift-tab when we don't have a selected completion means we abort searching
 						RefreshLine();
 						next_key.action = ENTER;
 						stop = true;
+					} else if (completion_idx.GetIndex() == 0) {
+						completion_idx = optional_idx();
 					} else {
 						completion_idx = completion_idx.GetIndex() - 1;
 					}
@@ -1417,9 +1427,11 @@ int Linenoise::Edit() {
 				}
 				continue;
 			}
-			if (!CompleteLine(key_press)) {
-				/* Return on errors */
-				return len;
+			while (key_press.action == TAB) {
+				if (!CompleteLine(key_press)) {
+					/* Return on errors */
+					return len;
+				}
 			}
 			/* Read next character when 0 */
 			if (key_press.action == KEY_NULL) {
