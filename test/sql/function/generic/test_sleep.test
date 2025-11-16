@@ -1,5 +1,5 @@
 # name: test/sql/function/generic/test_sleep.test
-# description: Test sleep_ms function
+# description: Test sleep_ms function for test
 # group: [generic]
 
 # Test basic sleep function - should return NULL
