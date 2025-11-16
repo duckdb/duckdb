@@ -562,6 +562,12 @@ string ShellHighlight::TerminalCode(PrintColor color, PrintIntensity intensity) 
 	case PrintIntensity::BOLD:
 		terminal_code = "\033[1m";
 		break;
+	case PrintIntensity::ITALIC:
+		terminal_code = "\033[3m";
+		break;
+	case PrintIntensity::BOLD_ITALIC:
+		terminal_code = "\033[1m\033[3m";
+		break;
 	case PrintIntensity::UNDERLINE:
 		terminal_code = "\033[4m";
 		break;

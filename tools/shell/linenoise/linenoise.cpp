@@ -115,8 +115,13 @@ TabCompletion Linenoise::TabComplete() const {
 	buf[pos] = prev_char;
 	for (auto &completion : result.completions) {
 		idx_t copy_offset = pos;
-		if (completion.extra_char != '\0' && buf[pos] == completion.extra_char) {
-			copy_offset++;
+		if (completion.extra_char != '\0') {
+			if (buf[pos] == completion.extra_char) {
+				// if the buffer already has the extra char at this position do not add it again
+				// i.e. if we are completing 'file.parq[CURSOR]' - complete to 'file.parquet' and not 'file.parquet''
+				copy_offset++;
+			}
+			completion.extra_char_pos = completion.completion.size() - 1;
 		}
 		completion.completion += buf + copy_offset;
 	}
