@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -79,22 +80,48 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	return BindSelectRef(index - 1);
 }
 
-bool GroupBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
+bool GroupBinder::TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) {
 	// failed to bind the column and the node is the root expression with depth = 0
 	// check if refers to an alias in the select clause
+
+	// Regular aliases cannot be qualified
+	if (colref.IsQualified()) {
+		return false;
+	}
+
 	auto &alias_name = colref.GetColumnName();
 	auto entry = bind_state.alias_map.find(alias_name);
 	if (entry == bind_state.alias_map.end()) {
 		// no matching alias found
 		return false;
 	}
-	if (!root_expression) {
+	if (!in_root_group_ref) {
 		result = BindResult(BinderException(
 		    colref,
 		    "Alias with name \"%s\" exists, but aliases cannot be used as part of an expression in the GROUP BY",
 		    alias_name));
 		return true;
 	}
+	result = BindResult(BindSelectRef(entry->second));
+	if (!result.HasError()) {
+		group_alias_map[alias_name] = bind_index;
+	}
+	return true;
+}
+
+bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) {
+	// handle qualified alias.<name>
+	// In this implementation we don't restrict the alias to be used as a part of an expression
+	// We don't unify the two-step alias binding here as each one of them has its own semantics
+	if (!colref.IsQualified() || colref.column_names.size() != 2 || !StringUtil::CIEquals(colref.GetTableName(), "alias")) {
+		return false;
+	}
+	const auto &alias_name = colref.GetColumnName();
+	auto entry = bind_state.alias_map.find(alias_name);
+	if (entry == bind_state.alias_map.end()) {
+		return false;
+	}
+
 	result = BindResult(BindSelectRef(entry->second));
 	if (!result.HasError()) {
 		group_alias_map[alias_name] = bind_index;
@@ -109,6 +136,14 @@ BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// THEN if no match is found, refer to outer queries
 
 	// first try to bind to the base columns (original tables)
+
+	// mark that we are binding the root GROUP BY expression so alias rules apply
+	struct RootGuard {
+		bool &flag;
+		explicit RootGuard(bool &f) : flag(f) { flag = true; }
+		~RootGuard() { flag = false; }
+	};
+	RootGuard guard(in_root_group_ref);
 	return ExpressionBinder::BindExpression(colref, 0, true);
 }
 

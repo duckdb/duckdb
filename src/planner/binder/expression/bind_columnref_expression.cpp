@@ -513,35 +513,14 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	ErrorData error;
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
-		// column wasn't found, we're trying to bind it as an alias
-		if (col_ref_p.IsQualified()) {
-			if (StringUtil::CIEquals(col_ref_p.GetTableName(), "alias")) {
-				if (!SupportsAliasReference()) {
-					throw BinderException(col_ref_p, "alias.* references are only valid in a SELECT projection list");
-				}
-				const auto &alias_name = col_ref_p.GetColumnName();
-
-				auto resolved = TryResolveAliasReference(alias_name, col_ref_p);
-				if (!resolved) {
-					throw BinderException(
-					    col_ref_p, "alias.%s refers to an unknown or not-yet-defined alias in SELECT list", alias_name);
-				}
-				resolved->SetQueryLocation(col_ref_p.GetQueryLocation());
-				return BindResult(std::move(resolved));
-			}
-		} else {
+		// column wasn't found, try the unified two-step alias binding
+		if (ExpressionBinder::IsPotentialAlias(col_ref_p)) {
 			BindResult alias_result;
-			auto found_alias = TryBindAlias(col_ref_p, root_expression, alias_result);
-			if (found_alias) {
+			if (TryBindRegularAlias(col_ref_p, alias_result)) {
 				return alias_result;
 			}
-			found_alias = QualifyColumnAlias(col_ref_p);
-			if (!found_alias) {
-				// column was not found - check if it is a SQL value function
-				auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
-				if (value_function) {
-					return BindExpression(value_function, depth);
-				}
+			if (TryResolveAliasReference(col_ref_p, alias_result)) {
+				return alias_result;
 			}
 		}
 		error.AddQueryLocation(col_ref_p);

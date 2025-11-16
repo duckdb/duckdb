@@ -9,51 +9,7 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : BaseSelectBinder(binder, context, node, info) {
 }
 
-unique_ptr<Expression> SelectBinder::TryResolveAliasReference(const string &alias_name,
-                                                              const ColumnRefExpression &column_ref_expr) {
-	// resolve alias.name within SELECT list
-	auto entry = node.bind_state.alias_map.find(alias_name);
-	if (entry == node.bind_state.alias_map.end()) {
-		throw BinderException(column_ref_expr, "alias.%s referenced, but no such alias exists in the SELECT list",
-		                      alias_name);
-	}
-	auto alias_index = entry->second;
-
-	// Simple way to prevent circular aliasing (`SELECT alias.y as x, alias.x as y;`)
-	if (alias_index >= node.bound_column_count) {
-		throw BinderException(column_ref_expr, "alias.%s references an alias defined after the current expression",
-		                      alias_name);
-	}
-
-	// Restricting alias references to subqueries as we will need to define some caveats we want to enforce
-	if (node.bind_state.AliasHasSubquery(alias_index)) {
-		throw BinderException(column_ref_expr,
-		                      "Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery. This is "
-		                      "not yet supported.",
-		                      alias_name);
-	}
-	auto copied_unbound = node.bind_state.BindAlias(alias_index);
-	return Bind(copied_unbound);
-}
-
-unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &column_name) {
-	auto alias_entry = node.bind_state.alias_map.find(column_name);
-	if (alias_entry != node.bind_state.alias_map.end()) {
-		// don't replace SQL value functions if they are in the alias map
-		return nullptr;
-	}
-	return ExpressionBinder::GetSQLValueFunction(column_name);
-}
-
-BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	// first try to bind the column reference regularly
-	auto result = BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
-	if (!result.HasError()) {
-		return result;
-	}
-	// binding failed
-	// check in the alias map
-	auto &colref = (expr_ptr.get())->Cast<ColumnRefExpression>();
+bool SelectBinder::TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) {
 	if (!colref.IsQualified()) {
 		auto &bind_state = node.bind_state;
 		auto alias_entry = node.bind_state.alias_map.find(colref.column_names[0]);
@@ -71,11 +27,59 @@ BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 				                      colref.column_names[0]);
 			}
 			auto copied_expression = node.bind_state.BindAlias(index);
-			result = BindExpression(copied_expression, depth, false);
-			return result;
+			result = BindExpression(copied_expression, 0, false);
+			return true;
 		}
 	}
-	// entry was not found in the alias map: return the original error
+	return false;
+}
+
+bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) {
+	// must be a qualified alias.<name>
+	if (!colref.IsQualified() || colref.column_names.size() != 2 ||
+	    !StringUtil::CIEquals(colref.GetTableName(), "alias")) {
+		return false;
+	}
+
+	const auto &alias_name = colref.GetColumnName();
+	auto entry = node.bind_state.alias_map.find(alias_name);
+	if (entry == node.bind_state.alias_map.end()) {
+		throw BinderException(colref, "alias.%s referenced, but no such alias exists in the SELECT list", alias_name);
+	}
+
+	auto alias_index = entry->second;
+	// Simple way to prevent circular aliasing (`SELECT alias.y as x, alias.x as y;`)
+	if (alias_index >= node.bound_column_count) {
+		throw BinderException(colref, "alias.%s references an alias defined after the current expression", alias_name);
+	}
+
+	if (node.bind_state.AliasHasSubquery(alias_index)) {
+		throw BinderException(colref,
+		                      "Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery. This is "
+		                      "not yet supported.",
+		                      alias_name);
+	}
+	auto copied_unbound = node.bind_state.BindAlias(alias_index);
+	auto bound_expr = Bind(copied_unbound);
+	result = BindResult(std::move(bound_expr));
+	return true;
+}
+
+unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &column_name) {
+	auto alias_entry = node.bind_state.alias_map.find(column_name);
+	if (alias_entry != node.bind_state.alias_map.end()) {
+		// don't replace SQL value functions if they are in the alias map
+		return nullptr;
+	}
+	return ExpressionBinder::GetSQLValueFunction(column_name);
+}
+
+BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	// first try to bind the column reference regularly
+	auto result = BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
+	if (!result.HasError()) {
+		return result;
+	}
 	return result;
 }
 

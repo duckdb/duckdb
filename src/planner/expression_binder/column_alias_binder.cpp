@@ -16,13 +16,25 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 	D_ASSERT(expr_ptr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
 	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
 
-	// Qualified columns cannot be aliases.
-	if (expr.IsQualified()) {
+	if (!ExpressionBinder::IsPotentialAlias(expr)) {
 		return false;
 	}
 
+	string alias_name;
+	if (expr.IsQualified()) {
+		if (expr.column_names.size() == 2 && StringUtil::CIEquals(expr.GetTableName(), "alias")) {
+			// Handle explicit qualified alias references: alias.<name>
+			alias_name = expr.GetColumnName();
+		} else {
+			// Qualified columns that are not `alias.<name>` cannot be aliases
+			return false;
+		}
+	} else {
+		alias_name = expr.column_names[0];
+	}
+
 	// We try to find the alias in the alias_map and return false, if no alias exists.
-	auto alias_entry = bind_state.alias_map.find(expr.column_names[0]);
+	auto alias_entry = bind_state.alias_map.find(alias_name);
 	if (alias_entry == bind_state.alias_map.end()) {
 		return false;
 	}

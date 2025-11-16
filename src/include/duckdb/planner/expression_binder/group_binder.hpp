@@ -35,12 +35,18 @@ protected:
 	BindResult BindSelectRef(idx_t entry);
 	BindResult BindColumnRef(ColumnRefExpression &expr);
 	BindResult BindConstant(ConstantExpression &expr);
-	bool TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) override;
+
+	// Two-step alias binding overrides for GROUP BY
+	bool TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) override;
+	bool TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) override;
 
 	SelectNode &node;
 	SelectBindState &bind_state;
 	case_insensitive_map_t<idx_t> &group_alias_map;
 	unordered_set<idx_t> used_aliases;
+
+	// tracks whether we are binding the root GROUP BY expression to enforce alias usage rules
+	bool in_root_group_ref = false;
 
 	idx_t group_index;
 };

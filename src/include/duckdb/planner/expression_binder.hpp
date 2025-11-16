@@ -74,15 +74,13 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
-	// Returns true if alias.name references are allowed in this binder context
-	virtual bool SupportsAliasReference() const {
-		return false;
-	}
-	// Try to resolve alias.name in contexts that support it; default returns nullptr to defer
-	virtual unique_ptr<Expression> TryResolveAliasReference(const string &alias_name,
-	                                                        const ColumnRefExpression &col_ref_p) {
-		return nullptr;
-	}
+	// legacy unqualified alias binding (e.g., SELECT x AS y; then later y)
+	virtual bool TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) { return false; }
+	// explicit qualified alias reference resolution (alias.<name>) with deep-binding
+	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) { return false; }
+
+	// Returns true if the ColumnRef could be an alias reference (unqualified or qualified with table name "alias")
+	static bool IsPotentialAlias(const ColumnRefExpression &colref);
 
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
@@ -143,7 +141,6 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
-	virtual bool TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result);
 	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
 
 	//! Bind the given expression. Unlike Bind(), this does *not* mute the given ParsedExpression.
