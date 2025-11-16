@@ -1010,12 +1010,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 	switch (flags.Lock()) {
 	case FileLockType::NO_LOCK:
-		// Allow other handles to read, write, and delete while this handle is open
-		share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+		share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE;
 		break;
 	case FileLockType::READ_LOCK:
-		// Allow shared reads and deletion while this handle holds a read lock
-		share_mode = FILE_SHARE_READ | FILE_SHARE_DELETE;
+		share_mode = FILE_SHARE_READ;
 		break;
 	case FileLockType::WRITE_LOCK:
 		share_mode = 0;
