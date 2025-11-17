@@ -75,9 +75,13 @@ public:
 	virtual ~ExpressionBinder();
 
 	// legacy unqualified alias binding
-	virtual bool TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) { return false; }
+	virtual bool TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) {
+		return false;
+	}
 	// explicit qualified alias reference resolution (alias.<name>) with deep-binding
-	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) { return false; }
+	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) {
+		return false;
+	}
 
 	// Returns true if the ColumnRef could be an alias reference (unqualified or qualified with table name "alias")
 	static bool IsPotentialAlias(const ColumnRefExpression &colref);

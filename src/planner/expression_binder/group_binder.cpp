@@ -113,7 +113,8 @@ bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, BindResu
 	// handle qualified alias.<name>
 	// In this implementation we don't restrict the alias to be used as a part of an expression
 	// We don't unify the two-step alias binding here as each one of them has its own semantics
-	if (!colref.IsQualified() || colref.column_names.size() != 2 || !StringUtil::CIEquals(colref.GetTableName(), "alias")) {
+	if (!colref.IsQualified() || colref.column_names.size() != 2 ||
+	    !StringUtil::CIEquals(colref.GetTableName(), "alias")) {
 		return false;
 	}
 	const auto &alias_name = colref.GetColumnName();
@@ -140,8 +141,12 @@ BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// mark that we are binding the root GROUP BY expression so alias rules apply
 	struct RootGuard {
 		bool &flag;
-		explicit RootGuard(bool &f) : flag(f) { flag = true; }
-		~RootGuard() { flag = false; }
+		explicit RootGuard(bool &f) : flag(f) {
+			flag = true;
+		}
+		~RootGuard() {
+			flag = false;
+		}
 	};
 	RootGuard guard(in_root_group_ref);
 	return ExpressionBinder::BindExpression(colref, 0, true);
