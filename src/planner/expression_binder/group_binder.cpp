@@ -80,7 +80,7 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	return BindSelectRef(index - 1);
 }
 
-bool GroupBinder::TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) {
+bool GroupBinder::TryBindRegularAlias(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
 	// failed to bind the column and the node is the root expression with depth = 0
 	// check if refers to an alias in the select clause
 
@@ -109,7 +109,7 @@ bool GroupBinder::TryBindRegularAlias(ColumnRefExpression &colref, BindResult &r
 	return true;
 }
 
-bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) {
+bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
 	// handle qualified alias.<name>
 	// In this implementation we don't restrict the alias to be used as a part of an expression
 	// We don't unify the two-step alias binding here as each one of them has its own semantics

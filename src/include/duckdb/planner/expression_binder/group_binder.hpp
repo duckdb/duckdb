@@ -37,8 +37,8 @@ protected:
 	BindResult BindConstant(ConstantExpression &expr);
 
 	// Two-step alias binding overrides for GROUP BY
-	bool TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) override;
-	bool TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) override;
+	bool TryBindRegularAlias(ColumnRefExpression &colref, idx_t depth, BindResult &result) override;
+	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) override;
 
 	SelectNode &node;
 	SelectBindState &bind_state;

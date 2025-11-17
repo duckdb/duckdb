@@ -9,7 +9,7 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : BaseSelectBinder(binder, context, node, info) {
 }
 
-bool SelectBinder::TryBindRegularAlias(ColumnRefExpression &colref, BindResult &result) {
+bool SelectBinder::TryBindRegularAlias(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
 	if (!colref.IsQualified()) {
 		auto &bind_state = node.bind_state;
 		auto alias_entry = node.bind_state.alias_map.find(colref.column_names[0]);
@@ -27,14 +27,14 @@ bool SelectBinder::TryBindRegularAlias(ColumnRefExpression &colref, BindResult &
 				                      colref.column_names[0]);
 			}
 			auto copied_expression = node.bind_state.BindAlias(index);
-			result = BindExpression(copied_expression, 0, false);
+			result = BindExpression(copied_expression, depth, false);
 			return true;
 		}
 	}
 	return false;
 }
 
-bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) {
+bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
 	// must be a qualified alias.<name>
 	if (!ExpressionBinder::IsPotentialAlias(colref)) {
 		return false;
