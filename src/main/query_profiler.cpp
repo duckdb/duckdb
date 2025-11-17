@@ -295,9 +295,9 @@ void QueryProfiler::EndQuery() {
 				info.metrics[MetricsType::ATTACH_REPLAY_WAL_LATENCY] =
 				    query_metrics.attach_replay_wal_latency.Elapsed();
 			}
-			if (info.Enabled(settings, MetricsType::WRITE_TO_WAL_COMMIT_LATENCY)) {
-				info.metrics[MetricsType::WRITE_TO_WAL_COMMIT_LATENCY] =
-				    query_metrics.write_to_wal_commit_latency.Elapsed();
+			if (info.Enabled(settings, MetricsType::COMMIT_LOCAL_STORAGE_LATENCY)) {
+				info.metrics[MetricsType::COMMIT_LOCAL_STORAGE_LATENCY] =
+				    query_metrics.commit_local_storage_latency.Elapsed();
 			}
 			if (info.Enabled(settings, MetricsType::WRITE_TO_WAL_LATENCY)) {
 				info.metrics[MetricsType::WRITE_TO_WAL_LATENCY] = query_metrics.write_to_wal_latency.Elapsed();
@@ -387,8 +387,8 @@ void QueryProfiler::StartTimer(const MetricsType type) {
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.Start();
 		return;
-	case MetricsType::WRITE_TO_WAL_COMMIT_LATENCY:
-		query_metrics.write_to_wal_commit_latency.Start();
+	case MetricsType::COMMIT_LOCAL_STORAGE_LATENCY:
+		query_metrics.commit_local_storage_latency.Start();
 		return;
 	case MetricsType::WRITE_TO_WAL_LATENCY:
 		query_metrics.write_to_wal_latency.Start();
@@ -416,8 +416,8 @@ void QueryProfiler::EndTimer(MetricsType type) {
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.End();
 		return;
-	case MetricsType::WRITE_TO_WAL_COMMIT_LATENCY:
-		query_metrics.write_to_wal_commit_latency.End();
+	case MetricsType::COMMIT_LOCAL_STORAGE_LATENCY:
+		query_metrics.commit_local_storage_latency.End();
 		return;
 	case MetricsType::WRITE_TO_WAL_LATENCY:
 		query_metrics.write_to_wal_latency.End();

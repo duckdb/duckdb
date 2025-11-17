@@ -215,9 +215,9 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 
 		auto &profiler = *context.client_data->profiler;
 
-		profiler.StartTimer(MetricsType::WRITE_TO_WAL_COMMIT_LATENCY);
+		profiler.StartTimer(MetricsType::COMMIT_LOCAL_STORAGE_LATENCY);
 		storage->Commit(commit_state.get());
-		profiler.EndTimer(MetricsType::WRITE_TO_WAL_COMMIT_LATENCY);
+		profiler.EndTimer(MetricsType::COMMIT_LOCAL_STORAGE_LATENCY);
 
 		profiler.StartTimer(MetricsType::WRITE_TO_WAL_LATENCY);
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
