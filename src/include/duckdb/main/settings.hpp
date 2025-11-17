@@ -249,6 +249,17 @@ struct AutoloadKnownExtensionsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct BlockAllocatorMemorySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "block_allocator_memory";
+	static constexpr const char *Description = "Physical memory that the block allocator is allowed to use (this "
+	                                           "memory is never freed and cannot be reduced).";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct CatalogErrorMaxSchemasSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "catalog_error_max_schemas";

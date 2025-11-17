@@ -1,8 +1,10 @@
 # name: test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test
 # group: [temp_files]
 
-foreach cipher GCM CTR
+# httpfs require to write encrypted data
+require httpfs
 
+foreach cipher GCM CTR
 
 require block_size 262144
 

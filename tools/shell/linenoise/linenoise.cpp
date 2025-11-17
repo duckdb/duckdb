@@ -131,6 +131,7 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 	render_completion_suggestion = false;
 	if (completions.empty()) {
 		Terminal::Beep();
+		next_key.action = KEY_NULL;
 	} else {
 		bool stop = false;
 		bool accept_completion = false;
