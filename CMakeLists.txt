@@ -774,8 +774,9 @@ if (BUILD_MAIN_DUCKDB_LIBRARY)
  add_subdirectory(src)
  add_subdirectory(tools)
  add_subdirectory(extension)
-
 endif()
+
+add_third_party(mbedtls)
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)
