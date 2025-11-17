@@ -95,7 +95,7 @@ a.out
 #==============================================================================#
 ~*
 *~
-tmp/
+
 
 #==============================================================================#
 # KDevelop files
@@ -160,7 +160,6 @@ third_party/logcabin/
 
 .metadata
 bin/
-tmp/
 *.tmp
 *.bak
 *.swp
@@ -296,7 +295,6 @@ cmake-build-relwithdebinfo
 CMakeUserPresets.json
 
 # Generated documentation
-docs
 
 # tests
 test/test.sql
@@ -358,3 +356,4 @@ extension_external
 
 test/sql/pragma/output.json
 tools/pythonpkg/duckdb_build/
+
