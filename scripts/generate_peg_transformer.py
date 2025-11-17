@@ -190,12 +190,12 @@ def generate_code_for_missing_rules(generation_queue):
         print(f"1. Add DECLARATION to: {FACTORY_HPP_FILE}")
         print(generate_declaration_stub(rule_name))
 
-        print(f"2. Add REGISTRATION to: {FACTORY_REG_FILE}\n\tInside the appropriate Register...() function:")
+        print(f"2. Add REGISTRATION to: {FACTORY_REG_FILE}\nInside the appropriate Register...() function:")
         print(generate_registration_stub(rule_name))
 
         print(f"3. Add IMPLEMENTATION to: {cpp_path}")
         print(generate_implementation_stub(rule_name))
-        print(f"--- End of {rule_name} ---")
+        print(f"--- End of {rule_name} ---\n")
 
 def main():
     """
@@ -223,6 +223,7 @@ def main():
     print("\n--- Rule Coverage Check ---")
 
     total_grammar_rules = 0
+    total_rules_scanned = 0
     total_found_enum = 0
     total_found_registered = 0
     total_missing_registration = 0
@@ -246,6 +247,7 @@ def main():
             continue
 
         for rule_name in sorted(grammar_rules):
+            total_rules_scanned += 1
             if rule_name in EXCLUDED_RULES:
                 print(f"{'[ EXCLUDED ]':<14} {rule_name}")
                 continue
@@ -287,13 +289,14 @@ def main():
     coverage = (total_covered / total_grammar_rules) * 100 if total_grammar_rules > 0 else 0
 
     print("\n--- Summary: Rule Coverage ---")
-    print(f"{'TOTAL GRAMMAR RULES':<25} : {total_grammar_rules}")
+    print(f"{'TOTAL RULES SCANNED':<25} : {total_rules_scanned}")
+    print(f"  {'  - Excluded':<23} : {len(EXCLUDED_RULES)}")
+    print("---------------------------------------")
+    print(f"{'TOTAL ACTIONABLE RULES':<25} : {total_grammar_rules}")
     print(f"{'TOTAL COVERED':<25} : {total_covered} ({coverage:.2f}%)")
     print(f"  {'  - Enum':<23} : {total_found_enum}")
     print(f"  {'  - Registered':<23} : {total_found_registered}")
     print(f"{'TOTAL ISSUES':<25} : {total_issues}")
-    print(f"  {'  - Missing Impl':<23} : {total_missing_implementation}")
-    print(f"  {'  - Not Registered':<23} : {total_missing_registration}")
 
     if missing_rules_by_file:
         print("\n--- Summary: Issues Per File ---")
