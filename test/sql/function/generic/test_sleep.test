@@ -129,7 +129,7 @@ CREATE OR REPLACE TABLE sleep_profiling_multi AS SELECT * FROM read_json('__TEST
 # This query returns both cpu_time and validation result so we can see the actual cpu_time value
 # The cpu_time value will vary between runs, but we can see it in the output for debugging
 query TT
-SELECT cpu_time, cpu_time >= 0.04 AND cpu_time < 0.15 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
+SELECT *, cpu_time, cpu_time >= 0.04 AND cpu_time < 0.15 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
 ----
 0.05	true
 
