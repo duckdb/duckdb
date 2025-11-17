@@ -1,0 +1,14 @@
+diff --git a/test/sql/logging/http_logging.test b/test/sql/logging/http_logging.test
+index 031e43e0e1f..e99b3c7cccf 100644
+--- a/test/sql/logging/http_logging.test
++++ b/test/sql/logging/http_logging.test
+@@ -8,6 +8,9 @@ require httpfs
+ statement ok
+ CALL enable_logging('HTTP');
+ 
++statement ok
++SET httpfs_client_implementation = httplib;
++
+ statement ok
+ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+ 
