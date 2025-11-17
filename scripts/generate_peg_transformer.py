@@ -3,11 +3,14 @@
 import re
 from pathlib import Path
 import sys
+import argparse  # Import argparse
 
 # --- Configuration ---
-GRAMMAR_DIR = "../extension/autocomplete/grammar/statements"
-TRANSFORMER_DIR = "../extension/autocomplete/transformer"
-FACTORY_REG_FILE = "../extension/autocomplete/transformer/peg_transformer_factory.cpp"
+# Paths are relative to the script's location
+SCRIPT_DIR = Path(__file__).parent
+GRAMMAR_DIR = SCRIPT_DIR / "../extension/autocomplete/grammar/statements"
+TRANSFORMER_DIR = SCRIPT_DIR / "../extension/autocomplete/transformer"
+FACTORY_REG_FILE = SCRIPT_DIR / "../extension/autocomplete/transformer/peg_transformer_factory.cpp"
 
 # Regex to find grammar rule names (e.g., "AlterStatement")
 # Matches: RuleName <- ...
@@ -32,7 +35,7 @@ def find_grammar_rules(grammar_path):
     Scans the grammar directory for *.gram files and extracts all rule names.
 
     Returns a dictionary mapping:
-    { "filename.gram": ["Rule1", "Rule2"], ... }
+    { "filename.gram": (Path, ["Rule1", "Rule2"]), ... }
     """
     all_rules_by_file = {}
 
@@ -59,7 +62,7 @@ def find_grammar_rules(grammar_path):
             print(f"Error reading {file_path}: {e}", file=sys.stderr)
             continue
 
-        all_rules_by_file[file_path.name] = rules_in_file
+        all_rules_by_file[file_path.name] = (file_path, rules_in_file)
 
     return all_rules_by_file
 
@@ -136,12 +139,73 @@ def find_factory_registrations(factory_file_path):
 
     return enum_rules, registered_rules
 
+# --- NEW: Phase 5: Code Generation ---
+
+def generate_stub_for_rule(rule_name):
+    """
+    Generates a C++ stub string for a given rule name.
+    We use unique_ptr<SQLStatement> as a common placeholder,
+    as requested in the prompt. This may need to be manually
+    changed for rules that don't return a statement.
+    """
+    return f"""
+unique_ptr<SQLStatement> PEGTransformerFactory::Transform{rule_name}(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {{
+	throw NotImplementedException("Transform{rule_name} has not yet been implemented");
+}}
+"""
+
+def generate_missing_stubs(generation_queue):
+    """
+    Iterates the generation queue and prints stub code.
+    Checks that the target .cpp file exists before printing.
+    """
+    if not generation_queue:
+        print("\n✅ No missing rules to generate.")
+        return
+
+    print("\n--- ✂️  Code Generation: Missing Stubs ---")
+    print("Copy and paste the code below into the correct files.")
+
+    for cpp_filename, rules in generation_queue.items():
+        cpp_path = TRANSFORMER_DIR / cpp_filename
+
+        # Constraint: Do not generate code for non-existent files
+        if not cpp_path.is_file():
+            print(f"\n// --- SKIPPING: {cpp_filename} (File not found) ---")
+            for rule in rules:
+                print(f"//   - (Skipped) Transform{rule}")
+            continue
+
+        print(f"\n// --- Add to: {cpp_path.relative_to(SCRIPT_DIR.parent)} ---")
+        print("\nnamespace duckdb {\n")
+
+        for rule_name in rules:
+            print(generate_stub_for_rule(rule_name))
+
+        print("\n} // namespace duckdb\n")
+        print("// --- End of {cpp_filename} ---")
+
+
 # --- Main Execution ---
 
 def main():
     """
     Main script to find rules, compare them, and print a report.
     """
+    # --- NEW: Argument Parsing ---
+    parser = argparse.ArgumentParser(
+        description="Check transformer coverage and optionally generate stubs."
+    )
+    parser.add_argument(
+        "-g",
+        "--generate",
+        action="store_true",
+        help="Generate C++ stubs for missing transformer rules."
+    )
+    args = parser.parse_args()
+
+    # --- Run Phases 1-4 ---
     grammar_rules_by_file = find_grammar_rules(Path(GRAMMAR_DIR))
     transformer_impls = find_transformer_rules(Path(TRANSFORMER_DIR))
     enum_rules, registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
@@ -160,10 +224,19 @@ def main():
     all_grammar_rules_flat = set()
     missing_rules_by_file = {}
 
+    # NEW: Dictionary to hold { "transform_file.cpp": ["Rule1", "Rule2"] }
+    generation_queue = {}
+
     # Iterate through each file and its rules
-    for file_name, grammar_rules in sorted(grammar_rules_by_file.items()):
+    for file_name, (file_path, grammar_rules) in sorted(grammar_rules_by_file.items()):
         print(f"\n--- File: {file_name} ---")
         missing_count_this_file = 0
+
+        # --- NEW: Prepare for generation ---
+        # Map 'alter.gram' -> 'transform_alter.cpp'
+        stem = file_path.stem
+        cpp_filename = f"transform_{stem}.cpp"
+        missing_rules_for_gen = []
 
         if not grammar_rules:
             print("  (No grammar rules found in this file)")
@@ -192,6 +265,8 @@ def main():
                 status_str = "[ ❌ MISSING ]"
                 total_missing_implementation += 1
                 missing_count_this_file += 1
+                # NEW: Add to generation queue
+                missing_rules_for_gen.append(rule_name)
 
             # Use f-string padding to align to 14 characters
             print(f"  {status_str:<14} {rule_name}")
@@ -199,6 +274,11 @@ def main():
         if missing_count_this_file > 0:
             missing_rules_by_file[file_name] = missing_count_this_file
 
+        # NEW: Add this file's missing rules to the main queue
+        if missing_rules_for_gen:
+            generation_queue[cpp_filename] = missing_rules_for_gen
+
+    # ... (Rest of the summary/orphan reports, no changes) ...
     total_covered = total_found_enum + total_found_registered
     total_issues = total_missing_implementation + total_missing_registration
     coverage = (total_covered / total_grammar_rules) * 100 if total_grammar_rules > 0 else 0
@@ -254,6 +334,11 @@ def main():
             print(f"    - {rule}")
 
     print("\n✅ Done.")
+
+    # --- NEW: Run Generation if Flag is Set ---
+    if args.generate:
+        generate_missing_stubs(generation_queue)
+
 
 if __name__ == "__main__":
     main()
