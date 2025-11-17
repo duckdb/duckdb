@@ -15,7 +15,14 @@ CompressedFile::~CompressedFile() {
 	try {
 		// stream_wrapper->Close() might throw
 		CompressedFile::Close();
-	} catch (...) { // NOLINT - cannot throw in exception
+	} catch (std::exception &ex) {
+		if (child_handle) {
+			// FIXME: make more log context available here.
+			ErrorData data(ex);
+			DUCKDB_LOG_ERROR(child_handle->logger, "CompressedFile::~CompressedFile()\t\t" + data.Message());
+		}
+	} catch (...) {
+		// NOLINT
 	}
 }
 

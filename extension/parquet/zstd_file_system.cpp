@@ -28,7 +28,15 @@ ZstdStreamWrapper::~ZstdStreamWrapper() {
 	}
 	try {
 		Close();
-	} catch (...) { // NOLINT: swallow exceptions in destructor
+	} catch (std::exception &ex) {
+		if (file && file->child_handle) {
+			// FIXME: make more log context available here.
+			ErrorData data(ex);
+			DUCKDB_LOG_ERROR(file->child_handle->logger,
+			                 "ZstdStreamWrapper::~ZstdStreamWrapper()\t\t" + data.Message());
+		}
+	} catch (...) {
+		// NOLINT
 	}
 }
 

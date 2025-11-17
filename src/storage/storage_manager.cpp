@@ -421,6 +421,11 @@ SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 	try {
 		// truncate the WAL in case of a destructor
 		RevertCommit();
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+
+		DUCKDB_LOG_ERROR(wal.GetDatabase().GetDatabase(),
+		                 "SingleFileStorageCommitState::~SingleFileStorageCommitState()\t\t" + data.Message());
 	} catch (...) { // NOLINT
 	}
 }

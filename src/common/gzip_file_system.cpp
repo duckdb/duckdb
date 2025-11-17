@@ -93,7 +93,13 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 	}
 	try {
 		MiniZStreamWrapper::Close();
-	} catch (...) { // NOLINT - cannot throw in exception
+	} catch (std::exception &ex) {
+		if (file && file->child_handle) {
+			ErrorData data(ex);
+			DUCKDB_LOG_ERROR(file->child_handle->logger,
+			                 "MiniZStreamWrapper::~MiniZStreamWrapper()\t\t" + data.Message())
+		}
+	} catch (...) { // NOLINT
 	}
 }
 
