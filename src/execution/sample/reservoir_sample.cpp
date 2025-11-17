@@ -111,7 +111,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	if (destroyed || !reservoir_chunk || Chunk().size() == 0) {
 		return nullptr;
 	}
-	// cannot destory internal samples.
+	// cannot destroy internal samples.
 	auto ret = make_uniq<DataChunk>();
 
 	SelectionVector ret_sel(STANDARD_VECTOR_SIZE);
@@ -351,7 +351,7 @@ void ReservoirSample::WeightedMerge(ReservoirSample &other_sample) {
 	for (idx_t i = num_samples_to_keep; i < total_samples; i++) {
 		auto min_weight_this = base_reservoir_sample->min_weight_threshold;
 		auto min_weight_other = other_sample.base_reservoir_sample->min_weight_threshold;
-		// min weight threshol is always positive
+		// min weight threshold is always positive
 		if (min_weight_this > min_weight_other) {
 			// pop from other
 			other_sample.base_reservoir_sample->reservoir_weights.pop();
@@ -908,7 +908,7 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
 
 void ReservoirSamplePercentage::Finalize() {
 	// need to finalize the current sample, if any
-	// we are finializing, so we are starting to return chunks. Our last chunk has
+	// we are finalizing, so we are starting to return chunks. Our last chunk has
 	// sample_percentage * RESERVOIR_THRESHOLD entries that hold samples.
 	// if our current count is less than the sample_percentage * RESERVOIR_THRESHOLD
 	// then we have sampled too much for the current_sample and we need to redo the sample

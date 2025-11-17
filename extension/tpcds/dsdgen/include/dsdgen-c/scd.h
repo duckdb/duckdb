@@ -47,7 +47,7 @@ ds_key_t getSKFromID(ds_key_t kID, int nColumn);
 ds_key_t getFirstSK(ds_key_t kID);
 /*
  * handle the partial change of a history keeping record
- * TODO: remove the macros in favor of straight fucntion calls
+ * TODO: remove the macros in favor of straight function calls
  */
 #define SCD_INT  0
 #define SCD_CHAR 1

@@ -31,7 +31,7 @@ void load_dists(long textBufferSize, DBGenContext *ctx) {
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "verbs", &verbs);
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "adjectives", &adjectives);
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "adverbs", &adverbs);
-	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "auxillaries", &auxillaries);
+	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "auxiliaries", &auxiliaries);
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "terminators", &terminators);
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "articles", &articles);
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "prepositions", &prepositions);
@@ -73,7 +73,7 @@ void cleanup_dists(void) {
 	cleanup_dist(&verbs);
 	cleanup_dist(&adjectives);
 	cleanup_dist(&adverbs);
-	cleanup_dist(&auxillaries);
+	cleanup_dist(&auxiliaries);
 	cleanup_dist(&terminators);
 	cleanup_dist(&articles);
 	cleanup_dist(&prepositions);

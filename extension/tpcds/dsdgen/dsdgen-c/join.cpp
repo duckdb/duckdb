@@ -69,16 +69,16 @@ static ds_key_t web_join(int col, ds_key_t join_key);
  * Assumptions:
  * Side Effects:
  * TODO: Relies on existing RNG code, which isn't really 64bit; will probably
- * requre a rework of the genrand_xx routines
+ * require a rework of the genrand_xx routines
  */
 static ds_key_t date_join(int from_tbl, int from_col, ds_key_t join_count, int nYear) {
 	int nDay, nTemp, nMin = -1, nMax = -1, nResult;
 	static int jToday;
-	date_t TempDate;
+	date_t template;
 
 	if (InitConstants::date_join_init == 0) {
-		strtodt(&TempDate, TODAYS_DATE);
-		jToday = dttoj(&TempDate);
+		strtodt(&template, TODAYS_DATE);
+		jToday = dttoj(&template);
 		InitConstants::date_join_init = 1;
 	}
 
@@ -117,11 +117,11 @@ static ds_key_t date_join(int from_tbl, int from_col, ds_key_t join_count, int n
 		break;
 	}
 
-	TempDate.year = nYear;
-	TempDate.month = 1;
-	TempDate.day = 1;
+	template.year = nYear;
+	template.month = 1;
+	template.day = 1;
 
-	nResult = dttoj(&TempDate) + nDay;
+	nResult = dttoj(&template) + nDay;
 
 	return ((ds_key_t)(nResult > jToday) ? -1 : nResult);
 }
@@ -138,7 +138,7 @@ static ds_key_t date_join(int from_tbl, int from_col, ds_key_t join_count, int n
  * Assumptions:
  * Side Effects:
  * TODO: Relies on existing RNG code, which isn't really 64bit; will probably
- * requre a rework of the genrand_xx routines
+ * require a rework of the genrand_xx routines
  */
 static ds_key_t time_join(int to_tbl, int to_col, ds_key_t join_count) {
 	int hour, secs;
@@ -372,7 +372,7 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
  * Assumptions:
  * Side Effects:
  * TODO: Relies on existing RNG code, which isn't really 64bit; will probably
- *requre a rework of the genrand_xx routines
+ *require a rework of the genrand_xx routines
  */
 ds_key_t mk_join(int from_col, int to_tbl, ds_key_t join_count) {
 	ds_key_t res;

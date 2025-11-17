@@ -1108,7 +1108,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && !column_pointers.empty() &&
 	    !HasChanges()) {
 		// we have existing metadata and the row group has not been changed
-		// re-use previous metadata
+		// reuse previous metadata
 		RowGroupWriteData result;
 		result.reuse_existing_metadata_blocks = true;
 		result.existing_extra_metadata_blocks = GetOrComputeExtraMetadataBlocks();
@@ -1149,7 +1149,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	row_group_pointer.row_start = row_group_start;
 	row_group_pointer.tuple_count = count;
 	if (write_data.reuse_existing_metadata_blocks) {
-		// we are re-using the previous metadata
+		// we are reusing the previous metadata
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = true;
 		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
@@ -1273,7 +1273,7 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded so they cannot be changed
-		// re-use them as-is
+		// reuse them as-is
 		manager.ClearModifiedBlocks(deletes_pointers);
 		return deletes_pointers;
 	}

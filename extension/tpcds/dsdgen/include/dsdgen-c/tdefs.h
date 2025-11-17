@@ -57,7 +57,7 @@
 #define FL_SPARSE 0x0080
 /* unused 0x0100 */
 #define FL_NO_UPDATE  0x0200 /* this table is not altered by the update process */
-#define FL_SOURCE_DDL 0x0400 /* table in the souce schema */
+#define FL_SOURCE_DDL 0x0400 /* table in the source schema */
 #define FL_JOIN_ERROR 0x0800 /* join called without an explicit rule */
 #define FL_PARENT     0x1000 /* this table has a child in nParam */
 #define FL_FACT_TABLE 0x2000
@@ -67,12 +67,12 @@
 /*
  * general table descriptions.
  * NOTE: This table contains the constant elements in the table descriptions; it
- * must be kept in sync with the declararions of assocaited functions, found in
+ * must be kept in sync with the declararions of associated functions, found in
  * tdef_functions.h
  */
 typedef struct TDEF_T {
 	char *name;        /* -- name of the table; */
-	char *abreviation; /* -- shorthand name of the table */
+	char *abbreviation; /* -- shorthand name of the table */
 	int flags;         /* -- control table options */
 	int nFirstColumn;  /* -- first column/RNG for this table */
 	int nLastColumn;   /* -- last column/RNG for this table */
@@ -84,7 +84,7 @@ typedef struct TDEF_T {
 	                      points) */
 	int nNewRowPct;
 	int nNullPct;            /* percentage of rows with nulls (basis points) */
-	ds_key_t kNullBitMap;    /* colums that should be NULL in the current row */
+	ds_key_t kNullBitMap;    /* columns that should be NULL in the current row */
 	ds_key_t kNotNullBitMap; /* columns that are defined NOT NULL */
 	ds_key_t *arSparseKeys;  /* sparse key set for table; used if FL_SPARSE is set */
 } tdef;

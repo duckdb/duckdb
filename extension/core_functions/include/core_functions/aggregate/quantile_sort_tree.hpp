@@ -358,7 +358,7 @@ struct QuantileSortTree {
 		//	Thread safe and idempotent.
 		index_tree->Build();
 
-		//	Find the interpolated indicies within the frame
+		//	Find the interpolated indices within the frame
 		QuantileInterpolator<DISCRETE> interp(q, n, false);
 		const auto lo_data = SelectNth(frames, interp.FRN);
 		auto hi_data = lo_data;

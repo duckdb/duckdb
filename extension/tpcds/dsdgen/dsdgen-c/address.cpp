@@ -195,7 +195,7 @@ int mk_suitenumber(int nTable, char *dest) {
  * Purpose:
  *	one of a set of routines that creates addresses
  * Algorithm:
- *	use a staggered distibution and the 150 most common street names in the US
+ *	use a staggered distribution and the 150 most common street names in the US
  * Data Structures:
  *
  * Params:
@@ -223,7 +223,7 @@ int mk_streetname(int nTable, char *dest) {
  * Purpose:
  *	one of a set of routines that creates addresses
  * Algorithm:
- *	use a staggered distibution of 1000 most common place names in the US
+ *	use a staggered distribution of 1000 most common place names in the US
  * Data Structures:
  *
  * Params:

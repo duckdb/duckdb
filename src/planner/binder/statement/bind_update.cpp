@@ -36,7 +36,7 @@ void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, 
 		}
 		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {
-			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
+			throw BinderException("Can't update column \"%s\" because it is a generated column!", column.Name());
 		}
 		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
@@ -85,7 +85,7 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 			throw InternalException(
 			    "BindRowIdColumns could not find the row id column in the virtual columns list of the table");
 		}
-		// check if this column has alraedy been projected
+		// check if this column has already been projected
 		idx_t column_idx;
 		for (column_idx = 0; column_idx < column_ids.size(); ++column_idx) {
 			if (column_ids[column_idx].GetPrimaryIndex() == row_id_column) {

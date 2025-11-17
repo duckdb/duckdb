@@ -41,17 +41,17 @@
 #include "error_msg.h"
 
 list_t *makeList(int nFlags, int (*SortFunc)(const void *d1, const void *d2)) {
-	list_t *pRes;
+	list_t *press;
 
-	pRes = (list_t *)malloc(sizeof(list_t));
-	MALLOC_CHECK(pRes);
-	if (pRes == NULL)
+	press = (list_t *)malloc(sizeof(list_t));
+	MALLOC_CHECK(press);
+	if (press == NULL)
 		ReportError(QERR_NO_MEMORY, "client list", 1);
-	memset(pRes, 0, sizeof(list_t));
+	memset(press, 0, sizeof(list_t));
 	pRes->nFlags = nFlags;
 	pRes->pSortFunc = SortFunc;
 
-	return (pRes);
+	return (press);
 }
 
 list_t *addList(list_t *pList, void *pData) {

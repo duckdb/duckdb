@@ -21,7 +21,7 @@ end
     @test df.a == [0, 1]
 
     # this still fails
-    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM nonexistant")
+    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM nonexistent")
 
     DBInterface.close!(con)
 end
@@ -52,7 +52,7 @@ end
     @test df.a == ["hello", "hello"]
 
     # this still fails
-    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM nonexistant")
+    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM nonexistent")
 
     DBInterface.close!(con)
 end
@@ -66,7 +66,7 @@ end
 
     DuckDB.add_replacement_scan!(con, ErrorReplacementScan, nothing)
 
-    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM nonexistant")
+    @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM nonexistent")
 
     DBInterface.close!(con)
 end

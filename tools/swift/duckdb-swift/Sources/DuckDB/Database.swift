@@ -71,7 +71,7 @@ public final class Database: Sendable {
   
   /// Creates a Duck DB database
   ///
-  /// A DuckDB database can be initilaized using either a local database file or
+  /// A DuckDB database can be initialized using either a local database file or
   /// using an in-memory store
   ///
   /// - Note: An in-memory database does not persist data to disk. All data is

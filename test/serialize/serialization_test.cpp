@@ -234,8 +234,8 @@ TEST_CASE("Test deleted values", "[serialization]") {
 		REQUIRE(v1_out.p2.empty());
 	}
 
-	// If we change the new value in foov2 to something thats not the default, we break forwards compatibility.
-	// But thats life. Tough shit.
+	// If we change the new value in foov2 to something that's not the default, we break forwards compatibility.
+	// But that's life. Tough shit.
 	stream.Rewind();
 	v2_in.p5 = make_uniq<Complex>(2, "foo");
 	options.serialize_default_values = false;

@@ -247,7 +247,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 		}
 	}
 
-	SECTION("Cheking NULLs with Vectorized UDF functions") {
+	SECTION("Checking NULLs with Vectorized UDF functions") {
 		for (LogicalType sql_type : all_sql_types) {
 			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 			func_name = table_name;
@@ -271,7 +271,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 		}
 	}
 
-	SECTION("Cheking Vectorized UDF functions with several input columns") {
+	SECTION("Checking Vectorized UDF functions with several input columns") {
 		duckdb::vector<LogicalType> sql_args = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER,
 		                                        LogicalType::INTEGER};
 		// UDF with 4 input ints, return the last one
@@ -298,7 +298,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	}
 
-	SECTION("Cheking Vectorized UDF functions with varargs and constant values") {
+	SECTION("Checking Vectorized UDF functions with varargs and constant values") {
 		// Test udf_max with integer
 		con.CreateVectorizedFunction("udf_const_max_int", {LogicalType::INTEGER}, LogicalType::INTEGER,
 		                             &udf_max_constant<int>, LogicalType::INTEGER);
@@ -318,7 +318,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {10.0}));
 	}
 
-	SECTION("Cheking Vectorized UDF functions with varargs and input columns") {
+	SECTION("Checking Vectorized UDF functions with varargs and input columns") {
 		// Test udf_max with integer
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers (a INTEGER, b INTEGER, c INTEGER, d INTEGER)"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES(1, 2, 3, 4), (10, 20, 30, 40), (100, 200, 300, 400), "

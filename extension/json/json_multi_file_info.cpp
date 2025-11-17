@@ -333,7 +333,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	bool reuse_readers = true;
 	for (auto &union_reader : bind_data.union_readers) {
 		if (!union_reader || !union_reader->reader) {
-			// not all readers have been initialized - don't re-use any
+			// not all readers have been initialized - don't reuse any
 			reuse_readers = false;
 			break;
 		}
@@ -346,7 +346,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	if (!reuse_readers) {
 		bind_data.union_readers.clear();
 	} else {
-		// re-use readers
+		// reuse readers
 		for (auto &union_reader : bind_data.union_readers) {
 			auto &json_reader = union_reader->reader->Cast<JSONReader>();
 			union_reader->names = names;

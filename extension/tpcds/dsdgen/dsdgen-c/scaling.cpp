@@ -659,7 +659,7 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 		break;
 	}
 
-	if (nTable != INVENTORY) /* inventory rowcount is uniform thorughout the year */
+	if (nTable != INVENTORY) /* inventory rowcount is uniform throughout the year */
 	{
 		if (is_leap(Date.year))
 			nDateWeight += 1;

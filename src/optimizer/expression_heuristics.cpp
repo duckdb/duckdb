@@ -155,7 +155,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, Expres
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(PhysicalType return_type, idx_t multiplier) {
-	// TODO: ajust values according to benchmark results
+	// TODO: adjust values according to benchmark results
 	switch (return_type) {
 	case PhysicalType::VARCHAR:
 		return 5 * multiplier;

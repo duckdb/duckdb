@@ -106,7 +106,7 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 		    "udf_covar_pop_double_args", LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::INTEGER));
 	}
 
-	SECTION("Cheking if aggregate UDFs are temporary") {
+	SECTION("Checking if aggregate UDFs are temporary") {
 		REQUIRE_NOTHROW(
 		    con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>("udf_avg_double"));
 		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int"));

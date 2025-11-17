@@ -48,7 +48,7 @@ protected:
 	AppenderType appender_type;
 	//! The amount of rows after which the appender flushes automatically.
 	idx_t flush_count = DEFAULT_FLUSH_COUNT;
-	//! Peak allocation threshold at which to flush the allocator when appender flushs chunk.
+	//! Peak allocation threshold at which to flush the allocator when appender flushes chunk.
 	optional_idx flush_memory_threshold;
 
 protected:

@@ -15,7 +15,7 @@
  *
  * The following #defines will effect the code:
  *   SEPARATOR         -- character used to separate fields in flat files
- *   STDLIB_HAS_GETOPT -- to prevent confilcts with gloabal getopt()
+ *   STDLIB_HAS_GETOPT -- to prevent conflicts with global getopt()
  *   MDY_DATE          -- generate dates as MM-DD-YY
  *   WIN32             -- support for WindowsNT
  *   DSS_HUGE          -- 64 bit data type
@@ -139,7 +139,7 @@
 #define RNG_C 1uI64
 #define HUGE_FORMAT "%I64d"
 #define HUGE_DATE_FORMAT "%02I64d"
-/* requried by move to Visual Studio 2005 */
+/* required by move to Visual Studio 2005 */
 #define strdup(x) _strdup(x)
 #endif /* WIN32 */
 

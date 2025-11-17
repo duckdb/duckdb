@@ -337,7 +337,7 @@ TEST_CASE("Secret storage name collision: manager loaded after", "[secret][.]") 
 	TestSecretLog log;
 	auto storage_ptr = duckdb::make_uniq<TestSecretStorage>("memory", *db.instance, log, 50);
 
-	// This passes but is actually wrong alsready
+	// This passes but is actually wrong already
 	secret_manager.LoadSecretStorage(std::move(storage_ptr));
 
 	// This now fails with a name collision warning

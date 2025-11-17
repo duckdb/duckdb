@@ -108,7 +108,7 @@ duckdb_state duckdb_register_config_option(duckdb_connection connection, duckdb_
 		return DuckDBError;
 	}
 
-	// TODO: This is not transactional... but theres no easy way to make it so currently.
+	// TODO: This is not transactional... but there's no easy way to make it so currently.
 	try {
 		if (conn->context->db->config.HasExtensionOption(coption->name)) {
 			// Option already exists

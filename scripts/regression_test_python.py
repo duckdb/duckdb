@@ -78,10 +78,10 @@ class TPCHData:
         self.conn = duckdb.connect()
         self.conn.execute(f'CALL dbgen(sf={scale_factor})')
 
-    def get_tables(self, convertor) -> Dict[str, Any]:
+    def get_tables(self, converter) -> Dict[str, Any]:
         res = {}
         for table in self.TABLES:
-            res[table] = convertor(self.conn, table)
+            res[table] = converter(self.conn, table)
         return res
 
     def load_lineitem(self, collector, benchmark_name) -> BenchmarkResult:
@@ -174,14 +174,14 @@ def test_tpch():
         df = convert_pandas(conn, table_name)
         return pa.Table.from_pandas(df)
 
-    CONVERTORS = {'pandas': convert_pandas, 'arrow': convert_arrow}
+    CONVERTERS = {'pandas': convert_pandas, 'arrow': convert_arrow}
     # Convert TPCH data to the right format, then run TPCH queries on that data
-    for convertor in CONVERTORS:
-        tables = tpch.get_tables(CONVERTORS[convertor])
-        tester = TPCHBenchmarker(convertor)
+    for converter in CONVERTERS:
+        tables = tpch.get_tables(CONVERTERS[converter])
+        tester = TPCHBenchmarker(converter)
         tester.register_tables(tables)
-        collector = COLLECTORS[convertor]
-        result: BenchmarkResult = tester.run_tpch(collector, f"{convertor}tpch")
+        collector = COLLECTORS[converter]
+        result: BenchmarkResult = tester.run_tpch(collector, f"{converter}tpch")
         result.write()
 
 

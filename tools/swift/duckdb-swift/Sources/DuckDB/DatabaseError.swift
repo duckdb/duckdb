@@ -24,7 +24,7 @@
 
 /// A DuckDB database error
 public enum DatabaseError: Error {
-  /// Provided decimal overflows the internal database representaion
+  /// Provided decimal overflows the internal database representation
   case decimalUnrepresentable
   /// Supplied item could not be appended
   case appenderFailedToAppendItem(reason: String?)

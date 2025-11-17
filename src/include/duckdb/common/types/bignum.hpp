@@ -47,7 +47,7 @@ public:
 	DUCKDB_API static bignum_t InitializeBignumZero(Vector &result);
 	DUCKDB_API static string InitializeBignumZero();
 
-	//! Switch Case of To Bignum Convertion
+	//! Switch Case of To Bignum Conversion
 	DUCKDB_API static BoundCastInfo NumericToBignumCastSwitch(const LogicalType &source);
 
 	//! ----------------------------------- Varchar Cast ----------------------------------- //

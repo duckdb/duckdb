@@ -190,7 +190,7 @@ fls_u(unsigned x) {
 	 * We're putting a little bit more work than you might expect	\
 	 * into the no-instrinsic case, since we only support the	\
 	 * GCC intrinsics spelling of popcount (for now).  Detecting	\
-	 * whether or not the popcount builtin is actually useable in	\
+	 * whether or not the popcount builtin is actually usable in	\
 	 * MSVC is nontrivial.						\
 	 */								\
 									\

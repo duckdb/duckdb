@@ -503,7 +503,7 @@ fileprivate extension VectorElementDataDecoder.KeyedValueContainer {
     guard let key = Key(stringValue: stringValue) else {
       let context = DecodingError.Context(
         codingPath: [],
-        debugDescription: "Cannot instatiate key of type \(Key.self) with string: \(stringValue)"
+        debugDescription: "Cannot instantiate key of type \(Key.self) with string: \(stringValue)"
       )
       throw DecodingError.typeMismatch(Key.self, context)
     }
@@ -514,7 +514,7 @@ fileprivate extension VectorElementDataDecoder.KeyedValueContainer {
     guard let key = Key(intValue: intValue) else {
       let context = DecodingError.Context(
         codingPath: [],
-        debugDescription: "Cannot instatiate key of type \(Key.self) with integer: \(intValue)"
+        debugDescription: "Cannot instantiate key of type \(Key.self) with integer: \(intValue)"
       )
       throw DecodingError.typeMismatch(Key.self, context)
     }

@@ -12,7 +12,7 @@
  * text.c --- pseaudo text generator for use in DBGEN 2.0
  *
  * Defined Routines:
- *		dbg_text() -- select and translate a sentance form
+ *		dbg_text() -- select and translate a sentence form
  */
 
 #ifdef TEXT_TEST
@@ -94,14 +94,14 @@ static int txt_vp(char *dest, seed_t *seed) {
 			src = &verbs;
 			break;
 		case 'X':
-			src = &auxillaries;
+			src = &auxiliaries;
 			break;
 		} /* end of POS switch statement */
 		i = pick_str(src, seed, dest);
 		i = (int)strlen(DIST_MEMBER(src, i));
 		dest += i;
 		res += i;
-		if (*(++cptr)) /* miscelaneous fillagree, like punctuation */
+		if (*(++cptr)) /* miscellaneous fillagree, like punctuation */
 		{
 			dest += 1;
 			res += 1;
@@ -155,7 +155,7 @@ static int txt_np(char *dest, seed_t *seed) {
 		i = (int)strlen(DIST_MEMBER(src, i));
 		dest += i;
 		res += i;
-		if (*(++cptr)) /* miscelaneous fillagree, like punctuation */
+		if (*(++cptr)) /* miscellaneous fillagree, like punctuation */
 		{
 			*dest = *cptr;
 			dest += 1;
@@ -216,7 +216,7 @@ next_token: /* I hate goto's, but can't seem to have parent and child use strtok
 	dest += len;
 	res += len;
 	cptr++;
-	if (*cptr && *cptr != ' ') /* miscelaneous fillagree, like punctuation */
+	if (*cptr && *cptr != ' ') /* miscellaneous fillagree, like punctuation */
 	{
 		dest += 1;
 		res += 1;
@@ -298,13 +298,13 @@ static char *gen_vp(char *dest, seed_t *seed) {
 	if (index == 0) {
 		dest = gen_text_index(dest, seed, verbs_index, &verbs);
 	} else if (index == 1) {
-		dest = gen_text_index(dest, seed, auxillaries_index, &auxillaries);
+		dest = gen_text_index(dest, seed, auxillaries_index, &auxiliaries);
 		dest = gen_text_index(dest, seed, verbs_index, &verbs);
 	} else if (index == 2) {
 		dest = gen_text_index(dest, seed, verbs_index, &verbs);
 		dest = gen_text_index(dest, seed, adverbs_index, &adverbs);
 	} else {
-		dest = gen_text_index(dest, seed, auxillaries_index, &auxillaries);
+		dest = gen_text_index(dest, seed, auxillaries_index, &auxiliaries);
 		dest = gen_text_index(dest, seed, verbs_index, &verbs);
 		dest = gen_text_index(dest, seed, adverbs_index, &adverbs);
 	}
@@ -405,7 +405,7 @@ void init_text_pool(long bSize, DBGenContext *ctx) {
 	gen_index(noun_index, &nouns);
 	gen_index(adjectives_index, &adjectives);
 	gen_index(adverbs_index, &adverbs);
-	gen_index(auxillaries_index, &auxillaries);
+	gen_index(auxillaries_index, &auxiliaries);
 	gen_index(verbs_index, &verbs);
 	gen_index(prepositions_index, &prepositions);
 

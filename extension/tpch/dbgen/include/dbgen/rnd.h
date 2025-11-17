@@ -9,7 +9,7 @@
  * THE TPC SOFTWARE IS AVAILABLE WITHOUT CHARGE FROM TPC.
  */
 /*
- * rnd.h -- header file for use withthe portable random number generator
+ * rnd.h -- header file for use with the portable random number generator
  * provided by Frank Stephens of Unisys
  */
 

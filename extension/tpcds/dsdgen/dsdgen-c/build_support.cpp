@@ -139,7 +139,7 @@ int mk_companyname(char *dest, int nTable, int nCompany) {
 /*
  * Routine: set_locale()
  * Purpose:
- *	generate a reasonable lattitude and longitude based on a region and the USGS
+ *	generate a reasonable latitude and longitude based on a region and the USGS
  *data on 3500 counties in the US Algorithm: Data Structures:
  *
  * Params:

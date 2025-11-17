@@ -85,7 +85,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 	}
 
 	/***
-	 * some attributes reamin the same for each lineitem in an order; others are
+	 * some attributes remain the same for each lineitem in an order; others are
 	 * different for each lineitem. Since the number of lineitems per order is
 	 * static, we can use a modulo to determine when to change the semi-static
 	 * values

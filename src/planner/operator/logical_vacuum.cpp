@@ -15,10 +15,10 @@ LogicalVacuum::LogicalVacuum(unique_ptr<VacuumInfo> info)
 }
 
 TableCatalogEntry &LogicalVacuum::GetTable() {
-	D_ASSERT(HasTable());
+	D_ASSERT(hashtable());
 	return *table;
 }
-bool LogicalVacuum::HasTable() const {
+bool LogicalVacuum::hashtable() const {
 	return table != nullptr;
 }
 

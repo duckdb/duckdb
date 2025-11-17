@@ -320,7 +320,7 @@ extension Vector.Element {
   }
 }
 
-// MARK: - Struct Contents accesors
+// MARK: - Struct Contents accessors
 
 extension Vector.Element {
   

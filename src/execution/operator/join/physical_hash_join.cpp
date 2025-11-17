@@ -286,7 +286,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 
 			auto count_fun = CountFunctionBase::GetFunction();
 			vector<unique_ptr<Expression>> children;
-			// this is a dummy but we need it to make the hash table understand whats going on
+			// this is a dummy but we need it to make the hash table understand what's going on
 			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
 			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
@@ -763,7 +763,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 	gstate.global_aggregate_state->Finalize(*final_min_max);
 
 	if (probe_info.empty()) {
-		return final_min_max; // There are not table souces in which we can push down filters
+		return final_min_max; // There are not table sources in which we can push down filters
 	}
 
 	auto dynamic_or_filter_threshold = DBConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);

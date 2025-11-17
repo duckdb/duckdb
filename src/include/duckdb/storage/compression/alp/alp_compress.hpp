@@ -75,7 +75,7 @@ public:
 	}
 
 	bool HasEnoughSpace() {
-		//! If [start of block + used space + required space] is more than whats left (current position
+		//! If [start of block + used space + required space] is more than what's left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
 		if ((handle.Ptr() + AlignValue(UsedSpace() + RequiredSpace())) >=
 		    (metadata_ptr - AlpConstants::METADATA_POINTER_SIZE)) {
