@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
+#include "transformer/peg_transformer.hpp"
 
 namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaStatement(PEGTransformer &transformer,
