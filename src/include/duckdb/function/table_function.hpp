@@ -453,6 +453,8 @@ public:
 	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
+	DUCKDB_API bool operator==(const TableFunction &rhs) const;
+	DUCKDB_API bool operator!=(const TableFunction &rhs) const;
 };
 
 } // namespace duckdb

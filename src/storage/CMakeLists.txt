@@ -15,6 +15,7 @@ add_library_unity(
   checkpoint_manager.cpp
   temporary_memory_manager.cpp
   block.cpp
+  block_allocator.cpp
   data_pointer.cpp
   data_table.cpp
   external_file_cache.cpp
