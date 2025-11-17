@@ -148,6 +148,9 @@ private:
 		T GetValue(idx_t col_idx) const {
 			return iterator.chunk->GetValue(col_idx, row).GetValue<T>();
 		}
+		Value GetBaseValue(idx_t col_idx) const {
+			return iterator.chunk->GetValue(col_idx, row);
+		}
 	};
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {

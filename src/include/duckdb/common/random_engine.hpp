@@ -38,6 +38,8 @@ public:
 
 	void SetSeed(uint64_t seed);
 
+	void RandomData(duckdb::data_ptr_t data, duckdb::idx_t len);
+
 	static RandomEngine &Get(ClientContext &context);
 
 	mutex lock;
