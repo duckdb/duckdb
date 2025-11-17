@@ -76,19 +76,11 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 	}
 	case ExpressionClass::COLUMN_REF: {
 		auto &colref = expr.Cast<ColumnRefExpression>();
-
-		string alias_name;
-		if (colref.IsQualified()) {
-			if (colref.column_names.size() == 2 && StringUtil::CIEquals(colref.GetTableName(), "alias")) {
-				// support explicit alias.<name> as a projection reference
-				alias_name = colref.GetColumnName();
-			} else {
-				// Qualified column reference that is not alias.<name> has no meaning as a projection reference
-				break;
-			}
-		} else {
-			alias_name = colref.column_names[0];
+		if (!ExpressionBinder::IsPotentialAlias(colref)) {
+			break;
 		}
+
+		string alias_name = colref.column_names.back();
 		// check the alias list
 		auto entry = bind_state.alias_map.find(alias_name);
 		if (entry == bind_state.alias_map.end()) {
