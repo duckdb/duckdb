@@ -247,7 +247,7 @@ vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context,
 			continue;
 		}
 
-		auto info = index.Cast<UnboundIndex>().GetStorageInfo();
+		auto info = index.Cast<UnboundIndex>().SerializeToDisk(options);
 		D_ASSERT(!info.name.empty());
 		infos.push_back(info);
 	}

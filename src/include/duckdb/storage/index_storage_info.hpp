@@ -11,10 +11,16 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
+
+class ColumnDataCollection;
+class Allocator;
+enum class BufferedIndexReplay : uint8_t;
 
 //! Information to serialize a FixedSizeAllocator, which holds the index data
 struct FixedSizeAllocatorInfo {
@@ -39,6 +45,20 @@ struct IndexBufferInfo {
 	idx_t allocation_size;
 };
 
+//! Buffered replay information for an unbound index.
+struct BufferedIndexDataInfo {
+	BufferedIndexReplay replay_type;
+	vector<LogicalType> types;
+	vector<vector<Value>> values;
+
+	static BufferedIndexDataInfo FromCollection(BufferedIndexReplay replay_type,
+	                                            const ColumnDataCollection &collection);
+	unique_ptr<ColumnDataCollection> ToColumnDataCollection(Allocator &allocator) const;
+
+	void Serialize(Serializer &serializer) const;
+	static BufferedIndexDataInfo Deserialize(Deserializer &deserializer);
+};
+
 //! Index (de)serialization information.
 struct IndexStorageInfo {
 	IndexStorageInfo() {};
@@ -60,6 +80,11 @@ struct IndexStorageInfo {
 
 	//! The root block pointer of the index. Necessary to support older storage files.
 	BlockPointer root_block_ptr;
+
+	//! Mapping between buffered replay columns and physical columns.
+	vector<StorageIndex> mapped_column_ids;
+	//! Buffered replay payload serialized for unbound indexes.
+	vector<BufferedIndexDataInfo> buffered_replay_data;
 
 	//! Returns true, if IndexStorageInfo holds information to deserialize an index.
 	//! Note that the name can be misleading - any index that is empty (no nodes, etc.) might

@@ -26,6 +26,31 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 			}
 		}
 	}
+
+	auto &allocator = Allocator::Get(db);
+	for (auto &replay_info : storage_info.buffered_replay_data) {
+		auto collection = replay_info.ToColumnDataCollection(allocator);
+		buffered_replays.emplace_back(replay_info.replay_type, std::move(collection));
+	}
+	if (!storage_info.mapped_column_ids.empty()) {
+		mapped_column_ids = storage_info.mapped_column_ids;
+	}
+}
+
+IndexStorageInfo UnboundIndex::SerializeToDisk(const case_insensitive_map_t<Value> &options) {
+	auto result = storage_info;
+	result.options = options;
+	result.mapped_column_ids = mapped_column_ids;
+	result.buffered_replay_data.clear();
+	if (HasBufferedReplays()) {
+		result.buffered_replay_data.reserve(buffered_replays.size());
+		for (auto &replay : buffered_replays) {
+			D_ASSERT(replay.data);
+			result.buffered_replay_data.push_back(BufferedIndexDataInfo::FromCollection(replay.type, *replay.data));
+		}
+	}
+	storage_info = result;
+	return result;
 }
 
 void UnboundIndex::CommitDrop() {

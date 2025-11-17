@@ -1,0 +1,68 @@
+# name: test/sql/index/art/storage/test_art_wal_checkpoint_buffer_minimal.test
+# description: Minimal serialize -> deserialize -> serialize flow with unique index
+# group: [storage]
+
+load __TEST_DIR__/test_art_wal_checkpoint_buffer_minimal.db
+
+statement ok
+SET index_scan_max_count = 1;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+CREATE TABLE minimal_tbl(i INTEGER);
+
+statement ok
+CREATE UNIQUE INDEX idx_minimal ON minimal_tbl(i);
+
+statement ok
+INSERT INTO minimal_tbl VALUES (42);
+
+restart
+
+restart
+
+statement ok
+INSERT INTO minimal_tbl VALUES (43);
+
+restart
+
+statement ok
+DELETE FROM minimal_tbl where i = 42
+
+restart
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO minimal_tbl VALUES (44);
+
+restart
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO minimal_tbl VALUES (42);
+
+statement error
+INSERT INTO minimal_tbl VALUES (43);
+----
+violates unique constraint
+
+statement error
+INSERT INTO minimal_tbl VALUES (44);
+----
+violates unique constraint
+
+query I
+SELECT COUNT(*) FROM minimal_tbl;
+----
+3
+
+

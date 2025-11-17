@@ -56,9 +56,51 @@
     "pointer_type": "none"
   },
   {
+    "class": "BufferedIndexDataInfo",
+    "includes": [
+      "duckdb/execution/index/unbound_index.hpp",
+      "duckdb/common/types.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "replay_type",
+        "type": "BufferedIndexReplay"
+      },
+      {
+        "id": 101,
+        "name": "types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 102,
+        "name": "values",
+        "type": "vector<vector<Value>>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "StorageIndex",
+    "members": [
+      {
+        "id": 100,
+        "name": "index",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "child_indexes",
+        "type": "vector<StorageIndex>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "IndexStorageInfo",
     "includes": [
-      "duckdb/storage/table_storage_info.hpp"
+      "duckdb/storage/table_storage_info.hpp",
+      "duckdb/storage/storage_index.hpp"
     ],
     "members": [
       {
@@ -81,6 +123,16 @@
         "name": "options",
         "type": "case_insensitive_map_t<Value>",
         "default": "case_insensitive_map_t<Value>()"
+      },
+      {
+        "id": 104,
+        "name": "mapped_column_ids",
+        "type": "vector<StorageIndex>"
+      },
+      {
+        "id": 105,
+        "name": "buffered_replay_data",
+        "type": "vector<BufferedIndexDataInfo>"
       }
     ],
     "pointer_type": "none"
