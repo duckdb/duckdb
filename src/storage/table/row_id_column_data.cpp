@@ -169,7 +169,8 @@ unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(RowGroup &row_grou
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 
-void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) {
+void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
+                                     Vector &scan_vector) const {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 

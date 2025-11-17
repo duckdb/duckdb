@@ -73,7 +73,6 @@ private:
 	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
 	vector<CheckpointAnalyzeResult> DetectBestCompressionMethod();
 	void WriteToDisk();
-	bool HasChanges(ColumnData &col_data);
 	void WritePersistentSegments(ColumnCheckpointState &state);
 	void InitAnalyze();
 	void DropSegments();

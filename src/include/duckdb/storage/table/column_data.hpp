@@ -76,7 +76,7 @@ public:
 public:
 	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
 
-	BlockManager &GetBlockManager() {
+	BlockManager &GetBlockManager() const {
 		return block_manager;
 	}
 	DatabaseInstance &GetDatabase() const;
@@ -183,7 +183,7 @@ public:
 	                                                                PartialBlockManager &partial_block_manager);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info);
 
-	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector);
+	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) const;
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();

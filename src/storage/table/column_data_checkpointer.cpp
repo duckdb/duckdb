@@ -330,10 +330,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	}
 }
 
-bool ColumnDataCheckpointer::HasChanges(ColumnData &col_data) {
-	return col_data.HasChanges();
-}
-
 void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &state) {
 	// all segments are persistent and there are no updates
 	// we only need to write the metadata
@@ -375,7 +371,7 @@ void ColumnDataCheckpointer::Checkpoint() {
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i];
 		auto &col_data = state.get().original_column;
-		if (HasChanges(col_data)) {
+		if (col_data.HasChanges()) {
 			has_changes = true;
 			break;
 		}

@@ -302,7 +302,7 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 }
 
 void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
-                                        Vector &scan_vector) {
+                                        Vector &scan_vector) const {
 	ColumnData::CheckpointScan(segment, state, count, scan_vector);
 
 	idx_t offset_in_row_group = state.offset_in_column;
