@@ -39,7 +39,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	root_pointer = data.block_pointer;
 }
 
-unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
+unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() const {
 	if (current_row_group >= max_row_group) {
 		reader.reset();
 		finished_loading = true;

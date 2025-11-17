@@ -282,8 +282,7 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state_p);
 
-	auto &nodes = data.ReferenceSegments();
-	if (nodes.empty()) {
+	if (!data.GetRootSegment()) {
 		// empty table: flush the empty list
 		return base_state;
 	}

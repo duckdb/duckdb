@@ -67,16 +67,14 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 }
 
 bool ColumnData::HasChanges() const {
-	auto l = data.Lock();
-	auto &nodes = data.ReferenceLoadedSegments(l);
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment = *nodes[segment_idx]->node;
+	for (auto &segment_node : data.SegmentNodes()) {
+		auto &segment = *segment_node.node;
 		if (segment.segment_type == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
 		}
 		// persistent segment; check if there were any updates or deletions in this segment
-		idx_t start_row_idx = nodes[segment_idx]->row_start;
+		idx_t start_row_idx = segment_node.row_start;
 		idx_t end_row_idx = start_row_idx + segment.count;
 		if (HasChanges(start_row_idx, end_row_idx)) {
 			return true;
@@ -684,8 +682,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto &nodes = data.ReferenceSegments();
-	if (nodes.empty()) {
+	if (!data.GetRootSegment()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}

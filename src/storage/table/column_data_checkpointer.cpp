@@ -82,11 +82,9 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
-	auto &nodes = col_data.data.ReferenceSegments();
 
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment_node = *nodes[segment_idx];
+	for (auto &segment_node : col_data.data.SegmentNodes()) {
 		auto &segment = *segment_node.node;
 		ColumnScanState scan_state(nullptr);
 		scan_state.current = segment_node;
@@ -267,11 +265,9 @@ void ColumnDataCheckpointer::DropSegments() {
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i];
 		auto &col_data = state.get().original_column;
-		auto &nodes = col_data.data.ReferenceSegments();
 
 		// Drop the segments, as we'll be replacing them with new ones, because there are changes
-		for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-			auto &segment = *nodes[segment_idx]->node;
+		for (auto &segment : col_data.data.Segments()) {
 			segment.CommitDropSegment();
 		}
 	}
@@ -343,25 +339,15 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	// we only need to write the metadata
 
 	auto &col_data = state.original_column;
-	auto &nodes = col_data.data.ReferenceSegments();
 
+	optional_idx error_segment_start;
 	idx_t current_row = 0;
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment = *nodes[segment_idx]->node;
-		auto segment_start = nodes[segment_idx]->row_start;
+	for (auto &segment_node : col_data.data.SegmentNodes()) {
+		auto &segment = *segment_node.node;
+		auto segment_start = segment_node.row_start;
 		if (segment_start != current_row) {
-			string extra_info;
-			for (auto &s : nodes) {
-				extra_info += "\n";
-				extra_info += StringUtil::Format("Start %d, count %d", s->row_start, s->node->count.load());
-			}
-			const_reference<ColumnData> root = col_data;
-			throw InternalException(
-			    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
-			    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
-			    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
-			    row_group.count.load(), current_row, segment_start, root.get().column_index, col_data.type,
-			    root.get().type, root.get().info.GetSchemaName(), root.get().info.GetTableName(), extra_info);
+			error_segment_start = segment_start;
+			break;
 		}
 		auto pointer = segment.GetDataPointer(current_row);
 		current_row += segment.count;
@@ -369,6 +355,19 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment.stats.statistics);
 		state.data_pointers.push_back(std::move(pointer));
+	}
+	if (error_segment_start.IsValid()) {
+		string extra_info;
+		for (auto &s : col_data.data.SegmentNodes()) {
+			extra_info += "\n";
+			extra_info += StringUtil::Format("Start %d, count %d", s.row_start, s.node->count.load());
+		}
+		throw InternalException(
+		    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
+		    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
+		    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
+		    row_group.count.load(), current_row, error_segment_start.GetIndex(), col_data.column_index, col_data.type,
+		    col_data.type, col_data.info.GetSchemaName(), col_data.info.GetTableName(), extra_info);
 	}
 }
 

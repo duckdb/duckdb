@@ -38,24 +38,9 @@ protected:
 	shared_ptr<ColumnData> result_column;
 
 public:
-	virtual shared_ptr<ColumnData> CreateEmptyColumnData() {
-		throw InternalException("CreateEmptyColumnData not implemented for this column checkpoint state");
-	}
-	virtual ColumnData &GetResultColumn() {
-		if (!result_column) {
-			result_column = CreateEmptyColumnData();
-		}
-		return *result_column;
-	}
-	virtual shared_ptr<ColumnData> GetFinalResult() {
-		if (!result_column) {
-			// no result column instantiated - that means we haven't changed anything and can directly return the
-			// original column
-			return original_column.shared_from_this();
-		}
-		result_column->SetCount(original_column.count.load());
-		return result_column;
-	}
+	virtual shared_ptr<ColumnData> CreateEmptyColumnData();
+	virtual ColumnData &GetResultColumn();
+	virtual shared_ptr<ColumnData> GetFinalResult();
 
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 

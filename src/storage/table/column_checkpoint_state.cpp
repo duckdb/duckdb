@@ -22,6 +22,26 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 	return std::move(global_stats);
 }
 
+shared_ptr<ColumnData> ColumnCheckpointState::CreateEmptyColumnData() {
+	throw InternalException("CreateEmptyColumnData not implemented for this column checkpoint state");
+}
+
+ColumnData &ColumnCheckpointState::GetResultColumn() {
+	if (!result_column) {
+		result_column = CreateEmptyColumnData();
+	}
+	return *result_column;
+}
+
+shared_ptr<ColumnData> ColumnCheckpointState::GetFinalResult() {
+	if (!result_column) {
+		// no result column instantiated - that means we haven't changed anything and can directly return the
+		// original column
+		return original_column.shared_from_this();
+	}
+	result_column->SetCount(original_column.count.load());
+	return result_column;
+}
 PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                                      BlockManager &block_manager)
     : PartialBlock(state, block_manager, segment.block) {
