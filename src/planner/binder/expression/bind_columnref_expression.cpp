@@ -527,7 +527,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 					return BindExpression(value_function, depth);
 				}
 			}
-			found_alias = TryBindRegularAlias(col_ref_p, alias_result);
+			found_alias = TryResolveAliasReference(col_ref_p, alias_result);
 			if (found_alias) {
 				return alias_result;
 			}
