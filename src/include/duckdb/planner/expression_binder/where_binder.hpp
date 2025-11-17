@@ -24,7 +24,6 @@ protected:
 	                          bool root_expression = false) override;
 
 	string UnsupportedAggregateMessage() override;
-	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;
 
 private:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);

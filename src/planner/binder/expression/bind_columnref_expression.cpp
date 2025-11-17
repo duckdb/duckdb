@@ -155,7 +155,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
 		if (!IsUnnestFunction(function.function_name)) {
-			BindAndQualifyFunction(function, false);
+			BindAndQualifyFunction(function, depth, false);
 		}
 		if (function.IsLambdaFunction()) {
 			return QualifyColumnNamesInLambda(function, lambda_params);
@@ -527,12 +527,9 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 					return alias_result;
 				}
 			} else {
-				found_alias = QualifyColumnAlias(col_ref_p);
-				if (!found_alias) {
-					auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
-					if (value_function) {
-						return BindExpression(value_function, depth);
-					}
+				auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
+				if (value_function) {
+					return BindExpression(value_function, depth);
 				}
 			}
 		}
@@ -581,9 +578,4 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	return result;
 }
 
-bool ExpressionBinder::QualifyColumnAlias(const ColumnRefExpression &col_ref) {
-	// only the BaseSelectBinder will have a valid column alias map,
-	// otherwise we return false
-	return false;
-}
 } // namespace duckdb

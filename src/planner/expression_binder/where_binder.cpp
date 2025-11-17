@@ -42,11 +42,4 @@ string WhereBinder::UnsupportedAggregateMessage() {
 	return "WHERE clause cannot contain aggregates!";
 }
 
-bool WhereBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
-	if (column_alias_binder) {
-		return column_alias_binder->QualifyColumnAlias(colref);
-	}
-	return false;
-}
-
 } // namespace duckdb

@@ -73,11 +73,4 @@ unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &col
 	return ExpressionBinder::GetSQLValueFunction(column_name);
 }
 
-bool SelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
-	if (!colref.IsQualified()) {
-		return node.bind_state.alias_map.find(colref.column_names[0]) != node.bind_state.alias_map.end();
-	}
-	return false;
-}
-
 } // namespace duckdb
