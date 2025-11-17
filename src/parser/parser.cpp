@@ -219,7 +219,7 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 			                              result.error.RawMessage());
 		}
 		if (result.error.Type() == ExceptionType::PARSER) {
-			throw ParserException("Parser override could not parse this query.\nOriginal Error: %s",
+			throw ParserException("Parser override could not parse this query.\nOriginal error: %s",
 			                      result.error.RawMessage());
 		}
 		result.error.Throw();
