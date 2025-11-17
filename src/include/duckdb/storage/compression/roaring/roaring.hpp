@@ -629,38 +629,91 @@ public:
 	vector<idx_t> data_start_position;
 };
 
-//! Utils
+//===--------------------------------------------------------------------===//
+// Boolean BitPacking functions
+//===--------------------------------------------------------------------===//
 
-static void BitPackBooleans(data_ptr_t dst, const data_ptr_t src, const idx_t count,
-								   const ValidityMask &validity_mask, BaseStatistics *statistics = nullptr) {
-	bool is_last_bit_true = false; // If first value is null, write false, as it's probably the most common value
+static void BitPackBooleansNoNulls(data_ptr_t dst, const bool *src, const idx_t count) {
+	uint8_t byte = 0;
+
 	for (idx_t i = 0; i < count; i++) {
-		if (statistics) {
+		byte |= src[i] << (i % 8);
+		if ((i + 1) % 8 == 0) {
+			*dst = byte; // write
+			byte = 0;
+			dst++;
+		}
+	}
+	// flush last partial byte
+	if (count % 8 != 0) {
+		*dst = byte;
+	}
+}
+static void BitPackBooleansNoNulls(data_ptr_t dst, const bool *src, const idx_t count, BaseStatistics *statistics) {
+	uint8_t byte = 0;
+
+	for (idx_t i = 0; i < count; i++) {
+		statistics->UpdateNumericStats<bool>(src[i]);
+		byte |= src[i] << (i % 8);
+		if ((i + 1) % 8 == 0) {
+			*dst = byte; // write
+			byte = 0;
+			dst++;
+		}
+	}
+	// flush last partial byte
+	if (count % 8 != 0) {
+		*dst = byte;
+	}
+}
+static void BitPackBooleansWithNulls(data_ptr_t dst, const bool *src, const idx_t count,
+                                     const ValidityMask &validity_mask, BaseStatistics *statistics) {
+	bool last_bit_value = false;
+	uint8_t byte = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity_mask.RowIsValid(i)) {
+			// Copy last bit to form longer runs for RLE
+			byte |= last_bit_value << (i % 8);
+		} else {
+			byte |= src[i] << (i % 8);
+			last_bit_value = src[i];
 			statistics->UpdateNumericStats<bool>(src[i]);
 		}
-		if (src[i] == 1) {
-			*dst |= (uint64_t(1) << (i % 8));
-			is_last_bit_true = true;
-		} else if (src[i] == 0) {
-			*dst &= ~(uint64_t(1) << (i % 8));
-			is_last_bit_true = false;
-		} else if (validity_mask.RowIsValid(i) == false) {
-			// If not 0 or 1, it's a placeholder value for null, so copy previous bit, forming longer runs for RLE
-			if (is_last_bit_true) {
-				*dst |= (uint64_t(1) << (i % 8));
-			} else {
-				*dst &= ~(uint64_t(1) << (i % 8));
-			}
+
+		if ((i + 1) % 8 == 0) {
+			*dst = byte; // write
+			byte = 0;
+			dst++;
+		}
+	}
+	// flush last partial byte
+	if (count % 8 != 0) {
+		*dst = byte;
+	}
+}
+
+static void BitPackBooleansWithNulls(data_ptr_t dst, const bool *src, const idx_t count,
+                                     const ValidityMask &validity_mask) {
+	bool last_bit_value = false;
+	uint8_t byte = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity_mask.RowIsValid(i)) {
+			// Copy last bit to form longer runs for RLE
+			byte |= last_bit_value << (i % 8);
 		} else {
-			throw InternalException(
-				"Boolean vector value is neither true nor false, nor null per the validity mask.");
+			byte |= src[i] << (i % 8);
+			last_bit_value = src[i];
 		}
 
 		if ((i + 1) % 8 == 0) {
 			dst++;
 		}
-	};
-};
+	}
+	// flush last partial byte
+	if (count % 8 != 0) {
+		*dst = byte;
+	}
+}
 } // namespace roaring
 
 } // namespace duckdb

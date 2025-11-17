@@ -236,7 +236,7 @@ void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
 void RoaringScanPartialBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                        idx_t result_offset) {
+                               idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = state.GetPositionInSegment();
 
@@ -268,7 +268,8 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 
 	scan_state.ScanInternal(container_state, 1, result, result_idx);
 }
-void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                            idx_t result_idx) {
 	RoaringScanState scan_state(segment);
 
 	idx_t internal_offset;
@@ -301,8 +302,8 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	compression_analyze_t analyze = nullptr;
 	compression_compress_data_t compress = nullptr;
 	compression_scan_vector_t scan = nullptr;
-	compression_scan_partial_t scan_partial= nullptr;
-	compression_fetch_row_t fetch_row= nullptr;
+	compression_scan_partial_t scan_partial = nullptr;
+	compression_fetch_row_t fetch_row = nullptr;
 
 	switch (data_type) {
 	case PhysicalType::BIT: {
@@ -326,9 +327,8 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	}
 	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, roaring::RoaringInitAnalyze, analyze,
 	                           roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression, compress,
-	                           roaring::RoaringFinalizeCompress, roaring::RoaringInitScan, scan,
-	                           scan_partial, fetch_row, roaring::RoaringSkip,
-	                           roaring::RoaringInitSegment);
+	                           roaring::RoaringFinalizeCompress, roaring::RoaringInitScan, scan, scan_partial,
+	                           fetch_row, roaring::RoaringSkip, roaring::RoaringInitSegment);
 }
 
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {

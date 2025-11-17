@@ -489,14 +489,18 @@ template <>
 void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count) {
 	auto &self = *this;
 	input.Flatten(count);
-	data_ptr_t src = FlatVector::GetData<uint8_t>(input);
+	const bool *src = FlatVector::GetData<bool>(input);
 
 	Vector bitpacked_vector(LogicalType::UBIGINT, count);
 	data_ptr_t dst = data_ptr_t(FlatVector::GetData<uint64_t>(bitpacked_vector));
-
+	const auto &validity = FlatVector::Validity(input);
 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
 	// mask.
-	BitPackBooleans(dst, src, count, FlatVector::Validity(input), &this->current_segment->stats.statistics);
+	if (validity.AllValid()) {
+		BitPackBooleansNoNulls(dst, src, count, &this->current_segment->stats.statistics);
+	} else {
+		BitPackBooleansWithNulls(dst, src, count, validity, &this->current_segment->stats.statistics);
+	}
 	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_vector, count);
 }
 
