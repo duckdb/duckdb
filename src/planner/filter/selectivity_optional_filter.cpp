@@ -46,11 +46,11 @@ unique_ptr<TableFilter> SelectivityOptionalFilter::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<idx_t>(202, "n_vectors_to_check", result->n_vectors_to_check);
 	return std::move(result);
 }
-void SelectivityOptionalFilter::FiltersNullValues(const LogicalType &type,
-                                                  bool &filters_nulls, bool &filters_valid_values,
-                                                  TableFilterState &filter_state) const {
+void SelectivityOptionalFilter::FiltersNullValues(const LogicalType &type, bool &filters_nulls,
+                                                  bool &filters_valid_values, TableFilterState &filter_state) const {
 	const auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
-	return ConstantFun::FiltersNullValues(type, *this->child_filter, filters_nulls, filters_valid_values, *state.child_state);
+	return ConstantFun::FiltersNullValues(type, *this->child_filter, filters_nulls, filters_valid_values,
+	                                      *state.child_state);
 }
 unique_ptr<TableFilterState> SelectivityOptionalFilter::InitializeState(ClientContext &context) const {
 	D_ASSERT(child_filter);

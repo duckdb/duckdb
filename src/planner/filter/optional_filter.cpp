@@ -21,11 +21,10 @@ unique_ptr<Expression> OptionalFilter::ToExpression(const Expression &column) co
 }
 
 idx_t OptionalFilter::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-									  TableFilterState &filter_state, const idx_t scan_count,
-									  idx_t &approved_tuple_count) const {
+                                      TableFilterState &filter_state, const idx_t scan_count,
+                                      idx_t &approved_tuple_count) const {
 	return scan_count;
 }
-
 
 unique_ptr<TableFilter> OptionalFilter::Copy() const {
 	auto copy = make_uniq<OptionalFilter>();

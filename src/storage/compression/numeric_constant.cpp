@@ -108,7 +108,7 @@ void ConstantSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 // Filter
 //===--------------------------------------------------------------------===//
 void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool &filters_nulls,
-                       bool &filters_valid_values, TableFilterState &filter_state) {
+                                    bool &filters_valid_values, TableFilterState &filter_state) {
 	filters_nulls = false;
 	filters_valid_values = false;
 

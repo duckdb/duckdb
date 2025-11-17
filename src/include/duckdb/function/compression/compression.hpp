@@ -17,7 +17,7 @@ struct ConstantFun {
 	static CompressionFunction GetFunction(PhysicalType type);
 	static bool TypeIsSupported(const PhysicalType physical_type);
 	static void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool &filters_nulls,
-					   bool &filters_valid_values, TableFilterState &filter_state);
+	                              bool &filters_valid_values, TableFilterState &filter_state);
 };
 
 struct UncompressedFun {
