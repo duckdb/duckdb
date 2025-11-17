@@ -116,7 +116,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/sleep_profiling_multi.json'
 
 statement ok
-SELECT sleep_ms(10) FROM range(5)
+SELECT sleep_ms(1) FROM range(5)
 
 statement ok
 PRAGMA disable_profiling
