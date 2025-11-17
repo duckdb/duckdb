@@ -50,9 +50,6 @@ public:
 
 FullSortGlobalSinkState::FullSortGlobalSinkState(ClientContext &client, const FullSort &full_sort)
     : client(client), full_sort(full_sort), count(0) {
-	auto &orders = full_sort.orders;
-	D_ASSERT(!orders.empty());
-
 	//	Sort early into a dedicated hash group if we only sort.
 	hash_group = make_uniq<FullSortGroup>(client, *full_sort.sort);
 }
