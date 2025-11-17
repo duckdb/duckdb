@@ -23,7 +23,7 @@ ORDER BY y;
 1	1	2
 
 # GROUP BY for inside-expression alias
-query IIII
+query I
 SELECT a as x FROM (VALUES (1),(2),(3)) t(a)
 GROUP BY alias.x + 1
 ORDER BY alias.x;
