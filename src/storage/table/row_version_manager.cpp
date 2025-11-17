@@ -142,6 +142,7 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		auto &info = *vector_info[vector_idx];
 		info.CommitAppend(commit_id, vstart, vend);
+		has_changes = true;
 	}
 }
 
@@ -171,6 +172,7 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 		auto cleanup = info.Cleanup(lowest_active_transaction, new_info);
 		if (cleanup) {
 			vector_info[vector_idx] = std::move(new_info);
+			has_changes = true;
 		}
 	}
 }
@@ -180,6 +182,7 @@ void RowVersionManager::RevertAppend(idx_t start_row) {
 	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < vector_info.size(); vector_idx++) {
 		vector_info[vector_idx].reset();
+		has_changes = true;
 	}
 }
 
@@ -216,8 +219,7 @@ void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, 
 }
 
 vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager) {
-	if (!has_changes && !storage_pointers.empty()) {
-		// the row version manager already exists on disk and no changes were made
+	if (!has_changes) {
 		// we can write the current pointer as-is
 		// ensure the blocks we are pointing to are not marked as free
 		manager.ClearModifiedBlocks(storage_pointers);
@@ -236,22 +238,21 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 		}
 		to_serialize.emplace_back(vector_idx, *chunk_info);
 	}
-	if (to_serialize.empty()) {
-		return vector<MetaBlockPointer>();
-	}
 
 	storage_pointers.clear();
 
-	MetadataWriter writer(manager, &storage_pointers);
-	// now serialize the actual version information
-	writer.Write<idx_t>(to_serialize.size());
-	for (auto &entry : to_serialize) {
-		auto &vector_idx = entry.first;
-		auto &chunk_info = entry.second.get();
-		writer.Write<idx_t>(vector_idx);
-		chunk_info.Write(writer);
+	if (!to_serialize.empty()) {
+		MetadataWriter writer(manager, &storage_pointers);
+		// now serialize the actual version information
+		writer.Write<idx_t>(to_serialize.size());
+		for (auto &entry : to_serialize) {
+			auto &vector_idx = entry.first;
+			auto &chunk_info = entry.second.get();
+			writer.Write<idx_t>(vector_idx);
+			chunk_info.Write(writer);
+		}
+		writer.Flush();
 	}
-	writer.Flush();
 
 	has_changes = false;
 	return storage_pointers;
@@ -279,6 +280,17 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	}
 	version_info->has_changes = false;
 	return version_info;
+}
+
+bool RowVersionManager::HasChanges() {
+	lock_guard<mutex> lock(version_lock);
+	return has_changes;
+}
+
+vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
+	lock_guard<mutex> lock(version_lock);
+	D_ASSERT(!has_changes);
+	return storage_pointers;
 }
 
 } // namespace duckdb
