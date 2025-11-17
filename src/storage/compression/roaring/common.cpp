@@ -217,12 +217,32 @@ unique_ptr<SegmentScanState> RoaringInitScan(const QueryContext &context, Column
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
+void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t scan_count) {
+	// Get src's validity mask
+	auto &validity = FlatVector::Validity(src);
+
+	if (validity.AllValid()) {
+		memset(dst.GetData(), 1, scan_count); // 1 is for valid
+	} else {
+		// "Bit-Unpack" src's validity_mask and put it in dst's data
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(dst.GetData(), data_ptr_cast(validity.GetData()), scan_count, 1);
+	}
+}
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = state.GetPositionInSegment();
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
+}
+void RoaringScanPartialBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                        idx_t result_offset) {
+	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
+	auto start = state.GetPositionInSegment();
+
+	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
+	scan_state.ScanPartial(start, dummy, result_offset, scan_count);
+	ExtractValidityMaskToData(dummy, result, scan_count);
 }
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	RoaringScanPartial(segment, state, scan_count, result, 0);
@@ -233,16 +253,7 @@ void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 	// scanned data in the vector's validity mask
 	Vector dummy(LogicalType::UBIGINT, false, false, scan_count);
 	RoaringScan(segment, state, scan_count, dummy);
-
-	// Get dummy's validity mask
-	auto &validity = FlatVector::Validity(dummy);
-
-	if (validity.AllValid()) {
-		memset(result.GetData(), 1, scan_count); // 1 is for valid
-	} else {
-		// "Bit-Unpack" dummy's validity_mask and put it in result's data
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(result.GetData(), data_ptr_cast(validity.GetData()), scan_count, 1);
-	}
+	ExtractValidityMaskToData(dummy, result, scan_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -256,6 +267,17 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
 
 	scan_state.ScanInternal(container_state, 1, result, result_idx);
+}
+void RoaringFetchRowBoolean(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+	RoaringScanState scan_state(segment);
+
+	idx_t internal_offset;
+	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
+	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
+
+	Vector dummy(LogicalType::UBIGINT, false, false, 1);
+	scan_state.ScanInternal(container_state, 1, dummy, result_idx);
+	ExtractValidityMaskToData(dummy, result, 1);
 }
 
 void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
@@ -279,18 +301,24 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	compression_analyze_t analyze = nullptr;
 	compression_compress_data_t compress = nullptr;
 	compression_scan_vector_t scan = nullptr;
+	compression_scan_partial_t scan_partial= nullptr;
+	compression_fetch_row_t fetch_row= nullptr;
 
 	switch (data_type) {
 	case PhysicalType::BIT: {
 		analyze = roaring::RoaringAnalyze<PhysicalType::BIT>;
 		compress = roaring::RoaringCompress<PhysicalType::BIT>;
 		scan = roaring::RoaringScan;
+		scan_partial = roaring::RoaringScanPartial;
+		fetch_row = roaring::RoaringFetchRow;
 		break;
 	}
 	case PhysicalType::BOOL: {
 		analyze = roaring::RoaringAnalyze<PhysicalType::BOOL>;
 		compress = roaring::RoaringCompress<PhysicalType::BOOL>;
 		scan = roaring::RoaringScanBoolean;
+		scan_partial = roaring::RoaringScanPartialBoolean;
+		fetch_row = roaring::RoaringFetchRowBoolean;
 		break;
 	}
 	default:
@@ -299,7 +327,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, roaring::RoaringInitAnalyze, analyze,
 	                           roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression, compress,
 	                           roaring::RoaringFinalizeCompress, roaring::RoaringInitScan, scan,
-	                           roaring::RoaringScanPartial, roaring::RoaringFetchRow, roaring::RoaringSkip,
+	                           scan_partial, fetch_row, roaring::RoaringSkip,
 	                           roaring::RoaringInitSegment);
 }
 

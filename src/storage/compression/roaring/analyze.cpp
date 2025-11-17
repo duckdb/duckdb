@@ -13,7 +13,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/fast_mem.hpp"
-#include "duckdb/common/bitpacking.hpp"
 
 namespace duckdb {
 
@@ -186,7 +185,7 @@ void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count
 	Vector bitpacked_vector(LogicalType::UBIGINT, count);
 	auto dst = data_ptr_cast(FlatVector::GetData<uint64_t>(bitpacked_vector));
 	auto src = data_ptr_cast(FlatVector::GetData<uint8_t>(input));
-	BitpackingPrimitives::BitPackBooleans(dst, src, count, FlatVector::Validity(input));
+	BitPackBooleans(dst, src, count, FlatVector::Validity(input));
 
 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
 	// mask.

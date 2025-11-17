@@ -112,37 +112,6 @@ public:
 		return num_to_round + BITPACKING_ALGORITHM_GROUP_SIZE - NumericCast<idx_t>(remainder);
 	}
 
-	inline static void BitPackBooleans(data_ptr_t dst, const data_ptr_t src, const idx_t count,
-	                                   const ValidityMask &validity_mask, BaseStatistics *statistics = nullptr) {
-		bool is_last_bit_true = false; // If first value is null, write false, as it's probably the most common value
-		for (idx_t i = 0; i < count; i++) {
-			if (statistics) {
-				statistics->UpdateNumericStats<bool>(src[i]);
-			}
-			if (src[i] == 1) {
-				*dst |= (uint64_t(1) << (i % 8));
-				is_last_bit_true = true;
-			} else if (src[i] == 0) {
-				*dst &= ~(uint64_t(1) << (i % 8));
-				is_last_bit_true = false;
-			} else if (validity_mask.RowIsValid(i) == false) {
-				// If not 0 or 1, it's a placeholder value for null, so copy previous bit, forming longer runs for RLE
-				if (is_last_bit_true) {
-					*dst |= (uint64_t(1) << (i % 8));
-				} else {
-					*dst &= ~(uint64_t(1) << (i % 8));
-				}
-			} else {
-				throw InternalException(
-				    "Boolean vector value is neither true nor false, nor null per the validity mask.");
-			}
-
-			if ((i + 1) % 8 == 0) {
-				dst++;
-			}
-		}
-	}
-
 private:
 	template <class T, bool is_signed, bool round_to_next_byte = false>
 	static bitpacking_width_t FindMinimumBitWidth(T *values, idx_t count) {
