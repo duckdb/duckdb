@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <duckdb/common/types/timestamp.hpp>
-
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/common/types.hpp"
