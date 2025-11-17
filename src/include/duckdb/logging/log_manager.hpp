@@ -34,8 +34,7 @@ public:
 	void Initialize();
 
 	DUCKDB_API static LogManager &Get(ClientContext &context);
-	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false,
-	                                bool custom_callback = false);
+	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false);
 
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
 

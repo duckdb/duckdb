@@ -115,7 +115,7 @@ else()
       duckdb_yyjson
       duckdb_zstd)
 
-  add_library(duckdb SHARED ${ALL_OBJECT_FILES})
+  add_library(duckdb SHARED ${ALL_OBJECT_FILES} main/capi/logging-c.cpp)
   if(SET_DUCKDB_LIBRARY_VERSION)
     set_target_properties(
       duckdb

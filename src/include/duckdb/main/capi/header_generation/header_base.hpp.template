@@ -879,6 +879,17 @@ typedef struct _duckdb_catalog_entry {
 } * duckdb_catalog_entry;
 
 //===--------------------------------------------------------------------===//
+// Logging Types
+//===--------------------------------------------------------------------===//
+
+//! Holds a log storage object.
+typedef struct _duckdb_log_storage {
+	void *internal_ptr;
+} * duckdb_log_storage;
+
+typedef void (*duckdb_logger_write_log_entry_t)(duckdb_timestamp timestamp, const char *level, const char *log_type, const char *log_message);
+
+//===--------------------------------------------------------------------===//
 // DuckDB extension access
 //===--------------------------------------------------------------------===//
 

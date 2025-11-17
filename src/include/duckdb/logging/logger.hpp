@@ -208,31 +208,4 @@ public:
 	}
 };
 
-class CallbackLogger : public Logger {
-public:
-	explicit CallbackLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager);
-	explicit CallbackLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager);
-
-	// Main Logger API
-	bool ShouldLog(const char *log_type, LogLevel log_level) override;
-	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override;
-
-	void Flush() override;
-	bool IsThreadSafe() override {
-		return false;
-	}
-	const LogConfig &GetConfig() const override {
-		return config;
-	}
-
-private:
-	void DefaultCallback(const char *log_type, LogLevel log_level, const char *message) const;
-
-private:
-	custom_callback_t callback;
-
-	const LogConfig config;
-	const RegisteredLoggingContext context;
-};
-
 } // namespace duckdb

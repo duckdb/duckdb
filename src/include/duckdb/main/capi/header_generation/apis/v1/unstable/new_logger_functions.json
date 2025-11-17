@@ -1,0 +1,10 @@
+{
+  "version": "unstable_new_logger_functions",
+  "description": "API to manipulate logger.",
+  "entries": [
+    "duckdb_create_log_storage",
+    "duckdb_destroy_log_storage",
+    "duckdb_log_storage_set_write_log_entry",
+    "duckdb_register_log_storage"
+  ]
+}

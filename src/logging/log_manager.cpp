@@ -9,15 +9,11 @@
 
 namespace duckdb {
 
-unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_safe, bool mutable_settings,
-                                            bool custom_callback) {
+unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_safe, bool mutable_settings) {
 	unique_lock<mutex> lck(lock);
 
 	auto registered_logging_context = RegisterLoggingContextInternal(context);
 
-	if (custom_callback) {
-		return make_uniq<CallbackLogger>(config, registered_logging_context, *this);
-	}
 	if (mutable_settings) {
 		return make_uniq<MutableLogger>(config, registered_logging_context, *this);
 	}

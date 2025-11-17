@@ -155,46 +155,4 @@ void MutableLogger::Flush() {
 	manager.Flush();
 }
 
-CallbackLogger::CallbackLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-    : CallbackLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
-}
-
-CallbackLogger::CallbackLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager)
-    : Logger(manager), config(config_p), context(context_p) {
-	// NopLogger should be used instead
-	D_ASSERT(config_p.enabled);
-	callback = [this](const char *log_type, LogLevel log_level, const char *message) {
-		DefaultCallback(log_type, log_level, message);
-	};
-}
-
-bool CallbackLogger::ShouldLog(const char *log_type, LogLevel log_level) {
-	if (config.level > log_level) {
-		return false;
-	}
-
-	// TODO: improve these: they are currently fairly expensive due to requiring allocations when looking up const char*
-	//       also, we would ideally do prefix matching, not string matching here
-	if (config.mode == LogMode::ENABLE_SELECTED) {
-		return config.enabled_log_types.find(log_type) != config.enabled_log_types.end();
-	}
-	if (config.mode == LogMode::DISABLE_SELECTED) {
-		return config.disabled_log_types.find(log_type) == config.disabled_log_types.end();
-	}
-	return true;
-}
-
-void CallbackLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
-	callback(log_type, log_level, log_message);
-}
-
-void CallbackLogger::Flush() {
-	manager.Flush();
-	// NOP
-}
-
-void CallbackLogger::DefaultCallback(const char *log_type, LogLevel log_level, const char *message) const {
-	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), log_type, log_level, message, context);
-}
-
 } // namespace duckdb

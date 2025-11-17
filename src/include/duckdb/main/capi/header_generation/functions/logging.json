@@ -1,0 +1,78 @@
+{
+  "group": "logging",
+  "deprecated": false,
+  "description": "Functions to configure the logging of DuckDB.",
+  "entries": [
+    {
+      "name": "duckdb_create_log_storage",
+      "return_type": "duckdb_log_storage",
+      "comment": {
+        "description": "Creates a new log storage object.\n\n",
+        "return_value": "A log storage object. Must be destroyed with `duckdb_destroy_log_storage`."
+      }
+    },
+    {
+      "name": "duckdb_destroy_log_storage",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_log_storage",
+          "name": "storage"
+        }
+      ],
+      "comment": {
+        "description": "Destroys a log storage object.\n\n",
+        "param_comments": {
+          "storage": "The log storage object to destroy."
+        }
+      }
+    },
+    {
+      "name": "duckdb_log_storage_set_write_log_entry",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_log_storage",
+          "name": "storage"
+        },
+        {
+          "type": "duckdb_logger_write_log_entry_t",
+          "name": "function"
+        }
+      ],
+      "comment": {
+        "description": "Sets the function to be called when a new log entry is written.\n\n",
+        "param_comments": {
+          "storage": "The log storage object.",
+          "function": "The function to call."
+        }
+      }
+    },
+    {
+      "name": "duckdb_register_log_storage",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_database",
+          "name": "database"
+        },
+        {
+          "type": "const char *",
+          "name": "name"
+        },
+        {
+          "type": "duckdb_log_storage",
+          "name": "storage"
+        }
+      ],
+      "comment": {
+        "description": "Sets the storage for the logger.\n\n",
+        "param_comments": {
+          "database": "A database object.",
+          "name": "The storage name.",
+          "storage": "The log storage object."
+        }
+      }
+    }
+  ]
+}
