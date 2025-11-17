@@ -210,6 +210,13 @@ def main():
         action="store_true",
         help="Generate C++ stubs (declaration, registration, implementation) for missing rules."
     )
+    parser.add_argument(
+        "-s",
+        "--skip-found",
+        action="store_true",
+        help="Skip output of [ FOUND ] rules"
+    )
+
     args = parser.parse_args()
 
     grammar_rules_by_file = find_grammar_rules(Path(GRAMMAR_DIR))
@@ -276,7 +283,8 @@ def main():
                 missing_count_this_file += 1
                 missing_rules_for_gen.append(rule_name)
 
-            print(f"{status_str:<14} {rule_name}")
+            if args.skip_found and not ("FOUND" in status_str or "ENUM" in status_str):
+                print(f"{status_str:<14} {rule_name}")
 
         if missing_count_this_file > 0:
             missing_rules_by_file[file_name] = missing_count_this_file
