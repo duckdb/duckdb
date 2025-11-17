@@ -19,7 +19,10 @@ TransactionContext::~TransactionContext() {
 			Rollback(nullptr);
 		} catch (std::exception &ex) {
 			ErrorData data(ex);
-			DUCKDB_LOG_ERROR(context, "TransactionContext::~TransactionContext()\t\t" + data.Message());
+			try {
+				DUCKDB_LOG_ERROR(context, "TransactionContext::~TransactionContext()\t\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
 		} catch (...) { // NOLINT
 		}
 	}

@@ -19,10 +19,15 @@ CompressedFile::~CompressedFile() {
 		if (child_handle) {
 			// FIXME: make more log context available here.
 			ErrorData data(ex);
-			DUCKDB_LOG_ERROR(child_handle->logger, "CompressedFile::~CompressedFile()\t\t" + data.Message());
+			try {
+				const auto logger = child_handle->logger;
+				if (logger) {
+					DUCKDB_LOG_ERROR(logger, "CompressedFile::~CompressedFile()\t\t" + data.Message());
+				}
+			} catch (...) { // NOLINT
+			}
 		}
-	} catch (...) {
-		// NOLINT
+	} catch (...) { // NOLINT
 	}
 }
 

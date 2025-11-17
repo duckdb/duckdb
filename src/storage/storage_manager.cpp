@@ -423,9 +423,11 @@ SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 		RevertCommit();
 	} catch (std::exception &ex) {
 		ErrorData data(ex);
-
-		DUCKDB_LOG_ERROR(wal.GetDatabase().GetDatabase(),
-		                 "SingleFileStorageCommitState::~SingleFileStorageCommitState()\t\t" + data.Message());
+		try {
+			DUCKDB_LOG_ERROR(wal.GetDatabase().GetDatabase(),
+			                 "SingleFileStorageCommitState::~SingleFileStorageCommitState()\t\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
 	} catch (...) { // NOLINT
 	}
 }
