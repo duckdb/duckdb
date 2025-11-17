@@ -287,12 +287,15 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 bool FilterCombiner::FindNextLegalUTF8(string &prefix_string) {
 	// find the start of the last codepoint
 	idx_t last_codepoint_start;
-	for (last_codepoint_start = prefix_string.size() - 1; last_codepoint_start >= 0; last_codepoint_start--) {
-		if (IsCharacter(prefix_string[last_codepoint_start])) {
+	for (last_codepoint_start = prefix_string.size(); last_codepoint_start > 0; last_codepoint_start--) {
+		if (IsCharacter(prefix_string[last_codepoint_start - 1])) {
 			break;
 		}
 	}
-	D_ASSERT(last_codepoint_start >= 0);
+	if (last_codepoint_start == 0) {
+		throw InvalidInputException("Invalid UTF8 found in string \"%s\"", prefix_string);
+	}
+	last_codepoint_start--;
 	int codepoint_size;
 	auto codepoint = Utf8Proc::UTF8ToCodepoint(prefix_string.c_str() + last_codepoint_start, codepoint_size) + 1;
 	if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
