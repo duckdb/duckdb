@@ -177,7 +177,6 @@ def main():
             is_transformer = rule_name in transformer_impls
             is_registered = rule_name in registered_rules
 
-            status_str = ""
             if is_enum:
                 status_str = "[ ✅ ENUM ]"
                 total_found_enum += 1
