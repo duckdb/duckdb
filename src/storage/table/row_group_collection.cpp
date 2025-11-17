@@ -1397,7 +1397,7 @@ void RowGroupCollection::CommitDropTable() {
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
 struct DuckDBPartitionRowGroup : public PartitionRowGroup {
-	DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
+	explicit DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
 	}
 
 	RowGroup &row_group;
