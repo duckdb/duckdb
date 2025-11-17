@@ -74,15 +74,6 @@ unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &col
 	return ExpressionBinder::GetSQLValueFunction(column_name);
 }
 
-BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	// first try to bind the column reference regularly
-	auto result = BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
-	if (!result.HasError()) {
-		return result;
-	}
-	return result;
-}
-
 bool SelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		return node.bind_state.alias_map.find(colref.column_names[0]) != node.bind_state.alias_map.end();
