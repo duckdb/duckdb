@@ -1966,12 +1966,24 @@ bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
 	}
 	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
 		// in automatic mode we only use a pager when the output is large enough
-		if (mode == RenderMode::DUCKBOX) {
+		if (cMode == RenderMode::DUCKBOX) {
 			// in duckbox mode the output is automatically truncated to "max_rows"
 			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
 			if (max_rows < pager_min_rows) {
 				return false;
 			}
+		}
+		if (cMode == RenderMode::EXPLAIN) {
+			auto &materialized = result.Cast<MaterializedQueryResult>();
+			idx_t row_count = 0;
+			for (auto &row : materialized.Collection().Rows()) {
+				for (auto c : row.GetValue(1).GetValue<string>()) {
+					if (c == '\n') {
+						row_count++;
+					}
+				}
+			}
+			return row_count >= pager_min_rows;
 		}
 		// otherwise we check the size of the result set
 		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
@@ -2758,8 +2770,8 @@ MetadataResult ShellState::DisplayTables(const vector<string> &args) {
 	}
 	auto query = StringUtil::Format(R"(
 SELECT columns.database_name, columns.schema_name, columns.table_name, list(
-	struct_pack(column_name, data_type,
-	is_primary_key := c.column_index IS NOT NULL) order by column_index), t.estimated_size AS estimated_size, t.table_oid AS table_oid
+	struct_pack(column_name, data_type, is_primary_key := c.column_index IS NOT NULL) order by column_index),
+	t.estimated_size AS estimated_size, t.table_oid AS table_oid
 FROM duckdb_columns() columns
 LEFT JOIN duckdb_tables() t USING (table_oid)
 LEFT JOIN (
@@ -2784,9 +2796,6 @@ GROUP BY ALL;
 		table.database_name = row.GetValue<string>(0);
 		table.schema_name = row.GetValue<string>(1);
 		table.table_name = row.GetValue<string>(2);
-		if (table.schema_name != DEFAULT_SCHEMA) {
-			table.table_name = table.schema_name + "." + table.table_name;
-		}
 
 		auto column_val = row.GetBaseValue(3);
 		for (auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
@@ -2797,6 +2806,7 @@ GROUP BY ALL;
 			column.is_primary_key = struct_children[2].GetValue<bool>();
 			table.columns.push_back(std::move(column));
 		}
+
 		if (!row.IsNull(4)) {
 			table.estimated_size = row.GetValue<idx_t>(4);
 		}
