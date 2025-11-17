@@ -1,0 +1,608 @@
+# name: test/sql/storage/types/variant/tpcds_sf1.test_slow
+# group: [variant]
+
+require tpcds
+
+#load __TEST_DIR__/tpcds_sf1_variant.db
+
+load tmp/tpcds_sf1_variant.db readonly
+
+#statement ok
+#call dsdgen(sf=1, suffix='_normal')
+
+#statement ok
+#SET variant_minimum_shredding_size = 0;
+
+## --- Create tables stored as VARIANT ---
+
+#foreach tbl web_site web_sales web_returns web_page warehouse time_dim store_sales store_returns store ship_mode reason promotion item inventory income_band household_demographics date_dim customer_demographics customer_address customer catalog_sales catalog_returns catalog_page call_center
+
+#statement ok
+#create TABLE ${tbl}_variant as select ${tbl}_normal::VARIANT ${tbl} from ${tbl}_normal;
+
+#endloop
+
+#statement ok
+#checkpoint;
+
+#restart
+
+#mode skip
+
+# --- Create views ----
+
+statement ok
+attach ':memory:' as db2 (READONLY false);
+
+statement ok
+use db2;
+
+statement ok
+CREATE VIEW web_site as SELECT
+    web_site.web_site_sk::BIGINT as web_site_sk,
+    web_site.web_site_id::VARCHAR as web_site_id,
+    web_site.web_rec_start_date::DATE as web_rec_start_date,
+    web_site.web_rec_end_date::DATE as web_rec_end_date,
+    web_site.web_name::VARCHAR as web_name,
+    web_site.web_open_date_sk::BIGINT as web_open_date_sk,
+    web_site.web_close_date_sk::BIGINT as web_close_date_sk,
+    web_site.web_class::VARCHAR as web_class,
+    web_site.web_manager::VARCHAR as web_manager,
+    web_site.web_mkt_id::BIGINT as web_mkt_id,
+    web_site.web_mkt_class::VARCHAR as web_mkt_class,
+    web_site.web_mkt_desc::VARCHAR as web_mkt_desc,
+    web_site.web_market_manager::VARCHAR as web_market_manager,
+    web_site.web_company_id::BIGINT as web_company_id,
+    web_site.web_company_name::VARCHAR as web_company_name,
+    web_site.web_street_number::VARCHAR as web_street_number,
+    web_site.web_street_name::VARCHAR as web_street_name,
+    web_site.web_street_type::VARCHAR as web_street_type,
+    web_site.web_suite_number::VARCHAR as web_suite_number,
+    web_site.web_city::VARCHAR as web_city,
+    web_site.web_county::VARCHAR as web_county,
+    web_site.web_state::VARCHAR as web_state,
+    web_site.web_zip::VARCHAR as web_zip,
+    web_site.web_country::VARCHAR as web_country,
+    web_site.web_gmt_offset::DECIMAL(5,2) as web_gmt_offset,
+    web_site.web_tax_percentage::DECIMAL(5,2) as web_tax_percentage
+FROM
+    tpcds_sf1_variant.web_site_variant;
+
+statement ok
+CREATE VIEW web_sales as SELECT
+    web_sales.ws_sold_date_sk::BIGINT as ws_sold_date_sk,
+    web_sales.ws_sold_time_sk::BIGINT as ws_sold_time_sk,
+    web_sales.ws_ship_date_sk::BIGINT as ws_ship_date_sk,
+    web_sales.ws_item_sk::BIGINT as ws_item_sk,
+    web_sales.ws_bill_customer_sk::BIGINT as ws_bill_customer_sk,
+    web_sales.ws_bill_cdemo_sk::BIGINT as ws_bill_cdemo_sk,
+    web_sales.ws_bill_hdemo_sk::BIGINT as ws_bill_hdemo_sk,
+    web_sales.ws_bill_addr_sk::BIGINT as ws_bill_addr_sk,
+    web_sales.ws_ship_customer_sk::BIGINT as ws_ship_customer_sk,
+    web_sales.ws_ship_cdemo_sk::BIGINT as ws_ship_cdemo_sk,
+    web_sales.ws_ship_hdemo_sk::BIGINT as ws_ship_hdemo_sk,
+    web_sales.ws_ship_addr_sk::BIGINT as ws_ship_addr_sk,
+    web_sales.ws_web_page_sk::BIGINT as ws_web_page_sk,
+    web_sales.ws_web_site_sk::BIGINT as ws_web_site_sk,
+    web_sales.ws_ship_mode_sk::BIGINT as ws_ship_mode_sk,
+    web_sales.ws_warehouse_sk::BIGINT as ws_warehouse_sk,
+    web_sales.ws_promo_sk::BIGINT as ws_promo_sk,
+    web_sales.ws_order_number::BIGINT as ws_order_number,
+    web_sales.ws_quantity::BIGINT as ws_quantity,
+    web_sales.ws_wholesale_cost::DECIMAL(7,2) as ws_wholesale_cost,
+    web_sales.ws_list_price::DECIMAL(7,2) as ws_list_price,
+    web_sales.ws_sales_price::DECIMAL(7,2) as ws_sales_price,
+    web_sales.ws_ext_discount_amt::DECIMAL(7,2) as ws_ext_discount_amt,
+    web_sales.ws_ext_sales_price::DECIMAL(7,2) as ws_ext_sales_price,
+    web_sales.ws_ext_wholesale_cost::DECIMAL(7,2) as ws_ext_wholesale_cost,
+    web_sales.ws_ext_list_price::DECIMAL(7,2) as ws_ext_list_price,
+    web_sales.ws_ext_tax::DECIMAL(7,2) as ws_ext_tax,
+    web_sales.ws_coupon_amt::DECIMAL(7,2) as ws_coupon_amt,
+    web_sales.ws_ext_ship_cost::DECIMAL(7,2) as ws_ext_ship_cost,
+    web_sales.ws_net_paid::DECIMAL(7,2) as ws_net_paid,
+    web_sales.ws_net_paid_inc_tax::DECIMAL(7,2) as ws_net_paid_inc_tax,
+    web_sales.ws_net_paid_inc_ship::DECIMAL(7,2) as ws_net_paid_inc_ship,
+    web_sales.ws_net_paid_inc_ship_tax::DECIMAL(7,2) as ws_net_paid_inc_ship_tax,
+    web_sales.ws_net_profit::DECIMAL(7,2) as ws_net_profit
+FROM
+    tpcds_sf1_variant.web_sales_variant;
+
+statement ok
+CREATE VIEW web_returns as SELECT
+    web_returns.wr_returned_date_sk::BIGINT as wr_returned_date_sk,
+    web_returns.wr_returned_time_sk::BIGINT as wr_returned_time_sk,
+    web_returns.wr_item_sk::BIGINT as wr_item_sk,
+    web_returns.wr_refunded_customer_sk::BIGINT as wr_refunded_customer_sk,
+    web_returns.wr_refunded_cdemo_sk::BIGINT as wr_refunded_cdemo_sk,
+    web_returns.wr_refunded_hdemo_sk::BIGINT as wr_refunded_hdemo_sk,
+    web_returns.wr_refunded_addr_sk::BIGINT as wr_refunded_addr_sk,
+    web_returns.wr_returning_customer_sk::BIGINT as wr_returning_customer_sk,
+    web_returns.wr_returning_cdemo_sk::BIGINT as wr_returning_cdemo_sk,
+    web_returns.wr_returning_hdemo_sk::BIGINT as wr_returning_hdemo_sk,
+    web_returns.wr_returning_addr_sk::BIGINT as wr_returning_addr_sk,
+    web_returns.wr_web_page_sk::BIGINT as wr_web_page_sk,
+    web_returns.wr_reason_sk::BIGINT as wr_reason_sk,
+    web_returns.wr_order_number::BIGINT as wr_order_number,
+    web_returns.wr_return_quantity::BIGINT as wr_return_quantity,
+    web_returns.wr_return_amt::DECIMAL(7,2) as wr_return_amt,
+    web_returns.wr_return_tax::DECIMAL(7,2) as wr_return_tax,
+    web_returns.wr_return_amt_inc_tax::DECIMAL(7,2) as wr_return_amt_inc_tax,
+    web_returns.wr_fee::DECIMAL(7,2) as wr_fee,
+    web_returns.wr_return_ship_cost::DECIMAL(7,2) as wr_return_ship_cost,
+    web_returns.wr_refunded_cash::DECIMAL(7,2) as wr_refunded_cash,
+    web_returns.wr_reversed_charge::DECIMAL(7,2) as wr_reversed_charge,
+    web_returns.wr_account_credit::DECIMAL(7,2) as wr_account_credit,
+    web_returns.wr_net_loss::DECIMAL(7,2) as wr_net_loss
+FROM
+    tpcds_sf1_variant.web_returns_variant;
+
+statement ok
+CREATE VIEW web_page as SELECT
+    web_page.wp_web_page_sk::BIGINT as wp_web_page_sk,
+    web_page.wp_web_page_id::VARCHAR as wp_web_page_id,
+    web_page.wp_rec_start_date::DATE as wp_rec_start_date,
+    web_page.wp_rec_end_date::DATE as wp_rec_end_date,
+    web_page.wp_creation_date_sk::BIGINT as wp_creation_date_sk,
+    web_page.wp_access_date_sk::BIGINT as wp_access_date_sk,
+    web_page.wp_autogen_flag::VARCHAR as wp_autogen_flag,
+    web_page.wp_customer_sk::BIGINT as wp_customer_sk,
+    web_page.wp_url::VARCHAR as wp_url,
+    web_page.wp_type::VARCHAR as wp_type,
+    web_page.wp_char_count::BIGINT as wp_char_count,
+    web_page.wp_link_count::BIGINT as wp_link_count,
+    web_page.wp_image_count::BIGINT as wp_image_count,
+    web_page.wp_max_ad_count::INTEGER as wp_max_ad_count
+FROM
+    tpcds_sf1_variant.web_page_variant;
+
+statement ok
+CREATE VIEW warehouse as SELECT
+    warehouse.w_warehouse_sk::BIGINT as w_warehouse_sk,
+    warehouse.w_warehouse_id::VARCHAR as w_warehouse_id,
+    warehouse.w_warehouse_name::VARCHAR as w_warehouse_name,
+    warehouse.w_warehouse_sq_ft::BIGINT as w_warehouse_sq_ft,
+    warehouse.w_street_number::VARCHAR as w_street_number,
+    warehouse.w_street_name::VARCHAR as w_street_name,
+    warehouse.w_street_type::VARCHAR as w_street_type,
+    warehouse.w_suite_number::VARCHAR as w_suite_number,
+    warehouse.w_city::VARCHAR as w_city,
+    warehouse.w_county::VARCHAR as w_county,
+    warehouse.w_state::VARCHAR as w_state,
+    warehouse.w_zip::VARCHAR as w_zip,
+    warehouse.w_country::VARCHAR as w_country,
+    warehouse.w_gmt_offset::DECIMAL(5,2) as w_gmt_offset
+FROM
+    tpcds_sf1_variant.warehouse_variant;
+
+statement ok
+CREATE VIEW time_dim as SELECT
+    time_dim.t_time_sk::BIGINT as t_time_sk,
+    time_dim.t_time_id::VARCHAR as t_time_id,
+    time_dim.t_time::BIGINT as t_time,
+    time_dim.t_hour::BIGINT as t_hour,
+    time_dim.t_minute::BIGINT as t_minute,
+    time_dim.t_second::BIGINT as t_second,
+    time_dim.t_am_pm::VARCHAR as t_am_pm,
+    time_dim.t_shift::VARCHAR as t_shift,
+    time_dim.t_sub_shift::VARCHAR as t_sub_shift,
+    time_dim.t_meal_time::VARCHAR as t_meal_time
+FROM
+    tpcds_sf1_variant.time_dim_variant;
+
+statement ok
+CREATE VIEW store_sales as SELECT
+    store_sales.ss_sold_date_sk::BIGINT as ss_sold_date_sk,
+    store_sales.ss_sold_time_sk::BIGINT as ss_sold_time_sk,
+    store_sales.ss_item_sk::BIGINT as ss_item_sk,
+    store_sales.ss_customer_sk::BIGINT as ss_customer_sk,
+    store_sales.ss_cdemo_sk::BIGINT as ss_cdemo_sk,
+    store_sales.ss_hdemo_sk::BIGINT as ss_hdemo_sk,
+    store_sales.ss_addr_sk::BIGINT as ss_addr_sk,
+    store_sales.ss_store_sk::BIGINT as ss_store_sk,
+    store_sales.ss_promo_sk::BIGINT as ss_promo_sk,
+    store_sales.ss_ticket_number::BIGINT as ss_ticket_number,
+    store_sales.ss_quantity::BIGINT as ss_quantity,
+    store_sales.ss_wholesale_cost::DECIMAL(7,2) as ss_wholesale_cost,
+    store_sales.ss_list_price::DECIMAL(7,2) as ss_list_price,
+    store_sales.ss_sales_price::DECIMAL(7,2) as ss_sales_price,
+    store_sales.ss_ext_discount_amt::DECIMAL(7,2) as ss_ext_discount_amt,
+    store_sales.ss_ext_sales_price::DECIMAL(7,2) as ss_ext_sales_price,
+    store_sales.ss_ext_wholesale_cost::DECIMAL(7,2) as ss_ext_wholesale_cost,
+    store_sales.ss_ext_list_price::DECIMAL(7,2) as ss_ext_list_price,
+    store_sales.ss_ext_tax::DECIMAL(7,2) as ss_ext_tax,
+    store_sales.ss_coupon_amt::DECIMAL(7,2) as ss_coupon_amt,
+    store_sales.ss_net_paid::DECIMAL(7,2) as ss_net_paid,
+    store_sales.ss_net_paid_inc_tax::DECIMAL(7,2) as ss_net_paid_inc_tax,
+    store_sales.ss_net_profit::DECIMAL(7,2) as ss_net_profit
+FROM
+    tpcds_sf1_variant.store_sales_variant;
+
+statement ok
+CREATE VIEW store_returns as SELECT
+    store_returns.sr_returned_date_sk::BIGINT as sr_returned_date_sk,
+    store_returns.sr_return_time_sk::BIGINT as sr_return_time_sk,
+    store_returns.sr_item_sk::BIGINT as sr_item_sk,
+    store_returns.sr_customer_sk::BIGINT as sr_customer_sk,
+    store_returns.sr_cdemo_sk::BIGINT as sr_cdemo_sk,
+    store_returns.sr_hdemo_sk::BIGINT as sr_hdemo_sk,
+    store_returns.sr_addr_sk::BIGINT as sr_addr_sk,
+    store_returns.sr_store_sk::BIGINT as sr_store_sk,
+    store_returns.sr_reason_sk::BIGINT as sr_reason_sk,
+    store_returns.sr_ticket_number::BIGINT as sr_ticket_number,
+    store_returns.sr_return_quantity::BIGINT as sr_return_quantity,
+    store_returns.sr_return_amt::DECIMAL(7,2) as sr_return_amt,
+    store_returns.sr_return_tax::DECIMAL(7,2) as sr_return_tax,
+    store_returns.sr_return_amt_inc_tax::DECIMAL(7,2) as sr_return_amt_inc_tax,
+    store_returns.sr_fee::DECIMAL(7,2) as sr_fee,
+    store_returns.sr_return_ship_cost::DECIMAL(7,2) as sr_return_ship_cost,
+    store_returns.sr_refunded_cash::DECIMAL(7,2) as sr_refunded_cash,
+    store_returns.sr_reversed_charge::DECIMAL(7,2) as sr_reversed_charge,
+    store_returns.sr_store_credit::DECIMAL(7,2) as sr_store_credit,
+    store_returns.sr_net_loss::DECIMAL(7,2) as sr_net_loss
+FROM
+    tpcds_sf1_variant.store_returns_variant;
+
+statement ok
+CREATE VIEW store as SELECT
+    store.s_store_sk::BIGINT as s_store_sk,
+    store.s_store_id::VARCHAR as s_store_id,
+    store.s_rec_start_date::DATE as s_rec_start_date,
+    store.s_rec_end_date::DATE as s_rec_end_date,
+    store.s_closed_date_sk::BIGINT as s_closed_date_sk,
+    store.s_store_name::VARCHAR as s_store_name,
+    store.s_number_employees::BIGINT as s_number_employees,
+    store.s_floor_space::BIGINT as s_floor_space,
+    store.s_hours::VARCHAR as s_hours,
+    store.s_manager::VARCHAR as s_manager,
+    store.s_market_id::BIGINT as s_market_id,
+    store.s_geography_class::VARCHAR as s_geography_class,
+    store.s_market_desc::VARCHAR as s_market_desc,
+    store.s_market_manager::VARCHAR as s_market_manager,
+    store.s_division_id::BIGINT as s_division_id,
+    store.s_division_name::VARCHAR as s_division_name,
+    store.s_company_id::BIGINT as s_company_id,
+    store.s_company_name::VARCHAR as s_company_name,
+    store.s_street_number::VARCHAR as s_street_number,
+    store.s_street_name::VARCHAR as s_street_name,
+    store.s_street_type::VARCHAR as s_street_type,
+    store.s_suite_number::VARCHAR as s_suite_number,
+    store.s_city::VARCHAR as s_city,
+    store.s_county::VARCHAR as s_county,
+    store.s_state::VARCHAR as s_state,
+    store.s_zip::VARCHAR as s_zip,
+    store.s_country::VARCHAR as s_country,
+    store.s_gmt_offset::DECIMAL(5,2) as s_gmt_offset,
+    store.s_tax_percentage::DECIMAL(5,2) as s_tax_percentage
+FROM
+    tpcds_sf1_variant.store_variant;
+
+statement ok
+CREATE VIEW ship_mode as SELECT
+    ship_mode.sm_ship_mode_sk::BIGINT as sm_ship_mode_sk,
+    ship_mode.sm_ship_mode_id::VARCHAR as sm_ship_mode_id,
+    ship_mode.sm_type::VARCHAR as sm_type,
+    ship_mode.sm_code::VARCHAR as sm_code,
+    ship_mode.sm_carrier::VARCHAR as sm_carrier,
+    ship_mode.sm_contract::VARCHAR as sm_contract
+FROM
+    tpcds_sf1_variant.ship_mode_variant;
+
+statement ok
+CREATE VIEW reason as SELECT
+    reason.r_reason_sk::BIGINT as r_reason_sk,
+    reason.r_reason_id::VARCHAR as r_reason_id,
+    reason.r_reason_desc::VARCHAR as r_reason_desc
+FROM
+    tpcds_sf1_variant.reason_variant;
+
+statement ok
+CREATE VIEW promotion as SELECT
+    promotion.p_promo_sk::BIGINT as p_promo_sk,
+    promotion.p_promo_id::VARCHAR as p_promo_id,
+    promotion.p_start_date_sk::BIGINT as p_start_date_sk,
+    promotion.p_end_date_sk::BIGINT as p_end_date_sk,
+    promotion.p_item_sk::BIGINT as p_item_sk,
+    promotion.p_cost::DECIMAL(15,2) as p_cost,
+    promotion.p_response_target::BIGINT as p_response_target,
+    promotion.p_promo_name::VARCHAR as p_promo_name,
+    promotion.p_channel_dmail::VARCHAR as p_channel_dmail,
+    promotion.p_channel_email::VARCHAR as p_channel_email,
+    promotion.p_channel_catalog::VARCHAR as p_channel_catalog,
+    promotion.p_channel_tv::VARCHAR as p_channel_tv,
+    promotion.p_channel_radio::VARCHAR as p_channel_radio,
+    promotion.p_channel_press::VARCHAR as p_channel_press,
+    promotion.p_channel_event::VARCHAR as p_channel_event,
+    promotion.p_channel_demo::VARCHAR as p_channel_demo,
+    promotion.p_channel_details::VARCHAR as p_channel_details,
+    promotion.p_purpose::VARCHAR as p_purpose,
+    promotion.p_discount_active::VARCHAR as p_discount_active
+FROM
+    tpcds_sf1_variant.promotion_variant;
+
+statement ok
+CREATE VIEW item as SELECT
+    item.i_item_sk::BIGINT as i_item_sk,
+    item.i_item_id::VARCHAR as i_item_id,
+    item.i_rec_start_date::DATE as i_rec_start_date,
+    item.i_rec_end_date::DATE as i_rec_end_date,
+    item.i_item_desc::VARCHAR as i_item_desc,
+    item.i_current_price::DECIMAL(7,2) as i_current_price,
+    item.i_wholesale_cost::DECIMAL(7,2) as i_wholesale_cost,
+    item.i_brand_id::BIGINT as i_brand_id,
+    item.i_brand::VARCHAR as i_brand,
+    item.i_class_id::BIGINT as i_class_id,
+    item.i_class::VARCHAR as i_class,
+    item.i_category_id::BIGINT as i_category_id,
+    item.i_category::VARCHAR as i_category,
+    item.i_manufact_id::BIGINT as i_manufact_id,
+    item.i_manufact::VARCHAR as i_manufact,
+    item.i_size::VARCHAR as i_size,
+    item.i_formulation::VARCHAR as i_formulation,
+    item.i_color::VARCHAR as i_color,
+    item.i_units::VARCHAR as i_units,
+    item.i_container::VARCHAR as i_container,
+    item.i_manager_id::BIGINT as i_manager_id,
+    item.i_product_name::VARCHAR as i_product_name
+FROM
+    tpcds_sf1_variant.item_variant;
+
+statement ok
+CREATE VIEW inventory as SELECT
+    inventory.inv_date_sk::BIGINT as inv_date_sk,
+    inventory.inv_item_sk::BIGINT as inv_item_sk,
+    inventory.inv_warehouse_sk::BIGINT as inv_warehouse_sk,
+    inventory.inv_quantity_on_hand::INTEGER as inv_quantity_on_hand
+FROM
+    tpcds_sf1_variant.inventory_variant;
+
+statement ok
+CREATE VIEW income_band as SELECT
+    income_band.ib_income_band_sk::BIGINT as ib_income_band_sk,
+    income_band.ib_lower_bound::BIGINT as ib_lower_bound,
+    income_band.ib_upper_bound::INTEGER as ib_upper_bound
+FROM
+    tpcds_sf1_variant.income_band_variant;
+
+statement ok
+CREATE VIEW household_demographics as SELECT
+    household_demographics.hd_demo_sk::BIGINT as hd_demo_sk,
+    household_demographics.hd_income_band_sk::BIGINT as hd_income_band_sk,
+    household_demographics.hd_buy_potential::VARCHAR as hd_buy_potential,
+    household_demographics.hd_dep_count::BIGINT as hd_dep_count,
+    household_demographics.hd_vehicle_count::INTEGER as hd_vehicle_count
+FROM
+    tpcds_sf1_variant.household_demographics_variant;
+
+statement ok
+CREATE VIEW date_dim as SELECT
+    date_dim.d_date_sk::BIGINT as d_date_sk,
+    date_dim.d_date_id::VARCHAR as d_date_id,
+    date_dim.d_date::DATE as d_date,
+    date_dim.d_month_seq::BIGINT as d_month_seq,
+    date_dim.d_week_seq::BIGINT as d_week_seq,
+    date_dim.d_quarter_seq::BIGINT as d_quarter_seq,
+    date_dim.d_year::BIGINT as d_year,
+    date_dim.d_dow::BIGINT as d_dow,
+    date_dim.d_moy::BIGINT as d_moy,
+    date_dim.d_dom::BIGINT as d_dom,
+    date_dim.d_qoy::BIGINT as d_qoy,
+    date_dim.d_fy_year::BIGINT as d_fy_year,
+    date_dim.d_fy_quarter_seq::BIGINT as d_fy_quarter_seq,
+    date_dim.d_fy_week_seq::BIGINT as d_fy_week_seq,
+    date_dim.d_day_name::VARCHAR as d_day_name,
+    date_dim.d_quarter_name::VARCHAR as d_quarter_name,
+    date_dim.d_holiday::VARCHAR as d_holiday,
+    date_dim.d_weekend::VARCHAR as d_weekend,
+    date_dim.d_following_holiday::VARCHAR as d_following_holiday,
+    date_dim.d_first_dom::BIGINT as d_first_dom,
+    date_dim.d_last_dom::BIGINT as d_last_dom,
+    date_dim.d_same_day_ly::BIGINT as d_same_day_ly,
+    date_dim.d_same_day_lq::BIGINT as d_same_day_lq,
+    date_dim.d_current_day::VARCHAR as d_current_day,
+    date_dim.d_current_week::VARCHAR as d_current_week,
+    date_dim.d_current_month::VARCHAR as d_current_month,
+    date_dim.d_current_quarter::VARCHAR as d_current_quarter,
+    date_dim.d_current_year::VARCHAR as d_current_year
+FROM
+    tpcds_sf1_variant.date_dim_variant;
+
+statement ok
+CREATE VIEW customer_demographics as SELECT
+    customer_demographics.cd_demo_sk::BIGINT as cd_demo_sk,
+    customer_demographics.cd_gender::VARCHAR as cd_gender,
+    customer_demographics.cd_marital_status::VARCHAR as cd_marital_status,
+    customer_demographics.cd_education_status::VARCHAR as cd_education_status,
+    customer_demographics.cd_purchase_estimate::BIGINT as cd_purchase_estimate,
+    customer_demographics.cd_credit_rating::VARCHAR as cd_credit_rating,
+    customer_demographics.cd_dep_count::BIGINT as cd_dep_count,
+    customer_demographics.cd_dep_employed_count::BIGINT as cd_dep_employed_count,
+    customer_demographics.cd_dep_college_count::INTEGER as cd_dep_college_count
+FROM
+    tpcds_sf1_variant.customer_demographics_variant;
+
+statement ok
+CREATE VIEW customer_address as SELECT
+    customer_address.ca_address_sk::BIGINT as ca_address_sk,
+    customer_address.ca_address_id::VARCHAR as ca_address_id,
+    customer_address.ca_street_number::VARCHAR as ca_street_number,
+    customer_address.ca_street_name::VARCHAR as ca_street_name,
+    customer_address.ca_street_type::VARCHAR as ca_street_type,
+    customer_address.ca_suite_number::VARCHAR as ca_suite_number,
+    customer_address.ca_city::VARCHAR as ca_city,
+    customer_address.ca_county::VARCHAR as ca_county,
+    customer_address.ca_state::VARCHAR as ca_state,
+    customer_address.ca_zip::VARCHAR as ca_zip,
+    customer_address.ca_country::VARCHAR as ca_country,
+    customer_address.ca_gmt_offset::DECIMAL(5,2) as ca_gmt_offset,
+    customer_address.ca_location_type::VARCHAR as ca_location_type
+FROM
+    tpcds_sf1_variant.customer_address_variant;
+
+statement ok
+CREATE VIEW customer as SELECT
+    customer.c_customer_sk::BIGINT as c_customer_sk,
+    customer.c_customer_id::VARCHAR as c_customer_id,
+    customer.c_current_cdemo_sk::BIGINT as c_current_cdemo_sk,
+    customer.c_current_hdemo_sk::BIGINT as c_current_hdemo_sk,
+    customer.c_current_addr_sk::BIGINT as c_current_addr_sk,
+    customer.c_first_shipto_date_sk::BIGINT as c_first_shipto_date_sk,
+    customer.c_first_sales_date_sk::BIGINT as c_first_sales_date_sk,
+    customer.c_salutation::VARCHAR as c_salutation,
+    customer.c_first_name::VARCHAR as c_first_name,
+    customer.c_last_name::VARCHAR as c_last_name,
+    customer.c_preferred_cust_flag::VARCHAR as c_preferred_cust_flag,
+    customer.c_birth_day::BIGINT as c_birth_day,
+    customer.c_birth_month::BIGINT as c_birth_month,
+    customer.c_birth_year::BIGINT as c_birth_year,
+    customer.c_birth_country::VARCHAR as c_birth_country,
+    customer.c_login::VARCHAR as c_login,
+    customer.c_email_address::VARCHAR as c_email_address,
+    customer.c_last_review_date_sk::INTEGER as c_last_review_date_sk
+FROM
+    tpcds_sf1_variant.customer_variant;
+
+statement ok
+CREATE VIEW catalog_sales as SELECT
+    catalog_sales.cs_sold_date_sk::BIGINT as cs_sold_date_sk,
+    catalog_sales.cs_sold_time_sk::BIGINT as cs_sold_time_sk,
+    catalog_sales.cs_ship_date_sk::BIGINT as cs_ship_date_sk,
+    catalog_sales.cs_bill_customer_sk::BIGINT as cs_bill_customer_sk,
+    catalog_sales.cs_bill_cdemo_sk::BIGINT as cs_bill_cdemo_sk,
+    catalog_sales.cs_bill_hdemo_sk::BIGINT as cs_bill_hdemo_sk,
+    catalog_sales.cs_bill_addr_sk::BIGINT as cs_bill_addr_sk,
+    catalog_sales.cs_ship_customer_sk::BIGINT as cs_ship_customer_sk,
+    catalog_sales.cs_ship_cdemo_sk::BIGINT as cs_ship_cdemo_sk,
+    catalog_sales.cs_ship_hdemo_sk::BIGINT as cs_ship_hdemo_sk,
+    catalog_sales.cs_ship_addr_sk::BIGINT as cs_ship_addr_sk,
+    catalog_sales.cs_call_center_sk::BIGINT as cs_call_center_sk,
+    catalog_sales.cs_catalog_page_sk::BIGINT as cs_catalog_page_sk,
+    catalog_sales.cs_ship_mode_sk::BIGINT as cs_ship_mode_sk,
+    catalog_sales.cs_warehouse_sk::BIGINT as cs_warehouse_sk,
+    catalog_sales.cs_item_sk::BIGINT as cs_item_sk,
+    catalog_sales.cs_promo_sk::BIGINT as cs_promo_sk,
+    catalog_sales.cs_order_number::BIGINT as cs_order_number,
+    catalog_sales.cs_quantity::BIGINT as cs_quantity,
+    catalog_sales.cs_wholesale_cost::DECIMAL(7,2) as cs_wholesale_cost,
+    catalog_sales.cs_list_price::DECIMAL(7,2) as cs_list_price,
+    catalog_sales.cs_sales_price::DECIMAL(7,2) as cs_sales_price,
+    catalog_sales.cs_ext_discount_amt::DECIMAL(7,2) as cs_ext_discount_amt,
+    catalog_sales.cs_ext_sales_price::DECIMAL(7,2) as cs_ext_sales_price,
+    catalog_sales.cs_ext_wholesale_cost::DECIMAL(7,2) as cs_ext_wholesale_cost,
+    catalog_sales.cs_ext_list_price::DECIMAL(7,2) as cs_ext_list_price,
+    catalog_sales.cs_ext_tax::DECIMAL(7,2) as cs_ext_tax,
+    catalog_sales.cs_coupon_amt::DECIMAL(7,2) as cs_coupon_amt,
+    catalog_sales.cs_ext_ship_cost::DECIMAL(7,2) as cs_ext_ship_cost,
+    catalog_sales.cs_net_paid::DECIMAL(7,2) as cs_net_paid,
+    catalog_sales.cs_net_paid_inc_tax::DECIMAL(7,2) as cs_net_paid_inc_tax,
+    catalog_sales.cs_net_paid_inc_ship::DECIMAL(7,2) as cs_net_paid_inc_ship,
+    catalog_sales.cs_net_paid_inc_ship_tax::DECIMAL(7,2) as cs_net_paid_inc_ship_tax,
+    catalog_sales.cs_net_profit::DECIMAL(7,2) as cs_net_profit
+FROM
+    tpcds_sf1_variant.catalog_sales_variant;
+
+statement ok
+CREATE VIEW catalog_returns as SELECT
+    catalog_returns.cr_returned_date_sk::BIGINT as cr_returned_date_sk,
+    catalog_returns.cr_returned_time_sk::BIGINT as cr_returned_time_sk,
+    catalog_returns.cr_item_sk::BIGINT as cr_item_sk,
+    catalog_returns.cr_refunded_customer_sk::BIGINT as cr_refunded_customer_sk,
+    catalog_returns.cr_refunded_cdemo_sk::BIGINT as cr_refunded_cdemo_sk,
+    catalog_returns.cr_refunded_hdemo_sk::BIGINT as cr_refunded_hdemo_sk,
+    catalog_returns.cr_refunded_addr_sk::BIGINT as cr_refunded_addr_sk,
+    catalog_returns.cr_returning_customer_sk::BIGINT as cr_returning_customer_sk,
+    catalog_returns.cr_returning_cdemo_sk::BIGINT as cr_returning_cdemo_sk,
+    catalog_returns.cr_returning_hdemo_sk::BIGINT as cr_returning_hdemo_sk,
+    catalog_returns.cr_returning_addr_sk::BIGINT as cr_returning_addr_sk,
+    catalog_returns.cr_call_center_sk::BIGINT as cr_call_center_sk,
+    catalog_returns.cr_catalog_page_sk::BIGINT as cr_catalog_page_sk,
+    catalog_returns.cr_ship_mode_sk::BIGINT as cr_ship_mode_sk,
+    catalog_returns.cr_warehouse_sk::BIGINT as cr_warehouse_sk,
+    catalog_returns.cr_reason_sk::BIGINT as cr_reason_sk,
+    catalog_returns.cr_order_number::BIGINT as cr_order_number,
+    catalog_returns.cr_return_quantity::BIGINT as cr_return_quantity,
+    catalog_returns.cr_return_amount::DECIMAL(7,2) as cr_return_amount,
+    catalog_returns.cr_return_tax::DECIMAL(7,2) as cr_return_tax,
+    catalog_returns.cr_return_amt_inc_tax::DECIMAL(7,2) as cr_return_amt_inc_tax,
+    catalog_returns.cr_fee::DECIMAL(7,2) as cr_fee,
+    catalog_returns.cr_return_ship_cost::DECIMAL(7,2) as cr_return_ship_cost,
+    catalog_returns.cr_refunded_cash::DECIMAL(7,2) as cr_refunded_cash,
+    catalog_returns.cr_reversed_charge::DECIMAL(7,2) as cr_reversed_charge,
+    catalog_returns.cr_store_credit::DECIMAL(7,2) as cr_store_credit,
+    catalog_returns.cr_net_loss::DECIMAL(7,2) as cr_net_loss
+FROM
+    tpcds_sf1_variant.catalog_returns_variant;
+
+statement ok
+CREATE VIEW catalog_page as SELECT
+    catalog_page.cp_catalog_page_sk::BIGINT as cp_catalog_page_sk,
+    catalog_page.cp_catalog_page_id::VARCHAR as cp_catalog_page_id,
+    catalog_page.cp_start_date_sk::BIGINT as cp_start_date_sk,
+    catalog_page.cp_end_date_sk::BIGINT as cp_end_date_sk,
+    catalog_page.cp_department::VARCHAR as cp_department,
+    catalog_page.cp_catalog_number::BIGINT as cp_catalog_number,
+    catalog_page.cp_catalog_page_number::BIGINT as cp_catalog_page_number,
+    catalog_page.cp_description::VARCHAR as cp_description,
+    catalog_page.cp_type::VARCHAR as cp_type
+FROM
+    tpcds_sf1_variant.catalog_page_variant;
+
+statement ok
+CREATE VIEW call_center as SELECT
+    call_center.cc_call_center_sk::BIGINT as cc_call_center_sk,
+    call_center.cc_call_center_id::VARCHAR as cc_call_center_id,
+    call_center.cc_rec_start_date::DATE as cc_rec_start_date,
+    call_center.cc_rec_end_date::DATE as cc_rec_end_date,
+    call_center.cc_closed_date_sk::BIGINT as cc_closed_date_sk,
+    call_center.cc_open_date_sk::BIGINT as cc_open_date_sk,
+    call_center.cc_name::VARCHAR as cc_name,
+    call_center.cc_class::VARCHAR as cc_class,
+    call_center.cc_employees::BIGINT as cc_employees,
+    call_center.cc_sq_ft::BIGINT as cc_sq_ft,
+    call_center.cc_hours::VARCHAR as cc_hours,
+    call_center.cc_manager::VARCHAR as cc_manager,
+    call_center.cc_mkt_id::BIGINT as cc_mkt_id,
+    call_center.cc_mkt_class::VARCHAR as cc_mkt_class,
+    call_center.cc_mkt_desc::VARCHAR as cc_mkt_desc,
+    call_center.cc_market_manager::VARCHAR as cc_market_manager,
+    call_center.cc_division::BIGINT as cc_division,
+    call_center.cc_division_name::VARCHAR as cc_division_name,
+    call_center.cc_company::BIGINT as cc_company,
+    call_center.cc_company_name::VARCHAR as cc_company_name,
+    call_center.cc_street_number::VARCHAR as cc_street_number,
+    call_center.cc_street_name::VARCHAR as cc_street_name,
+    call_center.cc_street_type::VARCHAR as cc_street_type,
+    call_center.cc_suite_number::VARCHAR as cc_suite_number,
+    call_center.cc_city::VARCHAR as cc_city,
+    call_center.cc_county::VARCHAR as cc_county,
+    call_center.cc_state::VARCHAR as cc_state,
+    call_center.cc_zip::VARCHAR as cc_zip,
+    call_center.cc_country::VARCHAR as cc_country,
+    call_center.cc_gmt_offset::DECIMAL(5,2) as cc_gmt_offset,
+    call_center.cc_tax_percentage::DECIMAL(5,2) as cc_tax_percentage
+FROM
+    tpcds_sf1_variant.call_center_variant;
+
+# --- Run queries ---
+
+#loop i 1 9
+
+#query I
+#PRAGMA tpcds(${i})
+#----
+#<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
+
+#endloop
+
+query I
+PRAGMA tpcds(64)
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/64.csv
+
+#loop i 10 100
+
+#query I
+#PRAGMA tpcds(${i})
+#----
+#<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+#endloop
