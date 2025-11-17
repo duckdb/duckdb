@@ -142,6 +142,14 @@ bool StorageManager::InMemory() const {
 	return path == IN_MEMORY_PATH;
 }
 
+inline void ClearUserKey(shared_ptr<string> const &encryption_key) {
+	if (encryption_key && !encryption_key->empty()) {
+		duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(data_ptr_cast(&(*encryption_key)[0]),
+		                                                                 encryption_key->size());
+		encryption_key->clear();
+	}
+}
+
 void StorageManager::Initialize(QueryContext context) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {

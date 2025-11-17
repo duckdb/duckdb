@@ -30,7 +30,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = PlanFilter(std::move(statement.where_clause), std::move(root));
 	}
 
-	if (!statement.aggregates.empty() || !statement.groups.group_expressions.empty()) {
+	if (!statement.aggregates.empty() || !statement.groups.group_expressions.empty() || statement.having) {
 		if (!statement.groups.group_expressions.empty()) {
 			// visit the groups
 			for (auto &group : statement.groups.group_expressions) {
