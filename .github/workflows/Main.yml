@@ -154,6 +154,15 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+      - name: Aggressive cleanup
+        shell: bash
+        run: |
+          df -h
+          sudo rm -rf /usr/lib/jvm /usr/share/dotnet /usr/share/swift /usr/local/.ghcup /usr/local/julia* /usr/local/lib/android /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/local/share/powershell /opt/hostedtoolcache
+          docker system prune -af || true
+          docker builder prune -af || true
+          df -h
+
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
@@ -338,6 +347,15 @@ jobs:
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Aggressive cleanup
+        shell: bash
+        run: |
+          df -h
+          sudo rm -rf /usr/lib/jvm /usr/share/dotnet /usr/share/swift /usr/local/.ghcup /usr/local/julia* /usr/local/lib/android /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/local/share/powershell /opt/hostedtoolcache
+          docker system prune -af || true
+          docker builder prune -af || true
+          df -h
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
