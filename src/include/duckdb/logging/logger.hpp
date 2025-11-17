@@ -53,8 +53,6 @@ struct FileHandle;
 	DUCKDB_LOG_INTERNAL(SOURCE, LOG_TYPE_CLASS::NAME, LOG_TYPE_CLASS::LEVEL,                                           \
 	                    LOG_TYPE_CLASS::ConstructLogMessage(__VA_ARGS__))
 
-typedef std::function<void(const char *log_type, LogLevel log_level, const char *message)> custom_callback_t;
-
 //! Main logging interface
 class Logger {
 public:

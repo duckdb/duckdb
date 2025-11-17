@@ -1,7 +1,7 @@
 {
   "group": "logging",
   "deprecated": false,
-  "description": "Functions to configure the logging of DuckDB.",
+  "description": "Functions that expose the log storage and allow the configuration of a custom logger",
   "entries": [
     {
       "name": "duckdb_create_log_storage",

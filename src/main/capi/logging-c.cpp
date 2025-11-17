@@ -38,21 +38,17 @@ private:
 	duckdb_logger_write_log_entry_t write_log_entry_fun;
 };
 
-//===--------------------------------------------------------------------===//
-// Default Callbacks
-//===--------------------------------------------------------------------===//
-
-struct CLogStorage {
+struct LogStorageWrapper {
 	duckdb_logger_write_log_entry_t write_log_entry;
 };
 
 } // namespace duckdb
 
-using duckdb::CLogStorage;
 using duckdb::DatabaseWrapper;
+using duckdb::LogStorageWrapper;
 
 duckdb_log_storage duckdb_create_log_storage() {
-	auto clog_storage = new CLogStorage();
+	auto clog_storage = new LogStorageWrapper();
 	return reinterpret_cast<duckdb_log_storage>(clog_storage);
 }
 
@@ -60,7 +56,7 @@ void duckdb_destroy_log_storage(duckdb_log_storage storage) {
 	if (!storage) {
 		return;
 	}
-	auto clog_storage = reinterpret_cast<CLogStorage *>(storage);
+	auto clog_storage = reinterpret_cast<LogStorageWrapper *>(storage);
 	delete clog_storage;
 }
 
@@ -69,7 +65,7 @@ void duckdb_log_storage_set_write_log_entry(duckdb_log_storage storage, duckdb_l
 		return;
 	}
 
-	auto clog_storage = reinterpret_cast<CLogStorage *>(storage);
+	auto clog_storage = reinterpret_cast<LogStorageWrapper *>(storage);
 	clog_storage->write_log_entry = function;
 }
 
@@ -79,12 +75,11 @@ void duckdb_register_log_storage(duckdb_database database, const char *name, duc
 	}
 
 	const auto db_wrapper = reinterpret_cast<DatabaseWrapper *>(database);
-	auto converted_storage = reinterpret_cast<CLogStorage *>(storage);
+	auto cast_storage = reinterpret_cast<LogStorageWrapper *>(storage);
 
 	const auto &db = *db_wrapper->database;
 
-	auto shared_storage_ptr =
-	    duckdb::make_shared_ptr<duckdb::CallbackLogStorage>(name, converted_storage->write_log_entry);
+	auto shared_storage_ptr = duckdb::make_shared_ptr<duckdb::CallbackLogStorage>(name, cast_storage->write_log_entry);
 	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = shared_storage_ptr;
 	db.instance->GetLogManager().RegisterLogStorage(name, storage_ptr);
 }
