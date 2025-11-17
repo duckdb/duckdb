@@ -6,6 +6,7 @@
 #include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -13,6 +14,7 @@
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -353,6 +355,12 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 
 	if (encryption_config) {
 		auto &config = DBConfig::GetConfig(context);
+
+		// To ensure we can write, we need to autoload httpfs
+		if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+			ExtensionHelper::TryAutoLoadExtension(context, "httpfs");
+		}
+
 		if (config.encryption_util && debug_use_openssl) {
 			// Use OpenSSL
 			encryption_util = config.encryption_util;
@@ -541,7 +549,7 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	row_group.__isset.total_compressed_size = true;
 
 	if (encryption_config) {
-		auto row_group_ordinal = num_row_groups.load();
+		const auto row_group_ordinal = file_meta_data.row_groups.size();
 		if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
 			throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
 		}
@@ -561,6 +569,14 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	if (buffer.Count() == 0) {
 		return;
 	}
+
+	// "total_written" is only used for the FILE_SIZE_BYTES flag, and only when threads are writing in parallel.
+	// We pre-emptively increase it here to try to reduce overshooting when many threads are writing in parallel.
+	// However, waiting for the exact value (PrepareRowGroup) takes too long, and would cause overshoots to happen.
+	// So, we guess the compression ratio. We guess 3x, but this will be off depending on the data.
+	// "total_written" is restored to the exact number of written bytes at the end of FlushRowGroup.
+	// PhysicalCopyToFile should be reworked to use prepare/flush batch separately for better accuracy.
+	total_written += buffer.SizeInBytes() / 2;
 
 	PreparedRowGroup prepared_row_group;
 	PrepareRowGroup(buffer, prepared_row_group);

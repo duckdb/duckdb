@@ -5,6 +5,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+
 namespace duckdb {
 
 namespace {
@@ -55,7 +57,7 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 		context.TryGetCurrentSetting(key, val);
 	}
 
-	bound_function.return_type = val.type();
+	bound_function.SetReturnType(val.type());
 	return make_uniq<CurrentSettingBindData>(val);
 }
 
@@ -63,7 +65,7 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 
 ScalarFunction CurrentSettingFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction, CurrentSettingBind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

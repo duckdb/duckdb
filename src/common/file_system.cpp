@@ -30,10 +30,7 @@
 #include <unistd.h>
 
 #ifdef __MVS__
-#define _XOPEN_SOURCE_EXTENDED 1
 #include <sys/resource.h>
-// enjoy - https://reviews.llvm.org/D92110
-#define PATH_MAX _XOPEN_PATH_MAX
 #endif
 
 #else
@@ -453,6 +450,10 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
+FileMetadata FileSystem::Stats(FileHandle &handle) {
+	throw NotImplementedException("%s: Stats is not implemented!", GetName());
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
@@ -798,6 +799,10 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+FileMetadata FileHandle::Stats() {
+	return file_system.Stats(*this);
 }
 
 void FileHandle::TryAddLogger(FileOpener &opener) {

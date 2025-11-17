@@ -82,4 +82,14 @@ void RandomEngine::SetSeed(uint64_t seed) {
 	random_state->pcg.seed(seed);
 }
 
+void RandomEngine::RandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+	while (len) {
+		const auto random_integer = NextRandomInteger();
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
+		memcpy(data, duckdb::const_data_ptr_cast(&random_integer), next);
+		data += next;
+		len -= next;
+	}
+}
+
 } // namespace duckdb

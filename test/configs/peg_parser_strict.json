@@ -32,7 +32,8 @@
         "test/sql/index/art/constraints/test_art_eager_constraint_checking.test",
         "test/sql/index/art/scan/test_art_scan_coverage.test",
         "test/sql/index/art/storage/test_art_storage.test",
-        "test/sql/cte/materialized/dml_materialized_cte.test"
+        "test/sql/cte/materialized/dml_materialized_cte.test",
+        "test/sql/storage/wal/wal_index_delete_gen.test"
       ]
     },
     {

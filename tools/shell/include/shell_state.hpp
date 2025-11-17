@@ -44,6 +44,9 @@ using duckdb::InternalException;
 using duckdb::InvalidInputException;
 using duckdb::to_string;
 struct Prompt;
+struct ShellProgressBar;
+struct PagerState;
+struct ShellTableInfo;
 
 using idx_t = uint64_t;
 
@@ -58,6 +61,7 @@ enum class RenderMode : uint32_t {
 	TCL,       /* Generate ANSI-C or TCL quoted elements */
 	CSV,       /* Quote strings, numbers are plain */
 	EXPLAIN,   /* Like RenderMode::Column, but do not truncate data */
+	DESCRIBE,  /* Special DESCRIBE Renderer */
 	ASCII,     /* Use ASCII unit and record separators (0x1F/0x1E) */
 	PRETTY,    /* Pretty-print schemas */
 	EQP,       /* Converts EXPLAIN QUERY PLAN output into a graph */
@@ -91,8 +95,19 @@ enum class ShellOpenFlags { EXIT_ON_FAILURE, KEEP_ALIVE_ON_FAILURE };
 enum class SuccessState { SUCCESS, FAILURE };
 enum class OptionType { DEFAULT, ON, OFF };
 enum class StartupText { ALL, VERSION, NONE };
+enum class ReadLineVersion { LINENOISE, FALLBACK };
+enum class PagerMode { PAGER_AUTOMATIC, PAGER_ON, PAGER_OFF };
 
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
+
+enum class ExecuteSQLSingleValueResult {
+	SUCCESS,
+	EXECUTION_ERROR,
+	EMPTY_RESULT,
+	MULTIPLE_ROWS,
+	MULTIPLE_COLUMNS,
+	NULL_RESULT
+};
 
 typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
 
@@ -113,6 +128,24 @@ struct MetadataCommand {
 	const char *description;
 	idx_t match_size;
 	const char *extra_description;
+};
+
+struct ShellColumnInfo {
+	string column_name;
+	string column_type;
+	bool is_primary_key = false;
+	bool is_not_null = false;
+	bool is_unique = false;
+	string default_value;
+};
+
+struct ShellTableInfo {
+	string database_name;
+	string schema_name;
+	string table_name;
+	optional_idx estimated_size;
+	bool is_view = false;
+	vector<ShellColumnInfo> columns;
 };
 
 /*
@@ -210,8 +243,28 @@ public:
 	unique_ptr<Prompt> main_prompt;
 	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
 	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
+	//! Progress bar used to render the components that are displayed when query status / progress is rendered
+	unique_ptr<ShellProgressBar> progress_bar;
+
+#ifdef HAVE_LINENOISE
+	ReadLineVersion rl_version = ReadLineVersion::LINENOISE;
+#else
+	ReadLineVersion rl_version = ReadLineVersion::FALLBACK;
+#endif
+
+	//! Whether or not to run the pager
+	PagerMode pager_mode = PagerMode::PAGER_AUTOMATIC;
+	//! The command to run when running the pager
+	string pager_command;
+	// In automatic mode, only show a pager when this row count is exceeded
+	idx_t pager_min_rows = 50;
+	// In automatic mode, only show a pager when this column count is exceeded
+	idx_t pager_min_columns = 5;
+	//! Whether or not the pager is currently active
+	bool pager_is_active = false;
 
 #if defined(_WIN32) || defined(WIN32)
+	//! When enabled, sets the console page to UTF8 and renders using that code page
 	bool win_utf8_mode = false;
 #endif
 
@@ -243,11 +296,12 @@ public:
 	bool ReadFromFile(const string &file);
 	bool DisplaySchemas(const vector<string> &args);
 	MetadataResult DisplayEntries(const vector<string> &args, char type);
+	MetadataResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
 
-	idx_t RenderLength(const char *z);
-	idx_t RenderLength(const string &str);
-	bool IsCharacter(char c);
+	static idx_t RenderLength(const char *z);
+	static idx_t RenderLength(const string &str);
+	static bool IsCharacter(char c);
 	void SetBinaryMode();
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
@@ -274,6 +328,9 @@ public:
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
 	SuccessState RenderDuckBoxResult(duckdb::QueryResult &res);
+	SuccessState RenderDescribe(duckdb::QueryResult &res);
+	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
+	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
 	void PrintDatabaseError(const string &zErr);
 	int RunInitialCommand(const char *sql, bool bail);
@@ -281,7 +338,6 @@ public:
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
-	string EvaluateSQL(const string &sql);
 	SuccessState ExecuteSQL(const string &zSql);
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
@@ -300,10 +356,23 @@ public:
 		shellFlgs &= ~static_cast<uint32_t>(flag);
 	}
 	void ResetOutput();
+	bool ShouldUsePager(duckdb::QueryResult &result);
+	bool ShouldUsePager();
+	bool ShouldUsePager(idx_t line_count);
+	string GetSystemPager();
+	unique_ptr<PagerState> SetupPager();
+	static void StartPagerDisplay();
+	static void FinishPagerDisplay();
 	void ClearTempFile();
 	void NewTempFile(const char *zSuffix);
 	int DoMetaCommand(const string &zLine);
 	idx_t PrintHelp(const char *zPattern);
+
+	void ShellAddHistory(const char *line);
+	int ShellLoadHistory(const char *path);
+	int ShellSaveHistory(const char *path);
+	int ShellSetHistoryMaxLength(idx_t max_length);
+	char *OneInputLine(FILE *in, char *zPrior, int isContinuation);
 
 	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();
@@ -321,10 +390,10 @@ public:
 	static void Sleep(idx_t ms);
 	void PrintUsage();
 #if defined(_WIN32) || defined(WIN32)
-	static unique_ptr<uint8_t[]> Win32Utf8ToUnicode(const char *zText);
-	static string Win32UnicodeToUtf8(void *zWideText);
-	static string Win32MbcsToUtf8(const char *zText, bool useAnsi);
-	static unique_ptr<uint8_t[]> Win32Utf8ToMbcs(const char *zText, bool useAnsi);
+	static std::wstring Win32Utf8ToUnicode(const string &zText);
+	static string Win32UnicodeToUtf8(const std::wstring &zWideText);
+	static string Win32MbcsToUtf8(const string &zText, bool useAnsi);
+	static string Win32Utf8ToMbcs(const string &zText, bool useAnsi);
 #endif
 	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
 	optional_ptr<const MetadataCommand> FindMetadataCommand(const string &option, string &error_msg) const;
@@ -333,6 +402,9 @@ public:
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE
 	SuccessState ExecuteQuery(const string &query);
+	//! Execute a SQL query and extracts a single string value
+	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(const string &sql, string &result);
+	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql, string &result_value);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
 	SuccessState RenderQuery(RowRenderer &renderer, const string &query);
@@ -354,6 +426,23 @@ public:
 private:
 	ShellState();
 	~ShellState();
+
+private:
+	string describe_table_name;
+};
+
+struct PagerState {
+	explicit PagerState(ShellState &state) : state(state) {
+	}
+	~PagerState() {
+		if (state) {
+			state->ResetOutput();
+			ShellState::FinishPagerDisplay();
+			state = nullptr;
+		}
+	}
+
+	optional_ptr<ShellState> state;
 };
 
 } // namespace duckdb_shell

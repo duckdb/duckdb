@@ -708,13 +708,14 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    bound_function.name, arguments, bound_function.return_type, AggregateFunction::StateSize<SortedAggregateState>,
+	    bound_function.name, arguments, bound_function.GetReturnType(),
+	    AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, bound_function.null_handling, SortedAggregateFunction::SimpleUpdate, nullptr,
-	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
+	    SortedAggregateFunction::Finalize, bound_function.GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
+	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
 	expr.function = std::move(ordered_aggregate);
@@ -764,12 +765,12 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    aggregate.name, arguments, aggregate.return_type, AggregateFunction::StateSize<SortedAggregateState>,
+	    aggregate.name, arguments, aggregate.GetReturnType(), AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, aggregate.null_handling, SortedAggregateFunction::SimpleUpdate, nullptr,
+	    SortedAggregateFunction::Finalize, aggregate.GetNullHandling(), SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 

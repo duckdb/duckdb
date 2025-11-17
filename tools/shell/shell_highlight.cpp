@@ -14,8 +14,11 @@ static HighlightElement highlight_elements[] = {
     {"numeric_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"string_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"line_indicator", PrintColor::STANDARD, PrintIntensity::BOLD},
+    {"database_name", PrintColor::ORANGE3, PrintIntensity::STANDARD},
+    {"schema_name", PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD},
+    {"table_name", PrintColor::STANDARD, PrintIntensity::BOLD},
     {"column_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
-    {"column_type", PrintColor::STANDARD, PrintIntensity::STANDARD},
+    {"column_type", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"numeric_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"string_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"temporal_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
@@ -36,6 +39,9 @@ static HighlightElement highlight_elements[] = {
     {"suggestion_directory_name", PrintColor::DARKORANGE3, PrintIntensity::STANDARD},
     {"suggestion_function_name", PrintColor::DARKORANGE3, PrintIntensity::STANDARD},
     {"suggestion_setting_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
+    {"table_layout", PrintColor::GRAY, PrintIntensity::STANDARD},
+    {"view_layout", PrintColor::STANDARD, PrintIntensity::STANDARD},
+    {"primary_key_column", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
     {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
 

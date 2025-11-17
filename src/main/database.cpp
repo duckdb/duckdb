@@ -23,6 +23,7 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
@@ -32,6 +33,7 @@
 #include "duckdb/common/http_util.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
+#include "duckdb/main/result_set_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -87,13 +89,12 @@ DatabaseInstance::~DatabaseInstance() {
 	log_manager.reset();
 
 	external_file_cache.reset();
+	result_set_manager.reset();
 
 	buffer_manager.reset();
 
 	// flush allocations and disable the background thread
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
-	}
+	config.block_allocator->FlushAll();
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();
@@ -287,6 +288,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager->Initialize();
 
 	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
+	result_set_manager = make_uniq<ResultSetManager>(*this);
 
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
@@ -382,6 +384,10 @@ ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 	return *external_file_cache;
 }
 
+ResultSetManager &DatabaseInstance::GetResultSetManager() {
+	return *result_set_manager;
+}
+
 ConnectionManager &DatabaseInstance::GetConnectionManager() {
 	return *connection_manager;
 }
@@ -455,6 +461,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();
 	}
+	config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, config.options.default_block_alloc_size,
+	                                                   DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
+	                                                   config.options.block_allocator_size);
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	config.parser_extensions = std::move(new_config.parser_extensions);
 	config.error_manager = std::move(new_config.error_manager);
@@ -467,7 +476,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.buffer_pool) {
 		config.buffer_pool = std::move(new_config.buffer_pool);
 	} else {
-		config.buffer_pool = make_shared_ptr<BufferPool>(config.options.maximum_memory,
+		config.buffer_pool = make_shared_ptr<BufferPool>(*config.block_allocator, config.options.maximum_memory,
 		                                                 config.options.buffer_manager_track_eviction_timestamps,
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
@@ -505,12 +514,18 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Va
 	return db_config.TryGetCurrentSetting(key, result);
 }
 
-shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {
+shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() {
+	if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+		ExtensionHelper::TryAutoLoadExtension(*this, "httpfs");
+	}
+
 	if (config.encryption_util) {
 		return config.encryption_util;
 	}
 
-	return make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	auto result = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+
+	return std::move(result);
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

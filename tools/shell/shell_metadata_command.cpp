@@ -1,6 +1,7 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
 #include "shell_prompt.hpp"
+#include "shell_progress_bar.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -107,8 +108,6 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 			zLike = StringUtil::Format("name LIKE %s ESCAPE '\\'", SQLString(args[i]));
 		}
 	}
-
-	state.OpenDB();
 
 	/* When playing back a "dump", the content might appear in an order
 	** which causes immediate foreign key constraints to be violated.
@@ -297,6 +296,26 @@ MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult ConfigureProgressBar(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2 || args.size() > 3) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args[1] == "--clear") {
+		if (args.size() != 2) {
+			return MetadataResult::PRINT_USAGE;
+		}
+		state.progress_bar->ClearComponents();
+	} else if (args[1] == "--add") {
+		if (args.size() != 3) {
+			return MetadataResult::PRINT_USAGE;
+		}
+		state.progress_bar->AddComponent(args[2]);
+	} else {
+		return MetadataResult::PRINT_USAGE;
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult SetOutputMode(ShellState &state, const vector<string> &args) {
 	if (args.size() > 3) {
 		return MetadataResult::PRINT_USAGE;
@@ -425,7 +444,7 @@ MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
-	return state.DisplayEntries(args, 't');
+	return state.DisplayTables(args);
 }
 
 MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
@@ -647,6 +666,77 @@ MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetReadLineVersion(ShellState &state, const vector<string> &args) {
+	if (args[1] == "linenoise") {
+#ifdef HAVE_LINENOISE
+		state.rl_version = ReadLineVersion::LINENOISE;
+		return MetadataResult::SUCCESS;
+#else
+		state.Print("linenoise is not available in this build");
+		return MetadataResult::FAIL;
+#endif
+	} else if (args[1] == "fallback") {
+		state.rl_version = ReadLineVersion::FALLBACK;
+		return MetadataResult::SUCCESS;
+	}
+	return MetadataResult::PRINT_USAGE;
+}
+
+MetadataResult SetPager(ShellState &state, const vector<string> &args) {
+	if (args.size() == 1) {
+		// Show current pager status
+		string mode_str;
+		switch (state.pager_mode) {
+		case PagerMode::PAGER_OFF:
+			mode_str = "off";
+			break;
+		case PagerMode::PAGER_ON:
+			mode_str = "on";
+			break;
+		case PagerMode::PAGER_AUTOMATIC:
+			mode_str = "automatic";
+			break;
+		}
+		state.PrintF("Pager mode: %s\n", mode_str);
+		if (state.pager_mode == PagerMode::PAGER_AUTOMATIC) {
+			state.PrintF("Trigger pager when rows exceed %d or columns exceed %d\n", state.pager_min_rows,
+			             state.pager_min_columns);
+		}
+		if (state.pager_mode != PagerMode::PAGER_OFF || !state.pager_command.empty()) {
+			state.PrintF("Pager command: %s\n", state.pager_command);
+		}
+		return MetadataResult::SUCCESS;
+	}
+	if (args[1] == "set_row_threshold" || args[1] == "set_column_threshold") {
+		if (args.size() != 3) {
+			return MetadataResult::PRINT_USAGE;
+		}
+		idx_t limit = (idx_t)state.StringToInt(args[2]);
+		if (args[1] == "set_row_threshold") {
+			state.pager_min_rows = limit;
+		} else {
+			state.pager_min_columns = limit;
+		}
+		return MetadataResult::SUCCESS;
+	}
+	if (args.size() != 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args[1] == "on") {
+		state.pager_mode = PagerMode::PAGER_ON;
+		if (state.pager_command.empty()) {
+			state.pager_command = state.GetSystemPager();
+		}
+	} else if (args[1] == "off") {
+		state.pager_mode = PagerMode::PAGER_OFF;
+	} else if (args[1] == "automatic") {
+		state.pager_mode = PagerMode::PAGER_AUTOMATIC;
+	} else {
+		state.pager_command = args[1];
+	}
+	return MetadataResult::SUCCESS;
+}
+
 static const MetadataCommand metadata_commands[] = {
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
@@ -736,11 +826,20 @@ static const MetadataCommand metadata_commands[] = {
     {"output", 0, SetOutput, "?FILE?", "Send output to FILE or stdout if FILE is omitted", 0,
      "If FILE begins with '|' then open as a pipe\n\t--bom\tPut a UTF8 byte-order mark at the beginning\n\t-e\tSend "
      "output to the system text editor\n\t-x\tSend output as CSV to a spreadsheet (same as \".excel\")"},
+    {"pager", 0, SetPager, "OPTIONS", "Control pager usage for output", 0,
+     "Options:\n\t[on|off|automatic]\tToggle pager mode (default: automatic)\n\tset_[row|column]_threshold "
+     "THRESHOLD\tIn automatic mode, trigger the pager when the result has more rows/columns than "
+     "this\n\t[pager_command]\tSet the pager command to invoke\nNote: Set DUCKDB_PAGER or PAGER environment variable "
+     "or <cmd> to configure default pager"},
     {"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3, ""},
+    {"progress_bar", 0, ConfigureProgressBar, "OPTIONS", "Configure the progress bar display", 0,
+     "OPTIONS:\n\t--add [COMPONENT]\tAdd a component to the progress bar\n\t--clear\tClear all components"},
     {"prompt", 0, SetPrompt, "MAIN CONTINUE", "Replace the standard prompts", 0, ""},
 
     {"quit", 0, QuitProcess, "", "Exit this program", 0, ""},
     {"read", 2, ReadFromFile, "FILE", "Read input from FILE", 3, ""},
+    {"read_line_version", 2, SetReadLineVersion, "linenoise|fallback",
+     "Sets the library used for processing interactive input", 0, ""},
 #ifdef HAVE_LINENOISE
     {"render_completion", 2, ToggleCompletionRendering, "on|off",
      "Toggle displaying of completion prompts in the shell on/off", 0, ""},

@@ -68,8 +68,8 @@ public:
 	void InitializeScanWithOffset(const QueryContext &context, CollectionScanState &state,
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
 	static bool InitializeScanInRowGroup(const QueryContext &context, CollectionScanState &state,
-	                                     RowGroupCollection &collection, RowGroup &row_group, idx_t vector_index,
-	                                     idx_t max_row);
+	                                     RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
+	                                     idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
@@ -110,7 +110,7 @@ public:
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-	                           vector<SegmentNode<RowGroup>> &segments);
+	                           vector<unique_ptr<SegmentNode<RowGroup>>> &segments);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
@@ -150,12 +150,13 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
+	idx_t GetBaseRowId() const;
 	void SetAppendRequiresNewRowGroup();
 
 private:
 	bool IsEmpty(SegmentLock &) const;
 
-	optional_ptr<RowGroup> NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const;
+	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const;
 
 private:
 	//! BlockManager
@@ -168,7 +169,6 @@ private:
 	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection
 	vector<LogicalType> types;
-	idx_t row_start;
 	//! The segment trees holding the various row_groups of the table
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics

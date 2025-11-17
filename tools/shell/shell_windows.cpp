@@ -16,54 +16,44 @@
 #if defined(_WIN32) || defined(WIN32)
 #include <windows.h>
 #include "shell_state.hpp"
-
-#define osMultiByteToWideChar MultiByteToWideChar
-
-#define osWideCharToMultiByte WideCharToMultiByte
+#include "linenoise.hpp"
 
 namespace duckdb_shell {
-
-unique_ptr<uint8_t[]> allocZero(uint64_t byteCount) {
-	auto data = unique_ptr<uint8_t[]>(new uint8_t[byteCount]);
-	memset(data.get(), 0, byteCount);
-	return data;
-}
 
 /*
 ** Convert a UTF-8 string to Microsoft Unicode.
 **
 */
-static unique_ptr<uint8_t[]> winUtf8ToUnicode(const char *zText) {
-	int nChar;
-
-	nChar = osMultiByteToWideChar(CP_UTF8, 0, zText, -1, NULL, 0);
+static std::wstring winUtf8ToUnicode(const string &zText) {
+	int nChar = MultiByteToWideChar(CP_UTF8, 0, zText.c_str(), zText.size(), NULL, 0);
 	if (nChar == 0) {
-		return 0;
+		return std::wstring();
 	}
 
-	auto data = allocZero(nChar * sizeof(WCHAR));
-	auto zWideText = (LPWSTR)data.get();
-	nChar = osMultiByteToWideChar(CP_UTF8, 0, zText, -1, zWideText, nChar);
-	if (nChar == 0) {
-		zWideText = 0;
+	std::wstring result(nChar, (WCHAR)0);
+	auto zWideText = (LPWSTR)result.data();
+	auto conversion_result = MultiByteToWideChar(CP_UTF8, 0, zText.c_str(), zText.size(), zWideText, nChar);
+	if (nChar != conversion_result) {
+		return std::wstring();
 	}
-	return data;
+	return result;
 }
 
 /*
 ** Convert a Microsoft Unicode string to UTF-8.
 **
 */
-static string winUnicodeToUtf8(LPCWSTR zWideText) {
-	int nByte;
-
-	nByte = osWideCharToMultiByte(CP_UTF8, 0, zWideText, -1, 0, 0, 0, 0);
+static string winUnicodeToUtf8(const std::wstring &zWideText) {
+	int nByte = WideCharToMultiByte(CP_UTF8, 0, zWideText.c_str(), zWideText.size(), 0, 0, 0, 0);
 	if (nByte == 0) {
-		return 0;
+		return string();
 	}
 	string result(nByte, '\0');
 	auto zText = (LPSTR)result.data();
-	nByte = osWideCharToMultiByte(CP_UTF8, 0, zWideText, -1, zText, nByte, 0, 0);
+	auto conversion_result = WideCharToMultiByte(CP_UTF8, 0, zWideText.c_str(), zWideText.size(), zText, nByte, 0, 0);
+	if (conversion_result != nByte) {
+		return string();
+	}
 	return result;
 }
 
@@ -72,21 +62,20 @@ static string winUnicodeToUtf8(LPCWSTR zWideText) {
 ** code page.
 **
 */
-static unique_ptr<uint8_t[]> winMbcsToUnicode(const char *zText, bool useAnsi) {
-	int nByte;
+static std::wstring winMbcsToUnicode(const string &zText, bool useAnsi) {
 	int codepage = useAnsi ? CP_ACP : CP_OEMCP;
 
-	nByte = osMultiByteToWideChar(codepage, 0, zText, -1, NULL, 0) * sizeof(WCHAR);
-	if (nByte == 0) {
-		return nullptr;
+	int nChar = MultiByteToWideChar(codepage, 0, zText.c_str(), zText.size(), NULL, 0);
+	if (nChar == 0) {
+		return std::wstring();
 	}
-	auto data = allocZero(nByte * sizeof(WCHAR));
-	auto zMbcsText = (LPWSTR)data.get();
-	nByte = osMultiByteToWideChar(codepage, 0, zText, -1, zMbcsText, nByte);
-	if (nByte == 0) {
-		return nullptr;
+	std::wstring result(nChar, (WCHAR)0);
+	auto zMbcsText = (LPWSTR)result.data();
+	nChar = MultiByteToWideChar(codepage, 0, zText.c_str(), zText.size(), zMbcsText, nChar);
+	if (nChar == 0) {
+		return std::wstring();
 	}
-	return data;
+	return result;
 }
 
 /*
@@ -94,57 +83,51 @@ static unique_ptr<uint8_t[]> winMbcsToUnicode(const char *zText, bool useAnsi) {
 ** using the ANSI or OEM code page.
 **
 */
-static unique_ptr<uint8_t[]> winUnicodeToMbcs(LPCWSTR zWideText, bool useAnsi) {
-	int nByte;
+static string winUnicodeToMbcs(const std::wstring &zWideText, bool useAnsi) {
 	int codepage = useAnsi ? CP_ACP : CP_OEMCP;
 
-	nByte = osWideCharToMultiByte(codepage, 0, zWideText, -1, 0, 0, 0, 0);
-	if (nByte == 0) {
-		return nullptr;
+	int nChar = WideCharToMultiByte(codepage, 0, zWideText.c_str(), zWideText.size(), 0, 0, 0, 0);
+	if (nChar == 0) {
+		return string();
 	}
-	auto data = allocZero(nByte);
-	auto zText = (char *)data.get();
-	nByte = osWideCharToMultiByte(codepage, 0, zWideText, -1, zText, nByte, 0, 0);
-	if (nByte == 0) {
-		return nullptr;
+	string result(nChar, '\0');
+	auto zMbcsText = (LPSTR)result.data();
+	auto conversion_result =
+	    WideCharToMultiByte(codepage, 0, zWideText.c_str(), zWideText.size(), zMbcsText, nChar, 0, 0);
+	if (nChar != conversion_result) {
+		return string();
 	}
-	return data;
+	return result;
 }
 
 /*
 ** Convert a multi-byte character string to UTF-8.
 **
 */
-static string winMbcsToUtf8(const char *zText, bool useAnsi) {
+static string winMbcsToUtf8(const string &zText, bool useAnsi) {
 	auto zTmpWide = winMbcsToUnicode(zText, useAnsi);
-	if (!zTmpWide) {
-		return 0;
-	}
-	return winUnicodeToUtf8((LPCWSTR)zTmpWide.get());
+	return winUnicodeToUtf8(zTmpWide);
 }
 
 /*
 ** Convert a UTF-8 string to a multi-byte character string.
 **
 */
-static unique_ptr<uint8_t[]> winUtf8ToMbcs(const char *zText, bool useAnsi) {
+static string winUtf8ToMbcs(const string &zText, bool useAnsi) {
 	auto zTmpWide = winUtf8ToUnicode(zText);
-	if (!zTmpWide) {
-		return 0;
-	}
-	return winUnicodeToMbcs((LPCWSTR)zTmpWide.get(), useAnsi);
+	return winUnicodeToMbcs(zTmpWide, useAnsi);
 }
 
-unique_ptr<uint8_t[]> ShellState::Win32Utf8ToUnicode(const char *zText) {
+std::wstring ShellState::Win32Utf8ToUnicode(const string &zText) {
 	return winUtf8ToUnicode(zText);
 }
-string ShellState::Win32UnicodeToUtf8(void *zWideText) {
-	return winUnicodeToUtf8((LPCWSTR)zWideText);
+string ShellState::Win32UnicodeToUtf8(const std::wstring &zWideText) {
+	return winUnicodeToUtf8(zWideText);
 }
-string ShellState::Win32MbcsToUtf8(const char *zText, bool useAnsi) {
+string ShellState::Win32MbcsToUtf8(const string &zText, bool useAnsi) {
 	return winMbcsToUtf8(zText, useAnsi);
 }
-unique_ptr<uint8_t[]> ShellState::Win32Utf8ToMbcs(const char *zText, bool useAnsi) {
+string ShellState::Win32Utf8ToMbcs(const string &zText, bool useAnsi) {
 	return winUtf8ToMbcs(zText, useAnsi);
 }
 

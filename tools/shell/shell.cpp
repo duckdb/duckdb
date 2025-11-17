@@ -85,6 +85,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 #include "autocomplete_extension.hpp"
@@ -111,39 +112,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#if HAVE_READLINE
-#include <readline/readline.h>
-#include <readline/history.h>
-#endif
-
-#if HAVE_EDITLINE
-#include <editline/readline.h>
-#endif
-
-#if HAVE_EDITLINE || HAVE_READLINE
-
-#define shell_add_history(X)    add_history(X)
-#define shell_read_history(X)   read_history(X)
-#define shell_write_history(X)  write_history(X)
-#define shell_stifle_history(X) stifle_history(X)
-#define shell_readline(X)       readline(X)
-
-#elif HAVE_LINENOISE
-
+#ifdef HAVE_LINENOISE
 #include "linenoise.h"
-#define shell_add_history(X)    linenoiseHistoryAdd(X)
-#define shell_read_history(X)   linenoiseHistoryLoad(X)
-#define shell_write_history(X)  linenoiseHistorySave(X)
-#define shell_stifle_history(X) linenoiseHistorySetMaxLen(X)
-#define shell_readline(X)       linenoise(X)
-
-#else
-
-#define shell_read_history(X)
-#define shell_write_history(X)
-#define shell_stifle_history(X)
-
-#define SHELL_USE_LOCAL_GETLINE 1
 #endif
 
 #include "duckdb.hpp"
@@ -151,6 +121,7 @@
 #include "shell_highlight.hpp"
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/client_config.hpp"
 
 using namespace duckdb_shell;
 
@@ -399,25 +370,28 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 	va_list ap;
 	va_start(ap, zFormat);
 	auto &state = ShellState::Get();
-	if (state.stdout_is_console && (out == stdout || out == stderr)) {
+	if ((state.stdout_is_console && (out == stdout || out == stderr)) ||
+	    (state.pager_is_active && !state.win_utf8_mode)) {
 		char buffer[2048];
 		int required_characters = vsnprintf(buffer, 2048, zFormat, ap);
-		const char *z1;
+		const char *utf8_data;
 		unique_ptr<char[]> zbuf;
 		if (required_characters > 2048) {
 			zbuf = unique_ptr<char[]>(new char[required_characters + 1]);
 			vsnprintf(zbuf.get(), required_characters + 1, zFormat, ap);
-			z1 = zbuf.get();
+			utf8_data = zbuf.get();
 		} else {
-			z1 = buffer;
+			utf8_data = buffer;
 		}
-		if (state.win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
-			// we can write UTF8 directly
-			fputs(z1, out);
+		if (state.pager_is_active) {
+			auto mbcs_text = ShellState::Win32Utf8ToMbcs(utf8_data, true);
+			fputs(mbcs_text.c_str(), out);
 		} else {
-			// fallback to writing old style windows unicode
-			auto z2 = ShellState::Win32Utf8ToMbcs(z1, false);
-			fputs((const char *)z2.get(), out);
+			// convert from utf8 to utf16
+			auto unicode_text = ShellState::Win32Utf8ToUnicode(utf8_data);
+			auto out_handle = GetStdHandle(out == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+			// use WriteConsoleW to write the unicode codepoints to the console
+			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
 		}
 	} else {
 		vfprintf(out, zFormat, ap);
@@ -463,13 +437,15 @@ static void shell_out_of_memory(void) {
 	exit(1);
 }
 
-ShellState::ShellState() : seenInterrupt(0) {
+ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 	config.error_manager->AddCustomError(
 	    duckdb::ErrorType::UNSIGNED_EXTENSION,
 	    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
 	    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
+	strcpy(continuePrompt, "· ");
+	strcpy(continuePromptSelected, "‣ ");
 }
 
 ShellState::~ShellState() {
@@ -566,7 +542,6 @@ int ShellState::RunInitialCommand(const char *sql, bool bail) {
 		}
 	} else {
 		string zErrMsg;
-		OpenDB();
 		BEGIN_TIMER;
 		auto res = ExecuteSQL(sql);
 		END_TIMER;
@@ -673,34 +648,36 @@ static char *local_getline(char *zLine, FILE *in) {
 ** be freed by the caller or else passed back into this routine via the
 ** zPrior argument for reuse.
 */
-static char *one_input_line(FILE *in, char *zPrior, int isContinuation) {
-	char *zResult;
-	if (in != 0) {
-		zResult = local_getline(zPrior, in);
-	} else {
-		auto &state = ShellState::Get();
-#if SHELL_USE_LOCAL_GETLINE
+char *ShellState::OneInputLine(FILE *in, char *zPrior, int isContinuation) {
+	if (in) {
+		// use local_getline when reading from a file
+		// don't print prompt in this scenario
+		return local_getline(zPrior, in);
+	}
+
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		// use linenoise
+		string prompt_str;
+		const char *prompt_text;
 		if (!isContinuation) {
-			state.main_prompt->PrintPrompt(state, PrintOutput::STDOUT);
+			prompt_str = main_prompt->GeneratePrompt(*this);
+			prompt_text = prompt_str.c_str();
 		} else {
-			state.Print(state.continuePrompt);
-		}
-		fflush(stdout);
-		zResult = local_getline(zPrior, stdin);
-#else
-		string main_prompt;
-		const char *zPrompt;
-		if (!isContinuation) {
-			main_prompt = state.main_prompt->GeneratePrompt(state);
-			zPrompt = main_prompt.c_str();
-		} else {
-			zPrompt = state.continuePrompt;
+			prompt_text = continuePrompt;
 		}
 		free(zPrior);
-		zResult = shell_readline(zPrompt);
-#endif
+		return linenoise(prompt_text);
 	}
-	return zResult;
+#endif
+	// using local_getline to read from stdin - print the prompt
+	if (!isContinuation) {
+		main_prompt->PrintPrompt(*this, PrintOutput::STDOUT);
+	} else {
+		Print(continuePrompt);
+	}
+	fflush(stdout);
+	return local_getline(zPrior, stdin);
 }
 
 /*
@@ -765,10 +742,53 @@ int64_t ShellState::StringToInt(const string &arg) {
 }
 
 string ShellState::ModeToString(RenderMode mode) {
-	static const char *modeDescr[] = {"line",     "column", "list",    "semi",  "html",        "insert",    "quote",
-	                                  "tcl",      "csv",    "explain", "ascii", "prettyprint", "eqp",       "json",
-	                                  "markdown", "table",  "box",     "latex", "trash",       "jsonlines", "duckbox"};
-	return modeDescr[int(mode)];
+	switch (mode) {
+	case RenderMode::LINE:
+		return "line";
+	case RenderMode::COLUMN:
+		return "column";
+	case RenderMode::LIST:
+		return "list";
+	case RenderMode::SEMI:
+		return "semi";
+	case RenderMode::HTML:
+		return "html";
+	case RenderMode::INSERT:
+		return "insert";
+	case RenderMode::QUOTE:
+		return "quote";
+	case RenderMode::TCL:
+		return "tcl";
+	case RenderMode::CSV:
+		return "csv";
+	case RenderMode::EXPLAIN:
+		return "explain";
+	case RenderMode::DESCRIBE:
+		return "describe";
+	case RenderMode::ASCII:
+		return "ascii";
+	case RenderMode::PRETTY:
+		return "prettyprint";
+	case RenderMode::EQP:
+		return "eqp";
+	case RenderMode::JSON:
+		return "json";
+	case RenderMode::MARKDOWN:
+		return "markdown";
+	case RenderMode::TABLE:
+		return "table";
+	case RenderMode::BOX:
+		return "box";
+	case RenderMode::LATEX:
+		return "latex";
+	case RenderMode::TRASH:
+		return "trash";
+	case RenderMode::JSONLINES:
+		return "jsonlines";
+	case RenderMode::DUCKBOX:
+		return "duckbox";
+	}
+	return "invalid";
 }
 
 /*
@@ -1412,6 +1432,10 @@ public:
 		}
 	}
 
+	void RenderStringLiteral(const string &text, const duckdb::LogicalType &type) override {
+		PrintText(text, HighlightElementType::STRING_CONSTANT);
+	}
+
 	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
 		PrintText(text, HighlightElementType::NULL_VALUE);
 	}
@@ -1447,11 +1471,15 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	auto &con = *conn;
 	unique_ptr<duckdb::QueryResult> result;
-	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX) {
+	if (ShellRenderer::IsColumnar(cMode) && cMode != RenderMode::TRASH && cMode != RenderMode::DUCKBOX &&
+	    cMode != RenderMode::DESCRIBE) {
 		// for row-wise rendering we can use streaming results
 		result = con.SendQuery(std::move(statement));
 	} else {
-		result = con.Query(std::move(statement));
+		duckdb::QueryParameters parameters;
+		parameters.output_type = duckdb::QueryResultOutputType::FORCE_MATERIALIZED;
+		parameters.memory_type = duckdb::QueryResultMemoryType::BUFFER_MANAGED;
+		result = con.SendQuery(std::move(statement), parameters);
 	}
 	auto &res = *result;
 	if (res.HasError()) {
@@ -1477,12 +1505,21 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	if (res.type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
+	if (cMode == RenderMode::TRASH) {
+		// execute the query but don't render anything
+		return SuccessState::SUCCESS;
+	}
+	unique_ptr<PagerState> pager_setup;
+	if (ShouldUsePager(res)) {
+		// we should use a pager
+		pager_setup = SetupPager();
+	}
 	if (ShellRenderer::IsColumnar(cMode)) {
 		RenderColumnarResult(res);
 		return SuccessState::SUCCESS;
 	}
-	if (cMode == RenderMode::TRASH) {
-		// execute the query but don't render anything
+	if (cMode == RenderMode::DESCRIBE) {
+		RenderDescribe(res);
 		return SuccessState::SUCCESS;
 	}
 	if (cMode == RenderMode::DUCKBOX) {
@@ -1529,6 +1566,7 @@ SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
 		return SuccessState::FAILURE;
 	}
 }
+
 /*
 ** Execute a statement or set of statements.  Print
 ** any result rows/columns depending on the current mode
@@ -1555,6 +1593,9 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			cMode = mode;
 			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
+			}
+			if (UseDescribeRenderMode(*statement, describe_table_name)) {
+				cMode = RenderMode::DESCRIBE;
 			}
 
 			auto rc = ExecuteStatement(std::move(statement));
@@ -1700,6 +1741,10 @@ SuccessState ShellState::ExecuteQuery(const string &query) {
 	return SuccessState::SUCCESS;
 }
 
+unique_ptr<duckdb::ProgressBarDisplay> CreateProgressBar() {
+	return make_uniq<ShellProgressBarDisplay>();
+}
+
 void ShellState::OpenDB(ShellOpenFlags flags) {
 	if (!db) {
 		try {
@@ -1715,6 +1760,8 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 				exit(1);
 			}
 		}
+		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
+		client_config.display_create_func = CreateProgressBar;
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
@@ -1857,6 +1904,130 @@ FILE *ShellState::OpenOutputFile(const char *zFile, int bTextMode) {
 	return f;
 }
 
+string ShellState::GetSystemPager() {
+	const char *duckdb_pager = getenv("DUCKDB_PAGER");
+
+	// Try DUCKDB_PAGER first (highest priority for env vars)
+	if (duckdb_pager && strlen(duckdb_pager) > 0) {
+		return duckdb_pager;
+	}
+
+	// Try PAGER next
+	const char *pager = getenv("PAGER");
+	if (pager && strlen(pager) > 0) {
+		return pager;
+	}
+
+	// No valid pager environment variable set, use platform default
+#if defined(_WIN32) || defined(WIN32)
+	// On Windows, use 'more' as default pager
+	return "more";
+#else
+	// On other systems, use 'less' as default pager
+	return "less -SRX";
+#endif
+}
+
+bool ShellState::ShouldUsePager() {
+	if (out != stdout || !stdout_is_console || !outfile.empty()) {
+		// if we have an outfile specified we don't set up the pager
+		return false;
+	}
+	// setup a pager for output
+	if (pager_mode == PagerMode::PAGER_OFF) {
+		return false;
+	}
+	if (pager_command.empty()) {
+		pager_command = GetSystemPager();
+		if (pager_command.empty()) {
+			Print(PrintOutput::STDERR, "Warning: No pager configured. Set DUCKDB_PAGER or PAGER environment variable\n"
+			                           "or supply a command like `.pager 'less -SR'` or `.pager 'pspg --csv'`.\n");
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ShellState::ShouldUsePager(idx_t line_count) {
+	if (!ShouldUsePager()) {
+		return false;
+	}
+	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
+		if (line_count < pager_min_rows) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
+	if (!ShouldUsePager()) {
+		return false;
+	}
+	if (pager_mode == PagerMode::PAGER_AUTOMATIC) {
+		// in automatic mode we only use a pager when the output is large enough
+		if (cMode == RenderMode::DUCKBOX) {
+			// in duckbox mode the output is automatically truncated to "max_rows"
+			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
+			if (max_rows < pager_min_rows) {
+				return false;
+			}
+		}
+		if (cMode == RenderMode::EXPLAIN) {
+			auto &materialized = result.Cast<MaterializedQueryResult>();
+			idx_t row_count = 0;
+			for (auto &row : materialized.Collection().Rows()) {
+				for (auto c : row.GetValue(1).GetValue<string>()) {
+					if (c == '\n') {
+						row_count++;
+					}
+				}
+			}
+			return row_count >= pager_min_rows;
+		}
+		// otherwise we check the size of the result set
+		// if it has less than X columns, or there are fewer than Y rows, we omit the pager
+		if (result.ColumnCount() < pager_min_columns && !result.MoreRowsThan(pager_min_rows)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void ShellState::StartPagerDisplay() {
+#if !defined(_WIN32) && !defined(WIN32)
+	// disable sigpipe trap while displaying the pager
+	signal(SIGPIPE, SIG_IGN);
+#endif
+}
+
+void ShellState::FinishPagerDisplay() {
+	ShellState::Get().pager_is_active = false;
+#if !defined(_WIN32) && !defined(WIN32)
+	// enable sigpipe trap again after finishing the display
+	signal(SIGPIPE, SIG_DFL);
+#endif
+}
+
+unique_ptr<PagerState> ShellState::SetupPager() {
+#if defined(_WIN32) || defined(WIN32)
+	if (win_utf8_mode) {
+		SetConsoleCP(CP_UTF8);
+	}
+#endif
+	StartPagerDisplay();
+	auto pager_out = popen(pager_command.c_str(), "w");
+	if (!pager_out) {
+		FinishPagerDisplay();
+		PrintF(PrintOutput::STDERR, "Error: Failed to start pager process: %s. Output will be sent to stdout.\n",
+		       strerror(errno));
+		return nullptr;
+	}
+	pager_is_active = true;
+	out = pager_out;
+	outfile = "|" + pager_command;
+	return make_uniq<PagerState>(*this);
+}
 /*
 ** Change the output file back to stdout.
 **
@@ -1932,7 +2103,7 @@ int shellDeleteFile(const char *zFilename) {
 	int rc;
 #ifdef _WIN32
 	auto z = ShellState::Win32Utf8ToUnicode(zFilename);
-	rc = _wunlink((wchar_t *)z.get());
+	rc = _wunlink(z.c_str());
 #else
 	rc = unlink(zFilename);
 #endif
@@ -2162,7 +2333,6 @@ bool ShellState::ImportData(const vector<string> &args) {
 	}
 	seenInterrupt = 0;
 	// check if the table exists
-	OpenDB();
 	auto &con = *conn;
 	auto needCommit = con.context->transaction.IsAutoCommit();
 	if (needCommit) {
@@ -2201,41 +2371,39 @@ bool ShellState::ImportData(const vector<string> &args) {
 	return true;
 }
 
-string ShellState::EvaluateSQL(const string &sql) {
-	if (!db) {
-		OpenDB();
-	}
-	auto &con = *conn;
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql,
+                                                              string &result_value) {
 	auto result = con.Query(sql);
 	if (result->HasError()) {
-		return EVAL_SQL_ERROR;
+		// store error in the result
+		result_value = result->GetError();
+		return ExecuteSQLSingleValueResult::EXECUTION_ERROR;
 	}
 	auto is_query = result->properties.return_type == duckdb::StatementReturnType::QUERY_RESULT;
-	if (is_query == false) {
-		return EVAL_SQL_NOT_A_QUERY;
+	if (!is_query) {
+		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
 	}
 	auto &collection = result->Collection();
 	if (collection.Count() == 0) {
-		return EVAL_SQL_NO_RESULT;
+		return ExecuteSQLSingleValueResult::EMPTY_RESULT;
 	}
 	if (collection.Count() > 1) {
-		return EVAL_SQL_TOO_MANY_ROWS;
+		return ExecuteSQLSingleValueResult::MULTIPLE_ROWS;
 	}
 	if (collection.ColumnCount() != 1) {
-		return EVAL_SQL_TOO_MANY_COLUMNS;
+		return ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS;
 	}
 
 	auto value = collection.GetRows().GetValue(0, 0);
 	if (value.IsNull()) {
-		return EVAL_SQL_NULL;
+		return ExecuteSQLSingleValueResult::NULL_RESULT;
 	}
+	result_value = value.ToString();
+	return ExecuteSQLSingleValueResult::SUCCESS;
+}
 
-	auto str = value.ToString();
-	if (str.empty()) {
-		return EVAL_SQL_EMPTY;
-	}
-
-	return str;
+ExecuteSQLSingleValueResult ShellState::ExecuteSQLSingleValue(const string &sql, string &result_value) {
+	return ExecuteSQLSingleValue(*conn, sql, result_value);
 }
 
 bool ShellState::OpenDatabase(const vector<string> &args) {
@@ -2267,30 +2435,28 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 				Print(PrintOutput::STDERR, "Error: missing SQL query after --sql\n");
 				return false;
 			}
-			const char *query = args[++iName].c_str();
+			auto &query = args[++iName];
 
-			auto val = EvaluateSQL(query);
-			if (val == EVAL_SQL_ERROR) {
-				PrintF(PrintOutput::STDERR, "Error: failed to evaluate --sql query: '%s'\n", query);
+			string val;
+			auto exec_result = ExecuteSQLSingleValue(query, val);
+			switch (exec_result) {
+			case ExecuteSQLSingleValueResult::EXECUTION_ERROR:
+				PrintF(PrintOutput::STDERR, "Error: failed to evaluate --sql query '%s': %s\n", query, val);
 				return false;
-			} else if (val == EVAL_SQL_NOT_A_QUERY) {
-				PrintF(PrintOutput::STDERR, "Error: the --sql argument, '%s', is not a valid query\n");
+			case ExecuteSQLSingleValueResult::EMPTY_RESULT:
+				Print(PrintOutput::STDERR, "Error: --sql query returned no rows, expected single value\n");
 				return false;
-			} else if (val == EVAL_SQL_TOO_MANY_ROWS) {
+			case ExecuteSQLSingleValueResult::MULTIPLE_ROWS:
 				Print(PrintOutput::STDERR, "Error: --sql query returned multiple rows, expected single value\n");
 				return false;
-			} else if (val == EVAL_SQL_TOO_MANY_COLUMNS) {
+			case ExecuteSQLSingleValueResult::MULTIPLE_COLUMNS:
 				Print(PrintOutput::STDERR, "Error: --sql query returned multiple columns, expected single value\n");
 				return false;
-			} else if (val == EVAL_SQL_NULL) {
+			case ExecuteSQLSingleValueResult::NULL_RESULT:
 				Print(PrintOutput::STDERR, "Error: --sql query returned a null value\n");
 				return false;
-			} else if (val == EVAL_SQL_NO_RESULT) {
-				Print(PrintOutput::STDERR, "Error: --sql query returned no value\n");
-				return false;
-			} else if (val == EVAL_SQL_EMPTY) {
-				Print(PrintOutput::STDERR, "Error: --sql query returned an empty string\n");
-				return false;
+			default:
+				break;
 			}
 			zNewFilename = val;
 			has_sql = true;
@@ -2478,8 +2644,6 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 	bool bDebug = 0;
 	SuccessState rc = SuccessState::SUCCESS;
 
-	OpenDB();
-
 	RenderMode mode = RenderMode::SEMI;
 	for (idx_t ii = 1; ii < args.size(); ii++) {
 		if (optionMatch(args[ii], "indent")) {
@@ -2550,9 +2714,115 @@ void ShellState::ShowConfiguration() {
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
 }
 
+SuccessState ShellState::RenderDescribe(duckdb::QueryResult &res) {
+	vector<ShellTableInfo> result;
+	ShellTableInfo table;
+	table.table_name = describe_table_name;
+	for (auto &row : res) {
+		ShellColumnInfo column;
+		column.column_name = row.GetValue<string>(0);
+		column.column_type = row.GetValue<string>(1);
+		if (!row.IsNull(2)) {
+			column.is_not_null = row.GetValue<string>(2) == "NO";
+		}
+		if (!row.IsNull(3)) {
+			column.is_primary_key = row.GetValue<string>(3) == "PRI";
+			column.is_unique = row.GetValue<string>(3) == "UNI";
+		}
+		if (!row.IsNull(4)) {
+			column.default_value = row.GetValue<string>(4);
+		}
+		table.columns.push_back(std::move(column));
+	}
+	result.push_back(std::move(table));
+	RenderTableMetadata(result);
+	return SuccessState::SUCCESS;
+}
+
+MetadataResult ShellState::DisplayTables(const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	// FIXME: copy pasted from below
+	// Parse the filter pattern to check for schema qualification
+	string filter_pattern = args.size() > 1 ? args[1] : string();
+	string schema_filter = "";
+	string table_filter = "%" + filter_pattern + "%";
+
+	// Parse the filter pattern to check for schema qualification
+	try {
+		auto components = duckdb::QualifiedName::ParseComponents(filter_pattern);
+		if (components.size() >= 2) {
+			// e.g : "schema.table" or "schema.%"
+			schema_filter = "%" + components[0] + "%";
+			table_filter = "%" + components[1] + "%";
+		}
+	} catch (const duckdb::ParserException &) {
+		// If parsing fails, treat as a simple table pattern
+	}
+	string schema_filter_str;
+	string name_filter;
+	if (!table_filter.empty()) {
+		name_filter = StringUtil::Format(" AND columns.table_name ILIKE %s", SQLString(table_filter));
+	}
+	if (!schema_filter.empty()) {
+		schema_filter_str = StringUtil::Format(" AND columns.schema_name ILIKE %s", SQLString(schema_filter));
+	}
+	auto query = StringUtil::Format(R"(
+SELECT columns.database_name, columns.schema_name, columns.table_name, list(
+	struct_pack(column_name, data_type, is_primary_key := c.column_index IS NOT NULL) order by column_index),
+	t.estimated_size AS estimated_size, t.table_oid AS table_oid
+FROM duckdb_columns() columns
+LEFT JOIN duckdb_tables() t USING (table_oid)
+LEFT JOIN (
+	SELECT table_oid, UNNEST(constraint_column_indexes)+1 column_index
+	FROM duckdb_constraints()
+	WHERE constraint_type='PRIMARY KEY') c
+USING (table_oid, column_index)
+WHERE NOT columns.internal%s%s
+GROUP BY ALL;
+)",
+	                                schema_filter_str, name_filter);
+
+	auto &con = *conn;
+	auto query_result = con.Query(query);
+	if (query_result->HasError()) {
+		PrintDatabaseError(query_result->GetError());
+		return MetadataResult::FAIL;
+	}
+	vector<ShellTableInfo> result;
+	for (auto &row : *query_result) {
+		ShellTableInfo table;
+		table.database_name = row.GetValue<string>(0);
+		table.schema_name = row.GetValue<string>(1);
+		table.table_name = row.GetValue<string>(2);
+
+		auto column_val = row.GetBaseValue(3);
+		for (auto &column_entry : duckdb::ListValue::GetChildren(column_val)) {
+			ShellColumnInfo column;
+			auto &struct_children = duckdb::StructValue::GetChildren(column_entry);
+			column.column_name = struct_children[0].GetValue<string>();
+			column.column_type = struct_children[1].GetValue<string>();
+			column.is_primary_key = struct_children[2].GetValue<bool>();
+			table.columns.push_back(std::move(column));
+		}
+
+		if (!row.IsNull(4)) {
+			table.estimated_size = row.GetValue<idx_t>(4);
+		}
+		if (row.IsNull(5)) {
+			// view
+			table.is_view = true;
+		}
+
+		result.push_back(std::move(table));
+	}
+	RenderTableMetadata(result);
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
 	string s;
-	OpenDB();
 
 	if (args.size() > 2) {
 		return MetadataResult::PRINT_USAGE;
@@ -2685,7 +2955,7 @@ SuccessState ShellState::ChangeDirectory(const string &path) {
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
 	auto z = ShellState::Win32Utf8ToUnicode(path.c_str());
-	rc = !SetCurrentDirectoryW((wchar_t *)z.get());
+	rc = !SetCurrentDirectoryW(z.c_str());
 #else
 	rc = chdir(path.c_str());
 #endif
@@ -3010,18 +3280,49 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 	return state == SQLParseState::SEMICOLON;
 }
 
+void ShellState::ShellAddHistory(const char *history) {
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		linenoiseHistoryAdd(history);
+	}
+#endif
+}
+
+int ShellState::ShellLoadHistory(const char *path) {
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		return linenoiseHistoryLoad(path);
+	}
+#endif
+	return 0;
+}
+
+int ShellState::ShellSaveHistory(const char *path) {
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		return linenoiseHistorySave(path);
+	}
+#endif
+	return 0;
+}
+
+int ShellState::ShellSetHistoryMaxLength(idx_t max_length) {
+#ifdef HAVE_LINENOISE
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		return linenoiseHistorySetMaxLen(static_cast<int>(max_length));
+	}
+#endif
+	return 0;
+}
 /*
 ** Run a single line of SQL.  Return the number of errors.
 */
 int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	string zErrMsg;
 
-	OpenDB();
-#ifndef SHELL_USE_LOCAL_GETLINE
 	if (mode == InputMode::STANDARD && zSql && *zSql && *zSql != '\3') {
-		shell_add_history(zSql);
+		ShellAddHistory(zSql);
 	}
-#endif
 	BEGIN_TIMER;
 	auto success = ExecuteSQL(zSql);
 	END_TIMER;
@@ -3056,7 +3357,7 @@ int ShellState::ProcessInput(InputMode mode) {
 	lineno = 0;
 	while (errCnt == 0 || !bail_on_error || (!in && stdin_is_interactive)) {
 		fflush(out);
-		zLine = one_input_line(in, zLine, nSql > 0);
+		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
 			/* End of input */
 			if (!in && stdin_is_interactive) {
@@ -3106,11 +3407,9 @@ int ShellState::ProcessInput(InputMode mode) {
 				printf("%s\n", zLine);
 			}
 			if (zLine[0] == '.') {
-#ifndef SHELL_USE_LOCAL_GETLINE
 				if (mode == InputMode::STANDARD && zLine && *zLine && *zLine != '\3') {
-					shell_add_history(zLine);
+					ShellAddHistory(zLine);
 				}
-#endif
 				rc = DoMetaCommand(zLine);
 				if (rc == 2) { /* exit requested */
 					break;
@@ -3243,9 +3542,6 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 		unique_ptr<duckdb::DuckDB> localDB;
 		unique_ptr<duckdb::Connection> localCon;
 
-		if (!state.conn) {
-			state.OpenDB();
-		}
 		auto &con = *state.conn;
 		auto result = con.Query(zSql);
 		for (auto &row : *result) {
@@ -3285,10 +3581,21 @@ void ShellState::Initialize() {
 	default_prompt =
 	    "{max_length:40}{color:darkorange}{color:bold}{setting:current_database_and_schema}{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
-	strcpy(continuePrompt, "· ");
-	strcpy(continuePromptSelected, "‣ ");
+	vector<string> default_components;
+	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
+	default_components.push_back(
+	    "{align:right}{min_size:18}{hide_if_contains:0 bytes}Written: {setting:bytes_written}");
+	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Read: {setting:bytes_read}");
+	default_components.push_back("{align:right}{min_size:17}Memory: {setting:memory_usage}");
+	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Swap: {setting:swap_usage}");
+	progress_bar = make_uniq<ShellProgressBar>();
+	for (auto &component : default_components) {
+		progress_bar->AddComponent(component);
+	}
 #ifdef HAVE_LINENOISE
-	linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+	if (rl_version == ReadLineVersion::LINENOISE) {
+		linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+	}
 #endif
 }
 
@@ -3415,14 +3722,8 @@ int wmain(int argc, wchar_t **wargv) {
 	}
 	data.out = stdout;
 
-	/* Go ahead and open the database file if it already exists.  If the
-	** file does not exist, delay opening it.  This prevents empty database
-	** files from being created if a user mistypes the database name argument
-	** to the sqlite command-line tool.
-	*/
-	if (access(data.zDbFilename.c_str(), 0) == 0) {
-		data.OpenDB();
-	}
+	// Open the database file
+	data.OpenDB();
 
 	/* Process the initialization file if there is one.  If no -init option
 	** is given on the command line, look for a file named ~/.sqliterc and
@@ -3460,7 +3761,6 @@ int wmain(int argc, wchar_t **wargv) {
 					return rc == 2 ? 0 : rc;
 				}
 			} else {
-				data.OpenDB();
 				auto success = data.ExecuteSQL(cmd.c_str());
 				if (success != SuccessState::SUCCESS) {
 					return rc != 0 ? rc : 1;
@@ -3495,18 +3795,18 @@ int wmain(int argc, wchar_t **wargv) {
 				zHistory = zHome.c_str();
 			}
 			if (zHistory) {
-				shell_read_history(zHistory);
+				data.ShellLoadHistory(zHistory);
 			}
-#if HAVE_READLINE || HAVE_EDITLINE
-			rl_attempted_completion_function = readline_completion;
-#elif HAVE_LINENOISE
-			linenoiseSetCompletionCallback(linenoise_completion);
+#ifdef HAVE_LINENOISE
+			if (data.rl_version == ReadLineVersion::LINENOISE) {
+				linenoiseSetCompletionCallback(linenoise_completion);
+			}
 #endif
 			data.in = 0;
 			rc = data.ProcessInput(InputMode::STANDARD);
 			if (zHistory) {
-				shell_stifle_history(2000);
-				shell_write_history(zHistory);
+				data.ShellSetHistoryMaxLength(2000);
+				data.ShellSaveHistory(zHistory);
 			}
 		} else {
 			data.in = stdin;

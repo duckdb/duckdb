@@ -224,7 +224,7 @@ void SetArgumentType(ScalarFunction &bound_function, const LogicalType &type, bo
 	if (is_operator) {
 		bound_function.arguments[0] = type;
 		bound_function.arguments[1] = type;
-		bound_function.return_type = type;
+		bound_function.SetReturnType(type);
 		return;
 	}
 
@@ -232,7 +232,7 @@ void SetArgumentType(ScalarFunction &bound_function, const LogicalType &type, bo
 		arg = type;
 	}
 	bound_function.varargs = type;
-	bound_function.return_type = type;
+	bound_function.SetReturnType(type);
 }
 
 unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &bound_function,
@@ -281,12 +281,12 @@ unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &
 	if (all_null) {
 		// all arguments are NULL
 		SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
-		return make_uniq<ConcatFunctionData>(bound_function.return_type, is_operator);
+		return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 	}
 	auto list_type = LogicalType::LIST(child_type);
 
 	SetArgumentType(bound_function, list_type, is_operator);
-	return make_uniq<ConcatFunctionData>(bound_function.return_type, is_operator);
+	return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 }
 
 unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, ScalarFunction &bound_function,
@@ -316,7 +316,7 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 
 	// we can now assume that the input is a string or castable to a string
 	SetArgumentType(bound_function, return_type, is_operator);
-	return make_uniq<ConcatFunctionData>(bound_function.return_type, is_operator);
+	return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 }
 
 unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
@@ -345,7 +345,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, nullptr,
 	                          ListConcatStats);
 	fun.varargs = LogicalType::LIST(LogicalType::ANY);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
@@ -361,7 +361,7 @@ ScalarFunction ConcatFun::GetFunction() {
 	ScalarFunction concat =
 	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
 	concat.varargs = LogicalType::ANY;
-	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	concat.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return concat;
 }
 

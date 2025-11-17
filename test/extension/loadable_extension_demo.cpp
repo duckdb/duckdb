@@ -362,7 +362,7 @@ static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFun
 		auto new_max_val = left_max_val + right_max_val;
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.arguments[1] = arguments[1]->return_type;
-		bound_function.return_type = BoundedType::Get(new_max_val);
+		bound_function.SetReturnType(BoundedType::Get(new_max_val));
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
 	}
@@ -388,12 +388,12 @@ static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
-		bound_function.return_type = arguments[0]->return_type;
+		bound_function.SetReturnType(arguments[0]->return_type);
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");
 	}
 	auto result = make_uniq<BoundedFunctionData>();
-	result->max_val = BoundedType::GetMaxValue(bound_function.return_type);
+	result->max_val = BoundedType::GetMaxValue(bound_function.GetReturnType());
 	return std::move(result);
 }
 
