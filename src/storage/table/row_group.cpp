@@ -1296,7 +1296,6 @@ PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
 		result.count_type = CountType::COUNT_EXACT;
 	}
 
-	result.row_group = this;
 	return result;
 }
 

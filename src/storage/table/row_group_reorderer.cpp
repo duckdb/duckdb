@@ -9,8 +9,8 @@ struct RowGroupSegmentNodeEntry {
 	unique_ptr<BaseStatistics> stats;
 };
 
-struct RowGroupEntry {
-	reference<RowGroup> row_group;
+struct RowGroupOffsetEntry {
+	idx_t count;
 	unique_ptr<BaseStatistics> stats;
 };
 
@@ -146,8 +146,8 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 
 	for (; it != end; ++it) {
 		auto &current_key = it->first;
-		auto &row_group = it->second.row_group.get();
-		seen_tuples += row_group.count;
+		auto tuple_count = it->second.count;
+		seen_tuples += tuple_count;
 
 		while (last_unresolved_entry != it) {
 			if (!CompareValues(current_key, last_unresolved_boundary, order_by)) {
@@ -158,7 +158,7 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 			if (!current_stats->CanHaveNull()) {
 				// This row group has exactly row_group.count valid values. We can exclude those
 				pruned_row_group_count++;
-				new_row_offset -= row_group.count;
+				new_row_offset -= tuple_count;
 			}
 
 			++last_unresolved_entry;
@@ -204,16 +204,16 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
                                                              const RowGroupOrderType order_type,
                                                              const column_t column_idx, const idx_t row_offset,
                                                              vector<PartitionStatistics> &stats) {
-	multimap<Value, RowGroupEntry> ordered_row_groups;
+	multimap<Value, RowGroupOffsetEntry> ordered_row_groups;
 
 	for (auto &partition_stats : stats) {
-		if (partition_stats.count_type == CountType::COUNT_APPROXIMATE) {
+		if (partition_stats.count_type == CountType::COUNT_APPROXIMATE || !partition_stats.partition_row_group) {
 			return {row_offset, 0};
 		}
 
-		auto column_stats = partition_stats.GetColumnStatistics(column_idx);
+		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(column_idx);
 		Value comparison_value = RetrieveStat(*column_stats, order_by, column_type);
-		auto entry = RowGroupEntry {*partition_stats.row_group, std::move(column_stats)};
+		auto entry = RowGroupOffsetEntry {partition_stats.count, std::move(column_stats)};
 		ordered_row_groups.emplace(comparison_value, std::move(entry));
 	}
 
