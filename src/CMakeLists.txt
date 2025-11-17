@@ -9,6 +9,7 @@ add_third_party(hyperloglog)
 add_third_party(fastpforlib)
 add_third_party(yyjson)
 add_third_party(utf8proc)
+add_third_party(mbedtls)
 
 if(${DISABLE_THREADS})
   add_definitions(-DDUCKDB_NO_THREADS)
