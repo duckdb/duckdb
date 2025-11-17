@@ -34,7 +34,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/wal_commit.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"COMMIT_WRITE_WAL_LATENCY": "true"}';
+PRAGMA custom_profiling_settings='{"WRITE_TO_WAL_COMMIT_LATENCY": "true", "WRITE_TO_WAL_LATENCY": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';
@@ -52,7 +52,12 @@ statement ok
 CREATE OR REPLACE TABLE commit_metrics AS SELECT * FROM '__TEST_DIR__/wal_commit.json';
 
 query I
-SELECT CASE WHEN commit_write_wal_latency > 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+SELECT CASE WHEN WRITE_TO_WAL_COMMIT_LATENCY > 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+----
+true
+
+query I
+SELECT CASE WHEN WRITE_TO_WAL_LATENCY > 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
 ----
 true
 
