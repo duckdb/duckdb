@@ -235,11 +235,9 @@ void RoaringScanBoolean(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 	RoaringScan(segment, state, scan_count, dummy);
 
 	// Get dummy's validity mask
-	UnifiedVectorFormat unified;
-	dummy.ToUnifiedFormat(scan_count, unified);
-	auto &validity = unified.validity;
+	auto &validity = FlatVector::Validity(dummy);
 
-	if (!validity.GetData()) {                   // All bits are set implicitly, so all valid.
+	if (validity.AllValid()) {
 		memset(result.GetData(), 1, scan_count); // 1 is for valid
 	} else {
 		// "Bit-Unpack" dummy's validity_mask and put it in result's data
