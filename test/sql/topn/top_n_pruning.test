@@ -38,7 +38,10 @@ INSERT INTO t SELECT i FROM repeat(NULL, 2000000) t1(i)
 
 # Work-around for unsetting version info
 statement ok
-USE memory
+ATTACH '__TEST_DIR__/tmp.duckdb' AS tmp
+
+statement ok
+USE tmp
 
 statement ok
 DETACH db
@@ -48,6 +51,9 @@ ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
 
 statement ok
 USE db
+
+statement ok
+DETACH tmp
 
 query II
 EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2
