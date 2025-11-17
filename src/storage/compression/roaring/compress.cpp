@@ -478,12 +478,7 @@ void RoaringCompressState::Flush(RoaringCompressState &state) {
 template <>
 void RoaringCompressState::Compress<PhysicalType::BIT>(Vector &input, idx_t count) {
 	auto &self = *this;
-	UnifiedVectorFormat unified;
-	input.ToUnifiedFormat(count, unified);
-	auto &validity = unified.validity;
-
-	auto input_vector = Vector(LogicalType::UBIGINT, data_ptr_cast(validity.GetData()));
-	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input_vector, count);
+	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input, count);
 }
 template <>
 void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count) {
@@ -492,7 +487,10 @@ void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t cou
 	const bool *src = FlatVector::GetData<bool>(input);
 
 	Vector bitpacked_vector(LogicalType::UBIGINT, count);
-	data_ptr_t dst = data_ptr_t(FlatVector::GetData<uint64_t>(bitpacked_vector));
+	auto &bitpacked_vector_validity = FlatVector::Validity(bitpacked_vector);
+	bitpacked_vector_validity.EnsureWritable();
+	const auto dst = data_ptr_cast(bitpacked_vector_validity.GetData());
+
 	const auto &validity = FlatVector::Validity(input);
 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
 	// mask.

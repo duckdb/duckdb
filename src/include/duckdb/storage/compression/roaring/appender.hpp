@@ -46,9 +46,11 @@ public:
 	}
 
 	static void AppendVector(STATE_TYPE &state, Vector &input, idx_t input_size) {
-		auto data = FlatVector::GetData<validity_t>(input);
+		UnifiedVectorFormat unified;
+		input.ToUnifiedFormat(input_size, unified);
+		auto &validity = unified.validity;
 
-		if (!data) {
+		if (validity.AllValid()) {
 			// All bits are set implicitly
 			idx_t appended = 0;
 			while (appended < input_size) {
@@ -72,7 +74,7 @@ public:
 				idx_t entry_offset = appended / ValidityMask::BITS_PER_VALUE;
 				auto previous_entry_remainder = appended % ValidityMask::BITS_PER_VALUE;
 				if (DUCKDB_UNLIKELY(previous_entry_remainder != 0)) {
-					auto validity_entry = data[entry_offset];
+					auto validity_entry = validity.GetValidityEntry(entry_offset);
 
 					idx_t to_process = ValidityMask::BITS_PER_VALUE - previous_entry_remainder;
 					validity_t mask;
@@ -105,7 +107,7 @@ public:
 				auto entry_count = to_append / ValidityMask::BITS_PER_VALUE;
 				for (idx_t entry_index = 0; entry_index < entry_count; entry_index++) {
 					// get the validity entry at this index
-					auto validity_entry = data[entry_offset + entry_index];
+					auto validity_entry = validity.GetValidityEntry(entry_offset + entry_index);
 					if (ValidityMask::AllValid(validity_entry)) {
 						// All bits are set
 						STATE_TYPE::HandleAllValid(state, ValidityMask::BITS_PER_VALUE);
@@ -121,7 +123,7 @@ public:
 				// Deal with a ragged end, when the validity entry isn't entirely used
 				idx_t remainder = to_append % ValidityMask::BITS_PER_VALUE;
 				if (DUCKDB_UNLIKELY(remainder != 0)) {
-					auto validity_entry = data[entry_offset + entry_count];
+					auto validity_entry = validity.GetValidityEntry(entry_offset + entry_count);
 					auto masked = validity_entry & ValidityUncompressed::LOWER_MASKS[remainder];
 					if (masked == ValidityUncompressed::LOWER_MASKS[remainder]) {
 						// All bits are set
