@@ -20,7 +20,12 @@
       "reason": "Quotations",
       "paths": [
         "test/sql/pragma/test_show_tables_from.test",
-        "test/sql/attach/attach_dbname_quotes.test"
+        "test/sql/attach/attach_dbname_quotes.test",
+        "test/sql/show_select/test_summarize_quoted.test",
+        "test/sql/show_select/test_describe_quoted.test",
+        "test/sql/table_function/sqlite_master_quotes.test",
+        "test/sql/keywords/escaped_quotes_expressions.test",
+        "test/sql/keywords/keywords_in_expressions.test"
       ]
     },
     {
