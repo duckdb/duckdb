@@ -1296,6 +1296,17 @@ struct UsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct VariantMinimumShreddingSize {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "variant_minimum_shredding_size";
+	static constexpr const char *Description = "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 "
+	                                           "to disable entirely. Defaults to 1/4th of a rowgroup";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct WriteBufferRowGroupCountSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "write_buffer_row_group_count";

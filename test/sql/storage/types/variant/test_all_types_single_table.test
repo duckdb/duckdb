@@ -3,6 +3,10 @@
 
 load __TEST_DIR__/variant_test_all_types_single_table.db
 
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
 statement ok
 create table tbl (col VARIANT)
 
@@ -53,3 +57,17 @@ select * from "tbl2";
 ----
 
 endloop
+
+# Never shred
+statement ok
+SET variant_minimum_shredding_size = -1;
+
+statement ok
+create or replace table "tbl2" as select * from tbl;
+
+statement ok
+checkpoint
+
+query I nosort expected_res
+select * from "tbl2";
+----

@@ -429,22 +429,30 @@ LogicalType VariantColumnData::GetShreddedType() {
 	return variant_stats.GetShreddedType();
 }
 
+static bool EnableShredding(int64_t minimum_size, idx_t current_size) {
+	if (minimum_size == -1) {
+		//! Shredding is entirely disabled
+		return false;
+	}
+	return current_size >= static_cast<idx_t>(minimum_size);
+}
+
 unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_group,
                                                                 ColumnCheckpointInfo &checkpoint_info) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 
-	if (!HasAnyChanges()) {
+	auto &table_info = row_group.GetTableInfo();
+	auto &db = table_info.GetDB();
+	auto &config_options = DBConfig::Get(db).options;
+
+	if (!HasAnyChanges() || !EnableShredding(config_options.variant_minimum_shredding_size, row_group.count.load())) {
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
 			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
 		}
 		return std::move(checkpoint_state);
 	}
-
-	auto &table_info = row_group.GetTableInfo();
-	auto &db = table_info.GetDB();
-	auto &config_options = DBConfig::Get(db).options;
 
 	LogicalType shredded_type;
 	if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
