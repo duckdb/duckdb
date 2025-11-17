@@ -225,7 +225,7 @@ void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
-	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
+	StandardColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
 	                              PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
 	}
@@ -261,11 +261,11 @@ public:
 };
 
 unique_ptr<ColumnCheckpointState>
-StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager) {
+StandardColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
 	return make_uniq<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup &row_group,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
 	// we need to checkpoint the main column data first
 	// that is because the checkpointing of the main column data ALSO scans the validity data

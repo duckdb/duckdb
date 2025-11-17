@@ -98,12 +98,12 @@ private:
 	atomic<optional_ptr<RowVersionManager>> version_info;
 	//! The owned version info of the row_group (inserted and deleted tuple info)
 	shared_ptr<RowVersionManager> owned_version_info;
-	//! The column data of the row_group
-	vector<shared_ptr<ColumnData>> columns;
+	//! The column data of the row_group (mutable because `const` can lazily load)
+	mutable vector<shared_ptr<ColumnData>> columns;
 
 public:
 	void MoveToCollection(RowGroupCollection &collection);
-	RowGroupCollection &GetCollection() {
+	RowGroupCollection &GetCollection() const {
 		return collection.get();
 	}
 	//! Returns the list of meta block pointers used by the columns
@@ -115,8 +115,8 @@ public:
 	const vector<MetaBlockPointer> &GetDeletesPointers() const {
 		return deletes_pointers;
 	}
-	BlockManager &GetBlockManager();
-	DataTableInfo &GetTableInfo();
+	BlockManager &GetBlockManager() const;
+	DataTableInfo &GetTableInfo() const;
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
@@ -166,8 +166,8 @@ public:
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count, idx_t row_group_start);
 
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
-	                                             const vector<reference<RowGroup>> &row_groups);
-	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info);
+	                                             const vector<const_reference<RowGroup>> &row_groups);
+	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info) const;
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
@@ -219,11 +219,12 @@ private:
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
 	void SetVersionInfo(shared_ptr<RowVersionManager> version);
 
-	ColumnData &GetColumn(storage_t c);
-	ColumnData &GetColumn(const StorageIndex &c);
+	ColumnData &GetColumn(storage_t c) const;
+	void LoadColumn(storage_t c) const;
+	ColumnData &GetColumn(const StorageIndex &c) const;
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
-	ColumnData &GetRowIdColumnData();
+	void LoadRowIdColumnData() const;
 	void SetCount(idx_t count);
 
 	template <TableScanType TYPE>
@@ -234,16 +235,19 @@ private:
 	bool HasUnloadedDeletes() const;
 
 private:
-	mutex row_group_lock;
+	mutable mutex row_group_lock;
 	vector<MetaBlockPointer> column_pointers;
-	unique_ptr<atomic<bool>[]> is_loaded;
+	//! Whether or not each column is loaded (mutable because `const` can lazy load)
+	mutable unique_ptr<atomic<bool>[]> is_loaded;
 	vector<MetaBlockPointer> deletes_pointers;
 	bool has_metadata_blocks = false;
 	vector<idx_t> extra_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
-	unique_ptr<ColumnData> row_id_column_data;
-	atomic<bool> row_id_is_loaded;
+	//! The row id column data (mutable because `const` can lazy load)
+	mutable unique_ptr<ColumnData> row_id_column_data;
+	//! Whether or not `row_id_column_data` is loaded (mutable because `const` can lazy load)
+	mutable atomic<bool> row_id_is_loaded;
 	atomic<bool> has_changes;
 };
 

@@ -106,42 +106,50 @@ idx_t RowGroup::GetRowGroupSize() const {
 	return collection.get().GetRowGroupSize();
 }
 
-ColumnData &RowGroup::GetRowIdColumnData() {
+void RowGroup::LoadRowIdColumnData() const {
 	if (row_id_is_loaded) {
-		return *row_id_column_data;
+		return;
 	}
 	lock_guard<mutex> l(row_group_lock);
-	if (!row_id_column_data) {
-		row_id_column_data = make_uniq<RowIdColumnData>(GetBlockManager(), GetTableInfo());
-		row_id_column_data->count = count.load();
-		row_id_is_loaded = true;
+	if (row_id_column_data) {
+		return;
 	}
-	return *row_id_column_data;
+	row_id_column_data = make_uniq<RowIdColumnData>(GetBlockManager(), GetTableInfo());
+	row_id_column_data->count = count.load();
+	row_id_is_loaded = true;
 }
 
-ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
+ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 	return GetColumn(c.GetPrimaryIndex());
 }
 
-ColumnData &RowGroup::GetColumn(storage_t c) {
+ColumnData &RowGroup::GetColumn(storage_t c) const {
+	LoadColumn(c);
+	return c == COLUMN_IDENTIFIER_ROW_ID ? *row_id_column_data : *columns[c];
+}
+
+void RowGroup::LoadColumn(storage_t c) const {
 	if (c == COLUMN_IDENTIFIER_ROW_ID) {
-		return GetRowIdColumnData();
+		LoadRowIdColumnData();
+		return;
 	}
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
 		// not being lazy loaded
 		D_ASSERT(columns[c]);
-		return *columns[c];
+		return;
 	}
 	if (is_loaded[c]) {
 		D_ASSERT(columns[c]);
-		return *columns[c];
+		return;
 	}
 	lock_guard<mutex> l(row_group_lock);
 	if (columns[c]) {
+		// another thread loaded the column while we were waiting for the lock
 		D_ASSERT(is_loaded[c]);
-		return *columns[c];
+		return;
 	}
+	// load the column
 	if (column_pointers.size() != columns.size()) {
 		throw InternalException("Lazy loading a column but the pointer was not set");
 	}
@@ -156,13 +164,12 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 		                        "not match count of row group %llu",
 		                        c, this->columns[c]->count.load(), this->count.load());
 	}
-	return *columns[c];
 }
 
-BlockManager &RowGroup::GetBlockManager() {
+BlockManager &RowGroup::GetBlockManager() const {
 	return GetCollection().GetBlockManager();
 }
-DataTableInfo &RowGroup::GetTableInfo() {
+DataTableInfo &RowGroup::GetTableInfo() const {
 	return GetCollection().GetTableInfo();
 }
 
@@ -970,7 +977,7 @@ CompressionType ColumnCheckpointInfo::GetCompressionType() {
 }
 
 vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
-                                                const vector<reference<RowGroup>> &row_groups) {
+                                                const vector<const_reference<RowGroup>> &row_groups) {
 	vector<RowGroupWriteData> result;
 	if (row_groups.empty()) {
 		return result;
@@ -1011,7 +1018,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			result_col->MergeStatistics(*stats);
 
 			// FIXME: temporary - we shouldn't be modifying the row group in-place but emitting a new one
-			row_group.GetColumns()[column_idx] = std::move(result_col);
+			throw InternalException("FIXME: create new row group");
+			// row_group.GetColumns()[column_idx] = std::move(result_col);
 
 			row_group_write_data.statistics.push_back(stats->Copy());
 			row_group_write_data.states.push_back(std::move(checkpoint_state));
@@ -1020,8 +1028,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	return result;
 }
 
-RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) {
-	vector<reference<RowGroup>> row_groups;
+RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriteInfo &info) const {
+	vector<const_reference<RowGroup>> row_groups;
 	row_groups.push_back(*this);
 	auto result = WriteToDisk(info, row_groups);
 	return std::move(result[0]);

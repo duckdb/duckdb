@@ -31,7 +31,7 @@ ColumnData &ColumnDataCheckpointData::GetColumnData() {
 	return *col_data;
 }
 
-RowGroup &ColumnDataCheckpointData::GetRowGroup() {
+const RowGroup &ColumnDataCheckpointData::GetRowGroup() {
 	return *row_group;
 }
 
@@ -61,7 +61,7 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 }
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &checkpoint_states,
-                                               StorageManager &storage_manager, RowGroup &row_group,
+                                               StorageManager &storage_manager, const RowGroup &row_group,
                                                ColumnCheckpointInfo &checkpoint_info)
     : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
       intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {

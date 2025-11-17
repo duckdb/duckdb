@@ -290,7 +290,8 @@ void ArrayColumnData::SetChildData(shared_ptr<ColumnData> child_column_p) {
 }
 
 struct ArrayColumnCheckpointState : public ColumnCheckpointState {
-	ArrayColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager)
+	ArrayColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	                           PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
 		global_stats = ArrayStats::CreateEmpty(column_data.type).ToUnique();
 	}
@@ -330,12 +331,12 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(const RowGroup &row_group,
                                                                          PartialBlockManager &partial_block_manager) {
 	return make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(const RowGroup &row_group,
                                                               ColumnCheckpointInfo &checkpoint_info) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);

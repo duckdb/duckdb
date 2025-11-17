@@ -24,7 +24,7 @@ void ValidityColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &st
 }
 
 struct ValidityColumnCheckpointState : public ColumnCheckpointState {
-	ValidityColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
+	ValidityColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
 	                              PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
 	}
@@ -38,7 +38,7 @@ public:
 };
 
 unique_ptr<ColumnCheckpointState>
-ValidityColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager) {
+ValidityColumnData::CreateCheckpointState(const RowGroup &row_group, PartialBlockManager &partial_block_manager) {
 	return make_uniq<ValidityColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 

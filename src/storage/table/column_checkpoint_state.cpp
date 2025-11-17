@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &original_column,
+ColumnCheckpointState::ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column,
                                              PartialBlockManager &partial_block_manager)
     : row_group(row_group), original_column(original_column), partial_block_manager(partial_block_manager),
       original_column_mutable(original_column) {

@@ -25,10 +25,11 @@ class PartialBlockManager;
 class TableDataWriter;
 
 struct ColumnCheckpointState {
-	ColumnCheckpointState(RowGroup &row_group, ColumnData &original_column, PartialBlockManager &partial_block_manager);
+	ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column,
+	                      PartialBlockManager &partial_block_manager);
 	virtual ~ColumnCheckpointState();
 
-	RowGroup &row_group;
+	const RowGroup &row_group;
 	const ColumnData &original_column;
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
