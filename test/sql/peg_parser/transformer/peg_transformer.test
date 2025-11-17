@@ -18,4 +18,4 @@ statement error
 select 1;
 ----
 Not implemented Error: Parser override has not yet implemented this transformer rule.
-Original Error: No transformer function found for rule 'SelectStatement'
+Original error: No transformer function found for rule 'SelectStatement'

@@ -215,7 +215,7 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 	if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
 		if (result.error.Type() == ExceptionType::NOT_IMPLEMENTED) {
 			throw NotImplementedException("Parser override has not yet implemented this "
-			                              "transformer rule.\nOriginal Error: %s",
+			                              "transformer rule.\nOriginal error: %s",
 			                              result.error.RawMessage());
 		}
 		if (result.error.Type() == ExceptionType::PARSER) {
