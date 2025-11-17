@@ -1285,6 +1285,17 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
+struct DuckDBPartitionRowGroup : public PartitionRowGroup {
+	explicit DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
+	}
+
+	RowGroup &row_group;
+
+	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
+		return row_group.GetStatistics(column_id);
+	}
+};
+
 PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
 	PartitionStatistics result;
 	result.row_start = row_group_start;
@@ -1296,6 +1307,7 @@ PartitionStatistics RowGroup::GetPartitionStats(idx_t row_group_start) {
 		result.count_type = CountType::COUNT_EXACT;
 	}
 
+	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(*this);
 	return result;
 }
 

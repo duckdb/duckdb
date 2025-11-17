@@ -1396,24 +1396,11 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-struct DuckDBPartitionRowGroup : public PartitionRowGroup {
-	explicit DuckDBPartitionRowGroup(RowGroup &row_group_p) : row_group(row_group_p) {
-	}
-
-	RowGroup &row_group;
-
-	unique_ptr<BaseStatistics> GetColumnStatistics(column_t column_id) override {
-		return row_group.GetStatistics(column_id);
-	}
-};
-
 vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 	vector<PartitionStatistics> result;
 	for (auto &entry : row_groups->SegmentNodes()) {
 		auto &row_group = *entry.node;
 		auto partition_stats = row_group.GetPartitionStats(entry.row_start);
-		partition_stats.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group);
-
 		result.push_back(partition_stats);
 	}
 	return result;
