@@ -113,11 +113,11 @@ bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, BindResu
 	// handle qualified alias.<name>
 	// In this implementation we don't restrict the alias to be used as a part of an expression
 	// We don't unify the two-step alias binding here as each one of them has its own semantics
-	if (!colref.IsQualified() || colref.column_names.size() != 2 ||
-	    !StringUtil::CIEquals(colref.GetTableName(), "alias")) {
+	if (!ExpressionBinder::IsPotentialAlias(colref)) {
 		return false;
 	}
-	const auto &alias_name = colref.GetColumnName();
+
+	const auto &alias_name = colref.column_names.back();
 	auto entry = bind_state.alias_map.find(alias_name);
 	if (entry == bind_state.alias_map.end()) {
 		return false;

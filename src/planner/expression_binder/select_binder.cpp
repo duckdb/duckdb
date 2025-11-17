@@ -36,12 +36,11 @@ bool SelectBinder::TryBindRegularAlias(ColumnRefExpression &colref, BindResult &
 
 bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, BindResult &result) {
 	// must be a qualified alias.<name>
-	if (!colref.IsQualified() || colref.column_names.size() != 2 ||
-	    !StringUtil::CIEquals(colref.GetTableName(), "alias")) {
+	if (!ExpressionBinder::IsPotentialAlias(colref)) {
 		return false;
 	}
 
-	const auto &alias_name = colref.GetColumnName();
+	const auto &alias_name = colref.column_names.back();
 	auto entry = node.bind_state.alias_map.find(alias_name);
 	if (entry == node.bind_state.alias_map.end()) {
 		throw BinderException(colref, "alias.%s referenced, but no such alias exists in the SELECT list", alias_name);
