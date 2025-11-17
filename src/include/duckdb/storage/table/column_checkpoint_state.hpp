@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "validity_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
