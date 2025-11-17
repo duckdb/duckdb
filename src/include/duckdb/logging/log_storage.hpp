@@ -39,14 +39,6 @@ enum class LoggingTargetTable : uint8_t {
 	LOG_CONTEXTS, // Normalized: contains only the log contexts
 };
 
-typedef void (*write_log_entry_t)(timestamp_t timestamp, LogLevel level, const string &log_type,
-                                  const string &log_message);
-typedef void (*write_log_entries_t)(DataChunk &chunk, const RegisteredLoggingContext &context);
-typedef void (*flush_t)(LoggingTargetTable table);
-typedef void (*flush_all_t)();
-typedef bool (*is_enabled_t)(LoggingTargetTable table);
-typedef string (*get_storage_name_t)();
-
 class LogStorageScanState {
 public:
 	explicit LogStorageScanState(LoggingTargetTable table_p) : table(table_p) {

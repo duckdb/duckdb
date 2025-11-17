@@ -5,7 +5,7 @@ namespace duckdb {
 
 class CallbackLogStorage : public LogStorage {
 public:
-	CallbackLogStorage(const string &name, write_log_entry_t write_log_entry_fun)
+	CallbackLogStorage(const string &name, duckdb_logger_write_log_entry_t write_log_entry_fun)
 	    : name(name), write_log_entry_fun(write_log_entry_fun) {
 	}
 
@@ -14,7 +14,9 @@ public:
 		if (write_log_entry_fun == nullptr) {
 			return;
 		}
-		write_log_entry_fun(timestamp, level, log_type, log_message);
+
+		auto c_timestamp = reinterpret_cast<duckdb_timestamp *>(&timestamp);
+		write_log_entry_fun(*c_timestamp, EnumUtil::ToChars(level), log_type.c_str(), log_message.c_str());
 	};
 
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override {};
@@ -33,7 +35,7 @@ public:
 
 private:
 	const string name;
-	write_log_entry_t write_log_entry_fun;
+	duckdb_logger_write_log_entry_t write_log_entry_fun;
 };
 
 //===--------------------------------------------------------------------===//
@@ -81,10 +83,8 @@ void duckdb_register_log_storage(duckdb_database database, const char *name, duc
 
 	const auto &db = *db_wrapper->database;
 
-	auto converted_write_log_entry_fun =
-	    *reinterpret_cast<duckdb::write_log_entry_t *>(converted_storage->write_log_entry);
-
-	auto shared_storage_ptr = duckdb::make_shared_ptr<duckdb::CallbackLogStorage>(name, converted_write_log_entry_fun);
+	auto shared_storage_ptr =
+	    duckdb::make_shared_ptr<duckdb::CallbackLogStorage>(name, converted_storage->write_log_entry);
 	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = shared_storage_ptr;
 	db.instance->GetLogManager().RegisterLogStorage(name, storage_ptr);
 }

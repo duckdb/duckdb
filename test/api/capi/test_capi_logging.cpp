@@ -7,7 +7,6 @@ unordered_set<string> LOG_STORE;
 
 void WriteLogEntry(duckdb_timestamp timestamp, const char *level, const char *log_type, const char *log_message) {
 	LOG_STORE.insert(log_message);
-	std::cout << "Writing log entry: " << log_message << std::endl;
 }
 
 TEST_CASE("Test pluggable log storage in CAPI", "[capi]") {
@@ -25,7 +24,7 @@ TEST_CASE("Test pluggable log storage in CAPI", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("set logging_storage='MyCustomStorage';"));
 
 	REQUIRE_NO_FAIL(tester.Query("select write_log('HELLO, BRO');"));
-	// REQUIRE(storage.log_store.find("HELLO, BRO") != storage.log_store.end());
+	REQUIRE(LOG_STORE.find("HELLO, BRO") != LOG_STORE.end());
 
 	duckdb_destroy_log_storage(storage);
 }
