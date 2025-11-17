@@ -411,15 +411,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &opt_filter = filter.Cast<OptionalFilter>();
-		auto sel_optional_state = opt_filter.ExecuteChildFilter(filter_state);
-		if (sel_optional_state) {
-			idx_t approved_before = approved_tuple_count;
-			FilterSelection(sel, vector, vdata, *opt_filter.child_filter, *sel_optional_state->child_state, scan_count,
-			                approved_tuple_count);
-			sel_optional_state->stats.Update(approved_tuple_count, approved_before);
-			return approved_tuple_count;
-		}
-		return scan_count;
+		return opt_filter.FilterSelection(sel, vector, vdata, filter_state, scan_count, approved_tuple_count);
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)

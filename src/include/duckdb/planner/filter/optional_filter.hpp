@@ -32,15 +32,17 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 
-	//! If the child filter should be executed, the optional_ptr will contain the SelectivityOptionalFilterState
-	virtual optional_ptr<SelectivityOptionalFilterState> ExecuteChildFilter(TableFilterState &filter_state) const {
-		return nullptr;
+	virtual void FiltersNullValues(const LogicalType &type, bool &filters_nulls,
+					   bool &filters_valid_values, TableFilterState &filter_state) const {
 	}
 
 	virtual unique_ptr<TableFilterState> InitializeState(ClientContext &context) const {
-		// root nodes - create an empty filter state
 		return make_uniq<TableFilterState>();
 	}
+
+	virtual idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
+									 TableFilterState &filter_state, idx_t scan_count,
+									 idx_t &approved_tuple_count) const;
 };
 
 } // namespace duckdb

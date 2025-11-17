@@ -107,7 +107,7 @@ void ConstantSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
-void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool &filters_nulls,
+void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool &filters_nulls,
                        bool &filters_valid_values, TableFilterState &filter_state) {
 	filters_nulls = false;
 	filters_valid_values = false;
@@ -115,12 +115,7 @@ void FiltersNullValues(const LogicalType &type, const TableFilter &filter, bool 
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &opt_filter = filter.Cast<OptionalFilter>();
-		const auto sel_opt_state = opt_filter.ExecuteChildFilter(filter_state);
-		if (sel_opt_state) {
-			return FiltersNullValues(type, *opt_filter.child_filter, filters_nulls, filters_valid_values,
-			                         *sel_opt_state->child_state);
-		}
-		break;
+		return opt_filter.FiltersNullValues(type, filters_nulls, filters_valid_values, filter_state);
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
@@ -184,7 +179,7 @@ void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_
                             TableFilterState &filter_state) {
 	// check what effect the filter has on NULL values
 	bool filters_nulls, filters_valid_values;
-	FiltersNullValues(result.GetType(), filter, filters_nulls, filters_valid_values, filter_state);
+	ConstantFun::FiltersNullValues(result.GetType(), filter, filters_nulls, filters_valid_values, filter_state);
 
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {

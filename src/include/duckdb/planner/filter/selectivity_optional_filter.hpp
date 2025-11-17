@@ -30,9 +30,8 @@ public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
-
+	void FiltersNullValues(const LogicalType &type, bool &filters_nulls, bool &filters_valid_values, TableFilterState &filter_state) const override;
 	unique_ptr<TableFilterState> InitializeState(ClientContext &context) const override;
-
-	optional_ptr<SelectivityOptionalFilterState> ExecuteChildFilter(TableFilterState &filter_state) const override;
+	idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata, TableFilterState &filter_state, idx_t scan_count, idx_t &approved_tuple_count) const override;
 };
 } // namespace duckdb

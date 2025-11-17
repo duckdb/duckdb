@@ -86,14 +86,16 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 		}
 
 		void Update(const idx_t accepted, const idx_t processed) {
-			tuples_accepted += accepted;
-			tuples_processed += processed;
-			vectors_processed += 1;
+			if (vectors_processed < n_vectors_to_check) {
+				tuples_accepted += accepted;
+				tuples_processed += processed;
+				vectors_processed += 1;
 
-			// pause the filter if we processed enough vectors and the selectivity is too high
-			if (vectors_processed >= n_vectors_to_check) {
-				if (GetSelectivity() >= selectivity_threshold) {
-					status = SelectivityOptionalFilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY;
+				// pause the filter if we processed enough vectors and the selectivity is too high
+				if (vectors_processed == n_vectors_to_check) {
+					if (GetSelectivity() >= selectivity_threshold) {
+						status = SelectivityOptionalFilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY;
+					}
 				}
 			}
 		}

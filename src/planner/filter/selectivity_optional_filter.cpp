@@ -11,6 +11,7 @@
 
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/function/compression/compression.hpp"
 
 namespace duckdb {
 
@@ -45,19 +46,33 @@ unique_ptr<TableFilter> SelectivityOptionalFilter::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<idx_t>(202, "n_vectors_to_check", result->n_vectors_to_check);
 	return std::move(result);
 }
+void SelectivityOptionalFilter::FiltersNullValues(const LogicalType &type,
+                                                  bool &filters_nulls, bool &filters_valid_values,
+                                                  TableFilterState &filter_state) const {
+	const auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
+	return ConstantFun::FiltersNullValues(type, *this->child_filter, filters_nulls, filters_valid_values, *state.child_state);
+}
 unique_ptr<TableFilterState> SelectivityOptionalFilter::InitializeState(ClientContext &context) const {
 	D_ASSERT(child_filter);
 	auto child_filter_state = TableFilterState::Initialize(context, *child_filter);
 	return make_uniq<SelectivityOptionalFilterState>(std::move(child_filter_state), this->n_vectors_to_check,
 	                                                 this->selectivity_threshold);
 }
-optional_ptr<SelectivityOptionalFilterState>
-SelectivityOptionalFilter::ExecuteChildFilter(TableFilterState &filter_state) const {
+
+idx_t SelectivityOptionalFilter::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
+                                                 TableFilterState &filter_state, const idx_t scan_count,
+                                                 idx_t &approved_tuple_count) const {
 	auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
+
 	if (state.stats.IsActive()) {
-		return &state;
+		const idx_t approved_before = approved_tuple_count;
+		const idx_t accepted_count = ColumnSegment::FilterSelection(
+		    sel, vector, vdata, *child_filter, *state.child_state, scan_count, approved_tuple_count);
+
+		state.stats.Update(accepted_count, approved_before);
+		return accepted_count;
 	}
-	return nullptr;
+	return scan_count;
 }
 
 unique_ptr<TableFilter> SelectivityOptionalFilter::Copy() const {
