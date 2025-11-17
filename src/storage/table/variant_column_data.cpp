@@ -442,7 +442,17 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(RowGroup &row_gr
 		return std::move(checkpoint_state);
 	}
 
-	auto shredded_type = GetShreddedType();
+	auto &table_info = row_group.GetTableInfo();
+	auto &db = table_info.GetDB();
+	auto &config_options = DBConfig::Get(db).options;
+
+	LogicalType shredded_type;
+	if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
+		shredded_type = config_options.force_variant_shredding;
+	} else {
+		shredded_type = GetShreddedType();
+	}
+
 	D_ASSERT(shredded_type.id() == LogicalTypeId::STRUCT);
 	auto &type_entries = StructType::GetChildTypes(shredded_type);
 	if (type_entries.size() == 2) {

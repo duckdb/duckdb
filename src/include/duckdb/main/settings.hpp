@@ -743,6 +743,17 @@ struct ForceCompressionSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ForceVariantShredding {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "force_variant_shredding";
+	static constexpr const char *Description =
+	    "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct HomeDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "home_directory";
