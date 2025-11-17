@@ -95,6 +95,7 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 		MiniZStreamWrapper::Close();
 	} catch (std::exception &ex) {
 		if (file && file->child_handle) {
+			// FIXME: make more log context available here.
 			ErrorData data(ex);
 			DUCKDB_LOG_ERROR(file->child_handle->logger,
 			                 "MiniZStreamWrapper::~MiniZStreamWrapper()\t\t" + data.Message())

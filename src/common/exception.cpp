@@ -334,6 +334,7 @@ InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "
 }
 
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
+	// FIXME: Log error here
 }
 
 InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
