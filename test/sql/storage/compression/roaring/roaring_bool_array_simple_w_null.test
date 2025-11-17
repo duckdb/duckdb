@@ -13,11 +13,13 @@ CREATE TABLE test (a BOOL);
 
 # 82 values stored in the Array Container - with nulls
 statement ok
-INSERT INTO test SELECT case
+INSERT INTO test SELECT
+case
     when i%50=0 then false
     when i%25=0 then true
     else NULL
-end FROM range(0,10_000) tbl(i);
+end
+FROM range(0,10_000) tbl(i);
 
 statement ok
 checkpoint

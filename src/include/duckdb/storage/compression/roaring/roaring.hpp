@@ -635,34 +635,45 @@ public:
 
 static void BitPackBooleansNoNulls(data_ptr_t dst, const bool *src, const idx_t count) {
 	uint8_t byte = 0;
+	int bit_pos = 0;
 
 	for (idx_t i = 0; i < count; i++) {
-		byte |= src[i] << (i % 8);
-		if ((i + 1) % 8 == 0) {
-			*dst = byte; // write
+		byte |= src[i] << bit_pos;
+		bit_pos++;
+
+		// flush
+		if (bit_pos == 8) {
+			*dst++ = byte;
 			byte = 0;
-			dst++;
+			bit_pos = 0;
 		}
 	}
 	// flush last partial byte
-	if (count % 8 != 0) {
+	if (bit_pos != 0) {
 		*dst = byte;
 	}
 }
 static void BitPackBooleansNoNulls(data_ptr_t dst, const bool *src, const idx_t count, BaseStatistics *statistics) {
 	uint8_t byte = 0;
+	int bit_pos = 0;
 
 	for (idx_t i = 0; i < count; i++) {
-		statistics->UpdateNumericStats<bool>(src[i]);
-		byte |= src[i] << (i % 8);
-		if ((i + 1) % 8 == 0) {
-			*dst = byte; // write
+		const uint8_t src_bit = src[i];
+
+		statistics->UpdateNumericStats<bool>(src_bit);
+
+		byte |= src_bit << bit_pos;
+		bit_pos++;
+
+		// flush
+		if (bit_pos == 8) {
+			*dst++ = byte;
 			byte = 0;
-			dst++;
+			bit_pos = 0;
 		}
 	}
 	// flush last partial byte
-	if (count % 8 != 0) {
+	if (bit_pos != 0) {
 		*dst = byte;
 	}
 }
@@ -670,24 +681,32 @@ static void BitPackBooleansWithNulls(data_ptr_t dst, const bool *src, const idx_
                                      const ValidityMask &validity_mask, BaseStatistics *statistics) {
 	bool last_bit_value = false;
 	uint8_t byte = 0;
+	int bit_pos = 0;
+
 	for (idx_t i = 0; i < count; i++) {
-		if (!validity_mask.RowIsValid(i)) {
-			// Copy last bit to form longer runs for RLE
-			byte |= last_bit_value << (i % 8);
-		} else {
-			byte |= src[i] << (i % 8);
-			last_bit_value = src[i];
-			statistics->UpdateNumericStats<bool>(src[i]);
+		const uint8_t valid = validity_mask.RowIsValid(i);
+		const uint8_t src_bit = valid ? src[i] : 0;
+		const uint8_t bit = (src_bit & valid) | (last_bit_value & ~valid);
+
+		byte |= bit << bit_pos;
+		bit_pos++;
+
+		// update last_bit_value only if valid
+		last_bit_value = (src_bit & valid) | (last_bit_value & ~valid);
+
+		if (valid) {
+			statistics->UpdateNumericStats<bool>(src_bit & valid);
 		}
 
-		if ((i + 1) % 8 == 0) {
-			*dst = byte; // write
+		// flush
+		if (bit_pos == 8) {
+			*dst++ = byte;
 			byte = 0;
-			dst++;
+			bit_pos = 0;
 		}
 	}
 	// flush last partial byte
-	if (count % 8 != 0) {
+	if (bit_pos != 0) {
 		*dst = byte;
 	}
 }
@@ -696,21 +715,28 @@ static void BitPackBooleansWithNulls(data_ptr_t dst, const bool *src, const idx_
                                      const ValidityMask &validity_mask) {
 	bool last_bit_value = false;
 	uint8_t byte = 0;
-	for (idx_t i = 0; i < count; i++) {
-		if (!validity_mask.RowIsValid(i)) {
-			// Copy last bit to form longer runs for RLE
-			byte |= last_bit_value << (i % 8);
-		} else {
-			byte |= src[i] << (i % 8);
-			last_bit_value = src[i];
-		}
+	int bit_pos = 0;
 
-		if ((i + 1) % 8 == 0) {
-			dst++;
+	for (idx_t i = 0; i < count; i++) {
+		const uint8_t valid = validity_mask.RowIsValid(i);
+		const uint8_t src_bit = valid ? src[i] : 0;
+		const uint8_t bit = (src_bit & valid) | (last_bit_value & ~valid);
+
+		byte |= bit << bit_pos;
+		bit_pos++;
+
+		// update last_bit_value only if valid
+		last_bit_value = (src_bit & valid) | (last_bit_value & ~valid);
+
+		// flush
+		if (bit_pos == 8) {
+			*dst++ = byte;
+			byte = 0;
+			bit_pos = 0;
 		}
 	}
 	// flush last partial byte
-	if (count % 8 != 0) {
+	if (bit_pos != 0) {
 		*dst = byte;
 	}
 }

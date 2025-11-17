@@ -14,7 +14,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
+
 namespace duckdb {
 
 using bitpacking_width_t = uint8_t;
