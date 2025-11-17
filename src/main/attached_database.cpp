@@ -11,6 +11,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 
 namespace duckdb {
 

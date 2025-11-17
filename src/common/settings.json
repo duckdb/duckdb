@@ -156,6 +156,17 @@
         "scope": "global"
     },
     {
+        "name": "block_allocator_memory",
+        "description": "Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced).",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
         "type": "UBIGINT",

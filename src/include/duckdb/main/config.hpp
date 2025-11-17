@@ -40,6 +40,7 @@
 
 namespace duckdb {
 
+class BlockAllocator;
 class BufferManager;
 class BufferPool;
 class CastFunctionSet;
@@ -223,6 +224,8 @@ struct DBConfigOptions {
 #endif
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
+	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
+	idx_t block_allocator_size = 0;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -250,6 +253,8 @@ public:
 	unique_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
+	//! The block allocator used by the system
+	unique_ptr<BlockAllocator> block_allocator;
 	//! Database configuration options
 	DBConfigOptions options;
 	//! Extensions made to the parser

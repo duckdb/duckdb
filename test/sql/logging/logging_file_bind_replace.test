@@ -30,6 +30,11 @@ SELECT message FROM duckdb_logs_parsed('QueryLog') WHERE starts_with(message, 'S
 ----
 SELECT 1 as a
 
+query I
+SELECT message FROM duckdb_logs_parsed('querylog') WHERE starts_with(message, 'SELECT 1');
+----
+SELECT 1 as a
+
 statement ok
 CALL truncate_duckdb_logs();
 
