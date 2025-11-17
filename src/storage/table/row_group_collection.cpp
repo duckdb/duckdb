@@ -858,7 +858,6 @@ struct CollectionCheckpointState {
 	vector<unique_ptr<RowGroupWriter>> writers;
 	vector<RowGroupWriteData> write_data;
 	TableStatistics &global_stats;
-	mutex write_lock;
 };
 
 class BaseCheckpointTask : public BaseExecutorTask {

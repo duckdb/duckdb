@@ -43,6 +43,7 @@ shared_ptr<ColumnData> ColumnCheckpointState::GetFinalResult() {
 	result_column->SetCount(original_column.count.load());
 	return result_column;
 }
+
 PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                                      BlockManager &block_manager)
     : PartialBlock(state, block_manager, segment.block) {
