@@ -56,7 +56,7 @@ The DuckDB parser has been overridden
 statement error
 overri
 ----
-Parser Error: Parser override could not parse this query. (Original error: Parser overridden, query equaled "overri" but not "override")
+Parser Error: Parser override could not parse this query. Original error: Parser overridden, query equaled "overri" but not "override"
 
 statement error
 SELECT 1;
