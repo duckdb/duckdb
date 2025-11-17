@@ -677,7 +677,7 @@ typedef struct {
 	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
 #endif
 
-// API to manipulate logger.
+// API to register custom log storage.
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_log_storage (*duckdb_create_log_storage)();
 	void (*duckdb_destroy_log_storage)(duckdb_log_storage storage);

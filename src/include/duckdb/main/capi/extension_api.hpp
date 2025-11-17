@@ -592,7 +592,7 @@ typedef struct {
 	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file_handle);
 	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file_handle);
 	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
-	// API to manipulate logger.
+	// API to register custom log storage.
 
 	duckdb_log_storage (*duckdb_create_log_storage)();
 	void (*duckdb_destroy_log_storage)(duckdb_log_storage storage);

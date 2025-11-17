@@ -887,6 +887,7 @@ typedef struct _duckdb_log_storage {
 	void *internal_ptr;
 } * duckdb_log_storage;
 
+//! This function is missing the logging context which may be added later, or in a secondary function.
 typedef void (*duckdb_logger_write_log_entry_t)(duckdb_timestamp timestamp, const char *level, const char *log_type,
                                                 const char *log_message);
 
@@ -6097,7 +6098,7 @@ DUCKDB_C_API void duckdb_destroy_catalog_entry(duckdb_catalog_entry *entry);
 // Logging
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-// Functions to configure the logging of DuckDB.
+// Functions that expose the log storage and allow the configuration of a custom logger
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
