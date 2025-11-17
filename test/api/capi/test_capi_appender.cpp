@@ -1433,8 +1433,12 @@ TEST_CASE("Test the appender with parallel appends and multiple data types in th
 				if (has_error(duckdb_appender_end_row(t_app), success, "failed to append end row")) {
 					return;
 				}
+
+				// Clean up.
+				duckdb_destroy_value(&decimal_value);
 			}
 
+			// COMMIT and clean up.
 			if (has_error(duckdb_query(t_conn, "COMMIT", &t_ret), success, "failed to commit transaction")) {
 				return;
 			}
