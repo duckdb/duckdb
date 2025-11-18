@@ -58,6 +58,9 @@ USE db
 statement ok
 DETACH tmp
 
+statement ok
+SET threads TO 1
+
 query II
 EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2
 ----
