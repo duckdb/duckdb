@@ -43,7 +43,7 @@ public:
 private:
 	DatabaseInstance &db;
 	case_insensitive_map_t<read_policy_factory_t> policies;
-	mutex lock;
+	mutex policy_lock;
 };
 
 } // namespace duckdb

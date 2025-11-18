@@ -23,7 +23,7 @@ ReadPolicyRegistry::~ReadPolicyRegistry() {
 }
 
 void ReadPolicyRegistry::RegisterPolicy(const string &name, read_policy_factory_t factory) {
-	lock_guard<mutex> guard(lock);
+	lock_guard<mutex> guard(policy_lock);
 	auto name_lower = StringUtil::Lower(name);
 	if (policies.find(name_lower) != policies.end()) {
 		throw InvalidInputException("Read policy '%s' is already registered", name);
@@ -32,7 +32,7 @@ void ReadPolicyRegistry::RegisterPolicy(const string &name, read_policy_factory_
 }
 
 unique_ptr<ReadPolicy> ReadPolicyRegistry::CreatePolicy(const string &name) {
-	lock_guard<mutex> guard(lock);
+	lock_guard<mutex> guard(policy_lock);
 	auto name_lower = StringUtil::Lower(name);
 	auto it = policies.find(name_lower);
 	if (it == policies.end()) {
@@ -43,7 +43,7 @@ unique_ptr<ReadPolicy> ReadPolicyRegistry::CreatePolicy(const string &name) {
 }
 
 bool ReadPolicyRegistry::HasPolicy(const string &name) {
-	lock_guard<mutex> guard(lock);
+	lock_guard<mutex> guard(policy_lock);
 	auto name_lower = StringUtil::Lower(name);
 	return policies.find(name_lower) != policies.end();
 }
