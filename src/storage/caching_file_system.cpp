@@ -109,8 +109,9 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	}
 
 	// Use the read policy to calculate how many bytes to read and cache
+	const idx_t file_size = GetFileSize();
 	const ReadPolicyResult policy_result =
-	    read_policy->CalculateBytesToRead(nr_bytes, location, start_location_of_next_range);
+	    read_policy->CalculateBytesToRead(nr_bytes, location, file_size, start_location_of_next_range);
 	const idx_t actual_read_location = policy_result.read_location;
 	const idx_t actual_read_bytes = policy_result.read_bytes;
 

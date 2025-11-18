@@ -24,8 +24,8 @@ bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length)
 
 } // namespace
 
-ReadPolicyResult DefaultReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t location,
-                                                         optional_idx start_location_of_next_range) {
+ReadPolicyResult DefaultReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t location, idx_t file_size,
+                                                          optional_idx start_location_of_next_range) {
 	idx_t new_nr_bytes = nr_bytes;
 	if (start_location_of_next_range.IsValid()) {
 		const idx_t nr_bytes_to_be_added = start_location_of_next_range.GetIndex() - location - nr_bytes;
@@ -34,11 +34,15 @@ ReadPolicyResult DefaultReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t l
 			new_nr_bytes = nr_bytes + nr_bytes_to_be_added;
 		}
 	}
+	// Make sure we don't read past the end of the file
+	if (location + new_nr_bytes > file_size) {
+		new_nr_bytes = file_size - location;
+	}
 	return {location, new_nr_bytes};
 }
 
-ReadPolicyResult AlignedReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t location,
-                                                         optional_idx start_location_of_next_range) {
+ReadPolicyResult AlignedReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t location, idx_t file_size,
+                                                          optional_idx start_location_of_next_range) {
 	// Use the hardcoded 2MiB block size
 	const idx_t block_size_to_use = ALIGNED_READ_BLOCK_SIZE;
 
@@ -49,7 +53,12 @@ ReadPolicyResult AlignedReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t l
 	const idx_t requested_end = location + nr_bytes;
 
 	// Align the end location up to block boundary
-	const idx_t aligned_end = ((requested_end + block_size_to_use - 1) / block_size_to_use) * block_size_to_use;
+	idx_t aligned_end = ((requested_end + block_size_to_use - 1) / block_size_to_use) * block_size_to_use;
+
+	// Don't read past the end of the file
+	if (aligned_end > file_size) {
+		aligned_end = file_size;
+	}
 
 	// Calculate aligned bytes to read
 	idx_t aligned_nr_bytes = aligned_end - aligned_start;
@@ -62,11 +71,15 @@ ReadPolicyResult AlignedReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t l
 			// Use the default policy logic to potentially fill the gap
 			DefaultReadPolicy default_policy;
 			ReadPolicyResult default_result =
-			    default_policy.CalculateBytesToRead(nr_bytes, location, start_location_of_next_range);
+			    default_policy.CalculateBytesToRead(nr_bytes, location, file_size, start_location_of_next_range);
 			// But still align it
 			const idx_t default_end = default_result.read_location + default_result.read_bytes;
-			const idx_t aligned_default_end =
+			idx_t aligned_default_end =
 			    ((default_end + block_size_to_use - 1) / block_size_to_use) * block_size_to_use;
+			// Don't align past the file size
+			if (aligned_default_end > file_size) {
+				aligned_default_end = file_size;
+			}
 			aligned_nr_bytes = aligned_default_end - aligned_start;
 			// Make sure we don't exceed the next range
 			if (aligned_start + aligned_nr_bytes > next_range_start) {

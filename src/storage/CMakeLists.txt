@@ -1,11 +1,40 @@
-add_subdirectory(buffer) add_subdirectory(checkpoint) add_subdirectory(compression) add_subdirectory(metadata)
-    add_subdirectory(serialization) add_subdirectory(statistics) add_subdirectory(table)
+add_subdirectory(buffer)
+add_subdirectory(checkpoint)
+add_subdirectory(compression)
+add_subdirectory(metadata)
+add_subdirectory(serialization)
+add_subdirectory(statistics)
+add_subdirectory(table)
 
-        add_library_unity(
-            duckdb_storage OBJECT arena_allocator.cpp buffer_manager.cpp caching_file_system.cpp read_policy
-                .cpp read_policy_registry.cpp checkpoint_manager.cpp temporary_memory_manager.cpp block.cpp data_pointer
-                .cpp data_table.cpp external_file_cache.cpp index.cpp local_storage.cpp magic_bytes.cpp storage_manager
-                .cpp standard_buffer_manager.cpp temporary_file_manager.cpp table_index_list.cpp write_ahead_log
-                .cpp open_file_storage_extension.cpp optimistic_data_writer.cpp partial_block_manager
-                .cpp single_file_block_manager.cpp storage_info.cpp storage_lock.cpp wal_replay.cpp)
-            set(ALL_OBJECT_FILES $ {ALL_OBJECT_FILES} $<TARGET_OBJECTS : duckdb_storage> PARENT_SCOPE)
+add_library_unity(
+  duckdb_storage
+  OBJECT
+  arena_allocator.cpp
+  buffer_manager.cpp
+  caching_file_system.cpp
+  read_policy.cpp
+  read_policy_registry.cpp
+  checkpoint_manager.cpp
+  temporary_memory_manager.cpp
+  block.cpp
+  data_pointer.cpp
+  data_table.cpp
+  external_file_cache.cpp
+  index.cpp
+  local_storage.cpp
+  magic_bytes.cpp
+  storage_manager.cpp
+  standard_buffer_manager.cpp
+  temporary_file_manager.cpp
+  table_index_list.cpp
+  write_ahead_log.cpp
+  open_file_storage_extension.cpp
+  optimistic_data_writer.cpp
+  partial_block_manager.cpp
+  single_file_block_manager.cpp
+  storage_info.cpp
+  storage_lock.cpp
+  wal_replay.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage>
+    PARENT_SCOPE)
