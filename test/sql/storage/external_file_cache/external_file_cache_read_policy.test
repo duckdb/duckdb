@@ -1,0 +1,35 @@
+#name : test / sql / storage / external_file_cache / external_file_cache_read_policy.test
+#description : Test the external file cache read policy setting
+#group : [external_file_cache]
+
+#Check the default value
+query I SELECT current_setting('external_file_cache_read_policy');
+----default
+
+#Set to ALIGNED
+  statement ok SET external_file_cache_read_policy = 'ALIGNED';
+
+query I SELECT current_setting('external_file_cache_read_policy');
+----aligned
+
+#Set back to DEFAULT
+      statement ok SET external_file_cache_read_policy = 'DEFAULT';
+
+query I SELECT current_setting('external_file_cache_read_policy');
+----default
+
+#Test case insensitivity
+  statement ok SET external_file_cache_read_policy = 'AlIgNeD';
+
+query I SELECT current_setting('external_file_cache_read_policy');
+----aligned
+
+#Reset to default
+      statement ok RESET external_file_cache_read_policy;
+
+query I SELECT current_setting('external_file_cache_read_policy');
+----default
+
+#Test invalid value
+  statement error SET external_file_cache_read_policy = 'INVALID';
+----Conversion Error : Could not convert string 'INVALID' to ReadPolicyType

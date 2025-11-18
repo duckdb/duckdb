@@ -22,6 +22,7 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
+#include "duckdb/storage/read_policy_registry.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -290,6 +291,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
 	result_set_manager = make_uniq<ResultSetManager>(*this);
+	read_policy_registry = make_uniq<ReadPolicyRegistry>(*this);
 
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
@@ -387,6 +389,10 @@ ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 
 ResultSetManager &DatabaseInstance::GetResultSetManager() {
 	return *result_set_manager;
+}
+
+ReadPolicyRegistry &DatabaseInstance::GetReadPolicyRegistry() {
+	return *read_policy_registry;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {

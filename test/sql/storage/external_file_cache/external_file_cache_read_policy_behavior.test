@@ -1,0 +1,61 @@
+#name : test / sql / storage / external_file_cache / external_file_cache_read_policy_behavior.test
+#description : Test that different read policies work correctly with actual file reads
+#group : [external_file_cache]
+
+require parquet
+
+#Create a test parquet file
+    statement ok
+    copy(select range % 100000 as id, range * 2 as value from range(500_000)) to
+    '__TEST_DIR__/test_read_policy.parquet'(row_group_size 500_000);
+
+#Test with DEFAULT read policy
+statement ok SET external_file_cache_read_policy = 'DEFAULT';
+
+statement ok SET prefetch_all_parquet_files = true;
+
+statement ok CREATE VIEW test_data AS FROM '__TEST_DIR__/test_read_policy.parquet';
+
+#we require that the last modified time is more than 10 seconds in the past
+sleep 11 seconds
+
+#Read with DEFAULT policy
+        query I SELECT
+        COUNT(*) FROM test_data WHERE id < 1000;
+----1000
+
+#Verify cache was populated
+    query I SELECT
+    COUNT(*) > 0 FROM duckdb_external_file_cache();
+----true
+
+#Clear cache
+  statement ok SET enable_external_file_cache = false;
+
+statement ok SET enable_external_file_cache = true;
+
+#Now test with ALIGNED read policy
+statement ok SET external_file_cache_read_policy = 'ALIGNED';
+
+statement ok DROP VIEW test_data;
+
+statement ok CREATE VIEW test_data AS FROM '__TEST_DIR__/test_read_policy.parquet';
+
+sleep 11 seconds
+
+#Read with ALIGNED policy
+        query I SELECT
+        COUNT(*) FROM test_data WHERE id < 1000;
+----1000
+
+#Verify cache was populated with ALIGNED policy
+    query I SELECT
+    COUNT(*) > 0 FROM duckdb_external_file_cache();
+----true
+
+#Verify we can read the same data correctly
+    query I SELECT SUM(value) FROM test_data WHERE id < 100;
+----9900
+
+#Clean up
+  statement ok DROP VIEW test_data;

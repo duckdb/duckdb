@@ -15,6 +15,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/read_policy.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,7 @@ class BufferHandle;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
+class DatabaseInstance;
 class CachingFileSystem;
 
 struct CachingFileHandle {
@@ -99,6 +101,9 @@ private:
 
 	//! Current position (if non-seeking reads)
 	idx_t position;
+
+	//! Read policy that determines how many bytes to read and cache
+	unique_ptr<ReadPolicy> read_policy;
 };
 
 //! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.
@@ -124,6 +129,8 @@ private:
 	FileSystem &file_system;
 	//! The External File Cache that caches the files
 	ExternalFileCache &external_file_cache;
+	//! Reference to the database instance to access config
+	DatabaseInstance &db;
 };
 
 } // namespace duckdb
