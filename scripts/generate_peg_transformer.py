@@ -20,10 +20,8 @@ ENUM_RULE_REGEX = re.compile(r'RegisterEnum<[^>]+>\s*\(\s*"(\w+)"\s*,')
 # Matches: REGISTER_TRANSFORM(TransformRuleName)
 REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)\s*\)")
 
-EXCLUDED_RULES = {
-    "FunctionType",
-    "IfExists"
-}
+EXCLUDED_RULES = {"FunctionType", "IfExists"}
+
 
 def find_grammar_rules(grammar_path):
     """
@@ -58,7 +56,9 @@ def find_grammar_rules(grammar_path):
 
     return all_rules_by_file
 
+
 # --- Phase 2: Find all Transformer Implementations ---
+
 
 def find_transformer_rules(transformer_path):
     """
@@ -94,7 +94,9 @@ def find_transformer_rules(transformer_path):
 
     return transformer_rules
 
+
 # --- Phase 3 & 4: Find Enum Rules and Registrations ---
+
 
 def find_factory_registrations(factory_file_path):
     """
@@ -131,7 +133,9 @@ def find_factory_registrations(factory_file_path):
 
     return enum_rules, registered_rules
 
+
 # --- NEW: Phase 5: Code Generation ---
+
 
 def guess_return_type(rule_name):
     """
@@ -142,15 +146,18 @@ def guess_return_type(rule_name):
     # Default to a common base class for expressions
     return "unique_ptr<ParsedExpression>"
 
+
 def generate_declaration_stub(rule_name):
     """Generates the C++ method declaration (for the .hpp file)."""
     return f"""// TODO: Verify this return type is correct
     static unique_ptr<SQLStatement> Transform{rule_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 """
 
+
 def generate_registration_stub(rule_name):
     """Generates the C++ registration line (for peg_transformer_factory.cpp)."""
     return f"REGISTER_TRANSFORM(Transform{rule_name});"
+
 
 def generate_implementation_stub(rule_name):
     """Generates the C++ method implementation (for the transform_...cpp file)."""
@@ -160,6 +167,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform{rule_name}(PEGTransfor
 	throw NotImplementedException("Transform{rule_name} has not yet been implemented");
 }}
 """
+
 
 def generate_code_for_missing_rules(generation_queue):
     """
@@ -172,7 +180,7 @@ def generate_code_for_missing_rules(generation_queue):
     print("\n--- Code Generation: Missing Stubs ---")
     print("Copy and paste the code below into the correct files.")
 
-    rules_to_generate = [] # List of (rule_name, cpp_filename)
+    rules_to_generate = []  # List of (rule_name, cpp_filename)
     for cpp_filename, rules in generation_queue.items():
         for rule in rules:
             rules_to_generate.append((rule, cpp_filename))
@@ -197,25 +205,19 @@ def generate_code_for_missing_rules(generation_queue):
         print(generate_implementation_stub(rule_name))
         print(f"--- End of {rule_name} ---\n")
 
+
 def main():
     """
     Main script to find rules, compare them, and print a report.
     """
-    parser = argparse.ArgumentParser(
-        description="Check transformer coverage and optionally generate stubs."
-    )
+    parser = argparse.ArgumentParser(description="Check transformer coverage and optionally generate stubs.")
     parser.add_argument(
         "-g",
         "--generate",
         action="store_true",
-        help="Generate C++ stubs (declaration, registration, implementation) for missing rules."
+        help="Generate C++ stubs (declaration, registration, implementation) for missing rules.",
     )
-    parser.add_argument(
-        "-s",
-        "--skip-found",
-        action="store_true",
-        help="Skip output of [ FOUND ] rules"
-    )
+    parser.add_argument("-s", "--skip-found", action="store_true", help="Skip output of [ FOUND ] rules")
 
     args = parser.parse_args()
 
