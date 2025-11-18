@@ -513,7 +513,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	ErrorData error;
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
-		// column wasn't found, try the unified two-step alias binding
+		// column wasn't found
 		if (ExpressionBinder::IsPotentialAlias(col_ref_p)) {
 			BindResult alias_result;
 			auto found_alias = TryResolveAliasReference(col_ref_p, depth, root_expression, alias_result);
