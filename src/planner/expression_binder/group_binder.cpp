@@ -80,7 +80,8 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	return BindSelectRef(index - 1);
 }
 
-bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression, BindResult &result) {
+bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
+                                           BindResult &result) {
 	// failed to bind the column and the node is the root expression with depth = 0
 	// check if refers to an alias in the select clause
 
