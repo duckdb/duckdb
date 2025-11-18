@@ -45,7 +45,6 @@ bool WhereBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
 	return false;
 }
 
-
 string WhereBinder::UnsupportedAggregateMessage() {
 	return "WHERE clause cannot contain aggregates!";
 }

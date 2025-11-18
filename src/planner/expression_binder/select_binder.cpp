@@ -44,7 +44,6 @@ bool SelectBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
 	return node.bind_state.alias_map.find(alias_name) != node.bind_state.alias_map.end();
 }
 
-
 unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &column_name) {
 	auto alias_entry = node.bind_state.alias_map.find(column_name);
 	if (alias_entry != node.bind_state.alias_map.end()) {
