@@ -38,6 +38,13 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 	return true;
 }
 
+bool SelectBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
+	// Using `back()` to support both qualified and unqualified aliasing
+	auto alias_name = colref.column_names.back();
+	return node.bind_state.alias_map.find(alias_name) != node.bind_state.alias_map.end();
+}
+
+
 unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &column_name) {
 	auto alias_entry = node.bind_state.alias_map.find(column_name);
 	if (alias_entry != node.bind_state.alias_map.end()) {

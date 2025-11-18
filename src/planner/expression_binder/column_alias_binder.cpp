@@ -41,11 +41,8 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 	return true;
 }
 
-bool ColumnAliasBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
-	if (!colref.IsQualified()) {
-		return bind_state.alias_map.find(colref.column_names[0]) != bind_state.alias_map.end();
-	}
-	return false;
+bool ColumnAliasBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
+	return bind_state.alias_map.find(colref.column_names.back()) != bind_state.alias_map.end();
 }
 
 } // namespace duckdb

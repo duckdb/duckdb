@@ -18,6 +18,7 @@ public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
 	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) override;
+	bool DoesColumnAliasExist(const ColumnRefExpression &colref) override;
 
 protected:
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
