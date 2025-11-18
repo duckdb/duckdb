@@ -194,7 +194,7 @@ string VariantStats::ToString(const BaseStatistics &stats) {
 	if (data.is_shredded) {
 		result += ", shredding: {";
 		result += StringUtil::Format("typed_value_type: %s, ", ToStructuredType(stats.child_stats[1].type).ToString());
-		result += StringUtil::Format("stats: %s", stats.child_stats[1].ToString());
+		result += StringUtil::Format("stats:%s", stats.child_stats[1].ToString());
 		result += "}";
 	}
 	return result;

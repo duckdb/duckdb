@@ -1,0 +1,83 @@
+# name: test/sql/storage/types/variant/variant_shredding.test
+# group: [variant]
+
+load __TEST_DIR__/variant_shredding.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'INTEGER';
+
+# ------------------------------ INTEGER Shredding ------------------------------
+
+statement ok
+create table shredded_integer (col VARIANT)
+
+# Insert values 0-99
+statement ok
+insert into shredded_integer select (i % 100)::INTEGER from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# untyped_value_index is entirely NULL, indicating the VARIANT is fully shredded
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('shredded_integer');
+----
+<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Has Null: true, Has No Null: true\].*typed_value: \[Min: 0, Max: 99\]\[Has Null: false, Has No Null: true\]\}.*
+
+# ------------------------------ Nothing is shredded ------------------------------
+
+statement ok
+create table nothing_is_shredded(col VARIANT);
+
+# Insert values true/false
+statement ok
+insert into nothing_is_shredded select (i % 2)::BOOL from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# untyped_value_index is entirely non-NULL, indicating none of the VARIANT values are shredded
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('nothing_is_shredded');
+----
+<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Min: 1, Max: 1\]\[Has Null: false, Has No Null: true\].*
+
+# ------------------------------ Partially shredded primitive ------------------------------
+
+statement ok
+create table partial_primitive_shredding(col VARIANT);
+
+# Insert INTEGER values
+statement ok
+insert into partial_primitive_shredding select 42::INTEGER from range(122880 // 2) t(i)
+
+# Insert values true/false
+statement ok
+insert into partial_primitive_shredding select (i % 2)::BOOL from range(122880 // 2) t(i)
+
+statement ok
+checkpoint
+
+# untyped_value_index contains NULL, indicating at least some of the VARIANT values are shredded
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partial_primitive_shredding');
+----
+<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Min: 1, Max: 1\]\[Has Null: true, Has No Null: true\]
+
+# typed_value contains NULL, indicating not everything is shredded
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partial_primitive_shredding');
+----
+<REGEX>:.*is_shredded: true.*typed_value:.*\[Min: 42, Max: 42\]\[Has Null: true, Has No Null: true\]\}
+
+# ------------------------------ Fully shredded OBJECT ------------------------------
+
+# ------------------------------ Partially shredded OBJECT ------------------------------
+
+# ------------------------------ Fully shredded LIST ------------------------------
+
+# ------------------------------ Partially shredded LIST ------------------------------
