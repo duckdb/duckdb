@@ -25,7 +25,9 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 	auto alias_index = entry->second;
 	// Simple way to prevent circular aliasing (`SELECT alias.y as x, alias.x as y;`)
 	if (alias_index >= node.bound_column_count) {
-		throw BinderException(colref, "alias.%s references an alias defined after the current expression", alias_name);
+		throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
+		                      "cannot be referenced before it is defined",
+		                      colref.column_names[0]);
 	}
 
 	if (node.bind_state.AliasHasSubquery(alias_index)) {
