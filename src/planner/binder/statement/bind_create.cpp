@@ -225,6 +225,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		auto &storage_manager = attached.GetStorageManager();
 		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
 		store_types |= storage_manager.InMemory() || storage_manager.GetStorageVersion() >= since;
+	} else {
+		// If it does not have a storage manager, we check it from the catalog.
+		auto catalog_type = catalog.GetCatalogType();
+		store_types = catalog_type == "ducklake";
 	}
 
 	// try to bind each of the included functions
