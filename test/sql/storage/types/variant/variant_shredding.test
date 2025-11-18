@@ -106,23 +106,23 @@ SET force_variant_shredding = 'STRUCT(a INTEGER, b BOOLEAN)';
 statement ok
 create table partially_shredded_object(col VARIANT);
 
-#statement ok
-#insert into partially_shredded_object select {
-#	'a': 'test',
-#	'b': true
-#} from range(122880) t(i)
+statement ok
+insert into partially_shredded_object select {
+	'a': 'test',
+	'b': true
+} from range(122880) t(i)
 
-#statement ok
-#checkpoint
+statement ok
+checkpoint
 
-## Now the 'typed_value' for 'a' is "Has Null: true", because at least *some* of the values are not an OBJECT with an 'a INTEGER' field
-#query I
-#select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partially_shredded_object');
-#----
-#<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+# Now the 'typed_value' for 'a' is "Has Null: true", because at least *some* of the values are not an OBJECT with an 'a INTEGER' field
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partially_shredded_object');
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
 
-#statement ok
-#delete from partially_shredded_object;
+statement ok
+delete from partially_shredded_object;
 
 statement ok
 insert into partially_shredded_object select {
@@ -133,12 +133,72 @@ insert into partially_shredded_object select {
 statement ok
 checkpoint
 
-# Difference now is that 'untyped_value_index' is: "Has Null: false"
+# The added difference is that 'untyped_value_index' is now: "Has Null: false"
+# Because we have an OBJECT(d 42) in the 'unshredded' column for every row now
 query I
 select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partially_shredded_object');
 ----
-<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: false, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: false, Has No Null: true\].*typed_value.*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
 
-# ------------------------------ Fully shredded LIST ------------------------------
+# ------------------------------ Fully shredded ARRAY ------------------------------
 
-# ------------------------------ Partially shredded LIST ------------------------------
+statement ok
+SET force_variant_shredding = 'VARCHAR[]';
+
+statement ok
+create table fully_shredded_array(col VARIANT);
+
+statement ok
+insert into fully_shredded_array select ['a', 'this is a long string', 'b'] from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# typed_value does not contain any NULLs now, because all values are of type VARCHAR[]
+# FIXME: why does the 'untyped_value_index' say "Has No Null: true" ?
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('fully_shredded_array');
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*
+
+# ------------------------------ Partially shredded ARRAY ------------------------------
+
+statement ok
+SET force_variant_shredding = 'VARCHAR[]';
+
+statement ok
+create table partially_shredded_array(col VARIANT);
+
+statement ok
+insert into partially_shredded_array select [(i % 100)::INTEGER::VARIANT, 'this is a long string', 'b' || i] from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# Both 'untyped_value_index' and 'typed_value' have "Has No Null: true"
+# because there are both shredded and unshredded list children
+# FIXME: the root level 'untyped_value_index' should not contain NULL, because all values are of type ARRAY
+# Only the child elements aren't all of type VARCHAR, so the child's 'untyped_value_index' should contain NULL values
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partially_shredded_array');
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*typed_value.*\[Has Null: true, Has No Null: true\]\}.*
+
+statement ok
+delete from partially_shredded_array;
+
+statement ok
+insert into partially_shredded_array select ['hello', 'world'] from range(122880 // 2) t(i)
+
+statement ok
+insert into partially_shredded_array select 42::INTEGER from range(122880 // 2) t(i)
+
+statement ok
+checkpoint
+
+# The children of the list do not contain nulls, but the list itself *does*,
+# because now there are unshredded rows containing the 42::INTEGER value
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partially_shredded_array');
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: 1, Max: 1\]\[Has Null: true, Has No Null: true\].*typed_value.*\[Has Null: false, Has No Null: true\]\}\[Has Null: false, Has No Null: true\].*
