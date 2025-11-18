@@ -35,9 +35,7 @@ protected:
 	BindResult BindSelectRef(idx_t entry);
 	BindResult BindColumnRef(ColumnRefExpression &expr);
 	BindResult BindConstant(ConstantExpression &expr);
-
-	// Two-step alias binding overrides for GROUP BY
-	bool TryBindRegularAlias(ColumnRefExpression &colref, idx_t depth, BindResult &result) override;
+	
 	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) override;
 
 	SelectNode &node;

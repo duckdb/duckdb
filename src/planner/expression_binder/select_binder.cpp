@@ -9,31 +9,6 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : BaseSelectBinder(binder, context, node, info) {
 }
 
-bool SelectBinder::TryBindRegularAlias(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
-	if (!colref.IsQualified()) {
-		auto &bind_state = node.bind_state;
-		auto alias_entry = node.bind_state.alias_map.find(colref.column_names[0]);
-		if (alias_entry != node.bind_state.alias_map.end()) {
-			// found entry!
-			auto index = alias_entry->second;
-			if (index >= node.bound_column_count) {
-				throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
-				                      "cannot be referenced before it is defined",
-				                      colref.column_names[0]);
-			}
-			if (bind_state.AliasHasSubquery(index)) {
-				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has a subquery."
-				                      " This is not yet supported.",
-				                      colref.column_names[0]);
-			}
-			auto copied_expression = node.bind_state.BindAlias(index);
-			result = BindExpression(copied_expression, depth, false);
-			return true;
-		}
-	}
-	return false;
-}
-
 bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
 	// must be a qualified alias.<name>
 	if (!ExpressionBinder::IsPotentialAlias(colref)) {
@@ -59,8 +34,7 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 		                      alias_name);
 	}
 	auto copied_unbound = node.bind_state.BindAlias(alias_index);
-	auto bound_expr = Bind(copied_unbound);
-	result = BindResult(std::move(bound_expr));
+	result = BindExpression(copied_unbound, depth, false);
 	return true;
 }
 

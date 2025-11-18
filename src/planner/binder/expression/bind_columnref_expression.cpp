@@ -516,21 +516,14 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		// column wasn't found, try the unified two-step alias binding
 		if (ExpressionBinder::IsPotentialAlias(col_ref_p)) {
 			BindResult alias_result;
-			auto found_alias = TryBindRegularAlias(col_ref_p, depth, alias_result);
+			auto found_alias = TryResolveAliasReference(col_ref_p, depth, alias_result);
 			if (found_alias) {
 				return alias_result;
 			}
-			if (col_ref_p.IsQualified()) {
-				// Meaning it's `alias.<name>`
-				found_alias = TryResolveAliasReference(col_ref_p, depth, alias_result);
-				if (found_alias) {
-					return alias_result;
-				}
-			} else {
-				auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
-				if (value_function) {
-					return BindExpression(value_function, depth);
-				}
+
+			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
+			if (value_function) {
+				return BindExpression(value_function, depth);
 			}
 		}
 		error.AddQueryLocation(col_ref_p);

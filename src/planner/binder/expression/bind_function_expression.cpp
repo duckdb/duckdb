@@ -109,7 +109,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 					// could not find the column - try to qualify the alias
 					BindResult result;
 					// The depth here isn't relevant, we're just checking for the existence of the alias
-					if (!TryBindRegularAlias(*colref, 0, result)) {
+					if (!TryResolveAliasReference(*colref, 0, result)) {
 						if (!allow_throw) {
 							return func;
 						}

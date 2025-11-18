@@ -80,14 +80,9 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	return BindSelectRef(index - 1);
 }
 
-bool GroupBinder::TryBindRegularAlias(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
+bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
 	// failed to bind the column and the node is the root expression with depth = 0
 	// check if refers to an alias in the select clause
-
-	// Regular aliases cannot be qualified
-	if (colref.IsQualified()) {
-		return false;
-	}
 
 	auto &alias_name = colref.GetColumnName();
 	auto entry = bind_state.alias_map.find(alias_name);
@@ -97,32 +92,11 @@ bool GroupBinder::TryBindRegularAlias(ColumnRefExpression &colref, idx_t depth, 
 	}
 	if (!in_root_group_ref) {
 		result = BindResult(BinderException(
-		    colref,
-		    "Alias with name \"%s\" exists, but aliases cannot be used as part of an expression in the GROUP BY",
-		    alias_name));
+			colref,
+			"Alias with name \"%s\" exists, but aliases cannot be used as part of an expression in the GROUP BY",
+			alias_name));
 		return true;
 	}
-	result = BindResult(BindSelectRef(entry->second));
-	if (!result.HasError()) {
-		group_alias_map[alias_name] = bind_index;
-	}
-	return true;
-}
-
-bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
-	// handle qualified alias.<name>
-	// In this implementation we don't restrict the alias to be used as a part of an expression
-	// We don't unify the two-step alias binding here as each one of them has its own semantics
-	if (!ExpressionBinder::IsPotentialAlias(colref)) {
-		return false;
-	}
-
-	const auto &alias_name = colref.column_names.back();
-	auto entry = bind_state.alias_map.find(alias_name);
-	if (entry == bind_state.alias_map.end()) {
-		return false;
-	}
-
 	result = BindResult(BindSelectRef(entry->second));
 	if (!result.HasError()) {
 		group_alias_map[alias_name] = bind_index;

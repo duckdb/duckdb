@@ -17,7 +17,6 @@ class SelectBinder : public BaseSelectBinder {
 public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
-	bool TryBindRegularAlias(ColumnRefExpression &colref, idx_t depth, BindResult &result) override;
 	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) override;
 
 protected:
