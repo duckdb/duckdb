@@ -1,10 +1,10 @@
-# name: test/sql/storage/compression/roaring/bool_fetch_row.test
+# name: test/sql/storage/compression/roaring/roaring_bool_fetch_row.test
 # group: [roaring]
 
 require block_size 262144
 
 # load the DB from disk
-load __TEST_DIR__/test_roaring_compression_fetch_row.db readwrite v1.2.0
+load __TEST_DIR__/test_roaring_compression_fetch_row.db readwrite v1.5.0
 
 statement ok
 CREATE TABLE test (

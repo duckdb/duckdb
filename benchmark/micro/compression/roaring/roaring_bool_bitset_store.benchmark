@@ -4,7 +4,7 @@
 
 name Roaring Write Run Container Inverted
 group roaring
-storage persistent v1.2.0
+storage persistent v1.5.0
 
 load
 CREATE TABLE data_source AS SELECT case when i%3=0 then true else false end as a FROM range(0, 250_000_000) tbl(i);

@@ -225,7 +225,8 @@ public:
 	void FlushContainer();
 	template <PhysicalType TYPE>
 	void Analyze(Vector &input, idx_t count) {
-		throw InternalException("RoaringAnalyzeState::Analyze, type %s not handled", EnumUtil::ToString(TYPE));
+		static_assert(AlwaysFalse<std::integral_constant<PhysicalType, TYPE>>::VALUE,
+		              "No specialization exists for this type");
 	}
 
 public:

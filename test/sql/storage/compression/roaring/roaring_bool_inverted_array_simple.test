@@ -2,7 +2,7 @@
 # description: Test bitpacking with trues
 # group: [roaring]
 
-load __TEST_DIR__/test_roaring.db readwrite v1.2.0
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
 
 statement ok
 PRAGMA force_compression='roaring'

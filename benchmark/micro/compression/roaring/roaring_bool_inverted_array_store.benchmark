@@ -4,7 +4,7 @@
 
 name Roaring Scan Array Container Inverted
 group roaring
-storage persistent v1.2.0
+storage persistent v1.5.0
 
 load
 CREATE TABLE data_source AS SELECT case when i%25=0 then false else true end as a FROM range(0, 250_000_000) tbl(i);

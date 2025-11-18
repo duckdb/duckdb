@@ -4,7 +4,7 @@
 
 name Roaring Scan Run Container Inverted
 group roaring
-storage persistent v1.2.0
+storage persistent v1.5.0
 
 load
 DROP TABLE IF EXISTS tbl;
