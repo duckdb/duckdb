@@ -318,6 +318,15 @@ public:
 			}
 
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
+			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+				// We can avoid looping, and just return as appropriate
+				if (!next) {
+					data_p.async_result = AsyncResultType::FINISHED;
+				} else {
+					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+				}
+				return;
+			}
 			if (!next) {
 				return;
 			}
