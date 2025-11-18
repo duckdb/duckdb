@@ -2882,6 +2882,7 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE), "SYSTEM_PEAK_TEMP_DIR_SIZE" },
 		{ static_cast<uint32_t>(MetricsType::TOTAL_BYTES_READ), "TOTAL_BYTES_READ" },
 		{ static_cast<uint32_t>(MetricsType::TOTAL_BYTES_WRITTEN), "TOTAL_BYTES_WRITTEN" },
+		{ static_cast<uint32_t>(MetricsType::TOTAL_MEMORY_ALLOCATED), "TOTAL_MEMORY_ALLOCATED" },
 		{ static_cast<uint32_t>(MetricsType::WAITING_TO_ATTACH_LATENCY), "WAITING_TO_ATTACH_LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::COMMIT_LOCAL_STORAGE_LATENCY), "COMMIT_LOCAL_STORAGE_LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::WRITE_TO_WAL_LATENCY), "WRITE_TO_WAL_LATENCY" },
