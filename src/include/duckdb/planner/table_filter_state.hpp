@@ -65,7 +65,7 @@ struct BFTableFilterState final : public TableFilterState {
 	}
 };
 
-enum class SelectivityOptionalFilterStatus : uint8_t {
+enum class SelectivityOptionalFilterStatus {
 	ACTIVE,
 	PAUSED_DUE_TO_ZONE_MAP_STATS, // todo: use this to disable the filter for one zone map based on CheckStatistics
 	PAUSED_DUE_TO_HIGH_SELECTIVITY

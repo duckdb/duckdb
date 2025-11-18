@@ -166,7 +166,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
@@ -4019,25 +4018,6 @@ const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType v
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value) {
 	return static_cast<SecretSerializationType>(StringUtil::StringToEnum(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetSelectivityOptionalFilterStatusValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(SelectivityOptionalFilterStatus::ACTIVE), "ACTIVE" },
-		{ static_cast<uint32_t>(SelectivityOptionalFilterStatus::PAUSED_DUE_TO_ZONE_MAP_STATS), "PAUSED_DUE_TO_ZONE_MAP_STATS" },
-		{ static_cast<uint32_t>(SelectivityOptionalFilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY), "PAUSED_DUE_TO_HIGH_SELECTIVITY" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<SelectivityOptionalFilterStatus>(SelectivityOptionalFilterStatus value) {
-	return StringUtil::EnumToString(GetSelectivityOptionalFilterStatusValues(), 3, "SelectivityOptionalFilterStatus", static_cast<uint32_t>(value));
-}
-
-template<>
-SelectivityOptionalFilterStatus EnumUtil::FromString<SelectivityOptionalFilterStatus>(const char *value) {
-	return static_cast<SelectivityOptionalFilterStatus>(StringUtil::StringToEnum(GetSelectivityOptionalFilterStatusValues(), 3, "SelectivityOptionalFilterStatus", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
