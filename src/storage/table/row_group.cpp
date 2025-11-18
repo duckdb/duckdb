@@ -1031,6 +1031,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		auto &row_group = row_groups[row_group_idx].get();
 		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
 		result_row_group->columns = std::move(result_columns[row_group_idx]);
+		result_row_group->version_info = row_group.version_info.load();
+		result_row_group->owned_version_info = row_group.owned_version_info;
 
 		row_group_write_data.result_row_group = std::move(result_row_group);
 	}

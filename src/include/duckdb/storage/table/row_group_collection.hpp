@@ -59,6 +59,8 @@ public:
 	void AppendRowGroup(SegmentLock &l, idx_t start_row);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
 	optional_ptr<RowGroup> GetRowGroup(int64_t index);
+	//! Overrides a row group - should only be used if you know what you're doing (will likely be removed in the future)
+	void SetRowGroup(int64_t index, shared_ptr<RowGroup> new_row_group);
 	void Verify();
 	void Destroy();
 

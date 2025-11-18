@@ -154,6 +154,14 @@ optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
 	return result->node.get();
 }
 
+void RowGroupCollection::SetRowGroup(int64_t index, shared_ptr<RowGroup> new_row_group) {
+	auto result = row_groups->GetSegmentByIndex(index);
+	if (!result) {
+		throw InternalException("RowGroupCollection::SetRowGroup - Segment is out of range");
+	}
+	result->node = std::move(new_row_group);
+}
+
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
@@ -1248,6 +1256,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		idx_t row_start = new_total_rows;
 		bool metadata_reuse = row_group_write_data.reuse_existing_metadata_blocks;
 		auto new_row_group = std::move(row_group_write_data.result_row_group);
+		if (!new_row_group) {
+			// row group was unchanged - emit previous row group
+			new_row_group = entry->node;
+		}
 		auto pointer =
 		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
 

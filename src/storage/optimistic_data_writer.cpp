@@ -69,10 +69,13 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 	if (unflushed_row_groups >= DBConfig::GetSetting<WriteBufferRowGroupCountSetting>(context)) {
 		// we have crossed our flush threshold - flush any unwritten row groups to disk
 		vector<const_reference<RowGroup>> to_flush;
+		vector<int64_t> segment_indexes;
 		for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
-			to_flush.push_back(*row_groups.collection->GetRowGroup(NumericCast<int64_t>(i)));
+			auto segment_index = NumericCast<int64_t>(i);
+			to_flush.push_back(*row_groups.collection->GetRowGroup(segment_index));
+			segment_indexes.push_back(segment_index);
 		}
-		FlushToDisk(row_groups, to_flush);
+		FlushToDisk(row_groups, to_flush, segment_indexes);
 		row_groups.last_flushed = row_groups.complete_row_groups;
 	}
 }
@@ -84,12 +87,17 @@ void OptimisticDataWriter::WriteLastRowGroup(OptimisticWriteCollection &row_grou
 	}
 	// flush the last batch of row groups
 	vector<const_reference<RowGroup>> to_flush;
+	vector<int64_t> segment_indexes;
 	for (idx_t i = row_groups.last_flushed; i < row_groups.complete_row_groups; i++) {
-		to_flush.push_back(*row_groups.collection->GetRowGroup(NumericCast<int64_t>(i)));
+		auto segment_index = NumericCast<int64_t>(i);
+		to_flush.push_back(*row_groups.collection->GetRowGroup(segment_index));
+		segment_indexes.push_back(segment_index);
 	}
 	// add the last (incomplete) row group
 	to_flush.push_back(*row_groups.collection->GetRowGroup(-1));
-	FlushToDisk(row_groups, to_flush);
+	segment_indexes.push_back(-1);
+
+	FlushToDisk(row_groups, to_flush, segment_indexes);
 
 	for (auto &partial_manager : row_groups.partial_block_managers) {
 		Merge(partial_manager);
@@ -98,7 +106,8 @@ void OptimisticDataWriter::WriteLastRowGroup(OptimisticWriteCollection &row_grou
 }
 
 void OptimisticDataWriter::FlushToDisk(OptimisticWriteCollection &collection,
-                                       const vector<const_reference<RowGroup>> &row_groups) {
+                                       const vector<const_reference<RowGroup>> &row_groups,
+                                       const vector<int64_t> &segment_indexes) {
 	//! The set of column compression types (if any)
 	vector<CompressionType> compression_types;
 	D_ASSERT(compression_types.empty());
@@ -107,7 +116,10 @@ void OptimisticDataWriter::FlushToDisk(OptimisticWriteCollection &collection,
 	}
 	RowGroupWriteInfo info(*partial_manager, compression_types, collection.partial_block_managers);
 	auto result = RowGroup::WriteToDisk(info, row_groups);
-	throw InternalException("FIXME: move new row groups from write to disk to original collection");
+	// move new (checkpointed) row groups to the row group collection
+	for (idx_t i = 0; i < row_groups.size(); i++) {
+		collection.collection->SetRowGroup(segment_indexes[i], std::move(result[i].result_row_group));
+	}
 }
 
 void OptimisticDataWriter::Merge(unique_ptr<PartialBlockManager> &other_manager) {
