@@ -130,9 +130,12 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
 class HTTPLibClient : public HTTPClient {
 public:
 	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) {
+		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
+		Initialize(http_params);
+	}
+	void Initialize(HTTPParams &http_params) override {
 		auto sec = static_cast<time_t>(http_params.timeout);
 		auto usec = static_cast<time_t>(http_params.timeout_usec);
-		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
 		client->set_follow_location(http_params.follow_location);
 		client->set_keep_alive(http_params.keep_alive);
 		client->set_write_timeout(sec, usec);
@@ -228,11 +231,26 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
 		unique_ptr<HTTPResponse> response;
+
+		// When logging is enabled, we collect request timings
+		if (request.params.logger) {
+			request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
+		}
+
 		try {
+			if (request.have_request_timing) {
+				request.request_start = Timestamp::GetCurrentTimestamp();
+			}
 			response = client->Request(request);
 		} catch (...) {
+			if (request.have_request_timing) {
+				request.request_end = Timestamp::GetCurrentTimestamp();
+			}
 			LogRequest(request, nullptr);
 			throw;
+		}
+		if (request.have_request_timing) {
+			request.request_end = Timestamp::GetCurrentTimestamp();
 		}
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;

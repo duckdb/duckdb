@@ -623,6 +623,43 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 	return true;
 }
 
+idx_t TupleDataCollection::Seek(TupleDataScanState &state, const idx_t target_chunk) {
+	D_ASSERT(state.pin_state.properties == TupleDataPinProperties::UNPIN_AFTER_DONE);
+	state.pin_state.row_handles.clear();
+	state.pin_state.heap_handles.clear();
+
+	// early return for empty collection
+	if (segments.empty()) {
+		return 0;
+	}
+
+	idx_t current_chunk = 0;
+	idx_t total_rows = 0;
+	for (idx_t seg_idx = 0; seg_idx < segments.size(); seg_idx++) {
+		auto &segment = segments[seg_idx];
+		idx_t chunk_count = segment->ChunkCount();
+
+		if (current_chunk + chunk_count <= target_chunk) {
+			total_rows += segment->count;
+			current_chunk += chunk_count;
+		} else {
+			idx_t chunk_idx_in_segment = target_chunk - current_chunk;
+			for (idx_t chunk_idx = 0; chunk_idx < chunk_idx_in_segment; chunk_idx++) {
+				total_rows += segment->chunks[chunk_idx]->count;
+			}
+			current_chunk += chunk_count;
+
+			// reset scan state to target segment
+			state.segment_index = seg_idx;
+			state.chunk_index = chunk_idx_in_segment;
+			break;
+		}
+	}
+
+	D_ASSERT(target_chunk < current_chunk);
+	return total_rows;
+}
+
 bool TupleDataCollection::ScanComplete(const TupleDataScanState &state) const {
 	if (Count() == 0) {
 		return true;

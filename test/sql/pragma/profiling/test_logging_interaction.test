@@ -32,6 +32,6 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT count(*) FROM duckdb_logs() WHERE type == 'Metrics' AND message ILIKE '%CPU_TIME%';
+SELECT count(*) FROM duckdb_logs_parsed('Metrics') WHERE metric == 'CPU_TIME';
 ----
 3

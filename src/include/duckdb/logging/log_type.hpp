@@ -135,7 +135,7 @@ public:
 	                                  idx_t merge_count, idx_t target_count, idx_t merge_rows, idx_t row_start);
 	//! Checkpoint
 	static string ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
-	                                  RowGroup &row_group);
+	                                  RowGroup &row_group, idx_t row_group_start);
 
 private:
 	static string CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op, vector<Value> map_keys,
