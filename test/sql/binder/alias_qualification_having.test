@@ -16,11 +16,12 @@ ORDER BY x;
 query III
 SELECT a + 1 AS x, alias.x % 2 AS y, SUM(a) AS s
 FROM (VALUES (1),(2),(3),(4)) t(a)
-GROUP BY alias.y
-HAVING alias.s > 5
+GROUP BY a
+HAVING alias.s > 2
 ORDER BY y;
 ----
-1	1	6
+4	0	3
+5	1	4
 
 # quoted alias in HAVING
 query II
