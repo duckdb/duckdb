@@ -303,9 +303,6 @@ public:
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
 		do {
-			if (context.interrupted) {
-				throw InterruptException();
-			}
 			if (bind_data.is_create_index) {
 				storage.CreateIndexScan(l_state.scan_state, output,
 				                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
@@ -323,6 +320,11 @@ public:
 			auto next = storage.NextParallelScan(context, state, l_state.scan_state);
 			if (!next) {
 				return;
+			}
+
+			// Before looping back, check if we are interrupted
+			if (context.interrupted) {
+				throw InterruptException();
 			}
 		} while (true);
 	}
