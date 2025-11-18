@@ -7,41 +7,34 @@ using namespace duckdb;
 using namespace std;
 
 class CustomLogStore {
-	mutex m;
-	unordered_set<string> store;
-
 public:
+	// Concurrent insertions.
 	void Insert(const string &msg) {
 		m.lock();
 		store.insert(msg);
 		m.unlock();
 	}
 
-	idx_t Size() {
-		m.lock();
-		auto size = store.size();
-		m.unlock();
-		return size;
-	}
+	// NOTE: Not concurrency-safe helper functions.
 
 	void Reset() {
-		m.lock();
 		store.clear();
-		m.unlock();
 	}
-
-	bool Contains(const string &key) {
-		m.lock();
-		auto contains = false;
+	bool Contains(const string &key) const {
 		for (const auto &elem : store) {
 			if (StringUtil::Contains(elem, key)) {
-				contains = true;
-				break;
+				return true;
 			}
 		}
-		m.unlock();
-		return contains;
+		return false;
 	}
+	bool Find(const string &key) const {
+		return store.find(key) != store.end();
+	}
+
+private:
+	mutex m;
+	unordered_set<string> store;
 };
 
 CustomLogStore my_log_store;
@@ -64,7 +57,7 @@ TEST_CASE("Test a custom log storage in the CAPI", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("SET enable_logging = true;"));
 	REQUIRE_NO_FAIL(tester.Query("SET logging_storage = 'MyCustomStorage';"));
 	REQUIRE_NO_FAIL(tester.Query("SELECT write_log('HELLO, BRO');"));
-	REQUIRE(my_log_store.Contains("HELLO, BRO"));
+	REQUIRE(my_log_store.Find("HELLO, BRO"));
 
 	duckdb_destroy_log_storage(&log_storage);
 }
@@ -138,15 +131,20 @@ TEST_CASE("Test a concurrent custom log storage in the CAPI", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("SET logging_storage = 'MyCustomStorage';"));
 
 	duckdb::vector<std::thread> workers;
-	for (idx_t i = 0; i < 10; i++) {
-		workers.emplace_back(workUnit, tester.database, i);
+	for (idx_t worker_id = 0; worker_id < 10; worker_id++) {
+		workers.emplace_back(workUnit, tester.database, worker_id);
 	}
 	for (auto &worker : workers) {
 		worker.join();
 	}
 
-	auto log_count = my_log_store.Size();
-	REQUIRE(log_count == 201); // TODO: fix.
+	// Ensure that all our logs are there.
+	for (idx_t worker_id = 0; worker_id < 10; worker_id++) {
+		for (idx_t i = 0; i < 10; i++) {
+			string log_msg = "worker: " + to_string(worker_id) + " iteration: " + to_string(i);
+			REQUIRE(my_log_store.Find(log_msg));
+		}
+	}
 
 	duckdb_destroy_log_storage(&log_storage);
 }
