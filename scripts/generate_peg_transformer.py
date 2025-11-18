@@ -128,13 +128,13 @@ def find_factory_registrations(factory_file_path):
 def generate_declaration_stub(rule_name):
     """Generates the C++ method declaration (for the .hpp file)."""
     return f"""// TODO: Verify this return type is correct
-    static unique_ptr<SQLStatement> Transform{rule_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+static unique_ptr<SQLStatement> Transform{rule_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 """
 
 
 def generate_registration_stub(rule_name):
     """Generates the C++ registration line (for peg_transformer_factory.cpp)."""
-    return f"REGISTER_TRANSFORM(Transform{rule_name});"
+    return f"REGISTER_TRANSFORM(Transform{rule_name});\n"
 
 
 def generate_implementation_stub(rule_name):
