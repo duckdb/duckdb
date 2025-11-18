@@ -20,7 +20,16 @@ ENUM_RULE_REGEX = re.compile(r'RegisterEnum<[^>]+>\s*\(\s*"(\w+)"\s*,')
 # Matches: REGISTER_TRANSFORM(TransformRuleName)
 REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)\s*\)")
 
-EXCLUDED_RULES = {"FunctionType", "IfExists"}
+EXCLUDED_RULES = {
+    "FunctionType",
+    "IfExists",
+    "AbortOrRollback",
+    "CommitOrEnd",
+    "StartOrBegin",
+    "Transaction",
+    "VariableAssign",
+}
+
 
 def find_grammar_rules(grammar_path):
     """
@@ -55,6 +64,7 @@ def find_grammar_rules(grammar_path):
 
     return all_rules_by_file
 
+
 def find_transformer_rules(transformer_path):
     """
     Scans the transformer directory for *.cpp files and extracts all
@@ -88,6 +98,7 @@ def find_transformer_rules(transformer_path):
             continue
 
     return transformer_rules
+
 
 def find_factory_registrations(factory_file_path):
     """
