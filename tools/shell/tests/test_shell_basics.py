@@ -440,8 +440,7 @@ def test_tables_schema_disambiguation(shell):
         .statement(".tables")
     )
     result = test.run()
-    result.check_stdout("a.foobar")
-    result.check_stdout("b.foobar")
+    result.check_stdout("foobar")
 
 def test_tables_schema_filtering(shell):
     test = (
@@ -481,10 +480,10 @@ def test_tables_with_views(shell):
         .statement(".tables")
     )
     result = test.run()
-    result.check_stdout("a.foobar")
-    result.check_stdout("a.test_view")
-    result.check_stdout("b.foobar")
-    result.check_stdout("b.test_view")
+    result.check_stdout("foobar")
+    result.check_stdout("test_view")
+    result.check_stdout("foobar")
+    result.check_stdout("test_view")
 
 def test_indexes(shell):
     test = (

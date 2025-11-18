@@ -124,7 +124,8 @@ struct QueryMetrics {
 		attach_load_storage_latency.Reset();
 		attach_replay_wal_latency.Reset();
 		checkpoint_latency.Reset();
-		commit_write_wal_latency.Reset();
+		commit_local_storage_latency.Reset();
+		write_to_wal_latency.Reset();
 		wal_replay_entry_count = 0;
 		total_bytes_read = 0;
 		total_bytes_written = 0;
@@ -144,8 +145,10 @@ struct QueryMetrics {
 	Profiler attach_replay_wal_latency;
 	//! The timer for running checkpoints.
 	Profiler checkpoint_latency;
-	//! The timer for the WAL writes during COMMIT.
-	Profiler commit_write_wal_latency;
+	//! The timer for committing the transaction-local storage.
+	Profiler commit_local_storage_latency;
+	//! The timer for the WAL writes.
+	Profiler write_to_wal_latency;
 	//! The total number of entries to replay in the WAL.
 	atomic<idx_t> wal_replay_entry_count;
 	//! The total bytes read by the file system.

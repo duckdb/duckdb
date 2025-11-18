@@ -114,7 +114,8 @@ unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext 
 	return make_uniq<OrderGlobalSourceState>(context, sink_state->Cast<OrderGlobalSinkState>());
 }
 
-SourceResultType PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalOrder::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<OrderGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<OrderLocalSourceState>();
 	OperatorSourceInput sort_input {*gstate.state, *lstate.state, input.interrupt_state};
