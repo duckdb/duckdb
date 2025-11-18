@@ -165,17 +165,38 @@ void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base)
 	}
 }
 
+LogicalType ToStructuredType(const LogicalType &shredding) {
+	D_ASSERT(shredding.id() == LogicalTypeId::STRUCT);
+	auto &child_types = StructType::GetChildTypes(shredding);
+	D_ASSERT(child_types.size() == 2);
+
+	auto &typed_value = child_types[1].second;
+
+	if (typed_value.id() == LogicalTypeId::STRUCT) {
+		auto &struct_children = StructType::GetChildTypes(typed_value);
+		child_list_t<LogicalType> structured_children;
+		for (auto &child : struct_children) {
+			structured_children.emplace_back(child.first, ToStructuredType(child.second));
+		}
+		return LogicalType::STRUCT(structured_children);
+	} else if (typed_value.id() == LogicalTypeId::LIST) {
+		auto &child_type = ListType::GetChildType(typed_value);
+		return LogicalType::LIST(ToStructuredType(child_type));
+	} else {
+		return typed_value;
+	}
+}
+
 string VariantStats::ToString(const BaseStatistics &stats) {
 	auto &data = GetDataUnsafe(stats);
 	string result;
 	result = StringUtil::Format("is_shredded: %s", data.is_shredded ? "true" : "false");
-	result += ", children: {";
-	result += StringUtil::Format("unshredded: %s", stats.child_stats[0].ToString());
 	if (data.is_shredded) {
-		result += ", ";
-		result += StringUtil::Format("shredded: %s", stats.child_stats[1].ToString());
+		result += ", shredding: {";
+		result += StringUtil::Format("typed_value_type: %s, ", ToStructuredType(stats.child_stats[1].type).ToString());
+		result += StringUtil::Format("stats: %s", stats.child_stats[1].ToString());
+		result += "}";
 	}
-	result += "}";
 	return result;
 }
 

@@ -200,7 +200,10 @@ public:
 
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics();
+	bool HasStatistics() const {
+		return stats != nullptr;
+	}
+	unique_ptr<BaseStatistics> GetStatistics() const;
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);

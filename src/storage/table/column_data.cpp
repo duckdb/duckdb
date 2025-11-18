@@ -456,7 +456,7 @@ FilterPropagateResult ColumnData::CheckZonemap(TableFilter &filter) {
 	return filter.CheckStatistics(stats->statistics);
 }
 
-unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
+unique_ptr<BaseStatistics> ColumnData::GetStatistics() const {
 	if (!stats) {
 		throw InternalException("ColumnData::GetStatistics called on a column without stats");
 	}
@@ -980,7 +980,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 	idx_t segment_idx = 0;
 	for (auto &segment_node : data.SegmentNodes()) {
 		auto &segment = *segment_node.node;
-		ColumnSegmentInfo column_info;
+		ColumnSegmentInfo column_info(*this);
 		column_info.row_group_index = row_group_index;
 		column_info.column_id = col_path[0];
 		column_info.column_path = col_path_str;

@@ -12,6 +12,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 #include <algorithm>
 
@@ -81,6 +82,9 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 
 	names.emplace_back("additional_block_ids");
 	return_types.emplace_back(LogicalType::LIST(LogicalTypeId::BIGINT));
+
+	names.emplace_back("column_stats");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
@@ -155,6 +159,13 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		} else {
 			output.SetValue(col_idx++, count, Value());
 		}
+		// column_stats
+		if (entry.col_data.HasStatistics()) {
+			output.SetValue(col_idx++, count, Value(entry.col_data.GetStatistics()->ToString()));
+		} else {
+			output.SetValue(col_idx++, count, Value(LogicalType::VARCHAR));
+		}
+
 		count++;
 	}
 	output.SetCardinality(count);
