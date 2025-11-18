@@ -2883,6 +2883,7 @@ indirection_expr:
             param_expr
 			| struct_expr
 			| map_expr
+			| switch_expr
 			| func_expr
 			| case_expr
 			| list_expr
@@ -3838,6 +3839,34 @@ case_default:
 case_arg:	a_expr									{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
+
+switch_expr: SWITCH '(' case_arg ',' switch_list case_default ')'
+                {
+					PGCaseExpr *c = makeNode(PGCaseExpr);
+					c->casetype = InvalidOid; /* not analyzed yet */
+					c->arg = (PGExpr *) $3;
+					c->args = $5;
+					c->defresult = (PGExpr *) $6;
+					c->location = @1;
+					$$ = (PGNode *)c;
+                }
+        ;
+
+switch_list:
+            switch_clause                       { $$ = list_make1($1);  }
+            | switch_list ',' switch_clause     { $$ = lappend($1, $3); }
+            ;
+
+switch_clause:
+            a_expr THEN a_expr
+             {
+                  PGCaseWhen *w = makeNode(PGCaseWhen);
+                  w->expr = (PGExpr*) $1;
+                  w->result = (PGExpr*) $3;
+                  w->location = @1;
+                  $$ = (PGNode *)w;
+             }
+            ;
 
 columnrefList:
 			columnref								{ $$ = list_make1($1); }
