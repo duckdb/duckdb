@@ -43,9 +43,6 @@ protected:
 	case_insensitive_map_t<idx_t> &group_alias_map;
 	unordered_set<idx_t> used_aliases;
 
-	// tracks whether we are binding the root GROUP BY expression to enforce alias usage rules
-	bool in_root_group_ref = false;
-
 	idx_t group_index;
 };
 
