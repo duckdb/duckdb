@@ -2,6 +2,9 @@
 # description: Test Top N with ordered row groups and row limits
 # group: [topn]
 
+# Alternative verify disables the offset pruning in the optimizer rule
+require no_alternative_verify
+
 statement ok
 ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
 
