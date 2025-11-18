@@ -3,31 +3,27 @@
 
 require tpcds
 
-#load __TEST_DIR__/tpcds_sf1_variant.db
+load __TEST_DIR__/tpcds_sf1_variant.db
 
-load tmp/tpcds_sf1_variant.db readonly
+statement ok
+call dsdgen(sf=1, suffix='_normal')
 
-#statement ok
-#call dsdgen(sf=1, suffix='_normal')
+statement ok
+SET variant_minimum_shredding_size = 0;
 
-#statement ok
-#SET variant_minimum_shredding_size = 0;
+# --- Create tables stored as VARIANT ---
 
-## --- Create tables stored as VARIANT ---
+foreach tbl web_site web_sales web_returns web_page warehouse time_dim store_sales store_returns store ship_mode reason promotion item inventory income_band household_demographics date_dim customer_demographics customer_address customer catalog_sales catalog_returns catalog_page call_center
 
-#foreach tbl web_site web_sales web_returns web_page warehouse time_dim store_sales store_returns store ship_mode reason promotion item inventory income_band household_demographics date_dim customer_demographics customer_address customer catalog_sales catalog_returns catalog_page call_center
+statement ok
+create TABLE ${tbl}_variant as select ${tbl}_normal::VARIANT ${tbl} from ${tbl}_normal;
 
-#statement ok
-#create TABLE ${tbl}_variant as select ${tbl}_normal::VARIANT ${tbl} from ${tbl}_normal;
+endloop
 
-#endloop
+statement ok
+checkpoint;
 
-#statement ok
-#checkpoint;
-
-#restart
-
-#mode skip
+restart
 
 # --- Create views ----
 
@@ -584,25 +580,20 @@ FROM
 
 # --- Run queries ---
 
-#loop i 1 9
-
-#query I
-#PRAGMA tpcds(${i})
-#----
-#<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
-
-#endloop
+loop i 1 9
 
 query I
-PRAGMA tpcds(64)
+PRAGMA tpcds(${i})
 ----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/64.csv
+<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
 
-#loop i 10 100
+endloop
 
-#query I
-#PRAGMA tpcds(${i})
-#----
-#<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+loop i 10 100
 
-#endloop
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
