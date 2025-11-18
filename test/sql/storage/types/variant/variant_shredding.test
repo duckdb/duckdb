@@ -177,7 +177,6 @@ checkpoint
 
 # Both 'untyped_value_index' and 'typed_value' have "Has No Null: true"
 # because there are both shredded and unshredded list children
-# FIXME: the root level 'untyped_value_index' should not contain NULL, because all values are of type ARRAY
 # Only the child elements aren't all of type VARCHAR, so the child's 'untyped_value_index' should contain NULL values
 query I
 select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partially_shredded_array');
