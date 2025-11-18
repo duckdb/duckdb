@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/read_policy.hpp"
 
 namespace duckdb {
