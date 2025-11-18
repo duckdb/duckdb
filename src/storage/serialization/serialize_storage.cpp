@@ -8,8 +8,6 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
@@ -101,26 +99,6 @@ FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &deseria
 	return result;
 }
 
-void IndexStorageInfo::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(100, "name", name);
-	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
-	serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(103, "options", options, case_insensitive_map_t<Value>());
-	serializer.WritePropertyWithDefault<vector<StorageIndex>>(104, "mapped_column_ids", mapped_column_ids);
-	serializer.WritePropertyWithDefault<vector<BufferedIndexDataInfo>>(105, "buffered_replay_data", buffered_replay_data);
-}
-
-IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
-	IndexStorageInfo result;
-	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
-	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
-	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);
-	deserializer.ReadPropertyWithExplicitDefault<case_insensitive_map_t<Value>>(103, "options", result.options, case_insensitive_map_t<Value>());
-	deserializer.ReadPropertyWithDefault<vector<StorageIndex>>(104, "mapped_column_ids", result.mapped_column_ids);
-	deserializer.ReadPropertyWithDefault<vector<BufferedIndexDataInfo>>(105, "buffered_replay_data", result.buffered_replay_data);
-	return result;
-}
-
 void MetaBlockPointer::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(100, "block_pointer", block_pointer);
 	serializer.WritePropertyWithDefault<uint32_t>(101, "offset", offset);
@@ -130,18 +108,6 @@ MetaBlockPointer MetaBlockPointer::Deserialize(Deserializer &deserializer) {
 	auto block_pointer = deserializer.ReadPropertyWithDefault<idx_t>(100, "block_pointer");
 	auto offset = deserializer.ReadPropertyWithDefault<uint32_t>(101, "offset");
 	MetaBlockPointer result(block_pointer, offset);
-	return result;
-}
-
-void StorageIndex::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<idx_t>(100, "index", index);
-	serializer.WritePropertyWithDefault<vector<StorageIndex>>(101, "child_indexes", child_indexes);
-}
-
-StorageIndex StorageIndex::Deserialize(Deserializer &deserializer) {
-	StorageIndex result;
-	deserializer.ReadPropertyWithDefault<idx_t>(100, "index", result.index);
-	deserializer.ReadPropertyWithDefault<vector<StorageIndex>>(101, "child_indexes", result.child_indexes);
 	return result;
 }
 

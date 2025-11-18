@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/storage_index.hpp"

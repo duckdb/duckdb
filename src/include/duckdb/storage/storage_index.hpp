@@ -13,9 +13,6 @@
 
 namespace duckdb {
 
-class Serializer;
-class Deserializer;
-
 struct StorageIndex {
 	StorageIndex() : index(DConstants::INVALID_INDEX) {
 	}
@@ -64,9 +61,6 @@ struct StorageIndex {
 	bool IsRowIdColumn() const {
 		return index == DConstants::INVALID_INDEX;
 	}
-
-	void Serialize(Serializer &serializer) const;
-	static StorageIndex Deserialize(Deserializer &deserializer);
 
 private:
 	idx_t index;
