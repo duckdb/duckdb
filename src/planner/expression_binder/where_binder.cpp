@@ -38,15 +38,15 @@ BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, i
 	}
 }
 
+string WhereBinder::UnsupportedAggregateMessage() {
+	return "WHERE clause cannot contain aggregates!";
+}
+
 bool WhereBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
 	if (column_alias_binder) {
 		return column_alias_binder->DoesColumnAliasExist(colref);
 	}
 	return false;
-}
-
-string WhereBinder::UnsupportedAggregateMessage() {
-	return "WHERE clause cannot contain aggregates!";
 }
 
 } // namespace duckdb
