@@ -26,6 +26,14 @@ statement ok
 checkpoint;
 
 query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' and compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
+----
+
+query I
 FROM test;
 ----
 null

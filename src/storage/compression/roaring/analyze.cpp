@@ -184,9 +184,9 @@ void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count
 	const bool *src = FlatVector::GetData<bool>(input);
 	const auto &validity = FlatVector::Validity(input);
 	if (validity.AllValid()) {
-		BitPackBooleansNoNulls(dst, src, count);
+		BitPackBooleans<false, true>(dst, src, count);
 	} else {
-		BitPackBooleansWithNulls(dst, src, count, validity);
+		BitPackBooleans<false, false>(dst, src, count, &validity);
 	}
 
 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
