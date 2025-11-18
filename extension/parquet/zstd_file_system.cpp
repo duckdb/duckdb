@@ -30,7 +30,7 @@ ZstdStreamWrapper::~ZstdStreamWrapper() {
 		Close();
 	} catch (std::exception &ex) {
 		if (file && file->child_handle) {
-			// FIXME: make more log context available here.
+			// FIXME: Make any log context available here.
 			ErrorData data(ex);
 			try {
 				const auto logger = file->child_handle->logger;

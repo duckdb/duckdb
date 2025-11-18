@@ -41,7 +41,7 @@ void BaseAppender::Destructor() {
 	try {
 		Close();
 	} catch (...) { // NOLINT
-		            // FIXME: Log error here
+		            // FIXME: Make any log context available here.
 	}
 }
 

@@ -1,7 +1,7 @@
 {
   "group": "logging",
   "deprecated": false,
-  "description": "Functions that expose the log storage and allow the configuration of a custom logger",
+  "description": "Functions exposing the log storage, which allows the configuration of a custom logger. This API is not yet ready to be stabilized.",
   "entries": [
     {
       "name": "duckdb_create_log_storage",
@@ -16,14 +16,14 @@
       "return_type": "void",
       "params": [
         {
-          "type": "duckdb_log_storage",
-          "name": "storage"
+          "type": "duckdb_log_storage *",
+          "name": "log_storage"
         }
       ],
       "comment": {
         "description": "Destroys a log storage object.\n\n",
         "param_comments": {
-          "storage": "The log storage object to destroy."
+          "log_storage": "The log storage object to destroy."
         }
       }
     },
@@ -33,7 +33,7 @@
       "params": [
         {
           "type": "duckdb_log_storage",
-          "name": "storage"
+          "name": "log_storage"
         },
         {
           "type": "duckdb_logger_write_log_entry_t",
@@ -41,9 +41,9 @@
         }
       ],
       "comment": {
-        "description": "Sets the function to be called when a new log entry is written.\n\n",
+        "description": "Sets the callback function for writing log entries.\n\n",
         "param_comments": {
-          "storage": "The log storage object.",
+          "log_storage": "The log storage object.",
           "function": "The function to call."
         }
       }
@@ -62,15 +62,15 @@
         },
         {
           "type": "duckdb_log_storage",
-          "name": "storage"
+          "name": "log_storage"
         }
       ],
       "comment": {
-        "description": "Sets the storage for the logger.\n\n",
+        "description": "Registers a custom log storage for the logger.\n\n",
         "param_comments": {
           "database": "A database object.",
           "name": "The storage name.",
-          "storage": "The log storage object."
+          "log_storage": "The log storage object."
         }
       }
     }

@@ -1,60 +1,152 @@
 #include "capi_tester.hpp"
-#include "util/logging.h"
+#include "duckdb/common/vector.hpp"
+
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
 
-unordered_set<string> LOG_STORE;
+class CustomLogStore {
+	mutex m;
+	unordered_set<string> store;
+
+public:
+	void Insert(const string &msg) {
+		m.lock();
+		store.insert(msg);
+		m.unlock();
+	}
+
+	idx_t Size() {
+		m.lock();
+		auto size = store.size();
+		m.unlock();
+		return size;
+	}
+
+	void Reset() {
+		m.lock();
+		store.clear();
+		m.unlock();
+	}
+
+	bool Contains(const string &key) {
+		m.lock();
+		auto contains = false;
+		for (const auto &elem : store) {
+			if (StringUtil::Contains(elem, key)) {
+				contains = true;
+				break;
+			}
+		}
+		m.unlock();
+		return contains;
+	}
+};
+
+CustomLogStore my_log_store;
 
 void WriteLogEntry(duckdb_timestamp timestamp, const char *level, const char *log_type, const char *log_message) {
-	LOG_STORE.insert(log_message);
+	my_log_store.Insert(log_message);
 }
 
-TEST_CASE("Test pluggable log storage in CAPI", "[capi]") {
+TEST_CASE("Test a custom log storage in the CAPI", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
-	LOG_STORE.clear();
-
+	my_log_store.Reset();
 	REQUIRE(tester.OpenDatabase(nullptr));
 
-	auto storage = duckdb_create_log_storage();
-	duckdb_log_storage_set_write_log_entry(storage, WriteLogEntry);
+	auto log_storage = duckdb_create_log_storage();
+	duckdb_log_storage_set_write_log_entry(log_storage, WriteLogEntry);
+	duckdb_register_log_storage(tester.database, "MyCustomStorage", log_storage);
 
-	duckdb_register_log_storage(tester.database, "MyCustomStorage", storage);
+	REQUIRE_NO_FAIL(tester.Query("SET enable_logging = true;"));
+	REQUIRE_NO_FAIL(tester.Query("SET logging_storage = 'MyCustomStorage';"));
+	REQUIRE_NO_FAIL(tester.Query("SELECT write_log('HELLO, BRO');"));
+	REQUIRE(my_log_store.Contains("HELLO, BRO"));
 
-	REQUIRE_NO_FAIL(tester.Query("set enable_logging=true;"));
-	REQUIRE_NO_FAIL(tester.Query("set logging_storage='MyCustomStorage';"));
-
-	REQUIRE_NO_FAIL(tester.Query("select write_log('HELLO, BRO');"));
-	REQUIRE(LOG_STORE.find("HELLO, BRO") != LOG_STORE.end());
-
-	duckdb_destroy_log_storage(storage);
+	duckdb_destroy_log_storage(&log_storage);
 }
 
-// Check that Fatal Error which is otherwise swallowed, is logged
-TEST_CASE("Test logging errors using pluggable log storage in CAPI", "[capi]") {
+TEST_CASE("Test logging silent exceptions using a custom log storage in the CAPI", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
-	LOG_STORE.clear();
-
+	my_log_store.Reset();
 	REQUIRE(tester.OpenDatabase(nullptr));
 
-	auto storage = duckdb_create_log_storage();
-	duckdb_log_storage_set_write_log_entry(storage, WriteLogEntry);
-
-	duckdb_register_log_storage(tester.database, "MyCustomStorage", storage);
+	auto log_storage = duckdb_create_log_storage();
+	duckdb_log_storage_set_write_log_entry(log_storage, WriteLogEntry);
+	duckdb_register_log_storage(tester.database, "MyCustomStorage", log_storage);
 
 	REQUIRE_NO_FAIL(tester.Query("CALL enable_logging(level = 'error');"));
-	REQUIRE_NO_FAIL(tester.Query("set logging_storage='MyCustomStorage';"));
+	REQUIRE_NO_FAIL(tester.Query("SET logging_storage = 'MyCustomStorage';"));
 
 	auto path = TestCreatePath("log_storage_test.db");
-	REQUIRE_NO_FAIL(tester.Query("ATTACH IF NOT EXISTS '" + path + "' (TYPE DUCKDB)"));
-	REQUIRE_NO_FAIL(tester.Query("PRAGMA wal_autocheckpoint='1TB';"));
-	REQUIRE_NO_FAIL(tester.Query("PRAGMA debug_checkpoint_abort='before_header';"));
+	REQUIRE_NO_FAIL(tester.Query("ATTACH '" + path + "'"));
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA wal_autocheckpoint = '1TB';"));
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA debug_checkpoint_abort = 'before_header';"));
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE log_storage_test.integers AS SELECT * FROM range(100) tbl(i);"));
 	REQUIRE_NO_FAIL(tester.Query("DETACH log_storage_test;"));
 
-	duckdb_destroy_log_storage(storage);
+	REQUIRE(my_log_store.Contains("Failed to create checkpoint because of error"));
+
+	duckdb_destroy_log_storage(&log_storage);
+}
+
+void workUnit(duckdb_database db, idx_t worker_id) {
+	duckdb_connection conn;
+	if (duckdb_connect(db, &conn) != DuckDBSuccess) {
+		return;
+	}
+
+	duckdb_result result;
+	auto state = duckdb_query(conn, "PRAGMA disable_profiling;", &result);
+	if (state != DuckDBSuccess) {
+		return;
+	}
+	duckdb_destroy_result(&result);
+
+	for (idx_t i = 0; i < 10; i++) {
+		string log_msg = "worker: " + to_string(worker_id) + " iteration: " + to_string(i);
+		string query = "SELECT write_log('" + log_msg + "');";
+
+		state = duckdb_query(conn, query.c_str(), &result);
+		duckdb_destroy_result(&result);
+		if (state != DuckDBSuccess) {
+			return;
+		}
+	}
+
+	duckdb_disconnect(&conn);
+}
+
+TEST_CASE("Test a concurrent custom log storage in the CAPI", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	my_log_store.Reset();
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto log_storage = duckdb_create_log_storage();
+	duckdb_log_storage_set_write_log_entry(log_storage, WriteLogEntry);
+	duckdb_register_log_storage(tester.database, "MyCustomStorage", log_storage);
+
+	REQUIRE_NO_FAIL(tester.Query("PRAGMA disable_profiling;"));
+	REQUIRE_NO_FAIL(tester.Query("SET enable_logging = true;"));
+	REQUIRE_NO_FAIL(tester.Query("SET logging_storage = 'MyCustomStorage';"));
+
+	duckdb::vector<std::thread> workers;
+	for (idx_t i = 0; i < 10; i++) {
+		workers.emplace_back(workUnit, tester.database, i);
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+
+	auto log_count = my_log_store.Size();
+	REQUIRE(log_count == 201); // TODO: fix.
+
+	duckdb_destroy_log_storage(&log_storage);
 }

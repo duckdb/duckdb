@@ -25,7 +25,6 @@ class LogManager {
 	friend class ThreadSafeLogger;
 	friend class ThreadLocalLogger;
 	friend class MutableLogger;
-	friend class CallbackLogger;
 
 public:
 	// Note: two step initialization because Logger needs shared pointer to log manager TODO: can we clean up?
