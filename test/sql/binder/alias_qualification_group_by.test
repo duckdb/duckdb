@@ -12,26 +12,6 @@ ORDER BY x;
 0	2
 1	2
 
-# alias chaining in select list, grouping by the later alias
-query III
-SELECT a + 1 AS x, alias.x % 2 AS y, SUM(a) AS s
-FROM (VALUES (1),(2),(3)) t(a)
-GROUP BY alias.y
-ORDER BY y;
-----
-0	0	4
-1	1	2
-
-# GROUP BY for inside-expression alias
-query I
-SELECT a as x FROM (VALUES (1),(2),(3)) t(a)
-GROUP BY alias.x + 1
-ORDER BY alias.x;
-----
-2
-3
-4
-
 # quoted alias in GROUP BY
 query II
 SELECT (a/2)::INT AS "Half", COUNT(*) AS c
@@ -57,3 +37,20 @@ ORDER BY x;
 ----
 1	2
 2	1
+
+# GROUP BY on values that are a part of an expression 
+statement error
+SELECT a + 1 AS x, alias.x % 2 AS y, SUM(a) AS s
+FROM (VALUES (1),(2),(3)) t(a)
+GROUP BY alias.y
+ORDER BY y;
+----
+Binder Error
+
+# GROUP BY for inside-expression alias calling from the GROUP BY clause
+statement error
+SELECT a as x FROM (VALUES (1),(2),(3)) t(a)
+GROUP BY alias.x + 1
+ORDER BY alias.x;
+----
+Binder Error
