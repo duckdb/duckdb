@@ -3,10 +3,7 @@
 # group: [optimizer]
 
 statement ok
-pragma enable_verification;
-
-statement ok
-CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(1300000);
+CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(130000);
 
 # Check that row_number is not accessible
 statement error
@@ -21,13 +18,25 @@ SELECT a as row_number FROM foo limit 3;
 1
 2
 
+query I
+select row_number() over() from foo where a < 3;
+----
+1
+2
+3
+
 statement ok
 delete from foo where a < 5000;
 
 query III
 select row_number() over(), a, rowid from foo order by a desc limit 1;
 ----
-1295000	1299999	1299999
+125000	129999	129999
+
+query III
+select a, rowid, row_number() over() from foo order by a desc limit 1;
+----
+129999	129999	125000
 
 query II
 explain select a,rowid, row_number() over() as x from foo order by a desc limit 1;
@@ -60,3 +69,36 @@ SELECT CASE WHEN row_number() OVER () = 2 THEN 2222::BIGINT ELSE 1111::BIGINT EN
 1111
 2222
 1111
+
+statement ok
+CREATE OR REPLACE TABLE numbers AS SELECT range(1, 5) AS num;
+
+query II
+SELECT row_number() OVER(), unnest(num) FROM numbers;
+----
+1	1
+1	2
+1	3
+1	4
+
+query II
+SELECT row_number() OVER (), nums FROM (SELECT unnest(num) AS nums from numbers);
+----
+1	1
+2	2
+3	3
+4	4
+
+# Try with a join on the row_number
+
+statement ok
+CREATE OR REPLACE TABLE foo AS SELECT range a from range(3);
+
+statement ok
+CREATE OR REPLACE TABLE bar AS SELECT range b from range(2,5);
+
+query II
+EXPLAIN SELECT f.row_num AS foo_row, b.row_num AS bar_row, f.a, b.b FROM (SELECT row_number() OVER () AS row_num, a FROM foo) f
+JOIN (SELECT row_number() OVER () AS row_num, b FROM bar) b ON f.row_num = b.row_num;
+----
+physical_plan	<!REGEX>:.*WINDOW.*

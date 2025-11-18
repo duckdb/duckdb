@@ -21,6 +21,8 @@ public:
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
 	bool CanOptimize(LogicalOperator &op);
 	unique_ptr<LogicalOperator> RewriteGet(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
+
+	ColumnBindingReplacer replacer;
 };
 
 } // namespace duckdb
