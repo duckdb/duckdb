@@ -776,7 +776,17 @@ if (BUILD_MAIN_DUCKDB_LIBRARY)
  add_subdirectory(extension)
 endif()
 
+add_third_party(fastpforlib)
+add_third_party(fmt)
+add_third_party(fsst)
+add_third_party(hyperloglog)
+add_third_party(libpg_query)
 add_third_party(mbedtls)
+add_third_party(miniz)
+add_third_party(re2)
+add_third_party(utf8proc)
+add_third_party(yyjson)
+
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)
