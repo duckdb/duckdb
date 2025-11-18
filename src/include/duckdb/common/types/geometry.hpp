@@ -12,25 +12,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/pair.hpp"
 #include <limits>
-
-// Depending on what header files have already been included, the functions
-// isnan and isfinite may or may not be defined in the global namespace.
-// To avoid issues, we define our own wrapper macros to use these functions.
-// (but undef them later in the header)
-
-#ifndef isnan
 #include <cmath>
-#define DUCKDB_ISNAN(value) (std::isnan(value))
-#else
-#define DUCKDB_ISNAN(value) (isnan(value) != 0)
-#endif
-
-#ifndef isfinite
-#include <cmath>
-#define DUCKDB_ISFINITE(value) (std::isfinite(value))
-#else
-#define DUCKDB_ISFINITE(value) (isfinite(value) != 0)
-#endif
 
 namespace duckdb {
 
@@ -58,7 +40,7 @@ struct VertexXY {
 	double y;
 
 	bool AllNan() const {
-		return DUCKDB_ISNAN(x) && DUCKDB_ISNAN(y);
+		return std::isnan(x) && std::isnan(y);
 	}
 };
 
@@ -72,7 +54,7 @@ struct VertexXYZ {
 	double z;
 
 	bool AllNan() const {
-		return DUCKDB_ISNAN(x) && DUCKDB_ISNAN(y) && DUCKDB_ISNAN(z);
+		return std::isnan(x) && std::isnan(y) && std::isnan(z);
 	}
 };
 struct VertexXYM {
@@ -85,7 +67,7 @@ struct VertexXYM {
 	double m;
 
 	bool AllNan() const {
-		return DUCKDB_ISNAN(x) && DUCKDB_ISNAN(y) && DUCKDB_ISNAN(m);
+		return std::isnan(x) && std::isnan(y) && std::isnan(m);
 	}
 };
 
@@ -100,7 +82,7 @@ struct VertexXYZM {
 	double m;
 
 	bool AllNan() const {
-		return DUCKDB_ISNAN(x) && DUCKDB_ISNAN(y) && DUCKDB_ISNAN(z) && DUCKDB_ISNAN(m);
+		return std::isnan(x) && std::isnan(y) && std::isnan(z) && std::isnan(m);
 	}
 };
 
@@ -130,17 +112,17 @@ public:
 	// Does this extent have any X/Y values set?
 	// In other words, is the range of the x/y axes not empty and not unknown?
 	bool HasXY() const {
-		return DUCKDB_ISFINITE(x_min) && DUCKDB_ISFINITE(y_min) && DUCKDB_ISFINITE(x_max) && DUCKDB_ISFINITE(y_max);
+		return std::isfinite(x_min) && std::isfinite(y_min) && std::isfinite(x_max) && std::isfinite(y_max);
 	}
 	// Does this extent have any Z values set?
 	// In other words, is the range of the Z-axis not empty and not unknown?
 	bool HasZ() const {
-		return DUCKDB_ISFINITE(z_min) && DUCKDB_ISFINITE(z_max);
+		return std::isfinite(z_min) && std::isfinite(z_max);
 	}
 	// Does this extent have any M values set?
 	// In other words, is the range of the M-axis not empty and not unknown?
 	bool HasM() const {
-		return DUCKDB_ISFINITE(m_min) && DUCKDB_ISFINITE(m_max);
+		return std::isfinite(m_min) && std::isfinite(m_max);
 	}
 
 	void Extend(const VertexXY &vertex) {
@@ -240,7 +222,3 @@ public:
 };
 
 } // namespace duckdb
-
-// Undefine the macros to avoid polluting the global namespace
-#undef DUCKDB_ISNAN
-#undef DUCKDB_ISFINITE
