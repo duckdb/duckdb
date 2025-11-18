@@ -633,8 +633,8 @@ public:
 //! Boolean BitPacking
 
 template <bool UPDATE_STATS, bool ALL_VALID>
-static void BitPackBooleans(data_ptr_t dst, const bool *src, const idx_t count, const ValidityMask *validity_mask=nullptr, BaseStatistics *statistics=nullptr) {
-
+static void BitPackBooleans(data_ptr_t dst, const bool *src, const idx_t count,
+                            const ValidityMask *validity_mask = nullptr, BaseStatistics *statistics = nullptr) {
 	uint8_t byte = 0;
 	int bit_pos = 0;
 	uint8_t src_bit = false;
@@ -643,7 +643,9 @@ static void BitPackBooleans(data_ptr_t dst, const bool *src, const idx_t count, 
 		for (idx_t i = 0; i < count; i++) {
 			src_bit = src[i];
 
-			if (UPDATE_STATS) { statistics->UpdateNumericStats<bool>(src_bit); }
+			if (UPDATE_STATS) {
+				statistics->UpdateNumericStats<bool>(src_bit);
+			}
 			byte |= src_bit << bit_pos;
 			bit_pos++;
 
@@ -666,7 +668,9 @@ static void BitPackBooleans(data_ptr_t dst, const bool *src, const idx_t count, 
 
 			last_bit_value = src_bit;
 
-			if (UPDATE_STATS) { statistics->UpdateNumericStats<bool>(src_bit); }
+			if (UPDATE_STATS) {
+				statistics->UpdateNumericStats<bool>(src_bit);
+			}
 
 			// flush
 			if (bit_pos == 8) {
