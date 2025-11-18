@@ -356,9 +356,6 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 				// join condition was a not equal and filtered out all NULLS.
 				// DELIM JOIN need to do that for not DELIM_GET side. Easiest way is to change the
 				// comparison expression type. See duckdb/duckdb#16803
-				// NOTE: We should NOT convert DISTINCT FROM to != in general, as they have different NULL semantics
-				// - DISTINCT FROM: NULL IS DISTINCT FROM NULL = FALSE (NULL-aware)
-				// - !=: NULL != NULL = NULL (filters out NULL)
 				// Only convert if the ORIGINAL join had != or = (not DISTINCT FROM variants)
 				if (delim_join.join_type != JoinType::MARK &&
 				    original_join_comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
