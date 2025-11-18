@@ -9,7 +9,7 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : BaseSelectBinder(binder, context, node, info) {
 }
 
-bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
+bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression, BindResult &result) {
 	// must be a qualified alias.<name>
 	if (!ExpressionBinder::IsPotentialAlias(colref)) {
 		return false;

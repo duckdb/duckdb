@@ -80,7 +80,7 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	return BindSelectRef(index - 1);
 }
 
-bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) {
+bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression, BindResult &result) {
 	// failed to bind the column and the node is the root expression with depth = 0
 	// check if refers to an alias in the select clause
 
@@ -90,7 +90,7 @@ bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t de
 		// no matching alias found
 		return false;
 	}
-	if (!in_root_group_ref) {
+	if (!root_expression) {
 		result = BindResult(BinderException(
 		    colref,
 		    "Alias with name \"%s\" exists, but aliases cannot be used as part of an expression in the GROUP BY",
@@ -111,18 +111,6 @@ BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// THEN if no match is found, refer to outer queries
 
 	// first try to bind to the base columns (original tables)
-
-	// mark that we are binding the root GROUP BY expression so alias rules apply
-	struct RootGuard {
-		bool &flag;
-		explicit RootGuard(bool &f) : flag(f) {
-			flag = true;
-		}
-		~RootGuard() {
-			flag = false;
-		}
-	};
-	RootGuard guard(in_root_group_ref);
 	return ExpressionBinder::BindExpression(colref, 0, true);
 }
 

@@ -36,7 +36,7 @@ protected:
 	BindResult BindColumnRef(ColumnRefExpression &expr);
 	BindResult BindConstant(ConstantExpression &expr);
 
-	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, BindResult &result) override;
+	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression, BindResult &result) override;
 
 	SelectNode &node;
 	SelectBindState &bind_state;
