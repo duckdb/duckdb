@@ -54,6 +54,7 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	TableScanState scan_state;
 	//! The column IDs of the local storage scan.
 	vector<StorageIndex> column_ids;
+	bool in_charge_of_final_stretch {false};
 };
 
 static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
@@ -114,7 +115,7 @@ class DuckIndexScanState : public TableScanGlobalState {
 public:
 	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p)
 	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), arena(Allocator::Get(context)),
-	      row_ids(nullptr), row_id_count(0), finished(false) {
+	      row_ids(nullptr), row_id_count(0), finished_first_phase(false), finished_last_phase(false) {
 	}
 
 	//! The batch index of the next Sink.
@@ -129,7 +130,8 @@ public:
 	//! The column IDs of the to-be-scanned columns.
 	vector<StorageIndex> column_ids;
 	//! True, if no more row IDs must be scanned.
-	bool finished;
+	bool finished_first_phase;
+	bool finished_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
 
@@ -163,45 +165,62 @@ public:
 		auto &storage = duck_table.GetStorage();
 		auto &l_state = data_p.local_state->Cast<IndexScanLocalState>();
 
-		idx_t scan_count = 0;
-		idx_t offset = 0;
+		// We might need to loop back, so while (true)
+		while (true) {
+			idx_t scan_count = 0;
+			idx_t offset = 0;
 
-		{
-			// Synchronize changes to the shared global state.
-			lock_guard<mutex> l(index_scan_lock);
-			if (!finished) {
-				l_state.batch_index = next_batch_index;
-				next_batch_index++;
+			// Phase selection
+			int phase = 0;
+			{
+				// Synchronize changes to the shared global state.
+				lock_guard<mutex> l(index_scan_lock);
+				if (!finished_first_phase) {
+					l_state.batch_index = next_batch_index;
+					next_batch_index++;
 
-				offset = l_state.batch_index * STANDARD_VECTOR_SIZE;
-				auto remaining = row_id_count - offset;
-				scan_count = remaining < STANDARD_VECTOR_SIZE ? remaining : STANDARD_VECTOR_SIZE;
-				finished = remaining < STANDARD_VECTOR_SIZE ? true : false;
+					offset = l_state.batch_index * STANDARD_VECTOR_SIZE;
+					auto remaining = row_id_count - offset;
+					scan_count = remaining <= STANDARD_VECTOR_SIZE ? remaining : STANDARD_VECTOR_SIZE;
+					finished_first_phase = remaining <= STANDARD_VECTOR_SIZE ? true : false;
+					phase = 1;
+				} else if (!finished_last_phase || l_state.in_charge_of_final_stretch) {
+					finished_last_phase = true;
+					l_state.in_charge_of_final_stretch = true;
+					phase = 2;
+				}
 			}
-		}
 
-		if (scan_count != 0) {
-			auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
-			Vector local_vector(LogicalType::ROW_TYPE, row_id_data);
+			if (phase == 1) {
+				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
+				Vector local_vector(LogicalType::ROW_TYPE, row_id_data);
 
-			if (CanRemoveFilterColumns()) {
-				l_state.all_columns.Reset();
-				storage.Fetch(tx, l_state.all_columns, column_ids, local_vector, scan_count, l_state.fetch_state);
-				output.ReferenceColumns(l_state.all_columns, projection_ids);
-			} else {
-				storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
+				if (CanRemoveFilterColumns()) {
+					l_state.all_columns.Reset();
+					storage.Fetch(tx, l_state.all_columns, column_ids, local_vector, scan_count, l_state.fetch_state);
+					output.ReferenceColumns(l_state.all_columns, projection_ids);
+				} else {
+					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
+				}
+				if (output.size() == 0) {
+					// output is empty, loop back, since there might be results from the last phase
+					continue;
+				} else {
+					return;
+				}
+			} else if (phase == 2) {
+				auto &local_storage = LocalStorage::Get(tx);
+				{
+					if (CanRemoveFilterColumns()) {
+						l_state.all_columns.Reset();
+						local_storage.Scan(l_state.scan_state.local_state, column_ids, l_state.all_columns);
+						output.ReferenceColumns(l_state.all_columns, projection_ids);
+					} else {
+						local_storage.Scan(l_state.scan_state.local_state, column_ids, output);
+					}
+				}
 			}
-		}
-
-		if (output.size() == 0) {
-			auto &local_storage = LocalStorage::Get(tx);
-			if (CanRemoveFilterColumns()) {
-				l_state.all_columns.Reset();
-				local_storage.Scan(l_state.scan_state.local_state, column_ids, l_state.all_columns);
-				output.ReferenceColumns(l_state.all_columns, projection_ids);
-			} else {
-				local_storage.Scan(l_state.scan_state.local_state, column_ids, output);
-			}
+			return;
 		}
 	}
 
@@ -350,7 +369,8 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
                                                              const TableScanBindData &bind_data, set<row_t> &row_ids) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
-	g_state->finished = row_ids.empty() ? true : false;
+	g_state->finished_first_phase = row_ids.empty() ? true : false;
+	g_state->finished_last_phase = false;
 
 	if (!row_ids.empty()) {
 		auto row_id_ptr = g_state->arena.AllocateAligned(row_ids.size() * sizeof(row_t));
