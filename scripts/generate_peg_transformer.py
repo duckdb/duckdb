@@ -22,7 +22,6 @@ REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)
 
 EXCLUDED_RULES = {"FunctionType", "IfExists"}
 
-
 def find_grammar_rules(grammar_path):
     """
     Scans the grammar directory for *.gram files and extracts all rule names.
@@ -55,10 +54,6 @@ def find_grammar_rules(grammar_path):
         all_rules_by_file[file_path.name] = (file_path, rules_in_file)
 
     return all_rules_by_file
-
-
-# --- Phase 2: Find all Transformer Implementations ---
-
 
 def find_transformer_rules(transformer_path):
     """
@@ -94,10 +89,6 @@ def find_transformer_rules(transformer_path):
 
     return transformer_rules
 
-
-# --- Phase 3 & 4: Find Enum Rules and Registrations ---
-
-
 def find_factory_registrations(factory_file_path):
     """
     Scans the factory file for RegisterEnum<...> and REGISTER_TRANSFORM(...)
@@ -132,19 +123,6 @@ def find_factory_registrations(factory_file_path):
         print(f"Error reading {factory_file_path}: {e}", file=sys.stderr)
 
     return enum_rules, registered_rules
-
-
-# --- NEW: Phase 5: Code Generation ---
-
-
-def guess_return_type(rule_name):
-    """
-    Makes an educated guess about the C++ return type for a rule.
-    """
-    if rule_name.endswith("Statement"):
-        return "unique_ptr<SQLStatement>"
-    # Default to a common base class for expressions
-    return "unique_ptr<ParsedExpression>"
 
 
 def generate_declaration_stub(rule_name):
@@ -285,8 +263,10 @@ def main():
                 missing_count_this_file += 1
                 missing_rules_for_gen.append(rule_name)
 
-            if args.skip_found and not ("FOUND" in status_str or "ENUM" in status_str):
-                print(f"{status_str:<14} {rule_name}")
+            if args.skip_found and ("FOUND" in status_str or "ENUM" in status_str):
+                continue
+
+            print(f"{status_str:<14} {rule_name}")
 
         if missing_count_this_file > 0:
             missing_rules_by_file[file_name] = missing_count_this_file
