@@ -66,17 +66,78 @@ checkpoint
 query I
 select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partial_primitive_shredding');
 ----
-<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Min: 1, Max: 1\]\[Has Null: true, Has No Null: true\]
+<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Min: 1, Max: 1\]\[Has Null: true, Has No Null: true\].*
 
 # typed_value contains NULL, indicating not everything is shredded
 query I
 select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partial_primitive_shredding');
 ----
-<REGEX>:.*is_shredded: true.*typed_value:.*\[Min: 42, Max: 42\]\[Has Null: true, Has No Null: true\]\}
+<REGEX>:.*is_shredded: true.*typed_value:.*\[Min: 42, Max: 42\]\[Has Null: true, Has No Null: true\]\}.*
 
 # ------------------------------ Fully shredded OBJECT ------------------------------
 
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER, b BOOLEAN)';
+
+statement ok
+create table fully_shredded_object(col VARIANT);
+
+statement ok
+insert into fully_shredded_object select {
+	'a': (i % 100)::INTEGER,
+	'b': true
+} from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# For both 'a' and 'b' the 'typed_value' stats have "Has Null: false"
+# Showing that for all values the fields are present and shredded
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('fully_shredded_object');
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+
 # ------------------------------ Partially shredded OBJECT ------------------------------
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER, b BOOLEAN)';
+
+statement ok
+create table partially_shredded_object(col VARIANT);
+
+#statement ok
+#insert into partially_shredded_object select {
+#	'a': 'test',
+#	'b': true
+#} from range(122880) t(i)
+
+#statement ok
+#checkpoint
+
+## Now the 'typed_value' for 'a' is "Has Null: true", because at least *some* of the values are not an OBJECT with an 'a INTEGER' field
+#query I
+#select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partially_shredded_object');
+#----
+#<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+
+#statement ok
+#delete from partially_shredded_object;
+
+statement ok
+insert into partially_shredded_object select {
+	'd': 42::INTEGER,
+	'b': true
+} from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# Difference now is that 'untyped_value_index' is: "Has Null: false"
+query I
+select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('partially_shredded_object');
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: false, Has No Null: true\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
 
 # ------------------------------ Fully shredded LIST ------------------------------
 
