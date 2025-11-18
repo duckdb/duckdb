@@ -19,7 +19,7 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 	const auto &alias_name = colref.column_names.back();
 	auto entry = node.bind_state.alias_map.find(alias_name);
 	if (entry == node.bind_state.alias_map.end()) {
-		throw BinderException(colref, "alias.%s referenced, but no such alias exists in the SELECT list", alias_name);
+		return false;
 	}
 
 	auto alias_index = entry->second;
