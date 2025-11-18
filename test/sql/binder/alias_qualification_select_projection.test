@@ -103,3 +103,9 @@ query II
 SELECT col1 * 10 AS col2, alias.col2 AS projected_col2 FROM alias;
 ----
 110	22
+
+# mmethod call on alias reference
+query II
+SELECT 'AbC' AS s, alias.s.lower();
+----
+AbC	abc
