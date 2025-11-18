@@ -110,7 +110,7 @@ public:
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-	                           vector<unique_ptr<SegmentNode<RowGroup>>> &segments);
+	                           const vector<shared_ptr<SegmentNode<RowGroup>>> &segments);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);

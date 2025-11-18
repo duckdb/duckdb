@@ -39,7 +39,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	root_pointer = data.block_pointer;
 }
 
-unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() const {
+shared_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() const {
 	if (current_row_group >= max_row_group) {
 		reader.reset();
 		finished_loading = true;
@@ -50,7 +50,7 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() const {
 	auto row_group_pointer = RowGroup::Deserialize(deserializer);
 	deserializer.End();
 	current_row_group++;
-	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
+	return make_shared_ptr<RowGroup>(collection, std::move(row_group_pointer));
 }
 
 //===--------------------------------------------------------------------===//
@@ -844,7 +844,7 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &da
 //===--------------------------------------------------------------------===//
 struct CollectionCheckpointState {
 	CollectionCheckpointState(RowGroupCollection &collection, TableDataWriter &writer,
-	                          vector<unique_ptr<SegmentNode<RowGroup>>> &segments, TableStatistics &global_stats)
+	                          const vector<shared_ptr<SegmentNode<RowGroup>>> &segments, TableStatistics &global_stats)
 	    : collection(collection), writer(writer), executor(writer.CreateTaskExecutor()), segments(segments),
 	      global_stats(global_stats) {
 		writers.resize(segments.size());
@@ -854,7 +854,7 @@ struct CollectionCheckpointState {
 	RowGroupCollection &collection;
 	TableDataWriter &writer;
 	unique_ptr<TaskExecutor> executor;
-	vector<unique_ptr<SegmentNode<RowGroup>>> &segments;
+	const vector<shared_ptr<SegmentNode<RowGroup>>> &segments;
 	vector<unique_ptr<RowGroupWriter>> writers;
 	vector<RowGroupWriteData> write_data;
 	TableStatistics &global_stats;
@@ -1019,7 +1019,7 @@ private:
 };
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-                                               vector<unique_ptr<SegmentNode<RowGroup>>> &segments) {
+                                               const vector<shared_ptr<SegmentNode<RowGroup>>> &segments) {
 	auto checkpoint_type = checkpoint_state.writer.GetCheckpointType();
 	bool vacuum_is_allowed = checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT;
 	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
@@ -1137,7 +1137,7 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto l = row_groups->Lock();
-	auto segments = row_groups->MoveSegments(l);
+	auto &segments = row_groups->ReferenceSegments(l);
 
 	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
 
@@ -1219,12 +1219,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				}
 				metadata_manager.ClearModifiedBlocks(extra_metadata_block_pointers);
 				metadata_manager.ClearModifiedBlocks(row_group.GetDeletesPointers());
-				row_groups->AppendSegment(l, std::move(entry->node));
 			}
 			writer.WriteUnchangedTable(metadata_pointer, total_rows.load());
 			return;
 		}
 	}
+
+	// not all segments have stayed the same - we need to make a new segment tree with the new set of segments
+	auto new_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, GetBaseRowId());
 
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
@@ -1234,21 +1236,20 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			continue;
 		}
 		auto &row_group = *entry->node;
-		if (!checkpoint_state.writers[segment_idx]) {
+		auto &row_group_writer = checkpoint_state.writers[segment_idx];
+		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
 			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
-			row_groups->AppendSegment(l, std::move(entry->node));
+			new_row_groups->AppendSegment(l, entry->node);
 			new_total_rows += row_group.count;
 			continue;
 		}
-		auto row_group_writer = std::move(checkpoint_state.writers[segment_idx]);
-		if (!row_group_writer) {
-			throw InternalException("Missing row group writer for index %llu", segment_idx);
-		}
+		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
 		idx_t row_start = new_total_rows;
-		bool metadata_reuse = checkpoint_state.write_data[segment_idx].reuse_existing_metadata_blocks;
-		auto pointer = row_group.Checkpoint(std::move(checkpoint_state.write_data[segment_idx]), *row_group_writer,
-		                                    global_stats, row_start);
+		bool metadata_reuse = row_group_write_data.reuse_existing_metadata_blocks;
+		auto new_row_group = std::move(row_group_write_data.result_row_group);
+		auto pointer =
+		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
 
 		auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
@@ -1257,7 +1258,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			pointer_copy = pointer;
 		}
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
-		row_groups->AppendSegment(l, std::move(entry->node));
+		new_row_groups->AppendSegment(l, std::move(new_row_group));
 		new_total_rows += row_group.count;
 
 		if (debug_verify_blocks) {
@@ -1339,8 +1340,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 		}
 	}
-	total_rows = new_total_rows;
 	l.Release();
+	// override the new
+	row_groups = std::move(new_row_groups);
+	total_rows = new_total_rows;
 	Verify();
 }
 
@@ -1350,7 +1353,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 class DestroyTask : public BaseExecutorTask {
 public:
-	DestroyTask(TaskExecutor &executor, unique_ptr<RowGroup> row_group_p)
+	DestroyTask(TaskExecutor &executor, shared_ptr<RowGroup> row_group_p)
 	    : BaseExecutorTask(executor), row_group(std::move(row_group_p)) {
 	}
 
@@ -1359,7 +1362,7 @@ public:
 	}
 
 private:
-	unique_ptr<RowGroup> row_group;
+	shared_ptr<RowGroup> row_group;
 };
 
 void RowGroupCollection::Destroy() {

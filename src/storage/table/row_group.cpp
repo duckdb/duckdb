@@ -1003,6 +1003,8 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 	// Some of these columns are composite (list, struct). The data is written
 	// first sequentially, and the pointers are written later, so that the
 	// pointers all end up densely packed, and thus more cache-friendly.
+	vector<vector<shared_ptr<ColumnData>>> result_columns;
+	result_columns.resize(row_groups.size());
 	for (idx_t column_idx = 0; column_idx < column_count; column_idx++) {
 		for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 			auto &row_group = row_groups[row_group_idx].get();
@@ -1017,14 +1019,22 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			auto stats = checkpoint_state->GetStatistics();
 			result_col->MergeStatistics(*stats);
 
-			// FIXME: temporary - we shouldn't be modifying the row group in-place but emitting a new one
-			throw InternalException("FIXME: create new row group");
-			// row_group.GetColumns()[column_idx] = std::move(result_col);
-
+			result_columns[row_group_idx].push_back(std::move(result_col));
 			row_group_write_data.statistics.push_back(stats->Copy());
 			row_group_write_data.states.push_back(std::move(checkpoint_state));
 		}
 	}
+
+	// create the row groups
+	for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
+		auto &row_group_write_data = result[row_group_idx];
+		auto &row_group = row_groups[row_group_idx].get();
+		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
+		result_row_group->columns = std::move(result_columns[row_group_idx]);
+
+		row_group_write_data.result_row_group = std::move(result_row_group);
+	}
+
 	return result;
 }
 

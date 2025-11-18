@@ -28,7 +28,7 @@ public:
 	}
 
 protected:
-	unique_ptr<RowGroup> LoadSegment() const override;
+	shared_ptr<RowGroup> LoadSegment() const override;
 
 	RowGroupCollection &collection;
 	mutable idx_t current_row_group;

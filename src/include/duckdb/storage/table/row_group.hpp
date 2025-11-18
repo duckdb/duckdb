@@ -75,6 +75,7 @@ private:
 };
 
 struct RowGroupWriteData {
+	shared_ptr<RowGroup> result_row_group;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	bool reuse_existing_metadata_blocks = false;
@@ -167,6 +168,8 @@ public:
 
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
 	                                             const vector<const_reference<RowGroup>> &row_groups);
+	//! Write the data inside this RowGroup to disk and return a struct with information about the write
+	//! Including the new RowGroup that contains the columns in their written-to-disk form
 	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info) const;
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();

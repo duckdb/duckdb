@@ -23,7 +23,7 @@ struct SegmentNode {
 	}
 
 	idx_t row_start;
-	unique_ptr<T> node;
+	shared_ptr<T> node;
 	//! The next segment after this one
 #ifndef DUCKDB_R_BUILD
 	atomic<SegmentNode<T> *> next;
@@ -83,27 +83,27 @@ public:
 		return GetRootSegmentInternal();
 	}
 	//! Obtains ownership of the data of the segment tree
-	vector<unique_ptr<SegmentNode<T>>> MoveSegments(SegmentLock &l) {
+	vector<shared_ptr<SegmentNode<T>>> MoveSegments(SegmentLock &l) {
 		LoadAllSegments(l);
 		return std::move(nodes);
 	}
-	vector<unique_ptr<SegmentNode<T>>> MoveSegments() {
+	vector<shared_ptr<SegmentNode<T>>> MoveSegments() {
 		auto l = Lock();
 		return MoveSegments(l);
 	}
 
-	const vector<unique_ptr<SegmentNode<T>>> &ReferenceSegments(SegmentLock &l) {
+	const vector<shared_ptr<SegmentNode<T>>> &ReferenceSegments(SegmentLock &l) {
 		LoadAllSegments(l);
 		return nodes;
 	}
-	const vector<unique_ptr<SegmentNode<T>>> &ReferenceSegments() {
+	const vector<shared_ptr<SegmentNode<T>>> &ReferenceSegments() {
 		auto l = Lock();
 		return ReferenceSegments(l);
 	}
-	vector<unique_ptr<SegmentNode<T>>> &ReferenceLoadedSegmentsMutable(SegmentLock &l) {
+	vector<shared_ptr<SegmentNode<T>>> &ReferenceLoadedSegmentsMutable(SegmentLock &l) {
 		return nodes;
 	}
-	const vector<unique_ptr<SegmentNode<T>>> &ReferenceLoadedSegments(SegmentLock &l) const {
+	const vector<shared_ptr<SegmentNode<T>>> &ReferenceLoadedSegments(SegmentLock &l) const {
 		return nodes;
 	}
 
@@ -173,15 +173,15 @@ public:
 		return nodes[GetSegmentIndex(l, row_number)].get();
 	}
 
-	void AppendSegment(unique_ptr<T> segment) {
+	void AppendSegment(shared_ptr<T> segment) {
 		auto l = Lock();
 		AppendSegment(l, std::move(segment));
 	}
-	void AppendSegment(SegmentLock &l, unique_ptr<T> segment) {
+	void AppendSegment(SegmentLock &l, shared_ptr<T> segment) {
 		LoadAllSegments(l);
 		AppendSegmentInternal(l, std::move(segment));
 	}
-	void AppendSegment(SegmentLock &l, unique_ptr<T> segment, idx_t row_start) {
+	void AppendSegment(SegmentLock &l, shared_ptr<T> segment, idx_t row_start) {
 		LoadAllSegments(l);
 		AppendSegmentInternal(l, std::move(segment), row_start);
 	}
@@ -294,7 +294,7 @@ protected:
 	mutable atomic<bool> finished_loading;
 
 	//! Load the next segment - only used when lazily loading
-	virtual unique_ptr<T> LoadSegment() const {
+	virtual shared_ptr<T> LoadSegment() const {
 		return nullptr;
 	}
 
@@ -304,7 +304,7 @@ protected:
 
 private:
 	//! The nodes in the tree, can be binary searched
-	mutable vector<unique_ptr<SegmentNode<T>>> nodes;
+	mutable vector<shared_ptr<SegmentNode<T>>> nodes;
 	//! Lock to access or modify the nodes
 	mutable mutex node_lock;
 	//! Base row id (row id of the first segment)
@@ -428,7 +428,7 @@ private:
 	}
 
 	//! Append a column segment to the tree
-	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment, idx_t row_start) const {
+	void AppendSegmentInternal(SegmentLock &l, shared_ptr<T> segment, idx_t row_start) const {
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		auto node = make_uniq<SegmentNode<T>>();
@@ -441,7 +441,7 @@ private:
 		}
 		nodes.push_back(std::move(node));
 	}
-	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment) const {
+	void AppendSegmentInternal(SegmentLock &l, shared_ptr<T> segment) const {
 		idx_t row_start;
 		if (nodes.empty()) {
 			row_start = base_row_id;
