@@ -1097,7 +1097,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExtractArgument(PEG
 		return make_uniq<ConstantExpression>(Value(choice_pr->Cast<StringLiteralParseResult>().result));
 	}
 	auto date_part = transformer.TransformEnum<DatePartSpecifier>(choice_pr);
-	return make_uniq<ConstantExpression>(DatePartSpecifierToString(date_part));
+	return make_uniq<ConstantExpression>(EnumUtil::ToString(date_part));
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLambdaExpression(PEGTransformer &transformer,
