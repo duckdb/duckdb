@@ -12,10 +12,7 @@
 
 namespace duckdb {
 
-
-
 struct SelectivityOptionalFilterState final : public TableFilterState {
-
 	enum class FilterStatus {
 		ACTIVE,
 		PAUSED_DUE_TO_ZONE_MAP_STATS, // todo: use this to disable the filter for one zone map based on CheckStatistics
