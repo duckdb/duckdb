@@ -444,7 +444,7 @@ MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
-	return state.DisplayEntries(args, 't');
+	return state.DisplayTables(args);
 }
 
 MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {

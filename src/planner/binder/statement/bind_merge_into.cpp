@@ -40,10 +40,20 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 	auto result = make_uniq<BoundMergeIntoAction>();
 	result->action_type = action.action_type;
 	if (action.condition) {
-		ProjectionBinder proj_binder(*this, context, proj_index, expressions, "WHERE clause");
-		proj_binder.target_type = LogicalType::BOOLEAN;
-		auto cond = proj_binder.Bind(action.condition);
-		result->condition = std::move(cond);
+		if (action.condition->HasSubquery()) {
+			// if we have a subquery we need to execute the condition outside of the MERGE INTO statement
+			WhereBinder where_binder(*this, context);
+			auto cond = where_binder.Bind(action.condition);
+			PlanSubqueries(cond, root);
+			result->condition =
+			    make_uniq<BoundColumnRefExpression>(cond->return_type, ColumnBinding(proj_index, expressions.size()));
+			expressions.push_back(std::move(cond));
+		} else {
+			ProjectionBinder proj_binder(*this, context, proj_index, expressions, "WHERE clause");
+			proj_binder.target_type = LogicalType::BOOLEAN;
+			auto cond = proj_binder.Bind(action.condition);
+			result->condition = std::move(cond);
+		}
 	}
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {

@@ -156,8 +156,8 @@ static void ValidateAsyncStrategyResult(const PhysicalTableScanExecutionStrategy
 	}
 }
 
-SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk,
-                                            OperatorSourceInput &input) const {
+SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                    OperatorSourceInput &input) const {
 	D_ASSERT(!column_ids.empty());
 	auto &g_state = input.global_state.Cast<TableScanGlobalSourceState>();
 	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
@@ -362,7 +362,7 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<PhysicalTableScan>();
-	if (function.function != other.function.function) {
+	if (function != other.function) {
 		return false;
 	}
 	if (column_ids != other.column_ids) {
