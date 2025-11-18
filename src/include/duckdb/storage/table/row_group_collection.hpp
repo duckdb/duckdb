@@ -160,6 +160,9 @@ private:
 
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(row_t *ids, idx_t &pos, idx_t count) const;
 
+	shared_ptr<RowGroupSegmentTree> GetRowGroupPointer();
+	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
+
 private:
 	//! BlockManager
 	BlockManager &block_manager;
@@ -171,8 +174,12 @@ private:
 	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection
 	vector<LogicalType> types;
+	//! Lock held when accessing or modifying the owned_row_groups pointer
+	mutex row_group_pointer_lock;
+	//! The owning pointer of the segment tree
+	shared_ptr<RowGroupSegmentTree> owned_row_groups;
 	//! The segment trees holding the various row_groups of the table
-	shared_ptr<RowGroupSegmentTree> row_groups;
+	reference<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
 	//! Allocation size, only tracked for appends

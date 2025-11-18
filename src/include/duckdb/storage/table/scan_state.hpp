@@ -199,7 +199,7 @@ enum class OrderByColumnType { NUMERIC, STRING };
 class RowGroupReorderer {
 public:
 	explicit RowGroupReorderer(const RowGroupOrderOptions &options);
-	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups);
+	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(const RowGroupSegmentTree &row_groups);
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
 
 	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
@@ -229,7 +229,7 @@ public:
 	//! Child column scans
 	unsafe_vector<ColumnScanState> column_scans;
 	//! Row group segment tree
-	RowGroupSegmentTree *row_groups;
+	optional_ptr<RowGroupSegmentTree> row_groups;
 	//! The total maximum row index
 	idx_t max_row;
 	//! The current batch index
