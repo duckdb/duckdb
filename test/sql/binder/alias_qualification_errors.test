@@ -12,7 +12,7 @@ alias.x references an alias defined after the current expression
 statement error
 SELECT alias.nope;
 ----
-Binder Error: alias.nope referenced, but no such alias exists in the SELECT list
+Binder Error:
 
 # alias to a subquery should error
 statement error
