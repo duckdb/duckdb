@@ -560,7 +560,8 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 }
 
 void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
-	auto row_group = row_groups->GetSegment(start);
+	auto segment_tree = row_groups;
+	auto row_group = segment_tree->GetSegment(start);
 	D_ASSERT(row_group);
 	idx_t current_row = start;
 	idx_t remaining = count;
@@ -576,7 +577,7 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 		if (remaining == 0) {
 			break;
 		}
-		row_group = row_groups->GetNextSegment(*row_group);
+		row_group = segment_tree->GetNextSegment(*row_group);
 	}
 }
 
