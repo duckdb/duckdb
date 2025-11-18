@@ -136,6 +136,73 @@ DROP TABLE sleep_profiling_multi
 statement ok
 DROP TABLE test_sleep_table
 
+# Test nested sleep_ms calls - the inner sleep should execute
+# Test basic nested sleep_ms - should return NULL
+query T
+SELECT sleep_ms(sleep_ms(10))
+----
+NULL
+
+# Test nested sleep_ms with timing validation - inner sleep should execute
+# For nested sleep_ms(50) inside sleep_ms, we expect to see at least 0.04s (40ms) in the timing
+require json
+
+statement ok
+PRAGMA enable_profiling = 'json'
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/sleep_nested_profiling.json'
+
+statement ok
+SELECT sleep_ms(sleep_ms(50)) FROM range(1)
+
+statement ok
+PRAGMA disable_profiling
+
+# Extract timing from JSON profiling output and validate it's >= 0.04s
+statement ok
+CREATE OR REPLACE TABLE sleep_nested_profiling AS SELECT * FROM read_json('__TEST_DIR__/sleep_nested_profiling.json')
+
+query T
+SELECT cpu_time >= 0.05 FROM sleep_nested_profiling WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
+----
+true
+
+statement ok
+DROP TABLE sleep_nested_profiling
+
+# Test nested sleep_ms with NULL input - outer sleep should receive NULL and return NULL
+query T
+SELECT sleep_ms(sleep_ms(NULL))
+----
+NULL
+
+# Test nested sleep_ms with 0 milliseconds
+query T
+SELECT sleep_ms(sleep_ms(0))
+----
+NULL
+
+# Test nested sleep_ms in WHERE clause (should still execute)
+query I
+SELECT 42 WHERE sleep_ms(sleep_ms(10)) IS NULL
+----
+42
+
+# Test nested sleep_ms with expression
+query T
+SELECT sleep_ms(sleep_ms(10 + 20))
+----
+NULL
+
+# Test nested sleep_ms with multiple rows
+query T
+SELECT sleep_ms(sleep_ms(10)) FROM range(3)
+----
+NULL
+NULL
+NULL
+
 # Test pg_sleep function (Postgres compatibility - takes seconds, converts to milliseconds)
 # Test basic pg_sleep function - should return NULL
 query T
