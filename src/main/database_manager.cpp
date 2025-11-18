@@ -83,7 +83,16 @@ shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_gua
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
-	auto &config = DBConfig::GetConfig(context);
+	string extension = "";
+	if (FileSystem::IsRemoteFile(info.path, extension)) {
+		if (options.access_mode == AccessMode::AUTOMATIC) {
+			// Attaching of remote files gets bumped to READ_ONLY
+			// This is due to the fact that on most (all?) remote files writes to DB are not available
+			// and having this raised later is not super helpful
+			options.access_mode = AccessMode::READ_ONLY;
+		}
+	}
+
 	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
@@ -99,6 +108,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			}
 		}
 	}
+	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);
 	if (!options.db_type.empty()) {
 		// we only need to prevent duplicate opening of DuckDB files
@@ -108,17 +118,10 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
-	string extension = "";
-	if (FileSystem::IsRemoteFile(info.path, extension)) {
+	if (!extension.empty()) {
 		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
 			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", info.path,
 			                                extension);
-		}
-		if (options.access_mode == AccessMode::AUTOMATIC) {
-			// Attaching of remote files gets bumped to READ_ONLY
-			// This is due to the fact that on most (all?) remote files writes to DB are not available
-			// and having this raised later is not super helpful
-			options.access_mode = AccessMode::READ_ONLY;
 		}
 	}
 
