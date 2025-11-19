@@ -290,7 +290,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
 	result_set_manager = make_uniq<ResultSetManager>(*this);
-	read_policy_registry = make_uniq<ReadPolicyRegistry>(*this);
+	read_policy_registry = make_uniq<ReadPolicyRegistry>();
 
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();

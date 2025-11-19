@@ -742,7 +742,7 @@ void ExternalFileCacheReadPolicySetting::SetGlobal(DatabaseInstance *db, DBConfi
 		auto &registry = ReadPolicyRegistry::Get(*db);
 		if (!registry.HasPolicy(str_input)) {
 			throw InvalidInputException("Invalid read policy type '%s'. Valid options are: %s", str_input,
-			                            StringUtil::Join(registry.GetPolicyNames(), ", "));
+			                            StringUtil::Join(registry.GetReadPolicies(), ", "));
 		}
 	}
 	// Store the policy name in the config
