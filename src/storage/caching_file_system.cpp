@@ -14,8 +14,8 @@
 
 namespace duckdb {
 
-CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db)
-    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)), db(db) {
+CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
+    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db_p)), db(db_p) {
 }
 
 CachingFileSystem::~CachingFileSystem() {
@@ -41,11 +41,12 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
     : context(context), caching_file_system(caching_file_system_p),
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), validate(true),
       cached_file(cached_file_p), position(0) {
-	// Create the appropriate read policy based on the setting
+	// Create the appropriate read policy based on the current setting
 	auto &config = DBConfig::GetConfig(caching_file_system_p.db);
 	auto &registry = ReadPolicyRegistry::Get(caching_file_system_p.db);
-	auto policy_name = config.options.external_file_cache_read_policy_name;
+	const auto &policy_name = config.options.external_file_cache_read_policy_name;
 	read_policy = registry.CreatePolicy(policy_name);
+
 	if (path.extended_info) {
 		const auto &open_options = path.extended_info->options;
 		const auto validate_entry = open_options.find("validate_external_file_cache");

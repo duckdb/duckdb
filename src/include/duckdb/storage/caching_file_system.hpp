@@ -114,7 +114,7 @@ private:
 	friend struct CachingFileHandle;
 
 public:
-	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
+	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db_p);
 	DUCKDB_API ~CachingFileSystem();
 
 public:

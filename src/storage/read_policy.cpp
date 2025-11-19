@@ -4,9 +4,20 @@ namespace duckdb {
 
 namespace {
 
-// Hardcoded block size for aligned reads: 2MiB
+// Default block size for aligned read, which is made for object storage access.
 constexpr idx_t ALIGNED_READ_BLOCK_SIZE = 2 * 1024 * 1024; // 2MiB
 
+// Align a value down to the nearest multiple of ALIGNED_READ_BLOCK_SIZE.
+idx_t AlignDown(idx_t value) {
+	return (value / ALIGNED_READ_BLOCK_SIZE) * ALIGNED_READ_BLOCK_SIZE;
+}
+
+// Align a value up to the nearest multiple of ALIGNED_READ_BLOCK_SIZE.
+idx_t AlignUp(idx_t value) {
+	return ((value + ALIGNED_READ_BLOCK_SIZE - 1) / ALIGNED_READ_BLOCK_SIZE) * ALIGNED_READ_BLOCK_SIZE;
+}
+
+// Util function for default read policy.
 bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length) {
 	const idx_t MAX_BOUND_TO_BE_ADDED_LENGTH = 1048576;
 
@@ -43,51 +54,25 @@ ReadPolicyResult DefaultReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t l
 
 ReadPolicyResult AlignedReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t location, idx_t file_size,
                                                           optional_idx start_location_of_next_range) {
-	// Use the hardcoded 2MiB block size
-	const idx_t block_size_to_use = ALIGNED_READ_BLOCK_SIZE;
-
-	// Align the start location down to block boundary
-	const idx_t aligned_start = (location / block_size_to_use) * block_size_to_use;
-
-	// Calculate the end location (requested end)
+	const idx_t aligned_start = AlignDown(location);
 	const idx_t requested_end = location + nr_bytes;
+	idx_t aligned_end = AlignUp(requested_end);
 
-	// Align the end location up to block boundary
-	idx_t aligned_end = ((requested_end + block_size_to_use - 1) / block_size_to_use) * block_size_to_use;
+	// Adjust aligned_end if we have a known next range location.
+	if (start_location_of_next_range.IsValid()) {
+		D_ASSERT(start_location_of_next_range.GetIndex() % ALIGNED_READ_BLOCK_SIZE == 0);
+		const idx_t next_range_start = start_location_of_next_range.GetIndex();		
+		if (aligned_end > next_range_start) {
+			aligned_end = next_range_start;
+		}
+	}
 
-	// Don't read past the end of the file
+	// Ensure we don't read past the end of the file.
 	if (aligned_end > file_size) {
 		aligned_end = file_size;
 	}
 
-	// Calculate aligned bytes to read
-	idx_t aligned_nr_bytes = aligned_end - aligned_start;
-
-	// If we have a next range location, we might want to limit the read
-	if (start_location_of_next_range.IsValid()) {
-		const idx_t next_range_start = start_location_of_next_range.GetIndex();
-		// Don't read beyond the next range
-		if (aligned_end > next_range_start) {
-			// Use the default policy logic to potentially fill the gap
-			DefaultReadPolicy default_policy;
-			ReadPolicyResult default_result =
-			    default_policy.CalculateBytesToRead(nr_bytes, location, file_size, start_location_of_next_range);
-			// But still align it
-			const idx_t default_end = default_result.read_location + default_result.read_bytes;
-			idx_t aligned_default_end =
-			    ((default_end + block_size_to_use - 1) / block_size_to_use) * block_size_to_use;
-			// Don't align past the file size
-			if (aligned_default_end > file_size) {
-				aligned_default_end = file_size;
-			}
-			aligned_nr_bytes = aligned_default_end - aligned_start;
-			// Make sure we don't exceed the next range
-			if (aligned_start + aligned_nr_bytes > next_range_start) {
-				aligned_nr_bytes = next_range_start - aligned_start;
-			}
-		}
-	}
-
+	const idx_t aligned_nr_bytes = aligned_end - aligned_start;
 	return {aligned_start, aligned_nr_bytes};
 }
 
