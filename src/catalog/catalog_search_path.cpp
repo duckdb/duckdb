@@ -265,8 +265,10 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) con
 				}
 			}
 		}
-		// If no regular catalog was found for this schema, add the default database
-		// This allows looking up schemas that aren't in the search path
+		// If no regular catalog was found for this schema, add the default database.
+		// This ensures explicitly-qualified schemas resolve correctly even when not
+		// in the search path. Previously this fallback was in GetCatalogEntries(),
+		// but since TEMP_CATALOG is now always added first, we must handle it here.
 		if (!found_regular_catalog) {
 			auto &default_entry = GetDefault();
 			if (!IsInvalidCatalog(default_entry.catalog)) {
