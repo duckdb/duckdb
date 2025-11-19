@@ -155,7 +155,6 @@ statement ok
 checkpoint
 
 # typed_value does not contain any NULLs now, because all values are of type VARCHAR[]
-# FIXME: why does the 'untyped_value_index' say "Has No Null: true" ?
 query I
 select DISTINCT ON(row_group_id) column_stats from pragma_storage_info('fully_shredded_array');
 ----
@@ -175,7 +174,7 @@ insert into partially_shredded_array select [(i % 100)::INTEGER::VARIANT, 'this 
 statement ok
 checkpoint
 
-# Both 'untyped_value_index' and 'typed_value' have "Has No Null: true"
+# Both 'untyped_value_index' and 'typed_value' have "Has Null: true"
 # because there are both shredded and unshredded list children
 # Only the child elements aren't all of type VARCHAR, so the child's 'untyped_value_index' should contain NULL values
 query I
