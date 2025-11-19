@@ -80,7 +80,7 @@ SELECT id, sleep_ms(20) FROM test_sleep_table WHERE id < 3 ORDER BY id
 2	NULL
 
 # Test sleep_ms timing with JSON profiling - extract and validate actual timing
-# For 50ms sleep, we expect to see at least 0.04s (40ms) in the operator_timing
+# For 50ms sleep, we expect to see at least 0.05s (50ms) in the operator_timing
 require json
 
 statement ok
@@ -95,7 +95,7 @@ SELECT sleep_ms(50) FROM range(1)
 statement ok
 PRAGMA disable_profiling
 
-# Extract timing from JSON profiling output and validate it's >= 0.04s
+# Extract timing from JSON profiling output and validate it's >= 0.05s
 statement ok
 CREATE OR REPLACE TABLE sleep_profiling AS SELECT * FROM read_json('__TEST_DIR__/sleep_profiling.json')
 
@@ -108,7 +108,7 @@ statement ok
 DROP TABLE sleep_profiling
 
 # Test sleep_ms timing over multiple rows - should take cumulative time
-# For 5 rows of 10ms each (50ms total), we expect to see at least 0.04s in the timing
+# For 5 rows of 10ms each (50ms total), we expect to see at least 0.05s in the timing
 statement ok
 PRAGMA enable_profiling = 'json'
 
@@ -121,12 +121,12 @@ SELECT sleep_ms(10) FROM range(5)
 statement ok
 PRAGMA disable_profiling
 
-# Extract timing from JSON profiling output and validate it's >= 0.04s
+# Extract timing from JSON profiling output and validate it's >= 0.05s
 statement ok
 CREATE OR REPLACE TABLE sleep_profiling_multi AS SELECT * FROM read_json('__TEST_DIR__/sleep_profiling_multi.json')
 
 query T
-SELECT cpu_time >= 0.04 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
+SELECT cpu_time >= 0.05 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
 ----
 true
 
@@ -159,7 +159,7 @@ SELECT sleep_ms(sleep_ms(50)) FROM range(1)
 statement ok
 PRAGMA disable_profiling
 
-# Extract timing from JSON profiling output and validate it's >= 0.04s
+# Extract timing from JSON profiling output and validate it's >= 0.05s
 statement ok
 CREATE OR REPLACE TABLE sleep_nested_profiling AS SELECT * FROM read_json('__TEST_DIR__/sleep_nested_profiling.json')
 
