@@ -60,6 +60,7 @@ void IndexStorageInfo::Serialize(Serializer &serializer) const {
 	vector<idx_t> mapped_ids;
 	mapped_ids.reserve(mapped_column_ids.size());
 	for (auto &col_id : mapped_column_ids) {
+		D_ASSERT(!col_id.HasChildren());
 		mapped_ids.push_back(col_id.GetPrimaryIndex());
 	}
 	serializer.WritePropertyWithDefault<vector<idx_t>>(104, "mapped_column_ids", mapped_ids);
