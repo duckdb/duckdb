@@ -887,9 +887,9 @@ typedef struct _duckdb_log_storage {
 	void *internal_ptr;
 } * duckdb_log_storage;
 
-//! This function is missing the logging context which may be added later, or in a secondary function.
-typedef void (*duckdb_logger_write_log_entry_t)(duckdb_timestamp timestamp, const char *level, const char *log_type,
-                                                const char *log_message);
+//! This function is missing the logging context, which will be added later.
+typedef void (*duckdb_logger_write_log_entry_t)(void *extra_data, duckdb_timestamp *timestamp, const char *level,
+                                                const char *log_type, const char *log_message);
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
@@ -6098,7 +6098,8 @@ DUCKDB_C_API void duckdb_destroy_catalog_entry(duckdb_catalog_entry *entry);
 // Logging
 //----------------------------------------------------------------------------------------------------------------------
 // DESCRIPTION:
-// Functions that expose the log storage and allow the configuration of a custom logger
+// Functions exposing the log storage, which allows the configuration of a custom logger. This API is not yet ready to
+// be stabilized.
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
@@ -6111,27 +6112,45 @@ DUCKDB_C_API duckdb_log_storage duckdb_create_log_storage();
 /*!
 Destroys a log storage object.
 
-* @param storage The log storage object to destroy.
+* @param log_storage The log storage object to destroy.
 */
-DUCKDB_C_API void duckdb_destroy_log_storage(duckdb_log_storage storage);
+DUCKDB_C_API void duckdb_destroy_log_storage(duckdb_log_storage *log_storage);
 
 /*!
-Sets the function to be called when a new log entry is written.
+Sets the callback function for writing log entries.
 
-* @param storage The log storage object.
+* @param log_storage The log storage object.
 * @param function The function to call.
 */
-DUCKDB_C_API void duckdb_log_storage_set_write_log_entry(duckdb_log_storage storage,
+DUCKDB_C_API void duckdb_log_storage_set_write_log_entry(duckdb_log_storage log_storage,
                                                          duckdb_logger_write_log_entry_t function);
 
 /*!
-Sets the storage for the logger.
+Sets the extra data of the custom log storage.
+
+* @param log_storage The log storage object.
+* @param extra_data The extra data that is passed back into the callbacks.
+* @param delete_callback The delete callback to call on the extra data, if any.
+*/
+DUCKDB_C_API void duckdb_log_storage_set_extra_data(duckdb_log_storage log_storage, void *extra_data,
+                                                    duckdb_delete_callback_t delete_callback);
+
+/*!
+Sets the name of the log storage.
+
+* @param log_storage The log storage object.
+* @param name The name of the log storage.
+*/
+DUCKDB_C_API void duckdb_log_storage_set_name(duckdb_log_storage log_storage, const char *name);
+
+/*!
+Registers a custom log storage for the logger.
 
 * @param database A database object.
-* @param name The storage name.
-* @param storage The log storage object.
+* @param log_storage The log storage object.
+* @return Whether the registration was successful.
 */
-DUCKDB_C_API void duckdb_register_log_storage(duckdb_database database, const char *name, duckdb_log_storage storage);
+DUCKDB_C_API duckdb_state duckdb_register_log_storage(duckdb_database database, duckdb_log_storage log_storage);
 
 #endif
 

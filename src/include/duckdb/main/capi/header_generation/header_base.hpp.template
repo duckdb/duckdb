@@ -887,8 +887,8 @@ typedef struct _duckdb_log_storage {
 	void *internal_ptr;
 } * duckdb_log_storage;
 
-//! This function is missing the logging context which may be added later, or in a secondary function.
-typedef void (*duckdb_logger_write_log_entry_t)(duckdb_timestamp timestamp, const char *level, const char *log_type, const char *log_message);
+//! This function is missing the logging context, which will be added later.
+typedef void (*duckdb_logger_write_log_entry_t)(void *extra_data, duckdb_timestamp *timestamp, const char *level, const char *log_type, const char *log_message);
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
