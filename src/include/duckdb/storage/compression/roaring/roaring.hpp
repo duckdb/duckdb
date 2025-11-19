@@ -353,7 +353,8 @@ public:
 	void Compress(Vector &input, idx_t count);
 	template <PhysicalType TYPE>
 	void Compress(Vector &input, idx_t count) {
-		throw InternalException("RoaringCompressState::Compress, type %s not handled", EnumUtil::ToString(TYPE));
+		static_assert(AlwaysFalse<std::integral_constant<PhysicalType, TYPE>>::VALUE,
+					  "No specialization exists for this type");
 	}
 
 public:
