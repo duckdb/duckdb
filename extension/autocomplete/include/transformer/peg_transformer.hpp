@@ -760,6 +760,20 @@ private:
 	                                                                      optional_ptr<ParseResult> parse_result);
 
 	// select.gram
+	static unique_ptr<SQLStatement> TransformSelectStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformSelectStatementInternal(PEGTransformer &transformer,
+																		 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformSelectOrParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformSelectParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformBaseSelect(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformSelectStatementType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformOptionalParensSimpleSelect(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformSimpleSelectParens(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformSimpleSelect(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectNode> TransformSelectFrom(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectNode> TransformSelectFromClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectNode> TransformFromSelectClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<TableRef> TransformFromClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionArgument(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

@@ -442,6 +442,19 @@ void PEGTransformerFactory::RegisterPragma() {
 
 void PEGTransformerFactory::RegisterSelect() {
 	// select.gram
+	REGISTER_TRANSFORM(TransformSelectStatement);
+	REGISTER_TRANSFORM(TransformSelectStatementInternal);
+	REGISTER_TRANSFORM(TransformSelectOrParens);
+	REGISTER_TRANSFORM(TransformSelectParens);
+	REGISTER_TRANSFORM(TransformBaseSelect);
+	REGISTER_TRANSFORM(TransformSelectStatementType);
+	REGISTER_TRANSFORM(TransformOptionalParensSimpleSelect);
+	REGISTER_TRANSFORM(TransformSimpleSelectParens);
+	REGISTER_TRANSFORM(TransformSimpleSelect);
+	REGISTER_TRANSFORM(TransformSelectFrom);
+	REGISTER_TRANSFORM(TransformSelectFromClause);
+	REGISTER_TRANSFORM(TransformFromSelectClause);
+	REGISTER_TRANSFORM(TransformFromClause);
 	REGISTER_TRANSFORM(TransformFunctionArgument);
 	REGISTER_TRANSFORM(TransformBaseTableName);
 	REGISTER_TRANSFORM(TransformSchemaReservedTable);
