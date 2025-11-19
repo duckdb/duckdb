@@ -75,7 +75,7 @@ public:
 	virtual ~ExpressionBinder();
 
 	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
-	                                      BindResult &result) {
+	                                      BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
 		return false;
 	}
 
@@ -174,7 +174,8 @@ protected:
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
-	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression);
+	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression,
+	                          unique_ptr<ParsedExpression> &expr_ptr);
 	BindResult BindExpression(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
