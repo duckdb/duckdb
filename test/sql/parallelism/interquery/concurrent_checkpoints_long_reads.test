@@ -1,0 +1,38 @@
+# name: test/sql/parallelism/interquery/concurrent_checkpoints_long_reads.test
+# description: Concurrently checkpoint the same database while long reads happen in the background
+# group: [interquery]
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_checkpoint_long_reads.db' AS db
+
+statement ok
+CREATE TABLE db.integers(i INTEGER);
+
+statement ok
+INSERT INTO db.integers FROM range(1000000);
+
+concurrentloop threadid 0 10
+
+loop k 100 200
+
+onlyif threadid=0
+statement ok
+SELECT sleep_ms(10)
+
+onlyif threadid=0
+statement ok
+UPDATE db.integers SET i=i+1 WHERE i%${k}=0
+
+onlyif threadid=0
+statement maybe
+CHECKPOINT db
+----
+there are other write transactions active
+
+endloop
+
+onlyif threadid>0
+statement ok
+SELECT COUNT(*), SUM(i), SUM(sleep_ms(case when i%2=0 then 1 else 1 end)) FROM db.integers WHERE i%(973+${threadid})=0
+
+endloop
