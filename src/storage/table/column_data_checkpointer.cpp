@@ -86,18 +86,19 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment = *nodes[segment_idx].node;
-		ColumnScanState scan_state;
-		scan_state.current = &segment;
+		auto &segment_node = *nodes[segment_idx];
+		auto &segment = *segment_node.node;
+		ColumnScanState scan_state(nullptr);
+		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
 
 		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
 			scan_vector.Reference(intermediate);
 
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
-			scan_state.row_index = segment.start + base_row_index;
+			scan_state.offset_in_column = segment_node.row_start + base_row_index;
 
-			col_data.CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
+			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			callback(scan_vector, count);
 		}
 	}
@@ -108,9 +109,10 @@ CompressionType ForceCompression(StorageManager &storage_manager,
                                  CompressionType compression_type) {
 	// One of the force_compression flags has been set
 	// check if this compression method is available
-	// if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
+	// auto compression_availability_result = CompressionTypeIsAvailable(compression_type, storage_manager);
+	// if (!compression_availability_result.IsAvailable()) {
 	//	throw InvalidInputException("The forced compression method (%s) is not available in the current storage
-	// version", 	                            CompressionTypeToString(compression_type));
+	// version", CompressionTypeToString(compression_type));
 	//}
 
 	bool found = false;
@@ -284,8 +286,8 @@ void ColumnDataCheckpointer::DropSegments() {
 
 		// Drop the segments, as we'll be replacing them with new ones, because there are changes
 		for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-			auto segment = nodes[segment_idx].node.get();
-			segment->CommitDropSegment();
+			auto &segment = *nodes[segment_idx]->node;
+			segment.CommitDropSegment();
 		}
 	}
 }
@@ -371,14 +373,15 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	auto &col_data = state.column_data;
 	auto nodes = col_data.data.MoveSegments();
 
-	idx_t current_row = row_group.start;
+	idx_t current_row = 0;
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto segment = nodes[segment_idx].node.get();
-		if (segment->start != current_row) {
+		auto &segment = *nodes[segment_idx]->node;
+		auto segment_start = nodes[segment_idx]->row_start;
+		if (segment_start != current_row) {
 			string extra_info;
 			for (auto &s : nodes) {
 				extra_info += "\n";
-				extra_info += StringUtil::Format("Start %d, count %d", s.node->start, s.node->count.load());
+				extra_info += StringUtil::Format("Start %d, count %d", segment_start, segment.count.load());
 			}
 			const_reference<ColumnData> root = col_data;
 			while (root.get().HasParent()) {
@@ -388,18 +391,17 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 			    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
 			    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
 			    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
-			    row_group.start, row_group.count.load(), current_row, segment->start, root.get().column_index,
-			    col_data.type, root.get().type, root.get().info.GetSchemaName(), root.get().info.GetTableName(),
-			    extra_info);
+			    row_group.count.load(), current_row, segment_start, root.get().column_index, col_data.type,
+			    root.get().type, root.get().info.GetSchemaName(), root.get().info.GetTableName(), extra_info);
 		}
-		current_row += segment->count;
-		auto pointer = segment->GetDataPointer();
+		auto pointer = segment.GetDataPointer(current_row);
+		current_row += segment.count;
 
 		// merge the persistent stats into the global column stats
-		state.global_stats->Merge(segment->stats.statistics);
+		state.global_stats->Merge(segment.stats.statistics);
 
 		// directly append the current segment to the new tree
-		state.new_tree.AppendSegment(std::move(nodes[segment_idx].node));
+		state.new_tree.AppendSegment(std::move(nodes[segment_idx]->node));
 
 		state.data_pointers.push_back(std::move(pointer));
 	}
@@ -446,7 +448,7 @@ void ColumnDataCheckpointer::FinalizeCheckpoint() {
 		auto new_segments = state.new_tree.MoveSegments();
 		auto l = col_data.data.Lock();
 		for (auto &new_segment : new_segments) {
-			col_data.AppendSegment(l, std::move(new_segment.node));
+			col_data.AppendSegment(l, std::move(new_segment->node));
 		}
 		col_data.ClearUpdates();
 	}

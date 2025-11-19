@@ -150,6 +150,9 @@ public:
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
+	//! Returns true if the function name is an alias for the UNNEST function
+	static bool IsUnnestFunction(const string &function_name);
+
 private:
 	//! Current stack depth
 	idx_t stack_depth = DConstants::INVALID_INDEX;
@@ -216,8 +219,6 @@ protected:
 	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
 
-	//! Returns true if the function name is an alias for the UNNEST function
-	static bool IsUnnestFunction(const string &function_name);
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
 	                               const LambdaSyntaxType syntax_type);
 

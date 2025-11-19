@@ -3,7 +3,12 @@
 #include "history.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "shell_highlight.hpp"
+#include "shell_state.hpp"
+#if defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace duckdb {
 static const char *continuationPrompt = "> ";
@@ -42,7 +47,7 @@ struct AppendBuffer {
 	}
 
 	void Write(int fd) {
-		if (write(fd, buffer.c_str(), buffer.size()) == -1) {
+		if (!Linenoise::Write(fd, buffer.c_str(), buffer.size())) {
 			/* Can't recover from write error. */
 			Linenoise::Log("%s", "Failed to write buffer\n");
 		}
@@ -93,7 +98,7 @@ void Linenoise::RefreshShowHints(AppendBuffer &append_buffer, int plen) const {
 }
 
 static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, size_t cols, size_t plen,
-                       std::string &highlight_buffer, bool highlight, searchMatch *match = nullptr) {
+                       std::string &highlight_buffer, bool highlight) {
 	if (duckdb::Utf8Proc::IsValid(buf, len)) {
 		// utf8 in prompt, handle rendering
 		size_t remaining_render_width = cols - plen - 1;
@@ -129,8 +134,7 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
 		}
 		if (highlight) {
 			bool is_dot_command = buf[0] == '.';
-
-			auto tokens = Highlighting::Tokenize(buf, len, is_dot_command, match);
+			auto tokens = Highlighting::Tokenize(buf, len, is_dot_command);
 			highlight_buffer = Highlighting::HighlightText(buf, len, start_pos, cpos, tokens);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
@@ -310,12 +314,10 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, 
 				highlightToken token;
 				token.start = cpos + extra_bytes;
 				token.type = is_cursor_row ? tokenType::TOKEN_CONTINUATION_SELECTED : tokenType::TOKEN_CONTINUATION;
-				token.search_match = false;
 				new_tokens.push_back(token);
 
 				token.start = cpos + extra_bytes + continuationBytes;
 				token.type = prev_type;
-				token.search_match = false;
 				new_tokens.push_back(token);
 			}
 			extra_bytes += continuationBytes;
@@ -347,14 +349,12 @@ static void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highligh
 			highlightToken token;
 			token.start = insert_pos;
 			token.type = insert_type;
-			token.search_match = false;
 			new_tokens.push_back(token);
 
 			// now we need to insert the other token ONLY if the other token is not immediately following this one
 			if (i + 1 >= tokens.size() || tokens[i + 1].start > insert_pos + 1) {
 				token.start = insert_pos + 1;
 				token.type = tokens[i].type;
-				token.search_match = false;
 				new_tokens.push_back(token);
 			}
 			i++;
@@ -366,7 +366,6 @@ static void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highligh
 			highlightToken token;
 			token.start = insert_pos;
 			token.type = insert_type;
-			token.search_match = false;
 			new_tokens.push_back(token);
 
 			// now just insert the next token
@@ -388,7 +387,6 @@ static void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highligh
 		highlightToken token;
 		token.start = insert_pos;
 		token.type = insert_type;
-		token.search_match = false;
 		new_tokens.push_back(token);
 	}
 	tokens = std::move(new_tokens);
@@ -689,7 +687,6 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 			highlightToken comment_token;
 			comment_token.start = c_start;
 			comment_token.type = tokenType::TOKEN_COMMENT;
-			comment_token.search_match = false;
 
 			for (; token_idx < tokens.size(); token_idx++) {
 				if (tokens[token_idx].start >= c_start) {
@@ -789,7 +786,7 @@ bool Linenoise::AddCompletionMarker(const char *buf, idx_t len, string &result_b
 	highlightToken completion_token;
 	completion_token.start = len;
 	completion_token.type = tokenType::TOKEN_COMMENT;
-	completion_token.search_match = true;
+	completion_token.extra_highlighting = ExtraHighlightingType::UNDERLINE;
 	tokens.push_back(completion_token);
 	return true;
 }
@@ -860,11 +857,29 @@ void Linenoise::RefreshMultiLine() {
 	vector<highlightToken> tokens;
 	if (Highlighting::IsEnabled()) {
 		bool is_dot_command = buf[0] == '.';
-		auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
-		tokens = Highlighting::Tokenize(render_buf, render_len, is_dot_command, match);
+		tokens = Highlighting::Tokenize(render_buf, render_len, is_dot_command);
 
 		// add error highlighting
 		AddErrorHighlighting(render_start, render_end, tokens);
+
+		// add any extra highlighting (search match, autocomplete)
+		auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
+		ExtraHighlighting extra_highlighting;
+		if (match) {
+			// search match - add underline under the match
+			extra_highlighting.start = match->match_start;
+			extra_highlighting.end = match->match_end;
+			extra_highlighting.type = ExtraHighlightingType::UNDERLINE;
+		} else if (completion_idx.IsValid()) {
+			// auto-completing - bold-face the extra character (if any)
+			auto &completion = completion_list.completions[completion_idx.GetIndex()];
+			if (completion.extra_char != '\0') {
+				extra_highlighting.start = completion.extra_char_pos;
+				extra_highlighting.end = completion.extra_char_pos + 1;
+				extra_highlighting.type = ExtraHighlightingType::BOLD;
+			}
+		}
+		Highlighting::AddExtraHighlighting(render_len, tokens, extra_highlighting);
 
 		// add completion hint
 		if (AddCompletionMarker(render_buf, render_len, highlight_buffer, tokens)) {
@@ -965,10 +980,27 @@ void Linenoise::RefreshMultiLine() {
 
 		if (!completion_list.completions.empty()) {
 			string completion_text;
-			for (idx_t i = 0; i < completion_list.completions.size(); i++) {
-				if (i > 0) {
-					completion_text += " ";
+			// figure out how to align the completions
+			// we need to figure out how many "columns" we render
+			idx_t max_length = 0;
+			for (auto &completion : completion_list.completions) {
+				auto &completion_text = completion.original_completion;
+				if (!completion.original_completion_length.IsValid()) {
+					completion.original_completion_length =
+					    linenoiseComputeRenderWidth(completion_text.c_str(), completion_text.size());
 				}
+				idx_t completion_length = completion.original_completion_length.GetIndex();
+				if (completion_length > max_length) {
+					max_length = completion_length;
+				}
+			}
+
+			// now based on the max width determine the column count
+			// we need at least one space between each entry
+			max_length++;
+			idx_t column_count = ws.ws_col / max_length;
+			idx_t column_index = 0;
+			for (idx_t i = 0; i < completion_list.completions.size(); i++) {
 				auto &completion = completion_list.completions[i];
 				auto &rendered_text = completion.original_completion;
 				auto element_type = duckdb_shell::HighlightElementType::NONE;
@@ -1009,7 +1041,7 @@ void Linenoise::RefreshMultiLine() {
 				auto &element = duckdb_shell::ShellHighlight::GetHighlightElement(element_type);
 				auto color = element.color;
 				auto intensity = element.intensity;
-				if (i == completion_idx) {
+				if (completion_idx.IsValid() && i == completion_idx.GetIndex()) {
 					// underline selected completion
 					if (intensity == duckdb_shell::PrintIntensity::BOLD) {
 						intensity = duckdb_shell::PrintIntensity::BOLD_UNDERLINE;
@@ -1022,6 +1054,25 @@ void Linenoise::RefreshMultiLine() {
 				completion_text += rendered_text;
 				if (!terminal_text.empty()) {
 					completion_text += duckdb_shell::ShellHighlight::ResetTerminalCode();
+				}
+				if (i + 1 == completion_list.completions.size()) {
+					continue;
+				}
+				if (column_count == 0) {
+					// if we cannot fit even a single column because our completion is too long
+					// just space separate the entries and don't try to align them
+					completion_text += " ";
+					continue;
+				}
+				// if we have columns - add spaces to pad so we get nicely aligned suggestions
+				column_index++;
+				if (column_index >= column_count) {
+					// have to wrap around - add a newline
+					completion_text += "\r\n";
+					column_index = 0;
+				} else {
+					idx_t space_count = max_length - completion.original_completion_length.GetIndex();
+					completion_text += string(space_count, ' ');
 				}
 			}
 

@@ -1058,7 +1058,8 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 	CreateIndexScanState state;
 
 	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
-	auto row_start_aligned = state.table_state.row_group->start + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
+	auto row_start_aligned =
+	    state.table_state.row_group->row_start + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
@@ -1193,7 +1194,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		if (!index.IsBound()) {
 			// Buffer only the key columns, and store their mapping.
 			auto &unbound_index = index.Cast<UnboundIndex>();
-			unbound_index.BufferChunk(index_chunk, row_ids, mapped_column_ids);
+			unbound_index.BufferChunk(index_chunk, row_ids, mapped_column_ids, BufferedIndexReplay::INSERT_ENTRY);
 			return false;
 		}
 

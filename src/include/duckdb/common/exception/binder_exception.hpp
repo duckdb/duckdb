@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 
 namespace duckdb {

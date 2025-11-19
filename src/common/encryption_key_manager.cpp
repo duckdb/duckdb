@@ -19,7 +19,8 @@ EncryptionKey::EncryptionKey(data_ptr_t encryption_key_p) {
 	D_ASSERT(memcmp(key, encryption_key_p, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH) == 0);
 
 	// zero out the encryption key in memory
-	memset(encryption_key_p, 0, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(encryption_key_p,
+	                                                                 MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	LockEncryptionKey(key);
 }
 
@@ -31,15 +32,19 @@ EncryptionKey::~EncryptionKey() {
 void EncryptionKey::LockEncryptionKey(data_ptr_t key, idx_t key_len) {
 #if defined(_WIN32)
 	VirtualLock(key, key_len);
+#elif defined(__MVS__)
+	__mlockall(_BPX_NONSWAP);
 #else
 	mlock(key, key_len);
 #endif
 }
 
 void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, idx_t key_len) {
-	memset(key, 0, key_len);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key, key_len);
 #if defined(_WIN32)
 	VirtualUnlock(key, key_len);
+#elif defined(__MVS__)
+	__mlockall(_BPX_SWAP);
 #else
 	munlock(key, key_len);
 #endif
@@ -64,7 +69,8 @@ EncryptionKeyManager &EncryptionKeyManager::Get(DatabaseInstance &db) {
 
 string EncryptionKeyManager::GenerateRandomKeyID() {
 	uint8_t key_id[KEY_ID_BYTES];
-	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(key_id, KEY_ID_BYTES);
+	RandomEngine engine;
+	engine.RandomData(key_id, KEY_ID_BYTES);
 	string key_id_str(reinterpret_cast<const char *>(key_id), KEY_ID_BYTES);
 	return key_id_str;
 }
@@ -72,7 +78,7 @@ string EncryptionKeyManager::GenerateRandomKeyID() {
 void EncryptionKeyManager::AddKey(const string &key_name, data_ptr_t key) {
 	derived_keys.emplace(key_name, EncryptionKey(key));
 	// Zero-out the encryption key
-	std::memset(key, 0, DERIVED_KEY_LENGTH);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key, DERIVED_KEY_LENGTH);
 }
 
 bool EncryptionKeyManager::HasKey(const string &key_name) const {
@@ -107,7 +113,7 @@ string EncryptionKeyManager::Base64Decode(const string &key) {
 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
 	Blob::FromBase64(key, output.get(), result_size);
 	string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
-	memset(output.get(), 0, result_size);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(output.get(), result_size);
 	return decoded_key;
 }
 
@@ -124,10 +130,9 @@ void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr
 
 	KeyDerivationFunctionSHA256(reinterpret_cast<const_data_ptr_t>(decoded_key.data()), decoded_key.size(), salt,
 	                            derived_key);
-
-	// wipe the original and decoded key
-	std::fill(user_key.begin(), user_key.end(), 0);
-	std::fill(decoded_key.begin(), decoded_key.end(), 0);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(data_ptr_cast(&user_key[0]), user_key.size());
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(data_ptr_cast(&decoded_key[0]),
+	                                                                 decoded_key.size());
 	user_key.clear();
 	decoded_key.clear();
 }

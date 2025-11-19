@@ -1,10 +1,8 @@
 include_directories(include)
-if(NOT WIN32)
-  add_subdirectory(linenoise)
-  add_definitions(-DHAVE_LINENOISE=1)
-  include_directories(../../third_party/utf8proc/include)
-  include_directories(linenoise/include)
-endif()
+add_subdirectory(linenoise)
+add_definitions(-DHAVE_LINENOISE=1)
+include_directories(../../third_party/utf8proc/include)
+include_directories(linenoise/include)
 add_definitions(-DSQLITE_SHELL_IS_UTF8)
 add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 
@@ -27,6 +25,7 @@ set(SHELL_SOURCES
     shell_renderer.cpp
     shell_highlight.cpp
     shell_progress_bar.cpp
+    shell_render_table_metadata.cpp
     shell_windows.cpp)
 
 option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)

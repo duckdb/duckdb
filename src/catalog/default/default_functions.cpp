@@ -86,6 +86,7 @@ static const DefaultMacro internal_macros[] = {
 	{"pg_catalog", "pg_type_is_visible", {"type_oid", nullptr}, {{nullptr, nullptr}}, "true"},
 
 	{"pg_catalog", "pg_size_pretty", {"bytes", nullptr}, {{nullptr, nullptr}}, "format_bytes(bytes)"},
+	{"pg_catalog", "pg_sleep", {"seconds", nullptr}, {{nullptr, nullptr}}, "sleep_ms(CAST(seconds * 1000 AS BIGINT))"},
 
 	{DEFAULT_SCHEMA, "round_even", {"x", "n", nullptr}, {{nullptr, nullptr}}, "CASE ((abs(x) * power(10, n+1)) % 10) WHEN 5 THEN round(x/2, n) * 2 ELSE round(x, n) END"},
 	{DEFAULT_SCHEMA, "roundbankers", {"x", "n", nullptr}, {{nullptr, nullptr}}, "round_even(x, n)"},
@@ -114,10 +115,6 @@ static const DefaultMacro internal_macros[] = {
 
     {DEFAULT_SCHEMA, "list_reverse", {"l", nullptr}, {{nullptr, nullptr}}, "l[:-:-1]"},
     {DEFAULT_SCHEMA, "array_reverse", {"l", nullptr}, {{nullptr, nullptr}}, "list_reverse(l)"},
-
-    // FIXME implement as actual function if we encounter a lot of performance issues. Complexity now: n * m, with hashing possibly n + m
-    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, {{nullptr, nullptr}}, "list_filter(list_distinct(l1), lambda variable_intersect: list_contains(l2, variable_intersect))"},
-    {DEFAULT_SCHEMA, "array_intersect", {"l1", "l2", nullptr}, {{nullptr, nullptr}}, "list_intersect(l1, l2)"},
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, {{nullptr, nullptr}}, "list_aggr(l, 'avg')"},

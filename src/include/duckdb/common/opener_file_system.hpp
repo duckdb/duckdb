@@ -50,6 +50,9 @@ public:
 	FileType GetFileType(FileHandle &handle) override {
 		return GetFileSystem().GetFileType(handle);
 	}
+	FileMetadata Stats(FileHandle &handle) override {
+		return GetFileSystem().Stats(handle);
+	}
 
 	void Truncate(FileHandle &handle, int64_t new_size) override {
 		GetFileSystem().Truncate(handle, new_size);

@@ -31,7 +31,7 @@ ReplaceEntry <- Expression 'AS' ColumnReference
 RenameList <- 'RENAME' (Parens(List(RenameEntry)) / RenameEntry)
 RenameEntry <- ColumnReference 'AS' Identifier
 SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference
-CaseExpression <- 'CASE' Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'
+CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
 TypeLiteral <- ColId StringLiteral
@@ -45,8 +45,11 @@ FrameBound <- ('UNBOUNDED' 'PRECEDING') / ('UNBOUNDED' 'FOLLOWING') / ('CURRENT'
 WindowExcludeClause <- 'EXCLUDE' WindowExcludeElement
 WindowExcludeElement <- ('CURRENT' 'ROW') / 'GROUP' / 'TIES' / ('NO' 'OTHERS')
 OverClause <- 'OVER' WindowFrame
-WindowFrame <- WindowFrameDefinition / Identifier / Parens(Identifier)
-WindowFrameDefinition <- Parens(BaseWindowName? WindowFrameContents) / Parens(WindowFrameContents)
+WindowFrame <- WindowFrameDefinition / Identifier / ParensIdentifier
+ParensIdentifier <- Parens(Identifier)
+WindowFrameDefinition <- WindowFrameNameContentsParens / WindowFrameContentsParens
+WindowFrameNameContentsParens <- Parens(BaseWindowName? WindowFrameContents)
+WindowFrameContentsParens <- Parens(WindowFrameContents)
 WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 BaseWindowName <- Identifier
 WindowPartition <- 'PARTITION' 'BY' List(Expression)
@@ -96,7 +99,10 @@ SingleExpression <-
     DefaultExpression
 
 # LEVEL 1 (Lowest)
-Expression <- LogicalOrExpression
+Expression <- LambdaArrowExpression
+# LEVEL 1.5
+LambdaArrowExpression <- LogicalOrExpression (LambdaOperator LogicalOrExpression)*
+LambdaOperator <- '->'
 LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
 # LEVEL 2
 LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
@@ -131,25 +137,34 @@ OperatorGreaterThanEquals <- '>='
 # LEVEL 7
 BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
 BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
-LikeClause <- LikeVariations OtherOperatorExpression ('ESCAPE' OtherOperatorExpression)?
-LikeVariations <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO') / '~' / '~~' / '!~' / '!~~' / '!~~*'
+LikeClause <- LikeVariations Expression EscapeClause?
+EscapeClause <- 'ESCAPE' Expression
+
+LikeVariations <- SimilarToToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp
+LikeToken      <- 'LIKE' / '~~'
+ILikeToken     <- 'ILIKE' / '~~*'
+GlobToken      <- 'GLOB' / '~~~'
+SimilarToToken <- ('SIMILAR' 'TO') / '~'
+NotILikeOp     <- '!~~*'
+NotLikeOp      <- '!~~'
+NotSimilarToOp <- '!~'
+
 InClause <- 'IN' InExpression
 InExpression <- Parens(List(Expression)) / Parens(SelectStatement) / OtherOperatorExpression
 BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
-    AnyAllOperator / LambdaOperator / InetOperator / JsonOperator / ListOperator / StringOperator
+    AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
 AnyAllOperator <- ComparisonOperator AnyOrAll
 AnyOrAll <- 'ANY' / 'ALL'
-LambdaOperator <- '->'
 InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
 ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
-BitOperator <- '&' / '|' / '<<' / '>>' / '||'
+BitOperator <- '&' / '|' / '<<' / '>>'
 # LEVEL 10
 AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
 Term <- '+' / '-'
@@ -196,5 +211,8 @@ RowExpression <- 'ROW' Parens(List(Expression))
 SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
 SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
-TrimDirection <- 'BOTH' / 'LEADING' / 'TRAILING'
+TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
+TrimBoth <- 'BOTH'
+TrimLeading <- 'LEADING'
+TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'

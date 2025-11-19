@@ -5,11 +5,6 @@
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
 
-#if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
-// disable highlighting on windows (for now?)
-#define DISABLE_HIGHLIGHT
-#endif
-
 namespace duckdb {
 
 bool Highlighting::IsEnabled() {
@@ -82,7 +77,71 @@ static vector<highlightToken> GetDotCommandTokens(char *buf, size_t len) {
 	return tokens;
 }
 
-vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, bool is_dot_command, searchMatch *match) {
+void Highlighting::AddExtraHighlighting(size_t len, vector<highlightToken> &tokens,
+                                        ExtraHighlighting extra_highlighting) {
+	if (tokens.empty() || extra_highlighting.type == ExtraHighlightingType::NONE) {
+		return;
+	}
+	// we have a extra highlighting - insert it into the token list
+	// we want to insert an extra token with start = match_start, end = match_end
+	// first figure out which token type we would have at match_end (if any)
+	for (size_t i = 0; i + 1 < tokens.size(); i++) {
+		if (tokens[i].start <= extra_highlighting.start && tokens[i + 1].start >= extra_highlighting.start) {
+			// this token begins after the search position, insert the token here
+			size_t token_position = i + 1;
+			auto end_type = tokens[i].type;
+			if (tokens[i].start == extra_highlighting.start) {
+				// exact start: only set the search match
+				tokens[i].extra_highlighting = extra_highlighting.type;
+			} else {
+				// non-exact start: add a new token
+				highlightToken search_token;
+				search_token.type = tokens[i].type;
+				search_token.start = extra_highlighting.start;
+				search_token.extra_highlighting = extra_highlighting.type;
+				tokens.insert(tokens.begin() + static_cast<int64_t>(token_position), search_token);
+				token_position++;
+			}
+
+			// move forwards
+			while (token_position < tokens.size() && tokens[token_position].start < extra_highlighting.end) {
+				// this token is
+				// mark this token as a search token
+				end_type = tokens[token_position].type;
+				tokens[token_position].extra_highlighting = extra_highlighting.type;
+				token_position++;
+			}
+			if (token_position >= tokens.size() || tokens[token_position].start > extra_highlighting.end) {
+				// insert the token that marks the end of the search
+				highlightToken end_token;
+				end_token.type = end_type;
+				end_token.start = extra_highlighting.end;
+				tokens.insert(tokens.begin() + static_cast<int64_t>(token_position), end_token);
+				token_position++;
+			}
+			return;
+		}
+	}
+	// we didn't manage to add the extra highlighting - this means the token is in the end of the buffer
+	// insert a new token at the end with this extra highlighting
+	if (extra_highlighting.start >= tokens.back().start) {
+		highlightToken start_token;
+		start_token.type = tokens.back().type;
+		start_token.start = extra_highlighting.start;
+		start_token.extra_highlighting = extra_highlighting.type;
+		tokens.push_back(start_token);
+
+		if (extra_highlighting.end < len) {
+			// resume original rendering
+			highlightToken end_token;
+			end_token.type = tokens.back().type;
+			end_token.start = extra_highlighting.end;
+			tokens.push_back(end_token);
+		}
+	}
+}
+
+vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, bool is_dot_command) {
 	vector<highlightToken> tokens;
 	if (!is_dot_command) {
 		// SQL query - use parser to obtain tokens
@@ -90,48 +149,6 @@ vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, bool is_dot
 	} else {
 		// . command
 		tokens = GetDotCommandTokens(buf, len);
-	}
-	if (match) {
-		// we have a search match - insert it into the token list
-		// we want to insert a search token with start = match_start, end = match_end
-		// first figure out which token type we would have at match_end (if any)
-		for (size_t i = 0; i + 1 < tokens.size(); i++) {
-			if (tokens[i].start <= match->match_start && tokens[i + 1].start >= match->match_start) {
-				// this token begins after the search position, insert the token here
-				size_t token_position = i + 1;
-				auto end_type = tokens[i].type;
-				if (tokens[i].start == match->match_start) {
-					// exact start: only set the search match
-					tokens[i].search_match = true;
-				} else {
-					// non-exact start: add a new token
-					highlightToken search_token;
-					search_token.type = tokens[i].type;
-					search_token.start = match->match_start;
-					search_token.search_match = true;
-					tokens.insert(tokens.begin() + token_position, search_token);
-					token_position++;
-				}
-
-				// move forwards
-				while (token_position < tokens.size() && tokens[token_position].start < match->match_end) {
-					// this token is
-					// mark this token as a search token
-					end_type = tokens[token_position].type;
-					tokens[token_position].search_match = true;
-					token_position++;
-				}
-				if (token_position >= tokens.size() || tokens[token_position].start > match->match_end) {
-					// insert the token that marks the end of the search
-					highlightToken end_token;
-					end_token.type = end_type;
-					end_token.start = match->match_end;
-					tokens.insert(tokens.begin() + token_position, end_token);
-					token_position++;
-				}
-				break;
-			}
-		}
 	}
 	return tokens;
 }
@@ -197,12 +214,22 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 		auto &element = duckdb_shell::ShellHighlight::GetHighlightElement(element_type);
 		auto color = element.color;
 		auto intensity = element.intensity;
-		if (token.search_match) {
-			// add underline for search matches
+		if (token.extra_highlighting == ExtraHighlightingType::UNDERLINE) {
+			// add underline
 			if (intensity == duckdb_shell::PrintIntensity::BOLD) {
 				intensity = duckdb_shell::PrintIntensity::BOLD_UNDERLINE;
 			} else {
 				intensity = duckdb_shell::PrintIntensity::UNDERLINE;
+			}
+		} else if (token.extra_highlighting == ExtraHighlightingType::BOLD) {
+			// add bold
+			if (intensity == duckdb_shell::PrintIntensity::UNDERLINE) {
+				intensity = duckdb_shell::PrintIntensity::BOLD_UNDERLINE;
+			} else if (intensity == duckdb_shell::PrintIntensity::BOLD) {
+				// might be a weird choice - but "flip" bold fonts if we encounter them
+				intensity = duckdb_shell::PrintIntensity::STANDARD;
+			} else {
+				intensity = duckdb_shell::PrintIntensity::BOLD;
 			}
 		}
 		string terminal_code = duckdb_shell::ShellHighlight::TerminalCode(color, intensity);

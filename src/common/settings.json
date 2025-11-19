@@ -156,6 +156,17 @@
         "scope": "global"
     },
     {
+        "name": "block_allocator_memory",
+        "description": "Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced).",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
         "type": "UBIGINT",
@@ -238,6 +249,13 @@
     {
         "name": "debug_skip_checkpoint_on_commit",
         "description": "DEBUG SETTING: skip checkpointing on commit",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_blocks",
+        "description": "DEBUG SETTING: verify block metadata during checkpointing",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"

@@ -109,7 +109,7 @@ class RadixPartitionedTupleData : public PartitionedTupleData {
 public:
 	RadixPartitionedTupleData(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, idx_t radix_bits_p,
 	                          idx_t hash_col_idx_p);
-	RadixPartitionedTupleData(const RadixPartitionedTupleData &other);
+	RadixPartitionedTupleData(RadixPartitionedTupleData &other);
 	~RadixPartitionedTupleData() override;
 
 	idx_t GetRadixBits() const {
