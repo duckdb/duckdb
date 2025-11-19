@@ -8,12 +8,12 @@ namespace duckdb {
 ConstPrefixHandle::ConstPrefixHandle(const ART &art, const Node node)
     : segment_handle(make_uniq<SegmentHandle>(Node::GetAllocator(art, PREFIX).GetHandle(node))) {
 	data = segment_handle->GetPtr();
-	ptr = reinterpret_cast<Node *>(data + Count(art) + 1);
+	child = reinterpret_cast<Node *>(data + art.PrefixCount() + 1);
 	// Read-only: don't mark segment as modified
 }
 
 uint8_t ConstPrefixHandle::GetCount(const ART &art) const {
-	return data[Count(art)];
+	return data[art.PrefixCount()];
 }
 
 uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
@@ -38,7 +38,7 @@ string ConstPrefixHandle::ToString(ART &art, const Node &node, const idx_t inden
 	reference<const Node> ref(node);
 	Iterator(art, ref, true, [&](const ConstPrefixHandle &handle) {
 		str += "Prefix: |";
-		for (idx_t i = 0; i < handle.GetCount(art); i++) {
+		for (idx_t i = 0; i < handle.data[art.PrefixCount()]; i++) {
 			str += format_byte(handle.data[i]) + "|";
 		}
 	});
@@ -51,8 +51,8 @@ void ConstPrefixHandle::Verify(ART &art, const Node &node) {
 	reference<const Node> ref(node);
 
 	Iterator(art, ref, true, [&](const ConstPrefixHandle &handle) {
-		D_ASSERT(handle.GetCount(art) != 0);
-		D_ASSERT(handle.GetCount(art) <= Count(art));
+		D_ASSERT(handle.data[art.PrefixCount()] != 0);
+		D_ASSERT(handle.data[art.PrefixCount()] <= art.PrefixCount());
 	});
 
 	ref.get().Verify(art);

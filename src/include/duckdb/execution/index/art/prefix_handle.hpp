@@ -29,18 +29,13 @@ public:
 	PrefixHandle(const ART &art, const Node node);
 	PrefixHandle(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node node, const uint8_t count);
 	PrefixHandle(const PrefixHandle &) = delete;
-	PrefixHandle &operator=(const PrefixHandle &) = delete;
 	PrefixHandle(PrefixHandle &&other) noexcept;
 	PrefixHandle &operator=(PrefixHandle &&other) noexcept;
 
 	data_ptr_t data;
-	Node *ptr;
+	Node *child;
 
 public:
-	static inline uint8_t Count(const ART &art) {
-		return art.prefix_count;
-	}
-
 	//! Create a new deprecated prefix node and return a handle to it.
 	static PrefixHandle NewDeprecated(unsafe_unique_ptr<FixedSizeAllocator> &allocator, Node &node);
 

@@ -8,31 +8,31 @@ namespace duckdb {
 PrefixHandle::PrefixHandle(const ART &art, const Node node)
     : segment_handle(make_uniq<SegmentHandle>(Node::GetAllocator(art, PREFIX).GetHandle(node))) {
 	data = segment_handle->GetPtr();
-	ptr = reinterpret_cast<Node *>(data + Count(art) + 1);
+	child = reinterpret_cast<Node *>(data + art.PrefixCount() + 1);
 	segment_handle->MarkModified();
 }
 
 PrefixHandle::PrefixHandle(unsafe_unique_ptr<FixedSizeAllocator> &allocator, const Node node, const uint8_t count)
     : segment_handle(make_uniq<SegmentHandle>(allocator->GetHandle(node))) {
 	data = segment_handle->GetPtr();
-	ptr = reinterpret_cast<Node *>(data + count + 1);
+	child = reinterpret_cast<Node *>(data + count + 1);
 	segment_handle->MarkModified();
 }
 
 PrefixHandle::PrefixHandle(PrefixHandle &&other) noexcept
-    : segment_handle(std::move(other.segment_handle)), data(other.data), ptr(other.ptr) {
+    : segment_handle(std::move(other.segment_handle)), data(other.data), child(other.child) {
 	other.data = nullptr;
-	other.ptr = nullptr;
+	other.child = nullptr;
 }
 
 PrefixHandle &PrefixHandle::operator=(PrefixHandle &&other) noexcept {
 	if (this != &other) {
 		segment_handle = std::move(other.segment_handle);
 		data = other.data;
-		ptr = other.ptr;
+		child = other.child;
 
 		other.data = nullptr;
-		other.ptr = nullptr;
+		other.child = nullptr;
 	}
 	return *this;
 }
@@ -56,7 +56,7 @@ void PrefixHandle::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr
 				return;
 			}
 			PrefixHandle handle(art, ref);
-			ref = *handle.ptr;
+			ref = *handle.child;
 		}
 		return Node::TransformToDeprecated(art, ref, allocator);
 	}
@@ -74,17 +74,17 @@ void PrefixHandle::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr
 
 		PrefixHandle current_handle(art, current_node);
 
-		for (idx_t i = 0; i < current_handle.data[Count(art)]; i++) {
+		for (idx_t i = 0; i < current_handle.data[art.PrefixCount()]; i++) {
 			new_handle = new_handle.TransformToDeprecatedAppend(art, allocator, current_handle.data[i]);
 		}
 
-		*new_handle.ptr = *current_handle.ptr;
+		*new_handle.child = *current_handle.child;
 		Node::FreeNode(art, current_node);
-		current_node = *new_handle.ptr;
+		current_node = *new_handle.child;
 	}
 
 	node = new_node;
-	return Node::TransformToDeprecated(art, *new_handle.ptr, allocator);
+	return Node::TransformToDeprecated(art, *new_handle.child, allocator);
 }
 
 PrefixHandle PrefixHandle::TransformToDeprecatedAppend(ART &art, unsafe_unique_ptr<FixedSizeAllocator> &allocator,
@@ -95,7 +95,7 @@ PrefixHandle PrefixHandle::TransformToDeprecatedAppend(ART &art, unsafe_unique_p
 		return std::move(*this);
 	}
 
-	auto new_prefix = PrefixHandle::NewDeprecated(allocator, *ptr);
+	auto new_prefix = PrefixHandle::NewDeprecated(allocator, *child);
 	return new_prefix.TransformToDeprecatedAppend(art, allocator, byte);
 }
 
