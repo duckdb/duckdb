@@ -5,7 +5,7 @@ namespace duckdb {
 namespace {
 
 // Default block size for aligned read, which is made for object storage access.
-constexpr idx_t ALIGNED_READ_BLOCK_SIZE = 2 * 1024 * 1024; // 2MiB
+constexpr idx_t ALIGNED_READ_BLOCK_SIZE = 2ULL * 1024 * 1024; // 2MiB
 
 // Align a value down to the nearest multiple of ALIGNED_READ_BLOCK_SIZE.
 idx_t AlignDown(idx_t value) {
