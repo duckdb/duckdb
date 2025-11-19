@@ -76,8 +76,10 @@ void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &re
 } // namespace
 
 ScalarFunction ParseLogMessage::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction,
-	                      ParseLogMessageBind, nullptr, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
+	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction,
+	                          ParseLogMessageBind, nullptr, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
+	fun.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	return fun;
 }
 
 } // namespace duckdb

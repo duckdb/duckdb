@@ -54,7 +54,8 @@ public:
 	void SetReadWrite() override;
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
-	ErrorData WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state) noexcept;
+	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
+	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
 	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id,
@@ -74,7 +75,7 @@ public:
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
-	UndoBufferReference CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries);
+	UndoBufferReference CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries, idx_t row_group_start);
 
 	bool IsDuckTransaction() const override {
 		return true;

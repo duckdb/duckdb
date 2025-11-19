@@ -166,9 +166,9 @@ void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, i
 	}
 }
 
-void RowVersionManager::RevertAppend(idx_t start_row) {
+void RowVersionManager::RevertAppend(idx_t new_count) {
 	lock_guard<mutex> lock(version_lock);
-	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
+	idx_t start_vector_idx = (new_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < vector_info.size(); vector_idx++) {
 		vector_info[vector_idx].reset();
 	}

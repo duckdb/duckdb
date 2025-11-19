@@ -28,7 +28,7 @@ public:
 	                                   idx_t max_unique_count_across_all_segments);
 
 public:
-	void CreateEmptySegment(idx_t row_start);
+	void CreateEmptySegment();
 	void Verify() override;
 	bool LookupString(string_t str) override;
 	void AddNewString(string_t str) override;

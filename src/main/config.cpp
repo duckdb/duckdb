@@ -78,6 +78,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
     DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
+    DUCKDB_GLOBAL(BlockAllocatorMemorySetting),
     DUCKDB_SETTING(CatalogErrorMaxSchemasSetting),
     DUCKDB_GLOBAL(CheckpointThresholdSetting),
     DUCKDB_GLOBAL(CustomExtensionRepositorySetting),
@@ -185,10 +186,10 @@ static const ConfigurationOption internal_options[] = {
     FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 87),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 36),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 37),
                                                      DUCKDB_SETTING_ALIAS("profiling_output", 106),
                                                      DUCKDB_SETTING_ALIAS("user", 121),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 21),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
                                                      DUCKDB_SETTING_ALIAS("worker_threads", 120),
                                                      FINAL_ALIAS};
 

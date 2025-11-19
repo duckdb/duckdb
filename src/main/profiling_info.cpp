@@ -43,7 +43,6 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	        MetricsType::BLOCKED_THREAD_TIME,
 	        MetricsType::CHECKPOINT_LATENCY,
 	        MetricsType::CPU_TIME,
-	        MetricsType::COMMIT_WRITE_WAL_LATENCY,
 	        MetricsType::CUMULATIVE_CARDINALITY,
 	        MetricsType::CUMULATIVE_ROWS_SCANNED,
 	        MetricsType::EXTRA_INFO,
@@ -61,6 +60,8 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	        MetricsType::TOTAL_BYTES_WRITTEN,
 	        MetricsType::WAITING_TO_ATTACH_LATENCY,
 	        MetricsType::WAL_REPLAY_ENTRY_COUNT,
+	        MetricsType::COMMIT_LOCAL_STORAGE_LATENCY,
+	        MetricsType::WRITE_TO_WAL_LATENCY,
 	        MetricsType::QUERY_NAME};
 }
 
@@ -69,13 +70,14 @@ profiler_settings_t ProfilingInfo::RootScopeSettings() {
 	        MetricsType::ATTACH_REPLAY_WAL_LATENCY,
 	        MetricsType::BLOCKED_THREAD_TIME,
 	        MetricsType::CHECKPOINT_LATENCY,
-	        MetricsType::COMMIT_WRITE_WAL_LATENCY,
 	        MetricsType::LATENCY,
 	        MetricsType::ROWS_RETURNED,
 	        MetricsType::TOTAL_BYTES_READ,
 	        MetricsType::TOTAL_BYTES_WRITTEN,
 	        MetricsType::WAITING_TO_ATTACH_LATENCY,
 	        MetricsType::WAL_REPLAY_ENTRY_COUNT,
+	        MetricsType::COMMIT_LOCAL_STORAGE_LATENCY,
+	        MetricsType::WRITE_TO_WAL_LATENCY,
 	        MetricsType::QUERY_NAME};
 }
 
@@ -104,7 +106,8 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
 		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
 		case MetricsType::CHECKPOINT_LATENCY:
-		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
+		case MetricsType::COMMIT_LOCAL_STORAGE_LATENCY:
+		case MetricsType::WRITE_TO_WAL_LATENCY:
 			metrics[metric] = Value::CreateValue(0.0);
 			break;
 		case MetricsType::OPERATOR_NAME:
@@ -246,7 +249,8 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 		case MetricsType::WAITING_TO_ATTACH_LATENCY:
 		case MetricsType::ATTACH_LOAD_STORAGE_LATENCY:
 		case MetricsType::ATTACH_REPLAY_WAL_LATENCY:
-		case MetricsType::COMMIT_WRITE_WAL_LATENCY:
+		case MetricsType::COMMIT_LOCAL_STORAGE_LATENCY:
+		case MetricsType::WRITE_TO_WAL_LATENCY:
 		case MetricsType::CHECKPOINT_LATENCY: {
 			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
 			break;

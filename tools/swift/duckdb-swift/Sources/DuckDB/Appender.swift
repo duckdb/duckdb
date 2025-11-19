@@ -22,7 +22,11 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 //  IN THE SOFTWARE.
 
+#if compiler(>=6.0)
+internal import Cduckdb
+#else
 @_implementationOnly import Cduckdb
+#endif
 import Foundation
 
 /// An object that efficiently appends data to a DuckDB table
