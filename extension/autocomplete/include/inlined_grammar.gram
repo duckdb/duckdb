@@ -738,9 +738,10 @@ StepSliceBOund <- ':' Expression?
 PostfixOperator <- '!'
 
 
-SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
+SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / TryExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))
 UnpackExpression <- 'UNPACK' Parens(Expression)
+TryExpression <- 'TRY' Parens(Expression)
 ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
 ExtractExpression <- 'EXTRACT' Parens(Expression 'FROM' Expression)
 LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression

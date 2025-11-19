@@ -1059,6 +1059,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnpackExpression(PE
 	return std::move(result);
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTryExpression(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+	result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens));
+	return std::move(result);
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(PEGTransformer &transformer,
                                                                                optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

@@ -130,6 +130,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformFromClause(PEGTransformer &
 		cross_product->left = std::move(result_table_ref);
 		cross_product->right = std::move(table_ref);
 		cross_product->ref_type = JoinRefType::CROSS;
+		cross_product->is_implicit = true;
 		result_table_ref = std::move(cross_product);
 	}
 	return result_table_ref;

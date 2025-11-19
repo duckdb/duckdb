@@ -386,6 +386,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformSpecialFunctionExpression);
 	REGISTER_TRANSFORM(TransformCoalesceExpression);
 	REGISTER_TRANSFORM(TransformUnpackExpression);
+	REGISTER_TRANSFORM(TransformTryExpression);
 	REGISTER_TRANSFORM(TransformColumnsExpression);
 	REGISTER_TRANSFORM(TransformExtractExpression);
 	REGISTER_TRANSFORM(TransformExtractArgument);
