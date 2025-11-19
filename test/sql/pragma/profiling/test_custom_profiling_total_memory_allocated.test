@@ -91,8 +91,15 @@ true
 
 # Verify that children nodes don't have total_memory_allocated
 # We'll check by looking at the JSON structure - children should not have this field
+# Use unnest with recursive to flatten all children nodes
 statement ok
-CREATE OR REPLACE TABLE json_data AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(children, recursive := true) FROM metrics_output;
+
+# Verify that total_memory_allocated field does not exist in children nodes
+statement error
+SELECT total_memory_allocated FROM metrics_children;
+----
+Binder Error
 
 # Test disabling the metric removes it from output
 statement ok
