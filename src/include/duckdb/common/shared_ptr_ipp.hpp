@@ -1,4 +1,6 @@
-#include <memory>
+#pragma once
+
+#include "duckdb/common/compatible_with_ipp.hpp"
 
 namespace duckdb {
 
@@ -267,5 +269,8 @@ private:
 	void __enable_weak_this(...) noexcept { // NOLINT: invalid case style
 	}
 };
+
+template <typename T>
+using unsafe_shared_ptr = shared_ptr<T, false>;
 
 } // namespace duckdb

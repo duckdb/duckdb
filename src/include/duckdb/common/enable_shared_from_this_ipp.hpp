@@ -1,3 +1,7 @@
+#pragma once
+
+#include "duckdb/common/compatible_with_ipp.hpp"
+
 namespace duckdb {
 
 template <class T>
