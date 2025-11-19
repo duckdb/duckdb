@@ -1,0 +1,13 @@
+# name: test/sql/types/nested/unnest_range_plan.test
+# group: [nested]
+
+# Fix issue #19645
+
+query I rowsort
+SELECT *
+FROM UNNEST(ARRAY[6]) AS x
+UNION ALL
+SELECT 2 FROM generate_series(1, 1);
+----
+2
+6

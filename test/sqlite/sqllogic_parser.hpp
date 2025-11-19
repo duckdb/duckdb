@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception_format_value.hpp"
+#include "sqllogic_command.hpp"
 
 namespace duckdb {
 
@@ -86,7 +87,7 @@ public:
 	vector<string> ExtractExpectedResult();
 
 	//! Extract the expected error (in case of statement error)
-	string ExtractExpectedError(bool expect_ok, bool original_sqlite_test);
+	string ExtractExpectedError(ExpectedResult expected_result, bool original_sqlite_test);
 
 	//! Tokenize the current line
 	SQLLogicToken Tokenize();

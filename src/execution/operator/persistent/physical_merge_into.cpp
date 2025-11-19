@@ -455,8 +455,8 @@ unique_ptr<LocalSourceState> PhysicalMergeInto::GetLocalSourceState(ExecutionCon
 	return make_uniq<MergeLocalSourceState>(context, *this, gstate.Cast<MergeGlobalSourceState>());
 }
 
-SourceResultType PhysicalMergeInto::GetData(ExecutionContext &context, DataChunk &chunk,
-                                            OperatorSourceInput &input) const {
+SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                    OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<MergeIntoGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
