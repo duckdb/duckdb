@@ -343,6 +343,29 @@ PEGTransformerFactory::TransformExpressionOptIdentifier(PEGTransformer &transfor
 	return expr;
 }
 
+TableAlias PEGTransformerFactory::TransformTableAlias(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	TableAlias result;
+	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
+	result.name = qualified_name.name;
+	auto opt_column_aliases = list_pr.Child<OptionalParseResult>(2);
+	if (opt_column_aliases.HasResult()) {
+		result.column_name_alias = transformer.Transform<vector<string>>(opt_column_aliases.optional_result);
+	}
+	return result;
+}
+
+vector<string> PEGTransformerFactory::TransformColumnAliases(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<string> result;
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto alias_list = ExtractParseResultsFromList(extract_parens);
+	for (auto alias : alias_list) {
+		result.push_back(transformer.Transform<string>(alias));
+	}
+	return result;
+}
+
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &transformer,
                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

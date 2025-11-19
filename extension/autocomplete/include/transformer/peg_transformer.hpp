@@ -17,6 +17,7 @@
 #include "ast/on_conflict_expression_target.hpp"
 #include "ast/sequence_option.hpp"
 #include "ast/setting_info.hpp"
+#include "ast/table_alias.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -819,6 +820,8 @@ private:
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformExpressionOptIdentifier(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
+	static TableAlias TransformTableAlias(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformColumnAliases(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	static vector<OrderByNode> TransformOrderByClause(PEGTransformer &transformer,
 	                                                  optional_ptr<ParseResult> parse_result);
