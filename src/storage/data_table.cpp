@@ -240,7 +240,6 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,
                                const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters) {
-	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, context, table_filters);
 	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
@@ -249,7 +248,6 @@ void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transact
 
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
-	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, column_ids, start_row, end_row);
 }
@@ -279,7 +277,6 @@ idx_t DataTable::MaxThreads(ClientContext &context) const {
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	auto &transaction = DuckTransaction::Get(context, db);
-	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	row_groups->InitializeParallelScan(state.scan_state);
 
 	local_storage.InitializeParallelScan(*this, state.local_state);
@@ -1588,10 +1585,6 @@ unique_ptr<BlockingSample> DataTable::GetSample() {
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-unique_ptr<StorageLockKey> DataTable::GetSharedCheckpointLock() {
-	return info->checkpoint_lock.GetSharedLock();
-}
-
 unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
 	return info->checkpoint_lock.GetExclusiveLock();
 }
@@ -1645,7 +1638,6 @@ void DataTable::CommitDropTable() {
 // Column Segment Info
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context) {
-	auto lock = GetSharedCheckpointLock();
 	return row_groups->GetColumnSegmentInfo(context);
 }
 
