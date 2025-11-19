@@ -115,7 +115,7 @@ class DuckIndexScanState : public TableScanGlobalState {
 public:
 	DuckIndexScanState(ClientContext &context, const FunctionData *bind_data_p)
 	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), arena(Allocator::Get(context)),
-	      row_ids(nullptr), row_id_count(0), finished_first_phase(false), finished_last_phase(false) {
+	      row_ids(nullptr), row_id_count(0), finished_first_phase(false), started_last_phase(false) {
 	}
 
 	//! The batch index of the next Sink.
@@ -131,7 +131,7 @@ public:
 	vector<StorageIndex> column_ids;
 	//! True, if no more row IDs must be scanned.
 	bool finished_first_phase;
-	bool finished_last_phase;
+	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
 
@@ -165,13 +165,15 @@ public:
 		auto &storage = duck_table.GetStorage();
 		auto &l_state = data_p.local_state->Cast<IndexScanLocalState>();
 
+		enum class ExecutionPhase { NONE = 0, STORAGE = 1, LOCAL_STORAGE = 2 };
+
 		// We might need to loop back, so while (true)
 		while (true) {
 			idx_t scan_count = 0;
 			idx_t offset = 0;
 
 			// Phase selection
-			int phase = 0;
+			auto phase_to_be_performed = ExecutionPhase::NONE;
 			{
 				// Synchronize changes to the shared global state.
 				lock_guard<mutex> l(index_scan_lock);
@@ -183,15 +185,25 @@ public:
 					auto remaining = row_id_count - offset;
 					scan_count = remaining <= STANDARD_VECTOR_SIZE ? remaining : STANDARD_VECTOR_SIZE;
 					finished_first_phase = remaining <= STANDARD_VECTOR_SIZE ? true : false;
-					phase = 1;
-				} else if (!finished_last_phase || l_state.in_charge_of_final_stretch) {
-					finished_last_phase = true;
+					phase_to_be_performed = ExecutionPhase::STORAGE;
+				} else if (!started_last_phase) {
+					// First thread to get last phase, great, set l_state's in_charge_of_final_stretch, so same thread
+					// will be on again
+					started_last_phase = true;
 					l_state.in_charge_of_final_stretch = true;
-					phase = 2;
+					phase_to_be_performed = ExecutionPhase::LOCAL_STORAGE;
+				} else if (l_state.in_charge_of_final_stretch) {
+					phase_to_be_performed = ExecutionPhase::LOCAL_STORAGE;
 				}
 			}
 
-			if (phase == 1) {
+			switch (phase_to_be_performed) {
+			case ExecutionPhase::NONE: {
+				// No work to be picked up
+				return;
+			}
+			case ExecutionPhase::STORAGE: {
+				// Scan (in parallel) storage
 				auto row_id_data = reinterpret_cast<data_ptr_t>(row_ids + offset);
 				Vector local_vector(LogicalType::ROW_TYPE, row_id_data);
 
@@ -203,12 +215,13 @@ public:
 					storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
 				}
 				if (output.size() == 0) {
-					// output is empty, loop back, since there might be results from the last phase
+					// output is empty, loop back, since there might be results to be picked up from LOCAL_STORAGE phase
 					continue;
-				} else {
-					return;
 				}
-			} else if (phase == 2) {
+				return;
+			}
+			case ExecutionPhase::LOCAL_STORAGE: {
+				// Scan (sequentially, always same logical thread) local_storage
 				auto &local_storage = LocalStorage::Get(tx);
 				{
 					if (CanRemoveFilterColumns()) {
@@ -219,8 +232,9 @@ public:
 						local_storage.Scan(l_state.scan_state.local_state, column_ids, output);
 					}
 				}
+				return;
 			}
-			return;
+			}
 		}
 	}
 
@@ -370,7 +384,7 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
                                                              const TableScanBindData &bind_data, set<row_t> &row_ids) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
 	g_state->finished_first_phase = row_ids.empty() ? true : false;
-	g_state->finished_last_phase = false;
+	g_state->started_last_phase = false;
 
 	if (!row_ids.empty()) {
 		auto row_id_ptr = g_state->arena.AllocateAligned(row_ids.size() * sizeof(row_t));
