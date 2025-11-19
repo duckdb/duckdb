@@ -144,7 +144,7 @@ SELECT sleep_ms(sleep_ms(10))
 NULL
 
 # Test nested sleep_ms with timing validation - inner sleep should execute
-# For nested sleep_ms(50) inside sleep_ms, we expect to see at least 0.04s (40ms) in the timing
+# For nested sleep_ms(50) inside sleep_ms, we expect to see at least 0.05s (50ms) in the timing
 require json
 
 statement ok
