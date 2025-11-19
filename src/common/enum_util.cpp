@@ -54,6 +54,7 @@
 #include "duckdb/common/enums/preserve_order.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
+#include "duckdb/common/enums/read_policy_type.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
@@ -2865,6 +2866,7 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::ATTACH_REPLAY_WAL_LATENCY), "ATTACH_REPLAY_WAL_LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::BLOCKED_THREAD_TIME), "BLOCKED_THREAD_TIME" },
 		{ static_cast<uint32_t>(MetricsType::CHECKPOINT_LATENCY), "CHECKPOINT_LATENCY" },
+		{ static_cast<uint32_t>(MetricsType::COMMIT_WRITE_WAL_LATENCY), "COMMIT_WRITE_WAL_LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::CPU_TIME), "CPU_TIME" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_CARDINALITY), "CUMULATIVE_CARDINALITY" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_ROWS_SCANNED), "CUMULATIVE_ROWS_SCANNED" },
@@ -2883,8 +2885,6 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::TOTAL_BYTES_READ), "TOTAL_BYTES_READ" },
 		{ static_cast<uint32_t>(MetricsType::TOTAL_BYTES_WRITTEN), "TOTAL_BYTES_WRITTEN" },
 		{ static_cast<uint32_t>(MetricsType::WAITING_TO_ATTACH_LATENCY), "WAITING_TO_ATTACH_LATENCY" },
-		{ static_cast<uint32_t>(MetricsType::COMMIT_LOCAL_STORAGE_LATENCY), "COMMIT_LOCAL_STORAGE_LATENCY" },
-		{ static_cast<uint32_t>(MetricsType::WRITE_TO_WAL_LATENCY), "WRITE_TO_WAL_LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::WAL_REPLAY_ENTRY_COUNT), "WAL_REPLAY_ENTRY_COUNT" },
 		{ static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
@@ -2931,12 +2931,12 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
-	return StringUtil::EnumToString(GetMetricsTypeValues(), 64, "MetricsType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricsTypeValues(), 63, "MetricsType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
-	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 64, "MetricsType", value));
+	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 63, "MetricsType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
@@ -3766,6 +3766,24 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	return static_cast<QueryResultType>(StringUtil::StringToEnum(GetQueryResultTypeValues(), 4, "QueryResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetReadPolicyTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ReadPolicyType::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ReadPolicyType::ALIGNED), "ALIGNED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ReadPolicyType>(ReadPolicyType value) {
+	return StringUtil::EnumToString(GetReadPolicyTypeValues(), 2, "ReadPolicyType", static_cast<uint32_t>(value));
+}
+
+template<>
+ReadPolicyType EnumUtil::FromString<ReadPolicyType>(const char *value) {
+	return static_cast<ReadPolicyType>(StringUtil::StringToEnum(GetReadPolicyTypeValues(), 2, "ReadPolicyType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecoveryModeValues() {
@@ -5242,3 +5260,4 @@ WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *valu
 }
 
 }
+
