@@ -225,7 +225,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		// If DuckDB is used as a storage, we must check the version.
 		auto &storage_manager = attached.GetStorageManager();
 		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
-		store_types |= storage_manager.InMemory() || storage_manager.GetStorageVersion() >= since;
+		store_types = info.temporary || attached.IsTemporary() || storage_manager.InMemory() ||
+		              storage_manager.GetStorageVersion() >= since;
 	}
 	// try to bind each of the included functions
 	vector_of_logical_type_set_t type_overloads;
