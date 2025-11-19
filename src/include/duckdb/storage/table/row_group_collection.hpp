@@ -152,7 +152,6 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
-	idx_t GetBaseRowId() const;
 	void SetAppendRequiresNewRowGroup();
 
 private:
