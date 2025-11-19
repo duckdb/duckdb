@@ -894,6 +894,10 @@ private:
 	static GroupByNode TransformGroupByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static GroupByNode TransformGroupByList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
+	static CommonTableExpressionMap TransformWithClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<CommonTableExpressionInfo>> TransformWithStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static bool TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 	// use.gram
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);

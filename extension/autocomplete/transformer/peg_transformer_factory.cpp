@@ -531,6 +531,10 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformGroupByExpressions);
 	REGISTER_TRANSFORM(TransformGroupByAll);
 	REGISTER_TRANSFORM(TransformGroupByList);
+
+	REGISTER_TRANSFORM(TransformWithClause);
+	REGISTER_TRANSFORM(TransformWithStatement);
+	REGISTER_TRANSFORM(TransformMaterialized);
 }
 
 void PEGTransformerFactory::RegisterUse() {
