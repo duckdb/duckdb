@@ -85,7 +85,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
 	for (auto &segment_node : col_data.data.SegmentNodes()) {
-		auto &segment = *segment_node.node;
+		auto &segment = segment_node.GetNode();
 		ColumnScanState scan_state(nullptr);
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
@@ -94,7 +94,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 			scan_vector.Reference(intermediate);
 
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
-			scan_state.offset_in_column = segment_node.row_start + base_row_index;
+			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			callback(scan_vector, count);
@@ -339,8 +339,8 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	optional_idx error_segment_start;
 	idx_t current_row = 0;
 	for (auto &segment_node : col_data.data.SegmentNodes()) {
-		auto &segment = *segment_node.node;
-		auto segment_start = segment_node.row_start;
+		auto &segment = segment_node.GetNode();
+		auto segment_start = segment_node.GetRowStart();
 		if (segment_start != current_row) {
 			error_segment_start = segment_start;
 			break;
@@ -356,7 +356,7 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 		string extra_info;
 		for (auto &s : col_data.data.SegmentNodes()) {
 			extra_info += "\n";
-			extra_info += StringUtil::Format("Start %d, count %d", s.row_start, s.node->count.load());
+			extra_info += StringUtil::Format("Start %d, count %d", s.GetRowStart(), s.GetNode().count.load());
 		}
 		throw InternalException(
 		    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "

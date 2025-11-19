@@ -157,7 +157,7 @@ optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
 	if (!result) {
 		return nullptr;
 	}
-	return result->node.get();
+	return result->GetNode();
 }
 
 void RowGroupCollection::SetRowGroup(int64_t index, shared_ptr<RowGroup> new_row_group) {
@@ -165,7 +165,7 @@ void RowGroupCollection::SetRowGroup(int64_t index, shared_ptr<RowGroup> new_row
 	if (!result) {
 		throw InternalException("RowGroupCollection::SetRowGroup - Segment is out of range");
 	}
-	result->node = std::move(new_row_group);
+	result->SetNode(std::move(new_row_group));
 }
 
 void RowGroupCollection::Verify() {
@@ -174,10 +174,10 @@ void RowGroupCollection::Verify() {
 	auto row_groups = GetRowGroups();
 	row_groups->Verify();
 	for (auto &entry : row_groups->SegmentNodes()) {
-		auto &row_group = *entry.node;
+		auto &row_group = entry.GetNode();
 		row_group.Verify();
 		D_ASSERT(&row_group.GetCollection() == this);
-		D_ASSERT(entry.row_start == row_groups->GetBaseRowId() + current_total_rows);
+		D_ASSERT(entry.GetRowStart() == row_groups->GetBaseRowId() + current_total_rows);
 		current_total_rows += row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());
@@ -195,7 +195,7 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
 	D_ASSERT(row_group);
 	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
 	state.Initialize(context, GetTypes());
-	while (row_group && !row_group->node->InitializeScan(state, *row_group)) {
+	while (row_group && !row_group->GetNode().InitializeScan(state, *row_group)) {
 		row_group = state.GetNextRowGroup(*row_group);
 	}
 }
@@ -213,8 +213,8 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 	D_ASSERT(row_group);
 	state.max_row = end_row;
 	state.Initialize(context, GetTypes());
-	idx_t start_vector = (start_row - row_group->row_start) / STANDARD_VECTOR_SIZE;
-	if (!row_group->node->InitializeScanWithOffset(state, *row_group, start_vector)) {
+	idx_t start_vector = (start_row - row_group->GetRowStart()) / STANDARD_VECTOR_SIZE;
+	if (!row_group->GetNode().InitializeScanWithOffset(state, *row_group, start_vector)) {
 		throw InternalException("Failed to initialize row group scan with offset");
 	}
 }
@@ -228,7 +228,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(const QueryContext &context, C
 		// initialize the scan state
 		state.Initialize(context, collection.GetTypes());
 	}
-	return row_group.node->InitializeScanWithOffset(state, row_group, vector_index);
+	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index);
 }
 
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
@@ -256,11 +256,11 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				// no more data left to scan
 				break;
 			}
-			auto &current_row_group = *state.current_row_group->node;
+			auto &current_row_group = state.current_row_group->GetNode();
 			if (current_row_group.count == 0) {
 				break;
 			}
-			auto row_start = state.current_row_group->row_start;
+			auto row_start = state.current_row_group->GetRowStart();
 			collection = state.collection;
 			row_group = state.current_row_group;
 			if (ClientConfig::GetConfig(context).verify_parallelism) {
@@ -355,8 +355,8 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 			}
 			row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 		}
-		auto &current_row_group = *row_group->node;
-		auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->row_start;
+		auto &current_row_group = row_group->GetNode();
+		auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->GetRowStart();
 		if (!current_row_group.Fetch(transaction, offset_in_row_group)) {
 			continue;
 		}
@@ -379,8 +379,8 @@ bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_i
 		}
 		row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 	}
-	auto &current_row_group = *row_group->node;
-	auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->row_start;
+	auto &current_row_group = row_group->GetNode();
+	auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->GetRowStart();
 	return current_row_group.Fetch(transaction, offset_in_row_group);
 }
 
@@ -415,10 +415,10 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	}
 	state.start_row_group = state.row_groups->GetLastSegment(l);
 	D_ASSERT(state.row_groups->GetBaseRowId() + total_rows ==
-	         state.start_row_group->row_start + state.start_row_group->node->count);
-	state.start_row_group->node->InitializeAppend(state.row_group_append_state);
+	         state.start_row_group->GetRowStart() + state.start_row_group->GetNode().count);
+	state.start_row_group->GetNode().InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
-	state.row_group_start = state.start_row_group->row_start;
+	state.row_group_start = state.start_row_group->GetRowStart();
 
 	// initialize thread-local stats so we have less lock contention when updating distinct statistics
 	state.stats = TableStatistics();
@@ -470,7 +470,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		AppendRowGroup(l, next_start);
 		// set up the append state for this row_group
 		auto last_row_group = state.row_groups->GetLastSegment(l);
-		last_row_group->node->InitializeAppend(state.row_group_append_state);
+		last_row_group->GetNode().InitializeAppend(state.row_group_append_state);
 		state.row_group_start = next_start;
 	}
 	state.current_row += row_t(total_append_count);
@@ -491,7 +491,7 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {
-		auto &current_row_group = *row_group->node;
+		auto &current_row_group = row_group->GetNode();
 		auto append_count = MinValue<idx_t>(remaining, row_group_size - current_row_group.count);
 		current_row_group.AppendVersionInfo(transaction, append_count);
 		remaining -= append_count;
@@ -526,8 +526,8 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 	idx_t current_row = row_start;
 	idx_t remaining = count;
 	while (true) {
-		auto &current_row_group = *row_group->node;
-		idx_t start_in_row_group = current_row - row_group->row_start;
+		auto &current_row_group = row_group->GetNode();
+		idx_t start_in_row_group = current_row - row_group->GetRowStart();
 		idx_t append_count = MinValue<idx_t>(current_row_group.count - start_in_row_group, remaining);
 
 		current_row_group.CommitAppend(commit_id, start_in_row_group, append_count);
@@ -558,7 +558,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 		segment_index = segment_count - 1;
 	}
 	auto &segment = *row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
-	if (segment.row_start == start_row) {
+	if (segment.GetRowStart() == start_row) {
 		// we are truncating exactly this row group - erase it entirely
 		row_groups->EraseSegments(l, segment_index);
 	} else {
@@ -566,8 +566,8 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 		// remove any segments AFTER this segment: they should be deleted entirely
 		row_groups->EraseSegments(l, segment_index + 1);
 
-		segment.next = nullptr;
-		segment.node->RevertAppend(start_row - segment.row_start);
+		segment.SetNext(nullptr);
+		segment.GetNode().RevertAppend(start_row - segment.GetRowStart());
 	}
 }
 
@@ -578,8 +578,8 @@ void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t s
 	idx_t current_row = start;
 	idx_t remaining = count;
 	while (true) {
-		auto &current_row_group = *row_group->node;
-		idx_t start_in_row_group = current_row - row_group->row_start;
+		auto &current_row_group = row_group->GetNode();
+		idx_t start_in_row_group = current_row - row_group->GetRowStart();
 		idx_t append_count = MinValue<idx_t>(current_row_group.count - start_in_row_group, remaining);
 
 		current_row_group.CleanupAppend(lowest_transaction, start_in_row_group, append_count);
@@ -617,7 +617,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	idx_t optimistically_written_count = 0;
 	if (commit_state) {
 		for (auto &entry : segments) {
-			auto &row_group = *entry->node;
+			auto &row_group = entry->GetNode();
 			if (!row_group.IsPersistent()) {
 				break;
 			}
@@ -628,7 +628,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 		}
 	}
 	for (auto &entry : segments) {
-		auto &row_group = entry->node;
+		auto row_group = entry->MoveNode();
 		row_group->MoveToCollection(*this);
 
 		if (commit_state && (index - start_index) < optimistically_written_count) {
@@ -663,20 +663,22 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		idx_t start = pos;
 		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(ids[start]));
 
-		auto &current_row_group = *row_group->node;
+		auto &current_row_group = row_group->GetNode();
+		auto row_start = row_group->GetRowStart();
+		auto row_end = row_start + current_row_group.count;
 		for (pos++; pos < count; pos++) {
 			D_ASSERT(ids[pos] >= 0);
 			// check if this id still belongs to this row group
-			if (idx_t(ids[pos]) < row_group->row_start) {
+			if (idx_t(ids[pos]) < row_start) {
 				// id is before row_group start -> it does not
 				break;
 			}
-			if (idx_t(ids[pos]) >= row_group->row_start + current_row_group.count) {
+			if (idx_t(ids[pos]) >= row_end) {
 				// id is after row group end -> it does not
 				break;
 			}
 		}
-		delete_count += current_row_group.Delete(transaction, table, ids + start, pos - start, row_group->row_start);
+		delete_count += current_row_group.Delete(transaction, table, ids + start, pos - start, row_start);
 	} while (pos < count);
 
 	return delete_count;
@@ -689,8 +691,8 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupCollection::NextUpdateRowGroup(RowGr
                                                                            idx_t &pos, idx_t count) const {
 	auto row_group = row_groups.GetSegment(UnsafeNumericCast<idx_t>(ids[pos]));
 
-	auto &current_row_group = *row_group->node;
-	auto row_start = row_group->row_start;
+	auto &current_row_group = row_group->GetNode();
+	auto row_start = row_group->GetRowStart();
 	row_t base_id = UnsafeNumericCast<row_t>(
 	    row_start + ((UnsafeNumericCast<idx_t>(ids[pos]) - row_start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE));
 	auto max_id =
@@ -719,9 +721,9 @@ void RowGroupCollection::Update(TransactionData transaction, DataTable &data_tab
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(*row_groups, ids, pos, updates.size());
 
-		auto &current_row_group = *row_group->node;
+		auto &current_row_group = row_group->GetNode();
 		current_row_group.Update(transaction, data_table, updates, ids, start, pos - start, column_ids,
-		                         row_group->row_start);
+		                         row_group->GetRowStart());
 
 		auto l = stats.GetLock();
 		for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -787,8 +789,8 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		auto row_id = row_ids[r];
 		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(row_id));
 
-		auto &current_row_group = *row_group->node;
-		auto row_start = row_group->row_start;
+		auto &current_row_group = row_group->GetNode();
+		auto row_start = row_group->GetRowStart();
 		auto row_group_vector_idx = (UnsafeNumericCast<idx_t>(row_id) - row_start) / STANDARD_VECTOR_SIZE;
 		auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_start;
 
@@ -856,9 +858,9 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &da
 	do {
 		idx_t start = pos;
 		auto row_group = NextUpdateRowGroup(*row_groups, ids, pos, updates.size());
-		auto &current_row_group = *row_group->node;
+		auto &current_row_group = row_group->GetNode();
 		current_row_group.UpdateColumn(transaction, data_table, updates, row_ids, start, pos - start, column_path,
-		                               row_group->row_start);
+		                               row_group->GetRowStart());
 
 		auto lock = stats.GetLock();
 		auto primary_column_idx = column_path[0];
@@ -906,7 +908,7 @@ public:
 
 	void ExecuteTask() override {
 		auto &entry = checkpoint_state.segments[index];
-		auto &row_group = *entry->node;
+		auto &row_group = entry->GetNode();
 		checkpoint_state.writers[index] = checkpoint_state.writer.GetRowGroupWriter(row_group);
 		checkpoint_state.write_data[index] = row_group.WriteToDisk(*checkpoint_state.writers[index]);
 	}
@@ -981,7 +983,7 @@ public:
 			}
 			merged_groups++;
 
-			auto &current_row_group = *checkpoint_state.segments[c_idx]->node;
+			auto &current_row_group = checkpoint_state.segments[c_idx]->GetNode();
 
 			current_row_group.InitializeScan(scan_state.table_state, *checkpoint_state.segments[c_idx]);
 			while (true) {
@@ -1013,7 +1015,7 @@ public:
 			}
 			// drop the row group after merging
 			current_row_group.CommitDrop();
-			checkpoint_state.segments[c_idx]->node.reset();
+			checkpoint_state.segments[c_idx]->SetNode(nullptr);
 		}
 		idx_t total_append_count = 0;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
@@ -1021,7 +1023,8 @@ public:
 			row_group->Verify();
 
 			// assign the new row group to the current segment
-			checkpoint_state.segments[segment_idx + target_idx]->node = std::move(row_group);
+			// FIXME: should we override this?
+			checkpoint_state.segments[segment_idx + target_idx]->SetNode(std::move(row_group));
 			total_append_count += append_counts[target_idx];
 		}
 		if (total_append_count != merge_rows) {
@@ -1058,12 +1061,12 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	// obtain the set of committed row counts for each row group
 	state.row_group_counts.reserve(segments.size());
 	for (auto &entry : segments) {
-		auto &row_group = *entry->node;
+		auto &row_group = entry->GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (row_group_count == 0) {
 			// empty row group - we can drop it entirely
 			row_group.CommitDrop();
-			entry->node.reset();
+			entry->SetNode(nullptr);
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
@@ -1083,7 +1086,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	}
 	if (state.row_group_counts[segment_idx] == 0) {
 		// segment was already dropped - skip
-		D_ASSERT(!checkpoint_state.segments[segment_idx]->node);
+		D_ASSERT(!checkpoint_state.segments[segment_idx]->HasNode());
 		return false;
 	}
 	if (!schedule_vacuum) {
@@ -1186,13 +1189,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				total_vacuum_tasks++;
 				continue;
 			}
-			if (!entry->node) {
+			if (!entry->HasNode()) {
 				// row group was vacuumed/dropped - skip
 				continue;
 			}
 			// schedule a checkpoint task for this row group
-			auto &row_group = *entry->node;
-			if (vacuum_state.row_start != entry->row_start) {
+			auto &row_group = entry->GetNode();
+			if (vacuum_state.row_start != entry->GetRowStart()) {
 				row_group.MoveToCollection(*this);
 			} else if (!RefersToSameObject(row_group.GetCollection(), *this)) {
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
@@ -1220,7 +1223,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		bool table_has_changes = false;
 		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 			auto &entry = segments[segment_idx];
-			if (!entry->node) {
+			if (!entry->HasNode()) {
 				table_has_changes = true;
 				break;
 			}
@@ -1237,7 +1240,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			auto &metadata_manager = writer.GetMetadataManager();
 			for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 				auto &entry = segments[segment_idx];
-				auto &row_group = *entry->node;
+				auto &row_group = entry->GetNode();
 				auto &write_state = checkpoint_state.write_data[segment_idx];
 				metadata_manager.ClearModifiedBlocks(row_group.GetColumnStartPointers());
 				D_ASSERT(write_state.reuse_existing_metadata_blocks);
@@ -1260,16 +1263,16 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &entry = segments[segment_idx];
-		if (!entry->node) {
+		if (!entry->HasNode()) {
 			// row group was vacuumed/dropped - skip
 			continue;
 		}
-		auto &row_group = *entry->node;
+		auto &row_group = entry->GetNode();
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
 			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
-			new_row_groups->AppendSegment(l, entry->node);
+			new_row_groups->AppendSegment(l, entry->ReferenceNode());
 			new_total_rows += row_group.count;
 			continue;
 		}
@@ -1279,7 +1282,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto new_row_group = std::move(row_group_write_data.result_row_group);
 		if (!new_row_group) {
 			// row group was unchanged - emit previous row group
-			new_row_group = entry->node;
+			new_row_group = entry->ReferenceNode();
 		}
 		auto pointer =
 		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
@@ -1404,7 +1407,7 @@ void RowGroupCollection::Destroy() {
 
 	TaskExecutor executor(TaskScheduler::GetScheduler(GetAttached().GetDatabase()));
 	for (auto &segment : segments) {
-		auto destroy_task = make_uniq<DestroyTask>(executor, std::move(segment->node));
+		auto destroy_task = make_uniq<DestroyTask>(executor, segment->MoveNode());
 		executor.ScheduleTask(std::move(destroy_task));
 	}
 	executor.WorkOnTasks();
@@ -1434,8 +1437,8 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 	vector<PartitionStatistics> result;
 	auto row_groups = GetRowGroups();
 	for (auto &entry : row_groups->SegmentNodes()) {
-		auto &row_group = *entry.node;
-		result.push_back(row_group.GetPartitionStats(entry.row_start));
+		auto &row_group = entry.GetNode();
+		result.push_back(row_group.GetPartitionStats(entry.GetRowStart()));
 	}
 	return result;
 }
@@ -1448,8 +1451,8 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryCo
 	auto row_groups = GetRowGroups();
 	auto lock = row_groups->Lock();
 	for (auto &node : row_groups->SegmentNodes(lock)) {
-		auto &row_group = *node.node;
-		row_group.GetColumnSegmentInfo(context, node.index, result);
+		auto &row_group = node.GetNode();
+		row_group.GetColumnSegmentInfo(context, node.GetIndex(), result);
 	}
 	return result;
 }
@@ -1544,7 +1547,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	auto &changed_stats = result->stats.GetStats(*lock, changed_idx);
 	auto result_row_groups = result->GetRowGroups();
 	for (auto &node : row_groups->SegmentNodes()) {
-		auto &current_row_group = *node.node;
+		auto &current_row_group = node.GetNode();
 		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
 		                                                 scan_state.table_state, node, scan_chunk);
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
