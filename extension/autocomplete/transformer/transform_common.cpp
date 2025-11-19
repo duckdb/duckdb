@@ -241,7 +241,13 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 		auto qualified_type_name = transformer.Transform<QualifiedName>(type_or_character_pr);
 		result = LogicalType(TransformStringToLogicalTypeId(qualified_type_name.name));
 		if (result.id() == LogicalTypeId::USER) {
-			result = LogicalType::USER(qualified_type_name.name);
+			vector<Value> modifiers;
+			if (qualified_type_name.schema.empty()) {
+				qualified_type_name.schema = qualified_type_name.catalog;
+				qualified_type_name.catalog = INVALID_CATALOG;
+			}
+			result = LogicalType::USER(qualified_type_name.catalog, qualified_type_name.schema,
+			                           qualified_type_name.name, std::move(modifiers));
 		}
 	} else if (type_or_character_pr->name == "CharacterType") {
 		result = transformer.Transform<LogicalType>(type_or_character_pr);
@@ -252,6 +258,15 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 	vector<unique_ptr<ParsedExpression>> modifiers;
 	if (opt_modifiers.HasResult()) {
 		modifiers = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
+		for (const auto &modifier : modifiers) {
+			if (modifier->GetExpressionClass() == ExpressionClass::CONSTANT) {
+				continue;
+			}
+			throw ParserException("Expected a constant as type modifier");
+		}
+		if (modifiers.size() > 9) {
+			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", result.GetAlias());
+		}
 	}
 	// TODO(Dtenwolde) add modifiers
 	return result;
@@ -443,6 +458,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
 	// if there is a decimal or the value is too big to cast as either hugeint or bigint
 	double dbl_value = Cast::Operation<string_t, double>(str_val);
 	return make_uniq<ConstantExpression>(Value::DOUBLE(dbl_value));
+}
+
+LogicalType PEGTransformerFactory::TransformSetofType(PEGTransformer &transformer,
+                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
 }
 
 // StringLiteral <- '\'' [^\']* '\''

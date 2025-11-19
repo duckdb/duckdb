@@ -23,9 +23,9 @@
         "test/sql/attach/attach_dbname_quotes.test",
         "test/sql/show_select/test_summarize_quoted.test",
         "test/sql/show_select/test_describe_quoted.test",
+        "test/sql/keywords/keywords_in_expressions.test",
         "test/sql/table_function/sqlite_master_quotes.test",
-        "test/sql/keywords/escaped_quotes_expressions.test",
-        "test/sql/keywords/keywords_in_expressions.test"
+        "test/sql/keywords/escaped_quotes_expressions.test"
       ]
     },
     {
@@ -33,6 +33,18 @@
       "paths": [
         "test/sql/storage/types/struct/wal_struct_storage.test",
         "test/sql/storage/types/struct/struct_storage.test"
+      ]
+    },
+    {
+      "reason": "Case insensitive preservation",
+      "paths": [
+        "test/sql/settings/setting_preserve_identifier_case.test"
+      ]
+    },
+    {
+      "reason": "Create macro with param",
+      "paths": [
+        "test/sql/catalog/function/test_complex_macro.test"
       ]
     },
     {

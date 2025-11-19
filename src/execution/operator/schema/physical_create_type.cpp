@@ -70,8 +70,8 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk,
-                                             OperatorSourceInput &input) const {
+SourceResultType PhysicalCreateType::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                     OperatorSourceInput &input) const {
 	if (IsSink()) {
 		D_ASSERT(info->type == LogicalType::INVALID);
 		auto &g_sink_state = sink_state->Cast<CreateTypeGlobalState>();

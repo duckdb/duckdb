@@ -9,15 +9,25 @@ add_library_unity(
   transform_checkpoint.cpp
   transform_comment.cpp
   transform_common.cpp
+  transform_copy.cpp
+  transform_create_index.cpp
+  transform_create_macro.cpp
+  transform_create_schema.cpp
   transform_create_sequence.cpp
+  transform_create_secret.cpp
   transform_create_table.cpp
+  transform_create_view.cpp
+  transform_create_type.cpp
   transform_deallocate.cpp
   transform_delete.cpp
   transform_detach.cpp
   transform_drop.cpp
+  transform_export.cpp
   transform_expression.cpp
+  transform_import.cpp
   transform_insert.cpp
   transform_load.cpp
+  transform_pragma.cpp
   transform_select.cpp
   transform_set.cpp
   transform_transaction.cpp

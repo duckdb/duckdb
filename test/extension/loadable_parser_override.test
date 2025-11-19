@@ -56,9 +56,11 @@ The DuckDB parser has been overridden
 statement error
 overri
 ----
-Parser Error: Parser override could not parse this query. (Original error: Parser overridden, query equaled "overri" but not "override")
+Parser Error: Parser override could not parse this query.
+Original error: Parser overridden, query equaled "overri" but not "override"
 
 statement error
 SELECT 1;
 ----
-Not implemented Error: Parser override has not yet implemented this transformer rule. (Original error: QuackParser has not yet implemented the statements to transform this query)
+Not implemented Error: Parser override has not yet implemented this transformer rule.
+Original error: QuackParser has not yet implemented the statements to transform this query

@@ -1,12 +1,126 @@
 #include "ast/column_constraints.hpp"
+#include "ast/column_elements.hpp"
+#include "ast/create_table_as.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/check_constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 
 namespace duckdb {
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateStatement(PEGTransformer &transformer,
+                                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	bool replace = list_pr.Child<OptionalParseResult>(1).HasResult();
+	auto result = transformer.Transform<unique_ptr<CreateStatement>>(list_pr.Child<ListParseResult>(3));
+	auto &conflict_policy = result->info->on_conflict;
+	if (replace) {
+		if (conflict_policy == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			throw ParserException("Cannot specify both OR REPLACE and IF NOT EXISTS within single create statement");
+		}
+		conflict_policy = OnCreateConflict::REPLACE_ON_CONFLICT;
+	}
+	auto temporary_pr = list_pr.Child<OptionalParseResult>(2);
+	auto persistent_type = SecretPersistType::DEFAULT;
+	transformer.TransformOptional<SecretPersistType>(list_pr, 2, persistent_type);
+	if (result->info->TYPE == ParseInfoType::CREATE_SECRET_INFO) {
+		auto &secret_info = result->info->Cast<CreateSecretInfo>();
+		secret_info.persist_type = persistent_type;
+	}
+	result->info->temporary = persistent_type == SecretPersistType::TEMPORARY;
+	return std::move(result);
+}
+
+SecretPersistType PEGTransformerFactory::TransformTemporary(PEGTransformer &transformer,
+                                                            optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<SecretPersistType>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<CreateStatement>
+PEGTransformerFactory::TransformCreateStatementVariation(PEGTransformer &transformer,
+                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.Transform<unique_ptr<CreateStatement>>(choice_pr.result);
+}
+
+unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	throw NotImplementedException("CreateTableStmt not implemented");
+	auto result = make_uniq<CreateStatement>();
+	QualifiedName table_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	// Use appropriate constructor
+	auto info = make_uniq<CreateTableInfo>(table_name.catalog, table_name.schema, table_name.name);
+
+	bool if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	auto &table_as_or_column_list = list_pr.Child<ListParseResult>(3).Child<ChoiceParseResult>(0);
+	if (table_as_or_column_list.name == "CreateTableAs") {
+		auto create_table_as = transformer.Transform<CreateTableAs>(table_as_or_column_list.result);
+		// TODO(Dtenwolde) Figure out what to do with WithData?
+		info->query = std::move(create_table_as.select_statement);
+		info->columns = std::move(create_table_as.column_names);
+	} else {
+		auto column_list = transformer.Transform<ColumnElements>(table_as_or_column_list.result);
+		info->columns = std::move(column_list.columns);
+		info->constraints = std::move(column_list.constraints);
+	}
+
+	result->info = std::move(info);
+	return result;
+}
+
+CreateTableAs PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &transformer,
+                                                            optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	CreateTableAs result;
+	transformer.TransformOptional<ColumnList>(list_pr, 0, result.column_names);
+	result.select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(2));
+	transformer.TransformOptional<bool>(list_pr, 3, result.with_data);
+	return result;
+}
+
+ColumnList PEGTransformerFactory::TransformIdentifierList(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto identifier_list = ExtractParseResultsFromList(extract_parens);
+	ColumnList result;
+	for (auto identifier : identifier_list) {
+		result.AddColumn(ColumnDefinition(identifier->Cast<IdentifierParseResult>().identifier, LogicalType::UNKNOWN));
+	}
+	return result;
+}
+
+ColumnElements PEGTransformerFactory::TransformCreateColumnList(PEGTransformer &transformer,
+                                                                optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto create_table_column_list = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	return transformer.Transform<ColumnElements>(create_table_column_list);
+}
+
+ColumnElements PEGTransformerFactory::TransformCreateTableColumnList(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto column_elements = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
+	ColumnElements result;
+	for (auto column_element : column_elements) {
+		auto column_element_child = column_element->Cast<ListParseResult>().Child<ChoiceParseResult>(0).result;
+		if (column_element_child->name == "ColumnDefinition") {
+			result.columns.AddColumn(transformer.Transform<ColumnDefinition>(column_element_child));
+		} else if (column_element_child->name == "TopLevelConstraint") {
+			result.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(column_element_child));
+		} else {
+			throw NotImplementedException("Unknown column type encountered: %s", column_element_child->name);
+		}
+	}
+	return result;
+}
 
 // IdentifierOrStringLiteral <- Identifier / StringLiteral
 QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
@@ -203,6 +317,16 @@ vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &tran
 		result.push_back(transformer.Transform<string>(colid));
 	}
 	return result;
+}
+
+string PEGTransformerFactory::TransformTypeFuncName(PEGTransformer &transformer,
+                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->type == ParseResultType::IDENTIFIER) {
+		return choice_pr->Cast<IdentifierParseResult>().identifier;
+	}
+	return transformer.Transform<string>(choice_pr);
 }
 
 } // namespace duckdb

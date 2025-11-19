@@ -1,13 +1,18 @@
-SelectStatement <- SelectOrParens (SetopClause SelectStatement)* ResultModifiers
-
+SelectStatement <- SelectStatementInternal
+SelectStatementInternal <- SelectOrParens RepeatSetopSelect* ResultModifiers?
+RepeatSetopSelect <- SetOpClause SelectStatementInternal
 SetopClause <- ('UNION' / 'EXCEPT' / 'INTERSECT') DistinctOrAll? ByName?
 ByName <- 'BY' 'NAME'
-SelectOrParens <- BaseSelect / Parens(SelectStatement)
+SelectOrParens <- BaseSelect / SelectParens
+SelectParens <- Parens(SelectStatementInternal)
 
-BaseSelect <- WithClause? (OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement) ResultModifiers
-ResultModifiers <- OrderByClause? LimitClause? OffsetClause?
+BaseSelect <- WithClause? SelectStatementType ResultModifiers?
+SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
+ResultModifiers <- OrderByClause? LimitOffsetClause?
+LimitOffsetClause <- LimitClause? OffsetClause?
 TableStatement <- 'TABLE' BaseTableName
-OptionalParensSimpleSelect <- Parens(SimpleSelect) / SimpleSelect
+OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
+SimpleSelectParens <- Parens(SimpleSelect)
 SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)

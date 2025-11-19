@@ -4,6 +4,8 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
 
@@ -47,7 +49,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
-	return transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	return result;
 }
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
@@ -148,6 +150,61 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformIntervalType);
 	REGISTER_TRANSFORM(TransformIntervalInterval);
 	REGISTER_TRANSFORM(TransformInterval);
+	REGISTER_TRANSFORM(TransformSetofType);
+}
+
+void PEGTransformerFactory::RegisterCopy() {
+	// copy.gram
+	REGISTER_TRANSFORM(TransformCopyStatement);
+	REGISTER_TRANSFORM(TransformCopySelect);
+	REGISTER_TRANSFORM(TransformCopyFromDatabase);
+	REGISTER_TRANSFORM(TransformCopyDatabaseFlag);
+	REGISTER_TRANSFORM(TransformCopyTable);
+	REGISTER_TRANSFORM(TransformFromOrTo);
+	REGISTER_TRANSFORM(TransformCopyFileName);
+	REGISTER_TRANSFORM(TransformIdentifierColId);
+	REGISTER_TRANSFORM(TransformCopyOptions);
+	REGISTER_TRANSFORM(TransformGenericCopyOptionListParens);
+	REGISTER_TRANSFORM(TransformSpecializedOptionList);
+	REGISTER_TRANSFORM(TransformSpecializedOption);
+	REGISTER_TRANSFORM(TransformSingleOption);
+	REGISTER_TRANSFORM(TransformEncodingOption);
+	REGISTER_TRANSFORM(TransformForceQuoteOption);
+}
+
+void PEGTransformerFactory::RegisterCreateIndex() {
+	// create_index.gram
+	REGISTER_TRANSFORM(TransformCreateIndexStmt);
+	REGISTER_TRANSFORM(TransformIndexType);
+	REGISTER_TRANSFORM(TransformIndexElement);
+	REGISTER_TRANSFORM(TransformWithList);
+	REGISTER_TRANSFORM(TransformRelOptionOrOids);
+	REGISTER_TRANSFORM(TransformRelOptionList);
+	REGISTER_TRANSFORM(TransformOids);
+	REGISTER_TRANSFORM(TransformRelOption);
+	REGISTER_TRANSFORM(TransformIndexName);
+}
+
+void PEGTransformerFactory::RegisterCreateMacro() {
+	// create_macro.gram
+	REGISTER_TRANSFORM(TransformCreateMacroStmt);
+	REGISTER_TRANSFORM(TransformMacroDefinition);
+	REGISTER_TRANSFORM(TransformTableMacroDefinition);
+	REGISTER_TRANSFORM(TransformScalarMacroDefinition);
+	REGISTER_TRANSFORM(TransformMacroParameters);
+	REGISTER_TRANSFORM(TransformMacroParameter);
+	REGISTER_TRANSFORM(TransformSimpleParameter);
+}
+
+void PEGTransformerFactory::RegisterCreateSchema() {
+	REGISTER_TRANSFORM(TransformCreateSchemaStmt);
+}
+
+void PEGTransformerFactory::RegisterCreateSecret() {
+	// create_secret.gram
+	REGISTER_TRANSFORM(TransformCreateSecretStmt);
+	REGISTER_TRANSFORM(TransformSecretStorageSpecifier);
+	REGISTER_TRANSFORM(TransformSecretName);
 }
 
 void PEGTransformerFactory::RegisterCreateSequence() {
@@ -164,11 +221,20 @@ void PEGTransformerFactory::RegisterCreateSequence() {
 
 void PEGTransformerFactory::RegisterCreateTable() {
 	// create_table.gram
+	REGISTER_TRANSFORM(TransformCreateStatement);
+	REGISTER_TRANSFORM(TransformTemporary);
+	REGISTER_TRANSFORM(TransformCreateStatementVariation);
+	REGISTER_TRANSFORM(TransformCreateTableStmt);
+	REGISTER_TRANSFORM(TransformCreateTableAs);
+	REGISTER_TRANSFORM(TransformIdentifierList);
+	REGISTER_TRANSFORM(TransformCreateColumnList);
+	REGISTER_TRANSFORM(TransformCreateTableColumnList);
 	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformColIdOrString);
 	REGISTER_TRANSFORM(TransformColLabelOrString);
 	REGISTER_TRANSFORM(TransformColId);
 	REGISTER_TRANSFORM(TransformColumnIdList);
+	REGISTER_TRANSFORM(TransformTypeFuncName);
 	REGISTER_TRANSFORM(TransformIdentifier);
 	REGISTER_TRANSFORM(TransformDottedIdentifier);
 	REGISTER_TRANSFORM(TransformColumnDefinition);
@@ -180,6 +246,18 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformCheckConstraint);
 	REGISTER_TRANSFORM(TransformTopForeignKeyConstraint);
 	REGISTER_TRANSFORM(TransformDefaultValue);
+}
+
+void PEGTransformerFactory::RegisterCreateType() {
+	// create_type.gram
+	REGISTER_TRANSFORM(TransformCreateTypeStmt);
+	REGISTER_TRANSFORM(TransformCreateType);
+	REGISTER_TRANSFORM(TransformEnumSelectType);
+	REGISTER_TRANSFORM(TransformEnumStringLiteralList);
+}
+
+void PEGTransformerFactory::RegisterCreateView() {
+	REGISTER_TRANSFORM(TransformCreateViewStmt);
 }
 
 void PEGTransformerFactory::RegisterDeallocate() {
@@ -220,6 +298,11 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropSecretStorage);
 }
 
+void PEGTransformerFactory::RegisterExport() {
+	REGISTER_TRANSFORM(TransformExportSource);
+	REGISTER_TRANSFORM(TransformExportStatement);
+}
+
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
 	REGISTER_TRANSFORM(TransformBaseExpression);
@@ -237,10 +320,13 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformBetweenInLikeExpression);
 	REGISTER_TRANSFORM(TransformBetweenInLikeOp);
 	REGISTER_TRANSFORM(TransformBetweenClause);
+	REGISTER_TRANSFORM(TransformLikeClause);
+	REGISTER_TRANSFORM(TransformLikeVariations);
 	REGISTER_TRANSFORM(TransformComparisonExpression);
 	REGISTER_TRANSFORM(TransformComparisonOperator);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
 	REGISTER_TRANSFORM(TransformOtherOperator);
+	REGISTER_TRANSFORM(TransformStringOperator);
 	REGISTER_TRANSFORM(TransformLambdaOperator);
 	REGISTER_TRANSFORM(TransformBitwiseExpression);
 	REGISTER_TRANSFORM(TransformAdditiveExpression);
@@ -306,7 +392,20 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformLambdaExpression);
 	REGISTER_TRANSFORM(TransformNullIfExpression);
 	REGISTER_TRANSFORM(TransformRowExpression);
+	REGISTER_TRANSFORM(TransformTrimExpression);
+	REGISTER_TRANSFORM(TransformTrimDirection);
+	REGISTER_TRANSFORM(TransformTrimSource);
 	REGISTER_TRANSFORM(TransformPositionExpression);
+	REGISTER_TRANSFORM(TransformCastExpression);
+	REGISTER_TRANSFORM(TransformCastOrTryCast);
+	REGISTER_TRANSFORM(TransformCaseExpression);
+	REGISTER_TRANSFORM(TransformCaseElse);
+	REGISTER_TRANSFORM(TransformCaseWhenThen);
+	REGISTER_TRANSFORM(TransformTypeLiteral);
+}
+
+void PEGTransformerFactory::RegisterImport() {
+	REGISTER_TRANSFORM(TransformImportStatement);
 }
 
 void PEGTransformerFactory::RegisterInsert() {
@@ -333,6 +432,14 @@ void PEGTransformerFactory::RegisterLoad() {
 	REGISTER_TRANSFORM(TransformVersionNumber);
 }
 
+void PEGTransformerFactory::RegisterPragma() {
+	// pragma.gram
+	REGISTER_TRANSFORM(TransformPragmaStatement);
+	REGISTER_TRANSFORM(TransformPragmaAssign);
+	REGISTER_TRANSFORM(TransformPragmaFunction);
+	REGISTER_TRANSFORM(TransformPragmaParameters);
+}
+
 void PEGTransformerFactory::RegisterSelect() {
 	// select.gram
 	REGISTER_TRANSFORM(TransformFunctionArgument);
@@ -343,6 +450,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformCatalogQualification);
 	REGISTER_TRANSFORM(TransformQualifiedName);
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifierOrStringLiteral);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifier);
 	REGISTER_TRANSFORM(TransformSchemaReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformTableNameIdentifierOrStringLiteral);
@@ -534,6 +642,18 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<ExpressionType>("OperatorGreaterThan", ExpressionType::COMPARE_GREATERTHAN);
 	RegisterEnum<ExpressionType>("OperatorLessThanEquals", ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	RegisterEnum<ExpressionType>("OperatorGreaterThanEquals", ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+
+	RegisterEnum<string>("TrimBoth", "trim");
+	RegisterEnum<string>("TrimLeading", "ltrim");
+	RegisterEnum<string>("TrimTrailing", "rtrim");
+
+	RegisterEnum<string>("LikeToken", "~~");
+	RegisterEnum<string>("ILikeToken", "~~*");
+	RegisterEnum<string>("GlobToken", "~~~");
+	RegisterEnum<string>("SimilarToToken", "regexp_full_match");
+	RegisterEnum<string>("NotILikeOp", "!~~*");
+	RegisterEnum<string>("NotLikeOp", "!~~");
+	RegisterEnum<string>("NotSimilarToOp", "!~");
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
@@ -544,15 +664,25 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCheckpoint();
 	RegisterComment();
 	RegisterCommon();
+	RegisterCopy();
+	RegisterCreateIndex();
+	RegisterCreateMacro();
+	RegisterCreateSchema();
 	RegisterCreateSequence();
+	RegisterCreateSecret();
 	RegisterCreateTable();
+	RegisterCreateType();
+	RegisterCreateView();
 	RegisterDeallocate();
 	RegisterDelete();
 	RegisterDetach();
 	RegisterDrop();
+	RegisterExport();
 	RegisterExpression();
+	RegisterImport();
 	RegisterInsert();
 	RegisterLoad();
+	RegisterPragma();
 	RegisterSelect();
 	RegisterUse();
 	RegisterSet();
@@ -639,6 +769,92 @@ LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_
 		return LogicalType::DOUBLE;
 	default:
 		throw InternalException("Unsupported interval post-fix");
+	}
+}
+
+bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
+	// We have to construct it like this because we don't have the ClientContext for binding/executing the expr here
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::FUNCTION: {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.function_name == "struct_pack") {
+			unordered_set<string> unique_names;
+			child_list_t<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				if (!unique_names.insert(child->GetAlias()).second) {
+					throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
+				}
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(child->GetAlias(), std::move(child_value));
+			}
+			value = Value::STRUCT(std::move(values));
+			return true;
+		} else if (function.function_name == "list_value") {
+			vector<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(std::move(child_value));
+			}
+
+			// figure out child type
+			LogicalType child_type(LogicalTypeId::SQLNULL);
+			for (auto &child_value : values) {
+				child_type = LogicalType::ForceMaxLogicalType(child_type, child_value.type());
+			}
+
+			// finally create the list
+			value = Value::LIST(child_type, values);
+			return true;
+		} else if (function.function_name == "map") {
+			Value keys;
+			if (!ConstructConstantFromExpression(*function.children[0], keys)) {
+				return false;
+			}
+
+			Value values;
+			if (!ConstructConstantFromExpression(*function.children[1], values)) {
+				return false;
+			}
+
+			vector<Value> keys_unpacked = ListValue::GetChildren(keys);
+			vector<Value> values_unpacked = ListValue::GetChildren(values);
+
+			value = Value::MAP(ListType::GetChildType(keys.type()), ListType::GetChildType(values.type()),
+			                   keys_unpacked, values_unpacked);
+			return true;
+		} else {
+			return false;
+		}
+	}
+	case ExpressionType::VALUE_CONSTANT: {
+		auto &constant = expr.Cast<ConstantExpression>();
+		value = constant.value;
+		return true;
+	}
+	case ExpressionType::OPERATOR_CAST: {
+		auto &cast = expr.Cast<CastExpression>();
+		Value dummy_value;
+		if (!ConstructConstantFromExpression(*cast.child, dummy_value)) {
+			return false;
+		}
+
+		string error_message;
+		if (!dummy_value.DefaultTryCastAs(cast.cast_type, value, &error_message)) {
+			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
+			                          EnumUtil::ToString(cast.cast_type.id()));
+		}
+		return true;
+	}
+	default:
+		return false;
 	}
 }
 

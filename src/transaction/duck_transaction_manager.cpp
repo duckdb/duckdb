@@ -273,10 +273,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		// Commit the changes to the WAL.
 		if (db.GetRecoveryMode() == RecoveryMode::DEFAULT) {
-			auto &profiler = *context.client_data->profiler;
-			profiler.StartTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
-			error = transaction.WriteToWAL(db, commit_state);
-			profiler.EndTimer(MetricsType::COMMIT_WRITE_WAL_LATENCY);
+			error = transaction.WriteToWAL(context, db, commit_state);
 		}
 
 		// after we finish writing to the WAL we grab the transaction lock again

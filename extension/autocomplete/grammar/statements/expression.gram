@@ -31,7 +31,7 @@ ReplaceEntry <- Expression 'AS' ColumnReference
 RenameList <- 'RENAME' (Parens(List(RenameEntry)) / RenameEntry)
 RenameEntry <- ColumnReference 'AS' Identifier
 SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference
-CaseExpression <- 'CASE' Expression? CaseWhenThen CaseWhenThen* CaseElse? 'END'
+CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
 TypeLiteral <- ColId StringLiteral
@@ -137,8 +137,18 @@ OperatorGreaterThanEquals <- '>='
 # LEVEL 7
 BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
 BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
-LikeClause <- LikeVariations OtherOperatorExpression ('ESCAPE' OtherOperatorExpression)?
-LikeVariations <- 'LIKE' / 'ILIKE' / 'GLOB' / ('SIMILAR' 'TO') / '~' / '~~' / '!~' / '!~~' / '!~~*'
+LikeClause <- LikeVariations Expression EscapeClause?
+EscapeClause <- 'ESCAPE' Expression
+
+LikeVariations <- SimilarToToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp
+LikeToken      <- 'LIKE' / '~~'
+ILikeToken     <- 'ILIKE' / '~~*'
+GlobToken      <- 'GLOB' / '~~~'
+SimilarToToken <- ('SIMILAR' 'TO') / '~'
+NotILikeOp     <- '!~~*'
+NotLikeOp      <- '!~~'
+NotSimilarToOp <- '!~'
+
 InClause <- 'IN' InExpression
 InExpression <- Parens(List(Expression)) / Parens(SelectStatement) / OtherOperatorExpression
 BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
@@ -154,7 +164,7 @@ ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
-BitOperator <- '&' / '|' / '<<' / '>>' / '||'
+BitOperator <- '&' / '|' / '<<' / '>>'
 # LEVEL 10
 AdditiveExpression <- MultiplicativeExpression (Term MultiplicativeExpression)*
 Term <- '+' / '-'
@@ -201,5 +211,8 @@ RowExpression <- 'ROW' Parens(List(Expression))
 SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
 SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
-TrimDirection <- 'BOTH' / 'LEADING' / 'TRAILING'
+TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
+TrimBoth <- 'BOTH'
+TrimLeading <- 'LEADING'
+TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'
