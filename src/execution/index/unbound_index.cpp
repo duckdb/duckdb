@@ -32,6 +32,7 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 		auto collection = replay_info.ToColumnDataCollection(allocator);
 		buffered_replays.emplace_back(replay_info.replay_type, std::move(collection));
 	}
+	storage_info.buffered_replay_data.clear();
 	if (!storage_info.mapped_column_ids.empty()) {
 		mapped_column_ids = storage_info.mapped_column_ids;
 	}
@@ -41,7 +42,7 @@ IndexStorageInfo UnboundIndex::SerializeToDisk(const case_insensitive_map_t<Valu
 	auto result = storage_info;
 	result.options = options;
 	result.mapped_column_ids = mapped_column_ids;
-	result.buffered_replay_data.clear();
+	D_ASSERT(result.buffered_replay_data.size() == 0);
 	if (HasBufferedReplays()) {
 		result.buffered_replay_data.reserve(buffered_replays.size());
 		for (auto &replay : buffered_replays) {
@@ -49,6 +50,8 @@ IndexStorageInfo UnboundIndex::SerializeToDisk(const case_insensitive_map_t<Valu
 			result.buffered_replay_data.push_back(BufferedIndexDataInfo::FromCollection(replay.type, *replay.data));
 		}
 	}
+	// If there are no buffered replays, then result replay data is en empty vector, and the serialization code
+	// avoids serializing it by default.
 	storage_info = result;
 	return result;
 }

@@ -20,6 +20,8 @@ namespace duckdb {
 
 class ColumnDataCollection;
 class Allocator;
+
+// Forward Declaration for BufferedIndexReplay type in unbound_index.hpp
 enum class BufferedIndexReplay : uint8_t;
 
 //! Information to serialize a FixedSizeAllocator, which holds the index data

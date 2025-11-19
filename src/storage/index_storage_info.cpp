@@ -26,10 +26,8 @@ BufferedIndexDataInfo BufferedIndexDataInfo::FromCollection(BufferedIndexReplay 
 }
 
 unique_ptr<ColumnDataCollection> BufferedIndexDataInfo::ToColumnDataCollection(Allocator &allocator) const {
+	D_ASSERT(!values.empty() && !types.empty());
 	auto collection = make_uniq<ColumnDataCollection>(allocator, types);
-	if (values.empty() || types.empty()) {
-		return collection;
-	}
 	DataChunk chunk;
 	chunk.Initialize(allocator, types);
 
