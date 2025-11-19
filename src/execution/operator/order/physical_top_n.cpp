@@ -578,7 +578,8 @@ unique_ptr<LocalSourceState> PhysicalTopN::GetLocalSourceState(ExecutionContext 
 	return make_uniq<TopNLocalSourceState>();
 }
 
-SourceResultType PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalTopN::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
 	if (limit == 0) {
 		return SourceResultType::FINISHED;
 	}

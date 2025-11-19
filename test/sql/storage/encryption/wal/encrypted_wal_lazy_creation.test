@@ -13,6 +13,9 @@ require noforcestorage
 
 require skip_reload
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 statement ok
 ATTACH '__TEST_DIR__/attach_no_wal_${cipher}.db' AS attach_no_wal (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 

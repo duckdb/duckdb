@@ -16,8 +16,11 @@ class CreateTableRelation : public Relation {
 public:
 	CreateTableRelation(shared_ptr<Relation> child, string schema_name, string table_name, bool temporary,
 	                    OnCreateConflict on_conflict);
+	CreateTableRelation(shared_ptr<Relation> child, string catalog_name, string schema_name, string table_name,
+	                    bool temporary, OnCreateConflict on_conflict);
 
 	shared_ptr<Relation> child;
+	string catalog_name;
 	string schema_name;
 	string table_name;
 	vector<ColumnDefinition> columns;

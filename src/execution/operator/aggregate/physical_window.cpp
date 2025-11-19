@@ -1108,8 +1108,8 @@ OperatorPartitionData PhysicalWindow::GetPartitionData(ExecutionContext &context
 	return OperatorPartitionData(lstate.batch_index);
 }
 
-SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &source) const {
+SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &source) const {
 	auto &gsource = source.global_state.Cast<WindowGlobalSourceState>();
 	auto &lsource = source.local_state.Cast<WindowLocalSourceState>();
 

@@ -160,16 +160,17 @@ void RowIdColumnData::CommitDropColumn() {
 	throw InternalException("RowIdColumnData cannot be dropped");
 }
 
-unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const RowGroup &row_group,
                                                                          PartialBlockManager &partial_block_manager) {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 
-unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) {
+unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 
-void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) {
+void RowIdColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
+                                     Vector &scan_vector) const {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 

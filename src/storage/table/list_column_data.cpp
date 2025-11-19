@@ -10,18 +10,20 @@ namespace duckdb {
 
 ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
                                ColumnDataType data_type, optional_ptr<ColumnData> parent)
-    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent),
-      validity(block_manager, info, 0, *this) {
+    : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-	auto &child_type = ListType::GetChildType(type);
-	// the child column, with column index 1 (0 is the validity mask)
-	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, child_type, data_type, this);
+	if (data_type != ColumnDataType::CHECKPOINT_TARGET) {
+		auto &child_type = ListType::GetChildType(type);
+		validity = make_shared_ptr<ValidityColumnData>(block_manager, info, 0, *this);
+		// the child column, with column index 1 (0 is the validity mask)
+		child_column = CreateColumn(block_manager, info, 1, child_type, data_type, this);
+	}
 }
 
 void ListColumnData::SetDataType(ColumnDataType data_type) {
 	ColumnData::SetDataType(data_type);
 	child_column->SetDataType(data_type);
-	validity.SetDataType(data_type);
+	validity->SetDataType(data_type);
 }
 
 FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -31,7 +33,7 @@ FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, Table
 
 void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
-	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 
 	// we can't know how many rows we need to prefetch for the child of this list without looking at the actual data
 	// we make an estimation by looking at how many rows the child column has versus this column
@@ -48,7 +50,7 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
-	validity.InitializeScan(state.child_states[0]);
+	validity->InitializeScan(state.child_states[0]);
 
 	// initialize the child scan
 	child_column->InitializeScan(state.child_states[1]);
@@ -74,7 +76,7 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
-	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
+	validity->InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
 	auto child_offset = FetchListOffset(row_idx - 1);
@@ -108,7 +110,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	Vector offset_vector(LogicalType::UBIGINT, count);
 	idx_t scan_count = ScanVector(state, offset_vector, count, ScanVectorType::SCAN_FLAT_VECTOR);
 	D_ASSERT(scan_count > 0);
-	validity.ScanCount(state.child_states[0], result, count);
+	validity->ScanCount(state.child_states[0], result, count);
 
 	UnifiedVectorFormat offsets;
 	offset_vector.ToUnifiedFormat(scan_count, offsets);
@@ -147,7 +149,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 
 void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// skip inside the validity segment
-	validity.Skip(state.child_states[0], count);
+	validity->Skip(state.child_states[0], count);
 
 	// we need to read the list entries/offsets to figure out how much to skip
 	// note that we only need to read the first and last entry
@@ -176,7 +178,7 @@ void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 
 	// initialize the validity append
 	ColumnAppendState validity_append_state;
-	validity.InitializeAppend(validity_append_state);
+	validity->InitializeAppend(validity_append_state);
 	state.child_appends.push_back(std::move(validity_append_state));
 
 	// initialize the child column append
@@ -246,12 +248,12 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	ColumnData::AppendData(stats, state, vdata, count);
 	// append the validity data
 	vdata.validity = append_mask;
-	validity.AppendData(stats, state.child_appends[0], vdata, count);
+	validity->AppendData(stats, state.child_appends[0], vdata, count);
 }
 
 void ListColumnData::RevertAppend(row_t new_count) {
 	ColumnData::RevertAppend(new_count);
-	validity.RevertAppend(new_count);
+	validity->RevertAppend(new_count);
 	auto column_count = GetMaxEntry();
 	if (column_count > 0) {
 		// revert append in the child column
@@ -293,15 +295,15 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	// now perform the fetch within the segment
 	auto start_offset = row_id == 0 ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
 	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
-	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 
-	auto &validity = FlatVector::Validity(result);
+	auto &validity_mask = FlatVector::Validity(result);
 	auto list_data = FlatVector::GetData<list_entry_t>(result);
 	auto &list_entry = list_data[result_idx];
 	// set the list entry offset to the size of the current list
 	list_entry.offset = ListVector::GetListSize(result);
 	list_entry.length = end_offset - start_offset;
-	if (!validity.RowIsValid(result_idx)) {
+	if (!validity_mask.RowIsValid(result_idx)) {
 		// the list is NULL! no need to fetch the child
 		D_ASSERT(list_entry.length == 0);
 		return;
@@ -326,12 +328,29 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 
 void ListColumnData::CommitDropColumn() {
 	ColumnData::CommitDropColumn();
-	validity.CommitDropColumn();
+	validity->CommitDropColumn();
 	child_column->CommitDropColumn();
 }
 
+void ListColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
+	if (validity) {
+		throw InternalException("ListColumnData::SetValidityData cannot be used to overwrite existing validity");
+	}
+	validity_p->SetParent(this);
+	this->validity = std::move(validity_p);
+}
+
+void ListColumnData::SetChildData(shared_ptr<ColumnData> child_column_p) {
+	if (child_column) {
+		throw InternalException("ListColumnData::SetChildData cannot be used to overwrite existing data");
+	}
+	child_column_p->SetParent(this);
+	this->child_column = std::move(child_column_p);
+}
+
 struct ListColumnCheckpointState : public ColumnCheckpointState {
-	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager)
+	ListColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
+	                          PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
 		global_stats = ListStats::CreateEmpty(column_data.type).ToUnique();
 	}
@@ -340,6 +359,22 @@ struct ListColumnCheckpointState : public ColumnCheckpointState {
 	unique_ptr<ColumnCheckpointState> child_state;
 
 public:
+	shared_ptr<ColumnData> CreateEmptyColumnData() override {
+		return make_shared_ptr<ListColumnData>(original_column.GetBlockManager(), original_column.GetTableInfo(),
+		                                       original_column.column_index, original_column.type,
+		                                       ColumnDataType::CHECKPOINT_TARGET, nullptr);
+	}
+
+	shared_ptr<ColumnData> GetFinalResult() override {
+		if (result_column) {
+			auto &column_data = result_column->Cast<ListColumnData>();
+			auto validity_child = validity_state->GetFinalResult();
+			column_data.SetValidityData(shared_ptr_cast<ColumnData, ValidityColumnData>(std::move(validity_child)));
+			column_data.SetChildData(child_state->GetFinalResult());
+		}
+		return ColumnCheckpointState::GetFinalResult();
+	}
+
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
 		ListStats::SetChildStats(stats, child_state->GetStatistics());
@@ -354,15 +389,15 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(const RowGroup &row_group,
                                                                         PartialBlockManager &partial_block_manager) {
 	return make_uniq<ListColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(const RowGroup &row_group,
                                                              ColumnCheckpointInfo &checkpoint_info) {
 	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
-	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	auto validity_state = validity->Checkpoint(row_group, checkpoint_info);
 	auto child_state = child_column->Checkpoint(row_group, checkpoint_info);
 
 	auto &checkpoint_state = base_state->Cast<ListColumnCheckpointState>();
@@ -372,23 +407,23 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 }
 
 bool ListColumnData::IsPersistent() {
-	return ColumnData::IsPersistent() && validity.IsPersistent() && child_column->IsPersistent();
+	return ColumnData::IsPersistent() && validity->IsPersistent() && child_column->IsPersistent();
 }
 
 bool ListColumnData::HasAnyChanges() const {
-	return ColumnData::HasAnyChanges() || validity.HasAnyChanges() || child_column->HasAnyChanges();
+	return ColumnData::HasAnyChanges() || validity->HasAnyChanges() || child_column->HasAnyChanges();
 }
 
 PersistentColumnData ListColumnData::Serialize() {
 	auto persistent_data = ColumnData::Serialize();
-	persistent_data.child_columns.push_back(validity.Serialize());
+	persistent_data.child_columns.push_back(validity->Serialize());
 	persistent_data.child_columns.push_back(child_column->Serialize());
 	return persistent_data;
 }
 
 void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	ColumnData::InitializeColumn(column_data, target_stats);
-	validity.InitializeColumn(column_data.child_columns[0], target_stats);
+	validity->InitializeColumn(column_data.child_columns[0], target_stats);
 	auto &child_stats = ListStats::GetChildStats(target_stats);
 	child_column->InitializeColumn(column_data.child_columns[1], child_stats);
 }
@@ -397,7 +432,7 @@ void ListColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row
                                           vector<ColumnSegmentInfo> &result) {
 	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.push_back(0);
-	validity.GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 	col_path.back() = 1;
 	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
 }
