@@ -1,909 +1,959 @@
-[{
-	"name" : "access_mode",
-	"description" : "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
-	"type" : "ENUM<AccessMode>",
-	"scope" : "global",
-	"on_callbacks" : ["set"]
-},
- {
-	 "name" : "allocator_background_threads",
-	 "description" : "Whether to enable the allocator background thread.",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "allocator_bulk_deallocation_flush_threshold",
-	 "description" : "If a bulk deallocation larger than this occurs, flush outstanding allocations.",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "allocator_flush_threshold",
-	 "description" : "Peak allocation threshold at which to flush the allocator after completing a task.",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "allow_community_extensions",
-	 "description" : "Allow to load community built extensions",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "allow_extensions_metadata_mismatch",
-	 "description" : "Allow to load extensions with not compatible metadata",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "allow_parser_override_extension",
-	 "description" : "Allow extensions to override the current parser",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "allow_persistent_secrets",
-	 "description" : "Allow the creation of persistent secrets, that are stored and loaded on restarts",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "allow_unredacted_secrets",
-	 "description" : "Allow printing unredacted secrets",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "allow_unsigned_extensions",
-	 "description" : "Allow to load extensions with invalid or missing signatures",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "allowed_directories",
-	 "description" : "List of directories/prefixes that are ALWAYS allowed to be queried - even when "
-	                 "enable_external_access is false",
-	 "type" : "VARCHAR[]",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "allowed_paths",
-	 "description" : "List of files that are ALWAYS allowed to be queried - even when enable_external_access is false",
-	 "type" : "VARCHAR[]",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "arrow_large_buffer_size",
-	 "description" : "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "arrow_lossless_conversion",
-	 "description" : "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, "
-	                 "export the types with a duckdb.type_name extension name.",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "arrow_output_list_view",
-	 "description" : "Whether export to Arrow format should use ListView as the physical layout for LIST columns",
-	 "type" : "BOOLEAN",
-	 "internal_setting" : "arrow_use_list_view",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "arrow_output_version",
-	 "description" : "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8",
-	 "type" : "ENUM<ArrowFormatVersion>",
-	 "default_scope" : "global",
-	 "default_value" : "1.0"
- },
- {
-	 "name" : "asof_loop_join_threshold",
-	 "description" : "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "64"
- },
- {
-	 "name" : "autoinstall_extension_repository",
-	 "description" : "Overrides the custom endpoint for extension installation on autoloading",
-	 "type" : "VARCHAR",
-	 "internal_setting" : "autoinstall_extension_repo",
-	 "scope" : "global"
- },
- {
-	 "name" : "autoinstall_known_extensions",
-	 "description" : "Whether known extensions are allowed to be automatically installed when a query depends on them",
-	 "type" : "BOOLEAN",
-	 "scope" : "global"
- },
- {
-	 "name" : "autoload_known_extensions",
-	 "description" : "Whether known extensions are allowed to be automatically loaded when a query depends on them",
-	 "type" : "BOOLEAN",
-	 "scope" : "global"
- },
- {
-	 "name" : "catalog_error_max_schemas",
-	 "description" :
-	     "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
-	 "type" : "UBIGINT",
-	 "default_scope" : "global",
-	 "default_value" : "100"
- },
- {
-	 "name" : "checkpoint_threshold",
-	 "description" : "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "internal_setting" : "checkpoint_wal_size",
-	 "custom_implementation" : [ "set", "get" ],
-	 "aliases" : ["wal_autocheckpoint"]
- },
- {
-	 "name" : "custom_extension_repository",
-	 "description" : "Overrides the custom endpoint for remote extension installation",
-	 "type" : "VARCHAR",
-	 "internal_setting" : "custom_extension_repo",
-	 "scope" : "global"
- },
- {
-	 "name" : "custom_profiling_settings",
-	 "description" : "Accepts a JSON enabling custom metrics",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "custom_user_agent",
-	 "description" : "Metadata from DuckDB callers",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : [ "set", "reset" ]
- },
- {
-	 "name" : "debug_asof_iejoin",
-	 "description" : "DEBUG SETTING: force use of IEJoin to implement AsOf joins",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "false"
- },
- {
-	 "name" : "debug_checkpoint_abort",
-	 "description" : "DEBUG SETTING: trigger an abort while checkpointing for testing purposes",
-	 "type" : "ENUM<CheckpointAbort>",
-	 "default_scope" : "global",
-	 "default_value" : "NONE"
- },
- {
-	 "name" : "debug_force_external",
-	 "description" : "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
-	 "type" : "BOOLEAN",
-	 "scope" : "local",
-	 "internal_setting" : "force_external"
- },
- {
-	 "name" : "debug_force_no_cross_product",
-	 "description" :
-	     "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "false"
- },
- {
-	 "name" : "debug_physical_table_scan_execution_strategy",
-	 "description" : "DEBUG SETTING: force use of given strategy for executing physical table scans",
-	 "type" : "ENUM<PhysicalTableScanExecutionStrategy>",
-	 "default_scope" : "global",
-	 "default_value" : "DEFAULT"
- },
- {
-	 "name" : "debug_skip_checkpoint_on_commit",
-	 "description" : "DEBUG SETTING: skip checkpointing on commit",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "debug_verify_blocks",
-	 "description" : "DEBUG SETTING: verify block metadata during checkpointing",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "debug_verify_vector",
-	 "description" : "DEBUG SETTING: enable vector verification",
-	 "type" : "ENUM<DebugVectorVerification>",
-	 "default_scope" : "global",
-	 "default_value" : "NONE"
- },
- {
-	 "name" : "debug_window_mode",
-	 "description" : "DEBUG SETTING: switch window mode to use",
-	 "type" : "ENUM<WindowAggregationMode>",
-	 "default_scope" : "global",
-	 "default_value" : "WINDOW"
- },
- {
-	 "name" : "default_block_size",
-	 "description" : "The default block size for new duckdb database files (new as-in, they do not yet exist).",
-	 "type" : "UBIGINT",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "default_collation",
-	 "description" : "The collation setting used when none is specified",
-	 "type" : "VARCHAR",
-	 "default_scope" : "global",
-	 "default_value" : "",
-	 "on_callbacks" : ["set"]
- },
- {
-	 "name" : "default_null_order",
-	 "description" : "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
-	 "type" : "ENUM<DefaultOrderByNullType>",
-	 "default_value" : "NULLS_LAST",
-	 "default_scope" : "global",
-	 "custom_implementation" : ["set"],
-	 "aliases" : ["null_order"]
- },
- {
-	 "name" : "default_order",
-	 "description" : "The order type used when none is specified (ASC or DESC)",
-	 "type" : "ENUM<OrderType>",
-	 "default_value" : "ASCENDING",
-	 "default_scope" : "global",
-	 "custom_implementation" : ["set"]
- },
- {
-	 "name" : "default_secret_storage",
-	 "description" : "Allows switching the default storage for secrets",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "disable_database_invalidation",
-	 "description" : "Disables invalidating the database instance when encountering a fatal error. Should be used with "
-	                 "great care, as DuckDB cannot guarantee correct behavior after a fatal error.",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "disable_timestamptz_casts",
-	 "description" : "Disable casting from timestamp to timestamptz ",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "false"
- },
- {
-	 "name" : "disabled_compression_methods",
-	 "description" : "Disable a specific set of compression methods (comma separated)",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "disabled_filesystems",
-	 "description" : "Disable specific file systems preventing access (e.g. LocalFileSystem)",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "disabled_log_types",
-	 "description" : "Sets the list of disabled loggers",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "struct" : "DisabledLogTypes",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "disabled_optimizers",
-	 "description" : "DEBUG SETTING: disable a specific set of optimizers (comma separated)",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "duckdb_api",
-	 "description" : "DuckDB API surface",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true,
-	 "struct" : "DuckDBAPISetting"
- },
- {
-	 "name" : "dynamic_or_filter_threshold",
-	 "description" : "The maximum amount of OR filters we generate dynamically from a hash join",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "50"
- },
- {
-	 "name" : "enable_external_access",
-	 "description" : "Allow the database to access external state (through e.g. loading/installing modules, COPY "
-	                 "TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "enable_external_file_cache",
-	 "description" : "Allow the database to cache external files (e.g., Parquet) in memory.",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "enable_fsst_vectors",
-	 "description" : "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false",
-	 "struct" : "EnableFSSTVectorsSetting"
- },
- {
-	 "name" : "enable_http_logging",
-	 "description" : "(deprecated) Enables HTTP logging",
-	 "type" : "BOOLEAN",
-	 "scope" : "local",
-	 "struct" : "EnableHTTPLoggingSetting",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "enable_http_metadata_cache",
-	 "description" : "Whether or not the global http metadata is used to cache HTTP metadata",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "internal_setting" : "http_metadata_cache_enable",
-	 "struct" : "EnableHTTPMetadataCacheSetting"
- },
- {
-	 "name" : "enable_logging",
-	 "description" : "Enables the logger",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "struct" : "EnableLogging",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "enable_macro_dependencies",
-	 "description" : "Enable created MACROs to create dependencies on the referenced objects (such as tables)",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "enable_object_cache",
-	 "description" : "[PLACEHOLDER] Legacy setting - does nothing",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "enable_profiling",
-	 "description" : "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "enable_progress_bar",
-	 "description" : "Enables the progress bar, printing progress to the terminal for long queries",
-	 "type" : "BOOLEAN",
-	 "scope" : "local",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "enable_progress_bar_print",
-	 "description" : "Controls the printing of the progress bar, when 'enable_progress_bar' is true",
-	 "type" : "BOOLEAN",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "enable_view_dependencies",
-	 "description" : "Enable created VIEWs to create dependencies on the referenced objects (such as tables)",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "enabled_log_types",
-	 "description" : "Sets the list of enabled loggers",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "struct" : "EnabledLogTypes",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "errors_as_json",
-	 "description" : "Output error messages as structured JSON instead of as a raw string",
-	 "type" : "BOOLEAN",
-	 "scope" : "local",
-	 "struct" : "ErrorsAsJSONSetting"
- },
- {
-	 "name" : "experimental_metadata_reuse",
-	 "description" : "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "true"
- },
- {
-	 "name" : "explain_output",
-	 "description" : "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
-	 "type" : "ENUM<ExplainOutputType>",
-	 "scope" : "local",
-	 "internal_setting" : "explain_output_type"
- },
- {
-	 "name" : "extension_directory",
-	 "description" : "Set the directory to store extensions in",
-	 "type" : "VARCHAR",
-	 "scope" : "global"
- },
- {
-	 "name" : "external_file_cache_read_policy",
-	 "description" : "Read policy for external file cache. Built-in: DEFAULT (fill gaps), ALIGNED (align to 2MiB "
-	                 "blocks). Extensions can register additional policies.",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "default_scope" : "global",
-	 "default_value" : "default",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "external_threads",
-	 "description" : "The number of external threads that work on DuckDB tasks.",
-	 "type" : "UBIGINT",
-	 "scope" : "global",
-	 "on_callbacks" : [ "set", "reset" ]
- },
- {
-	 "name" : "file_search_path",
-	 "description" : "A comma separated list of directories to search for input files",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "force_bitpacking_mode",
-	 "description" : "DEBUG SETTING: forces a specific bitpacking mode",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "force_compression",
-	 "description" : "DEBUG SETTING: forces a specific compression method to be used",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "home_directory",
-	 "description" : "Sets the home directory used by the system",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : ["set"]
- },
- {
-	 "name" : "http_logging_output",
-	 "description" :
-	     "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "struct" : "HTTPLoggingOutputSetting",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "http_proxy",
-	 "description" : "HTTP proxy host",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "struct" : "HTTPProxySetting"
- },
- {
-	 "name" : "http_proxy_password",
-	 "description" : "Password for HTTP proxy",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "struct" : "HTTPProxyPasswordSetting"
- },
- {
-	 "name" : "http_proxy_username",
-	 "description" : "Username for HTTP proxy",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "struct" : "HTTPProxyUsernameSetting"
- },
- {
-	 "name" : "ieee_floating_point_ops",
-	 "description" : "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "true"
- },
- {
-	 "name" : "immediate_transaction_mode",
-	 "description" :
-	     "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "index_scan_max_count",
-	 "description" : "The maximum index scan count sets a threshold for index scans. If fewer than "
-	                 "MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we "
-	                 "perform an index scan instead of a table scan.",
-	 "type" : "UBIGINT",
-	 "default_scope" : "global",
-	 "default_value" : 2048
- },
- {
-	 "name" : "index_scan_percentage",
-	 "description" :
-	     "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t   "
-	     " \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
-	 "type" : "DOUBLE",
-	 "default_scope" : "global",
-	 "default_value" : "0.001",
-	 "on_callbacks" : ["set"]
- },
- {
-	 "name" : "integer_division",
-	 "description" : "Whether or not the / operator defaults to integer division, or to floating point division",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "false"
- },
- {
-	 "name" : "lambda_syntax",
-	 "description" : "Configures the use of the deprecated single arrow operator (->) for lambda functions.",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "late_materialization_max_rows",
-	 "description" : "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "50"
- },
- {
-	 "name" : "lock_configuration",
-	 "description" : "Whether or not the configuration can be altered",
-	 "type" : "BOOLEAN",
-	 "scope" : "global"
- },
- {
-	 "name" : "log_query_path",
-	 "description" : "Specifies the path to which queries should be logged (default: NULL, queries are not logged)",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "logging_level",
-	 "description" : "The log level which will be recorded in the log",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "struct" : "LoggingLevel",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "logging_mode",
-	 "description" : "Determines which types of log messages are logged",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "struct" : "LoggingMode",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "logging_storage",
-	 "description" : "Set the logging storage (memory/stdout/file/<custom>)",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "struct" : "LoggingStorage",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "max_expression_depth",
-	 "description" : "The maximum expression depth limit in the parser. WARNING: increasing this setting and using "
-	                 "very deep \"\n\t    \"expressions might lead to stack overflow errors.",
-	 "type" : "UBIGINT",
-	 "scope" : "local"
- },
- {
-	 "name" : "max_memory",
-	 "description" : "The maximum memory of the system (e.g. 1GB)",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true,
-	 "aliases" : ["memory_limit"]
- },
- {
-	 "name" : "max_temp_directory_size",
-	 "description" : "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "max_vacuum_tasks",
-	 "description" : "The maximum vacuum tasks to schedule during a checkpoint.",
-	 "type" : "UBIGINT",
-	 "default_scope" : "global",
-	 "default_value" : "100"
- },
- {
-	 "name" : "merge_join_threshold",
-	 "description" : "The maximum number of rows on either table to choose a merge join",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "1000"
- },
- {
-	 "name" : "nested_loop_join_threshold",
-	 "description" : "The maximum number of rows on either table to choose a nested loop join",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "5"
- },
- {
-	 "name" : "old_implicit_casting",
-	 "description" : "Allow implicit casting to/from VARCHAR",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "order_by_non_integer_literal",
-	 "description" : "Allow ordering by non-integer literals - ordering by such literals has no effect.",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "false"
- },
- {
-	 "name" : "ordered_aggregate_threshold",
-	 "description" : "The number of rows to accumulate before sorting, used for tuning",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "262144",
-	 "on_callbacks" : ["set"]
- },
- {
-	 "name" : "partitioned_write_flush_threshold",
-	 "description" :
-	     "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "524288"
- },
- {
-	 "name" : "partitioned_write_max_open_files",
-	 "description" :
-	     "The maximum amount of files the system can keep open before flushing to disk when writing using PARTITION_BY",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "100"
- },
- {
-	 "name" : "password",
-	 "description" : "The password to use. Ignored for legacy compatibility.",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "perfect_ht_threshold",
-	 "description" : "Threshold in bytes for when to use a perfect hash table",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "12",
-	 "on_callbacks" : ["set"]
- },
- {
-	 "name" : "pin_threads",
-	 "description" : "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)",
-	 "type" : "ENUM<ThreadPinMode>",
-	 "scope" : "global"
- },
- {
-	 "name" : "pivot_filter_threshold",
-	 "description" : "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "20"
- },
- {
-	 "name" : "pivot_limit",
-	 "description" : "The maximum number of pivot columns in a pivot statement",
-	 "type" : "UBIGINT",
-	 "default_scope" : "local",
-	 "default_value" : "100000"
- },
- {
-	 "name" : "prefer_range_joins",
-	 "description" : "Force use of range joins with mixed predicates",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "false"
- },
- {
-	 "name" : "preserve_identifier_case",
-	 "description" :
-	     "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "true"
- },
- {
-	 "name" : "preserve_insertion_order",
-	 "description" : "Whether or not to preserve insertion order. If set to false the system is allowed to re-order "
-	                 "any results \"\n\t    \"that do not contain ORDER BY clauses.",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "true"
- },
- {
-	 "name" : "produce_arrow_string_view",
-	 "description" : "Whether Arrow strings should be produced by DuckDB in Utf8View format instead of Utf8",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "global",
-	 "default_value" : "false"
- },
- {
-	 "name" : "profile_output",
-	 "description" : "The file to which profile output should be saved, or empty to print to the terminal",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true,
-	 "aliases" : ["profiling_output"]
- },
- {
-	 "name" : "profiling_coverage",
-	 "description" : "The profiling coverage (SELECT or ALL)",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "profiling_mode",
-	 "description" : "The profiling mode (STANDARD or DETAILED)",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "progress_bar_time",
-	 "description" :
-	     "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar",
-	 "type" : "BIGINT",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "scalar_subquery_error_on_multiple_rows",
-	 "description" :
-	     "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
-	 "type" : "BOOLEAN",
-	 "default_scope" : "local",
-	 "default_value" : "true"
- },
- {
-	 "name" : "scheduler_process_partial",
-	 "description" :
-	     "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries",
-	 "type" : "BOOLEAN",
-	 "scope" : "global"
- },
- {
-	 "name" : "schema",
-	 "description" : "Sets the default search schema. Equivalent to setting search_path to a single value.",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "search_path",
-	 "description" : "Sets the default catalog search path as a comma-separated list of values",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "secret_directory",
-	 "description" : "Set the directory to which persistent secrets are stored",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "storage_block_prefetch",
-	 "description" : "In which scenarios to use storage block prefetching",
-	 "type" : "ENUM<StorageBlockPrefetch>",
-	 "default_scope" : "global",
-	 "default_value" : "REMOTE_ONLY"
- },
- {
-	 "name" : "storage_compatibility_version",
-	 "description" : "Serialize on checkpoint with compatibility for a given duckdb version",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "streaming_buffer_size",
-	 "description" : "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)",
-	 "type" : "VARCHAR",
-	 "scope" : "local",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "temp_directory",
-	 "description" : "Set the directory to which to write temp files",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "temp_file_encryption",
-	 "description" : "Encrypt all temporary files if database is encrypted",
-	 "type" : "BOOLEAN",
-	 "scope" : "global",
-	 "custom_implementation" : true
- },
- {
-	 "name" : "threads",
-	 "description" : "The number of total threads used by the system.",
-	 "type" : "BIGINT",
-	 "scope" : "global",
-	 "custom_implementation" : true,
-	 "aliases" : ["worker_threads"]
- },
- {
-	 "name" : "username",
-	 "description" : "The username to use. Ignored for legacy compatibility.",
-	 "type" : "VARCHAR",
-	 "scope" : "global",
-	 "custom_implementation" : true,
-	 "aliases" : ["user"]
- },
- {
-	 "name" : "write_buffer_row_group_count",
-	 "description" : "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing "
-	                 "this setting can reduce memory consumption.",
-	 "type" : "UBIGINT",
-	 "default_scope" : "global",
-	 "default_value" : "5"
- },
- {
-	 "name" : "zstd_min_string_length",
-	 "description" : "The (average) length at which to enable ZSTD compression, defaults to 4096",
-	 "type" : "UBIGINT",
-	 "scope" : "global"
- }]
+[
+    {
+        "name": "access_mode",
+        "description": "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
+        "type": "ENUM<AccessMode>",
+        "scope": "global",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "allocator_background_threads",
+        "description": "Whether to enable the allocator background thread.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "allocator_bulk_deallocation_flush_threshold",
+        "description": "If a bulk deallocation larger than this occurs, flush outstanding allocations.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "allocator_flush_threshold",
+        "description": "Peak allocation threshold at which to flush the allocator after completing a task.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "allow_community_extensions",
+        "description": "Allow to load community built extensions",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "allow_extensions_metadata_mismatch",
+        "description": "Allow to load extensions with not compatible metadata",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "allow_parser_override_extension",
+        "description": "Allow extensions to override the current parser",
+        "type": "VARCHAR",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "allow_persistent_secrets",
+        "description": "Allow the creation of persistent secrets, that are stored and loaded on restarts",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "allow_unredacted_secrets",
+        "description": "Allow printing unredacted secrets",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "allow_unsigned_extensions",
+        "description": "Allow to load extensions with invalid or missing signatures",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "allowed_directories",
+        "description": "List of directories/prefixes that are ALWAYS allowed to be queried - even when enable_external_access is false",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "allowed_paths",
+        "description": "List of files that are ALWAYS allowed to be queried - even when enable_external_access is false",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "arrow_large_buffer_size",
+        "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "arrow_lossless_conversion",
+        "description": "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types with a duckdb.type_name extension name.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "arrow_output_list_view",
+        "description": "Whether export to Arrow format should use ListView as the physical layout for LIST columns",
+        "type": "BOOLEAN",
+        "internal_setting": "arrow_use_list_view",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "arrow_output_version",
+        "description": "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8",
+        "type": "ENUM<ArrowFormatVersion>",
+        "default_scope": "global",
+        "default_value": "1.0"
+    },
+    {
+        "name": "asof_loop_join_threshold",
+        "description": "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "64"
+    },
+    {
+        "name": "autoinstall_extension_repository",
+        "description": "Overrides the custom endpoint for extension installation on autoloading",
+        "type": "VARCHAR",
+        "internal_setting": "autoinstall_extension_repo",
+        "scope": "global"
+    },
+    {
+        "name": "autoinstall_known_extensions",
+        "description": "Whether known extensions are allowed to be automatically installed when a query depends on them",
+        "type": "BOOLEAN",
+        "scope": "global"
+    },
+    {
+        "name": "autoload_known_extensions",
+        "description": "Whether known extensions are allowed to be automatically loaded when a query depends on them",
+        "type": "BOOLEAN",
+        "scope": "global"
+    },
+    {
+        "name": "block_allocator_memory",
+        "description": "Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced).",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "catalog_error_max_schemas",
+        "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "100"
+    },
+    {
+        "name": "checkpoint_threshold",
+        "description": "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "internal_setting": "checkpoint_wal_size",
+        "custom_implementation": [
+            "set",
+            "get"
+        ],
+        "aliases": [
+            "wal_autocheckpoint"
+        ]
+    },
+    {
+        "name": "custom_extension_repository",
+        "description": "Overrides the custom endpoint for remote extension installation",
+        "type": "VARCHAR",
+        "internal_setting": "custom_extension_repo",
+        "scope": "global"
+    },
+    {
+        "name": "custom_profiling_settings",
+        "description": "Accepts a JSON enabling custom metrics",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "custom_user_agent",
+        "description": "Metadata from DuckDB callers",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "debug_asof_iejoin",
+        "description": "DEBUG SETTING: force use of IEJoin to implement AsOf joins",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_checkpoint_abort",
+        "description": "DEBUG SETTING: trigger an abort while checkpointing for testing purposes",
+        "type": "ENUM<CheckpointAbort>",
+        "default_scope": "global",
+        "default_value": "NONE"
+    },
+    {
+        "name": "debug_force_external",
+        "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "internal_setting": "force_external"
+    },
+    {
+        "name": "debug_force_no_cross_product",
+        "description": "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_physical_table_scan_execution_strategy",
+        "description": "DEBUG SETTING: force use of given strategy for executing physical table scans",
+        "type": "ENUM<PhysicalTableScanExecutionStrategy>",
+        "default_scope": "global",
+        "default_value": "DEFAULT"
+    },
+    {
+        "name": "debug_skip_checkpoint_on_commit",
+        "description": "DEBUG SETTING: skip checkpointing on commit",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_blocks",
+        "description": "DEBUG SETTING: verify block metadata during checkpointing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_vector",
+        "description": "DEBUG SETTING: enable vector verification",
+        "type": "ENUM<DebugVectorVerification>",
+        "default_scope": "global",
+        "default_value": "NONE"
+    },
+    {
+        "name": "debug_window_mode",
+        "description": "DEBUG SETTING: switch window mode to use",
+        "type": "ENUM<WindowAggregationMode>",
+        "default_scope": "global",
+        "default_value": "WINDOW"
+    },
+    {
+        "name": "default_block_size",
+        "description": "The default block size for new duckdb database files (new as-in, they do not yet exist).",
+        "type": "UBIGINT",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "default_collation",
+        "description": "The collation setting used when none is specified",
+        "type": "VARCHAR",
+        "default_scope": "global",
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "default_null_order",
+        "description": "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
+        "type": "ENUM<DefaultOrderByNullType>",
+        "default_value": "NULLS_LAST",
+        "default_scope": "global",
+        "custom_implementation": [
+            "set"
+        ],
+        "aliases": [
+            "null_order"
+        ]
+    },
+    {
+        "name": "default_order",
+        "description": "The order type used when none is specified (ASC or DESC)",
+        "type": "ENUM<OrderType>",
+        "default_value": "ASCENDING",
+        "default_scope": "global",
+        "custom_implementation": [
+            "set"
+        ]
+    },
+    {
+        "name": "default_secret_storage",
+        "description": "Allows switching the default storage for secrets",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "disable_database_invalidation",
+        "description": "Disables invalidating the database instance when encountering a fatal error. Should be used with great care, as DuckDB cannot guarantee correct behavior after a fatal error.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "disable_timestamptz_casts",
+        "description": "Disable casting from timestamp to timestamptz ",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "disabled_compression_methods",
+        "description": "Disable a specific set of compression methods (comma separated)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "disabled_filesystems",
+        "description": "Disable specific file systems preventing access (e.g. LocalFileSystem)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "disabled_log_types",
+        "description": "Sets the list of disabled loggers",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "DisabledLogTypes",
+        "custom_implementation": true
+    },
+    {
+        "name": "disabled_optimizers",
+        "description": "DEBUG SETTING: disable a specific set of optimizers (comma separated)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "duckdb_api",
+        "description": "DuckDB API surface",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "struct": "DuckDBAPISetting"
+    },
+    {
+        "name": "dynamic_or_filter_threshold",
+        "description": "The maximum amount of OR filters we generate dynamically from a hash join",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "50"
+    },
+    {
+        "name": "enable_external_access",
+        "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "enable_external_file_cache",
+        "description": "Allow the database to cache external files (e.g., Parquet) in memory.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "external_file_cache_read_policy",
+        "description": "The read policy to use when caching external files. Options are 'default' or 'aligned'.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "enable_fsst_vectors",
+        "description": "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false",
+        "struct": "EnableFSSTVectorsSetting"
+    },
+    {
+        "name": "enable_http_logging",
+        "description": "(deprecated) Enables HTTP logging",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "struct": "EnableHTTPLoggingSetting",
+        "custom_implementation": true
+    },
+    {
+        "name": "enable_http_metadata_cache",
+        "description": "Whether or not the global http metadata is used to cache HTTP metadata",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "internal_setting": "http_metadata_cache_enable",
+        "struct": "EnableHTTPMetadataCacheSetting"
+    },
+    {
+        "name": "enable_logging",
+        "description": "Enables the logger",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "struct": "EnableLogging",
+        "custom_implementation": true
+    },
+    {
+        "name": "enable_macro_dependencies",
+        "description": "Enable created MACROs to create dependencies on the referenced objects (such as tables)",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "enable_object_cache",
+        "description": "[PLACEHOLDER] Legacy setting - does nothing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "enable_profiling",
+        "description": "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "enable_progress_bar",
+        "description": "Enables the progress bar, printing progress to the terminal for long queries",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "enable_progress_bar_print",
+        "description": "Controls the printing of the progress bar, when 'enable_progress_bar' is true",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "enable_view_dependencies",
+        "description": "Enable created VIEWs to create dependencies on the referenced objects (such as tables)",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "enabled_log_types",
+        "description": "Sets the list of enabled loggers",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "EnabledLogTypes",
+        "custom_implementation": true
+    },
+    {
+        "name": "errors_as_json",
+        "description": "Output error messages as structured JSON instead of as a raw string",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "struct": "ErrorsAsJSONSetting"
+    },
+    {
+        "name": "experimental_metadata_reuse",
+        "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
+    },
+    {
+        "name": "explain_output",
+        "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
+        "type": "ENUM<ExplainOutputType>",
+        "scope": "local",
+        "internal_setting": "explain_output_type"
+    },
+    {
+        "name": "extension_directory",
+        "description": "Set the directory to store extensions in",
+        "type": "VARCHAR",
+        "scope": "global"
+    },
+    {
+        "name": "external_threads",
+        "description": "The number of external threads that work on DuckDB tasks.",
+        "type": "UBIGINT",
+        "scope": "global",
+        "on_callbacks": [
+            "set",
+            "reset"
+        ]
+    },
+    {
+        "name": "file_search_path",
+        "description": "A comma separated list of directories to search for input files",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "force_bitpacking_mode",
+        "description": "DEBUG SETTING: forces a specific bitpacking mode",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "force_compression",
+        "description": "DEBUG SETTING: forces a specific compression method to be used",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "home_directory",
+        "description": "Sets the home directory used by the system",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": [
+            "set"
+        ]
+    },
+    {
+        "name": "http_logging_output",
+        "description": "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
+        "type": "VARCHAR",
+        "scope": "local",
+        "struct": "HTTPLoggingOutputSetting",
+        "custom_implementation": true
+    },
+    {
+        "name": "http_proxy",
+        "description": "HTTP proxy host",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "HTTPProxySetting"
+    },
+    {
+        "name": "http_proxy_password",
+        "description": "Password for HTTP proxy",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "HTTPProxyPasswordSetting"
+    },
+    {
+        "name": "http_proxy_username",
+        "description": "Username for HTTP proxy",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "HTTPProxyUsernameSetting"
+    },
+    {
+        "name": "ieee_floating_point_ops",
+        "description": "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
+    },
+    {
+        "name": "immediate_transaction_mode",
+        "description": "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "index_scan_max_count",
+        "description": "The maximum index scan count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": 2048
+    },
+    {
+        "name": "index_scan_percentage",
+        "description": "The index scan percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, \"\n\t    \"index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.",
+        "type": "DOUBLE",
+        "default_scope": "global",
+        "default_value": "0.001",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "integer_division",
+        "description": "Whether or not the / operator defaults to integer division, or to floating point division",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "lambda_syntax",
+        "description": "Configures the use of the deprecated single arrow operator (->) for lambda functions.",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "late_materialization_max_rows",
+        "description": "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "50"
+    },
+    {
+        "name": "lock_configuration",
+        "description": "Whether or not the configuration can be altered",
+        "type": "BOOLEAN",
+        "scope": "global"
+    },
+    {
+        "name": "log_query_path",
+        "description": "Specifies the path to which queries should be logged (default: NULL, queries are not logged)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "logging_level",
+        "description": "The log level which will be recorded in the log",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingLevel",
+        "custom_implementation": true
+    },
+    {
+        "name": "logging_mode",
+        "description": "Determines which types of log messages are logged",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingMode",
+        "custom_implementation": true
+    },
+    {
+        "name": "logging_storage",
+        "description": "Set the logging storage (memory/stdout/file/<custom>)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingStorage",
+        "custom_implementation": true
+    },
+    {
+        "name": "max_expression_depth",
+        "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
+        "type": "UBIGINT",
+        "scope": "local"
+    },
+    {
+        "name": "max_memory",
+        "description": "The maximum memory of the system (e.g. 1GB)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "aliases": [
+            "memory_limit"
+        ]
+    },
+    {
+        "name": "max_temp_directory_size",
+        "description": "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "max_vacuum_tasks",
+        "description": "The maximum vacuum tasks to schedule during a checkpoint.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "100"
+    },
+    {
+        "name": "merge_join_threshold",
+        "description": "The maximum number of rows on either table to choose a merge join",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "1000"
+    },
+    {
+        "name": "nested_loop_join_threshold",
+        "description": "The maximum number of rows on either table to choose a nested loop join",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "5"
+    },
+    {
+        "name": "old_implicit_casting",
+        "description": "Allow implicit casting to/from VARCHAR",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "order_by_non_integer_literal",
+        "description": "Allow ordering by non-integer literals - ordering by such literals has no effect.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "ordered_aggregate_threshold",
+        "description": "The number of rows to accumulate before sorting, used for tuning",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "262144",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "partitioned_write_flush_threshold",
+        "description": "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "524288"
+    },
+    {
+        "name": "partitioned_write_max_open_files",
+        "description": "The maximum amount of files the system can keep open before flushing to disk when writing using PARTITION_BY",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "100"
+    },
+    {
+        "name": "password",
+        "description": "The password to use. Ignored for legacy compatibility.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "perfect_ht_threshold",
+        "description": "Threshold in bytes for when to use a perfect hash table",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "12",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "pin_threads",
+        "description": "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)",
+        "type": "ENUM<ThreadPinMode>",
+        "scope": "global"
+    },
+    {
+        "name": "pivot_filter_threshold",
+        "description": "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "20"
+    },
+    {
+        "name": "pivot_limit",
+        "description": "The maximum number of pivot columns in a pivot statement",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "100000"
+    },
+    {
+        "name": "prefer_range_joins",
+        "description": "Force use of range joins with mixed predicates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "preserve_identifier_case",
+        "description": "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
+    },
+    {
+        "name": "preserve_insertion_order",
+        "description": "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results \"\n\t    \"that do not contain ORDER BY clauses.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
+    },
+    {
+        "name": "produce_arrow_string_view",
+        "description": "Whether Arrow strings should be produced by DuckDB in Utf8View format instead of Utf8",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "profile_output",
+        "description": "The file to which profile output should be saved, or empty to print to the terminal",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "profiling_output"
+        ]
+    },
+    {
+        "name": "profiling_coverage",
+        "description": "The profiling coverage (SELECT or ALL)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "profiling_mode",
+        "description": "The profiling mode (STANDARD or DETAILED)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "progress_bar_time",
+        "description": "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar",
+        "type": "BIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "scalar_subquery_error_on_multiple_rows",
+        "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
+    },
+    {
+        "name": "scheduler_process_partial",
+        "description": "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries",
+        "type": "BOOLEAN",
+        "scope": "global"
+    },
+    {
+        "name": "schema",
+        "description": "Sets the default search schema. Equivalent to setting search_path to a single value.",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "search_path",
+        "description": "Sets the default catalog search path as a comma-separated list of values",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "secret_directory",
+        "description": "Set the directory to which persistent secrets are stored",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "storage_block_prefetch",
+        "description": "In which scenarios to use storage block prefetching",
+        "type": "ENUM<StorageBlockPrefetch>",
+        "default_scope": "global",
+        "default_value": "REMOTE_ONLY"
+    },
+    {
+        "name": "storage_compatibility_version",
+        "description": "Serialize on checkpoint with compatibility for a given duckdb version",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "streaming_buffer_size",
+        "description": "The maximum memory to buffer between fetching from a streaming result (e.g. 1GB)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "temp_directory",
+        "description": "Set the directory to which to write temp files",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "temp_file_encryption",
+        "description": "Encrypt all temporary files if database is encrypted",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "threads",
+        "description": "The number of total threads used by the system.",
+        "type": "BIGINT",
+        "scope": "global",
+        "custom_implementation": true,
+        "aliases": [
+            "worker_threads"
+        ]
+    },
+    {
+        "name": "username",
+        "description": "The username to use. Ignored for legacy compatibility.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "aliases": [
+            "user"
+        ]
+    },
+    {
+        "name": "write_buffer_row_group_count",
+        "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "5"
+    },
+    {
+        "name": "zstd_min_string_length",
+        "description": "The (average) length at which to enable ZSTD compression, defaults to 4096",
+        "type": "UBIGINT",
+        "scope": "global"
+    }
+]
