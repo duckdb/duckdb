@@ -36,7 +36,7 @@ bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length)
 } // namespace
 
 ReadPolicyResult DefaultReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t location, idx_t file_size,
-                                                          optional_idx start_location_of_next_range) {
+                                                         optional_idx start_location_of_next_range) {
 	idx_t new_nr_bytes = nr_bytes;
 	if (start_location_of_next_range.IsValid()) {
 		const idx_t nr_bytes_to_be_added = start_location_of_next_range.GetIndex() - location - nr_bytes;
@@ -53,7 +53,7 @@ ReadPolicyResult DefaultReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t l
 }
 
 ReadPolicyResult AlignedReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t location, idx_t file_size,
-                                                          optional_idx start_location_of_next_range) {
+                                                         optional_idx start_location_of_next_range) {
 	const idx_t aligned_start = AlignDown(location);
 	const idx_t requested_end = location + nr_bytes;
 	idx_t aligned_end = AlignUp(requested_end);
@@ -61,7 +61,7 @@ ReadPolicyResult AlignedReadPolicy::CalculateBytesToRead(idx_t nr_bytes, idx_t l
 	// Adjust aligned_end if we have a known next range location.
 	if (start_location_of_next_range.IsValid()) {
 		D_ASSERT(start_location_of_next_range.GetIndex() % ALIGNED_READ_BLOCK_SIZE == 0);
-		const idx_t next_range_start = start_location_of_next_range.GetIndex();		
+		const idx_t next_range_start = start_location_of_next_range.GetIndex();
 		if (aligned_end > next_range_start) {
 			aligned_end = next_range_start;
 		}
