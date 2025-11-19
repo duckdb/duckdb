@@ -402,6 +402,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformCaseElse);
 	REGISTER_TRANSFORM(TransformCaseWhenThen);
 	REGISTER_TRANSFORM(TransformTypeLiteral);
+	REGISTER_TRANSFORM(TransformDefaultExpression);
 }
 
 void PEGTransformerFactory::RegisterImport() {

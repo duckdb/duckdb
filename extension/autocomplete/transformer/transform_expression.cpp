@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/default_expression.hpp"
 
 namespace duckdb {
 
@@ -1262,6 +1263,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 	auto child = make_uniq<ConstantExpression>(Value(string_literal));
 	auto result = make_uniq<CastExpression>(type, std::move(child));
 	return std::move(result);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	return make_uniq<DefaultExpression>();
 }
 
 } // namespace duckdb

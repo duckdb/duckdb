@@ -712,6 +712,7 @@ private:
 	static CaseCheck TransformCaseWhenThen(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformTypeLiteral(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformDefaultExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,
