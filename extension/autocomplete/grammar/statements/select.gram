@@ -18,7 +18,7 @@ SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClaus
 SelectFrom <- SelectFromClause / FromSelectClause
 SelectFromClause <- SelectClause FromClause?
 FromSelectClause <- FromClause SelectClause?
-WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS'i Materialized? SubqueryReference
+WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? SubqueryReference
 UsingKey <- 'USING' 'KEY' ColumnIdList
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)

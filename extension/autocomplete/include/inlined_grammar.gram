@@ -998,13 +998,15 @@ OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)
 SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
-SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
+SelectFrom <- SelectFromClause / FromSelectClause
+SelectFromClause <- SelectClause FromClause?
+FromSelectClause <- FromClause SelectClause?
 WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? SubqueryReference
-UsingKey <- 'USING' 'KEY' Parens(List(ColId))
+UsingKey <- 'USING' 'KEY' ColumnIdList
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'
-SelectClause <- 'SELECT' DistinctClause? TargetList
+SelectClause <- ('SELECT' / 'QUACK') DistinctClause? TargetList
 TargetList <- List(AliasedExpression)
 ColumnAliases <- Parens(List(ColIdOrString))
 
@@ -1037,16 +1039,15 @@ SchemaReservedTable <- SchemaQualification ReservedTableName
 CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
 
 TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
-TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
-TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality?
-WithOrdinality <- 'WITH' 'ORDINALITY'
+TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
+TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
-NamedParameter <- TypeName Type? NamedParameterAssignment Expression
+NamedParameter <- TypeName NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
-TableAlias <- 'AS'? (Identifier / StringLiteral) ColumnAliases?
+TableAlias <- 'AS'? IdentifierOrStringLiteral ColumnAliases?
 
 AtClause <- 'AT' Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression
@@ -1060,8 +1061,17 @@ OnClause <- 'ON' Expression
 UsingClause <- 'USING' Parens(List(ColumnName))
 
 OuterJoinType <- 'FULL' / 'LEFT' / 'RIGHT'
-JoinType <- (OuterJoinType 'OUTER'?) / 'SEMI' / 'ANTI' / 'INNER'
-JoinPrefix <- 'CROSS' / ('NATURAL' JoinType?) / 'POSITIONAL'
+JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
+JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
+CrossJoinPrefix <- 'CROSS'
+NaturalJoinPrefix <- 'NATURAL' JoinType?
+PositionalJoinPrefix <- 'POSITIONAL'
+FullJoin <- 'FULL' 'OUTER'?
+LeftJoin <- 'LEFT' 'OUTER'?
+RightJoin <- 'RIGHT' 'OUTER'?
+SemiJoin <- 'SEMI'
+AntiJoin <- 'ANTI'
+InnerJoin <- 'INNER'
 
 FromClause <- 'FROM' List(TableRef)
 WhereClause <- 'WHERE' Expression
@@ -1084,7 +1094,8 @@ RepeatableSample <- 'REPEATABLE' Parens(NumberLiteral)
 SampleCount <- Expression SampleUnit?
 SampleUnit <- '%' / 'PERCENT' / 'ROWS'
 
-GroupByExpressions <- GroupByList / 'ALL'
+GroupByExpressions <- GroupByList / GroupByAll
+GroupByAll <- 'ALL'
 GroupByList <- List(GroupByExpression)
 GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
 EmptyGroupingItem <- '(' ')'
@@ -1092,7 +1103,7 @@ CubeOrRollupClause <- CubeOrRollup Parens(List(Expression))
 CubeOrRollup <- 'CUBE' / 'ROLLUP'
 GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
 
-SubqueryReference <- Parens(SelectStatement)
+SubqueryReference <- Parens(SelectStatementInternal)
 
 OrderByExpression <- Expression DescOrAsc? NullsFirstOrLast?
 DescOrAsc <- DescendingOrder / AscendingOrder
@@ -1107,10 +1118,11 @@ OrderByExpressionList <- List(OrderByExpression)
 OrderByAll <- 'ALL' DescOrAsc? NullsFirstOrLast?
 
 LimitClause <- 'LIMIT' LimitValue
-OffsetClause <- 'OFFSET' OffsetValue
-LimitValue <- 'ALL' / (NumberLiteral 'PERCENT') / (Expression '%'?)
-OffsetValue <- Expression RowOrRows?
-RowOrRows <- 'ROW' / 'ROWS'
+OffsetClause <- 'OFFSET' LimitValue
+LimitValue <- LimitAll / LimitLiteralPercent / LimitExpression
+LimitAll <- 'ALL'
+LimitLiteralPercent <- NumberLiteral 'PERCENT'
+LimitExpression <- Expression '%'?
 
 AliasedExpression <- ColIdExpression / ExpressionAsColLabel / ExpressionOptIdentifier
 ColIdExpression <- ColId ':' Expression

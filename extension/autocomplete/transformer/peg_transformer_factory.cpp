@@ -456,6 +456,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformSelectFromClause);
 	REGISTER_TRANSFORM(TransformFromSelectClause);
 	REGISTER_TRANSFORM(TransformFromClause);
+	REGISTER_TRANSFORM(TransformSelectClause);
 	REGISTER_TRANSFORM(TransformFunctionArgument);
 	REGISTER_TRANSFORM(TransformBaseTableName);
 	REGISTER_TRANSFORM(TransformSchemaReservedTable);

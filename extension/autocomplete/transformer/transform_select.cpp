@@ -135,6 +135,13 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformFromClause(PEGTransformer &
 	return result_table_ref;
 }
 
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSelectClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// TODO(Dtenwolde) Do something with opt_distinct
+	auto opt_distinct = list_pr.Child<OptionalParseResult>(1);
+	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	return target_list;
+}
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {

@@ -776,6 +776,7 @@ private:
 	static unique_ptr<SelectNode> TransformSelectFromClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectNode> TransformFromSelectClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformFromClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSelectClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionArgument(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
