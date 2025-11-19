@@ -49,16 +49,59 @@
       }
     },
     {
-      "name": "duckdb_register_log_storage",
+      "name": "duckdb_log_storage_set_extra_data",
       "return_type": "void",
       "params": [
         {
-          "type": "duckdb_database",
-          "name": "database"
+          "type": "duckdb_log_storage",
+          "name": "log_storage"
+        },
+        {
+          "type": "void *",
+          "name": "extra_data"
+        },
+        {
+          "type": "duckdb_delete_callback_t",
+          "name": "delete_callback"
+        }
+      ],
+      "comment": {
+        "description": "Sets the extra data of the custom log storage.\n\n",
+        "param_comments": {
+          "log_storage": "The log storage object.",
+          "extra_data": "The extra data that is passed back into the callbacks.",
+          "delete_callback": "The delete callback to call on the extra data, if any."
+        }
+      }
+    },
+    {
+      "name": "duckdb_log_storage_set_name",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_log_storage",
+          "name": "log_storage"
         },
         {
           "type": "const char *",
           "name": "name"
+        }
+      ],
+      "comment": {
+        "description": "Sets the name of the log storage.\n\n",
+        "param_comments": {
+          "log_storage": "The log storage object.",
+          "name": "The name of the log storage."
+        }
+      }
+    },
+    {
+      "name": "duckdb_register_log_storage",
+      "return_type": "duckdb_state",
+      "params": [
+        {
+          "type": "duckdb_database",
+          "name": "database"
         },
         {
           "type": "duckdb_log_storage",
@@ -69,9 +112,9 @@
         "description": "Registers a custom log storage for the logger.\n\n",
         "param_comments": {
           "database": "A database object.",
-          "name": "The storage name.",
           "log_storage": "The log storage object."
-        }
+        },
+        "return_value": "Whether the registration was successful."
       }
     }
   ]

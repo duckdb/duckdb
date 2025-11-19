@@ -888,8 +888,8 @@ typedef struct _duckdb_log_storage {
 } * duckdb_log_storage;
 
 //! This function is missing the logging context, which will be added later.
-typedef void (*duckdb_logger_write_log_entry_t)(duckdb_timestamp timestamp, const char *level, const char *log_type,
-                                                const char *log_message);
+typedef void (*duckdb_logger_write_log_entry_t)(void *extra_data, duckdb_timestamp *timestamp, const char *level,
+                                                const char *log_type, const char *log_message);
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
@@ -6126,14 +6126,31 @@ DUCKDB_C_API void duckdb_log_storage_set_write_log_entry(duckdb_log_storage log_
                                                          duckdb_logger_write_log_entry_t function);
 
 /*!
+Sets the extra data of the custom log storage.
+
+* @param log_storage The log storage object.
+* @param extra_data The extra data that is passed back into the callbacks.
+* @param delete_callback The delete callback to call on the extra data, if any.
+*/
+DUCKDB_C_API void duckdb_log_storage_set_extra_data(duckdb_log_storage log_storage, void *extra_data,
+                                                    duckdb_delete_callback_t delete_callback);
+
+/*!
+Sets the name of the log storage.
+
+* @param log_storage The log storage object.
+* @param name The name of the log storage.
+*/
+DUCKDB_C_API void duckdb_log_storage_set_name(duckdb_log_storage log_storage, const char *name);
+
+/*!
 Registers a custom log storage for the logger.
 
 * @param database A database object.
-* @param name The storage name.
 * @param log_storage The log storage object.
+* @return Whether the registration was successful.
 */
-DUCKDB_C_API void duckdb_register_log_storage(duckdb_database database, const char *name,
-                                              duckdb_log_storage log_storage);
+DUCKDB_C_API duckdb_state duckdb_register_log_storage(duckdb_database database, duckdb_log_storage log_storage);
 
 #endif
 

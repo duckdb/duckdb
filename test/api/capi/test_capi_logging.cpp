@@ -39,25 +39,56 @@ private:
 
 CustomLogStore my_log_store;
 
-void WriteLogEntry(duckdb_timestamp timestamp, const char *level, const char *log_type, const char *log_message) {
+struct MyCopyFunctionExtraData {
+	string mode;
+};
+
+void WriteLogEntry(void *extra_data, duckdb_timestamp *timestamp, const char *level, const char *log_type,
+                   const char *log_message) {
+	if (!extra_data) {
+		my_log_store.Insert(log_message);
+		return;
+	}
+	const auto data = static_cast<MyCopyFunctionExtraData *>(extra_data);
+	if (StringUtil::CIEquals(data->mode, "full log")) {
+		my_log_store.Insert(to_string(timestamp->micros) + ", " + level + ", " + log_type + ", " + log_message);
+		return;
+	}
 	my_log_store.Insert(log_message);
 }
 
-TEST_CASE("Test a custom log storage in the CAPI", "[capi]") {
+TEST_CASE("Test a custom log storage in the CAPI with extra data", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 
 	my_log_store.Reset();
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	auto my_extra_data = new MyCopyFunctionExtraData();
+	my_extra_data->mode = "full log";
+
 	auto log_storage = duckdb_create_log_storage();
+	duckdb_log_storage_set_write_log_entry(log_storage, nullptr);
+	duckdb_log_storage_set_write_log_entry(nullptr, WriteLogEntry);
 	duckdb_log_storage_set_write_log_entry(log_storage, WriteLogEntry);
-	duckdb_register_log_storage(tester.database, "MyCustomStorage", log_storage);
+	duckdb_log_storage_set_name(log_storage, "MyCustomStorage");
+
+	duckdb_log_storage_set_extra_data(log_storage, my_extra_data, [](void *extra_data) {
+		const auto data = static_cast<MyCopyFunctionExtraData *>(extra_data);
+		delete data;
+	});
+	auto state = duckdb_register_log_storage(tester.database, log_storage);
+	REQUIRE(state == DuckDBSuccess);
+
+	// Log storage already exists.
+	state = duckdb_register_log_storage(tester.database, log_storage);
+	REQUIRE(state == DuckDBError);
 
 	REQUIRE_NO_FAIL(tester.Query("SET enable_logging = true;"));
 	REQUIRE_NO_FAIL(tester.Query("SET logging_storage = 'MyCustomStorage';"));
 	REQUIRE_NO_FAIL(tester.Query("SELECT write_log('HELLO, BRO');"));
-	REQUIRE(my_log_store.Find("HELLO, BRO"));
+
+	REQUIRE(my_log_store.Contains("INFO, QueryLog, SELECT write_log('HELLO, BRO');"));
 
 	duckdb_destroy_log_storage(&log_storage);
 }
@@ -71,7 +102,8 @@ TEST_CASE("Test logging silent exceptions using a custom log storage in the CAPI
 
 	auto log_storage = duckdb_create_log_storage();
 	duckdb_log_storage_set_write_log_entry(log_storage, WriteLogEntry);
-	duckdb_register_log_storage(tester.database, "MyCustomStorage", log_storage);
+	duckdb_log_storage_set_name(log_storage, "MyCustomStorage");
+	duckdb_register_log_storage(tester.database, log_storage);
 
 	REQUIRE_NO_FAIL(tester.Query("CALL enable_logging(level = 'error');"));
 	REQUIRE_NO_FAIL(tester.Query("SET logging_storage = 'MyCustomStorage';"));
@@ -124,7 +156,8 @@ TEST_CASE("Test a concurrent custom log storage in the CAPI", "[capi]") {
 
 	auto log_storage = duckdb_create_log_storage();
 	duckdb_log_storage_set_write_log_entry(log_storage, WriteLogEntry);
-	duckdb_register_log_storage(tester.database, "MyCustomStorage", log_storage);
+	duckdb_log_storage_set_name(log_storage, "MyCustomStorage");
+	duckdb_register_log_storage(tester.database, log_storage);
 
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA disable_profiling;"));
 	REQUIRE_NO_FAIL(tester.Query("SET enable_logging = true;"));

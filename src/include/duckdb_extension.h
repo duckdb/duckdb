@@ -683,7 +683,10 @@ typedef struct {
 	void (*duckdb_destroy_log_storage)(duckdb_log_storage *log_storage);
 	void (*duckdb_log_storage_set_write_log_entry)(duckdb_log_storage log_storage,
 	                                               duckdb_logger_write_log_entry_t function);
-	void (*duckdb_register_log_storage)(duckdb_database database, const char *name, duckdb_log_storage log_storage);
+	void (*duckdb_log_storage_set_extra_data)(duckdb_log_storage log_storage, void *extra_data,
+	                                          duckdb_delete_callback_t delete_callback);
+	void (*duckdb_log_storage_set_name)(duckdb_log_storage log_storage, const char *name);
+	duckdb_state (*duckdb_register_log_storage)(duckdb_database database, duckdb_log_storage log_storage);
 #endif
 
 // New functions around the client context
@@ -1294,6 +1297,8 @@ typedef struct {
 #define duckdb_create_log_storage              duckdb_ext_api.duckdb_create_log_storage
 #define duckdb_destroy_log_storage             duckdb_ext_api.duckdb_destroy_log_storage
 #define duckdb_log_storage_set_write_log_entry duckdb_ext_api.duckdb_log_storage_set_write_log_entry
+#define duckdb_log_storage_set_extra_data      duckdb_ext_api.duckdb_log_storage_set_extra_data
+#define duckdb_log_storage_set_name            duckdb_ext_api.duckdb_log_storage_set_name
 #define duckdb_register_log_storage            duckdb_ext_api.duckdb_register_log_storage
 
 // Version unstable_new_open_connect_functions
