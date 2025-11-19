@@ -20,9 +20,29 @@ from python_helpers import open_utf8
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from format_test_benchmark import format_file_content
 
-cpp_format_command = '/opt/homebrew/Cellar/clang-format@11/11.1.0/bin/clang-format-11 --sort-includes=0 -style=file'
 try:
-    subprocess.check_output(('/opt/homebrew/Cellar/clang-format@11/11.1.0/bin/clang-format-11', '--version'), text=True)
+    ver = subprocess.check_output(('black', '--version'), text=True)
+    if int(ver.split(' ')[1].split('.')[0]) < 24:
+        print('you need to run `pip install "black>=24"`', ver)
+        exit(-1)
+except Exception as e:
+    print('you need to run `pip install "black>=24"`', e)
+    exit(-1)
+
+try:
+    ver = subprocess.check_output(('clang-format', '--version'), text=True)
+    if '11.' not in ver:
+        print('you need to run `pip install clang_format==11.0.1 - `', ver)
+        exit(-1)
+except Exception as e:
+    print('you need to run `pip install clang_format==11.0.1 - `', e)
+    exit(-1)
+
+cpp_format_command = 'clang-format --sort-includes=0 -style=file'
+cmake_format_command = 'cmake-format'
+
+try:
+    subprocess.check_output(('cmake-format', '--version'), text=True)
 except Exception as e:
     print('you need to run `pip install cmake-format`', e)
     exit(-1)
@@ -35,6 +55,13 @@ extensions = [
     '.h',
     '.cc',
     '.hh',
+    'CMakeLists.txt',
+    '.test',
+    '.test_slow',
+    '.test_coverage',
+    '.benchmark',
+    '.py',
+    '.java',
 ]
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension', 'scripts']
 ignored_files = [
@@ -216,6 +243,9 @@ format_commands = {
     '.h': cpp_format_command,
     '.hh': cpp_format_command,
     '.cc': cpp_format_command,
+    '.txt': cmake_format_command,
+    '.py': 'black --quiet - --skip-string-normalization --line-length 120 --stdin-filename',
+    '.java': cpp_format_command,
 }
 
 difference_files = []
@@ -409,4 +439,3 @@ if check_only:
     else:
         print("Passed format-check")
         exit(0)
-
