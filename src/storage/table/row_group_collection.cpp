@@ -146,7 +146,6 @@ ColumnDataType GetColumnDataType(idx_t row_start) {
 }
 
 void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
-	D_ASSERT(start_row >= GetBaseRowId());
 	auto new_row_group = make_uniq<RowGroup>(*this, 0U);
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
 	owned_row_groups->AppendSegment(l, std::move(new_row_group), start_row);
@@ -178,7 +177,7 @@ void RowGroupCollection::Verify() {
 		auto &row_group = *entry.node;
 		row_group.Verify();
 		D_ASSERT(&row_group.GetCollection() == this);
-		D_ASSERT(entry.row_start == this->GetBaseRowId() + current_total_rows);
+		D_ASSERT(entry.row_start == row_groups->GetBaseRowId() + current_total_rows);
 		current_total_rows += row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());
