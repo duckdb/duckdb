@@ -400,13 +400,6 @@
         "custom_implementation": true
     },
     {
-        "name": "external_file_cache_read_policy",
-        "description": "The read policy to use when caching external files. Options are 'default' or 'aligned'.",
-        "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
-    },
-    {
         "name": "enable_fsst_vectors",
         "description": "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression",
         "type": "BOOLEAN",
@@ -517,6 +510,13 @@
         "description": "Set the directory to store extensions in",
         "type": "VARCHAR",
         "scope": "global"
+    },
+    {
+        "name": "external_file_cache_read_policy",
+        "description": "The read policy to use when caching external files. Options are 'default' or 'aligned'.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "external_threads",

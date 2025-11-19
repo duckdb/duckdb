@@ -716,8 +716,7 @@ struct ExternalFileCacheReadPolicySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "external_file_cache_read_policy";
 	static constexpr const char *Description =
-	    "Read policy for external file cache. Built-in: DEFAULT (fill gaps), ALIGNED (align to 2MiB blocks). "
-	    "Extensions can register additional policies.";
+	    "The read policy to use when caching external files. Options are 'default' or 'aligned'.";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
