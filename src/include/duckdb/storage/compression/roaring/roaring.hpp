@@ -354,7 +354,7 @@ public:
 	template <PhysicalType TYPE>
 	void Compress(Vector &input, idx_t count) {
 		static_assert(AlwaysFalse<std::integral_constant<PhysicalType, TYPE>>::VALUE,
-					  "No specialization exists for this type");
+		              "No specialization exists for this type");
 	}
 
 public:
