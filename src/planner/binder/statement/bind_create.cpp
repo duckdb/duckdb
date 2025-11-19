@@ -220,17 +220,13 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// Figure out if we can store typed macro parameters
 	auto &attached = catalog.GetAttached();
-	auto store_types = info.temporary || attached.IsTemporary();
+	auto store_types = true;
 	if (attached.HasStorageManager()) {
+		// If DuckDB is used as a storage, we must check the version.
 		auto &storage_manager = attached.GetStorageManager();
 		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
 		store_types |= storage_manager.InMemory() || storage_manager.GetStorageVersion() >= since;
-	} else {
-		// If it does not have a storage manager, we check it from the catalog.
-		auto catalog_type = catalog.GetCatalogType();
-		store_types = catalog_type == "ducklake";
 	}
-
 	// try to bind each of the included functions
 	vector_of_logical_type_set_t type_overloads;
 	auto &base = info.Cast<CreateMacroInfo>();
