@@ -252,7 +252,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 	while (true) {
 		idx_t vector_index;
 		idx_t max_row;
-		RowGroupCollection *collection;
+		optional_ptr<RowGroupCollection> collection;
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
 			// select the next row group to scan from the parallel state
