@@ -31,8 +31,7 @@ void Printer::RawPrint(OutputStream stream, const string &str) {
 }
 
 void Printer::DefaultLinePrint(OutputStream stream, const string &str) {
-	Printer::RawPrint(stream, str);
-	Printer::RawPrint(stream, "\n");
+	Printer::RawPrint(stream, str + "\n");
 }
 
 line_printer_f Printer::line_printer = Printer::DefaultLinePrint;

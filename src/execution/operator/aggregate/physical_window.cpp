@@ -953,11 +953,6 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 
 bool WindowLocalSourceState::TryAssignTask() {
 	D_ASSERT(TaskFinished());
-	if (task && task->stage == WindowGroupStage::GETDATA) {
-		// If this state completed the last block in the previous iteration,
-		// release our local state memory.
-		ReleaseLocalStates();
-	}
 	// Because downstream operators may be using our internal buffers,
 	// we can't "finish" a task until we are about to get the next one.
 
@@ -1116,8 +1111,8 @@ OperatorPartitionData PhysicalWindow::GetPartitionData(ExecutionContext &context
 	return OperatorPartitionData(lstate.batch_index);
 }
 
-SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &source) const {
+SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &source) const {
 	auto &gsource = source.global_state.Cast<WindowGlobalSourceState>();
 	auto &lsource = source.local_state.Cast<WindowLocalSourceState>();
 

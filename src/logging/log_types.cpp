@@ -59,6 +59,8 @@ LogicalType HTTPLogType::GetLogType() {
 	child_list_t<LogicalType> request_child_list = {
 	    {"type", LogicalType::VARCHAR},
 	    {"url", LogicalType::VARCHAR},
+	    {"start_time", LogicalType::TIMESTAMP_TZ},
+	    {"duration_ms", LogicalType::BIGINT},
 	    {"headers", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
 	auto request_type = LogicalType::STRUCT(request_child_list);
@@ -91,7 +93,10 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	    {"type", Value(EnumUtil::ToString(request.type))},
 	    {"url", Value(request.url)},
 	    {"headers", CreateHTTPHeadersValue(request.headers)},
-	};
+	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_start) : Value()},
+	    {"duration_ms", request.have_request_timing ? Value::BIGINT(Timestamp::GetEpochMs(request.request_end) -
+	                                                                Timestamp::GetEpochMs(request.request_start))
+	                                                : Value()}};
 	auto request_value = Value::STRUCT(request_child_list);
 	Value response_value;
 	if (response) {

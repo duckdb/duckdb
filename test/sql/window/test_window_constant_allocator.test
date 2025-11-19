@@ -1,0 +1,27 @@
+# name: test/sql/window/test_window_constant_allocator.test
+# description: Test "constant" aggregation allocator usage
+# group: [window]
+
+# Test ArenaAllocation usage
+# Original issue was an assertion failure, 
+# but the output is unstable under multi-theading 
+# because STRING_AGG is order-sensitive.
+statement ok
+WITH cte AS (
+    SELECT 1 AS ext
+    UNION ALL
+    SELECT 2
+    UNION ALL
+    SELECT 3
+    UNION ALL
+    SELECT 4
+)
+SELECT
+    CASE
+        WHEN ext % 2 = 0 THEN 'even'
+        ELSE 'odd'
+        END AS pred,
+    TRUE AS eof,
+    CAST(NULL AS BOOLEAN) AS converter,
+    STRING_AGG(cte.ext, 'abc') OVER () AS str_agg
+FROM cte;

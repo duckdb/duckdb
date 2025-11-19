@@ -102,7 +102,7 @@ public:
 	void ByteSwap() {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
-			(&sort_key.part0)[i] = BSwap((&sort_key.part0)[i]);
+			(&sort_key.part0)[i] = BSwapIfLE((&sort_key.part0)[i]);
 		}
 	}
 
@@ -172,7 +172,7 @@ public:
 	void ByteSwap() {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
-			(&sort_key.part0)[i] = BSwap((&sort_key.part0)[i]);
+			(&sort_key.part0)[i] = BSwapIfLE((&sort_key.part0)[i]);
 		}
 	}
 

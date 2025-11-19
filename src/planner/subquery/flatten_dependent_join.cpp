@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"

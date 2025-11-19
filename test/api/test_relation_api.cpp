@@ -506,6 +506,16 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+
+	// create a table in an attached db and insert values
+	auto test_dir = TestDirectoryPath();
+	string db_path = test_dir + "/my_db.db";
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + db_path + "' AS my_db;"));
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
+	REQUIRE_NOTHROW(values->Create(std::string("my_db"), std::string(), std::string("integers")));
+	result = con.Query("SELECT * FROM my_db.integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 }
 
 TEST_CASE("Test table creations with on_create_conflict using the relation API", "[relation_api]") {
