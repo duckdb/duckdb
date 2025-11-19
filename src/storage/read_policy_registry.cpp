@@ -2,6 +2,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/exception.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 // Factory functions for built-in policies
@@ -49,11 +51,12 @@ bool ReadPolicyRegistry::HasPolicy(const string &name) {
 }
 
 vector<string> ReadPolicyRegistry::GetPolicyNames() {
-	// Note: caller should hold lock
 	vector<string> names;
 	for (auto &entry : policies) {
 		names.push_back(entry.first);
 	}
+	// Sort to get the deterministic order.
+	std::sort(names.begin(), names.end());
 	return names;
 }
 
