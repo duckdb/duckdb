@@ -737,7 +737,7 @@ Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void ExternalFileCacheReadPolicySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto str_input = input.GetValue<string>();
-	// Validate that the policy exists (will throw if not)
+	// Validate that the policy exists.
 	if (db) {
 		auto &registry = ReadPolicyRegistry::Get(*db);
 		if (!registry.HasPolicy(str_input)) {
