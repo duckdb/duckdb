@@ -1,4 +1,11 @@
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/tuple_data_layout_enums.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -7,19 +14,101 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+
+struct ValueComparator {
+	virtual ~ValueComparator() = default;
+	virtual Value &Compare(Value &lhs, Value &rhs) = 0;
+	virtual Value GetVal(BaseStatistics &stats) = 0;
+};
+
+struct MinValueComp : public ValueComparator {
+	Value &Compare(Value &lhs, Value &rhs) override {
+		if (lhs < rhs) {
+			return lhs;
+		}
+		return rhs;
+	}
+	Value GetVal(BaseStatistics &stats) override {
+		return NumericStats::Min(stats);
+	}
+};
+
+struct MaxValueComp : public ValueComparator {
+	Value &Compare(Value &lhs, Value &rhs) override {
+		if (lhs > rhs) {
+			return lhs;
+		}
+		return rhs;
+	}
+	Value GetVal(BaseStatistics &stats) override {
+		return NumericStats::Max(stats);
+	}
+};
+
+unique_ptr<ValueComparator> GetComparator(const string &fun_name) {
+	if (fun_name == "min") {
+		return make_uniq<MinValueComp>();
+	}
+	D_ASSERT(fun_name == "max");
+	return make_uniq<MaxValueComp>();
+}
 
 void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_ptr<LogicalOperator> &node_ptr) {
 	if (!aggr.groups.empty()) {
 		// not possible with groups
 		return;
 	}
+	// check if all aggregates are COUNT(*), MIN or MAX
+	vector<idx_t> count_star_idxs;
+	vector<ColumnBinding> min_max_bindings;
+	vector<unique_ptr<ValueComparator>> comparators;
+
+	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+		auto &aggr_ref = aggr.expressions[i];
+		if (aggr_ref->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+			// not an aggregate
+			return;
+		}
+		auto &aggr_expr = aggr_ref->Cast<BoundAggregateExpression>();
+		const string &fun_name = aggr_expr.function.name;
+		if (fun_name == "min" || fun_name == "max") {
+			if (aggr_expr.children.size() != 1 || aggr_expr.children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+				return;
+			}
+			const auto &col_ref = aggr_expr.children[0]->Cast<BoundColumnRefExpression>();
+			if (!col_ref.return_type.IsNumeric() && !col_ref.return_type.IsTemporal()) {
+				// TODO: If these are strings or some other fancy type, we might not have statistics
+			}
+
+			min_max_bindings.push_back(col_ref.binding);
+			comparators.push_back(GetComparator(fun_name));
+		} else if (aggr_expr.function.name != "count_star") {
+			// aggregate is not count star - bail
+			return;
+		}
+		count_star_idxs.push_back(i);
+		if (aggr_expr.filter) {
+			// aggregate has a filter - bail
+			return;
+		}
+	}
+
 	// skip any projections
 	reference<LogicalOperator> child_ref = *aggr.children[0];
 	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		for (auto &binding : min_max_bindings) {
+			auto &expr = child_ref.get().expressions[binding.column_index];
+			if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+				return;
+			}
+			binding = expr->Cast<BoundColumnRefExpression>().binding;
+		}
 		child_ref = *child_ref.get().children[0];
 	}
+
 	if (child_ref.get().type != LogicalOperatorType::LOGICAL_GET) {
 		// child must be a LOGICAL_GET
 		return;
@@ -33,22 +122,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		// we cannot do this if the GET has filters
 		return;
 	}
-	// check if all aggregates are COUNT(*)
-	for (auto &aggr_ref : aggr.expressions) {
-		if (aggr_ref->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
-			// not an aggregate
-			return;
-		}
-		auto &aggr_expr = aggr_ref->Cast<BoundAggregateExpression>();
-		if (aggr_expr.function.name != "count_star") {
-			// aggregate is not count star - bail
-			return;
-		}
-		if (aggr_expr.filter) {
-			// aggregate has a filter - bail
-			return;
-		}
-	}
+
 	// we can do the rewrite! get the stats
 	GetPartitionStatsInput input(get.function, get.bind_data.get());
 	auto partition_stats = get.function.get_partition_stats(context, input);
@@ -64,19 +138,52 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		}
 		count += stats.count;
 	}
+	vector<Value> min_max_results;
+	if (!min_max_bindings.empty()) {
+		min_max_results.reserve(min_max_bindings.size());
+
+		for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
+			auto &stats = partition_stats[partition_idx];
+			if (!stats.partition_row_group) {
+				return;
+			}
+			for (idx_t agg_idx = 0; agg_idx < min_max_bindings.size(); agg_idx++) {
+				const auto &binding = min_max_bindings[agg_idx];
+				// FIXME: Map column bindings to actual column_indexes in LogicalGet
+				auto column_stats = stats.partition_row_group->GetColumnStatistics(binding.column_index);
+				if (partition_idx == 0) {
+					min_max_results.push_back(comparators[agg_idx]->GetVal(*column_stats));
+				} else {
+					auto rhs = comparators[agg_idx]->GetVal(*column_stats);
+					min_max_results[agg_idx] = comparators[agg_idx]->Compare(min_max_results[agg_idx], rhs);
+				}
+			}
+		}
+	}
+
 	// we got an exact count - replace the entire aggregate with a scan of the result
 	vector<LogicalType> types;
-	vector<unique_ptr<Expression>> count_results;
+	vector<unique_ptr<Expression>> agg_results;
+	for (idx_t min_max_index = 0; min_max_index < min_max_results.size(); min_max_index++) {
+		auto expr = make_uniq<BoundConstantExpression>(min_max_results[min_max_index]);
+		expr->SetAlias(get.names[min_max_bindings[min_max_index].column_index]);
+		agg_results.push_back(std::move(expr));
+
+		types.push_back(min_max_results[min_max_index].GetTypeMutable());
+	}
+
 	for (idx_t aggregate_index = 0; aggregate_index < aggr.expressions.size(); ++aggregate_index) {
 		auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));
 		count_result->SetAlias(aggr.expressions[aggregate_index]->GetName());
-		count_results.push_back(std::move(count_result));
+
+		agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idxs[aggregate_index]),
+		                    std::move(count_result));
 
 		types.push_back(LogicalType::BIGINT);
 	}
 
 	vector<vector<unique_ptr<Expression>>> expressions;
-	expressions.push_back(std::move(count_results));
+	expressions.push_back(std::move(agg_results));
 	auto expression_get =
 	    make_uniq<LogicalExpressionGet>(aggr.aggregate_index, std::move(types), std::move(expressions));
 	expression_get->children.push_back(make_uniq<LogicalDummyScan>(aggr.group_index));
