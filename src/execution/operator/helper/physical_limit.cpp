@@ -167,7 +167,8 @@ unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext 
 	return make_uniq<LimitSourceState>();
 }
 
-SourceResultType PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalLimit::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<LimitGlobalState>();
 	auto &state = input.global_state.Cast<LimitSourceState>();
 	while (state.current_offset < gstate.limit + gstate.offset) {

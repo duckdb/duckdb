@@ -409,8 +409,20 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		switch (seq[0]) {
 		case BACKSPACE:
 			return EscapeSequence::ALT_BACKSPACE;
-		case ESC:
-			return EscapeSequence::ESCAPE;
+		case ESC: {
+			// Double ESC - this might be ALT + arrow key
+			// Read the next escape sequence
+			auto next_escape = ReadEscapeSequence(ifd);
+			switch (next_escape) {
+			case EscapeSequence::LEFT:
+				return EscapeSequence::ALT_LEFT_ARROW;
+			case EscapeSequence::RIGHT:
+				return EscapeSequence::ALT_RIGHT_ARROW;
+			default:
+				// Not an arrow key, just return ESCAPE
+				return EscapeSequence::ESCAPE;
+			}
+		}
 		case '<':
 			return EscapeSequence::ALT_LEFT_ARROW;
 		case '>':
@@ -492,7 +504,13 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		}
 		break;
 	case 5:
-		if (memcmp(seq, "[1;5C", 5) == 0 || memcmp(seq, "[1;3C", 5) == 0) {
+		if (memcmp(seq, "[1;5A", 5) == 0) {
+			// [1;5A: ctrl-up
+			return EscapeSequence::CTRL_UP;
+		} else if (memcmp(seq, "[1;5B", 5) == 0) {
+			// [1;5B: ctrl-down
+			return EscapeSequence::CTRL_DOWN;
+		} else if (memcmp(seq, "[1;5C", 5) == 0 || memcmp(seq, "[1;3C", 5) == 0) {
 			// [1;5C: move word right
 			return EscapeSequence::CTRL_MOVE_FORWARDS;
 		} else if (memcmp(seq, "[1;5D", 5) == 0 || memcmp(seq, "[1;3D", 5) == 0) {
