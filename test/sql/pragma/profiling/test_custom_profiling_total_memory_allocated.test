@@ -91,7 +91,6 @@ true
 
 # Verify that children nodes don't have total_memory_allocated
 # We'll check by looking at the JSON structure - children should not have this field
-# Use unnest with recursive to flatten all children nodes
 statement ok
 CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(children, recursive := true) FROM metrics_output;
 
