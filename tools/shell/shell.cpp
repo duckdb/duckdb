@@ -3531,7 +3531,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 			// auto-complete dot command
 			auto dot_completions = ShellState::GetMetadataCompletions(zLine, nLine);
 			for (auto &completion : dot_completions) {
-				linenoiseAddCompletion(lc, zLine, completion.c_str(), completion.size(), nLine, "keyword");
+				linenoiseAddCompletion(lc, zLine, completion.c_str(), completion.size(), 0, "keyword", 0, '\0');
 			}
 			return;
 		}
@@ -3544,16 +3544,26 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 
 		auto &con = *state.conn;
 		auto result = con.Query(zSql);
+		if (result->HasError()) {
+			return;
+		}
 		for (auto &row : *result) {
 			auto zCompletion = row.GetValue<string>(0);
 			idx_t iStart = row.GetValue<idx_t>(1);
 			auto completion_type = row.GetValue<string>(2);
-			linenoiseAddCompletion(lc, zLine, zCompletion.c_str(), zCompletion.size(), iStart, completion_type.c_str());
+			auto score = row.GetValue<uint64_t>(3);
+			char extra_char = '\0';
+			if (!row.IsNull(4)) {
+				auto extra_char_str = row.GetValue<string>(4);
+				if (extra_char_str.size() == 1) {
+					extra_char = extra_char_str[0];
+				}
+			}
+			linenoiseAddCompletion(lc, zLine, zCompletion.c_str(), zCompletion.size(), iStart, completion_type.c_str(),
+			                       score, extra_char);
 		}
 	} catch (std::exception &ex) {
-		ErrorData error(ex);
-		state.PrintF(PrintOutput::STDERR, "Failure during auto-completion: %s\n", error.Message());
-		exit(1);
+		return;
 	}
 }
 #endif

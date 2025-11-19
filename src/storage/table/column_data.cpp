@@ -24,9 +24,11 @@
 namespace duckdb {
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
-                       ColumnDataType data_type_p, optional_ptr<ColumnData> parent)
+                       ColumnDataType data_type_p, optional_ptr<ColumnData> parent_p)
     : count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
-      allocation_size(0), data_type(data_type_p), parent(parent) {
+      allocation_size(0),
+      data_type(data_type_p == ColumnDataType::CHECKPOINT_TARGET ? ColumnDataType::MAIN_TABLE : data_type_p),
+      parent(parent_p) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -51,13 +53,6 @@ StorageManager &ColumnData::GetStorageManager() const {
 	return info.GetDB().GetStorageManager();
 }
 
-const LogicalType &ColumnData::RootType() const {
-	if (parent) {
-		return parent->RootType();
-	}
-	return type;
-}
-
 bool ColumnData::HasUpdates() const {
 	lock_guard<mutex> update_guard(update_lock);
 	return updates.get();
@@ -74,16 +69,14 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 }
 
 bool ColumnData::HasChanges() const {
-	auto l = data.Lock();
-	auto &nodes = data.ReferenceLoadedSegments(l);
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment = *nodes[segment_idx]->node;
+	for (auto &segment_node : data.SegmentNodes()) {
+		auto &segment = *segment_node.node;
 		if (segment.segment_type == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
 		}
 		// persistent segment; check if there were any updates or deletions in this segment
-		idx_t start_row_idx = nodes[segment_idx]->row_start;
+		idx_t start_row_idx = segment_node.row_start;
 		idx_t end_row_idx = start_row_idx + segment.count;
 		if (HasChanges(start_row_idx, end_row_idx)) {
 			return true;
@@ -94,11 +87,6 @@ bool ColumnData::HasChanges() const {
 
 bool ColumnData::HasAnyChanges() const {
 	return HasChanges();
-}
-
-void ColumnData::ClearUpdates() {
-	lock_guard<mutex> update_guard(update_lock);
-	updates.reset();
 }
 
 idx_t ColumnData::GetMaxEntry() {
@@ -410,7 +398,7 @@ void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, 
 }
 
 void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_count) {
-	if (parent || !stats) {
+	if (!stats) {
 		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
 	}
 	lock_guard<mutex> l(stats_lock);
@@ -669,12 +657,13 @@ void ColumnData::CommitDropColumn() {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &row_group,
+unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(const RowGroup &row_group,
                                                                     PartialBlockManager &partial_block_manager) {
 	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
-void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) {
+void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
+                                Vector &scan_vector) const {
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
@@ -691,15 +680,15 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(const RowGroup &row_group,
+                                                         ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto &nodes = data.ReferenceSegments();
-	if (nodes.empty()) {
+	if (!data.GetRootSegment()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
@@ -1048,36 +1037,22 @@ void ColumnData::Verify(RowGroup &parent) {
 #endif
 }
 
-template <class RET, class OP>
-static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                const LogicalType &type, ColumnDataType data_type, optional_ptr<ColumnData> parent) {
-	if (type.id() == LogicalTypeId::VARIANT) {
-		return OP::template Create<VariantColumnData>(block_manager, info, column_index, type, data_type, parent);
-	}
-	if (type.InternalType() == PhysicalType::STRUCT) {
-		return OP::template Create<StructColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.InternalType() == PhysicalType::LIST) {
-		return OP::template Create<ListColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.InternalType() == PhysicalType::ARRAY) {
-		return OP::template Create<ArrayColumnData>(block_manager, info, column_index, type, data_type, parent);
-	} else if (type.id() == LogicalTypeId::VALIDITY) {
-		return OP::template Create<ValidityColumnData>(block_manager, info, column_index, *parent);
-	}
-	return OP::template Create<StandardColumnData>(block_manager, info, column_index, type, data_type, parent);
-}
-
 shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                 const LogicalType &type, ColumnDataType data_type,
                                                 optional_ptr<ColumnData> parent) {
-	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, type,
-	                                                                       data_type, parent);
-}
-
-unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
-                                                      idx_t column_index, const LogicalType &type,
-                                                      ColumnDataType data_type, optional_ptr<ColumnData> parent) {
-	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, type,
-	                                                                       data_type, parent);
+	if (type.id() == LogicalTypeId::VARIANT) {
+		return make_shared_ptr<VariantColumnData>(block_manager, info, column_index, type, data_type, parent);
+	}
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		return make_shared_ptr<StructColumnData>(block_manager, info, column_index, type, data_type, parent);
+	} else if (type.InternalType() == PhysicalType::LIST) {
+		return make_shared_ptr<ListColumnData>(block_manager, info, column_index, type, data_type, parent);
+	} else if (type.InternalType() == PhysicalType::ARRAY) {
+		return make_shared_ptr<ArrayColumnData>(block_manager, info, column_index, type, data_type, parent);
+	} else if (type.id() == LogicalTypeId::VALIDITY) {
+		return make_shared_ptr<ValidityColumnData>(block_manager, info, column_index, data_type, parent);
+	}
+	return make_shared_ptr<StandardColumnData>(block_manager, info, column_index, type, data_type, parent);
 }
 
 } // namespace duckdb

@@ -12,7 +12,7 @@
 
 namespace duckdb_shell {
 
-enum class PrintIntensity { STANDARD, BOLD, UNDERLINE, BOLD_UNDERLINE };
+enum class PrintIntensity { STANDARD, BOLD, UNDERLINE, BOLD_UNDERLINE, ITALIC, BOLD_ITALIC };
 
 enum class PrintColor : uint16_t;
 

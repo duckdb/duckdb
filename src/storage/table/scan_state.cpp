@@ -235,7 +235,7 @@ void SetRowGroupVectorWithLimit(const multimap<Value, RowGroupMapEntry> &row_gro
 	}
 }
 
-optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
+optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(const RowGroupSegmentTree &row_groups) {
 	if (initialized) {
 		if (ordered_row_groups.empty()) {
 			return nullptr;

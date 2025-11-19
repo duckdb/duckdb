@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-SourceResultType PhysicalPrepare::GetData(ExecutionContext &context, DataChunk &chunk,
-                                          OperatorSourceInput &input) const {
+SourceResultType PhysicalPrepare::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                  OperatorSourceInput &input) const {
 	auto &client = context.client;
 
 	// store the prepared statement in the context

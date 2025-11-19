@@ -1576,8 +1576,8 @@ void AsOfLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChunk 
 	}
 }
 
-SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
-                                           OperatorSourceInput &input) const {
+SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                   OperatorSourceInput &input) const {
 	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<AsOfLocalSourceState>();
 

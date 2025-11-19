@@ -20,8 +20,8 @@ public:
 	                  ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
 	//! The sub-columns of the struct
-	vector<unique_ptr<ColumnData>> sub_columns;
-	ValidityColumnData validity;
+	vector<shared_ptr<ColumnData>> sub_columns;
+	shared_ptr<ValidityColumnData> validity;
 	//! Whether (some of) the fields are stored outside of the VARIANT data
 	bool is_shredded = false;
 
@@ -56,9 +56,9 @@ public:
 
 	void CommitDropColumn() override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
@@ -73,9 +73,12 @@ public:
 	static void ShredVariantData(Vector &input, Vector &output, idx_t count);
 	static void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 
+	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
+	void SetChildData(vector<shared_ptr<ColumnData>> child_data);
+
 private:
-	vector<unique_ptr<ColumnData>> WriteShreddedData(RowGroup &row_group, const LogicalType &shredded_type);
-	void ReplaceColumns(unique_ptr<ColumnData> &&unshredded, unique_ptr<ColumnData> &&shredded);
+	vector<shared_ptr<ColumnData>> WriteShreddedData(const RowGroup &row_group, const LogicalType &shredded_type);
+	void ReplaceColumns(shared_ptr<ColumnData> &&unshredded, shared_ptr<ColumnData> &&shredded);
 	void CreateScanStates(ColumnScanState &state);
 	LogicalType GetShreddedType();
 };
