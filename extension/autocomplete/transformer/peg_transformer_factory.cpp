@@ -513,6 +513,19 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformValuesClause);
 	REGISTER_TRANSFORM(TransformValuesExpressions);
 	REGISTER_TRANSFORM(TransformTableStatement);
+
+	REGISTER_TRANSFORM(TransformResultModifiers);
+	REGISTER_TRANSFORM(TransformLimitOffsetClause);
+	REGISTER_TRANSFORM(TransformLimitClause);
+	REGISTER_TRANSFORM(TransformLimitValue);
+	REGISTER_TRANSFORM(TransformLimitAll);
+	REGISTER_TRANSFORM(TransformLimitLiteralPercent);
+	REGISTER_TRANSFORM(TransformLimitExpression);
+	REGISTER_TRANSFORM(TransformOffsetClause);
+	REGISTER_TRANSFORM(TransformGroupByClause);
+	REGISTER_TRANSFORM(TransformGroupByExpressions);
+	REGISTER_TRANSFORM(TransformGroupByAll);
+	REGISTER_TRANSFORM(TransformGroupByList);
 }
 
 void PEGTransformerFactory::RegisterUse() {

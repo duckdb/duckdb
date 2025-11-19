@@ -1,12 +1,16 @@
 #include "ast/join_prefix.hpp"
 #include "ast/join_qualifier.hpp"
+#include "ast/limit_percent_result.hpp"
 #include "ast/table_alias.hpp"
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/tableref/at_clause.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 
 namespace duckdb {
 
@@ -749,5 +753,118 @@ OrderByNullType PEGTransformerFactory::TransformNullsFirstOrLast(PEGTransformer 
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.TransformEnum<OrderByNullType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
+
+vector<unique_ptr<ResultModifier>> PEGTransformerFactory::TransformResultModifiers(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<unique_ptr<ResultModifier>> result;
+	vector<OrderByNode> order_by;
+	transformer.TransformOptional<vector<OrderByNode>>(list_pr, 0, order_by);
+	if (!order_by.empty()) {
+		auto order_modifier = make_uniq<OrderModifier>();
+		order_modifier->orders = std::move(order_by);
+		result.push_back(std::move(order_modifier));
+	}
+	unique_ptr<ResultModifier> limit_offset;
+	transformer.TransformOptional<unique_ptr<ResultModifier>>(list_pr, 1, limit_offset);
+	if (limit_offset) {
+		result.push_back(std::move(limit_offset));
+	}
+	return result;
+}
+
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformLimitOffsetClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	LimitPercentResult limit_percent;
+	LimitPercentResult offset_percent;
+	transformer.TransformOptional<LimitPercentResult>(list_pr, 0, limit_percent);
+	transformer.TransformOptional<LimitPercentResult>(list_pr, 1, offset_percent);
+	if (offset_percent.is_percent) {
+		throw ParserException("Percentage for offsets are not supported.");
+	}
+	if (limit_percent.is_percent) {
+		auto result = make_uniq<LimitPercentModifier>();
+		result->limit = std::move(limit_percent.expression);
+		result->offset = std::move(offset_percent.expression);
+		return result;
+	} else {
+		auto result = make_uniq<LimitModifier>();
+		if (limit_percent.expression) {
+			result->limit = std::move(limit_percent.expression);
+		}
+		if (offset_percent.expression) {
+			result->offset = std::move(offset_percent.expression);
+		}
+		if (!result->limit && !result->offset) {
+			return nullptr;
+		}
+		return result;
+	}
+}
+
+LimitPercentResult PEGTransformerFactory::TransformLimitClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<LimitPercentResult>(list_pr.Child<ListParseResult>(1));
+}
+
+LimitPercentResult PEGTransformerFactory::TransformLimitValue(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<LimitPercentResult>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+LimitPercentResult PEGTransformerFactory::TransformLimitAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	LimitPercentResult result;
+	result.expression = make_uniq<StarExpression>();
+	result.is_percent = false;
+	return result;
+}
+
+LimitPercentResult PEGTransformerFactory::TransformLimitLiteralPercent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	LimitPercentResult result;
+	// TODO(Dtenwolde) transform number literal properly
+	result.expression = make_uniq<ConstantExpression>(Value(list_pr.Child<NumberParseResult>(0).number));
+	result.is_percent = true;
+	return result;
+}
+
+LimitPercentResult PEGTransformerFactory::TransformLimitExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	LimitPercentResult result;
+	result.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	result.is_percent = list_pr.Child<OptionalParseResult>(1).HasResult();
+	return result;
+}
+
+LimitPercentResult PEGTransformerFactory::TransformOffsetClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<LimitPercentResult>(list_pr.Child<ListParseResult>(1));
+}
+
+GroupByNode PEGTransformerFactory::TransformGroupByClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<GroupByNode>(list_pr.Child<ListParseResult>(2));
+}
+
+GroupByNode PEGTransformerFactory::TransformGroupByExpressions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<GroupByNode>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+GroupByNode PEGTransformerFactory::TransformGroupByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	GroupByNode result;
+	result.group_expressions.push_back(make_uniq<StarExpression>());
+	return result;
+}
+
+GroupByNode PEGTransformerFactory::TransformGroupByList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto group_by_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
+	GroupByNode result;
+	for (auto group_by_expr : group_by_list) {
+		result.group_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(group_by_expr));
+	}
+	return result;
+}
+
 
 } // namespace duckdb

@@ -12,6 +12,7 @@
 #include "ast/insert_values.hpp"
 #include "ast/join_prefix.hpp"
 #include "ast/join_qualifier.hpp"
+#include "ast/limit_percent_result.hpp"
 #include "ast/macro_parameter.hpp"
 #include "ast/on_conflict_expression_target.hpp"
 #include "ast/sequence_option.hpp"
@@ -873,6 +874,18 @@ private:
 	                                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformTableStatement(PEGTransformer &transformer,
 	                                                           optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ResultModifier>> TransformResultModifiers(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ResultModifier> TransformLimitOffsetClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LimitPercentResult TransformLimitClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LimitPercentResult TransformLimitValue(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LimitPercentResult TransformLimitAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LimitPercentResult TransformLimitLiteralPercent(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LimitPercentResult TransformLimitExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static LimitPercentResult TransformOffsetClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static GroupByNode TransformGroupByClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static GroupByNode TransformGroupByExpressions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static GroupByNode TransformGroupByAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static GroupByNode TransformGroupByList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// use.gram
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
