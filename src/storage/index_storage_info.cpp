@@ -48,6 +48,20 @@ unique_ptr<ColumnDataCollection> BufferedIndexDataInfo::ToColumnDataCollection(A
 	return collection;
 }
 
+void BufferedIndexDataInfo::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<BufferedIndexReplay>(100, "replay_type", replay_type);
+	serializer.WriteProperty<vector<LogicalType>>(101, "types", types);
+	serializer.WriteProperty<vector<vector<Value>>>(102, "values", values);
+}
+
+BufferedIndexDataInfo BufferedIndexDataInfo::Deserialize(Deserializer &deserializer) {
+	BufferedIndexDataInfo result;
+	deserializer.ReadProperty<BufferedIndexReplay>(100, "replay_type", result.replay_type);
+	deserializer.ReadProperty<vector<LogicalType>>(101, "types", result.types);
+	deserializer.ReadProperty<vector<vector<Value>>>(102, "values", result.values);
+	return result;
+}
+
 void IndexStorageInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(100, "name", name);
 	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);

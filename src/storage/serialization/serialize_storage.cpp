@@ -6,8 +6,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/execution/index/unbound_index.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
@@ -22,20 +20,6 @@ BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
 	auto block_id = deserializer.ReadProperty<block_id_t>(100, "block_id");
 	auto offset = deserializer.ReadPropertyWithDefault<uint32_t>(101, "offset");
 	BlockPointer result(block_id, offset);
-	return result;
-}
-
-void BufferedIndexDataInfo::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<BufferedIndexReplay>(100, "replay_type", replay_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(101, "types", types);
-	serializer.WritePropertyWithDefault<vector<vector<Value>>>(102, "values", values);
-}
-
-BufferedIndexDataInfo BufferedIndexDataInfo::Deserialize(Deserializer &deserializer) {
-	BufferedIndexDataInfo result;
-	deserializer.ReadProperty<BufferedIndexReplay>(100, "replay_type", result.replay_type);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(101, "types", result.types);
-	deserializer.ReadPropertyWithDefault<vector<vector<Value>>>(102, "values", result.values);
 	return result;
 }
 

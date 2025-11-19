@@ -57,10 +57,7 @@
   },
   {
     "class": "BufferedIndexDataInfo",
-    "includes": [
-      "duckdb/execution/index/unbound_index.hpp",
-      "duckdb/common/types.hpp"
-    ],
+    "custom_implementation": true,
     "members": [
       {
         "id": 100,
