@@ -141,7 +141,7 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 		idx_t vend =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		auto &info = *vector_info[vector_idx];
-		D_ASSERT(has_changes);
+		D_ASSERT(has_unserialized_changes);
 		info.CommitAppend(commit_id, vstart, vend);
 	}
 }
@@ -182,7 +182,7 @@ void RowVersionManager::RevertAppend(idx_t start_row) {
 	lock_guard<mutex> lock(version_lock);
 	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < vector_info.size(); vector_idx++) {
-		D_ASSERT(has_changes);
+		D_ASSERT(has_unserialized_changes);
 		vector_info[vector_idx].reset();
 	}
 }
@@ -291,7 +291,7 @@ bool RowVersionManager::HasUnserializedChanges() {
 
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
 	lock_guard<mutex> lock(version_lock);
-	D_ASSERT(!has_changes);
+	D_ASSERT(!has_unserialized_changes);
 	return storage_pointers;
 }
 
