@@ -6,4 +6,4 @@ load
 CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(1300000000);
 
 run
-SELECT row_number() over() from foo;
+SELECT a, row_number() over() from foo;
