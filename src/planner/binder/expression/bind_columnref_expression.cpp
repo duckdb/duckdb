@@ -504,7 +504,8 @@ BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx
 	return (*lambda_bindings)[lambda_ref.lambda_idx].Bind(lambda_ref, depth);
 }
 
-BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_t depth, bool root_expression, unique_ptr<ParsedExpression> &expr_ptr) {
+BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_t depth, bool root_expression,
+                                            unique_ptr<ParsedExpression> &expr_ptr) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
 	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));

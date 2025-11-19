@@ -36,8 +36,8 @@ protected:
 	BindResult BindColumnRef(ColumnRefExpression &expr, unique_ptr<ParsedExpression> &expr_ptr);
 	BindResult BindConstant(ConstantExpression &expr);
 
-	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
-	                              BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) override;
+	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression, BindResult &result,
+	                              unique_ptr<ParsedExpression> &expr_ptr) override;
 
 	SelectNode &node;
 	SelectBindState &bind_state;
