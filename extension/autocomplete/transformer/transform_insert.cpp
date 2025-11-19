@@ -8,7 +8,6 @@ namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTransformer &transformer,
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	throw NotImplementedException("TransformInsertStatement");
 	auto result = make_uniq<InsertStatement>();
 	auto with_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_opt.HasResult()) {
