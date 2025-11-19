@@ -52,7 +52,7 @@ void PrefixHandle::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr
 		reference<Node> ref(node);
 		while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
 			auto &alloc = Node::GetAllocator(art, PREFIX);
-			if (!alloc.IsLoaded(ref)) {
+			if (!alloc.LoadedFromStorage(ref)) {
 				return;
 			}
 			PrefixHandle handle(art, ref);
@@ -68,7 +68,7 @@ void PrefixHandle::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr
 	Node current_node = node;
 	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 		auto &alloc = Node::GetAllocator(art, PREFIX);
-		if (!alloc.IsLoaded(current_node)) {
+		if (!alloc.LoadedFromStorage(current_node)) {
 			return;
 		}
 
