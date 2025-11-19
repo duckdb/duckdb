@@ -1,0 +1,405 @@
+# name: test/sql/catalog/test_temporary_schema.test
+# description: Test temporary objects in non-default schemas
+# group: [catalog]
+
+# =============================================================================
+# Basic temporary objects in custom schemas
+# =============================================================================
+
+# Create a persistent schema first
+statement ok
+CREATE SCHEMA myschema
+
+# Create temporary table in custom schema - schema should auto-create in temp catalog
+statement ok
+CREATE TEMPORARY TABLE myschema.t1(i INTEGER)
+
+# Insert and query
+statement ok
+INSERT INTO myschema.t1 VALUES (1), (2), (3)
+
+query I rowsort
+SELECT * FROM myschema.t1
+----
+1
+2
+3
+
+# Verify the table is in the temp catalog
+query IIII
+SELECT database_name, schema_name, table_name, temporary FROM duckdb_tables() WHERE table_name = 't1'
+----
+temp	myschema	t1	true
+
+# Verify the schema was auto-created in temp catalog
+query II
+SELECT database_name, schema_name FROM duckdb_schemas() WHERE schema_name = 'myschema' ORDER BY database_name
+----
+memory	myschema
+temp	myschema
+
+# Create temporary view in custom schema
+statement ok
+CREATE TEMPORARY VIEW myschema.v1 AS SELECT i * 2 AS doubled FROM myschema.t1
+
+query I rowsort
+SELECT * FROM myschema.v1
+----
+2
+4
+6
+
+# Create temporary sequence in custom schema
+statement ok
+CREATE TEMPORARY SEQUENCE myschema.seq1
+
+query I
+SELECT nextval('myschema.seq1')
+----
+1
+
+query I
+SELECT nextval('myschema.seq1')
+----
+2
+
+# Create temporary macro in custom schema
+statement ok
+CREATE TEMPORARY MACRO myschema.double(x) AS x * 2
+
+query I
+SELECT myschema.double(21)
+----
+42
+
+# =============================================================================
+# Auto-creation of schemas in temp catalog
+# =============================================================================
+
+# Create temporary table in a schema that doesn't exist anywhere yet
+statement ok
+CREATE TEMPORARY TABLE newschema.t1(x INTEGER)
+
+# The schema should be auto-created in temp catalog only
+query II
+SELECT database_name, schema_name FROM duckdb_schemas() WHERE schema_name = 'newschema'
+----
+temp	newschema
+
+# Create another object in the same auto-created schema
+statement ok
+CREATE TEMPORARY TABLE newschema.t2(y VARCHAR)
+
+query IIII rowsort
+SELECT database_name, schema_name, table_name, temporary FROM duckdb_tables() WHERE schema_name = 'newschema'
+----
+temp	newschema	t1	true
+temp	newschema	t2	true
+
+# =============================================================================
+# Shadowing behavior
+# =============================================================================
+
+# Create a persistent table in myschema
+statement ok
+CREATE TABLE myschema.shadow_test(val VARCHAR)
+
+statement ok
+INSERT INTO myschema.shadow_test VALUES ('persistent')
+
+# Query should return persistent version
+query I
+SELECT * FROM myschema.shadow_test
+----
+persistent
+
+# Create temporary table with same name - should shadow the persistent one
+statement ok
+CREATE TEMPORARY TABLE myschema.shadow_test(val VARCHAR)
+
+statement ok
+INSERT INTO myschema.shadow_test VALUES ('temporary')
+
+# Query should now return temporary version (shadowing)
+query I
+SELECT * FROM myschema.shadow_test
+----
+temporary
+
+# Can still access persistent version explicitly
+query I
+SELECT * FROM memory.myschema.shadow_test
+----
+persistent
+
+# Drop the temporary table
+statement ok
+DROP TABLE temp.myschema.shadow_test
+
+# Now query returns persistent version again
+query I
+SELECT * FROM myschema.shadow_test
+----
+persistent
+
+# Test shadowing with views
+statement ok
+CREATE VIEW myschema.shadow_view AS SELECT 'persistent' AS src
+
+query I
+SELECT * FROM myschema.shadow_view
+----
+persistent
+
+statement ok
+CREATE TEMPORARY VIEW myschema.shadow_view AS SELECT 'temporary' AS src
+
+query I
+SELECT * FROM myschema.shadow_view
+----
+temporary
+
+statement ok
+DROP VIEW temp.myschema.shadow_view
+
+query I
+SELECT * FROM myschema.shadow_view
+----
+persistent
+
+# Test shadowing with sequences
+statement ok
+CREATE SEQUENCE myschema.shadow_seq START 100
+
+query I
+SELECT nextval('myschema.shadow_seq')
+----
+100
+
+statement ok
+CREATE TEMPORARY SEQUENCE myschema.shadow_seq START 1
+
+query I
+SELECT nextval('myschema.shadow_seq')
+----
+1
+
+statement ok
+DROP SEQUENCE temp.myschema.shadow_seq
+
+query I
+SELECT nextval('myschema.shadow_seq')
+----
+101
+
+# =============================================================================
+# Search path interaction
+# =============================================================================
+
+# Set search path to myschema
+statement ok
+SET search_path = 'myschema'
+
+# Create unqualified temporary table - should go to temp.myschema
+statement ok
+CREATE TEMPORARY TABLE searchpath_test(a INTEGER)
+
+statement ok
+INSERT INTO searchpath_test VALUES (42)
+
+# Query should find it
+query I
+SELECT * FROM searchpath_test
+----
+42
+
+# Verify it's in temp.myschema
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'searchpath_test'
+----
+temp	myschema	searchpath_test
+
+# Reset search path
+statement ok
+SET search_path = 'main'
+
+# =============================================================================
+# Error cases
+# =============================================================================
+
+# Cannot create temporary object with explicit non-temp catalog
+statement error
+CREATE TEMPORARY TABLE memory.myschema.error_test(i INTEGER)
+----
+<REGEX>:.*TEMPORARY.*can \*only\* use the "temp" catalog.*
+
+# Can use explicit temp catalog
+statement ok
+CREATE TEMPORARY TABLE temp.myschema.explicit_temp(i INTEGER)
+
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'explicit_temp'
+----
+temp	myschema	explicit_temp
+
+# =============================================================================
+# Multiple schemas
+# =============================================================================
+
+# Create temporary objects in multiple schemas
+statement ok
+CREATE SCHEMA schema_a
+
+statement ok
+CREATE SCHEMA schema_b
+
+statement ok
+CREATE TEMPORARY TABLE schema_a.t1(val VARCHAR)
+
+statement ok
+CREATE TEMPORARY TABLE schema_b.t1(val VARCHAR)
+
+statement ok
+INSERT INTO schema_a.t1 VALUES ('from_a')
+
+statement ok
+INSERT INTO schema_b.t1 VALUES ('from_b')
+
+query I
+SELECT * FROM schema_a.t1
+----
+from_a
+
+query I
+SELECT * FROM schema_b.t1
+----
+from_b
+
+# Verify both are temporary
+query IIII rowsort
+SELECT database_name, schema_name, table_name, temporary FROM duckdb_tables() WHERE table_name = 't1' AND schema_name IN ('schema_a', 'schema_b')
+----
+temp	schema_a	t1	true
+temp	schema_b	t1	true
+
+# =============================================================================
+# Transaction behavior
+# =============================================================================
+
+# Temporary objects in custom schemas should respect transaction semantics
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TEMPORARY TABLE myschema.txn_test(i INTEGER)
+
+statement ok
+INSERT INTO myschema.txn_test VALUES (1)
+
+query I
+SELECT * FROM myschema.txn_test
+----
+1
+
+statement ok
+ROLLBACK
+
+# Table should not exist after rollback
+statement error
+SELECT * FROM myschema.txn_test
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+# Test commit
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TEMPORARY TABLE myschema.txn_test2(i INTEGER)
+
+statement ok
+INSERT INTO myschema.txn_test2 VALUES (2)
+
+statement ok
+COMMIT
+
+# Table should exist after commit
+query I
+SELECT * FROM myschema.txn_test2
+----
+2
+
+# =============================================================================
+# Cross-schema references
+# =============================================================================
+
+# Temporary table can reference persistent table in another schema
+statement ok
+CREATE TABLE schema_a.ref_source(id INTEGER PRIMARY KEY, val VARCHAR)
+
+statement ok
+INSERT INTO schema_a.ref_source VALUES (1, 'one'), (2, 'two')
+
+# Create temporary view that references persistent table
+statement ok
+CREATE TEMPORARY VIEW schema_b.cross_ref AS SELECT * FROM schema_a.ref_source WHERE id = 1
+
+query II
+SELECT * FROM schema_b.cross_ref
+----
+1	one
+
+# =============================================================================
+# Cleanup
+# =============================================================================
+
+statement ok
+DROP TABLE myschema.t1
+
+statement ok
+DROP VIEW myschema.v1
+
+statement ok
+DROP SEQUENCE myschema.seq1
+
+statement ok
+DROP TABLE newschema.t1
+
+statement ok
+DROP TABLE newschema.t2
+
+statement ok
+DROP TABLE myschema.shadow_test
+
+statement ok
+DROP VIEW myschema.shadow_view
+
+statement ok
+DROP SEQUENCE myschema.shadow_seq
+
+statement ok
+DROP TABLE schema_a.t1
+
+statement ok
+DROP TABLE schema_b.t1
+
+statement ok
+DROP TABLE myschema.txn_test2
+
+statement ok
+DROP TABLE schema_a.ref_source CASCADE
+
+statement ok
+DROP TABLE myschema.explicit_temp
+
+statement ok
+DROP TABLE searchpath_test
+
+statement ok
+DROP SCHEMA myschema
+
+statement ok
+DROP SCHEMA schema_a
+
+statement ok
+DROP SCHEMA schema_b

@@ -126,7 +126,7 @@ test
 query I
 SELECT current_schemas(true);
 ----
-[main, test, main, main, pg_catalog]
+[test, test, main, main, main, pg_catalog]
 
 query I
 SELECT current_schemas(false);
@@ -261,7 +261,7 @@ pg_catalog
 query I
 SELECT current_schemas(true);
 ----
-[main, pg_catalog, main, main, pg_catalog]
+[pg_catalog, pg_catalog, main, main, main, pg_catalog]
 
 query I
 SELECT current_query();
