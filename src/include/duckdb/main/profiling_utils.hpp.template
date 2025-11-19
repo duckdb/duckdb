@@ -18,6 +18,8 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
+// DUCKDB_INSERT_CODE_HERE
+
 class ProfilingUtils {
 public:
 	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);

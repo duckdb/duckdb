@@ -38,7 +38,7 @@
       },
       {
         "name": "LATENCY",
-        "description": "The total elapsed query execution time",
+        "description": "Time spent executing the entire query",
         "type": "double",
         "unit": "seconds",
         "is_default": true,
@@ -47,10 +47,11 @@
       },
       {
         "name": "QUERY_NAME",
-        "description": "The query string",
+        "description": "The SQL string of the query",
         "type": "string",
         "is_default": true,
-        "query_root": true
+        "query_root": true,
+        "collection_method": "query_metric"
       },
       {
         "name": "RESULT_SET_SIZE",
@@ -107,7 +108,7 @@
     "metrics": [
       {
         "name": "ATTACH_LOAD_STORAGE_LATENCY",
-        "description": "Time spent loading a storage engine",
+        "description": "Time spent loading from storage.",
         "type": "double",
         "unit": "seconds",
         "is_default": true,
@@ -116,7 +117,7 @@
       },
       {
         "name": "ATTACH_REPLAY_WAL_LATENCY",
-        "description": "Time spent replaying the WAL",
+        "description": "Time spent replaying the WAL file.",
         "type": "double",
         "unit": "seconds",
         "is_default": true,
@@ -125,7 +126,7 @@
       },
       {
         "name": "CHECKPOINT_LATENCY",
-        "description": "Time spent performing a checkpoint",
+        "description": "Time spent running checkpoints",
         "type": "double",
         "unit": "seconds",
         "is_default": true,
@@ -134,7 +135,7 @@
       },
       {
         "name": "COMMIT_WRITE_WAL_LATENCY",
-        "description": "The timer for the WAL writes during COMMIT.",
+        "description": "Time spent writing to the WAL during COMMIT.",
         "type": "double",
         "unit": "seconds",
         "is_default": true,
@@ -143,7 +144,7 @@
       },
       {
         "name": "TOTAL_BYTES_READ",
-        "description": "Total number of bytes read from disk",
+        "description": "The total bytes read by the file system.",
         "type": "uint64",
         "unit": "bytes",
         "is_default": true,
@@ -152,7 +153,7 @@
       },
       {
         "name": "TOTAL_BYTES_WRITTEN",
-        "description": "Total number of bytes written to disk",
+        "description": "The total bytes written by the file system.",
         "type": "uint64",
         "unit": "bytes",
         "is_default": true,
@@ -161,7 +162,7 @@
       },
       {
         "name": "WAITING_TO_ATTACH_LATENCY",
-        "description": "Time spent waiting for a storage engine to attach",
+        "description": "Time spent waiting to ATTACH a file.",
         "type": "double",
         "unit": "seconds",
         "is_default": true,

@@ -15,6 +15,7 @@ class MetricDef:
     is_default: bool = False
     collection_method: Optional[str] = None
     child: Optional[str] = None
+    description: str = None
 
 
 class MetricIndex:
@@ -111,6 +112,12 @@ class MetricIndex:
                 return d.child
         return None
 
+    def metric_description(self, metric: str) -> Optional[str]:
+        for d in self.defs:
+            if d.name == metric:
+                return d.description
+        return None
+
 
 def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> MetricIndex:
     defs: list[MetricDef] = []
@@ -124,6 +131,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
             query_root = "query_root" in metric
             collection_method = metric.get("collection_method")
             child = metric.get("child")
+            description = metric.get("description", "")
             defs.append(
                 MetricDef(
                     name=name,
@@ -133,6 +141,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
                     query_root=query_root,
                     collection_method=collection_method,
                     child=child,
+                    description=description,
                 )
             )
     return MetricIndex(defs, optimizers)

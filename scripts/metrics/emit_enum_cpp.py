@@ -90,10 +90,10 @@ def _generate_standard_functions(
     cpp_f.write(f"bool MetricsUtils::{check_fn}(MetricType type) {{\n")
     cpp_f.write_indented(1, "switch(type) {")
     for m in metrics:
-        cpp_f.write_indented(2, f"case MetricType::{m}:")
-    cpp_f.write_indented(3, "return true;")
-    cpp_f.write_indented(2, "default:")
-    cpp_f.write_indented(3, "return false;")
+        cpp_f.write_indented(1, f"case MetricType::{m}:")
+    cpp_f.write_indented(2, "return true;")
+    cpp_f.write_indented(1, "default:")
+    cpp_f.write_indented(2, "return false;")
     cpp_f.write_indented(1, "}")
     cpp_f.write("}\n\n")
 
@@ -108,11 +108,11 @@ def _generate_custom_optimizer_functions(optimizers: List[str], hpp_f: IndentedF
     cpp_f.write(f"MetricType MetricsUtils::{by_type} {{\n")
     cpp_f.write_indented(1, "switch(type) {")
     for o in optimizers:
-        cpp_f.write_indented(2, f"case OptimizerType::{o}:")
-        cpp_f.write_indented(3, f"return MetricType::OPTIMIZER_{o};")
-    cpp_f.write_indented(2, "default:")
+        cpp_f.write_indented(1, f"case OptimizerType::{o}:")
+        cpp_f.write_indented(2, f"return MetricType::OPTIMIZER_{o};")
+    cpp_f.write_indented(1, "default:")
     cpp_f.write_indented(
-        3, 'throw InternalException("OptimizerType %s cannot be converted to a MetricType", EnumUtil::ToString(type));'
+        2, 'throw InternalException("OptimizerType %s cannot be converted to a MetricType", EnumUtil::ToString(type));'
     )
     cpp_f.write_indented(1, "}")
     cpp_f.write('}\n\n')
@@ -120,10 +120,10 @@ def _generate_custom_optimizer_functions(optimizers: List[str], hpp_f: IndentedF
     cpp_f.write(f"OptimizerType MetricsUtils::{by_metric} {{\n")
     cpp_f.write_indented(1, "switch(type) {")
     for o in optimizers:
-        cpp_f.write_indented(2, f"case MetricType::OPTIMIZER_{o}:")
-        cpp_f.write_indented(3, f"return OptimizerType::{o};")
-    cpp_f.write_indented(2, "default:")
-    cpp_f.write_indented(3, "return OptimizerType::INVALID;")
+        cpp_f.write_indented(1, f"case MetricType::OPTIMIZER_{o}:")
+        cpp_f.write_indented(2, f"return OptimizerType::{o};")
+    cpp_f.write_indented(1, "default:")
+    cpp_f.write_indented(2, "return OptimizerType::INVALID;")
     cpp_f.write_indented(1, "}")
     cpp_f.write('}\n\n')
 

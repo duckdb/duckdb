@@ -23,6 +23,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/profiling_node.hpp"
+#include "duckdb/main/profiling_utils.hpp"
 
 #include <stack>
 
@@ -110,48 +111,6 @@ private:
 	optional_ptr<const PhysicalOperator> active_operator;
 	//! A mapping of physical operators to profiled operator information.
 	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
-};
-
-//! Top level query metrics.
-struct QueryMetrics {
-	QueryMetrics() : total_bytes_read(0), total_bytes_written(0) {};
-
-	//! Reset the query metrics.
-	void Reset() {
-		query = "";
-		latency.Reset();
-		waiting_to_attach_latency.Reset();
-		attach_load_storage_latency.Reset();
-		attach_replay_wal_latency.Reset();
-		checkpoint_latency.Reset();
-		commit_write_wal_latency.Reset();
-		wal_replay_entry_count = 0;
-		total_bytes_read = 0;
-		total_bytes_written = 0;
-	}
-
-	ProfilingInfo query_global_info;
-
-	//! The SQL string of the query.
-	string query;
-	//! The timer of the execution of the entire query.
-	Profiler latency;
-	//! The timer of the delay when waiting to ATTACH a file.
-	Profiler waiting_to_attach_latency;
-	//! The timer for loading from storage.
-	Profiler attach_load_storage_latency;
-	//! The timer for replaying the WAL file.
-	Profiler attach_replay_wal_latency;
-	//! The timer for running checkpoints.
-	Profiler checkpoint_latency;
-	//! The timer for the WAL writes during COMMIT.
-	Profiler commit_write_wal_latency;
-	//! The total number of entries to replay in the WAL.
-	atomic<idx_t> wal_replay_entry_count;
-	//! The total bytes read by the file system.
-	atomic<idx_t> total_bytes_read;
-	//! The total bytes written by the file system.
-	atomic<idx_t> total_bytes_written;
 };
 
 //! QueryProfiler collects the profiling metrics of a query.

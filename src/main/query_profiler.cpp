@@ -98,7 +98,7 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
-	query_metrics.query = query;
+	query_metrics.query_name = query;
 	query_metrics.latency.Start();
 }
 
@@ -218,7 +218,7 @@ void QueryProfiler::EndQuery() {
 			auto &info = root->GetProfilingInfo();
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			auto &child_info = root->children[0]->GetProfilingInfo();
-			info.metrics[MetricType::QUERY_NAME] = query_metrics.query;
+			info.metrics[MetricType::QUERY_NAME] = query_metrics.query_name;
 
 			const auto &settings = info.expanded_settings;
 			for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
@@ -259,22 +259,8 @@ void QueryProfiler::EndQuery() {
 }
 
 void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
-	if (!IsEnabled()) {
-		return;
-	}
-
-	switch (type) {
-	case MetricType::TOTAL_BYTES_READ:
-		query_metrics.total_bytes_read += amount;
-		return;
-	case MetricType::TOTAL_BYTES_WRITTEN:
-		query_metrics.total_bytes_written += amount;
-		return;
-	case MetricType::WAL_REPLAY_ENTRY_COUNT:
-		query_metrics.wal_replay_entry_count += amount;
-		return;
-	default:
-		return;
+	if (IsEnabled()) {
+		query_metrics.AddToCounter(type, amount);
 	}
 }
 
@@ -287,51 +273,14 @@ idx_t QueryProfiler::GetBytesWritten() const {
 }
 
 void QueryProfiler::StartTimer(const MetricType type) {
-	if (!IsEnabled()) {
-		return;
-	}
-
-	switch (type) {
-	case MetricType::WAITING_TO_ATTACH_LATENCY:
-		query_metrics.waiting_to_attach_latency.Start();
-		return;
-	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-		query_metrics.attach_load_storage_latency.Start();
-		return;
-	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-		query_metrics.attach_replay_wal_latency.Start();
-		return;
-	case MetricType::CHECKPOINT_LATENCY:
-		query_metrics.checkpoint_latency.Start();
-		return;
-	case MetricType::COMMIT_WRITE_WAL_LATENCY:
-		query_metrics.commit_write_wal_latency.Start();
-		return;
-	default:
-		return;
+	if (IsEnabled()) {
+		query_metrics.StartTimer(type);
 	}
 }
 
 void QueryProfiler::EndTimer(MetricType type) {
 	if (!IsEnabled()) {
-		return;
-	}
-
-	switch (type) {
-	case MetricType::WAITING_TO_ATTACH_LATENCY:
-		query_metrics.waiting_to_attach_latency.End();
-		return;
-	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-		query_metrics.attach_load_storage_latency.End();
-		return;
-	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-		query_metrics.attach_replay_wal_latency.End();
-		return;
-	case MetricType::CHECKPOINT_LATENCY:
-		query_metrics.checkpoint_latency.End();
-		return;
-	default:
-		return;
+		query_metrics.EndTimer(type);
 	}
 }
 
@@ -357,7 +306,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
-		if (query_metrics.query.empty() && !root) {
+		if (query_metrics.query_name.empty() && !root) {
 			return "";
 		}
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
@@ -706,11 +655,11 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	ss << "││    Query Profiling Information    ││\n";
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
-	ss << StringUtil::Replace(query_metrics.query, "\n", " ") + "\n";
+	ss << StringUtil::Replace(query_metrics.query_name, "\n", " ") + "\n";
 
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
-	if (query_metrics.query.empty() && !root) {
+	if (query_metrics.query_name.empty() && !root) {
 		return;
 	}
 
@@ -840,7 +789,7 @@ string QueryProfiler::ToJSON() const {
 	auto result_obj = yyjson_mut_obj(json_holder.doc);
 	yyjson_mut_doc_set_root(json_holder.doc, result_obj);
 
-	if (query_metrics.query.empty() && !root) {
+	if (query_metrics.query_name.empty() && !root) {
 		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "empty");
 		return StringifyAndFree(json_holder, result_obj);
 	}

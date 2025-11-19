@@ -21,6 +21,115 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
+//! Top level query metrics.
+struct QueryMetrics {
+	QueryMetrics() : query_name(""), total_bytes_read(0), total_bytes_written(0), wal_replay_entry_count(0) {};
+
+	//! Reset the query metrics
+	void Reset() {
+		query_name = "";
+		attach_load_storage_latency.Reset();
+		attach_replay_wal_latency.Reset();
+		checkpoint_latency.Reset();
+		commit_write_wal_latency.Reset();
+		latency.Reset();
+		waiting_to_attach_latency.Reset();
+		total_bytes_read = 0;
+		total_bytes_written = 0;
+		wal_replay_entry_count = 0;
+	}
+
+	void StartTimer(const MetricType type) {
+		switch(type) {
+		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
+			attach_load_storage_latency.Start();
+			break;
+		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
+			attach_replay_wal_latency.Start();
+			break;
+		case MetricType::CHECKPOINT_LATENCY:
+			checkpoint_latency.Start();
+			break;
+		case MetricType::COMMIT_WRITE_WAL_LATENCY:
+			commit_write_wal_latency.Start();
+			break;
+		case MetricType::LATENCY:
+			latency.Start();
+			break;
+		case MetricType::WAITING_TO_ATTACH_LATENCY:
+			waiting_to_attach_latency.Start();
+			break;
+		default:
+			return;
+		};
+	}
+
+	void EndTimer(const MetricType type) {
+		switch(type) {
+		case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
+			attach_load_storage_latency.End();
+			break;
+		case MetricType::ATTACH_REPLAY_WAL_LATENCY:
+			attach_replay_wal_latency.End();
+			break;
+		case MetricType::CHECKPOINT_LATENCY:
+			checkpoint_latency.End();
+			break;
+		case MetricType::COMMIT_WRITE_WAL_LATENCY:
+			commit_write_wal_latency.End();
+			break;
+		case MetricType::LATENCY:
+			latency.End();
+			break;
+		case MetricType::WAITING_TO_ATTACH_LATENCY:
+			waiting_to_attach_latency.End();
+			break;
+		default:
+			return;
+		};
+	}
+
+	void AddToCounter(const MetricType type, const idx_t amount) {
+		switch(type) {
+		case MetricType::TOTAL_BYTES_READ:
+			total_bytes_read += amount;
+			break;
+		case MetricType::TOTAL_BYTES_WRITTEN:
+			total_bytes_written += amount;
+			break;
+		case MetricType::WAL_REPLAY_ENTRY_COUNT:
+			wal_replay_entry_count += amount;
+			break;
+		default:
+			return;
+		};
+	}
+
+	ProfilingInfo query_global_info;
+
+	//! The SQL string of the query
+	string query_name;
+	//! The timer for loading from storage.
+	Profiler attach_load_storage_latency;
+	//! The timer for replaying the WAL file.
+	Profiler attach_replay_wal_latency;
+	//! The timer for running checkpoints
+	Profiler checkpoint_latency;
+	//! The timer for writing to the WAL during COMMIT.
+	Profiler commit_write_wal_latency;
+	//! The timer for executing the entire query
+	Profiler latency;
+	//! The timer for waiting to ATTACH a file.
+	Profiler waiting_to_attach_latency;
+	//! The total bytes read by the file system.
+	atomic<idx_t> total_bytes_read;
+	//! The total bytes written by the file system.
+	atomic<idx_t> total_bytes_written;
+	//! The total number of entries to replay in the WAL.
+	atomic<idx_t> wal_replay_entry_count;
+};
+
+
 class ProfilingUtils {
 public:
 	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
