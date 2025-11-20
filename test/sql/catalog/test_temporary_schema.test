@@ -367,6 +367,38 @@ SELECT * FROM schema_b.cross_ref
 ----
 1	one
 
+# Test cascading view shadowing - persistent view references another view that gets shadowed
+statement ok
+CREATE VIEW myschema.base_view AS SELECT 'persistent' AS src
+
+statement ok
+CREATE VIEW myschema.derived_view AS SELECT * FROM myschema.base_view
+
+query I
+SELECT * FROM myschema.derived_view
+----
+persistent
+
+# Shadow base_view with temporary view
+statement ok
+CREATE TEMPORARY VIEW myschema.base_view AS SELECT 'temporary' AS src
+
+# derived_view should now return the temporary value
+query I
+SELECT * FROM myschema.derived_view
+----
+temporary
+
+# Cleanup cascading views
+statement ok
+DROP VIEW temp.myschema.base_view
+
+statement ok
+DROP VIEW myschema.derived_view
+
+statement ok
+DROP VIEW myschema.base_view
+
 # =============================================================================
 # Cleanup
 # =============================================================================
