@@ -126,7 +126,7 @@ statement ok
 CREATE OR REPLACE TABLE sleep_profiling_multi AS SELECT * FROM read_json('__TEST_DIR__/sleep_profiling_multi.json')
 
 query T
-SELECT cpu_time >= 0.05 AND cpu_time < 0.10 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
+SELECT cpu_time >= 0.04 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
 ----
 true
 

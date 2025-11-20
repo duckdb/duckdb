@@ -235,7 +235,7 @@ void SetRowGroupVectorWithLimit(const multimap<Value, RowGroupMapEntry> &row_gro
 	}
 }
 
-optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
+optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(const RowGroupSegmentTree &row_groups) {
 	if (initialized) {
 		if (ordered_row_groups.empty()) {
 			return nullptr;
@@ -298,8 +298,8 @@ void ColumnScanState::NextInternal(idx_t count) {
 		//! There is no column segment
 		return;
 	}
-	row_index += count;
-	while (row_index >= current->node->start + current->node->count) {
+	offset_in_column += count;
+	while (offset_in_column >= current->row_start + current->node->count) {
 		current = segment_tree->GetNextSegment(*current);
 		initialized = false;
 		segment_checked = false;
@@ -308,7 +308,11 @@ void ColumnScanState::NextInternal(idx_t count) {
 		}
 	}
 	D_ASSERT(!current ||
-	         (row_index >= current->node->start && row_index < current->node->start + current->node->count));
+	         (offset_in_column >= current->row_start && offset_in_column < current->row_start + current->node->count));
+}
+
+idx_t ColumnScanState::GetPositionInSegment() const {
+	return offset_in_column - (current ? current->row_start : 0);
 }
 
 void ColumnScanState::Next(idx_t count) {
@@ -385,14 +389,14 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 		row_group->node->Scan(transaction, *this, result);
 		if (result.size() > 0) {
 			return true;
-		} else if (max_row <= row_group->node->start + row_group->node->count) {
+		} else if (max_row <= row_group->row_start + row_group->node->count) {
 			row_group = nullptr;
 			return false;
 		} else {
 			do {
 				row_group = GetNextRowGroup(*row_group).get();
 				if (row_group) {
-					if (row_group->node->start >= max_row) {
+					if (row_group->row_start >= max_row) {
 						row_group = nullptr;
 						break;
 					}

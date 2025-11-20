@@ -21,7 +21,9 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 				parameters.query_location = NumericCast<idx_t>(root.location);
 			}
 			auto blob_data = Blob::ToBlob(string(c->val.val.str), parameters);
-			return make_uniq<ConstantExpression>(Value::BLOB_RAW(blob_data));
+			auto result = make_uniq<ConstantExpression>(Value::BLOB_RAW(blob_data));
+			SetQueryLocation(*result, root.location);
+			return std::move(result);
 		}
 	}
 	// transform the expression node

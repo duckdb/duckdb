@@ -157,7 +157,7 @@ TEST_CASE("Test NULL struct Appender", "[capi]") {
 	auto second_child_vector = duckdb_struct_vector_get_child(struct_vector, 1);
 
 	// set two values
-	auto first_child_ptr = (int64_t *)duckdb_vector_get_data(first_child_vector);
+	auto first_child_ptr = static_cast<int32_t *>(duckdb_vector_get_data(first_child_vector));
 	*first_child_ptr = 42;
 	duckdb_vector_assign_string_element(second_child_vector, 0, "hello");
 

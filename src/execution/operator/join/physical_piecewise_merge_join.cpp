@@ -762,8 +762,8 @@ unique_ptr<LocalSourceState> PhysicalPiecewiseMergeJoin::GetLocalSourceState(Exe
 	return make_uniq<PiecewiseJoinLocalScanState>(gstate.Cast<PiecewiseJoinGlobalScanState>());
 }
 
-SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result,
-                                                     OperatorSourceInput &source) const {
+SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &context, DataChunk &result,
+                                                             OperatorSourceInput &source) const {
 	D_ASSERT(PropagatesBuildSide(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &gsink = sink_state->Cast<MergeJoinGlobalState>();

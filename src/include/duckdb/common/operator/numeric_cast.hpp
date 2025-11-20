@@ -32,7 +32,7 @@ static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 		if (NumericLimits<SRC>::IsSigned()) {
 			// signed to unsigned conversion
 			if (NumericLimits<SRC>::Digits() > NumericLimits<DST>::Digits()) {
-				if (value < 0 || value > (SRC)NumericLimits<DST>::Maximum()) {
+				if (value < 0 || value > static_cast<SRC>(NumericLimits<DST>::Maximum())) {
 					return false;
 				}
 			} else {
@@ -40,31 +40,31 @@ static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 					return false;
 				}
 			}
-			result = (DST)value;
+			result = static_cast<DST>(value);
 			return true;
 		} else {
 			// unsigned to signed conversion
 			if (NumericLimits<SRC>::Digits() >= NumericLimits<DST>::Digits()) {
-				if (value <= (SRC)NumericLimits<DST>::Maximum()) {
-					result = (DST)value;
+				if (value <= static_cast<SRC>(NumericLimits<DST>::Maximum())) {
+					result = static_cast<DST>(value);
 					return true;
 				}
 				return false;
 			} else {
-				result = (DST)value;
+				result = static_cast<DST>(value);
 				return true;
 			}
 		}
 	} else {
 		// same sign conversion
 		if (NumericLimits<DST>::Digits() >= NumericLimits<SRC>::Digits()) {
-			result = (DST)value;
+			result = static_cast<DST>(value);
 			return true;
 		} else {
 			if (value < SRC(NumericLimits<DST>::Minimum()) || value > SRC(NumericLimits<DST>::Maximum())) {
 				return false;
 			}
-			result = (DST)value;
+			result = static_cast<DST>(value);
 			return true;
 		}
 	}

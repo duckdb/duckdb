@@ -1,0 +1,19 @@
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index f24f049..1ab9e70 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -963,12 +963,12 @@ struct ST_Read : ArrowTableFunction {
+ 			state.all_columns.Reset();
+ 			state.all_columns.SetCardinality(output_size);
+ 			ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), state.all_columns,
+-			                                  gstate.lines_read - output_size, false);
++			                                   false);
+ 			output.ReferenceColumns(state.all_columns, gstate.projection_ids);
+ 		} else {
+ 			output.SetCardinality(output_size);
+ 			ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), output,
+-			                                  gstate.lines_read - output_size, false);
++			                                   false);
+ 		}
+ 
+ 		if (!data.keep_wkb) {

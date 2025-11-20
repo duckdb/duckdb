@@ -12,7 +12,7 @@
 
 namespace duckdb_shell {
 
-enum class PrintIntensity { STANDARD, BOLD, UNDERLINE, BOLD_UNDERLINE };
+enum class PrintIntensity { STANDARD, BOLD, UNDERLINE, BOLD_UNDERLINE, ITALIC, BOLD_ITALIC };
 
 enum class PrintColor : uint16_t;
 
@@ -22,6 +22,9 @@ enum class HighlightElementType : uint32_t {
 	NUMERIC_CONSTANT,
 	STRING_CONSTANT,
 	LINE_INDICATOR,
+	DATABASE_NAME,
+	SCHEMA_NAME,
+	TABLE_NAME,
 	COLUMN_NAME,
 	COLUMN_TYPE,
 	NUMERIC_VALUE,
@@ -44,6 +47,9 @@ enum class HighlightElementType : uint32_t {
 	SUGGESTION_DIRECTORY_NAME,
 	SUGGESTION_FUNCTION_NAME,
 	SUGGESTION_SETTING_NAME,
+	TABLE_LAYOUT,
+	VIEW_LAYOUT,
+	PRIMARY_KEY_COLUMN,
 	NONE
 };
 

@@ -39,7 +39,7 @@ public:
 	~DictFSSTCompressionState() override;
 
 public:
-	void CreateEmptySegment(idx_t row_start);
+	void CreateEmptySegment();
 	idx_t Finalize();
 
 	bool AllUnique() const;

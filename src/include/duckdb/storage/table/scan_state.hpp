@@ -80,20 +80,24 @@ struct IndexScanState {
 typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
 struct ColumnScanState {
+	explicit ColumnScanState(optional_ptr<CollectionScanState> parent_p) : parent(parent_p) {
+	}
+
+	optional_ptr<CollectionScanState> parent;
 	//! The query context for this scan
 	QueryContext context;
 	//! The column segment that is currently being scanned
 	optional_ptr<SegmentNode<ColumnSegment>> current;
 	//! Column segment tree
 	ColumnSegmentTree *segment_tree = nullptr;
-	//! The current row index of the scan
-	idx_t row_index = 0;
+	//! The current row offset in the column
+	idx_t offset_in_column = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
 	idx_t internal_index = 0;
 	//! Segment scan state
 	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector
-	vector<ColumnScanState> child_states;
+	unsafe_vector<ColumnScanState> child_states;
 	//! Whether or not InitializeState has been called for this segment
 	bool initialized = false;
 	//! If this segment has already been checked for skipping purposes
@@ -116,6 +120,8 @@ public:
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
 	void NextInternal(idx_t count);
+	//! Returns the current row position in the segment
+	idx_t GetPositionInSegment() const;
 };
 
 struct ColumnFetchState {
@@ -125,6 +131,8 @@ struct ColumnFetchState {
 	buffer_handle_set_t handles;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
+	//! The current row group we are fetching from
+	optional_ptr<SegmentNode<RowGroup>> row_group;
 
 	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };
@@ -191,7 +199,7 @@ enum class OrderByColumnType { NUMERIC, STRING };
 class RowGroupReorderer {
 public:
 	explicit RowGroupReorderer(const RowGroupOrderOptions &options);
-	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups);
+	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(const RowGroupSegmentTree &row_groups);
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
 
 	static Value RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by, OrderByColumnType column_type);
@@ -219,9 +227,9 @@ public:
 	//! The maximum row within the row group
 	idx_t max_row_group_row;
 	//! Child column scans
-	unsafe_unique_array<ColumnScanState> column_scans;
-	//! Row group segment tree
-	RowGroupSegmentTree *row_groups;
+	unsafe_vector<ColumnScanState> column_scans;
+	//! Row group segment tree we are scanning
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! The total maximum row index
 	idx_t max_row;
 	//! The current batch index
@@ -314,6 +322,7 @@ struct ParallelCollectionScanState {
 
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	optional_ptr<SegmentNode<RowGroup>> current_row_group;
 	idx_t vector_index;
 	idx_t max_row;
@@ -344,6 +353,7 @@ struct PrefetchState {
 
 class CreateIndexScanState : public TableScanState {
 public:
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	vector<unique_ptr<StorageLockKey>> locks;
 	unique_lock<mutex> append_lock;
 	SegmentLock segment_lock;
