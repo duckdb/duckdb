@@ -376,6 +376,51 @@ persistent
 statement ok
 USE memory.main
 
+# Test temporary views with USE context
+statement ok
+USE myschema
+
+# Create temporary view in current schema context
+statement ok
+CREATE TEMPORARY VIEW use_view_test AS SELECT 'temp_view' AS src
+
+query I
+SELECT * FROM use_view_test
+----
+temp_view
+
+# Verify it's in temp.myschema
+query III
+SELECT database_name, schema_name, view_name FROM duckdb_views() WHERE view_name = 'use_view_test'
+----
+temp	myschema	use_view_test
+
+# Test temporary view with USE catalog.schema
+statement ok
+CREATE SCHEMA IF NOT EXISTS schema_c
+
+statement ok
+USE memory.schema_c
+
+# Create temporary view
+statement ok
+CREATE TEMPORARY VIEW catschema_view_test AS SELECT 'temp_view_in_schema_c' AS src
+
+query I
+SELECT * FROM catschema_view_test
+----
+temp_view_in_schema_c
+
+# Verify it's in temp.schema_c
+query III
+SELECT database_name, schema_name, view_name FROM duckdb_views() WHERE view_name = 'catschema_view_test'
+----
+temp	schema_c	catschema_view_test
+
+# Reset to default
+statement ok
+USE memory.main
+
 # =============================================================================
 # Error cases
 # =============================================================================
