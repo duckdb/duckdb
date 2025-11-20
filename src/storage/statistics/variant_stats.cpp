@@ -200,7 +200,16 @@ string VariantStats::ToString(const BaseStatistics &stats) {
 	return result;
 }
 
-bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &other) {
+static BaseStatistics WrapTypedValue(BaseStatistics &untyped_value_index, BaseStatistics &typed_value) {
+	BaseStatistics shredded = BaseStatistics::CreateEmpty(LogicalType::STRUCT(
+	    {{"untyped_value_index", untyped_value_index.GetType()}, {"typed_value", typed_value.GetType()}}));
+
+	StructStats::GetChildStats(shredded, 0).Copy(untyped_value_index);
+	StructStats::GetChildStats(shredded, 1).Copy(typed_value);
+	return shredded;
+}
+
+bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &other, BaseStatistics &new_stats) {
 	//! shredded_type:
 	//! STRUCT(untyped_value_index UINTEGER, typed_value <shredding>)
 
@@ -220,6 +229,10 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 	auto &stats_typed_value_type = stats_children[1].second;
 	auto &other_typed_value_type = other_children[1].second;
 
+	//! Merge the untyped_value_index stats
+	auto &untyped_value_index = StructStats::GetChildStats(stats, 0);
+	untyped_value_index.Merge(StructStats::GetChildStats(other, 0));
+
 	auto &stats_typed_value = StructStats::GetChildStats(stats, 1);
 	auto &other_typed_value = StructStats::GetChildStats(other, 1);
 
@@ -230,25 +243,52 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 		}
 		auto &stats_object_children = StructType::GetChildTypes(stats_typed_value_type);
 		auto &other_object_children = StructType::GetChildTypes(other_typed_value_type);
-		if (stats_object_children.size() != other_object_children.size()) {
-			//! FIXME: implement merging of overlapping children
-			return false;
+
+		//! Map field name to index, for 'other'
+		case_insensitive_map_t<idx_t> key_to_index;
+		for (idx_t i = 0; i < other_object_children.size(); i++) {
+			auto &other_object_child = other_object_children[i];
+			key_to_index.emplace(other_object_child.first, i);
 		}
+
+		//! Attempt to merge all overlapping fields, only keep the fields that were able to be merged
+		child_list_t<LogicalType> new_children;
+		vector<BaseStatistics> new_child_stats;
+
 		for (idx_t i = 0; i < stats_object_children.size(); i++) {
 			auto &stats_object_child = stats_object_children[i];
-			auto &other_object_child = other_object_children[i];
-
-			if (stats_object_child.first != other_object_child.first) {
-				//! FIXME: implement merging of overlapping children
-				return false;
+			auto other_it = key_to_index.find(stats_object_child.first);
+			if (other_it == key_to_index.end()) {
+				continue;
+			}
+			auto &other_object_child = other_object_children[other_it->second];
+			if (other_object_child.second.id() != stats_object_child.second.id()) {
+				//! TODO: perhaps we can keep the field but demote the type to unshredded somehow?
+				//! Or even use MaxLogicalType and merge the stats into that ?
+				continue;
 			}
 
 			auto &stats_child = StructStats::GetChildStats(stats_typed_value, i);
-			auto &other_child = StructStats::GetChildStats(other_typed_value, i);
-			if (!MergeShredding(stats_child, other_child)) {
-				return false;
+			auto &other_child = StructStats::GetChildStats(other_typed_value, other_it->second);
+			BaseStatistics new_child;
+			if (!MergeShredding(stats_child, other_child, new_child)) {
+				continue;
 			}
+			new_children.emplace_back(stats_object_child.first, new_child.GetType());
+			new_child_stats.emplace_back(std::move(new_child));
 		}
+		if (new_children.empty()) {
+			//! No fields remaining, demote to unshredded
+			return false;
+		}
+
+		//! Create new stats out of the remaining fields
+		auto new_object_type = LogicalType::STRUCT(std::move(new_children));
+		auto new_typed_value = BaseStatistics::CreateEmpty(new_object_type);
+		for (idx_t i = 0; i < new_children.size(); i++) {
+			StructStats::SetChildStats(new_typed_value, i, new_child_stats[i]);
+		}
+		new_stats = WrapTypedValue(untyped_value_index, new_typed_value);
 		return true;
 	} else if (stats_typed_value_type.id() == LogicalTypeId::LIST) {
 		if (stats_typed_value_type.id() != other_typed_value_type.id()) {
@@ -257,7 +297,16 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 		}
 		auto &stats_child = ListStats::GetChildStats(stats_typed_value);
 		auto &other_child = ListStats::GetChildStats(other_typed_value);
-		return MergeShredding(stats_child, other_child);
+
+		//! TODO: perhaps we can keep the LIST part of the stats, and only demote the child to unshredded?
+		BaseStatistics new_child_stats;
+		if (!MergeShredding(stats_child, other_child, new_child_stats)) {
+			return false;
+		}
+		auto new_typed_value = BaseStatistics::CreateEmpty(LogicalType::LIST(new_child_stats.type));
+		ListStats::SetChildStats(new_typed_value, new_child_stats.ToUnique());
+		new_stats = WrapTypedValue(untyped_value_index, new_typed_value);
+		return true;
 	} else {
 		D_ASSERT(!stats_typed_value_type.IsNested());
 		if (stats_typed_value_type.id() != other_typed_value_type.id()) {
@@ -265,6 +314,7 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 			return false;
 		}
 		stats_typed_value.Merge(other_typed_value);
+		new_stats = std::move(stats);
 		return true;
 	}
 }
@@ -284,10 +334,16 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 			stats.child_stats[1].Copy(other.child_stats[1]);
 			data.is_shredded = true;
 		} else {
-			if (!MergeShredding(stats.child_stats[1], other.child_stats[1])) {
+			BaseStatistics merged_shredding_stats;
+			if (!MergeShredding(stats.child_stats[1], other.child_stats[1], merged_shredding_stats)) {
 				data.is_shredded = false;
+			} else {
+				stats.child_stats[1] = BaseStatistics::CreateUnknown(merged_shredding_stats.GetType());
+				stats.child_stats[1].Copy(merged_shredding_stats);
 			}
 		}
+	} else {
+		stats.child_stats[0].Merge(other.child_stats[0]);
 	}
 }
 
