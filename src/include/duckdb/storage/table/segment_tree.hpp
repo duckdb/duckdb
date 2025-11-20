@@ -122,27 +122,16 @@ public:
 		return GetRootSegmentInternal();
 	}
 	//! Obtains ownership of the data of the segment tree
-	vector<shared_ptr<SegmentNode<T>>> MoveSegments(SegmentLock &l) {
+	vector<unique_ptr<SegmentNode<T>>> MoveSegments(SegmentLock &l) {
 		LoadAllSegments(l);
 		return std::move(nodes);
 	}
-	vector<shared_ptr<SegmentNode<T>>> MoveSegments() {
+	vector<unique_ptr<SegmentNode<T>>> MoveSegments() {
 		auto l = Lock();
 		return MoveSegments(l);
 	}
 
-	const vector<shared_ptr<SegmentNode<T>>> &ReferenceSegments(SegmentLock &l) {
-		LoadAllSegments(l);
-		return nodes;
-	}
-	const vector<shared_ptr<SegmentNode<T>>> &ReferenceSegments() {
-		auto l = Lock();
-		return ReferenceSegments(l);
-	}
-	vector<shared_ptr<SegmentNode<T>>> &ReferenceLoadedSegmentsMutable(SegmentLock &l) {
-		return nodes;
-	}
-	const vector<shared_ptr<SegmentNode<T>>> &ReferenceLoadedSegments(SegmentLock &l) const {
+	vector<unique_ptr<SegmentNode<T>>> &ReferenceLoadedSegmentsMutable(SegmentLock &l) {
 		return nodes;
 	}
 
@@ -345,7 +334,7 @@ protected:
 
 private:
 	//! The nodes in the tree, can be binary searched
-	mutable vector<shared_ptr<SegmentNode<T>>> nodes;
+	mutable vector<unique_ptr<SegmentNode<T>>> nodes;
 	//! Lock to access or modify the nodes
 	mutable mutex node_lock;
 	//! Base row id (row id of the first segment)
