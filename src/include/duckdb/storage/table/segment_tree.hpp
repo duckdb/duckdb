@@ -151,6 +151,7 @@ public:
 		return GetSegmentCount(l);
 	}
 	idx_t GetSegmentCount(SegmentLock &l) const {
+		LoadAllSegments(l);
 		return nodes.size();
 	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
