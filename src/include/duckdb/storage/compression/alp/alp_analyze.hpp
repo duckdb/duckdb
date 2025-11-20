@@ -24,7 +24,7 @@ struct AlpAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), state() {
+	explicit AlpAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), inner_state() {
 	}
 
 	idx_t total_bytes_used = 0;
@@ -34,7 +34,7 @@ public:
 	idx_t vectors_count = 0;
 	vector<vector<T>> rowgroup_sample;
 	vector<vector<T>> complete_vectors_sampled;
-	alp::AlpCompressionState<T, true> state;
+	alp::AlpInnerCompressionState<T, true> inner_state;
 
 public:
 	// Returns the required space to hyphotetically store the compressed segment
@@ -44,23 +44,15 @@ public:
 		current_bytes_used_in_segment = 0;
 	}
 
-	// Returns the required space to hyphotetically store the compressed vector
-	idx_t RequiredSpace() const {
-		idx_t required_space =
-		    state.bp_size + state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) +
-		    AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE +
-		    AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE + AlpConstants::METADATA_POINTER_SIZE;
-		return required_space;
-	}
 
 	void FlushVector() {
-		current_bytes_used_in_segment += RequiredSpace();
-		state.Reset();
+		current_bytes_used_in_segment += inner_state.RequiredSpace();
+		inner_state.Reset();
 	}
 
 	// Check if we have enough space in the segment to hyphotetically store the compressed vector
 	bool HasEnoughSpace() {
-		idx_t bytes_to_be_used = AlignValue(current_bytes_used_in_segment + RequiredSpace());
+		idx_t bytes_to_be_used = AlignValue(current_bytes_used_in_segment + inner_state.RequiredSpace());
 		// We have enough space if the already used space + the required space for a new vector
 		// does not exceed the space of the block - the segment header (the pointer to the metadata)
 		return bytes_to_be_used <= (info.GetBlockSize() - AlpConstants::METADATA_POINTER_SIZE);
@@ -154,13 +146,13 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	auto &analyze_state = (AlpAnalyzeState<T> &)state;
 
 	// Finding the Top K combinations of Exponent and Factor
-	alp::AlpCompression<T, true>::FindTopKCombinations(analyze_state.rowgroup_sample, analyze_state.state);
+	alp::AlpCompression<T, true>::FindTopKCombinations(analyze_state.rowgroup_sample, analyze_state.inner_state);
 
 	// Encode the entire sampled vectors to estimate a compression size
 	idx_t compressed_values = 0;
 	for (auto &vector_to_compress : analyze_state.complete_vectors_sampled) {
 		alp::AlpCompression<T, true>::Compress(vector_to_compress.data(), vector_to_compress.size(),
-		                                       analyze_state.state);
+		                                       analyze_state.inner_state);
 		if (!analyze_state.HasEnoughSpace()) {
 			analyze_state.FlushSegment();
 		}

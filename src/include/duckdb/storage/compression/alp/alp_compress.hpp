@@ -27,17 +27,17 @@
 namespace duckdb {
 
 template <class T>
-struct AlpCompressionState : public CompressionState {
+struct AlpOuterCompressionState : public CompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
+	AlpOuterCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
 	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment();
 
 		//! Combinations found on the analyze step are needed for compression
-		state.best_k_combinations = analyze_state->state.best_k_combinations;
+		state.best_k_combinations = analyze_state->inner_state.best_k_combinations;
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
@@ -57,7 +57,7 @@ public:
 	T input_vector[AlpConstants::ALP_VECTOR_SIZE];
 	uint16_t vector_null_positions[AlpConstants::ALP_VECTOR_SIZE];
 
-	alp::AlpCompressionState<T, false> state;
+	alp::AlpInnerCompressionState<T, false> state;
 
 public:
 	// Returns the space currently used in the segment (in bytes)
@@ -262,12 +262,12 @@ public:
 template <class T>
 unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                 unique_ptr<AnalyzeState> state) {
-	return make_uniq<AlpCompressionState<T>>(checkpoint_data, (AlpAnalyzeState<T> *)state.get());
+	return make_uniq<AlpOuterCompressionState<T>>(checkpoint_data, (AlpAnalyzeState<T> *)state.get());
 }
 
 template <class T>
 void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (AlpCompressionState<T> &)state_p;
+	auto &state = (AlpOuterCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
@@ -275,7 +275,7 @@ void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 
 template <class T>
 void AlpFinalizeCompress(CompressionState &state_p) {
-	auto &state = (AlpCompressionState<T> &)state_p;
+	auto &state = (AlpOuterCompressionState<T> &)state_p;
 	state.Finalize();
 }
 

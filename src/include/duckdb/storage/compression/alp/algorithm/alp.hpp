@@ -60,9 +60,9 @@ struct AlpCombination {
 };
 
 template <class T, bool EMPTY>
-class AlpCompressionState {
+class AlpInnerCompressionState {
 public:
-	AlpCompressionState() : vector_encoding_indices(0, 0), exceptions_count(0), bit_width(0) {
+	AlpInnerCompressionState() : vector_encoding_indices(0, 0), exceptions_count(0), bit_width(0) {
 	}
 
 	void Reset() {
@@ -86,11 +86,26 @@ public:
 	uint16_t exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
 	vector<AlpCombination> best_k_combinations;
 	uint8_t values_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
+	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
+
+	idx_t RequiredSpace() const {
+		printf("\nUSING MY OWN ADDED RequiredSpace()");
+		idx_t required_space =
+			bp_size +
+			(exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+			AlpConstants::EXPONENT_SIZE +
+			AlpConstants::FACTOR_SIZE +
+			AlpConstants::EXCEPTIONS_COUNT_SIZE +
+			AlpConstants::FOR_SIZE +
+			AlpConstants::BIT_WIDTH_SIZE;
+
+		return required_space;
+	}
 };
 
 template <class T, bool EMPTY>
 struct AlpCompression {
-	using State = AlpCompressionState<T, EMPTY>;
+	using InnerState = AlpInnerCompressionState<T, EMPTY>;
 	static constexpr uint8_t EXACT_TYPE_BITSIZE = sizeof(T) * 8;
 
 	/*
@@ -198,7 +213,7 @@ struct AlpCompression {
 	 * This function is called once per segment
 	 * This operates over ALP first level samples
 	 */
-	static void FindTopKCombinations(const vector<vector<T>> &vectors_sampled, State &state) {
+	static void FindTopKCombinations(const vector<vector<T>> &vectors_sampled, InnerState &state) {
 		state.ResetCombinations();
 
 		unordered_map<AlpEncodingIndices, uint64_t, AlpEncodingIndicesHash, AlpEncodingIndicesEquality>
@@ -252,7 +267,7 @@ struct AlpCompression {
 	 * Find the best combination of factor-exponent for a vector from within the best k combinations
 	 * This is ALP second level sampling
 	 */
-	static void FindBestFactorAndExponent(const T *input_vector, idx_t n_values, State &state) {
+	static void FindBestFactorAndExponent(const T *input_vector, idx_t n_values, InnerState &state) {
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
 		auto idx_increments = MaxValue<uint32_t>(
@@ -291,11 +306,11 @@ struct AlpCompression {
 	 * ALP Compress
 	 */
 	static void Compress(const T *input_vector, idx_t n_values, const uint16_t *vector_null_positions,
-	                     idx_t nulls_count, State &state) {
-		if (state.best_k_combinations.size() > 1) {
-			FindBestFactorAndExponent(input_vector, n_values, state);
+	                     idx_t nulls_count, InnerState &inner_state) {
+		if (inner_state.best_k_combinations.size() > 1) {
+			FindBestFactorAndExponent(input_vector, n_values, inner_state);
 		} else {
-			state.vector_encoding_indices = state.best_k_combinations[0].encoding_indices;
+			inner_state.vector_encoding_indices = inner_state.best_k_combinations[0].encoding_indices;
 		}
 
 		// Encoding Floating-Point to Int64
@@ -303,48 +318,48 @@ struct AlpCompression {
 		uint16_t exceptions_idx = 0;
 		for (idx_t i = 0; i < n_values; i++) {
 			T actual_value = input_vector[i];
-			int64_t encoded_value = EncodeValue(actual_value, state.vector_encoding_indices);
-			T decoded_value = DecodeValue(encoded_value, state.vector_encoding_indices);
-			state.encoded_integers[i] = encoded_value;
+			int64_t encoded_value = EncodeValue(actual_value, inner_state.vector_encoding_indices);
+			T decoded_value = DecodeValue(encoded_value, inner_state.vector_encoding_indices);
+			inner_state.encoded_integers[i] = encoded_value;
 			//! We detect exceptions using a predicated comparison
 			auto is_exception = (decoded_value != actual_value);
-			state.exceptions_positions[exceptions_idx] = UnsafeNumericCast<uint16_t>(i);
+			inner_state.exceptions_positions[exceptions_idx] = UnsafeNumericCast<uint16_t>(i);
 			exceptions_idx += is_exception;
 		}
 
 		// Finding first non exception value
 		int64_t a_non_exception_value = 0;
 		for (idx_t i = 0; i < n_values; i++) {
-			if (i != state.exceptions_positions[i]) {
-				a_non_exception_value = state.encoded_integers[i];
+			if (i != inner_state.exceptions_positions[i]) {
+				a_non_exception_value = inner_state.encoded_integers[i];
 				break;
 			}
 		}
 		// Replacing that first non exception value on the vector exceptions
 		for (idx_t i = 0; i < exceptions_idx; i++) {
-			idx_t exception_pos = state.exceptions_positions[i];
+			idx_t exception_pos = inner_state.exceptions_positions[i];
 			T actual_value = input_vector[exception_pos];
-			state.encoded_integers[exception_pos] = a_non_exception_value;
-			state.exceptions[i] = actual_value;
+			inner_state.encoded_integers[exception_pos] = a_non_exception_value;
+			inner_state.exceptions[i] = actual_value;
 		}
-		state.exceptions_count = exceptions_idx;
+		inner_state.exceptions_count = exceptions_idx;
 
 		// Replacing nulls with that first non exception value
 		for (idx_t i = 0; i < nulls_count; i++) {
 			uint16_t null_value_pos = vector_null_positions[i];
-			state.encoded_integers[null_value_pos] = a_non_exception_value;
+			inner_state.encoded_integers[null_value_pos] = a_non_exception_value;
 		}
 
 		// Analyze FFOR
 		auto min_value = NumericLimits<int64_t>::Maximum();
 		auto max_value = NumericLimits<int64_t>::Minimum();
 		for (idx_t i = 0; i < n_values; i++) {
-			max_value = MaxValue(max_value, state.encoded_integers[i]);
-			min_value = MinValue(min_value, state.encoded_integers[i]);
+			max_value = MaxValue(max_value, inner_state.encoded_integers[i]);
+			min_value = MinValue(min_value, inner_state.encoded_integers[i]);
 		}
 		uint64_t min_max_diff = (static_cast<uint64_t>(max_value) - static_cast<uint64_t>(min_value));
 
-		auto *u_encoded_integers = reinterpret_cast<uint64_t *>(state.encoded_integers);
+		auto *u_encoded_integers = reinterpret_cast<uint64_t *>(inner_state.encoded_integers);
 		auto const u_min_value = static_cast<uint64_t>(min_value);
 
 		// Subtract FOR
@@ -357,18 +372,18 @@ struct AlpCompression {
 		auto bit_width = BitpackingPrimitives::MinimumBitWidth<uint64_t, false>(min_max_diff);
 		auto bp_size = BitpackingPrimitives::GetRequiredSize(n_values, bit_width);
 		if (!EMPTY && bit_width > 0) { //! We only execute the BP if we are writing the data
-			BitpackingPrimitives::PackBuffer<uint64_t, false>(state.values_encoded, u_encoded_integers, n_values,
+			BitpackingPrimitives::PackBuffer<uint64_t, false>(inner_state.values_encoded, u_encoded_integers, n_values,
 			                                                  bit_width);
 		}
-		state.bit_width = bit_width;                                 // in bits
-		state.bp_size = bp_size;                                     // in bytes
-		state.frame_of_reference = static_cast<uint64_t>(min_value); // understood this can be negative
+		inner_state.bit_width = bit_width;                                 // in bits
+		inner_state.bp_size = bp_size;                                     // in bytes
+		inner_state.frame_of_reference = static_cast<uint64_t>(min_value); // understood this can be negative
 	}
 
 	/*
 	 * Overload without specifying nulls
 	 */
-	static void Compress(const T *input_vector, idx_t n_values, State &state) {
+	static void Compress(const T *input_vector, idx_t n_values, InnerState &state) {
 		Compress(input_vector, n_values, nullptr, 0, state);
 	}
 };
