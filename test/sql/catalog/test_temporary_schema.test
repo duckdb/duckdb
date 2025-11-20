@@ -2,6 +2,8 @@
 # description: Test temporary objects in non-default schemas
 # group: [catalog]
 
+require noforcestorage
+
 # =============================================================================
 # Basic temporary objects in custom schemas
 # =============================================================================

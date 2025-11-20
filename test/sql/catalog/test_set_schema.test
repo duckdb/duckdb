@@ -2,6 +2,8 @@
 # description: Default schema name changes
 # group: [catalog]
 
+require noforcestorage
+
 # This test focuses on actual name lookup.
 # See also test_set_search_path.test
 
