@@ -1215,8 +1215,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
 		auto max_vacuum_tasks = DBConfig::GetSetting<MaxVacuumTasksSetting>(writer.GetDatabase());
-		for (auto &entry : row_groups->SegmentNodes()) {
-			auto segment_idx = entry.GetIndex();
+		for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 			auto vacuum_tasks =
 			    ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx, total_vacuum_tasks < max_vacuum_tasks);
 			if (vacuum_tasks) {
@@ -1229,8 +1228,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				continue;
 			}
 			// schedule a checkpoint task for this row group
-			auto &row_group = entry.GetNode();
-			if (vacuum_state.row_start != entry.GetRowStart()) {
+			auto entry = checkpoint_state.GetSegment(segment_idx);
+			auto &row_group = entry->GetNode();
+			if (vacuum_state.row_start != entry->GetRowStart()) {
 				row_group.MoveToCollection(*this);
 			} else if (!RefersToSameObject(row_group.GetCollection(), *this)) {
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
@@ -1256,8 +1256,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// if the table already exists on disk - check if all row groups have stayed the same
 	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
 		bool table_has_changes = false;
-		for (auto &entry : row_groups->SegmentNodes()) {
-			auto segment_idx = entry.GetIndex();
+		for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
 				table_has_changes = true;
 				break;
@@ -1273,9 +1272,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// we can directly re-use the metadata pointer
 			// mark all blocks associated with row groups as still being in-use
 			auto &metadata_manager = writer.GetMetadataManager();
-			for (auto &entry : row_groups->SegmentNodes()) {
-				auto segment_idx = entry.GetIndex();
-				auto &row_group = entry.GetNode();
+			for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
+				auto entry = checkpoint_state.GetSegment(segment_idx);
+				auto &row_group = entry->GetNode();
 				auto &write_state = checkpoint_state.write_data[segment_idx];
 				metadata_manager.ClearModifiedBlocks(row_group.GetColumnStartPointers());
 				D_ASSERT(write_state.reuse_existing_metadata_blocks);
