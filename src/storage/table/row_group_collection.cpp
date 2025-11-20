@@ -1548,10 +1548,12 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	auto row_groups = GetRowGroups();
 	auto result_row_groups = result->GetRowGroups();
 
-	if (row_groups->GetSegmentCount()) {
-		scan_state.table_state.Initialize(executor.GetContext(), GetTypes());
-	}
+	bool first_rowgroup = true;
 	for (auto &node : row_groups->SegmentNodes()) {
+		if (first_rowgroup) {
+			scan_state.table_state.Initialize(executor.GetContext(), GetTypes());
+			first_rowgroup = false;
+		}
 		auto &current_row_group = *node.node;
 		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
 		                                                 scan_state.table_state, node, scan_chunk);
