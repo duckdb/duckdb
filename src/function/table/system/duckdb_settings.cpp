@@ -27,7 +27,7 @@ struct DuckDBSettingsData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-static bool extract_in_bytes_argument(const TableFunctionBindInput &input) {
+static bool ExtractInBytesArgument(const TableFunctionBindInput &input) {
 	bool in_bytes = false;
 	auto it = input.named_parameters.find("in_bytes");
 	if (it != input.named_parameters.end()) {
@@ -47,7 +47,7 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 
 	names.emplace_back("value");
 
-	bool in_bytes = extract_in_bytes_argument(input);
+	bool in_bytes = ExtractInBytesArgument(input);
 	if (in_bytes) {
 		return_types.emplace_back(LogicalType::UBIGINT);
 	} else {
