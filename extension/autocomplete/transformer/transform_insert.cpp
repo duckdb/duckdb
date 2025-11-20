@@ -85,6 +85,12 @@ unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictClause(PEGT
 	return result;
 }
 
+OnConflictExpressionTarget PEGTransformerFactory::TransformOnConflictTarget(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<OnConflictExpressionTarget>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
 OnConflictExpressionTarget
 PEGTransformerFactory::TransformOnConflictExpressionTarget(PEGTransformer &transformer,
                                                            optional_ptr<ParseResult> parse_result) {
@@ -96,13 +102,13 @@ PEGTransformerFactory::TransformOnConflictExpressionTarget(PEGTransformer &trans
 }
 
 unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictAction(PEGTransformer &transformer,
-                                                                  optional_ptr<ParseResult> parse_result) {
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<OnConflictInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictUpdate(PEGTransformer &transformer,
-                                                                  optional_ptr<ParseResult> parse_result) {
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<OnConflictInfo>();
 	result->action_type = OnConflictAction::UPDATE;
@@ -112,7 +118,7 @@ unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictUpdate(PEGT
 }
 
 unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictNothing(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto result = make_uniq<OnConflictInfo>();
 	result->action_type = OnConflictAction::NOTHING;
 	return result;

@@ -418,6 +418,7 @@ void PEGTransformerFactory::RegisterInsert() {
 	REGISTER_TRANSFORM(TransformOrAction);
 	REGISTER_TRANSFORM(TransformInsertTarget);
 	REGISTER_TRANSFORM(TransformOnConflictClause);
+	REGISTER_TRANSFORM(TransformOnConflictTarget);
 	REGISTER_TRANSFORM(TransformOnConflictExpressionTarget);
 	REGISTER_TRANSFORM(TransformOnConflictAction);
 	REGISTER_TRANSFORM(TransformOnConflictUpdate);
@@ -573,7 +574,6 @@ void PEGTransformerFactory::RegisterUpdate() {
 	REGISTER_TRANSFORM(TransformUpdateSetElementList);
 	REGISTER_TRANSFORM(TransformUpdateSetElement);
 }
-
 
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("PragmaName", &TransformIdentifierOrKeyword);
