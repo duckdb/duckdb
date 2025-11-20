@@ -1593,17 +1593,19 @@ int Linenoise::Edit() {
 		case ESC: /* escape sequence */ {
 			EscapeSequence escape = key_press.sequence;
 			switch (escape) {
-			case EscapeSequence::ALT_LEFT_ARROW:
+			case EscapeSequence::CTRL_UP:
 				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_START);
 				break;
-			case EscapeSequence::ALT_RIGHT_ARROW:
+			case EscapeSequence::CTRL_DOWN:
 				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_END);
 				break;
 			case EscapeSequence::CTRL_MOVE_BACKWARDS:
+			case EscapeSequence::ALT_LEFT_ARROW:
 			case EscapeSequence::ALT_B:
 				EditMoveWordLeft();
 				break;
 			case EscapeSequence::CTRL_MOVE_FORWARDS:
+			case EscapeSequence::ALT_RIGHT_ARROW:
 			case EscapeSequence::ALT_F:
 				EditMoveWordRight();
 				break;

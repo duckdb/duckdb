@@ -475,10 +475,31 @@ idx_t RoaringCompressState::Count(RoaringCompressState &state) {
 void RoaringCompressState::Flush(RoaringCompressState &state) {
 	state.NextContainer();
 }
-
-void RoaringCompressState::Compress(Vector &input, idx_t count) {
+template <>
+void RoaringCompressState::Compress<PhysicalType::BIT>(Vector &input, idx_t count) {
 	auto &self = *this;
 	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input, count);
+}
+template <>
+void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count) {
+	auto &self = *this;
+	input.Flatten(count);
+	const bool *src = FlatVector::GetData<bool>(input);
+
+	Vector bitpacked_vector(LogicalType::UBIGINT, count);
+	auto &bitpacked_vector_validity = FlatVector::Validity(bitpacked_vector);
+	bitpacked_vector_validity.EnsureWritable();
+	const auto dst = data_ptr_cast(bitpacked_vector_validity.GetData());
+
+	const auto &validity = FlatVector::Validity(input);
+	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
+	// mask.
+	if (validity.AllValid()) {
+		BitPackBooleans<true, true>(dst, src, count, &validity, &this->current_segment->stats.statistics);
+	} else {
+		BitPackBooleans<true, false>(dst, src, count, &validity, &this->current_segment->stats.statistics);
+	}
+	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_vector, count);
 }
 
 } // namespace roaring

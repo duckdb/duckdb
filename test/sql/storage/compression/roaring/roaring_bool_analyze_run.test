@@ -1,0 +1,83 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_analyze_run.test
+# description: Check the produced (final_)analyze result
+# group: [roaring]
+
+require block_size 262144
+
+require noforcestorage
+
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
+
+statement ok
+set logging_level='info';
+
+# 1 rowgroup
+statement ok
+set variable dataset_size = 122880;
+
+statement ok
+PRAGMA force_compression='BitPacking'
+
+statement ok
+set enable_logging=true;
+
+statement ok
+CREATE TABLE test_uncompressed AS SELECT
+	case
+		when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450)
+			then false
+		else true
+	end
+	FROM range(getvariable('dataset_size')) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+set enable_logging=false;
+
+query I
+SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
+where
+	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
+	message.contains('test_uncompressed') and
+	message.contains('BOOLEAN') and
+	message.contains('COMPRESSION_BITPACKING');
+----
+15900
+
+statement ok
+PRAGMA force_compression='roaring'
+
+statement ok
+set enable_logging=true;
+
+statement ok
+CREATE TABLE test_roaring AS select * from test_uncompressed;
+
+statement ok
+checkpoint
+
+statement ok
+set enable_logging=false;
+
+# For single row group
+# 60 vectors with 7 or 8 runs of trues per vector
+# Total compressed bytes:
+# 2 bits (is_inverted + is_run) + 7 bits (run_size) = 9 bits per Vector
+# 9 * 60 = 540 bits == 67 bytes of metadata per RowGroup
+#
+# 8 (compressed overhead) + (8 * sizeof(uint16_t)) = 24 bytes per Vector
+# 24 * 60 = 1440 bytes of data per RowGroup
+# 1507 bytes
+
+# We 2x the actual result, to pay for the slower decompression speed
+query I
+SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
+where
+	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
+	message.contains('test_roaring') and
+	message.contains('BOOLEAN') and
+	message.contains('COMPRESSION_ROARING');
+----
+3024
