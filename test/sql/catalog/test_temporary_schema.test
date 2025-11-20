@@ -583,3 +583,64 @@ query I
 SELECT * FROM myschema.derived_view
 ----
 temporary
+
+# =============================================================================
+# Schema named "temp" (edge case: conflicts with temp catalog name)
+# =============================================================================
+
+# Create a persistent schema with the name "temp"
+statement ok
+CREATE SCHEMA temp
+
+# Use the temp schema
+statement ok
+USE temp
+
+# Create a persistent table in the temp schema
+statement ok
+CREATE TABLE shadow_in_temp_schema(val VARCHAR)
+
+statement ok
+INSERT INTO shadow_in_temp_schema VALUES ('persistent')
+
+# Query should return persistent version
+query I
+SELECT * FROM shadow_in_temp_schema
+----
+persistent
+
+# Create a temporary table with the same name
+statement ok
+CREATE TEMPORARY TABLE shadow_in_temp_schema(val VARCHAR)
+
+statement ok
+INSERT INTO shadow_in_temp_schema VALUES ('temporary')
+
+# Query should now return temporary version (shadowing works)
+query I
+SELECT * FROM shadow_in_temp_schema
+----
+temporary
+
+# Verify the temporary table is in temp.temp schema (temp catalog, temp schema)
+query III rowsort
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'shadow_in_temp_schema'
+----
+memory	temp	shadow_in_temp_schema
+temp	temp	shadow_in_temp_schema
+
+# Can still access persistent version explicitly
+query I
+SELECT * FROM memory.temp.shadow_in_temp_schema
+----
+persistent
+
+# Drop the temporary table
+statement ok
+DROP TABLE temp.temp.shadow_in_temp_schema
+
+# Now query returns persistent version again
+query I
+SELECT * FROM shadow_in_temp_schema
+----
+persistent
