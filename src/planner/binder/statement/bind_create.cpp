@@ -101,6 +101,10 @@ const string Binder::BindCatalog(string &catalog) {
 }
 
 void Binder::SearchSchema(CreateInfo &info) {
+	// Save original catalog to check if user explicitly specified a non-temp catalog
+	// This must be done BEFORE BindSchemaOrCatalog which may modify it
+	auto original_catalog = info.catalog;
+
 	// First, resolve catalog/schema using the standard logic
 	BindSchemaOrCatalog(info.catalog, info.schema);
 
@@ -122,7 +126,8 @@ void Binder::SearchSchema(CreateInfo &info) {
 
 	if (info.temporary) {
 		// For temporary objects, redirect to temp catalog but preserve the resolved schema
-		if (!IsInvalidCatalog(info.catalog) && info.catalog != TEMP_CATALOG) {
+		// Only error if user EXPLICITLY specified a non-temp catalog (original_catalog was not empty)
+		if (!IsInvalidCatalog(original_catalog) && original_catalog != TEMP_CATALOG) {
 			// User explicitly specified a non-temp catalog for a temporary object
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", std::string(TEMP_CATALOG));
 		}

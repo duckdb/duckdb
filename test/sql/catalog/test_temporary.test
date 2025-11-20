@@ -161,3 +161,91 @@ statement error con2
 INSERT INTO integers VALUES (42)
 ----
 <REGEX>:.*Catalog Error.*does not exist.*
+
+# =============================================================================
+# Shadowing behavior - temp objects shadow persistent objects with same name
+# =============================================================================
+
+# --- Table shadowing ---
+
+statement ok
+CREATE TABLE shadow_me(val VARCHAR)
+
+statement ok
+INSERT INTO shadow_me VALUES ('persistent')
+
+query I
+SELECT * FROM shadow_me
+----
+persistent
+
+# Create temp table with same name - should shadow persistent
+statement ok
+CREATE TEMPORARY TABLE shadow_me(val VARCHAR)
+
+statement ok
+INSERT INTO shadow_me VALUES ('temporary')
+
+query I
+SELECT * FROM shadow_me
+----
+temporary
+
+# Can still access persistent via explicit catalog
+query I
+SELECT * FROM memory.main.shadow_me
+----
+persistent
+
+# Drop temp table
+statement ok
+DROP TABLE temp.main.shadow_me
+
+# Now query returns persistent version
+query I
+SELECT * FROM shadow_me
+----
+persistent
+
+# Cleanup
+statement ok
+DROP TABLE shadow_me
+
+# --- View shadowing ---
+
+statement ok
+CREATE VIEW shadow_view AS SELECT 'persistent' AS src
+
+query I
+SELECT * FROM shadow_view
+----
+persistent
+
+# Create temp view with same name - should shadow persistent
+statement ok
+CREATE TEMPORARY VIEW shadow_view AS SELECT 'temporary' AS src
+
+query I
+SELECT * FROM shadow_view
+----
+temporary
+
+# Can still access persistent via explicit catalog
+query I
+SELECT * FROM memory.main.shadow_view
+----
+persistent
+
+# Drop temp view
+statement ok
+DROP VIEW temp.main.shadow_view
+
+# Now query returns persistent version
+query I
+SELECT * FROM shadow_view
+----
+persistent
+
+# Cleanup
+statement ok
+DROP VIEW shadow_view

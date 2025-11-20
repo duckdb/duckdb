@@ -393,7 +393,7 @@ statement ok
 DROP TABLE myschema.explicit_temp
 
 statement ok
-DROP TABLE searchpath_test
+DROP TABLE myschema.searchpath_test
 
 statement ok
 DROP SCHEMA myschema
