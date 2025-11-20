@@ -2,6 +2,7 @@
 #include "duckdb/catalog/default/default_schemas.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -304,7 +305,7 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	paths.reserve(set_paths.size() * 2 + 4);
 
 	// Track which schemas we've already added temp entries for to avoid duplicates
-	unordered_set<string> temp_schemas_added;
+	case_insensitive_set_t temp_schemas_added;
 
 	// For each user path, add temp version first (for shadowing), then the regular path
 	for (auto &path : set_paths) {
