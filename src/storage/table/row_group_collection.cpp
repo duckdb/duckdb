@@ -1275,6 +1275,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			D_ASSERT(writer.GetCheckpointType() == CheckpointType::VACUUM_ONLY);
 			new_row_groups->AppendSegment(l, entry->node);
 			new_total_rows += row_group.count;
+
+			auto lock = global_stats.GetLock();
+			for (idx_t column_idx = 0; column_idx < row_group.GetColumnCount(); column_idx++) {
+				global_stats.GetStats(*lock, column_idx).Statistics().Merge(*row_group.GetStatistics(column_idx));
+			}
 			continue;
 		}
 		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
@@ -1378,6 +1383,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 	}
 	l.Release();
+	stats = std::move(global_stats);
 	// override the row group segment tree
 	SetRowGroups(std::move(new_row_groups));
 	total_rows = new_total_rows;

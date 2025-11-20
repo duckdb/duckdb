@@ -136,6 +136,9 @@ public:
 	unique_ptr<BlockingSample> GetSample();
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
+	TableStatistics &Stats() {
+		return stats;
+	}
 	AttachedDatabase &GetAttached();
 	BlockManager &GetBlockManager() {
 		return block_manager;

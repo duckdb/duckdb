@@ -23,6 +23,24 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	} // LCOV_EXCL_STOP
 }
 
+void TableStatistics::InitializeEmpty(const TableStatistics &other) {
+	D_ASSERT(Empty());
+	D_ASSERT(!table_sample);
+
+	stats_lock = make_shared_ptr<mutex>();
+	if (other.table_sample) {
+		D_ASSERT(other.table_sample->type == SampleType::RESERVOIR_SAMPLE);
+		auto &res = other.table_sample->Cast<ReservoirSample>();
+		table_sample = res.Copy();
+	} else {
+		table_sample = make_uniq<ReservoirSample>(static_cast<idx_t>(FIXED_SAMPLE_SIZE));
+	}
+
+	for (auto &stats : other.column_stats) {
+		column_stats.push_back(ColumnStatistics::CreateEmptyStats(stats->Statistics().GetType()));
+	}
+}
+
 void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 	D_ASSERT(!table_sample);

@@ -924,7 +924,7 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, 
 	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
 }
 
-unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
+unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) const {
 	auto &col_data = GetColumn(column_idx);
 	return col_data.GetStatistics();
 }
