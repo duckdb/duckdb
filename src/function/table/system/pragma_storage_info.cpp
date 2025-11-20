@@ -83,9 +83,6 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("additional_block_ids");
 	return_types.emplace_back(LogicalType::LIST(LogicalTypeId::BIGINT));
 
-	names.emplace_back("column_stats");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
@@ -158,12 +155,6 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			output.SetValue(col_idx++, count, ValueFromBlockIdList(entry.additional_blocks));
 		} else {
 			output.SetValue(col_idx++, count, Value());
-		}
-		// column_stats
-		if (entry.col_data.HasStatistics()) {
-			output.SetValue(col_idx++, count, Value(entry.col_data.GetStatistics()->ToString()));
-		} else {
-			output.SetValue(col_idx++, count, Value(LogicalType::VARCHAR));
 		}
 
 		count++;

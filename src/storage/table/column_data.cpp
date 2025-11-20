@@ -969,7 +969,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 	idx_t segment_idx = 0;
 	for (auto &segment_node : data.SegmentNodes()) {
 		auto &segment = *segment_node.node;
-		ColumnSegmentInfo column_info(*this);
+		ColumnSegmentInfo column_info;
 		column_info.row_group_index = row_group_index;
 		column_info.column_id = col_path[0];
 		column_info.column_path = col_path_str;

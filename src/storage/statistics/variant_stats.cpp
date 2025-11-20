@@ -285,7 +285,7 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 		//! Create new stats out of the remaining fields
 		auto new_object_type = LogicalType::STRUCT(std::move(new_children));
 		auto new_typed_value = BaseStatistics::CreateEmpty(new_object_type);
-		for (idx_t i = 0; i < new_children.size(); i++) {
+		for (idx_t i = 0; i < new_child_stats.size(); i++) {
 			StructStats::SetChildStats(new_typed_value, i, new_child_stats[i]);
 		}
 		new_stats = WrapTypedValue(untyped_value_index, new_typed_value);
