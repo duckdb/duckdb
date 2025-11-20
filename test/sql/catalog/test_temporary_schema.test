@@ -271,6 +271,110 @@ statement ok
 SET search_path = 'main'
 
 # =============================================================================
+# USE statement interaction
+# =============================================================================
+
+# Test USE with schema only
+statement ok
+USE myschema
+
+# Create temporary table - should go to temp.myschema
+statement ok
+CREATE TEMPORARY TABLE use_schema_test(val VARCHAR)
+
+statement ok
+INSERT INTO use_schema_test VALUES ('temp_in_myschema')
+
+query I
+SELECT * FROM use_schema_test
+----
+temp_in_myschema
+
+# Verify it's in temp.myschema
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'use_schema_test'
+----
+temp	myschema	use_schema_test
+
+# Test USE with catalog only
+statement ok
+USE memory
+
+# Create temporary table - should still go to temp catalog (in main schema since that's default)
+statement ok
+CREATE TEMPORARY TABLE use_catalog_test(val VARCHAR)
+
+statement ok
+INSERT INTO use_catalog_test VALUES ('temp_in_main')
+
+query I
+SELECT * FROM use_catalog_test
+----
+temp_in_main
+
+# Verify it's in temp.main
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'use_catalog_test'
+----
+temp	main	use_catalog_test
+
+# Test USE with catalog.schema
+# First ensure schema_a exists in memory
+statement ok
+CREATE SCHEMA IF NOT EXISTS schema_a
+
+statement ok
+USE memory.schema_a
+
+# Create temporary table - should go to temp.schema_a
+statement ok
+CREATE TEMPORARY TABLE use_catschema_test(val VARCHAR)
+
+statement ok
+INSERT INTO use_catschema_test VALUES ('temp_in_schema_a')
+
+query I
+SELECT * FROM use_catschema_test
+----
+temp_in_schema_a
+
+# Verify it's in temp.schema_a
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'use_catschema_test'
+----
+temp	schema_a	use_catschema_test
+
+# Test shadowing still works with USE context
+statement ok
+CREATE TABLE schema_a.use_shadow(val VARCHAR)
+
+statement ok
+INSERT INTO schema_a.use_shadow VALUES ('persistent')
+
+# Create temp with same name
+statement ok
+CREATE TEMPORARY TABLE use_shadow(val VARCHAR)
+
+statement ok
+INSERT INTO use_shadow VALUES ('temporary')
+
+# Should return temp version
+query I
+SELECT * FROM use_shadow
+----
+temporary
+
+# Explicit access to persistent
+query I
+SELECT * FROM memory.schema_a.use_shadow
+----
+persistent
+
+# Reset to default
+statement ok
+USE memory.main
+
+# =============================================================================
 # Error cases
 # =============================================================================
 
@@ -312,9 +416,6 @@ DROP TABLE temp.main.t1
 # =============================================================================
 
 # Create temporary objects in multiple schemas
-statement ok
-CREATE SCHEMA schema_a
-
 statement ok
 CREATE SCHEMA schema_b
 
