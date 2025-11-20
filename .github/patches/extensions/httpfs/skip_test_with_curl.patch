@@ -1,11 +1,27 @@
+diff --git a/test/sql/httpfs/hffs.test_slow b/test/sql/httpfs/hffs.test_slow
+index 5870366b404..846bf9b9f85 100644
+--- a/test/sql/httpfs/hffs.test_slow
++++ b/test/sql/httpfs/hffs.test_slow
+@@ -6,6 +6,10 @@ require parquet
+ 
+ require httpfs
+ 
++# FIXME: This should be investigated / fixed with CURL
++statement ok
++SET httpfs_client_implementation = httplib;
++
+ # FIXME: currently this will not fail the Linux HTTPFS ci job if it fails, because it might do so due to networking issues
+ #        however having a CI job dedicated to remote tests that may spuriously fail would solve this
+ 
 diff --git a/test/sql/logging/http_logging.test b/test/sql/logging/http_logging.test
-index 031e43e0e1f..e99b3c7cccf 100644
+index 031e43e0e1f..8d683f0b9a9 100644
 --- a/test/sql/logging/http_logging.test
 +++ b/test/sql/logging/http_logging.test
-@@ -8,6 +8,9 @@ require httpfs
+@@ -8,6 +8,10 @@ require httpfs
  statement ok
  CALL enable_logging('HTTP');
  
++# FIXME: This should be investigated / fixed with CURL
 +statement ok
 +SET httpfs_client_implementation = httplib;
 +
