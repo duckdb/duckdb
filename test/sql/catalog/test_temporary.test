@@ -191,6 +191,12 @@ SELECT * FROM shadow_table
 ----
 temporary
 
+# Schema-qualified should also return temp version
+query I
+SELECT * FROM main.shadow_table
+----
+temporary
+
 # Can still access persistent via explicit catalog
 query I
 SELECT * FROM memory.main.shadow_table
@@ -223,6 +229,12 @@ CREATE TEMPORARY VIEW shadow_view AS SELECT 'temporary' AS src
 
 query I
 SELECT * FROM shadow_view
+----
+temporary
+
+# Schema-qualified should also return temp version
+query I
+SELECT * FROM main.shadow_view
 ----
 temporary
 
