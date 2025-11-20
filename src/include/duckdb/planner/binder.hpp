@@ -405,7 +405,7 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
-	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map);
+	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map, unique_ptr<CTENode> &cte_root);
 	unique_ptr<BoundCTENode> BindCTE(CTENode &statement);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
