@@ -251,11 +251,11 @@ void QueryProfiler::EndQuery() {
 			auto &info = root->GetProfilingInfo();
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			auto &child_info = root->children[0]->GetProfilingInfo();
+
+			auto &settings = info.expanded_settings;
 			if (info.Enabled(settings, MetricsType::QUERY_NAME)) {
 				info.metrics[MetricsType::QUERY_NAME] = query_metrics.query;
 			}
-
-			auto &settings = info.expanded_settings;
 			for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
 				if (info.Enabled(settings, global_info_entry.first)) {
 					info.metrics[global_info_entry.first] = global_info_entry.second;
