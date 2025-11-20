@@ -284,7 +284,6 @@ void VariantStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 			stats.child_stats[1].Copy(other.child_stats[1]);
 			data.is_shredded = true;
 		} else {
-			//! FIXME: assumes equal shredding type?
 			if (!MergeShredding(stats.child_stats[1], other.child_stats[1])) {
 				data.is_shredded = false;
 			}
