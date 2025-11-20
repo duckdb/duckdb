@@ -1,0 +1,52 @@
+# name: test/sql/storage/types/variant/index_fetch.test
+# group: [variant]
+
+statement ok
+CREATE TABLE tbl(i INT PRIMARY KEY, v VARIANT);
+
+statement ok
+INSERT INTO tbl select i, {'a': i, 'b': i % 5} from range(100) t(i)
+
+query I
+SELECT v FROM tbl WHERE i=42;
+----
+{'a': 42, 'b': 2}
+
+# Now test the same with a persistent db, checkpointed (shredded VARIANT)
+
+statement ok
+ATTACH '__TEST_DIR__/variant_index_fetch.db' as db2;
+
+statement ok
+USE db2;
+
+statement ok
+CREATE TABLE tbl(i INT PRIMARY KEY, v VARIANT);
+
+statement ok
+INSERT INTO tbl select i, {'a': i, 'b': i % 5} from range(100) t(i)
+
+statement ok
+checkpoint;
+
+query I
+SELECT v FROM tbl WHERE i=42;
+----
+{'a': 42, 'b': 2}
+
+statement ok
+pragma verify_fetch_row;
+
+query I
+select v from tbl WHERE i < 10
+----
+{'a': 0, 'b': 0}
+{'a': 1, 'b': 1}
+{'a': 2, 'b': 2}
+{'a': 3, 'b': 3}
+{'a': 4, 'b': 4}
+{'a': 5, 'b': 0}
+{'a': 6, 'b': 1}
+{'a': 7, 'b': 2}
+{'a': 8, 'b': 3}
+{'a': 9, 'b': 4}

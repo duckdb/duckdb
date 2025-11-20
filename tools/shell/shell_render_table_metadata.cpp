@@ -5,6 +5,7 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/map.hpp"
 
 namespace duckdb_shell {
 
@@ -98,7 +99,7 @@ struct ShellTableRenderInfo {
 	}
 
 	void Truncate(idx_t max_render_width);
-	void TruncateValueIfRequired(string &value, idx_t &render_length, idx_t max_render_width);
+	static void TruncateValueIfRequired(string &value, idx_t &render_length, idx_t max_render_width);
 };
 
 struct TableMetadataLine {
@@ -120,6 +121,8 @@ struct TableMetadataLine {
 };
 
 struct TableMetadataDisplayInfo {
+	string database_name;
+	string schema_name;
 	idx_t render_height = 0;
 	idx_t render_width = 0;
 	vector<TableMetadataLine> display_lines;
@@ -398,6 +401,33 @@ void ShellTableRenderInfo::Truncate(idx_t max_render_width) {
 	}
 	render_width = max_render_width;
 }
+
+void RenderLineDisplay(ShellHighlight &highlight, string &text, idx_t total_render_width,
+                       HighlightElementType element_type) {
+	auto render_size = ShellState::RenderLength(text);
+	ShellTableRenderInfo::TruncateValueIfRequired(text, render_size, total_render_width - 4);
+
+	duckdb::BoxRendererConfig config;
+	idx_t total_lines = total_render_width - render_size - 4;
+	idx_t lline = total_lines / 2;
+	idx_t rline = total_lines - lline;
+
+	string middle_line;
+	middle_line += " ";
+	for (idx_t i = 0; i < lline; i++) {
+		middle_line += config.HORIZONTAL;
+	}
+	middle_line += " ";
+	middle_line += text;
+	middle_line += " ";
+	for (idx_t i = 0; i < rline; i++) {
+		middle_line += config.HORIZONTAL;
+	}
+	middle_line += " ";
+	middle_line += "\n";
+	highlight.PrintText(middle_line, PrintOutput::STDOUT, element_type);
+}
+
 void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	idx_t max_render_width = max_width == 0 ? duckdb::Printer::TerminalWidth() : max_width;
 	if (max_render_width < 80) {
@@ -405,16 +435,16 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	}
 	duckdb::BoxRendererConfig config;
 	// figure out the render width of each table
-	vector<ShellTableRenderInfo> result;
+	vector<ShellTableRenderInfo> table_list;
 	for (auto &table : tables) {
-		result.emplace_back(table, config.decimal_separator);
+		table_list.emplace_back(table, config.decimal_separator);
 	}
-	for (auto &table : result) {
+	for (auto &table : table_list) {
 		// optionally truncate each table if we exceed the max render width
 		table.Truncate(max_render_width);
 	}
 	// try to split up large tables
-	for (auto &table : result) {
+	for (auto &table : table_list) {
 		static constexpr const idx_t SPLIT_THRESHOLD = 20;
 		D_ASSERT(table.column_renders.size() == 1);
 		if (table.column_renders[0].columns.size() <= SPLIT_THRESHOLD) {
@@ -443,104 +473,118 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 		table.render_width = duckdb::MaxValue<idx_t>(table.render_width, split_count * width_per_split);
 	}
 
-	// sort from biggest to smallest table
-	std::sort(result.begin(), result.end(), [](const ShellTableRenderInfo &a, const ShellTableRenderInfo &b) {
-		return a.LineCount() > b.LineCount();
-	});
+	// group tables by db + schema
+	duckdb::map<string, duckdb::map<string, vector<ShellTableRenderInfo>>> grouped_tables;
+	for (auto &entry : table_list) {
+		grouped_tables[entry.table.database_name][entry.table.schema_name].push_back(std::move(entry));
+	}
 
-	// try to colocate different tables on the same lines in a greedy manner
 	vector<TableMetadataDisplayInfo> metadata_displays;
-	duckdb::unordered_set<idx_t> displayed_tables;
-	for (idx_t table_idx = 0; table_idx < result.size(); table_idx++) {
-		if (displayed_tables.find(table_idx) != displayed_tables.end()) {
-			// already displayed
-			continue;
-		}
-		displayed_tables.insert(table_idx);
-		auto &initial_table = result[table_idx];
-		TableMetadataDisplayInfo metadata_display;
-		// the first line always has only one table (this table)
-		TableMetadataLine initial_line;
-		initial_line.tables.push_back(table_idx);
-		metadata_display.render_width = initial_line.render_width = initial_table.render_width;
-		metadata_display.render_height = initial_line.render_height = initial_table.LineCount();
-		initial_line.max_component_widths = initial_table.max_component_widths;
-		metadata_display.display_lines.push_back(std::move(initial_line));
+	// for each set of table groups - make a list of displays
+	for (auto &db_entry : grouped_tables) {
+		for (auto &schema_entry : db_entry.second) {
+			auto &result = schema_entry.second;
+			// sort from biggest to smallest table
+			std::sort(result.begin(), result.end(), [](const ShellTableRenderInfo &a, const ShellTableRenderInfo &b) {
+				return a.LineCount() > b.LineCount();
+			});
 
-		// now for each table, check if we can co-locate it
-		for (idx_t next_idx = table_idx + 1; next_idx < result.size(); next_idx++) {
-			auto &current_table = result[next_idx];
-			auto render_width = current_table.render_width;
-			auto render_height = current_table.LineCount();
-			// we have two choices with co-locating
-			// we can EITHER add a new line
-			// OR add it to an existing line
-			// we prefer to add it to an existing line if possible
-			if (render_height > metadata_display.render_height) {
-				// if this table is bigger than the current render height we can never add it - so just skip it
-				continue;
-			}
-			bool added = false;
-			for (auto &existing_line : metadata_display.display_lines) {
-				if (existing_line.render_height + render_height > metadata_display.render_height) {
-					// does not fit!
+			// try to colocate different tables on the same lines in a greedy manner
+			duckdb::unordered_set<idx_t> displayed_tables;
+			for (idx_t table_idx = 0; table_idx < result.size(); table_idx++) {
+				if (displayed_tables.find(table_idx) != displayed_tables.end()) {
+					// already displayed
 					continue;
 				}
-				// adding the table here works out height wise - we could potentially add it here
-				// however, we do need to "stretch" the line to fit the current unit
-				// get the maximum render width
-				vector<idx_t> new_max_component_widths;
-				for (idx_t component_idx = 0; component_idx < existing_line.max_component_widths.size();
-				     component_idx++) {
-					new_max_component_widths.push_back(
-					    duckdb::MaxValue<idx_t>(existing_line.max_component_widths[component_idx],
-					                            current_table.max_component_widths[component_idx]));
-				}
-				idx_t new_column_render_width = 3;
-				for (auto &component_width : new_max_component_widths) {
-					new_column_render_width += component_width + 1;
-				}
-				idx_t new_rendering_width = duckdb::MaxValue<idx_t>(render_width, existing_line.render_width);
-				new_rendering_width = duckdb::MaxValue<idx_t>(new_rendering_width, new_column_render_width);
+				displayed_tables.insert(table_idx);
+				auto &initial_table = result[table_idx];
+				TableMetadataDisplayInfo metadata_display;
+				// the first line always has only one table (this table)
+				metadata_display.database_name = initial_table.table.database_name;
+				metadata_display.schema_name = initial_table.table.schema_name;
+				TableMetadataLine initial_line;
+				initial_line.tables.push_back(table_idx);
+				metadata_display.render_width = initial_line.render_width = initial_table.render_width;
+				metadata_display.render_height = initial_line.render_height = initial_table.LineCount();
+				initial_line.max_component_widths = initial_table.max_component_widths;
+				metadata_display.display_lines.push_back(std::move(initial_line));
 
-				D_ASSERT(new_rendering_width >= existing_line.render_width);
-				idx_t extra_width = new_rendering_width - existing_line.render_width;
+				// now for each table, check if we can co-locate it
+				for (idx_t next_idx = table_idx + 1; next_idx < result.size(); next_idx++) {
+					auto &current_table = result[next_idx];
+					auto render_width = current_table.render_width;
+					auto render_height = current_table.LineCount();
+					// we have two choices with co-locating
+					// we can EITHER add a new line
+					// OR add it to an existing line
+					// we prefer to add it to an existing line if possible
+					if (render_height > metadata_display.render_height) {
+						// if this table is bigger than the current render height we can never add it - so just skip it
+						continue;
+					}
+					bool added = false;
+					for (auto &existing_line : metadata_display.display_lines) {
+						if (existing_line.render_height + render_height > metadata_display.render_height) {
+							// does not fit!
+							continue;
+						}
+						// adding the table here works out height wise - we could potentially add it here
+						// however, we do need to "stretch" the line to fit the current unit
+						// get the maximum render width
+						vector<idx_t> new_max_component_widths;
+						for (idx_t component_idx = 0; component_idx < existing_line.max_component_widths.size();
+						     component_idx++) {
+							new_max_component_widths.push_back(
+							    duckdb::MaxValue<idx_t>(existing_line.max_component_widths[component_idx],
+							                            current_table.max_component_widths[component_idx]));
+						}
+						idx_t new_column_render_width = 3;
+						for (auto &component_width : new_max_component_widths) {
+							new_column_render_width += component_width + 1;
+						}
+						idx_t new_rendering_width = duckdb::MaxValue<idx_t>(render_width, existing_line.render_width);
+						new_rendering_width = duckdb::MaxValue<idx_t>(new_rendering_width, new_column_render_width);
 
-				if (metadata_display.render_width + extra_width > max_render_width) {
-					// the extra width makes us exceed the rendering width limit - we cannot add it here
-					continue;
+						D_ASSERT(new_rendering_width >= existing_line.render_width);
+						idx_t extra_width = new_rendering_width - existing_line.render_width;
+
+						if (metadata_display.render_width + extra_width > max_render_width) {
+							// the extra width makes us exceed the rendering width limit - we cannot add it here
+							continue;
+						}
+						// we can add it here! extend the line and add the table
+						existing_line.max_component_widths = std::move(new_max_component_widths);
+						existing_line.render_width += extra_width;
+						existing_line.render_height += render_height;
+						existing_line.tables.push_back(next_idx);
+						added = true;
+						break;
+					}
+					if (!added) {
+						// if we couldn't add it to an existing line we might still be able to add a new line
+						// but only if that fits width wise
+						if (metadata_display.render_width + render_width <= max_render_width) {
+							// it does! add an extra line
+							TableMetadataLine new_line;
+							new_line.tables.push_back(next_idx);
+							new_line.render_width = render_width;
+							new_line.render_height = render_height;
+							new_line.max_component_widths = current_table.max_component_widths;
+							metadata_display.render_width += render_width;
+							metadata_display.display_lines.push_back(std::move(new_line));
+							added = true;
+						}
+					}
+					if (added) {
+						// we added this table for rendering - add to the displayed tables list
+						displayed_tables.insert(next_idx);
+					}
 				}
-				// we can add it here! extend the line and add the table
-				existing_line.max_component_widths = std::move(new_max_component_widths);
-				existing_line.render_width += extra_width;
-				existing_line.render_height += render_height;
-				existing_line.tables.push_back(next_idx);
-				added = true;
-				break;
-			}
-			if (!added) {
-				// if we couldn't add it to an existing line we might still be able to add a new line
-				// but only if that fits width wise
-				if (metadata_display.render_width + render_width <= max_render_width) {
-					// it does! add an extra line
-					TableMetadataLine new_line;
-					new_line.tables.push_back(next_idx);
-					new_line.render_width = render_width;
-					new_line.render_height = render_height;
-					new_line.max_component_widths = current_table.max_component_widths;
-					metadata_display.render_width += render_width;
-					metadata_display.display_lines.push_back(std::move(new_line));
-					added = true;
-				}
-			}
-			if (added) {
-				// we added this table for rendering - add to the displayed tables list
-				displayed_tables.insert(next_idx);
+				std::sort(metadata_display.display_lines.begin(), metadata_display.display_lines.end(),
+				          [](TableMetadataLine &a, TableMetadataLine &b) { return a.render_height > b.render_height; });
+				metadata_displays.push_back(std::move(metadata_display));
 			}
 		}
-		std::sort(metadata_display.display_lines.begin(), metadata_display.display_lines.end(),
-		          [](TableMetadataLine &a, TableMetadataLine &b) { return a.render_height > b.render_height; });
-		metadata_displays.push_back(std::move(metadata_display));
 	}
 
 	idx_t line_count = 0;
@@ -554,12 +598,28 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	}
 	// render the metadata
 	ShellHighlight highlight(*this);
+	string last_displayed_database;
+	string last_displayed_schema;
 	for (auto &metadata_display : metadata_displays) {
+		// check if we should render the database and/or schema name for this batch of tables
+		if (!metadata_display.database_name.empty() && last_displayed_database != metadata_display.database_name) {
+			RenderLineDisplay(highlight, metadata_display.database_name, metadata_display.render_width,
+			                  HighlightElementType::DATABASE_NAME);
+			last_displayed_database = metadata_display.database_name;
+			last_displayed_schema = string();
+		}
+		if (!metadata_display.schema_name.empty() && last_displayed_schema != metadata_display.schema_name) {
+			RenderLineDisplay(highlight, metadata_display.schema_name, metadata_display.render_width,
+			                  HighlightElementType::SCHEMA_NAME);
+			last_displayed_schema = metadata_display.schema_name;
+		}
 		for (idx_t line_idx = 0; line_idx < metadata_display.render_height; line_idx++) {
 			// construct the line
 			for (idx_t table_line_idx = 0; table_line_idx < metadata_display.display_lines.size(); table_line_idx++) {
 				bool is_last = table_line_idx + 1 == metadata_display.display_lines.size();
-				metadata_display.display_lines[table_line_idx].RenderLine(highlight, result, line_idx, is_last);
+				auto &group_table_list = grouped_tables[metadata_display.database_name][metadata_display.schema_name];
+				metadata_display.display_lines[table_line_idx].RenderLine(highlight, group_table_list, line_idx,
+				                                                          is_last);
 			}
 			highlight.PrintText("\n", PrintOutput::STDOUT, HighlightElementType::LAYOUT);
 		}

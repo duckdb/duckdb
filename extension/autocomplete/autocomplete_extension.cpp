@@ -134,6 +134,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			// for types for which we prefer case matching - add a small penalty if we are not matching case
 			score++;
 		}
+		suggestion.score = score;
 		scores.emplace_back(str, score);
 	}
 	idx_t suggestion_count = parameters.max_suggestion_count;
@@ -165,7 +166,8 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			result += suggestion.extra_char;
 		}
 		string type = GetSuggestionType(suggestion.suggestion_type);
-		results.emplace_back(std::move(result), suggestion.suggestion_pos, std::move(type));
+		results.emplace_back(std::move(result), suggestion.suggestion_pos, std::move(type), suggestion.score.GetIndex(),
+		                     suggestion.extra_char);
 	}
 	return results;
 }
@@ -373,10 +375,11 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	}
 	fs.ListFiles(search_dir, [&](const string &fname, bool is_dir) {
 		string suggestion;
+		char extra_char;
 		if (is_dir) {
-			suggestion = fname + fs.PathSeparator(fname);
+			extra_char = fs.PathSeparator(fname)[0];
 		} else {
-			suggestion = fname + "'";
+			extra_char = '\'';
 		}
 		int score = 0;
 		if (is_dir && fname[0] != '.') {
@@ -386,7 +389,8 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 			score = 1;
 		}
 		auto state = is_dir ? SuggestionState::SUGGEST_DIRECTORY : SuggestionState::SUGGEST_FILE_NAME;
-		result.emplace_back(std::move(suggestion), state, score);
+		result.emplace_back(fname, state, score);
+		result.back().extra_char = extra_char;
 		result.back().candidate_type = CandidateType::LITERAL;
 	});
 	return result;
@@ -668,6 +672,12 @@ static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &conte
 	names.emplace_back("suggestion_type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("suggestion_score");
+	return_types.emplace_back(LogicalType::UBIGINT);
+
+	names.emplace_back("extra_char");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return GenerateSuggestions(context, StringValue::Get(input.inputs[0]), parameters);
 }
 
@@ -696,6 +706,12 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 
 		// suggestion_type, VARCHAR
 		output.SetValue(2, count, Value(entry.type));
+
+		// suggestion-score, VARCHAR
+		output.SetValue(3, count, Value::UBIGINT(entry.score));
+
+		// extra_char, VARCHAR
+		output.SetValue(4, count, entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
 		count++;
 	}
 	output.SetCardinality(count);

@@ -1,0 +1,26 @@
+# name: test/sql/storage/types/variant/test_all_types_variant.test
+# group: [variant]
+
+load __TEST_DIR__/test_all_types_variant.db
+
+statement ok
+create table tbl as select COLUMNS(*)::VARIANT from test_all_types()
+
+statement ok
+checkpoint
+
+restart
+
+foreach col <all_types_columns>
+
+query I nosort expected_res
+select "${col}"::VARIANT from test_all_types()
+----
+
+query I nosort expected_res
+select "${col}" from tbl
+----
+
+reset label expected_res
+
+endloop

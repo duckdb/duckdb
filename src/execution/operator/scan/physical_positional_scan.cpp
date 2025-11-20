@@ -66,10 +66,14 @@ public:
 
 				InterruptState interrupt_state;
 				OperatorSourceInput source_input {global_state, *local_state, interrupt_state};
-				auto source_result = table.GetData(context, source, source_input);
-				if (source_result == SourceResultType::BLOCKED) {
-					throw NotImplementedException(
-					    "Unexpected interrupt from table Source in PositionalTableScanner refill");
+				auto source_result = SourceResultType::HAVE_MORE_OUTPUT;
+				while (source_result == SourceResultType::HAVE_MORE_OUTPUT && source.size() == 0) {
+					// TODO: this could as well just be propagated further, but for now iterating it is
+					source_result = table.GetData(context, source, source_input);
+					if (source_result == SourceResultType::BLOCKED) {
+						throw NotImplementedException(
+						    "Unexpected interrupt from table Source in PositionalTableScanner refill");
+					}
 				}
 			}
 			source_offset = 0;
@@ -153,8 +157,8 @@ unique_ptr<GlobalSourceState> PhysicalPositionalScan::GetGlobalSourceState(Clien
 	return make_uniq<PositionalScanGlobalSourceState>(context, *this);
 }
 
-SourceResultType PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &output,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalPositionalScan::GetDataInternal(ExecutionContext &context, DataChunk &output,
+                                                         OperatorSourceInput &input) const {
 	auto &lstate = input.local_state.Cast<PositionalScanLocalSourceState>();
 
 	// Find the longest source block

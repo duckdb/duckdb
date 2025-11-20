@@ -1,0 +1,30 @@
+# name: benchmark/micro/compression/roaring/roaring_bool_array_read_w_null.benchmark
+# description: Scanning 1GB of ints compressed with Array Containers
+# group: [roaring]
+
+name Roaring Scan Array Container
+group roaring
+storage persistent v1.5.0
+
+load
+DROP TABLE IF EXISTS tbl;
+PRAGMA force_compression='Roaring';
+CREATE TABLE tbl AS SELECT
+CASE
+    when i%50=0 then false
+    when i%25=0 then true
+    else NULL
+END
+as a FROM range(0, 250_000_000) tbl(i);
+checkpoint;
+
+assert I
+select DISTINCT compression from pragma_storage_info('tbl') where segment_type in ('BOOLEAN')
+----
+Roaring
+
+run
+select count(*) from tbl WHERE a IS NOT NULL;
+
+result I
+10000000

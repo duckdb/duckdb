@@ -14,6 +14,8 @@ static HighlightElement highlight_elements[] = {
     {"numeric_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"string_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"line_indicator", PrintColor::STANDARD, PrintIntensity::BOLD},
+    {"database_name", PrintColor::ORANGE3, PrintIntensity::STANDARD},
+    {"schema_name", PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD},
     {"table_name", PrintColor::STANDARD, PrintIntensity::BOLD},
     {"column_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"column_type", PrintColor::GRAY, PrintIntensity::STANDARD},
@@ -29,13 +31,13 @@ static HighlightElement highlight_elements[] = {
     {"continuation_selected", PrintColor::GREEN, PrintIntensity::STANDARD},
     {"bracket", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
     {"comment", PrintColor::GRAY, PrintIntensity::STANDARD},
-    {"suggestion_catalog_name", PrintColor::YELLOW, PrintIntensity::STANDARD},
-    {"suggestion_schema_name", PrintColor::DODGERBLUE3, PrintIntensity::STANDARD},
+    {"suggestion_catalog_name", PrintColor::ORANGE3, PrintIntensity::STANDARD},
+    {"suggestion_schema_name", PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD},
     {"suggestion_table_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"suggestion_column_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"suggestion_file_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
-    {"suggestion_directory_name", PrintColor::DARKORANGE3, PrintIntensity::STANDARD},
-    {"suggestion_function_name", PrintColor::DARKORANGE3, PrintIntensity::STANDARD},
+    {"suggestion_directory_name", PrintColor::STANDARD, PrintIntensity::BOLD},
+    {"suggestion_function_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"suggestion_setting_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"table_layout", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"view_layout", PrintColor::STANDARD, PrintIntensity::STANDARD},
@@ -559,6 +561,12 @@ string ShellHighlight::TerminalCode(PrintColor color, PrintIntensity intensity) 
 	switch (intensity) {
 	case PrintIntensity::BOLD:
 		terminal_code = "\033[1m";
+		break;
+	case PrintIntensity::ITALIC:
+		terminal_code = "\033[3m";
+		break;
+	case PrintIntensity::BOLD_ITALIC:
+		terminal_code = "\033[1m\033[3m";
 		break;
 	case PrintIntensity::UNDERLINE:
 		terminal_code = "\033[4m";

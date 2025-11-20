@@ -16,13 +16,12 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 	D_ASSERT(expr_ptr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
 	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
 
-	// Qualified columns cannot be aliases.
-	if (expr.IsQualified()) {
+	if (!ExpressionBinder::IsPotentialAlias(expr)) {
 		return false;
 	}
 
 	// We try to find the alias in the alias_map and return false, if no alias exists.
-	auto alias_entry = bind_state.alias_map.find(expr.column_names[0]);
+	auto alias_entry = bind_state.alias_map.find(expr.column_names.back());
 	if (alias_entry == bind_state.alias_map.end()) {
 		return false;
 	}
@@ -42,11 +41,8 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, unique_ptr
 	return true;
 }
 
-bool ColumnAliasBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
-	if (!colref.IsQualified()) {
-		return bind_state.alias_map.find(colref.column_names[0]) != bind_state.alias_map.end();
-	}
-	return false;
+bool ColumnAliasBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
+	return bind_state.alias_map.find(colref.column_names.back()) != bind_state.alias_map.end();
 }
 
 } // namespace duckdb

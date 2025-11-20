@@ -10,8 +10,8 @@ PhysicalSetVariable::PhysicalSetVariable(PhysicalPlan &physical_plan, const stri
       name(physical_plan.ArenaRef().MakeString(name_p)) {
 }
 
-SourceResultType PhysicalSetVariable::GetData(ExecutionContext &context, DataChunk &chunk,
-                                              OperatorSourceInput &input) const {
+SourceResultType PhysicalSetVariable::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                      OperatorSourceInput &input) const {
 	return SourceResultType::FINISHED;
 }
 

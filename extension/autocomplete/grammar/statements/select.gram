@@ -1,13 +1,18 @@
-SelectStatement <- SelectOrParens (SetopClause SelectStatement)* ResultModifiers
-
+SelectStatement <- SelectStatementInternal
+SelectStatementInternal <- SelectOrParens RepeatSetopSelect* ResultModifiers?
+RepeatSetopSelect <- SetOpClause SelectStatementInternal
 SetopClause <- ('UNION' / 'EXCEPT' / 'INTERSECT') DistinctOrAll? ByName?
 ByName <- 'BY' 'NAME'
-SelectOrParens <- BaseSelect / Parens(SelectStatement)
+SelectOrParens <- BaseSelect / SelectParens
+SelectParens <- Parens(SelectStatementInternal)
 
-BaseSelect <- WithClause? (OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement) ResultModifiers
-ResultModifiers <- OrderByClause? LimitClause? OffsetClause?
+BaseSelect <- WithClause? SelectStatementType ResultModifiers?
+SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
+ResultModifiers <- OrderByClause? LimitOffsetClause?
+LimitOffsetClause <- LimitClause? OffsetClause?
 TableStatement <- 'TABLE' BaseTableName
-OptionalParensSimpleSelect <- Parens(SimpleSelect) / SimpleSelect
+OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
+SimpleSelectParens <- Parens(SimpleSelect)
 SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
@@ -107,10 +112,15 @@ GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
 SubqueryReference <- Parens(SelectStatement)
 
 OrderByExpression <- Expression DescOrAsc? NullsFirstOrLast?
-DescOrAsc <- 'DESC' / 'DESCENDING' / 'ASC' / 'ASCENDING'
-NullsFirstOrLast <- 'NULLS' 'FIRST' / 'LAST'
+DescOrAsc <- DescendingOrder / AscendingOrder
+DescendingOrder <- 'DESC' / 'DESCENDING'
+AscendingOrder <- 'ASC' / 'ASCENDING'
+NullsFirstOrLast <- NullsFirst / NullsLast
+NullsFirst <- 'NULLS' 'FIRST'
+NullsLast <- 'NULLS' 'LAST'
 OrderByClause <- 'ORDER' 'BY' OrderByExpressions
-OrderByExpressions <- List(OrderByExpression) / OrderByAll
+OrderByExpressions <- OrderByExpressionList / OrderByAll
+OrderByExpressionList <- List(OrderByExpression)
 OrderByAll <- 'ALL' DescOrAsc? NullsFirstOrLast?
 
 LimitClause <- 'LIMIT' LimitValue

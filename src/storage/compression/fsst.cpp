@@ -276,7 +276,7 @@ public:
 		current_segment->count++;
 	}
 
-	void AddNull() {
+	void AddEmptyStringInternal() {
 		if (!HasEnoughSpace(0)) {
 			Flush();
 			if (!HasEnoughSpace(0)) {
@@ -287,8 +287,13 @@ public:
 		current_segment->count++;
 	}
 
+	void AddNull() {
+		AddEmptyStringInternal();
+		current_segment->stats.statistics.SetHasNullFast();
+	}
+
 	void AddEmptyString() {
-		AddNull();
+		AddEmptyStringInternal();
 		UncompressedStringStorage::UpdateStringStats(current_segment->stats, "");
 	}
 
@@ -448,7 +453,8 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		auto idx = vdata.sel->get_index(i);
 
 		// Note: we treat nulls and empty strings the same
-		if (!vdata.validity.RowIsValid(idx) || data[idx].GetSize() == 0) {
+		const bool is_null = !vdata.validity.RowIsValid(idx);
+		if (is_null || data[idx].GetSize() == 0) {
 			continue;
 		}
 

@@ -1,0 +1,26 @@
+# name: benchmark/micro/compression/roaring/roaring_bool_inverted_array_store.benchmark
+# description: Writing 250m tuples, with validity masks compressed with Roaring Bitmap Compression (Array Containers (inverted))
+# group: [roaring]
+
+name Roaring Scan Array Container Inverted
+group roaring
+storage persistent v1.5.0
+
+load
+CREATE TABLE data_source AS SELECT case when i%25=0 then false else true end as a FROM range(0, 250_000_000) tbl(i);
+PRAGMA force_compression='roaring';
+SET checkpoint_threshold = '10.0 GB';
+CREATE TABLE test_compression as FROM data_source;
+checkpoint;
+
+assert I
+select DISTINCT compression from pragma_storage_info('test_compression') where segment_type in ('BOOLEAN')
+----
+Roaring
+
+run
+CREATE TABLE tbl AS FROM data_source;
+checkpoint;
+
+cleanup
+DROP TABLE IF EXISTS tbl;

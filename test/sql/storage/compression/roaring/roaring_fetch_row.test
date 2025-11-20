@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/roaring/fetch_row.test
+# name: test/sql/storage/compression/roaring/roaring_fetch_row.test
 # group: [roaring]
 
 require block_size 262144

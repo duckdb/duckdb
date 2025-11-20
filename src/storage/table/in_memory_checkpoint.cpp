@@ -98,6 +98,9 @@ unique_ptr<RowGroupWriter> InMemoryTableDataWriter::GetRowGroupWriter(RowGroup &
 	return make_uniq<InMemoryRowGroupWriter>(table, checkpoint_manager.GetPartialBlockManager(), checkpoint_manager);
 }
 
+void InMemoryTableDataWriter::FlushPartialBlocks() {
+}
+
 CheckpointType InMemoryTableDataWriter::GetCheckpointType() const {
 	return checkpoint_manager.GetCheckpointType();
 }

@@ -49,8 +49,8 @@ TEST_CASE("Test iterating over results", "[api]") {
 	idx_t row_count = 0;
 	auto result = con.Query("SELECT * FROM data;");
 	for (auto &row : *result) {
-		REQUIRE(row.GetValue<int>(0) == i_values[row.row]);
-		REQUIRE(row.GetValue<string>(1) == j_values[row.row]);
+		REQUIRE(row.GetValue<int>(0) == i_values[row_count]);
+		REQUIRE(row.GetValue<string>(1) == j_values[row_count]);
 		row_count++;
 	}
 	REQUIRE(row_count == 2);

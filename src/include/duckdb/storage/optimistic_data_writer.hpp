@@ -40,8 +40,6 @@ public:
 	void WriteLastRowGroup(OptimisticWriteCollection &row_groups);
 	//! Final flush of the optimistic writer - fully flushes the partial block manager
 	void FinalFlush();
-	//! Flushes a specific row group to disk
-	void FlushToDisk(OptimisticWriteCollection &collection, const vector<reference<RowGroup>> &row_groups);
 	//! Merge the partially written blocks from one optimistic writer into another
 	void Merge(OptimisticDataWriter &other);
 	void Merge(unique_ptr<PartialBlockManager> &other_manager);
@@ -56,6 +54,9 @@ public:
 private:
 	//! Prepare a write to disk
 	bool PrepareWrite();
+	//! Flushes a specific row group to disk
+	void FlushToDisk(OptimisticWriteCollection &collection, const vector<const_reference<RowGroup>> &row_groups,
+	                 const vector<int64_t> &segment_indexes);
 
 private:
 	//! The client context in which we're writing the data.

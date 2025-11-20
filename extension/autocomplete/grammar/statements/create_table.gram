@@ -1,10 +1,14 @@
-CreateStatement <- 'CREATE' OrReplace? Temporary? (CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt)
+CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
+CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt
 OrReplace <- 'OR' 'REPLACE'
-Temporary <- 'TEMP' / 'TEMPORARY' / 'PERSISTENT'
+Temporary <- Persistent / TempPersistent / TemporaryPersistent
+Persistent <- 'PERSISTENT'
+TempPersistent <- 'TEMP'
+TemporaryPersistent <- 'TEMPORARY'
 
 CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
 
-CreateTableAs <- IdentifierList? 'AS' SelectStatement WithData?
+CreateTableAs <- IdentifierList? 'AS' SelectStatementInternal WithData?
 WithData <- 'WITH' 'NO'? 'DATA'
 IdentifierList <- Parens(List(Identifier))
 CreateColumnList <- Parens(CreateTableColumnList)

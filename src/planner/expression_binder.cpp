@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -70,7 +71,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	case ExpressionClass::COLLATE:
 		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression);
+		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression, expr);
 	case ExpressionClass::LAMBDA_REF:
 		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
@@ -398,7 +399,14 @@ bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
 }
 
-bool ExpressionBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
+bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
+	// traditional alias (unqualified), or qualified with table name "alias"
+	if (!colref.IsQualified()) {
+		return true;
+	}
+	if (colref.column_names.size() == 2) {
+		return StringUtil::CIEquals(colref.GetTableName(), "alias");
+	}
 	return false;
 }
 

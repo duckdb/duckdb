@@ -31,6 +31,8 @@ SELECT value FROM duckdb_settings() WHERE name = 'block_allocator_memory';
 ----
 150.0 MiB
 
+require 64bit
+
 # cannot be reduced
 statement error
 RESET block_allocator_memory;

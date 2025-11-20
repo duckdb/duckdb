@@ -19,9 +19,6 @@ public:
 	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                   ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
-	//! The validity column data
-	ValidityColumnData validity;
-
 public:
 	void SetDataType(ColumnDataType data_type) override;
 
@@ -56,10 +53,11 @@ public:
 
 	void CommitDropColumn() override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
-	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
+	                    Vector &scan_vector) const override;
 
 	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
 	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
@@ -70,6 +68,12 @@ public:
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void Verify(RowGroup &parent) override;
+
+	void SetValidityData(shared_ptr<ValidityColumnData> validity);
+
+protected:
+	//! The validity column data
+	shared_ptr<ValidityColumnData> validity;
 };
 
 } // namespace duckdb

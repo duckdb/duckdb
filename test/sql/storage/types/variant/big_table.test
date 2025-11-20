@@ -1,0 +1,42 @@
+# name: test/sql/storage/types/variant/big_table.test
+# group: [variant]
+
+load __TEST_DIR__/variant_big_table.db
+
+statement ok
+create table tbl (col VARIANT)
+
+statement ok
+insert into tbl SELECT 21 from range(5000)
+
+statement ok
+insert into tbl SELECT 'this is a long string' from range(5000)
+
+statement ok
+insert into tbl SELECT {'a': 21, 'b': [1,2,3]} from range(5000)
+
+statement ok
+insert into tbl SELECT 42 from range(1000000)
+
+statement ok
+insert into tbl SELECT True from range(5000)
+
+statement ok
+insert into tbl SELECT '1970/06/21'::DATE from range(5000)
+
+statement ok
+insert into tbl SELECT [1, {'a': 21}::VARIANT, 3] from range(5000)
+
+query I
+select col from tbl where rowid > 1_015_000 limit 10
+----
+true
+true
+true
+true
+true
+true
+true
+true
+true
+true

@@ -858,8 +858,8 @@ unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(Executio
 	return make_uniq<HashAggregateLocalSourceState>(context, *this);
 }
 
-SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                OperatorSourceInput &input) const {
+SourceResultType PhysicalHashAggregate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                        OperatorSourceInput &input) const {
 	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalSinkState>();
 	auto &gstate = input.global_state.Cast<HashAggregateGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<HashAggregateLocalSourceState>();

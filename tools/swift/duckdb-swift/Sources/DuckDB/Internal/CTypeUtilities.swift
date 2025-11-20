@@ -22,7 +22,11 @@
 //  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 //  IN THE SOFTWARE.
 
+#if compiler(>=6.0)
+internal import Cduckdb
+#else
 @_implementationOnly import Cduckdb
+#endif
 import Foundation
 
 // MARK: - Type Layouts

@@ -2,7 +2,8 @@
 
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "reader/variant/variant_value.hpp"
+#include "duckdb/common/types/variant_value.hpp"
+#include "yyjson.hpp"
 
 using namespace duckdb_yyjson;
 

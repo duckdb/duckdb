@@ -1,0 +1,54 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_run_simple_w_null.test
+# description: Test bitpacking with nulls
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='roaring'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BOOL);
+
+# 8 runs per Vector
+statement ok
+INSERT INTO test
+SELECT
+  CASE
+    WHEN i % 1000 < 100 THEN true
+    WHEN i % 1000 < 200 THEN false
+    ELSE NULL
+  END
+FROM range(0, 10000) tbl(i);
+
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOL' and compression != 'Roaring';
+----
+
+query I
+select count(*) from test WHERE a IS true;
+----
+1000
+
+query I
+select count(*) from test WHERE a IS false;
+----
+1000
+
+query I
+select count(*) from test WHERE a IS null;
+----
+8000
+
+statement ok
+delete from test;
+

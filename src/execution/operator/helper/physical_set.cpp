@@ -29,7 +29,8 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 	SetGenericVariable(context, name, scope, std::move(target_value));
 }
 
-SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
 	auto &config = DBConfig::GetConfig(context.client);
 	// check if we are allowed to change the configuration option
 	config.CheckLock(name);

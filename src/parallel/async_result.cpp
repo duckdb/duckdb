@@ -180,8 +180,6 @@ AsyncResultsExecutionMode
 AsyncResult::ConvertToAsyncResultExecutionMode(const PhysicalTableScanExecutionStrategy &execution_mode) {
 	switch (execution_mode) {
 	case PhysicalTableScanExecutionStrategy::DEFAULT:
-		// FIXME: Once PositionalJoin logic has been fixed, this needs to revert to be TASK_EXECUTOR by default
-		return AsyncResultsExecutionMode::SYNCHRONOUS;
 	case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR:
 	case PhysicalTableScanExecutionStrategy::TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS:
 		return AsyncResultsExecutionMode::TASK_EXECUTOR;

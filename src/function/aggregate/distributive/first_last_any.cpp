@@ -233,7 +233,7 @@ void FirstFunctionSimpleUpdate(Vector inputs[], AggregateInputData &aggregate_in
 template <class T, bool LAST, bool SKIP_NULLS>
 AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
 	auto result = AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST, SKIP_NULLS>>(type, type);
-	result.simple_update = FirstFunctionSimpleUpdate<T, LAST, SKIP_NULLS>;
+	result.SetStateSimpleUpdateCallback(FirstFunctionSimpleUpdate<T, LAST, SKIP_NULLS>);
 	return result;
 }
 
@@ -317,7 +317,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
 	function.name = std::move(name);
-	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
+	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -337,9 +337,9 @@ unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &fu
 	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
-	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
-	if (function.bind) {
-		return function.bind(context, function, arguments);
+	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	if (function.HasBindCallback()) {
+		return function.GetBindCallback()(context, function, arguments);
 	} else {
 		return nullptr;
 	}

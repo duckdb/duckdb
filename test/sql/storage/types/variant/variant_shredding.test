@@ -1,0 +1,207 @@
+# name: test/sql/storage/types/variant/variant_shredding.test
+# group: [variant]
+
+load __TEST_DIR__/variant_shredding.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'INTEGER';
+
+# ------------------------------ INTEGER Shredding ------------------------------
+
+statement ok
+create table shredded_integer (col VARIANT)
+
+# Insert values 0-99
+statement ok
+insert into shredded_integer select (i % 100)::INTEGER from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# untyped_value_index is entirely NULL, indicating the VARIANT is fully shredded
+query I
+select stats(col) from shredded_integer limit 1;
+----
+<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Has Null: true, Has No Null: false\].*typed_value: \[Min: 0, Max: 99\]\[Has Null: false, Has No Null: true\]\}.*
+
+# ------------------------------ Nothing is shredded ------------------------------
+
+statement ok
+create table nothing_is_shredded(col VARIANT);
+
+# Insert values true/false
+statement ok
+insert into nothing_is_shredded select (i % 2)::BOOL from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# untyped_value_index is entirely non-NULL, indicating none of the VARIANT values are shredded
+query I
+select stats(col) from nothing_is_shredded limit 1;
+----
+<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Min: 1, Max: 1\]\[Has Null: false, Has No Null: true\].*
+
+# ------------------------------ Partially shredded primitive ------------------------------
+
+statement ok
+create table partial_primitive_shredding(col VARIANT);
+
+# Insert INTEGER values
+statement ok
+insert into partial_primitive_shredding select 42::INTEGER from range(122880 // 2) t(i)
+
+# Insert values true/false
+statement ok
+insert into partial_primitive_shredding select (i % 2)::BOOL from range(122880 // 2) t(i)
+
+statement ok
+checkpoint
+
+# untyped_value_index contains NULL, indicating at least some of the VARIANT values are shredded
+query I
+select stats(col) from partial_primitive_shredding limit 1;
+----
+<REGEX>:.*is_shredded: true.*untyped_value_index:.*\[Min: 1, Max: 1\]\[Has Null: true, Has No Null: true\].*
+
+# typed_value contains NULL, indicating not everything is shredded
+query I
+select stats(col) from partial_primitive_shredding limit 1;
+----
+<REGEX>:.*is_shredded: true.*typed_value:.*\[Min: 42, Max: 42\]\[Has Null: true, Has No Null: true\]\}.*
+
+# ------------------------------ Fully shredded OBJECT ------------------------------
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER, b BOOLEAN)';
+
+statement ok
+create table fully_shredded_object(col VARIANT);
+
+statement ok
+insert into fully_shredded_object select {
+	'a': (i % 100)::INTEGER,
+	'b': true
+} from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# For both 'a' and 'b' the 'typed_value' stats have "Has Null: false"
+# Showing that for all values the fields are present and shredded
+query I
+select stats(col) from fully_shredded_object limit 1;
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: false\].*\{a:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+
+# ------------------------------ Partially shredded OBJECT ------------------------------
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER, b BOOLEAN)';
+
+statement ok
+create table partially_shredded_object(col VARIANT);
+
+statement ok
+insert into partially_shredded_object select {
+	'a': 'test',
+	'b': true
+} from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# Now the 'typed_value' for 'a' is "Has Null: true", because at least *some* of the values are not an OBJECT with an 'a INTEGER' field
+query I
+select stats(col) from partially_shredded_object limit 1;
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: false\].*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: false\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+
+statement ok
+delete from partially_shredded_object;
+
+statement ok
+checkpoint;
+
+restart
+
+statement ok
+insert into partially_shredded_object select {
+	'd': 42::INTEGER,
+	'b': true
+} from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# The added difference is that 'untyped_value_index' is now: "Has Null: false"
+# Because we have an OBJECT(d 42) in the 'unshredded' column for every row now
+query I
+select stats(col) from partially_shredded_object limit 1;
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: false, Has No Null: true\].*typed_value.*\{a:.*typed_value:.*\[.*\]\[Has Null: true, Has No Null: false\].*b:.*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\]\}.*
+
+# ------------------------------ Fully shredded ARRAY ------------------------------
+
+statement ok
+SET force_variant_shredding = 'VARCHAR[]';
+
+statement ok
+create table fully_shredded_array(col VARIANT);
+
+statement ok
+insert into fully_shredded_array select ['a', 'this is a long string', 'b'] from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# typed_value does not contain any NULLs now, because all values are of type VARCHAR[]
+query I
+select stats(col) from fully_shredded_array limit 1;
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: false\].*typed_value:.*\[.*\]\[Has Null: false, Has No Null: true\].*
+
+# ------------------------------ Partially shredded ARRAY ------------------------------
+
+statement ok
+SET force_variant_shredding = 'VARCHAR[]';
+
+statement ok
+create table partially_shredded_array(col VARIANT);
+
+statement ok
+insert into partially_shredded_array select [(i % 100)::INTEGER::VARIANT, 'this is a long string', 'b' || i] from range(122880) t(i)
+
+statement ok
+checkpoint
+
+# Both 'untyped_value_index' and 'typed_value' have "Has Null: true"
+# because there are both shredded and unshredded list children
+# Only the child elements aren't all of type VARCHAR, so the child's 'untyped_value_index' should contain NULL values
+query I
+select stats(col) from partially_shredded_array limit 1;
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: .*, Max: .*\]\[Has Null: true, Has No Null: true\].*typed_value.*\[Has Null: true, Has No Null: true\]\}.*
+
+statement ok
+delete from partially_shredded_array;
+
+statement ok
+insert into partially_shredded_array select ['hello', 'world'] from range(122880 // 2) t(i)
+
+statement ok
+insert into partially_shredded_array select 42::INTEGER from range(122880 // 2) t(i)
+
+statement ok
+checkpoint
+
+# The children of the list do not contain nulls, but the list itself *does*,
+# because now there are unshredded rows containing the 42::INTEGER value
+query I
+select stats(col) from partially_shredded_array limit 1;
+----
+<REGEX>:.*is_shredded: true.*\{untyped_value_index: \[Min: 1, Max: 1\]\[Has Null: true, Has No Null: true\].*typed_value.*\[Has Null: false, Has No Null: true\]\}\[Has Null: false, Has No Null: true\].*

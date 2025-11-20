@@ -1,0 +1,34 @@
+diff --git a/src/include/storage/delta_insert.hpp b/src/include/storage/delta_insert.hpp
+index cf74ede..1cc4cb7 100644
+--- a/src/include/storage/delta_insert.hpp
++++ b/src/include/storage/delta_insert.hpp
+@@ -35,7 +35,7 @@ public:
+ 
+ public:
+ 	// // Source interface
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 
+ 	bool IsSource() const override {
+ 		return true;
+diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
+index 93ebf9f..08638b2 100644
+--- a/src/storage/delta_insert.cpp
++++ b/src/storage/delta_insert.cpp
+@@ -1,7 +1,5 @@
+ #include "storage/delta_insert.hpp"
+ 
+-#include <duckdb/common/sort/partition_state.hpp>
+-
+ #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+ #include "duckdb/main/client_data.hpp"
+ #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+@@ -219,7 +217,7 @@ SinkResultType DeltaInsert::Sink(ExecutionContext &context, DataChunk &chunk, Op
+ //===--------------------------------------------------------------------===//
+ // GetData
+ //===--------------------------------------------------------------------===//
+-SourceResultType DeltaInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
++SourceResultType DeltaInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+     auto &global_state = sink_state->Cast<DeltaInsertGlobalState>();
+     auto value = Value::BIGINT(global_state.insert_count);
+     chunk.SetCardinality(1);

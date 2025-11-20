@@ -35,6 +35,7 @@ struct RowGroupWriteInfo;
 struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
+class ValidityColumnData;
 
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
@@ -51,9 +52,9 @@ private:
 	RowGroupWriteInfo &info;
 };
 
-enum class ColumnDataType { MAIN_TABLE, INITIAL_TRANSACTION_LOCAL, TRANSACTION_LOCAL };
+enum class ColumnDataType { MAIN_TABLE, INITIAL_TRANSACTION_LOCAL, TRANSACTION_LOCAL, CHECKPOINT_TARGET };
 
-class ColumnData {
+class ColumnData : public enable_shared_from_this<ColumnData> {
 	friend class ColumnDataCheckpointer;
 
 public:
@@ -75,7 +76,7 @@ public:
 public:
 	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
 
-	BlockManager &GetBlockManager() {
+	BlockManager &GetBlockManager() const {
 		return block_manager;
 	}
 	DatabaseInstance &GetDatabase() const;
@@ -95,15 +96,25 @@ public:
 	}
 
 	bool HasParent() const {
-		return parent != nullptr;
+		return parent;
+	}
+	void SetParent(optional_ptr<ColumnData> parent) {
+		this->parent = parent;
 	}
 	const ColumnData &Parent() const {
 		D_ASSERT(HasParent());
 		return *parent;
 	}
+	const LogicalType &GetType() const {
+		return type;
+	}
+	ColumnSegmentTree &GetSegmentTree() {
+		return data;
+	}
+	void SetCount(idx_t new_count) {
+		this->count = new_count;
+	}
 
-	//! The root type of the column
-	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
 	bool HasChanges(idx_t start_row, idx_t end_row) const;
@@ -168,11 +179,11 @@ public:
 
 	virtual void CommitDropColumn();
 
-	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
+	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                                PartialBlockManager &partial_block_manager);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info);
 
-	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector);
+	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) const;
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
@@ -193,10 +204,6 @@ public:
 	                                           const LogicalType &type,
 	                                           ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
 	                                           optional_ptr<ColumnData> parent = nullptr);
-	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
-	                                                 idx_t column_index, const LogicalType &type,
-	                                                 ColumnDataType data_type = ColumnDataType::MAIN_TABLE,
-	                                                 optional_ptr<ColumnData> parent = nullptr);
 
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
@@ -221,7 +228,6 @@ protected:
 	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
 	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
 
-	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
 	                  bool allow_updates, bool scan_committed);
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
@@ -256,11 +262,24 @@ private:
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
 	atomic_ptr<const CompressionFunction> compression;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct PersistentColumnData {
-	explicit PersistentColumnData(PhysicalType physical_type);
-	PersistentColumnData(PhysicalType physical_type, vector<DataPointer> pointers);
+public:
+	explicit PersistentColumnData(const LogicalType &logical_type);
+	PersistentColumnData(const LogicalType &logical_type, vector<DataPointer> pointers);
 	// disable copy constructors
 	PersistentColumnData(const PersistentColumnData &other) = delete;
 	PersistentColumnData &operator=(const PersistentColumnData &) = delete;
@@ -269,16 +288,21 @@ struct PersistentColumnData {
 	PersistentColumnData &operator=(PersistentColumnData &&) = default;
 	~PersistentColumnData();
 
-	PhysicalType physical_type;
-	vector<DataPointer> pointers;
-	vector<PersistentColumnData> child_columns;
-	bool has_updates = false;
-
+public:
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
 	bool HasUpdates() const;
+	void SetVariantShreddedType(const LogicalType &shredded_type);
+
+public:
+	PhysicalType physical_type;
+	LogicalTypeId logical_type_id;
+	vector<DataPointer> pointers;
+	vector<PersistentColumnData> child_columns;
+	bool has_updates = false;
+	LogicalType variant_shredded_type;
 };
 
 struct PersistentRowGroupData {

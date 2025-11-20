@@ -16,7 +16,7 @@ on:
         required: false
         type: string
         default: ""
-      duckdb_ref:
+      override_duckdb_version:
         required: false
         type: string
         default: ""
@@ -48,7 +48,7 @@ jobs:
 
       # DuckDB version is overridden to the current commit of the current repository
       set_caller_as_duckdb: true
-      duckdb_version: ${{ github.sha }}
+      duckdb_version: ${{ inputs.override_duckdb_version != '' && inputs.override_duckdb_version || github.sha }}
 
       # CI tools is pinned to main
       override_ci_tools_repository: duckdb/extension-ci-tools

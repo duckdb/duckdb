@@ -33,7 +33,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 			filter_count++;
 			payload_types_filters.push_back(aggr.filter->return_type);
 		}
-		if (!aggr.function.combine) {
+		if (!aggr.function.HasStateCombineCallback()) {
 			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
 		}
 		aggregates.push_back(std::move(expr));
@@ -63,7 +63,7 @@ void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggr
 			filter_count++;
 		}
 	}
-	if (!aggr.function.combine) {
+	if (!aggr.function.HasStateCombineCallback()) {
 		throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
 	}
 }

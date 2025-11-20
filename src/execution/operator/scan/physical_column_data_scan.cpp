@@ -53,8 +53,8 @@ unique_ptr<LocalSourceState> PhysicalColumnDataScan::GetLocalSourceState(Executi
 	return make_uniq<PhysicalColumnDataLocalScanState>();
 }
 
-SourceResultType PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalColumnDataScan::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                         OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<PhysicalColumnDataGlobalScanState>();
 	auto &lstate = input.local_state.Cast<PhysicalColumnDataLocalScanState>();
 	collection->Scan(gstate.global_scan_state, lstate.local_scan_state, chunk);

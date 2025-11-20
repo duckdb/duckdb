@@ -13,13 +13,13 @@ In DuckDB, they appear in several contexts:
 In order to define an aggregate function, you need to define some operations.
 These operations accumulate data into a `State` object that is specific to the aggregate.
 Each `State` represents the accumulated values for a single result,
-so if (say) there are multiple groups in a `GROUP BY`, 
+so if (say) there are multiple groups in a `GROUP BY`,
 each result value would need its own `State` object.
 Unlike simple scalar functions, there are several of these:
 
-| Operation | Description | Required | 
-| :-------- | :---------- | :------- | 
-| `size`  | Returns the fixed size of the `State` | X | 
+| Operation | Description | Required |
+| :-------- | :---------- | :------- |
+| `size`  | Returns the fixed size of the `State` | X |
 | `initialize` | Constructs the `State` in raw memory | X |
 | `destructor` | Destructs the `State` back to raw memory |  |
 | `update` | Accumulate the arguments into the corresponding `State` | X |
@@ -82,7 +82,7 @@ update(Vector inputs[], AggregateInputData &info, idx_t ninputs, Vector &states,
 ```
 
 Accumulate the input values for each row into the `State` object for that row.
-The `states` argument contains pointers to the states, 
+The `states` argument contains pointers to the states,
 which allows different rows to be accumulated into the same row if they are in the same group.
 This type of operations is called "scattering", which is why
 the template generator methods for `update` operations are called `ScatterUpdate`s.
@@ -92,7 +92,7 @@ simple_update(Vector inputs[], AggregateInputData &info, idx_t ninputs, State *s
 ```
 
 Accumulate the input arguments for each row into a single `State`.
-Simple updates are used when there is only one `State` being updated, 
+Simple updates are used when there is only one `State` being updated,
 usually for `SELECT` queries with no `GROUP BY` clause.
 They are defined when an update can be performed more efficiently in a single tight loop.
 There are some other places where this operations will be used if available
@@ -120,7 +120,7 @@ combine(Vector &sources, Vector &targets, AggregateInputData &info, idx_t count)
 ```
 
 Merges the source states into the corresponding target states.
-If you are using template generators, 
+If you are using template generators,
 the generator is `StateCombine` and the method it wraps is:
 
 ```cpp
@@ -135,8 +135,7 @@ of the `AggregateInputData` argument is set to `ALLOW_DESTRUCTIVE`.
 This is useful when the aggregate can move data more efficiently than copying it.
 `LIST` is an example, where the internal linked list data structures can be spliced instead of copied.
 
-The `combine` operation is optional, but it is needed for multi-threaded aggregation.
-If it is not provided, then _all_ aggregate functions in the grouping must be computed on a single thread. 
+The `combine` operation is required.
 
 ### Finalize
 
@@ -164,27 +163,27 @@ window(Vector inputs[], const ValidityMask &filter,
 The Window operator usually works with the basic aggregation operations `update`, `combine` and `finalize`
 to compute moving aggregates via segment trees or simply computing the aggregate over a range of inputs.
 
-In some situations, this is either overkill (`COUNT(*)`) or too slow (`MODE`) 
+In some situations, this is either overkill (`COUNT(*)`) or too slow (`MODE`)
 and an optional window function can be defined.
-This function will be passed the values in the window frame, 
-along with the current frame, the previous frame 
+This function will be passed the values in the window frame,
+along with the current frame, the previous frame
 the result `Vector` and the result row number being computed.
 
-The previous frame is provided so the function can use 
+The previous frame is provided so the function can use
 the delta from the previous frame to update the `State`.
 This could be kept in the `State` itself.
 
 The `bias` argument was used for handling large input partitions,
 and contains the partition offset where the `inputs` rows start.
-Currently, it is always zero, but this could change in the future 
+Currently, it is always zero, but this could change in the future
 to handle constrained memory situations.
 
 The template generator method for windowing is:
 
 ```cpp
-Window(const ArgType *arg, ValidityMask &filter, ValidityMask &valid, 
-       AggregateInputData &info, State *state, 
-       const FrameBounds &frame, const FrameBounds &prev, 
+Window(const ArgType *arg, ValidityMask &filter, ValidityMask &valid,
+       AggregateInputData &info, State *state,
+       const FrameBounds &frame, const FrameBounds &prev,
        ResultType &result, idx_t rid, idx_tbias)
 ```
 
@@ -193,8 +192,8 @@ Window(const ArgType *arg, ValidityMask &filter, ValidityMask &valid,
 ```cpp
 bind(ClientContext &context, AggregateFunction &function,vector<unique_ptr<Expression>> &arguments)
 ```
- 
-Like scalar functions, aggregates can sometimes have complex binding rules 
+
+Like scalar functions, aggregates can sometimes have complex binding rules
 or need to cache data (such as constant arguments to quantiles).
 The `bind` function is how the aggregate hooks into the binding system.
 
@@ -221,7 +220,7 @@ These functions save and restore the binding data from binary blobs.
 ### Ignore Nulls
 
 The templating system needs to know whether the aggregate ignores nulls,
-so the template generators require the `IgnoreNull` static method to be defined. 
+so the template generators require the `IgnoreNull` static method to be defined.
 
 ## Ordered Aggregates
 
@@ -229,10 +228,10 @@ Some aggregates (e.g., `STRING_AGG`) are order-sensitive.
 Unless marked otherwise by setting the `order_dependent` flag to `NOT_ORDER_DEPENDENT`,
 the aggregate will be assumed to be order-sensitive.
 If the aggregate is order-sensitive and the user specifies an `ORDER BY` clause in the arguments,
-then it will be wrapped to make sure that the arguments are cached and sorted 
+then it will be wrapped to make sure that the arguments are cached and sorted
 before being passed to the aggregate operations:
 
 ```sql
--- Concatenate the strings in alphabetical order 
+-- Concatenate the strings in alphabetical order
 STRING_AGG(code, ',' ORDER BY code)
 ```

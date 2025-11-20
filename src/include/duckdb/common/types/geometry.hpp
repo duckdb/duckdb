@@ -209,7 +209,7 @@ public:
 
 	//! Convert from WKB
 	DUCKDB_API static bool FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict);
-	DUCKDB_API static void FromBinary(Vector &source, Vector &result, idx_t count, bool strict);
+	DUCKDB_API static bool FromBinary(Vector &source, Vector &result, idx_t count, bool strict);
 
 	//! Convert to WKB
 	DUCKDB_API static void ToBinary(Vector &source, Vector &result, idx_t count);

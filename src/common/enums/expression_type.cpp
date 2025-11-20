@@ -287,6 +287,12 @@ ExpressionType NegateComparisonExpression(ExpressionType type) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		negated_type = ExpressionType::COMPARE_LESSTHAN;
 		break;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		negated_type = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		break;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		negated_type = ExpressionType::COMPARE_DISTINCT_FROM;
+		break;
 	default:
 		throw InternalException("Unsupported comparison type in negation");
 	}
