@@ -96,7 +96,7 @@ public:
 	}
 
 	bool HasParent() const {
-		return parent != nullptr;
+		return parent;
 	}
 	void SetParent(optional_ptr<ColumnData> parent) {
 		this->parent = parent;
@@ -207,10 +207,7 @@ public:
 
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);
-	bool HasStatistics() const {
-		return stats != nullptr;
-	}
-	unique_ptr<BaseStatistics> GetStatistics() const;
+	unique_ptr<BaseStatistics> GetStatistics();
 
 protected:
 	//! Append a transient segment
