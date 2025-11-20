@@ -69,6 +69,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 		MetricType::TOTAL_BYTES_READ,
 		MetricType::TOTAL_BYTES_WRITTEN,
+		MetricType::TOTAL_MEMORY_ALLOCATED,
 		MetricType::WAITING_TO_ATTACH_LATENCY,
 		MetricType::WAL_REPLAY_ENTRY_COUNT,
 		MetricType::WRITE_TO_WAL_LATENCY,
@@ -150,6 +151,7 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 		MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 		MetricType::TOTAL_BYTES_READ,
 		MetricType::TOTAL_BYTES_WRITTEN,
+		MetricType::TOTAL_MEMORY_ALLOCATED,
 		MetricType::WAITING_TO_ATTACH_LATENCY,
 		MetricType::WAL_REPLAY_ENTRY_COUNT,
 		MetricType::WRITE_TO_WAL_LATENCY,
@@ -180,6 +182,7 @@ bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 	case MetricType::TOTAL_BYTES_READ:
 	case MetricType::TOTAL_BYTES_WRITTEN:
+	case MetricType::TOTAL_MEMORY_ALLOCATED:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
 	case MetricType::WRITE_TO_WAL_LATENCY:
@@ -194,6 +197,7 @@ profiler_settings_t MetricsUtils::GetExecutionMetrics() {
 		MetricType::BLOCKED_THREAD_TIME,
 		MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
 		MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+		MetricType::TOTAL_MEMORY_ALLOCATED,
 	};
 }
 
@@ -202,6 +206,7 @@ bool MetricsUtils::IsExecutionMetric(MetricType type) {
 	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
 	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
+	case MetricType::TOTAL_MEMORY_ALLOCATED:
 		return true;
 	default:
 		return false;
@@ -516,6 +521,7 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		MetricType::ROWS_RETURNED,
 		MetricType::TOTAL_BYTES_READ,
 		MetricType::TOTAL_BYTES_WRITTEN,
+		MetricType::TOTAL_MEMORY_ALLOCATED,
 		MetricType::WAITING_TO_ATTACH_LATENCY,
 		MetricType::WAL_REPLAY_ENTRY_COUNT,
 		MetricType::WRITE_TO_WAL_LATENCY,
@@ -534,6 +540,7 @@ bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	case MetricType::ROWS_RETURNED:
 	case MetricType::TOTAL_BYTES_READ:
 	case MetricType::TOTAL_BYTES_WRITTEN:
+	case MetricType::TOTAL_MEMORY_ALLOCATED:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
 	case MetricType::WRITE_TO_WAL_LATENCY:

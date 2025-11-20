@@ -23,7 +23,7 @@ namespace duckdb {
 
 //! Top level query metrics.
 struct QueryMetrics {
-	QueryMetrics() : query_name(""), total_bytes_read(0), total_bytes_written(0), wal_replay_entry_count(0) {};
+	QueryMetrics() : query_name(""), total_bytes_read(0), total_bytes_written(0), total_memory_allocated(0), wal_replay_entry_count(0) {};
 
 	//! Reset the query metrics
 	void Reset() {
@@ -37,6 +37,7 @@ struct QueryMetrics {
 		write_to_wal_latency.Reset();
 		total_bytes_read = 0;
 		total_bytes_written = 0;
+		total_memory_allocated = 0;
 		wal_replay_entry_count = 0;
 	}
 
@@ -104,6 +105,9 @@ struct QueryMetrics {
 		case MetricType::TOTAL_BYTES_WRITTEN:
 			total_bytes_written += amount;
 			break;
+		case MetricType::TOTAL_MEMORY_ALLOCATED:
+			total_memory_allocated += amount;
+			break;
 		case MetricType::WAL_REPLAY_ENTRY_COUNT:
 			wal_replay_entry_count += amount;
 			break;
@@ -134,6 +138,8 @@ struct QueryMetrics {
 	atomic<idx_t> total_bytes_read;
 	//! The total bytes written by the file system.
 	atomic<idx_t> total_bytes_written;
+	//! The total memory allocated by the buffer manager.
+	atomic<idx_t> total_memory_allocated;
 	//! The total number of entries to replay in the WAL.
 	atomic<idx_t> wal_replay_entry_count;
 };

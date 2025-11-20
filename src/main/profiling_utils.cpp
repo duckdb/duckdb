@@ -82,6 +82,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 	case MetricType::TOTAL_BYTES_READ:
 	case MetricType::TOTAL_BYTES_WRITTEN:
+	case MetricType::TOTAL_MEMORY_ALLOCATED:
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
 		metrics[type] = Value::CreateValue<uint64_t>(0);
 		break;
@@ -132,6 +133,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
 	case MetricType::TOTAL_BYTES_READ:
 	case MetricType::TOTAL_BYTES_WRITTEN:
+	case MetricType::TOTAL_MEMORY_ALLOCATED:
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
 		yyjson_mut_obj_add_uint(doc, dest, key_ptr, metrics[type].GetValue<uint64_t>());
 		break;
@@ -189,6 +191,9 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		break;
 	case MetricType::TOTAL_BYTES_WRITTEN:
 		metric = Value::UBIGINT(query_metrics.total_bytes_written);
+		break;
+	case MetricType::TOTAL_MEMORY_ALLOCATED:
+		metric = Value::UBIGINT(query_metrics.total_memory_allocated);
 		break;
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
 		metric = Value::UBIGINT(query_metrics.wal_replay_entry_count);

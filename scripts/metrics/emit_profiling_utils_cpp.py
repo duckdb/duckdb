@@ -204,7 +204,6 @@ def _generate_query_metrics(hpp_f: IndentedFileWriter, metric_index: MetricIndex
     for m, t, d in query_metric_types:
         # if the type is a Profiler (ie timer) replace "Time spent" with "The timer for"
         if t == "Profiler":
-            print(f"Metric {m} has type Profiler")
             if d.find("Time spent") == -1:
                 raise Exception(
                     f"Could not find 'Time spent' in metric description for {m}, description should match 'Time spent <description>'"

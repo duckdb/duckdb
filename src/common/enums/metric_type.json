@@ -99,6 +99,15 @@
         "type": "uint64",
         "unit": "bytes",
         "is_default": true
+      },
+      {
+        "name": "TOTAL_MEMORY_ALLOCATED",
+        "description": "The total memory allocated by the buffer manager.",
+        "type": "uint64",
+        "unit": "bytes",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "query_metric"
       }
     ]
   },
