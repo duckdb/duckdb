@@ -1,0 +1,8 @@
+# name: test/sql/peg_parser/parser/invisible_space.test
+# description: Test insert statement peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSERT INTO v0 BY POSITION ( SELECT TRUE ) OFFSET 1 ROWS RETURNING v0 . * EXCLUDE c1 ;$TEST_PEG_PARSER$);
