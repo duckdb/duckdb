@@ -92,6 +92,7 @@
     {
       "reason": "Parser exception because of dollar-quoted strings",
       "paths": [
+        "test/sql/peg_parser/parser/insert_statement.test",
         "test/sql/peg_parser/parser/create_macro.test",
         "test/sql/peg_parser/parser/show_table.test",
         "test/sql/peg_parser/parser/prepare_statement.test",

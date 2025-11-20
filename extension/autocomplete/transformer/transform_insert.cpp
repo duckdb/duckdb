@@ -11,7 +11,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 	auto result = make_uniq<InsertStatement>();
 	auto with_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_opt.HasResult()) {
-		throw NotImplementedException("WITH clause in INSERT statement is not yet supported.");
+		result->cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
 	}
 	auto or_action_opt = list_pr.Child<OptionalParseResult>(2);
 	auto insert_target = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(4));
