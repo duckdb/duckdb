@@ -64,6 +64,10 @@ void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer, id
 	existing_rows = total_rows;
 }
 
+void SingleFileTableDataWriter::FlushPartialBlocks() {
+	checkpoint_manager.partial_block_manager.FlushPartialBlocks();
+}
+
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
                                               RowGroupCollection &collection, Serializer &serializer) {
 	MetaBlockPointer pointer;

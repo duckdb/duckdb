@@ -1413,9 +1413,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 	}
 	l.Release();
+
+	// flush any partial blocks BEFORE updating the row group pointer
+	// flushing partial blocks updates where data lives
+	// this cannot be done after other threads start scanning the row groups
+	// so this HAS to happen before we call "SetRowGroups" to update the row groups
+	writer.FlushPartialBlocks();
 	// override the row group segment tree
-	SetRowGroups(std::move(new_row_groups));
 	total_rows = new_total_rows;
+	SetRowGroups(std::move(new_row_groups));
 	Verify();
 }
 
