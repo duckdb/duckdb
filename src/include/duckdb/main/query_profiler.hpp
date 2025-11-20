@@ -34,6 +34,7 @@ class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
+struct QueryMetrics;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
