@@ -25,8 +25,15 @@ AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *err
 	if (!driver) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+
+	// Check that the version is supported (1.0.0 or 1.1.0)
+	if (version != ADBC_VERSION_1_0_0 && version != ADBC_VERSION_1_1_0) {
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
+
 	auto adbc_driver = static_cast<AdbcDriver *>(driver);
 
+	// Initialize all 1.0.0 function pointers
 	adbc_driver->DatabaseNew = duckdb_adbc::DatabaseNew;
 	adbc_driver->DatabaseSetOption = duckdb_adbc::DatabaseSetOption;
 	adbc_driver->DatabaseInit = duckdb_adbc::DatabaseInit;
@@ -52,12 +59,51 @@ AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *err
 	adbc_driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
 	adbc_driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
 	adbc_driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
+
+	// Initialize 1.1.0 function pointers if version >= 1.1.0
+	if (version >= ADBC_VERSION_1_1_0) {
+		// TODO: ADBC 1.1.0 adds support for these functions
+		adbc_driver->ErrorGetDetailCount = nullptr;
+		adbc_driver->ErrorGetDetail = nullptr;
+		adbc_driver->ErrorFromArrayStream = nullptr;
+
+		adbc_driver->DatabaseGetOption = nullptr;
+		adbc_driver->DatabaseGetOptionBytes = nullptr;
+		adbc_driver->DatabaseGetOptionDouble = nullptr;
+		adbc_driver->DatabaseGetOptionInt = nullptr;
+		adbc_driver->DatabaseSetOptionBytes = nullptr;
+		adbc_driver->DatabaseSetOptionInt = nullptr;
+		adbc_driver->DatabaseSetOptionDouble = nullptr;
+
+		adbc_driver->ConnectionCancel = nullptr;
+		adbc_driver->ConnectionGetOption = nullptr;
+		adbc_driver->ConnectionGetOptionBytes = nullptr;
+		adbc_driver->ConnectionGetOptionDouble = nullptr;
+		adbc_driver->ConnectionGetOptionInt = nullptr;
+		adbc_driver->ConnectionGetStatistics = nullptr;
+		adbc_driver->ConnectionGetStatisticNames = nullptr;
+		adbc_driver->ConnectionSetOptionBytes = nullptr;
+		adbc_driver->ConnectionSetOptionInt = nullptr;
+		adbc_driver->ConnectionSetOptionDouble = nullptr;
+
+		adbc_driver->StatementCancel = nullptr;
+		adbc_driver->StatementExecuteSchema = nullptr;
+		adbc_driver->StatementGetOption = nullptr;
+		adbc_driver->StatementGetOptionBytes = nullptr;
+		adbc_driver->StatementGetOptionDouble = nullptr;
+		adbc_driver->StatementGetOptionInt = nullptr;
+		adbc_driver->StatementSetOptionBytes = nullptr;
+		adbc_driver->StatementSetOptionDouble = nullptr;
+		adbc_driver->StatementSetOptionInt = nullptr;
+	}
+
 	return ADBC_STATUS_OK;
 }
 
 namespace duckdb_adbc {
 
-enum class IngestionMode { CREATE = 0, APPEND = 1 };
+// ADBC 1.1.0: Added REPLACE and CREATE_APPEND modes
+enum class IngestionMode { CREATE = 0, APPEND = 1, REPLACE = 2, CREATE_APPEND = 3 };
 
 struct DuckDBAdbcStatementWrapper {
 	duckdb_connection connection;
@@ -617,9 +663,44 @@ void stream_schema(ArrowArrayStream *stream, ArrowSchema &schema) {
 	stream->get_schema(stream, &schema);
 }
 
+// Helper function to build CREATE TABLE SQL statement
+static std::string BuildCreateTableSQL(const char *schema, const char *table_name,
+                                       const duckdb::vector<duckdb::LogicalType> &types,
+                                       const duckdb::vector<std::string> &names, bool if_not_exists = false) {
+	std::ostringstream create_table;
+	create_table << "CREATE TABLE ";
+	if (if_not_exists) {
+		create_table << "IF NOT EXISTS ";
+	}
+	if (schema) {
+		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+	}
+	create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) << " (";
+	for (idx_t i = 0; i < types.size(); i++) {
+		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(names[i]);
+		create_table << " " << types[i].ToString();
+		if (i + 1 < types.size()) {
+			create_table << ", ";
+		}
+	}
+	create_table << ");";
+	return create_table.str();
+}
+
+// Helper function to build DROP TABLE IF EXISTS SQL statement
+static std::string BuildDropTableSQL(const char *schema, const char *table_name) {
+	std::ostringstream drop_table;
+	drop_table << "DROP TABLE IF EXISTS ";
+	if (schema) {
+		drop_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+	}
+	drop_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name);
+	return drop_table.str();
+}
+
 AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, const char *schema,
                       struct ArrowArrayStream *input, struct AdbcError *error, IngestionMode ingestion_mode,
-                      bool temporary) {
+                      bool temporary, int64_t *rows_affected) {
 	if (!connection) {
 		SetError(error, "Missing connection object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -654,35 +735,69 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 	auto types = d_converted_schema.GetTypes();
 	auto names = d_converted_schema.GetNames();
 
-	if (ingestion_mode == IngestionMode::CREATE) {
-		// We must construct the create table SQL query
-		std::ostringstream create_table;
-		create_table << "CREATE TABLE ";
-		if (schema) {
-			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
-		}
-		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) << " (";
-		for (idx_t i = 0; i < types.size(); i++) {
-			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(names[i]);
-			create_table << " " << types[i].ToString();
-			if (i + 1 < types.size()) {
-				create_table << ", ";
-			}
-		}
-		create_table << ");";
+	// Handle different ingestion modes
+	switch (ingestion_mode) {
+	case IngestionMode::CREATE: {
+		// CREATE mode: Create table, error if already exists
+		auto sql = BuildCreateTableSQL(schema, table_name, types, names);
 		duckdb_result result;
-		if (duckdb_query(connection, create_table.str().c_str(), &result) == DuckDBError) {
+		if (duckdb_query(connection, sql.c_str(), &result) == DuckDBError) {
+			const char *error_msg = duckdb_result_error(&result);
+			// Check if error is about table already existing before destroying result
+			bool already_exists = error_msg && std::string(error_msg).find("already exists") != std::string::npos;
+			duckdb_destroy_result(&result);
+			if (already_exists) {
+				return ADBC_STATUS_ALREADY_EXISTS;
+			}
+			return ADBC_STATUS_INTERNAL;
+		}
+		duckdb_destroy_result(&result);
+		break;
+	}
+	case IngestionMode::APPEND:
+		// APPEND mode: No pre-check needed
+		// The appender will naturally fail if the table doesn't exist
+		break;
+	case IngestionMode::REPLACE: {
+		// REPLACE mode: Drop table if exists, then create
+		auto drop_sql = BuildDropTableSQL(schema, table_name);
+		auto create_sql = BuildCreateTableSQL(schema, table_name, types, names);
+		duckdb_result result;
+		if (duckdb_query(connection, drop_sql.c_str(), &result) == DuckDBError) {
 			SetError(error, duckdb_result_error(&result));
 			duckdb_destroy_result(&result);
 			return ADBC_STATUS_INTERNAL;
 		}
 		duckdb_destroy_result(&result);
+		if (duckdb_query(connection, create_sql.c_str(), &result) == DuckDBError) {
+			SetError(error, duckdb_result_error(&result));
+			duckdb_destroy_result(&result);
+			return ADBC_STATUS_INTERNAL;
+		}
+		duckdb_destroy_result(&result);
+		break;
+	}
+	case IngestionMode::CREATE_APPEND: {
+		// CREATE_APPEND mode: Create if not exists, append if exists
+		auto sql = BuildCreateTableSQL(schema, table_name, types, names, true);
+		duckdb_result result;
+		if (duckdb_query(connection, sql.c_str(), &result) == DuckDBError) {
+			SetError(error, duckdb_result_error(&result));
+			duckdb_destroy_result(&result);
+			return ADBC_STATUS_INTERNAL;
+		}
+		duckdb_destroy_result(&result);
+		break;
+	}
 	}
 	AppenderWrapper appender(connection, schema, table_name);
 	if (!appender.Valid()) {
 		return ADBC_STATUS_INTERNAL;
 	}
 	duckdb::ArrowArrayWrapper arrow_array_wrapper;
+
+	// Initialize rows_affected counter if requested
+	int64_t affected = 0;
 
 	input->get_next(input, &arrow_array_wrapper.arrow_array);
 	while (arrow_array_wrapper.arrow_array.release) {
@@ -693,11 +808,19 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 			SetError(error, duckdb_error_data_message(res));
 			duckdb_destroy_error_data(&res);
 		}
+		// Count rows for rows_affected, if a chunk was produced
+		if (out_chunk.chunk) {
+			auto *chunk = reinterpret_cast<duckdb::DataChunk *>(out_chunk.chunk);
+			affected += static_cast<int64_t>(chunk->size());
+		}
 		if (duckdb_append_data_chunk(appender.Get(), out_chunk.chunk) != DuckDBSuccess) {
 			return ADBC_STATUS_INTERNAL;
 		}
 		arrow_array_wrapper = duckdb::ArrowArrayWrapper();
 		input->get_next(input, &arrow_array_wrapper.arrow_array);
+	}
+	if (rows_affected) {
+		*rows_affected = affected;
 	}
 	return ADBC_STATUS_OK;
 }
@@ -822,7 +945,8 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	return ADBC_STATUS_OK;
 }
 
-static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *statement, AdbcError *error) {
+static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *statement, int64_t *rows_affected,
+                                                   AdbcError *error) {
 	// See ADBC_INGEST_OPTION_TARGET_TABLE
 	D_ASSERT(statement->ingestion_stream.release);
 	D_ASSERT(statement->ingestion_table_name);
@@ -832,7 +956,7 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 
 	// Ingest into a table from the bound stream
 	return Ingest(statement->connection, statement->ingestion_table_name, statement->db_schema, &stream, error,
-	              statement->ingestion_mode, statement->temporary_table);
+	              statement->ingestion_mode, statement->temporary_table, rows_affected);
 }
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
@@ -856,9 +980,14 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	const auto to_table = wrapper->ingestion_table_name != nullptr;
 
 	if (has_stream && to_table) {
-		return IngestToTableFromBoundStream(wrapper, error);
+		return IngestToTableFromBoundStream(wrapper, rows_affected, error);
 	}
 	auto stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
+	if (!stream_wrapper) {
+		SetError(error, "Allocation error");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	std::memset(&stream_wrapper->result, 0, sizeof(stream_wrapper->result));
 	// Only process the stream if there are parameters to bind
 	auto prepared_statement_params = reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)
 	                                     ->statement->data->properties.parameter_count;
@@ -927,9 +1056,12 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 					return ADBC_STATUS_INVALID_ARGUMENT;
 				}
 			}
+			// Destroy any previous result before overwriting to avoid leaks
+			duckdb_destroy_result(&stream_wrapper->result);
 			auto res = duckdb_execute_prepared(wrapper->statement, &stream_wrapper->result);
 			if (res != DuckDBSuccess) {
 				SetError(error, duckdb_result_error(&stream_wrapper->result));
+				duckdb_destroy_result(&stream_wrapper->result);
 				free(stream_wrapper);
 				return ADBC_STATUS_INVALID_ARGUMENT;
 			}
@@ -941,7 +1073,24 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		auto res = duckdb_execute_prepared(wrapper->statement, &stream_wrapper->result);
 		if (res != DuckDBSuccess) {
 			SetError(error, duckdb_result_error(&stream_wrapper->result));
+			duckdb_destroy_result(&stream_wrapper->result);
+			free(stream_wrapper);
 			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
+	}
+
+	// Set rows_affected for queries (if not already set by ingestion path)
+	if (rows_affected && !(has_stream && to_table)) {
+		// For DML queries (INSERT/UPDATE/DELETE), duckdb_rows_changed() returns the count
+		// For SELECT queries, duckdb_rows_changed() returns 0
+		auto rows_changed = duckdb_rows_changed(&stream_wrapper->result);
+		if (rows_changed > 0) {
+			// This was a DML query
+			*rows_affected = static_cast<int64_t>(rows_changed);
+		} else {
+			// This is a SELECT or other query that returns a result set
+			// Return -1 to indicate unknown, as results are streamed
+			*rows_affected = -1;
 		}
 	}
 
@@ -952,6 +1101,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		out->get_next = get_next;
 		out->release = release;
 		out->get_last_error = get_last_error;
+	} else {
+		// Caller didn't request a stream; clean up resources
+		duckdb_destroy_result(&stream_wrapper->result);
+		free(stream_wrapper);
 	}
 
 	return ADBC_STATUS_OK;
@@ -1146,6 +1299,12 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 			return ADBC_STATUS_OK;
 		} else if (strcmp(value, ADBC_INGEST_OPTION_MODE_APPEND) == 0) {
 			wrapper->ingestion_mode = IngestionMode::APPEND;
+			return ADBC_STATUS_OK;
+		} else if (strcmp(value, ADBC_INGEST_OPTION_MODE_REPLACE) == 0) {
+			wrapper->ingestion_mode = IngestionMode::REPLACE;
+			return ADBC_STATUS_OK;
+		} else if (strcmp(value, ADBC_INGEST_OPTION_MODE_CREATE_APPEND) == 0) {
+			wrapper->ingestion_mode = IngestionMode::CREATE_APPEND;
 			return ADBC_STATUS_OK;
 		} else {
 			SetError(error, "Invalid ingestion mode");
