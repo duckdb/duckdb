@@ -1230,9 +1230,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// schedule a checkpoint task for this row group
 			auto entry = checkpoint_state.GetSegment(segment_idx);
 			auto &row_group = entry->GetNode();
-			if (vacuum_state.row_start != entry->GetRowStart()) {
-				row_group.MoveToCollection(*this);
-			} else if (!RefersToSameObject(row_group.GetCollection(), *this)) {
+			if (!RefersToSameObject(row_group.GetCollection(), *this)) {
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
 			}
 			if (writer.GetCheckpointType() != CheckpointType::VACUUM_ONLY) {
