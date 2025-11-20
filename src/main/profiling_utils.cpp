@@ -57,7 +57,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_WRITE_WAL_LATENCY:
+	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
@@ -69,6 +69,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
+	case MetricType::WRITE_TO_WAL_LATENCY:
 		metrics[type] = Value::CreateValue(0.0);
 		break;
 	case MetricType::CUMULATIVE_CARDINALITY:
@@ -106,7 +107,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_WRITE_WAL_LATENCY:
+	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
@@ -118,6 +119,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
+	case MetricType::WRITE_TO_WAL_LATENCY:
 		yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[type].GetValue<double>());
 		break;
 	case MetricType::CUMULATIVE_CARDINALITY:
@@ -167,14 +169,17 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 	case MetricType::CHECKPOINT_LATENCY:
 		metric = query_metrics.checkpoint_latency.Elapsed();
 		break;
-	case MetricType::COMMIT_WRITE_WAL_LATENCY:
-		metric = query_metrics.commit_write_wal_latency.Elapsed();
+	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
+		metric = query_metrics.commit_local_storage_latency.Elapsed();
 		break;
 	case MetricType::LATENCY:
 		metric = query_metrics.latency.Elapsed();
 		break;
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 		metric = query_metrics.waiting_to_attach_latency.Elapsed();
+		break;
+	case MetricType::WRITE_TO_WAL_LATENCY:
+		metric = query_metrics.write_to_wal_latency.Elapsed();
 		break;
 	case MetricType::QUERY_NAME:
 		metric = query_metrics.query_name;

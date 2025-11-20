@@ -31,9 +31,10 @@ struct QueryMetrics {
 		attach_load_storage_latency.Reset();
 		attach_replay_wal_latency.Reset();
 		checkpoint_latency.Reset();
-		commit_write_wal_latency.Reset();
+		commit_local_storage_latency.Reset();
 		latency.Reset();
 		waiting_to_attach_latency.Reset();
+		write_to_wal_latency.Reset();
 		total_bytes_read = 0;
 		total_bytes_written = 0;
 		wal_replay_entry_count = 0;
@@ -50,14 +51,17 @@ struct QueryMetrics {
 		case MetricType::CHECKPOINT_LATENCY:
 			checkpoint_latency.Start();
 			break;
-		case MetricType::COMMIT_WRITE_WAL_LATENCY:
-			commit_write_wal_latency.Start();
+		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
+			commit_local_storage_latency.Start();
 			break;
 		case MetricType::LATENCY:
 			latency.Start();
 			break;
 		case MetricType::WAITING_TO_ATTACH_LATENCY:
 			waiting_to_attach_latency.Start();
+			break;
+		case MetricType::WRITE_TO_WAL_LATENCY:
+			write_to_wal_latency.Start();
 			break;
 		default:
 			return;
@@ -75,14 +79,17 @@ struct QueryMetrics {
 		case MetricType::CHECKPOINT_LATENCY:
 			checkpoint_latency.End();
 			break;
-		case MetricType::COMMIT_WRITE_WAL_LATENCY:
-			commit_write_wal_latency.End();
+		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
+			commit_local_storage_latency.End();
 			break;
 		case MetricType::LATENCY:
 			latency.End();
 			break;
 		case MetricType::WAITING_TO_ATTACH_LATENCY:
 			waiting_to_attach_latency.End();
+			break;
+		case MetricType::WRITE_TO_WAL_LATENCY:
+			write_to_wal_latency.End();
 			break;
 		default:
 			return;
@@ -115,12 +122,14 @@ struct QueryMetrics {
 	Profiler attach_replay_wal_latency;
 	//! The timer for running checkpoints
 	Profiler checkpoint_latency;
-	//! The timer for writing to the WAL during COMMIT.
-	Profiler commit_write_wal_latency;
+	//! The timer for committing the transaction-local storage.
+	Profiler commit_local_storage_latency;
 	//! The timer for executing the entire query
 	Profiler latency;
 	//! The timer for waiting to ATTACH a file.
 	Profiler waiting_to_attach_latency;
+	//! The timer for writing to the WAL.
+	Profiler write_to_wal_latency;
 	//! The total bytes read by the file system.
 	atomic<idx_t> total_bytes_read;
 	//! The total bytes written by the file system.

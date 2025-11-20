@@ -134,8 +134,8 @@
         "collection_method": "timer"
       },
       {
-        "name": "COMMIT_WRITE_WAL_LATENCY",
-        "description": "Time spent writing to the WAL during COMMIT.",
+        "name": "COMMIT_LOCAL_STORAGE_LATENCY",
+        "description": "Time spent committing the transaction-local storage.",
         "type": "double",
         "unit": "seconds",
         "is_default": true,
@@ -177,6 +177,15 @@
         "is_default": true,
         "query_root": true,
         "collection_method": "query_metric"
+      },
+      {
+        "name": "WRITE_TO_WAL_LATENCY",
+        "description": "Time spent writing to the WAL.",
+        "type": "double",
+        "unit": "seconds",
+        "is_default": true,
+        "query_root": true,
+        "collection_method": "timer"
       }
     ]
   },

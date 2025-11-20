@@ -13,7 +13,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::ATTACH_REPLAY_WAL_LATENCY,
 		MetricType::BLOCKED_THREAD_TIME,
 		MetricType::CHECKPOINT_LATENCY,
-		MetricType::COMMIT_WRITE_WAL_LATENCY,
+		MetricType::COMMIT_LOCAL_STORAGE_LATENCY,
 		MetricType::CPU_TIME,
 		MetricType::CUMULATIVE_CARDINALITY,
 		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
@@ -71,6 +71,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::TOTAL_BYTES_WRITTEN,
 		MetricType::WAITING_TO_ATTACH_LATENCY,
 		MetricType::WAL_REPLAY_ENTRY_COUNT,
+		MetricType::WRITE_TO_WAL_LATENCY,
 	};
 }
 
@@ -131,7 +132,7 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 		MetricType::ATTACH_REPLAY_WAL_LATENCY,
 		MetricType::BLOCKED_THREAD_TIME,
 		MetricType::CHECKPOINT_LATENCY,
-		MetricType::COMMIT_WRITE_WAL_LATENCY,
+		MetricType::COMMIT_LOCAL_STORAGE_LATENCY,
 		MetricType::CPU_TIME,
 		MetricType::CUMULATIVE_CARDINALITY,
 		MetricType::CUMULATIVE_ROWS_SCANNED,
@@ -151,6 +152,7 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 		MetricType::TOTAL_BYTES_WRITTEN,
 		MetricType::WAITING_TO_ATTACH_LATENCY,
 		MetricType::WAL_REPLAY_ENTRY_COUNT,
+		MetricType::WRITE_TO_WAL_LATENCY,
 	};
 }
 
@@ -160,7 +162,7 @@ bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_WRITE_WAL_LATENCY:
+	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_CARDINALITY:
 	case MetricType::CUMULATIVE_ROWS_SCANNED:
@@ -180,6 +182,7 @@ bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	case MetricType::TOTAL_BYTES_WRITTEN:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
+	case MetricType::WRITE_TO_WAL_LATENCY:
 		return true;
 	default:
 		return false;
@@ -210,11 +213,12 @@ profiler_settings_t MetricsUtils::GetFileMetrics() {
 		MetricType::ATTACH_LOAD_STORAGE_LATENCY,
 		MetricType::ATTACH_REPLAY_WAL_LATENCY,
 		MetricType::CHECKPOINT_LATENCY,
-		MetricType::COMMIT_WRITE_WAL_LATENCY,
+		MetricType::COMMIT_LOCAL_STORAGE_LATENCY,
 		MetricType::TOTAL_BYTES_READ,
 		MetricType::TOTAL_BYTES_WRITTEN,
 		MetricType::WAITING_TO_ATTACH_LATENCY,
 		MetricType::WAL_REPLAY_ENTRY_COUNT,
+		MetricType::WRITE_TO_WAL_LATENCY,
 	};
 }
 
@@ -223,11 +227,12 @@ bool MetricsUtils::IsFileMetric(MetricType type) {
 	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_WRITE_WAL_LATENCY:
+	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::TOTAL_BYTES_READ:
 	case MetricType::TOTAL_BYTES_WRITTEN:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
+	case MetricType::WRITE_TO_WAL_LATENCY:
 		return true;
 	default:
 		return false;
@@ -505,7 +510,7 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		MetricType::ATTACH_REPLAY_WAL_LATENCY,
 		MetricType::BLOCKED_THREAD_TIME,
 		MetricType::CHECKPOINT_LATENCY,
-		MetricType::COMMIT_WRITE_WAL_LATENCY,
+		MetricType::COMMIT_LOCAL_STORAGE_LATENCY,
 		MetricType::LATENCY,
 		MetricType::QUERY_NAME,
 		MetricType::ROWS_RETURNED,
@@ -513,6 +518,7 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		MetricType::TOTAL_BYTES_WRITTEN,
 		MetricType::WAITING_TO_ATTACH_LATENCY,
 		MetricType::WAL_REPLAY_ENTRY_COUNT,
+		MetricType::WRITE_TO_WAL_LATENCY,
 	};
 }
 
@@ -522,7 +528,7 @@ bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_WRITE_WAL_LATENCY:
+	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::LATENCY:
 	case MetricType::QUERY_NAME:
 	case MetricType::ROWS_RETURNED:
@@ -530,6 +536,7 @@ bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	case MetricType::TOTAL_BYTES_WRITTEN:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
+	case MetricType::WRITE_TO_WAL_LATENCY:
 		return true;
 	default:
 		return false;
