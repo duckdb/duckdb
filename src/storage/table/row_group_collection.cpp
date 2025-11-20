@@ -880,7 +880,7 @@ struct CollectionCheckpointState {
 		auto segment_count = row_groups.GetSegmentCount();
 		writers.resize(segment_count);
 		write_data.resize(segment_count);
-		dropped_segments.resize(segment_count);
+		dropped_segments = make_uniq_array<bool>(segment_count);
 		overridden_segments.resize(segment_count);
 	}
 
@@ -920,7 +920,7 @@ struct CollectionCheckpointState {
 
 private:
 	vector<unique_ptr<SegmentNode<RowGroup>>> overridden_segments;
-	vector<bool> dropped_segments;
+	unique_array<bool> dropped_segments;
 };
 
 class BaseCheckpointTask : public BaseExecutorTask {
