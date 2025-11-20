@@ -63,9 +63,8 @@ SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transfor
 }
 
 // StandardAssignment <- (SetVariable / SetSetting) SetAssignment
-unique_ptr<SetStatement>
-PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
-                                                   optional_ptr<ParseResult> parse_result) {
+unique_ptr<SetStatement> PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &choice_pr = parse_result->Cast<ChoiceParseResult>();
 	auto &list_pr = choice_pr.result->Cast<ListParseResult>();
 	auto &first_sub_rule = list_pr.Child<ListParseResult>(0);

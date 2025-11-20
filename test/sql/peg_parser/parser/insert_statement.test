@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/parser/invisible_space.test
+# name: test/sql/peg_parser/parser/insert_statement.test
 # description: Test insert statement peg parser
 # group: [parser]
 

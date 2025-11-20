@@ -34,7 +34,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 		if (or_action_opt.HasResult()) {
 			// OR REPLACE | OR IGNORE are shorthands for the ON CONFLICT clause
 			throw ParserException("You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove "
-								  "the first if you want to have more granual control");
+			                      "the first if you want to have more granual control");
 		}
 		on_conflict_info = transformer.Transform<unique_ptr<OnConflictInfo>>(on_conflict_clause.optional_result);
 		result->on_conflict_info = std::move(on_conflict_info);
@@ -49,7 +49,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 	return std::move(result);
 }
 
-OnConflictAction PEGTransformerFactory::TransformOrAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+OnConflictAction PEGTransformerFactory::TransformOrAction(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto replace_or_ignore = list_pr.Child<ChoiceParseResult>(1).result;
 	auto replace_or_ignore_keyword = replace_or_ignore->Cast<KeywordParseResult>().keyword;

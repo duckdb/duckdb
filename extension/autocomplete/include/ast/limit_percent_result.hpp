@@ -7,4 +7,4 @@ struct LimitPercentResult {
 	bool is_percent = false;
 	unique_ptr<ParsedExpression> expression;
 };
-}
+} // namespace duckdb

@@ -1061,7 +1061,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnpackExpression(PE
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTryExpression(PEGTransformer &transformer,
-                                                                              optional_ptr<ParseResult> parse_result) {
+                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
@@ -1275,11 +1275,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 	return std::move(result);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultExpression(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
 	return make_uniq<DefaultExpression>();
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalLiteral(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalLiteral(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	DatePartSpecifier interval_unit = DatePartSpecifier::INVALID;
 	transformer.TransformOptional<DatePartSpecifier>(list_pr, 2, interval_unit);
@@ -1304,7 +1306,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalLiteral(PEG
 	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalParameter(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	if (choice_pr->type == ParseResultType::STRING) {
@@ -1312,6 +1315,5 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalParameter(P
 	}
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
 }
-
 
 } // namespace duckdb
