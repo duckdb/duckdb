@@ -404,6 +404,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformCaseWhenThen);
 	REGISTER_TRANSFORM(TransformTypeLiteral);
 	REGISTER_TRANSFORM(TransformDefaultExpression);
+	REGISTER_TRANSFORM(TransformIntervalLiteral);
+	REGISTER_TRANSFORM(TransformIntervalParameter);
 }
 
 void PEGTransformerFactory::RegisterImport() {
