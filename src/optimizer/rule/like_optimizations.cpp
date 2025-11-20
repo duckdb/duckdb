@@ -121,6 +121,19 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	auto &patt_str = StringValue::Get(constant_value);
 
 	bool is_not_like = root.function.name == "!~~";
+	
+	if (root.children[0]->type == ExpressionType::BOUND_FUNCTION) {
+		auto &func = root.children[0]->Cast<BoundFunctionExpression>();
+		if (func.function.name == "lower" && StringUtil::IsLower(patt_str)) {
+			auto &child = func.children[0];
+			auto ilike_func = is_not_like ? NotILikeFun::GetFunction() : ILikeFun::GetFunction();
+			vector<unique_ptr<Expression>> children;
+			children.push_back(child->Copy());
+			children.push_back(make_uniq<BoundConstantExpression>(Value(patt_str)));
+			return make_uniq<BoundFunctionExpression>(root.return_type, ilike_func, std::move(children), nullptr);
+		}
+	}
+
 	if (PatternIsConstant(patt_str)) {
 		// Pattern is constant
 		return make_uniq<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
