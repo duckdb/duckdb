@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/interquery/concurrent_checkpoints_long_reads.test
+# name: test/sql/parallelism/interquery/concurrent_checkpoints_long_reads.test_slow
 # description: Concurrently checkpoint the same database while long reads happen in the background
 # group: [interquery]
 
