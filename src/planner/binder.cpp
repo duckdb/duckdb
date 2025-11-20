@@ -70,7 +70,7 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 	}
 }
 
-unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &cte_map) {
+unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &cte_map, unique_ptr<CTENode> &cte_root) {
 	// Extract materialized CTEs from cte_map
 	vector<unique_ptr<CTENode>> materialized_ctes;
 	for (auto &cte : cte_map.map) {
@@ -87,7 +87,6 @@ unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &c
 		return nullptr;
 	}
 
-	unique_ptr<CTENode> cte_root = nullptr;
 	while (!materialized_ctes.empty()) {
 		unique_ptr<CTENode> node_result;
 		node_result = std::move(materialized_ctes.back());
@@ -110,7 +109,8 @@ unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &c
 template <class T>
 BoundStatement Binder::BindWithCTE(T &statement) {
 	BoundStatement bound_statement;
-	auto bound_cte = BindMaterializedCTE(statement.template Cast<T>().cte_map);
+	unique_ptr<CTENode> cte_root;
+	auto bound_cte = BindMaterializedCTE(statement.template Cast<T>().cte_map, cte_root);
 	if (bound_cte) {
 		reference<BoundCTENode> tail_ref = *bound_cte;
 
