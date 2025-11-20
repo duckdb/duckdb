@@ -20,7 +20,7 @@ namespace duckdb {
 template <class T>
 struct SegmentNode {
 	SegmentNode(idx_t row_start_p, shared_ptr<T> node_p, idx_t index_p)
-	    : row_start(row_start_p), node(std::move(node_p)), index(index_p), next(nullptr) {
+	    : row_start(row_start_p), node(std::move(node_p)), next(nullptr), index(index_p) {
 	}
 
 public:
@@ -190,7 +190,7 @@ public:
 	}
 	optional_ptr<SegmentNode<T>> GetNextSegment(SegmentLock &l, SegmentNode<T> &node) const {
 #ifdef DEBUG
-		D_ASSERT(RefersToSameObject(*nodes[node.index], node));
+		D_ASSERT(RefersToSameObject(*nodes[node.GetIndex()], node));
 #endif
 		return GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(node.GetIndex() + 1));
 	}
@@ -230,7 +230,8 @@ public:
 		return HasSegment(l, segment);
 	}
 	bool HasSegment(SegmentLock &, SegmentNode<T> &segment) const {
-		return segment.index < nodes.size() && RefersToSameObject(*nodes[segment.index], segment);
+		auto segment_idx = segment.GetIndex();
+		return segment_idx < nodes.size() && RefersToSameObject(*nodes[segment_idx], segment);
 	}
 
 	//! Erase all segments after a specific segment

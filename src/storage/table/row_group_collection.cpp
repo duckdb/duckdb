@@ -873,21 +873,54 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &da
 // Checkpoint State
 //===--------------------------------------------------------------------===//
 struct CollectionCheckpointState {
-	CollectionCheckpointState(RowGroupCollection &collection, TableDataWriter &writer,
-	                          const vector<shared_ptr<SegmentNode<RowGroup>>> &segments, TableStatistics &global_stats)
-	    : collection(collection), writer(writer), executor(writer.CreateTaskExecutor()), segments(segments),
-	      global_stats(global_stats) {
-		writers.resize(segments.size());
-		write_data.resize(segments.size());
+	CollectionCheckpointState(RowGroupCollection &collection, TableDataWriter &writer, TableStatistics &global_stats,
+	                          RowGroupSegmentTree &row_groups)
+	    : collection(collection), writer(writer), executor(writer.CreateTaskExecutor()), global_stats(global_stats),
+	      row_groups(row_groups) {
+		auto segment_count = row_groups.GetSegmentCount();
+		writers.resize(segment_count);
+		write_data.resize(segment_count);
+		dropped_segments.resize(segment_count);
+		overridden_segments.resize(segment_count);
 	}
 
 	RowGroupCollection &collection;
 	TableDataWriter &writer;
 	unique_ptr<TaskExecutor> executor;
-	const vector<shared_ptr<SegmentNode<RowGroup>>> &segments;
 	vector<unique_ptr<RowGroupWriter>> writers;
 	vector<RowGroupWriteData> write_data;
 	TableStatistics &global_stats;
+	RowGroupSegmentTree &row_groups;
+
+	idx_t SegmentCount() const {
+		return writers.size();
+	}
+	optional_ptr<SegmentNode<RowGroup>> GetSegment(idx_t index) {
+		if (overridden_segments[index]) {
+			return *overridden_segments[index];
+		}
+		if (dropped_segments[index]) {
+			// segment was dropped
+			return nullptr;
+		}
+		return row_groups.GetSegmentByIndex(NumericCast<int64_t>(index));
+	}
+
+	void DropSegment(idx_t index) {
+		dropped_segments[index] = true;
+	}
+
+	bool SegmentIsDropped(idx_t index) const {
+		return !overridden_segments[index] && dropped_segments[index];
+	}
+
+	void SetSegment(idx_t row_start, idx_t index, shared_ptr<RowGroup> row_group) {
+		overridden_segments[index] = make_uniq<SegmentNode<RowGroup>>(row_start, std::move(row_group), index);
+	}
+
+private:
+	vector<unique_ptr<SegmentNode<RowGroup>>> overridden_segments;
+	vector<bool> dropped_segments;
 };
 
 class BaseCheckpointTask : public BaseExecutorTask {
@@ -907,7 +940,7 @@ public:
 	}
 
 	void ExecuteTask() override {
-		auto &entry = checkpoint_state.segments[index];
+		auto entry = checkpoint_state.GetSegment(index);
 		auto &row_group = entry->GetNode();
 		checkpoint_state.writers[index] = checkpoint_state.writer.GetRowGroupWriter(row_group);
 		checkpoint_state.write_data[index] = row_group.WriteToDisk(*checkpoint_state.writers[index]);
@@ -977,15 +1010,20 @@ public:
 		scan_state.table_state.max_row = idx_t(-1);
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
+		optional_idx row_start;
 		for (idx_t c_idx = segment_idx; merged_groups < merge_count && c_idx < total_row_groups; c_idx++) {
 			if (vacuum_state.row_group_counts[c_idx] == 0) {
 				continue;
 			}
 			merged_groups++;
 
-			auto &current_row_group = checkpoint_state.segments[c_idx]->GetNode();
+			auto current_segment = checkpoint_state.GetSegment(c_idx);
+			if (!row_start.IsValid()) {
+				row_start = current_segment->GetRowStart();
+			}
+			auto &current_row_group = current_segment->GetNode();
 
-			current_row_group.InitializeScan(scan_state.table_state, *checkpoint_state.segments[c_idx]);
+			current_row_group.InitializeScan(scan_state.table_state, *current_segment);
 			while (true) {
 				scan_chunk.Reset();
 
@@ -1015,7 +1053,7 @@ public:
 			}
 			// drop the row group after merging
 			current_row_group.CommitDrop();
-			checkpoint_state.segments[c_idx]->SetNode(nullptr);
+			checkpoint_state.DropSegment(c_idx);
 		}
 		idx_t total_append_count = 0;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
@@ -1023,8 +1061,8 @@ public:
 			row_group->Verify();
 
 			// assign the new row group to the current segment
-			// FIXME: should we override this?
-			checkpoint_state.segments[segment_idx + target_idx]->SetNode(std::move(row_group));
+			checkpoint_state.SetSegment(row_start.GetIndex() + total_append_count, segment_idx + target_idx,
+			                            std::move(row_group));
 			total_append_count += append_counts[target_idx];
 		}
 		if (total_append_count != merge_rows) {
@@ -1049,8 +1087,7 @@ private:
 	idx_t merge_rows;
 };
 
-void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
-                                               const vector<shared_ptr<SegmentNode<RowGroup>>> &segments) {
+void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state) {
 	auto checkpoint_type = checkpoint_state.writer.GetCheckpointType();
 	bool vacuum_is_allowed = checkpoint_type != CheckpointType::CONCURRENT_CHECKPOINT;
 	// currently we can only vacuum deletes if we are doing a full checkpoint and there are no indexes
@@ -1059,14 +1096,14 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		return;
 	}
 	// obtain the set of committed row counts for each row group
-	state.row_group_counts.reserve(segments.size());
-	for (auto &entry : segments) {
-		auto &row_group = entry->GetNode();
+	state.row_group_counts.reserve(checkpoint_state.SegmentCount());
+	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
+		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (row_group_count == 0) {
 			// empty row group - we can drop it entirely
 			row_group.CommitDrop();
-			entry->SetNode(nullptr);
+			checkpoint_state.DropSegment(entry.GetIndex());
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
@@ -1086,7 +1123,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	}
 	if (state.row_group_counts[segment_idx] == 0) {
 		// segment was already dropped - skip
-		D_ASSERT(!checkpoint_state.segments[segment_idx]->HasNode());
+		D_ASSERT(checkpoint_state.SegmentIsDropped(segment_idx));
 		return false;
 	}
 	if (!schedule_vacuum) {
@@ -1108,7 +1145,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		auto total_target_size = target_count * row_group_size;
 		merge_count = 0;
 		merge_rows = 0;
-		for (next_idx = segment_idx; next_idx < checkpoint_state.segments.size(); next_idx++) {
+		for (next_idx = segment_idx; next_idx < checkpoint_state.SegmentCount(); next_idx++) {
 			if (state.row_group_counts[next_idx] == 0) {
 				continue;
 			}
@@ -1120,7 +1157,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			merge_rows += state.row_group_counts[next_idx];
 			merge_count++;
 		}
-		if (next_idx == checkpoint_state.segments.size()) {
+		if (next_idx == checkpoint_state.SegmentCount()) {
 			// in order to prevent poor performance when performing small appends, we only merge row groups at the end
 			// if we can reach a "target" size of twice the current size, or the max row group size
 			// this is to prevent repeated expensive checkpoints where:
@@ -1168,20 +1205,18 @@ unique_ptr<CheckpointTask> RowGroupCollection::GetCheckpointTask(CollectionCheck
 
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
 	auto row_groups = GetRowGroups();
-	auto l = row_groups->Lock();
-	auto &segments = row_groups->ReferenceSegments(l);
 
-	CollectionCheckpointState checkpoint_state(*this, writer, segments, global_stats);
+	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
 
 	VacuumState vacuum_state;
-	InitializeVacuumState(checkpoint_state, vacuum_state, segments);
+	InitializeVacuumState(checkpoint_state, vacuum_state);
 
 	try {
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
 		auto max_vacuum_tasks = DBConfig::GetSetting<MaxVacuumTasksSetting>(writer.GetDatabase());
-		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
-			auto &entry = segments[segment_idx];
+		for (auto &entry : row_groups->SegmentNodes()) {
+			auto segment_idx = entry.GetIndex();
 			auto vacuum_tasks =
 			    ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx, total_vacuum_tasks < max_vacuum_tasks);
 			if (vacuum_tasks) {
@@ -1189,13 +1224,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				total_vacuum_tasks++;
 				continue;
 			}
-			if (!entry->HasNode()) {
+			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
 				// row group was vacuumed/dropped - skip
 				continue;
 			}
 			// schedule a checkpoint task for this row group
-			auto &row_group = entry->GetNode();
-			if (vacuum_state.row_start != entry->GetRowStart()) {
+			auto &row_group = entry.GetNode();
+			if (vacuum_state.row_start != entry.GetRowStart()) {
 				row_group.MoveToCollection(*this);
 			} else if (!RefersToSameObject(row_group.GetCollection(), *this)) {
 				throw InternalException("RowGroup Vacuum - row group collection of row group changed");
@@ -1221,9 +1256,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// if the table already exists on disk - check if all row groups have stayed the same
 	if (DBConfig::GetSetting<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && metadata_pointer.IsValid()) {
 		bool table_has_changes = false;
-		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
-			auto &entry = segments[segment_idx];
-			if (!entry->HasNode()) {
+		for (auto &entry : row_groups->SegmentNodes()) {
+			auto segment_idx = entry.GetIndex();
+			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
 				table_has_changes = true;
 				break;
 			}
@@ -1238,9 +1273,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// we can directly re-use the metadata pointer
 			// mark all blocks associated with row groups as still being in-use
 			auto &metadata_manager = writer.GetMetadataManager();
-			for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
-				auto &entry = segments[segment_idx];
-				auto &row_group = entry->GetNode();
+			for (auto &entry : row_groups->SegmentNodes()) {
+				auto segment_idx = entry.GetIndex();
+				auto &row_group = entry.GetNode();
 				auto &write_state = checkpoint_state.write_data[segment_idx];
 				metadata_manager.ClearModifiedBlocks(row_group.GetColumnStartPointers());
 				D_ASSERT(write_state.reuse_existing_metadata_blocks);
@@ -1259,12 +1294,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	// not all segments have stayed the same - we need to make a new segment tree with the new set of segments
 	auto new_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
+	auto l = new_row_groups->Lock();
 
 	idx_t new_total_rows = 0;
-	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
-		auto &entry = segments[segment_idx];
-		if (!entry->HasNode()) {
+	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
+		auto entry = checkpoint_state.GetSegment(segment_idx);
+		if (!entry) {
 			// row group was vacuumed/dropped - skip
+			D_ASSERT(checkpoint_state.SegmentIsDropped(segment_idx));
 			continue;
 		}
 		auto &row_group = entry->GetNode();
