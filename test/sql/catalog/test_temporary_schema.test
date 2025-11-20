@@ -96,6 +96,53 @@ SELECT database_name, schema_name, table_name, temporary FROM duckdb_tables() WH
 temp	newschema	t1	true
 temp	newschema	t2	true
 
+# Create persistent schema with same name - should work
+statement ok
+CREATE SCHEMA newschema
+
+# Verify both schemas exist
+query II rowsort
+SELECT database_name, schema_name FROM duckdb_schemas() WHERE schema_name = 'newschema'
+----
+memory	newschema
+temp	newschema
+
+# Create persistent table in the persistent schema
+statement ok
+CREATE TABLE newschema.persistent_t(val VARCHAR)
+
+statement ok
+INSERT INTO newschema.persistent_t VALUES ('persistent')
+
+# Create temporary table with same name - should shadow
+statement ok
+CREATE TEMPORARY TABLE newschema.persistent_t(val VARCHAR)
+
+statement ok
+INSERT INTO newschema.persistent_t VALUES ('temporary')
+
+# Query should return temporary version (shadowing)
+query I
+SELECT * FROM newschema.persistent_t
+----
+temporary
+
+# Can still access persistent explicitly
+query I
+SELECT * FROM memory.newschema.persistent_t
+----
+persistent
+
+# Drop the temporary table
+statement ok
+DROP TABLE temp.newschema.persistent_t
+
+# Now query returns persistent version
+query I
+SELECT * FROM newschema.persistent_t
+----
+persistent
+
 # =============================================================================
 # Shadowing behavior
 # =============================================================================
