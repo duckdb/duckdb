@@ -139,7 +139,7 @@ SELECT j FROM main_table;
 600
 
 # Testing temp table.
-# test_temp_table should *not* be created in the test schema, but in the temp schema
+# With search path set to 'test', temp tables are created in temp.test (respecting search path)
 
 statement ok
 CREATE TEMP TABLE test_temp_table(i INTEGER);
@@ -149,14 +149,18 @@ SELECT * FROM memory.main.test_temp_table;
 ----
 
 statement error
-SELECT * FROM test.test_temp_table;
+SELECT * FROM memory.test.test_temp_table;
 ----
+
+# Schema-qualified lookup checks temp catalog first, so this succeeds
+statement ok
+SELECT * FROM test.test_temp_table;
 
 statement ok
 SELECT * FROM test_temp_table;
 
 statement ok
-SELECT * FROM temp.test_temp_table;
+SELECT * FROM temp.test.test_temp_table;
 
 # Testing functions and aggregates
 query I
