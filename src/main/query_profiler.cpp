@@ -251,9 +251,11 @@ void QueryProfiler::EndQuery() {
 			auto &info = root->GetProfilingInfo();
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			auto &child_info = root->children[0]->GetProfilingInfo();
-			info.metrics[MetricsType::QUERY_NAME] = query_metrics.query;
 
 			auto &settings = info.expanded_settings;
+			if (info.Enabled(settings, MetricsType::QUERY_NAME)) {
+				info.metrics[MetricsType::QUERY_NAME] = query_metrics.query;
+			}
 			for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
 				info.metrics[global_info_entry.first] = global_info_entry.second;
 			}
@@ -265,6 +267,10 @@ void QueryProfiler::EndQuery() {
 			}
 			if (info.Enabled(settings, MetricsType::TOTAL_BYTES_WRITTEN)) {
 				info.metrics[MetricsType::TOTAL_BYTES_WRITTEN] = Value::UBIGINT(query_metrics.total_bytes_written);
+			}
+			if (info.Enabled(settings, MetricsType::TOTAL_MEMORY_ALLOCATED)) {
+				info.metrics[MetricsType::TOTAL_MEMORY_ALLOCATED] =
+				    Value::UBIGINT(query_metrics.total_memory_allocated);
 			}
 			if (info.Enabled(settings, MetricsType::ROWS_RETURNED)) {
 				info.metrics[MetricsType::ROWS_RETURNED] = child_info.metrics[MetricsType::OPERATOR_CARDINALITY];
@@ -295,8 +301,12 @@ void QueryProfiler::EndQuery() {
 				info.metrics[MetricsType::ATTACH_REPLAY_WAL_LATENCY] =
 				    query_metrics.attach_replay_wal_latency.Elapsed();
 			}
-			if (info.Enabled(settings, MetricsType::COMMIT_WRITE_WAL_LATENCY)) {
-				info.metrics[MetricsType::COMMIT_WRITE_WAL_LATENCY] = query_metrics.commit_write_wal_latency.Elapsed();
+			if (info.Enabled(settings, MetricsType::COMMIT_LOCAL_STORAGE_LATENCY)) {
+				info.metrics[MetricsType::COMMIT_LOCAL_STORAGE_LATENCY] =
+				    query_metrics.commit_local_storage_latency.Elapsed();
+			}
+			if (info.Enabled(settings, MetricsType::WRITE_TO_WAL_LATENCY)) {
+				info.metrics[MetricsType::WRITE_TO_WAL_LATENCY] = query_metrics.write_to_wal_latency.Elapsed();
 			}
 			if (info.Enabled(settings, MetricsType::WAL_REPLAY_ENTRY_COUNT)) {
 				info.metrics[MetricsType::WAL_REPLAY_ENTRY_COUNT] =
@@ -349,6 +359,9 @@ void QueryProfiler::AddToCounter(const MetricsType type, const idx_t amount) {
 	case MetricsType::TOTAL_BYTES_WRITTEN:
 		query_metrics.total_bytes_written += amount;
 		return;
+	case MetricsType::TOTAL_MEMORY_ALLOCATED:
+		query_metrics.total_memory_allocated += amount;
+		return;
 	case MetricsType::WAL_REPLAY_ENTRY_COUNT:
 		query_metrics.wal_replay_entry_count += amount;
 		return;
@@ -383,8 +396,11 @@ void QueryProfiler::StartTimer(const MetricsType type) {
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.Start();
 		return;
-	case MetricsType::COMMIT_WRITE_WAL_LATENCY:
-		query_metrics.commit_write_wal_latency.Start();
+	case MetricsType::COMMIT_LOCAL_STORAGE_LATENCY:
+		query_metrics.commit_local_storage_latency.Start();
+		return;
+	case MetricsType::WRITE_TO_WAL_LATENCY:
+		query_metrics.write_to_wal_latency.Start();
 		return;
 	default:
 		return;
@@ -408,6 +424,12 @@ void QueryProfiler::EndTimer(MetricsType type) {
 		return;
 	case MetricsType::CHECKPOINT_LATENCY:
 		query_metrics.checkpoint_latency.End();
+		return;
+	case MetricsType::COMMIT_LOCAL_STORAGE_LATENCY:
+		query_metrics.commit_local_storage_latency.End();
+		return;
+	case MetricsType::WRITE_TO_WAL_LATENCY:
+		query_metrics.write_to_wal_latency.End();
 		return;
 	default:
 		return;
@@ -780,12 +802,19 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	lock_guard<std::mutex> guard(lock);
+
+	bool show_query_name = false;
+	if (root) {
+		auto &info = root->GetProfilingInfo();
+		auto &settings = info.expanded_settings;
+		show_query_name = info.Enabled(settings, MetricsType::QUERY_NAME);
+	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	ss << "││    Query Profiling Information    ││\n";
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
-	ss << StringUtil::Replace(query_metrics.query, "\n", " ") + "\n";
+	ss << (show_query_name ? StringUtil::Replace(query_metrics.query, "\n", " ") : "") + "\n";
 
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized

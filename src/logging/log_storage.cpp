@@ -22,26 +22,19 @@ namespace duckdb {
 
 vector<LogicalType> LogStorage::GetSchema(LoggingTargetTable table) {
 	switch (table) {
-	case LoggingTargetTable::ALL_LOGS:
-		return {
-		    LogicalType::UBIGINT,   // context_id
-		    LogicalType::VARCHAR,   // scope
-		    LogicalType::UBIGINT,   // connection_id
-		    LogicalType::UBIGINT,   // transaction_id
-		    LogicalType::UBIGINT,   // query_id
-		    LogicalType::UBIGINT,   // thread
-		    LogicalType::TIMESTAMP, // timestamp
-		    LogicalType::VARCHAR,   // log_type
-		    LogicalType::VARCHAR,   // level
-		    LogicalType::VARCHAR,   // message
-		};
+	case LoggingTargetTable::ALL_LOGS: {
+		auto all_logs = GetSchema(LoggingTargetTable::LOG_CONTEXTS);
+		auto log_entries = GetSchema(LoggingTargetTable::LOG_ENTRIES);
+		all_logs.insert(all_logs.end(), log_entries.begin() + 1, log_entries.end());
+		return all_logs;
+	}
 	case LoggingTargetTable::LOG_ENTRIES:
 		return {
-		    LogicalType::UBIGINT,   // context_id
-		    LogicalType::TIMESTAMP, // timestamp
-		    LogicalType::VARCHAR,   // log_type
-		    LogicalType::VARCHAR,   // level
-		    LogicalType::VARCHAR,   // message
+		    LogicalType::UBIGINT,      // context_id
+		    LogicalType::TIMESTAMP_TZ, // timestamp
+		    LogicalType::VARCHAR,      // log_type
+		    LogicalType::VARCHAR,      // level
+		    LogicalType::VARCHAR,      // message
 		};
 	case LoggingTargetTable::LOG_CONTEXTS:
 		return {
@@ -59,11 +52,12 @@ vector<LogicalType> LogStorage::GetSchema(LoggingTargetTable table) {
 
 vector<string> LogStorage::GetColumnNames(LoggingTargetTable table) {
 	switch (table) {
-	case LoggingTargetTable::ALL_LOGS:
-		return {
-		    "context_id", "scope",     "connection_id", "transaction_id", "query_id",
-		    "thread_id",  "timestamp", "type",          "log_level",      "message",
-		};
+	case LoggingTargetTable::ALL_LOGS: {
+		auto all_logs = GetColumnNames(LoggingTargetTable::LOG_CONTEXTS);
+		auto log_entries = GetColumnNames(LoggingTargetTable::LOG_ENTRIES);
+		all_logs.insert(all_logs.end(), log_entries.begin() + 1, log_entries.end());
+		return all_logs;
+	}
 	case LoggingTargetTable::LOG_ENTRIES:
 		return {"context_id", "timestamp", "type", "log_level", "message"};
 	case LoggingTargetTable::LOG_CONTEXTS:

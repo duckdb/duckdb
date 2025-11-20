@@ -53,7 +53,7 @@ void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 	idx_t qualify_later = 0;
 
 	idx_t last_unresolved_row_group_sum =
-	    GetQualifyingTupleCount(*it->second.row_group.get().node, *last_stats, column_type);
+	    GetQualifyingTupleCount(it->second.row_group.get().GetNode(), *last_stats, column_type);
 	for (; it != end; ++it) {
 		auto &current_key = it->first;
 		auto &row_group = it->second.row_group;
@@ -75,7 +75,7 @@ void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 			// Row groups do not overlap: we can guarantee that the tuples qualify
 			qualifying_tuples = last_unresolved_row_group_sum;
 			++last_unresolved_entry;
-			auto &upcoming_row_group = *last_unresolved_entry->second.row_group.get().node;
+			auto &upcoming_row_group = last_unresolved_entry->second.row_group.get().GetNode();
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;
 
 			last_unresolved_row_group_sum += GetQualifyingTupleCount(upcoming_row_group, upcoming_stats, column_type);
@@ -237,7 +237,7 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 
 	multimap<Value, RowGroupSegmentNodeEntry> row_group_map;
 	for (auto &row_group : row_groups.SegmentNodes()) {
-		auto stats = row_group.node->GetStatistics(options.column_idx);
+		auto stats = row_group.GetNode().GetStatistics(options.column_idx);
 		Value comparison_value = RetrieveStat(*stats, options.order_by, options.column_type);
 		auto entry = RowGroupSegmentNodeEntry {row_group, std::move(stats)};
 		row_group_map.emplace(comparison_value, std::move(entry));

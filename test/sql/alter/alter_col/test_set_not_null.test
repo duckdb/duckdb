@@ -154,3 +154,19 @@ SELECT * FROM t WHERE j IS NULL
 ----
 1	NULL
 
+# test that SET NOT NULL preserves temporary flag
+statement ok
+CREATE TEMPORARY TABLE temp_not_null_test(x INTEGER)
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_not_null_test'
+----
+temp_not_null_test	temp	true
+
+statement ok
+ALTER TABLE temp_not_null_test ALTER COLUMN x SET NOT NULL
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_not_null_test'
+----
+temp_not_null_test	temp	true

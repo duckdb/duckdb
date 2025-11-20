@@ -13,13 +13,14 @@
 
 namespace duckdb_shell {
 
-enum class PromptComponentType { LITERAL, SQL, SET_COLOR, SET_INTENSITY, RESET_COLOR, SETTING };
+enum class PromptComponentType { LITERAL, SQL, SET_COLOR, SET_INTENSITY, SET_HIGHLIGHT_ELEMENT, RESET_COLOR, SETTING };
 
 struct PromptComponent {
 	PromptComponentType type;
 	string literal;
 	PrintColor color;
 	PrintIntensity intensity;
+	HighlightElementType highlight_element;
 };
 
 // Supports dynamic prompts

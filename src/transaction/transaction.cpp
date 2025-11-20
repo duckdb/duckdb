@@ -21,4 +21,7 @@ void Transaction::SetReadWrite() {
 	is_read_only = false;
 }
 
+void Transaction::SetModifications(DatabaseModificationType type) {
+}
+
 } // namespace duckdb

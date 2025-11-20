@@ -1154,3 +1154,14 @@ TEST_CASE("Test materialized relations", "[relation_api]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
 	}
 }
+
+TEST_CASE("Test create table with empty name", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	duckdb::unique_ptr<QueryResult> result = con.Query("CREATE TABLE '' AS SELECT 42;");
+	REQUIRE_FAIL(result);
+
+	auto values = con.Values("(42)");
+	REQUIRE_THROWS_AS(values->Create(""), ParserException);
+}

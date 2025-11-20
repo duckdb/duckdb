@@ -2,6 +2,8 @@
 # description: Test block_allocator_memory setting
 # group: [settings]
 
+require 64bit
+
 # defaults to 0, resetting to 0 is ok
 statement ok
 RESET block_allocator_memory;
@@ -30,6 +32,8 @@ query I
 SELECT value FROM duckdb_settings() WHERE name = 'block_allocator_memory';
 ----
 150.0 MiB
+
+require 64bit
 
 # cannot be reduced
 statement error
