@@ -182,6 +182,7 @@ public:
 	void RegisterUse();
 	void RegisterSet();
 	void RegisterTransaction();
+	void RegisterUpdate();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterEnums();
 
@@ -736,11 +737,11 @@ private:
 	                                                            optional_ptr<ParseResult> parse_result);
 	static OnConflictExpressionTarget TransformOnConflictExpressionTarget(PEGTransformer &transformer,
 	                                                                      optional_ptr<ParseResult> parse_result);
-	static OnConflictAction TransformOnConflictAction(PEGTransformer &transformer,
+	static unique_ptr<OnConflictInfo> TransformOnConflictAction(PEGTransformer &transformer,
 	                                                  optional_ptr<ParseResult> parse_result);
-	static OnConflictAction TransformOnConflictUpdate(PEGTransformer &transformer,
+	static unique_ptr<OnConflictInfo> TransformOnConflictUpdate(PEGTransformer &transformer,
 	                                                  optional_ptr<ParseResult> parse_result);
-	static OnConflictAction TransformOnConflictNothing(PEGTransformer &transformer,
+	static unique_ptr<OnConflictInfo> TransformOnConflictNothing(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
 	static InsertValues TransformInsertValues(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static InsertColumnOrder TransformByNameOrPosition(PEGTransformer &transformer,
@@ -924,11 +925,6 @@ private:
 	TransformWithStatement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static bool TransformMaterialized(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
-	// use.gram
-	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
-	                                                      optional_ptr<ParseResult> parse_result);
-	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
@@ -956,6 +952,17 @@ private:
 	                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TransactionStatement> TransformCommitTransaction(PEGTransformer &, optional_ptr<ParseResult>);
 	static unique_ptr<TransactionStatement> TransformRollbackTransaction(PEGTransformer &, optional_ptr<ParseResult>);
+
+	// update.gram
+	static unique_ptr<UpdateSetInfo> TransformUpdateSetClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<UpdateSetInfo> TransformUpdateSetTuple(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<UpdateSetInfo> TransformUpdateSetElementList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<string, unique_ptr<ParsedExpression>> TransformUpdateSetElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// use.gram
+	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 private:
 	PEGParser parser;

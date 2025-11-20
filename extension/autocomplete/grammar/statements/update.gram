@@ -2,5 +2,7 @@ UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause?
 
 UpdateTarget <- (BaseTableName 'SET') / (BaseTableName UpdateAlias? 'SET')
 UpdateAlias <- 'AS'? ColId
-UpdateSetClause <- List(UpdateSetElement) / (Parens(List(ColumnName)) '=' Expression)
+UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
+UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression
+UpdateSetElementList <- List(UpdateSetElement)
 UpdateSetElement <- ColumnName '=' Expression

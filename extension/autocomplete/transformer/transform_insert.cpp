@@ -74,9 +74,7 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformInsertTarget(PEGTransfo
 unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictClause(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto result = make_uniq<OnConflictInfo>();
-	result->action_type = transformer.Transform<OnConflictAction>(list_pr.Child<ListParseResult>(3));
-	// TODO(Dtenwolde) Leaving DO UPDATE SET for later
+	auto result = transformer.Transform<unique_ptr<OnConflictInfo>>(list_pr.Child<ListParseResult>(3));
 	auto on_conflict_target_opt = list_pr.Child<OptionalParseResult>(2);
 	if (on_conflict_target_opt.HasResult()) {
 		auto expression_target =
@@ -97,20 +95,27 @@ PEGTransformerFactory::TransformOnConflictExpressionTarget(PEGTransformer &trans
 	return result;
 }
 
-OnConflictAction PEGTransformerFactory::TransformOnConflictAction(PEGTransformer &transformer,
+unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictAction(PEGTransformer &transformer,
                                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<OnConflictAction>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<unique_ptr<OnConflictInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
-OnConflictAction PEGTransformerFactory::TransformOnConflictUpdate(PEGTransformer &transformer,
+unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictUpdate(PEGTransformer &transformer,
                                                                   optional_ptr<ParseResult> parse_result) {
-	throw NotImplementedException("Rule 'OnConflictUpdate' has not been implemented yet");
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = make_uniq<OnConflictInfo>();
+	result->action_type = OnConflictAction::UPDATE;
+	result->set_info = transformer.Transform<unique_ptr<UpdateSetInfo>>(list_pr.Child<ListParseResult>(3));
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 4, result->condition);
+	return result;
 }
 
-OnConflictAction PEGTransformerFactory::TransformOnConflictNothing(PEGTransformer &transformer,
+unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictNothing(PEGTransformer &transformer,
                                                                    optional_ptr<ParseResult> parse_result) {
-	return OnConflictAction::NOTHING;
+	auto result = make_uniq<OnConflictInfo>();
+	result->action_type = OnConflictAction::NOTHING;
+	return result;
 }
 
 InsertValues PEGTransformerFactory::TransformInsertValues(PEGTransformer &transformer,

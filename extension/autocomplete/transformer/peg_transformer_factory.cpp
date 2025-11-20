@@ -567,6 +567,14 @@ void PEGTransformerFactory::RegisterTransaction() {
 	REGISTER_TRANSFORM(TransformRollbackTransaction);
 }
 
+void PEGTransformerFactory::RegisterUpdate() {
+	REGISTER_TRANSFORM(TransformUpdateSetClause);
+	REGISTER_TRANSFORM(TransformUpdateSetTuple);
+	REGISTER_TRANSFORM(TransformUpdateSetElementList);
+	REGISTER_TRANSFORM(TransformUpdateSetElement);
+}
+
+
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
@@ -725,6 +733,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterUse();
 	RegisterSet();
 	RegisterTransaction();
+	RegisterUpdate();
 	RegisterKeywordsAndIdentifiers();
 	RegisterEnums();
 }
