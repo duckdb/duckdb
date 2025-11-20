@@ -476,6 +476,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 
 bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	auto &filters = state.GetFilterInfo();
+	optional_idx target_vector_index_max;
 	for (auto &entry : filters.GetFilterList()) {
 		if (entry.IsAlwaysTrue()) {
 			// filter is always true - avoid checking
@@ -505,7 +506,13 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		D_ASSERT(target_row >= row_start);
 		D_ASSERT(target_row <= row_start + this->count);
 		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
-		if (state.vector_index == target_vector_index) {
+
+		if (!target_vector_index_max.IsValid() || target_vector_index_max.GetIndex() < target_vector_index) {
+			target_vector_index_max = target_vector_index;
+		}
+	}
+	if (target_vector_index_max.IsValid()) {
+		if (state.vector_index == target_vector_index_max.GetIndex()) {
 			// we can't skip any full vectors because this segment contains less than a full vector
 			// for now we just bail-out
 			// FIXME: we could check if we can ALSO skip the next segments, in which case skipping a full vector
@@ -514,13 +521,13 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 			// exceedingly rare
 			return true;
 		}
-		while (state.vector_index < target_vector_index) {
+		while (state.vector_index < target_vector_index_max.GetIndex()) {
 			NextVector(state);
 		}
 		return false;
+	} else {
+		return true;
 	}
-
-	return true;
 }
 
 template <TableScanType TYPE>
