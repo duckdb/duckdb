@@ -169,47 +169,43 @@ INSERT INTO integers VALUES (42)
 # --- Table shadowing ---
 
 statement ok
-CREATE TABLE shadow_me(val VARCHAR)
+CREATE TABLE shadow_table(val VARCHAR)
 
 statement ok
-INSERT INTO shadow_me VALUES ('persistent')
+INSERT INTO shadow_table VALUES ('persistent')
 
 query I
-SELECT * FROM shadow_me
+SELECT * FROM shadow_table
 ----
 persistent
 
 # Create temp table with same name - should shadow persistent
 statement ok
-CREATE TEMPORARY TABLE shadow_me(val VARCHAR)
+CREATE TEMPORARY TABLE shadow_table(val VARCHAR)
 
 statement ok
-INSERT INTO shadow_me VALUES ('temporary')
+INSERT INTO shadow_table VALUES ('temporary')
 
 query I
-SELECT * FROM shadow_me
+SELECT * FROM shadow_table
 ----
 temporary
 
 # Can still access persistent via explicit catalog
 query I
-SELECT * FROM memory.main.shadow_me
+SELECT * FROM memory.main.shadow_table
 ----
 persistent
 
 # Drop temp table
 statement ok
-DROP TABLE temp.main.shadow_me
+DROP TABLE temp.main.shadow_table
 
 # Now query returns persistent version
 query I
-SELECT * FROM shadow_me
+SELECT * FROM shadow_table
 ----
 persistent
-
-# Cleanup
-statement ok
-DROP TABLE shadow_me
 
 # --- View shadowing ---
 
@@ -245,7 +241,3 @@ query I
 SELECT * FROM shadow_view
 ----
 persistent
-
-# Cleanup
-statement ok
-DROP VIEW shadow_view
