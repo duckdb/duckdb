@@ -415,6 +415,7 @@ void PEGTransformerFactory::RegisterImport() {
 void PEGTransformerFactory::RegisterInsert() {
 	// insert.gram
 	REGISTER_TRANSFORM(TransformInsertStatement);
+	REGISTER_TRANSFORM(TransformOrAction);
 	REGISTER_TRANSFORM(TransformInsertTarget);
 	REGISTER_TRANSFORM(TransformOnConflictClause);
 	REGISTER_TRANSFORM(TransformOnConflictExpressionTarget);

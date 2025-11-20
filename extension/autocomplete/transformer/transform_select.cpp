@@ -535,7 +535,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	result->function =
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
-	auto table_alias_opt = list_pr.Child<OptionalParseResult>(3);
+	auto table_alias_opt = list_pr.Child<OptionalParseResult>(4);
 	if (table_alias_opt.HasResult()) {
 		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.optional_result);
 		result->alias = table_alias.name;

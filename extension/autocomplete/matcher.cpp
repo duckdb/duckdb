@@ -406,7 +406,7 @@ public:
 		if (text.empty()) {
 			return false;
 		}
-		if (IsSingleQuoted(text)) {
+		if (IsSingleQuoted(text) && SupportsStringLiteral()) {
 			return true;
 		}
 		if (IsQuoted(text)) {
@@ -433,8 +433,9 @@ public:
 		if (IsQuoted(token_text)) {
 			token_text = token_text.substr(1, token_text.size() - 2);
 		}
-		if (IsSingleQuoted(token_text)) {
-			return state.allocator.Allocate(make_uniq<StringLiteralParseResult>(token_text));
+		if (IsSingleQuoted(token_text) && SupportsStringLiteral()) {
+			auto string_token = token_text.substr(1, token_text.size() - 2);
+			return state.allocator.Allocate(make_uniq<IdentifierParseResult>(string_token));
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
 	}

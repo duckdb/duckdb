@@ -726,6 +726,7 @@ private:
 	// insert.gram
 	static unique_ptr<SQLStatement> TransformInsertStatement(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
+	static OnConflictAction TransformOrAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<BaseTableRef> TransformInsertTarget(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 	static unique_ptr<OnConflictInfo> TransformOnConflictClause(PEGTransformer &transformer,

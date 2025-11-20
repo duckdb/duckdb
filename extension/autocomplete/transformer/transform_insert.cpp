@@ -23,18 +23,43 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 	transformer.TransformOptional<vector<string>>(list_pr, 6, result->columns);
 	auto insert_values = transformer.Transform<InsertValues>(list_pr.Child<ListParseResult>(7));
 	if (insert_values.default_values) {
-		throw NotImplementedException("DEFAULT Values for insert statement are not yet implemented.");
+		result->default_values = true;
 	}
 	if (insert_values.select_statement) {
 		result->select_statement = std::move(insert_values.select_statement);
 	}
-	transformer.TransformOptional<unique_ptr<OnConflictInfo>>(list_pr, 8, result->on_conflict_info);
-	if (result->on_conflict_info) {
-		transformer.TransformOptional(list_pr, 2, result->on_conflict_info->action_type);
+	auto on_conflict_info = make_uniq<OnConflictInfo>();
+	auto on_conflict_clause = list_pr.Child<OptionalParseResult>(8);
+	if (on_conflict_clause.HasResult()) {
+		if (or_action_opt.HasResult()) {
+			// OR REPLACE | OR IGNORE are shorthands for the ON CONFLICT clause
+			throw ParserException("You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove "
+								  "the first if you want to have more granual control");
+		}
+		on_conflict_info = transformer.Transform<unique_ptr<OnConflictInfo>>(on_conflict_clause.optional_result);
+		result->on_conflict_info = std::move(on_conflict_info);
+		result->table_ref = std::move(insert_target);
+	}
+	if (or_action_opt.HasResult()) {
+		on_conflict_info->action_type = transformer.Transform<OnConflictAction>(or_action_opt.optional_result);
+		result->on_conflict_info = std::move(on_conflict_info);
+		result->table_ref = std::move(insert_target);
 	}
 	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 9, result->returning_list);
-
 	return std::move(result);
+}
+
+OnConflictAction PEGTransformerFactory::TransformOrAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto replace_or_ignore = list_pr.Child<ChoiceParseResult>(1).result;
+	auto replace_or_ignore_keyword = replace_or_ignore->Cast<KeywordParseResult>().keyword;
+	if (StringUtil::CIEquals(replace_or_ignore_keyword, "replace")) {
+		return OnConflictAction::REPLACE;
+	} else if (StringUtil::CIEquals(replace_or_ignore_keyword, "ignore")) {
+		return OnConflictAction::NOTHING;
+	} else {
+		throw InternalException("Unexpected keyword %s encountered for OrAction", replace_or_ignore_keyword);
+	}
 }
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformInsertTarget(PEGTransformer &transformer,
