@@ -242,6 +242,24 @@ SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_n
 ----
 temp	myschema	explicit_temp
 
+# Cannot create temporary objects in reserved/system schemas
+statement error
+CREATE TEMPORARY TABLE information_schema.t1(i INTEGER)
+----
+<REGEX>:.*Cannot create temporary schema with reserved name.*
+
+statement error
+CREATE TEMPORARY TABLE pg_catalog.t1(i INTEGER)
+----
+<REGEX>:.*Cannot create temporary schema with reserved name.*
+
+# Creating temporary tables in the default 'main' schema should work
+statement ok
+CREATE TEMPORARY TABLE main.t1(i INTEGER)
+
+statement ok
+DROP TABLE temp.main.t1
+
 # =============================================================================
 # Multiple schemas
 # =============================================================================

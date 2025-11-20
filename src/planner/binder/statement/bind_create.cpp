@@ -147,17 +147,18 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	// For temporary objects, ensure the schema exists in the temp catalog
 	// If not, create it automatically
 	if (info.temporary && info.catalog == TEMP_CATALOG) {
+		// Block creation of temp objects in reserved/system schema names (information_schema, pg_catalog)
+		// This check must happen regardless of whether the schema already exists
+		if (DefaultSchemaGenerator::IsDefaultSchema(info.schema)) {
+			throw BinderException("Cannot create temporary schema with reserved name \"%s\"", info.schema);
+		}
+
 		auto &catalog = Catalog::GetCatalog(context, info.catalog);
 		auto existing_schema = catalog.GetSchema(context, info.schema, OnEntryNotFound::RETURN_NULL);
 		if (!existing_schema) {
-			// Block creation of temp schemas with system/internal schema names
-			if (DefaultSchemaGenerator::IsDefaultSchema(info.schema)) {
-				throw BinderException("Cannot create temporary schema with reserved name \"%s\"", info.schema);
-			}
 			// Create the schema in the temp catalog
 			CreateSchemaInfo schema_info;
 			schema_info.schema = info.schema;
-			schema_info.internal = false;
 			schema_info.temporary = true;
 			schema_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 			catalog.CreateSchema(context, schema_info);
