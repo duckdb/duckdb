@@ -310,7 +310,6 @@ public:
 	void Print(PrintOutput output, const string &str);
 	void Print(const char *str);
 	void Print(const string &str);
-	void PrintPadded(const char *str, idx_t len);
 	template <typename... ARGS>
 	void PrintF(PrintOutput stream, const string &str, ARGS... params) {
 		Print(stream, StringUtil::Format(str, params...));

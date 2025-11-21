@@ -427,10 +427,6 @@ void ShellState::Print(const string &str) {
 	Print(PrintOutput::STDOUT, str.c_str());
 }
 
-void ShellState::PrintPadded(const char *str, idx_t len) {
-	utf8_printf(out, "%*s", int(len), str);
-}
-
 /* Indicate out-of-memory and exit. */
 static void shell_out_of_memory(void) {
 	fprintf(stderr, "Error: out of memory\n");
@@ -1969,7 +1965,7 @@ bool ShellState::ShouldUsePager(duckdb::QueryResult &result) {
 		if (cMode == RenderMode::DUCKBOX) {
 			// in duckbox mode the output is automatically truncated to "max_rows"
 			// if "max_rows" is smaller than pager_min_rows in this mode, we never show the pager
-			if (max_rows < pager_min_rows) {
+			if (max_rows < pager_min_rows && max_width == 0) {
 				return false;
 			}
 		}

@@ -39,9 +39,11 @@ void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t i) {
 	idx_t w = result.column_width[i];
 	idx_t n = state.RenderLength(result.data[i]);
-	state.PrintPadded("", (w - n) / 2);
+	idx_t lspace = (w - n) / 2;
+	idx_t rspace = (w - n + 1) / 2;
+	state.Print(string(lspace, ' '));
 	state.Print(result.data[i]);
-	state.PrintPadded("", (w - n + 1) / 2);
+	state.Print(string(rspace, ' '));
 }
 
 class ModeColumnRenderer : public ColumnRenderer {
@@ -353,9 +355,13 @@ public:
 		auto &data = result.data;
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < data.size(); i++) {
-			state.PrintPadded(col_names[i].c_str(), header_width);
+			idx_t space_count = header_width - col_names[i].size();
+			if (space_count > 0) {
+				state.Print(string(space_count, ' '));
+			}
+			state.Print(col_names[i]);
 			state.Print(" = ");
-			state.Print(data[i].c_str());
+			state.Print(data[i]);
 			state.Print(state.rowSeparator);
 		}
 	}
