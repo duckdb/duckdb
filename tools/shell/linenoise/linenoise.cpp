@@ -34,8 +34,6 @@
 namespace duckdb {
 
 static linenoiseCompletionCallback *completionCallback = NULL;
-static linenoiseHintsCallback *hintsCallback = NULL;
-static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 
 int linenoiseHistoryAdd(const char *line);
 
@@ -44,26 +42,6 @@ int linenoiseHistoryAdd(const char *line);
 /* Register a callback function to be called for tab-completion. */
 void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
 	completionCallback = fn;
-}
-
-/* Register a hits function to be called to show hits to the user at the
- * right of the prompt. */
-void Linenoise::SetHintsCallback(linenoiseHintsCallback *fn) {
-	hintsCallback = fn;
-}
-
-/* Register a function to free the hints returned by the hints callback
- * registered with linenoiseSetHintsCallback(). */
-void Linenoise::SetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
-	freeHintsCallback = fn;
-}
-
-linenoiseHintsCallback *Linenoise::HintsCallback() {
-	return hintsCallback;
-}
-
-linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
-	return freeHintsCallback;
 }
 
 CompletionType Linenoise::GetCompletionType(const char *type) {
@@ -416,8 +394,7 @@ void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_co
 	PositionToColAndRow(plen, buf, len, target_pos, out_row, out_col, rows, cols);
 }
 
-size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
-	int plen = GetPromptWidth();
+size_t Linenoise::ColAndRowToPosition(int plen, const char *buf, idx_t len, int target_row, int target_col) const {
 	int rows = 1;
 	int cols = plen;
 	size_t last_cpos = 0;
@@ -426,7 +403,7 @@ size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
 		if (cols >= ws.ws_col) {
 			// exceeded width - move to next line
 			rows++;
-			cols = 0;
+			cols = plen;
 		}
 		if (rows > target_row) {
 			// we have skipped our target row - that means "target_col" was out of range for this row
@@ -442,6 +419,11 @@ size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
 		NextPosition(buf, len, cpos, rows, cols, plen);
 	}
 	return cpos;
+}
+
+size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
+	int plen = GetPromptWidth();
+	return ColAndRowToPosition(plen, buf, len, target_row, target_col);
 }
 
 /* Insert the character 'c' at cursor current position.
@@ -1098,8 +1080,8 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	continuation_markers = true;
 	insert = false;
 	search_index = 0;
-	completion_idx = optional_idx();
 	rendered_completion_lines = 0;
+	completion_idx = optional_idx();
 	render_completion_suggestion = false;
 
 	/* Buffer starts empty. */
@@ -1136,6 +1118,7 @@ void Linenoise::HandleTerminalResize() {
 		}
 		PositionToColAndRow(0, completion_text.c_str(), completion_text.size(), 0, cursor_row, cursor_col, rows, cols);
 		rendered_completion_lines = rows;
+		maxrows += rows;
 	}
 }
 
@@ -1504,14 +1487,6 @@ int Linenoise::Edit() {
 				} else {
 					EditMoveEnd();
 				}
-			}
-			if (hintsCallback) {
-				/* Force a refresh without hints to leave the previous
-				 * line as the user typed it after a newline. */
-				linenoiseHintsCallback *hc = hintsCallback;
-				hintsCallback = NULL;
-				RefreshLine();
-				hintsCallback = hc;
 			}
 			// rewrite \r\n to \n
 			idx_t new_len = 0;
