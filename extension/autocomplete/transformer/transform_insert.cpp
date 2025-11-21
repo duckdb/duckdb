@@ -70,6 +70,11 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformInsertTarget(PEGTransfo
 	return table_ref;
 }
 
+string PEGTransformerFactory::TransformInsertAlias(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.Child<IdentifierParseResult>(1).identifier;
+}
+
 unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictClause(PEGTransformer &transformer,
                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

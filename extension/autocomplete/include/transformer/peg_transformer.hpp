@@ -736,6 +736,7 @@ private:
 	static OnConflictAction TransformOrAction(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<BaseTableRef> TransformInsertTarget(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
+	static string TransformInsertAlias(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<OnConflictInfo> TransformOnConflictClause(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static OnConflictExpressionTarget TransformOnConflictTarget(PEGTransformer &transformer,
