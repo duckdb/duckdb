@@ -53,7 +53,7 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 	// If the replay type doesn't match the type of the BufferedIndexData at the end, we append a new
 	// BufferedIndexData that we can buffer into.
 	if (buffered_replays.empty() || buffered_replays.back().type != replay_type) {
-		// Before creating a new BufferedIndexData, resize the previous small_chunk to be tight if needed.
+		// Before creating a new BufferedIndexData, resize the previous small_chunk if it has too many free slots.
 		if (!buffered_replays.empty() && buffered_replays.back().small_chunk) {
 			auto &prev = buffered_replays.back();
 			if (prev.small_chunk->size() == 0) {
@@ -152,7 +152,6 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 			tail_chunk.SetCardinality(leftover);
 			target.small_chunk->Append(tail_chunk, true);
 		}
-
 	}
 }
 

@@ -22,7 +22,7 @@ CREATE TABLE tbl(a INTEGER);
 statement ok
 CREATE INDEX idx_a ON tbl(a);
 
-loop i 0 1000000
+loop i 0 10000000
 
 statement ok
 INSERT INTO tbl VALUES (${i});
@@ -33,7 +33,7 @@ DELETE FROM tbl WHERE a = ${i};
 endloop
 
 statement ok
-INSERT INTO tbl VALUES (1000000)
+INSERT INTO tbl VALUES (10000000)
 
 restart
 
@@ -55,16 +55,16 @@ SELECT COUNT(*) FROM tbl;
 1
 
 query II
-EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 1000000;
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 10000000;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query I
-SELECT * FROM tbl WHERE a = 1000000;
+SELECT * FROM tbl WHERE a = 10000000;
 ----
-1000000
+100000000
 
 query I
-SELECT * FROM tbl WHERE a = 500000;
+SELECT * FROM tbl WHERE a = 50000;
 ----
 
