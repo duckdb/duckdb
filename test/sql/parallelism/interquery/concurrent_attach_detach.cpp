@@ -410,7 +410,8 @@ AttachTask AttachWorker::RandomTask() {
 		GetRandomTable(result);
 		if (result.tbl_id.IsValid()) {
 			auto current_num_rows = result.tbl_size.GetIndex();
-			idx_t delete_count = std::rand() % (STANDARD_VECTOR_SIZE / 3);
+			idx_t modulo = STANDARD_VECTOR_SIZE < 3 ? STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE / 3;
+			idx_t delete_count = std::rand() % modulo;
 			if (delete_count == 0) {
 				delete_count = 1;
 			}
