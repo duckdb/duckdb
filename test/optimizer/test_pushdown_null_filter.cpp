@@ -5,7 +5,7 @@
 
 using namespace duckdb;
 
-static TableFilterType ExtractFirstTableFilterTypeInQuery(duckdb::Connection& con, const std::string& query) {
+static TableFilterType ExtractFirstTableFilterTypeInQuery(duckdb::Connection &con, const std::string &query) {
 	const auto plan = con.context->ExtractPlan(query);
 	LogicalOperator *op = plan.get();
 	// find the logical get:
@@ -25,9 +25,11 @@ TEST_CASE("NullFilters are pushed down in TableFilters", "[optimizer][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (NULL), (3), (NULL);"));
 	SECTION("IS NULL filter") {
-		REQUIRE(ExtractFirstTableFilterTypeInQuery(con, "SELECT * FROM integers WHERE i IS NULL;") == TableFilterType::IS_NULL);
+		REQUIRE(ExtractFirstTableFilterTypeInQuery(con, "SELECT * FROM integers WHERE i IS NULL;") ==
+		        TableFilterType::IS_NULL);
 	}
 	SECTION("IS NOT NULL filter") {
-		REQUIRE(ExtractFirstTableFilterTypeInQuery(con, "SELECT * FROM integers WHERE i IS NOT NULL;") == TableFilterType::IS_NOT_NULL);
+		REQUIRE(ExtractFirstTableFilterTypeInQuery(con, "SELECT * FROM integers WHERE i IS NOT NULL;") ==
+		        TableFilterType::IS_NOT_NULL);
 	}
 }
