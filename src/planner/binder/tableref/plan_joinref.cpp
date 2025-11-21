@@ -117,6 +117,23 @@ static bool IsJoinTypeCondition(const JoinRefType ref_type, const ExpressionType
 	}
 }
 
+//! Check an expression is a usable comparison expression
+static bool IsComparisonExpression(const Expression &expr) {
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return true;
+	default:
+		return false;
+	}
+}
+
 //! Create a JoinCondition from a comparison
 static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &left_bindings,
                                 const unordered_set<idx_t> &right_bindings, vector<JoinCondition> &conditions) {
