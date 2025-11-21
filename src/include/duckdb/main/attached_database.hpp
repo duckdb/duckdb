@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 
@@ -94,7 +91,11 @@ public:
 	//! Initializes the catalog and storage of the attached database.
 	void Initialize(optional_ptr<ClientContext> context = nullptr);
 	void FinalizeLoad(optional_ptr<ClientContext> context);
-	void Close();
+	//! Checkpoint the database before shutting it down.
+	void Checkpoint();
+	//! Clean any (shared) resources held by the database. Should always be called when shutting down the database,
+	//! even if a previous checkpoint fails.
+	void Cleanup();
 
 	Catalog &ParentCatalog() override;
 	const Catalog &ParentCatalog() const override;
@@ -146,7 +147,8 @@ private:
 	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
-	bool is_closed = false;
+	bool checkpoint = true;
+	bool cleanup = true;
 };
 
 } // namespace duckdb

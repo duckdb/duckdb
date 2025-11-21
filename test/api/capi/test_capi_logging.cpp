@@ -93,6 +93,8 @@ TEST_CASE("Test a custom log storage in the CAPI with extra data", "[capi]") {
 	duckdb_destroy_log_storage(&log_storage);
 }
 
+// FIXME: shut down and log resetting the databases instead
+
 TEST_CASE("Test logging silent exceptions using a custom log storage in the CAPI", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;

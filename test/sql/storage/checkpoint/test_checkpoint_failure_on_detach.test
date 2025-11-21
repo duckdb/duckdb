@@ -1,0 +1,20 @@
+# name: test/sql/storage/checkpoint/test_checkpoint_failure_on_detach.test
+# description: Test failing a CHECKPOINT on DETACH.
+# group: [checkpoint]
+
+statement ok
+ATTACH '__TEST_DIR__/fail_detach';
+
+statement ok
+PRAGMA wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA debug_checkpoint_abort = 'before_header';
+
+statement ok
+CREATE TABLE fail_detach.integers AS SELECT * FROM range(100) tbl(i);
+
+statement error
+DETACH fail_detach;
+----
+but CHECKPOINT during DETACH failed

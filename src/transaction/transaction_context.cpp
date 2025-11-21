@@ -6,6 +6,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -55,9 +56,29 @@ void TransactionContext::Commit() {
 			s->TransactionRollback(*transaction, context, error);
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
-	} else {
-		for (auto &state : context.registered_state->States()) {
-			state->TransactionCommit(*transaction, context);
+	}
+
+	for (auto &state : context.registered_state->States()) {
+		state->TransactionCommit(*transaction, context);
+	}
+
+	// Try to checkpoint any attached databases potentially still held by this transaction.
+	auto referenced_databases = transaction->ReferencedDatabases();
+	for (auto &database : referenced_databases) {
+		auto &attached_db = database.second;
+		auto use_count = attached_db.use_count();
+		Printer::Print(attached_db->name);
+		Printer::Print(to_string(use_count));
+		if (use_count == 1) {
+			// We already detached the database meaning new transactions can no longer obtain a shared pointer to it.
+			try {
+				attached_db->Checkpoint();
+			} catch (std::exception &ex) {
+				ErrorData data(ex);
+				data.Throw();
+			} catch (...) { // NOLINT
+			}
+			database.second->Checkpoint();
 		}
 	}
 }

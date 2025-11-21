@@ -151,7 +151,27 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
-	Close();
+	// FIXME: I am not sure if we want to continue checkpointing here?
+	// FIXME: Theoretically, we should now catch all places higher up the call stack where the
+	// FIXME: shared pointer goes out of scope.
+
+	// Shutting down: attempt to checkpoint the database,
+	// but only if we are not cleaning up as part of an exception unwind.
+	if (!Exception::UncaughtException()) {
+		try {
+			Checkpoint();
+		} catch (std::exception &ex) {
+			ErrorData data(ex);
+			try {
+				DUCKDB_LOG_ERROR(db, "Silent exception in AttachedDatabase::~AttachedDatabase():\t" + data.Message());
+			} catch (...) { // NOLINT
+			}
+		} catch (...) { // NOLINT
+		}
+	}
+
+	// We need to clean up, independent of the success of the checkpoint.
+	Cleanup();
 }
 
 bool AttachedDatabase::IsSystem() const {
@@ -257,39 +277,28 @@ void AttachedDatabase::OnDetach(ClientContext &context) {
 	}
 }
 
-void AttachedDatabase::Close() {
-	if (is_closed) {
+void AttachedDatabase::Checkpoint() {
+	if (!checkpoint) {
 		return;
 	}
 	D_ASSERT(catalog);
-	is_closed = true;
+	checkpoint = false;
 
-	// shutting down: attempt to checkpoint the database
-	// but only if we are not cleaning up as part of an exception unwind
-	if (!Exception::UncaughtException() && storage && !ValidChecker::IsInvalidated(db)) {
-		if (!storage->InMemory()) {
-			try {
-				auto &config = DBConfig::GetConfig(db);
-				if (config.options.checkpoint_on_shutdown) {
-					CheckpointOptions options;
-					options.wal_action = CheckpointWALAction::DELETE_WAL;
-					storage->CreateCheckpoint(QueryContext(), options);
-				}
-			} catch (std::exception &ex) {
-				ErrorData data(ex);
-				try {
-					DUCKDB_LOG_ERROR(db, "AttachedDatabase::Close()\t\t" + data.Message());
-				} catch (...) { // NOLINT
-				}
-			} catch (...) { // NOLINT
-			}
-		}
-		try {
-			// destroy the storage
-			storage->Destroy();
-		} catch (...) { // NOLINT
+	if (storage && !storage->InMemory() && !ValidChecker::IsInvalidated(db)) {
+		auto &config = DBConfig::GetConfig(db);
+		if (config.options.checkpoint_on_shutdown) {
+			CheckpointOptions options;
+			options.wal_action = CheckpointWALAction::DELETE_WAL;
+			storage->CreateCheckpoint(QueryContext(), options);
 		}
 	}
+}
+
+void AttachedDatabase::Cleanup() {
+	if (!cleanup) {
+		return;
+	}
+	cleanup = false;
 
 	transaction_manager.reset();
 	catalog.reset();
