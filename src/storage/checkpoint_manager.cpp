@@ -540,12 +540,10 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 
 	// Write the table data
 	auto table_lock = table.GetStorage().GetCheckpointLock();
-	if (auto writer = GetTableDataWriter(table)) {
+	auto writer = GetTableDataWriter(table);
+	if (writer) {
 		writer->WriteTableData(serializer);
 	}
-	// flush any partial blocks BEFORE releasing the table lock
-	// flushing partial blocks updates where data lives and is not thread-safe
-	partial_block_manager.FlushPartialBlocks();
 }
 
 void CheckpointReader::ReadTable(CatalogTransaction transaction, Deserializer &deserializer) {
