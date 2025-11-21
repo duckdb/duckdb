@@ -418,6 +418,7 @@ void PEGTransformerFactory::RegisterInsert() {
 	REGISTER_TRANSFORM(TransformInsertStatement);
 	REGISTER_TRANSFORM(TransformOrAction);
 	REGISTER_TRANSFORM(TransformInsertTarget);
+	REGISTER_TRANSFORM(TransformInsertAlias);
 	REGISTER_TRANSFORM(TransformOnConflictClause);
 	REGISTER_TRANSFORM(TransformOnConflictTarget);
 	REGISTER_TRANSFORM(TransformOnConflictExpressionTarget);
@@ -463,6 +464,10 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformFromSelectClause);
 	REGISTER_TRANSFORM(TransformFromClause);
 	REGISTER_TRANSFORM(TransformSelectClause);
+	REGISTER_TRANSFORM(TransformDistinctClause);
+	REGISTER_TRANSFORM(TransformDistinctOn);
+	REGISTER_TRANSFORM(TransformDistinctOnTargets);
+	REGISTER_TRANSFORM(TransformDistinctAll);
 	REGISTER_TRANSFORM(TransformFunctionArgument);
 	REGISTER_TRANSFORM(TransformBaseTableName);
 	REGISTER_TRANSFORM(TransformSchemaReservedTable);
