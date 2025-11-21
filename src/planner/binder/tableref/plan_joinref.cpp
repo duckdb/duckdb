@@ -63,6 +63,40 @@ static void PushFilterToChild(unique_ptr<LogicalOperator> &child, unique_ptr<Exp
 	filter.expressions.push_back(std::move(expr));
 }
 
+//! Check if a foldable expression evaluates to TRUE and can be eliminated
+static bool CanEliminate(ClientContext &context, JoinType type, unique_ptr<Expression> &expr) {
+	if (!expr->IsFoldable()) {
+		return false;
+	}
+
+	Value result;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, *expr, result)) {
+		return false;
+	}
+
+	if (result.IsNull()) {
+		return false;
+	}
+
+	bool is_true = (result == Value(true));
+
+	if (is_true) {
+		switch (type) {
+		case JoinType::INNER:
+		case JoinType::LEFT:
+		case JoinType::RIGHT:
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+		case JoinType::OUTER:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	return false;
+}
+
 //! Only use conditions that are valid for the join ref type
 static bool IsJoinTypeCondition(const JoinRefType ref_type, const ExpressionType expr_type) {
 	switch (ref_type) {
