@@ -2969,10 +2969,26 @@ SuccessState ShellState::ChangeDirectory(const string &path) {
 SuccessState ShellState::ShowDatabases() {
 	OpenDB();
 
-	auto renderer = GetRowRenderer(RenderMode::LIST);
-	renderer->show_header = false;
-	renderer->col_sep = ": ";
-	return RenderQuery(*renderer, "SELECT name, file FROM pragma_database_list");
+	auto &con = *conn;
+	auto query_result = con.Query("SELECT name, file FROM pragma_database_list");
+	if (query_result->HasError()) {
+		PrintDatabaseError(query_result->GetError());
+		return SuccessState::FAILURE;
+	}
+	ShellTableInfo result;
+	result.table_name = "databases";
+	for (auto &row : *query_result) {
+		ShellColumnInfo column;
+		// database name
+		column.column_name = row.GetValue<string>(0);
+		// database file
+		column.column_type = row.IsNull(1) ? "(memory)" : row.GetValue<string>(1);
+		result.columns.push_back(std::move(column));
+	}
+	vector<ShellTableInfo> result_list;
+	result_list.push_back(std::move(result));
+	RenderTableMetadata(result_list);
+	return SuccessState::SUCCESS;
 }
 
 MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &args) {
