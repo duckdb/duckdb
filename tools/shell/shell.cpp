@@ -3832,6 +3832,7 @@ int wmain(int argc, wchar_t **wargv) {
 		}
 	}
 	data.SetTableName(0);
+	data.last_result.reset();
 	data.db.reset();
 	data.conn.reset();
 	data.ResetOutput();
