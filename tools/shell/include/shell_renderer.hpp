@@ -29,7 +29,7 @@ public:
 
 struct ColumnarResult {
 	idx_t column_count = 0;
-	vector<string> data;
+	vector<vector<string>> data;
 	vector<duckdb::LogicalType> types;
 	vector<idx_t> column_width;
 	vector<bool> right_align;
@@ -61,7 +61,7 @@ public:
 		return nullptr;
 	}
 
-	void RenderAlignedValue(ColumnarResult &result, idx_t i);
+	void RenderAlignedValue(ColumnarResult &result, idx_t c);
 };
 
 class RowRenderer : public ShellRenderer {

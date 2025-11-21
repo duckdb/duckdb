@@ -1318,18 +1318,21 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result) {
 	// fetch the column count, column names and types
 	result.column_count = res.ColumnCount();
-	result.data.reserve(result.column_count * 4);
+	vector<string> header_row;
 	for (idx_t c = 0; c < result.column_count; c++) {
-		result.data.push_back(renderer.ConvertValue(res.names[c].c_str()));
+		header_row.push_back(renderer.ConvertValue(res.names[c].c_str()));
 		result.types.push_back(res.types[c]);
 		result.type_names.push_back(GetTypeName(res.types[c]));
 	}
+	result.data.push_back(std::move(header_row));
 
 	for (auto &row : res) {
+		vector<string> row_data;
 		for (idx_t c = 0; c < result.column_count; c++) {
 			auto str_val = row.GetValue<string>(c);
-			result.data.push_back(renderer.ConvertValue(str_val.c_str()));
+			row_data.push_back(renderer.ConvertValue(str_val.c_str()));
 		}
+		result.data.push_back(std::move(row_data));
 	}
 
 	// compute the column widths
@@ -1343,11 +1346,12 @@ void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryRe
 		}
 		result.column_width.push_back(static_cast<idx_t>(w));
 	}
-	for (idx_t i = 0; i < result.data.size(); i++) {
-		idx_t width = RenderLength(result.data[i]);
-		idx_t column_idx = i % result.column_count;
-		if (width > result.column_width[column_idx]) {
-			result.column_width[column_idx] = width;
+	for (auto &row : result.data) {
+		for (idx_t column_idx = 0; column_idx < row.size(); column_idx++) {
+			idx_t width = RenderLength(row[column_idx]);
+			if (width > result.column_width[column_idx]) {
+				result.column_width[column_idx] = width;
+			}
 		}
 	}
 }
@@ -1372,22 +1376,23 @@ void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
 	auto rowSep = column_renderer->GetRowSeparator();
 	auto row_start = column_renderer->GetRowStart();
 
-	for (idx_t i = result.column_count, j = 0; i < result.data.size(); i++, j++) {
-		if (j == 0 && row_start) {
+	for (idx_t r = 1; r < result.data.size(); r++) {
+		auto &row = result.data[r];
+		if (seenInterrupt) {
+			return;
+		}
+		if (row_start) {
 			Print(row_start);
 		}
-		idx_t w = result.column_width[j];
-		bool right_align = result.right_align[j];
-		UTF8WidthPrint(w, result.data[i], right_align);
-		if (j == result.column_count - 1) {
-			Print(rowSep);
-			j = -1;
-			if (seenInterrupt) {
-				return;
+		for (idx_t c = 0; c < row.size(); c++) {
+			if (c > 0) {
+				Print(colSep);
 			}
-		} else {
-			Print(colSep);
+			idx_t w = result.column_width[c];
+			bool right_align = result.right_align[c];
+			UTF8WidthPrint(w, row[c], right_align);
 		}
+		Print(rowSep);
 	}
 	column_renderer->RenderFooter(result);
 }

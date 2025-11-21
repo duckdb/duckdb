@@ -36,13 +36,14 @@ string ColumnRenderer::ConvertValue(const char *value) {
 void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 }
 
-void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t i) {
-	idx_t w = result.column_width[i];
-	idx_t n = state.RenderLength(result.data[i]);
+void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t c) {
+	auto &header_value = result.data[0][c];
+	idx_t w = result.column_width[c];
+	idx_t n = state.RenderLength(header_value);
 	idx_t lspace = (w - n) / 2;
 	idx_t rspace = (w - n + 1) / 2;
 	state.Print(string(lspace, ' '));
-	state.Print(result.data[i]);
+	state.Print(header_value);
 	state.Print(string(rspace, ' '));
 }
 
@@ -55,13 +56,14 @@ public:
 		if (!show_header) {
 			return;
 		}
-		for (idx_t i = 0; i < result.column_count; i++) {
-			state.UTF8WidthPrint(result.column_width[i], result.data[i], result.right_align[i]);
-			state.Print(i == result.column_count - 1 ? "\n" : "  ");
+		auto column_count = result.column_count;
+		for (idx_t c = 0; c < column_count; c++) {
+			state.UTF8WidthPrint(result.column_width[c], result.data[0][c], result.right_align[c]);
+			state.Print(c == column_count - 1 ? "\n" : "  ");
 		}
-		for (idx_t i = 0; i < result.column_count; i++) {
+		for (idx_t i = 0; i < column_count; i++) {
 			state.PrintDashes(result.column_width[i]);
-			state.Print(i == result.column_count - 1 ? "\n" : "  ");
+			state.Print(i == column_count - 1 ? "\n" : "  ");
 		}
 	}
 
@@ -79,17 +81,19 @@ public:
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
-		state.PrintRowSeparator(result.column_count, "+", result.column_width);
+		auto column_count = result.column_count;
+		state.PrintRowSeparator(column_count, "+", result.column_width);
 		state.Print("| ");
-		for (idx_t i = 0; i < result.column_count; i++) {
-			RenderAlignedValue(result, i);
-			state.Print(i == result.column_count - 1 ? " |\n" : " | ");
+		for (idx_t c = 0; c < column_count; c++) {
+			RenderAlignedValue(result, c);
+			state.Print(c == column_count - 1 ? " |\n" : " | ");
 		}
-		state.PrintRowSeparator(result.column_count, "+", result.column_width);
+		state.PrintRowSeparator(column_count, "+", result.column_width);
 	}
 
 	void RenderFooter(ColumnarResult &result) override {
-		state.PrintRowSeparator(result.column_count, "+", result.column_width);
+		auto column_count = result.column_count;
+		state.PrintRowSeparator(column_count, "+", result.column_width);
 	}
 
 	const char *GetColumnSeparator() override {
@@ -115,15 +119,16 @@ public:
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
+		auto column_count = result.column_count;
 		state.Print(GetRowStart());
-		for (idx_t i = 0; i < result.column_count; i++) {
-			if (i > 0) {
+		for (idx_t c = 0; c < column_count; c++) {
+			if (c > 0) {
 				state.Print(GetColumnSeparator());
 			}
-			RenderAlignedValue(result, i);
+			RenderAlignedValue(result, c);
 		}
 		state.Print(GetRowSeparator());
-		state.PrintMarkdownSeparator(result.column_count, "|", result.types, result.column_width);
+		state.PrintMarkdownSeparator(column_count, "|", result.types, result.column_width);
 	}
 
 	const char *GetColumnSeparator() override {
@@ -196,17 +201,19 @@ public:
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
-		print_box_row_separator(result.column_count, BOX_23, BOX_234, BOX_34, result.column_width);
+		auto column_count = result.column_count;
+		print_box_row_separator(column_count, BOX_23, BOX_234, BOX_34, result.column_width);
 		state.Print(BOX_13 " ");
-		for (idx_t i = 0; i < result.column_count; i++) {
-			RenderAlignedValue(result, i);
-			state.Print(i == result.column_count - 1 ? " " BOX_13 "\n" : " " BOX_13 " ");
+		for (idx_t c = 0; c < column_count; c++) {
+			RenderAlignedValue(result, c);
+			state.Print(c == column_count - 1 ? " " BOX_13 "\n" : " " BOX_13 " ");
 		}
-		print_box_row_separator(result.column_count, BOX_123, BOX_1234, BOX_134, result.column_width);
+		print_box_row_separator(column_count, BOX_123, BOX_1234, BOX_134, result.column_width);
 	}
 
 	void RenderFooter(ColumnarResult &result) override {
-		print_box_row_separator(result.column_count, BOX_12, BOX_124, BOX_14, result.column_width);
+		auto column_count = result.column_count;
+		print_box_row_separator(column_count, BOX_12, BOX_124, BOX_14, result.column_width);
 	}
 
 	const char *GetColumnSeparator() override {
@@ -256,8 +263,10 @@ public:
 	}
 
 	void RenderHeader(ColumnarResult &result) override {
+		auto column_count = result.column_count;
+
 		state.Print("\\begin{tabular}{|");
-		for (idx_t i = 0; i < result.column_count; i++) {
+		for (idx_t i = 0; i < column_count; i++) {
 			if (state.ColumnTypeIsInteger(result.type_names[i].c_str())) {
 				state.Print("r");
 			} else {
@@ -266,9 +275,9 @@ public:
 		}
 		state.Print("|}\n");
 		state.Print("\\hline\n");
-		for (idx_t i = 0; i < result.column_count; i++) {
+		for (idx_t i = 0; i < column_count; i++) {
 			RenderAlignedValue(result, i);
-			state.Print(i == result.column_count - 1 ? GetRowSeparator() : GetColumnSeparator());
+			state.Print(i == column_count - 1 ? GetRowSeparator() : GetColumnSeparator());
 		}
 		state.Print("\\hline\n");
 	}
