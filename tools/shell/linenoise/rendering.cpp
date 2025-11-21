@@ -787,6 +787,9 @@ void Linenoise::RefreshMultiLine() {
 		max_rows_to_render--;
 	}
 	if (rows > max_rows_to_render) {
+		if (max_rows_to_render == ws.ws_row && rendered_completion_lines > 0) {
+			y_scroll--;
+		}
 		// the text does not fit in the terminal (too many rows)
 		// enable scrolling mode
 		// check if, given the current y_scroll, the cursor is visible
@@ -1050,8 +1053,8 @@ void Linenoise::RefreshMultiLine() {
 		                    completion_rows, completion_cols);
 		append_buffer.Append(completion_text.c_str(), completion_text.size());
 
-		rendered_completion_lines = completion_rows + 1;
-		rows += rendered_completion_lines;
+		rendered_completion_lines = completion_rows;
+		rows += static_cast<int>(rendered_completion_lines);
 		maxrows += rendered_completion_lines;
 	} else {
 		rendered_completion_lines = 0;
