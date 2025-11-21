@@ -818,15 +818,20 @@ void Linenoise::RefreshMultiLine() {
 		old_rows = 0;
 		clear_screen = false;
 	}
-	if (rows > ws.ws_row) {
+	idx_t max_rows_to_render = ws.ws_row;
+	if (render_completion_suggestion && !completion_list.completions.empty()) {
+		// if we are rendering completions keep one line clear for rendering them
+		max_rows_to_render--;
+	}
+	if (rows > max_rows_to_render) {
 		// the text does not fit in the terminal (too many rows)
 		// enable scrolling mode
 		// check if, given the current y_scroll, the cursor is visible
 		// display range is [y_scroll, y_scroll + ws.ws_row]
 		if (new_cursor_row < int(y_scroll) + 1) {
 			y_scroll = new_cursor_row - 1;
-		} else if (new_cursor_row > int(y_scroll) + int(ws.ws_row)) {
-			y_scroll = new_cursor_row - ws.ws_row;
+		} else if (new_cursor_row > int(y_scroll) + int(max_rows_to_render)) {
+			y_scroll = new_cursor_row - max_rows_to_render;
 		}
 		// display only characters up to the current scroll position
 		if (y_scroll == 0) {
@@ -834,17 +839,17 @@ void Linenoise::RefreshMultiLine() {
 		} else {
 			render_start = ColAndRowToPosition(y_scroll, 0);
 		}
-		if (int(y_scroll) + int(ws.ws_row) >= rows) {
+		if (int(y_scroll) + int(max_rows_to_render) >= rows) {
 			render_end = len;
 		} else {
-			render_end = ColAndRowToPosition(y_scroll + ws.ws_row, 99999);
+			render_end = ColAndRowToPosition(y_scroll + max_rows_to_render, 99999);
 		}
 		new_cursor_row -= y_scroll;
 		render_buf += render_start;
 		render_len = render_end - render_start;
-		Linenoise::Log("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, render_start,
+		Linenoise::Log("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + max_rows_to_render, render_start,
 		               render_end);
-		rows = ws.ws_row;
+		rows = max_rows_to_render;
 	} else {
 		y_scroll = 0;
 	}
@@ -956,7 +961,7 @@ void Linenoise::RefreshMultiLine() {
 	Linenoise::Log("pos %d", pos);
 	Linenoise::Log("max cols %d", ws.ws_col);
 
-	if (rendered_completion_lines > 0 || (render_completion_suggestion && !completion_list.completions.empty())) {
+	if ((rendered_completion_lines > 0 && rows < ws.ws_row) || (render_completion_suggestion && !completion_list.completions.empty())) {
 		// if we are tab-completing - write the list of completions one line below
 		if (rendered_completion_lines == 0) {
 			// move to the next line if we haven't rendered completions yet
@@ -979,7 +984,6 @@ void Linenoise::RefreshMultiLine() {
 		append_buffer.Append("\r\x1b[0K");
 
 		if (!completion_list.completions.empty()) {
-			string completion_text;
 			// figure out how to align the completions
 			// we need to figure out how many "columns" we render
 			idx_t max_length = 0;
@@ -998,8 +1002,10 @@ void Linenoise::RefreshMultiLine() {
 			// now based on the max width determine the column count
 			// we need at least one space between each entry
 			max_length++;
+			string completion_text;
 			idx_t column_count = ws.ws_col / max_length;
 			idx_t column_index = 0;
+			idx_t rendered_rows = 1;
 			for (idx_t i = 0; i < completion_list.completions.size(); i++) {
 				auto &completion = completion_list.completions[i];
 				auto &rendered_text = completion.original_completion;
@@ -1068,8 +1074,13 @@ void Linenoise::RefreshMultiLine() {
 				column_index++;
 				if (column_index >= column_count) {
 					// have to wrap around - add a newline
+					if (rendered_rows + 1 + rows > ws.ws_row) {
+						// too many rows - stop rendering completion results
+						break;
+					}
 					completion_text += "\r\n";
 					column_index = 0;
+					rendered_rows++;
 				} else {
 					idx_t space_count = max_length - completion.original_completion_length.GetIndex();
 					completion_text += string(space_count, ' ');
