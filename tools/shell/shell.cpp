@@ -1334,26 +1334,7 @@ void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryRe
 		}
 		result.data.push_back(std::move(row_data));
 	}
-
-	// compute the column widths
-	for (idx_t i = 0; i < result.column_count; i++) {
-		int w = i < colWidth.size() ? colWidth[i] : 0;
-		if (w < 0) {
-			result.right_align.push_back(true);
-			w = -w;
-		} else {
-			result.right_align.push_back(false);
-		}
-		result.column_width.push_back(static_cast<idx_t>(w));
-	}
-	for (auto &row : result.data) {
-		for (idx_t column_idx = 0; column_idx < row.size(); column_idx++) {
-			idx_t width = RenderLength(row[column_idx]);
-			if (width > result.column_width[column_idx]) {
-				result.column_width[column_idx] = width;
-			}
-		}
-	}
+	renderer.Analyze(result);
 }
 
 /*
@@ -1372,27 +1353,13 @@ void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
 	ConvertColumnarResult(*column_renderer, res, result);
 
 	column_renderer->RenderHeader(result);
-	auto colSep = column_renderer->GetColumnSeparator();
-	auto rowSep = column_renderer->GetRowSeparator();
-	auto row_start = column_renderer->GetRowStart();
 
 	for (idx_t r = 1; r < result.data.size(); r++) {
-		auto &row = result.data[r];
-		if (seenInterrupt) {
-			return;
-		}
-		if (row_start) {
-			Print(row_start);
-		}
-		for (idx_t c = 0; c < row.size(); c++) {
-			if (c > 0) {
-				Print(colSep);
-			}
-			idx_t w = result.column_width[c];
-			bool right_align = result.right_align[c];
-			UTF8WidthPrint(w, row[c], right_align);
-		}
-		Print(rowSep);
+		RowData row_data;
+		row_data.data = std::move(result.data[r]);
+		row_data.row_index = r - 1;
+
+		column_renderer->RenderRow(row_data);
 	}
 	column_renderer->RenderFooter(result);
 }

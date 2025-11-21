@@ -31,8 +31,6 @@ struct ColumnarResult {
 	idx_t column_count = 0;
 	vector<vector<string>> data;
 	vector<duckdb::LogicalType> types;
-	vector<idx_t> column_width;
-	vector<bool> right_align;
 	vector<string> type_names;
 };
 
@@ -51,8 +49,10 @@ class ColumnRenderer : public ShellRenderer {
 public:
 	explicit ColumnRenderer(ShellState &state);
 
+	void Analyze(ColumnarResult &result);
 	virtual string ConvertValue(const char *value);
 	virtual void RenderHeader(ColumnarResult &result) = 0;
+	virtual void RenderRow(RowData &row);
 	virtual void RenderFooter(ColumnarResult &result);
 
 	virtual const char *GetColumnSeparator() = 0;
@@ -62,6 +62,10 @@ public:
 	}
 
 	void RenderAlignedValue(ColumnarResult &result, idx_t c);
+
+protected:
+	vector<idx_t> column_width;
+	vector<bool> right_align;
 };
 
 class RowRenderer : public ShellRenderer {

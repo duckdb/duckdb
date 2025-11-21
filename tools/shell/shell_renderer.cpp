@@ -38,13 +38,55 @@ void ColumnRenderer::RenderFooter(ColumnarResult &result) {
 
 void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t c) {
 	auto &header_value = result.data[0][c];
-	idx_t w = result.column_width[c];
+	idx_t w = column_width[c];
 	idx_t n = state.RenderLength(header_value);
 	idx_t lspace = (w - n) / 2;
 	idx_t rspace = (w - n + 1) / 2;
 	state.Print(string(lspace, ' '));
 	state.Print(header_value);
 	state.Print(string(rspace, ' '));
+}
+
+void ColumnRenderer::Analyze(ColumnarResult &result) {
+	// compute the column widths
+	auto &state = ShellState::Get();
+	for (idx_t i = 0; i < result.column_count; i++) {
+		int w = i < state.colWidth.size() ? state.colWidth[i] : 0;
+		if (w < 0) {
+			right_align.push_back(true);
+			w = -w;
+		} else {
+			right_align.push_back(false);
+		}
+		column_width.push_back(static_cast<idx_t>(w));
+	}
+	for (auto &row : result.data) {
+		for (idx_t column_idx = 0; column_idx < row.size(); column_idx++) {
+			idx_t width = state.RenderLength(row[column_idx]);
+			if (width > column_width[column_idx]) {
+				column_width[column_idx] = width;
+			}
+		}
+	}
+}
+
+void ColumnRenderer::RenderRow(RowData &row) {
+	auto &state = ShellState::Get();
+	auto colSep = GetColumnSeparator();
+	auto rowSep = GetRowSeparator();
+	auto row_start = GetRowStart();
+	if (row_start) {
+		state.Print(row_start);
+	}
+	for (idx_t c = 0; c < row.data.size(); c++) {
+		if (c > 0) {
+			state.Print(colSep);
+		}
+		idx_t w = column_width[c];
+		bool is_right_aligned = right_align[c];
+		state.UTF8WidthPrint(w, row.data[c], is_right_aligned);
+	}
+	state.Print(rowSep);
 }
 
 class ModeColumnRenderer : public ColumnRenderer {
@@ -58,11 +100,11 @@ public:
 		}
 		auto column_count = result.column_count;
 		for (idx_t c = 0; c < column_count; c++) {
-			state.UTF8WidthPrint(result.column_width[c], result.data[0][c], result.right_align[c]);
+			state.UTF8WidthPrint(column_width[c], result.data[0][c], right_align[c]);
 			state.Print(c == column_count - 1 ? "\n" : "  ");
 		}
 		for (idx_t i = 0; i < column_count; i++) {
-			state.PrintDashes(result.column_width[i]);
+			state.PrintDashes(column_width[i]);
 			state.Print(i == column_count - 1 ? "\n" : "  ");
 		}
 	}
@@ -82,18 +124,18 @@ public:
 
 	void RenderHeader(ColumnarResult &result) override {
 		auto column_count = result.column_count;
-		state.PrintRowSeparator(column_count, "+", result.column_width);
+		state.PrintRowSeparator(column_count, "+", column_width);
 		state.Print("| ");
 		for (idx_t c = 0; c < column_count; c++) {
 			RenderAlignedValue(result, c);
 			state.Print(c == column_count - 1 ? " |\n" : " | ");
 		}
-		state.PrintRowSeparator(column_count, "+", result.column_width);
+		state.PrintRowSeparator(column_count, "+", column_width);
 	}
 
 	void RenderFooter(ColumnarResult &result) override {
 		auto column_count = result.column_count;
-		state.PrintRowSeparator(column_count, "+", result.column_width);
+		state.PrintRowSeparator(column_count, "+", column_width);
 	}
 
 	const char *GetColumnSeparator() override {
@@ -128,7 +170,7 @@ public:
 			RenderAlignedValue(result, c);
 		}
 		state.Print(GetRowSeparator());
-		state.PrintMarkdownSeparator(column_count, "|", result.types, result.column_width);
+		state.PrintMarkdownSeparator(column_count, "|", result.types, column_width);
 	}
 
 	const char *GetColumnSeparator() override {
@@ -202,18 +244,18 @@ public:
 
 	void RenderHeader(ColumnarResult &result) override {
 		auto column_count = result.column_count;
-		print_box_row_separator(column_count, BOX_23, BOX_234, BOX_34, result.column_width);
+		print_box_row_separator(column_count, BOX_23, BOX_234, BOX_34, column_width);
 		state.Print(BOX_13 " ");
 		for (idx_t c = 0; c < column_count; c++) {
 			RenderAlignedValue(result, c);
 			state.Print(c == column_count - 1 ? " " BOX_13 "\n" : " " BOX_13 " ");
 		}
-		print_box_row_separator(column_count, BOX_123, BOX_1234, BOX_134, result.column_width);
+		print_box_row_separator(column_count, BOX_123, BOX_1234, BOX_134, column_width);
 	}
 
 	void RenderFooter(ColumnarResult &result) override {
 		auto column_count = result.column_count;
-		print_box_row_separator(column_count, BOX_12, BOX_124, BOX_14, result.column_width);
+		print_box_row_separator(column_count, BOX_12, BOX_124, BOX_14, column_width);
 	}
 
 	const char *GetColumnSeparator() override {
