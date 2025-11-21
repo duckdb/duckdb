@@ -19,6 +19,50 @@
 
 namespace duckdb {
 
+//! Check if a filter can be safely pushed to the left child
+static bool CanPushToLeftChild(JoinType type) {
+	switch (type) {
+	case JoinType::INNER:
+	case JoinType::SEMI:
+	case JoinType::RIGHT:
+		return true;
+	case JoinType::ANTI:
+	case JoinType::LEFT:
+	case JoinType::OUTER:
+		return false;
+	default:
+		return false;
+	}
+}
+
+//! Check if a filter can be safely pushed to the right child
+static bool CanPushToRightChild(JoinType type) {
+	switch (type) {
+	case JoinType::INNER:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+	case JoinType::LEFT:
+		return true;
+	case JoinType::RIGHT:
+	case JoinType::OUTER:
+		return false;
+	default:
+		return false;
+	}
+}
+
+//! Push a filter expression to a child operator
+static void PushFilterToChild(unique_ptr<LogicalOperator> &child, unique_ptr<Expression> &expr) {
+	if (child->type != LogicalOperatorType::LOGICAL_FILTER) {
+		auto filter = make_uniq<LogicalFilter>();
+		filter->AddChild(std::move(child));
+		child = std::move(filter);
+	}
+
+	auto &filter = child->Cast<LogicalFilter>();
+	filter.expressions.push_back(std::move(expr));
+}
+
 //! Only use conditions that are valid for the join ref type
 static bool IsJoinTypeCondition(const JoinRefType ref_type, const ExpressionType expr_type) {
 	switch (ref_type) {
