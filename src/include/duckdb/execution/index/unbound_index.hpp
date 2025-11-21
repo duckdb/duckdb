@@ -21,8 +21,9 @@ enum class BufferedIndexReplay : uint8_t { INSERT_ENTRY = 0, DEL_ENTRY = 1 };
 struct BufferedIndexData {
 	BufferedIndexReplay type;
 	unique_ptr<ColumnDataCollection> data;
+	unique_ptr<DataChunk> small_chunk;
 
-	BufferedIndexData(BufferedIndexReplay replay_type, unique_ptr<ColumnDataCollection> data_p);
+	BufferedIndexData(BufferedIndexReplay replay_type);
 };
 
 class UnboundIndex final : public Index {
