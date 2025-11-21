@@ -227,7 +227,8 @@ bool RoaringCompressState::CanStore(idx_t container_size_in_tuples, const Contai
 #ifdef DEBUG
 	{
 		//! Assert that whatever is already stored can actually fit on the segment
-		idx_t current_metadata_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+		idx_t current_metadata_size =
+		    metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
 		(void)current_metadata_size;
 		auto used_data_space = GetUsedDataSpace();
 		used_data_space = AlignValue<idx_t, 8>(used_data_space);

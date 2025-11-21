@@ -226,7 +226,8 @@ void ExtractValidityMaskToData(Vector &src, Vector &dst, idx_t offset, idx_t sca
 		memset(dst.GetData() + offset, 1, scan_count); // 1 is for valid
 	} else {
 		// "Bit-Unpack" src's validity_mask and put it in dst's data
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(dst.GetData() + offset, data_ptr_cast(validity.GetData()), scan_count, 1);
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(dst.GetData() + offset, data_ptr_cast(validity.GetData()),
+		                                            scan_count, 1);
 	}
 }
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
