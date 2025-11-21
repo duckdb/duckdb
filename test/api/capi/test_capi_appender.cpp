@@ -1257,7 +1257,7 @@ TEST_CASE("Test upserting using the C API", "[capi]") {
 	tester.Cleanup();
 }
 
-bool has_error(const duckdb_state state, atomic<bool> &success, const string &message) {
+bool HasError(const duckdb_state state, atomic<bool> &success, const string &message) {
 	if (state == DuckDBError) {
 		success = false;
 		Printer::Print(message);
@@ -1298,35 +1298,36 @@ TEST_CASE("Test the appender with parallel appends and multiple data types in th
 	atomic<bool> success {true};
 	duckdb::vector<std::thread> threads;
 
-	for (idx_t i = 0; i < 5; i++) {
+	idx_t worker_count = 5;
+	for (idx_t worker_id = 0; worker_id < worker_count; worker_id++) {
 		threads.emplace_back([db, &success, test_types]() {
 			// Create thread-local connection.
 			duckdb_connection t_conn;
-			if (has_error(duckdb_connect(db, &t_conn), success, "failed to create connection")) {
+			if (HasError(duckdb_connect(db, &t_conn), success, "failed to create connection")) {
 				return;
 			}
 
 			// Create appender.
 			duckdb_appender t_app;
-			if (has_error(duckdb_appender_create(t_conn, "main", "test", &t_app), success,
-			              "failed to create appender")) {
+			if (HasError(duckdb_appender_create(t_conn, "main", "test", &t_app), success,
+			             "failed to create appender")) {
 				return;
 			}
 
 			// Start a transaction.
 			duckdb_result t_ret;
-			if (has_error(duckdb_query(t_conn, "BEGIN TRANSACTION", &t_ret), success, "failed to begin transaction")) {
+			if (HasError(duckdb_query(t_conn, "BEGIN TRANSACTION", &t_ret), success, "failed to begin transaction")) {
 				return;
 			}
 			duckdb_destroy_result(&t_ret);
 
-			for (int j = 0; j < 2060; j++) {
+			for (int j = 0; j < STANDARD_VECTOR_SIZE + 10; j++) {
 				if (!success) {
 					return;
 				}
 
 				// Begin row.
-				if (has_error(duckdb_appender_begin_row(t_app), success, "failed to begin append to row")) {
+				if (HasError(duckdb_appender_begin_row(t_app), success, "failed to begin append to row")) {
 					return;
 				}
 
@@ -1334,23 +1335,23 @@ TEST_CASE("Test the appender with parallel appends and multiple data types in th
 				for (const auto &type : test_types) {
 					auto value = type.min_value;
 					duckdb_value val_ptr = reinterpret_cast<duckdb_value>(&value);
-					if (has_error(duckdb_append_value(t_app, val_ptr), success, "failed to append value to row")) {
+					if (HasError(duckdb_append_value(t_app, val_ptr), success, "failed to append value to row")) {
 						return;
 					};
 				}
 
 				// End row.
-				if (has_error(duckdb_appender_end_row(t_app), success, "failed to append end row")) {
+				if (HasError(duckdb_appender_end_row(t_app), success, "failed to append end row")) {
 					return;
 				}
 			}
 
 			// COMMIT and clean up.
-			if (has_error(duckdb_query(t_conn, "COMMIT", &t_ret), success, "failed to commit transaction")) {
+			if (HasError(duckdb_query(t_conn, "COMMIT", &t_ret), success, "failed to commit transaction")) {
 				return;
 			}
 			duckdb_destroy_result(&t_ret);
-			if (has_error(duckdb_appender_destroy(&t_app), success, "failed to append destroy result")) {
+			if (HasError(duckdb_appender_destroy(&t_app), success, "failed to append destroy result")) {
 				return;
 			}
 			duckdb_disconnect(&t_conn);
