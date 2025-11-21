@@ -1363,14 +1363,17 @@ SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
 		duckdb::BoxRendererConfig config;
 		config.max_rows = max_rows;
 		config.max_width = max_width;
-		if (!outfile.empty() && outfile[0] != '|') {
-			config.max_rows = (size_t)-1;
-			config.max_width = (size_t)-1;
+		if (config.max_width == 0) {
+			// if max_width is set to 0 (auto) - set it to infinite if we are writing to a file
+			if (!outfile.empty() && outfile[0] != '|') {
+				config.max_rows = (size_t)-1;
+				config.max_width = (size_t)-1;
+			}
+			if (!stdout_is_console) {
+				config.max_width = (size_t)-1;
+			}
 		}
 		LargeNumberRendering large_rendering = large_number_rendering;
-		if (!stdout_is_console) {
-			config.max_width = (size_t)-1;
-		}
 		if (large_rendering == LargeNumberRendering::DEFAULT) {
 			large_rendering = stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
 		}

@@ -73,6 +73,7 @@ public:
 			for (idx_t c = 0; c < nCol; c++) {
 				if (row.IsNull(c)) {
 					row_data.is_null[c] = true;
+					row_data.data[c] = result->renderer.NullValue();
 				} else {
 					row_data.is_null[c] = false;
 					row_data.data[c] = row.GetValue<string>(c);
@@ -123,7 +124,7 @@ RenderingResultIterator RenderingQueryResult::end() {
 }
 
 SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &query_result) {
-	RenderingQueryResult result(query_result);
+	RenderingQueryResult result(query_result, renderer);
 
 	renderer.Analyze(result);
 

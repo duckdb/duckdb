@@ -33,10 +33,12 @@ struct RowData {
 };
 
 struct RenderingQueryResult {
-	explicit RenderingQueryResult(duckdb::QueryResult &result) : result(result), metadata(result), is_converted(false) {
+	RenderingQueryResult(duckdb::QueryResult &result, ShellRenderer &renderer)
+	    : result(result), renderer(renderer), metadata(result), is_converted(false) {
 	}
 
 	duckdb::QueryResult &result;
+	ShellRenderer &renderer;
 	ResultMetadata metadata;
 	vector<vector<string>> data;
 	bool is_converted = false;
