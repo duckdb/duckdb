@@ -19,9 +19,57 @@ namespace duckdb {
 
 template <class T>
 struct SegmentNode {
-	SegmentNode() : next(nullptr) {
+	SegmentNode(idx_t row_start_p, shared_ptr<T> node_p, idx_t index_p)
+	    : row_start(row_start_p), node(std::move(node_p)), next(nullptr), index(index_p) {
 	}
 
+public:
+	optional_ptr<SegmentNode<T>> Next() const {
+#ifndef DUCKDB_R_BUILD
+		return next.load();
+#else
+		return next;
+#endif
+	}
+
+	idx_t GetRowStart() const {
+		return row_start;
+	}
+	idx_t GetRowEnd() const {
+		return GetRowStart() + GetCount();
+	}
+	idx_t GetCount() const {
+		return GetNode().count;
+	}
+
+	idx_t GetIndex() const {
+		return index;
+	}
+
+	T &GetNode() const {
+		return *node;
+	}
+
+	shared_ptr<T> MoveNode() {
+		return std::move(node);
+	}
+	shared_ptr<T> &ReferenceNode() {
+		return node;
+	}
+
+	bool HasNode() const {
+		return node.get();
+	}
+
+	void SetNext(optional_ptr<SegmentNode<T>> next) {
+		this->next = next.get();
+	}
+
+	void SetNode(shared_ptr<T> new_node) {
+		node = std::move(new_node);
+	}
+
+private:
 	idx_t row_start;
 	shared_ptr<T> node;
 	//! The next segment after this one
@@ -32,15 +80,6 @@ struct SegmentNode {
 #endif
 	//! The index within the segment tree
 	idx_t index;
-
-public:
-	optional_ptr<SegmentNode<T>> Next() {
-#ifndef DUCKDB_R_BUILD
-		return next.load();
-#else
-		return next;
-#endif
-	}
 };
 
 //! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment
@@ -83,27 +122,16 @@ public:
 		return GetRootSegmentInternal();
 	}
 	//! Obtains ownership of the data of the segment tree
-	vector<shared_ptr<SegmentNode<T>>> MoveSegments(SegmentLock &l) {
+	vector<unique_ptr<SegmentNode<T>>> MoveSegments(SegmentLock &l) {
 		LoadAllSegments(l);
 		return std::move(nodes);
 	}
-	vector<shared_ptr<SegmentNode<T>>> MoveSegments() {
+	vector<unique_ptr<SegmentNode<T>>> MoveSegments() {
 		auto l = Lock();
 		return MoveSegments(l);
 	}
 
-	const vector<shared_ptr<SegmentNode<T>>> &ReferenceSegments(SegmentLock &l) {
-		LoadAllSegments(l);
-		return nodes;
-	}
-	const vector<shared_ptr<SegmentNode<T>>> &ReferenceSegments() {
-		auto l = Lock();
-		return ReferenceSegments(l);
-	}
-	vector<shared_ptr<SegmentNode<T>>> &ReferenceLoadedSegmentsMutable(SegmentLock &l) {
-		return nodes;
-	}
-	const vector<shared_ptr<SegmentNode<T>>> &ReferenceLoadedSegments(SegmentLock &l) const {
+	vector<unique_ptr<SegmentNode<T>>> &ReferenceLoadedSegmentsMutable(SegmentLock &l) {
 		return nodes;
 	}
 
@@ -112,6 +140,7 @@ public:
 		return GetSegmentCount(l);
 	}
 	idx_t GetSegmentCount(SegmentLock &l) const {
+		LoadAllSegments(l);
 		return nodes.size();
 	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
@@ -151,9 +180,9 @@ public:
 	}
 	optional_ptr<SegmentNode<T>> GetNextSegment(SegmentLock &l, SegmentNode<T> &node) const {
 #ifdef DEBUG
-		D_ASSERT(RefersToSameObject(*nodes[node.index], node));
+		D_ASSERT(RefersToSameObject(*nodes[node.GetIndex()], node));
 #endif
-		return GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(node.index + 1));
+		return GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(node.GetIndex() + 1));
 	}
 
 	//! Gets a pointer to the last segment. Useful for appends.
@@ -191,7 +220,8 @@ public:
 		return HasSegment(l, segment);
 	}
 	bool HasSegment(SegmentLock &, SegmentNode<T> &segment) const {
-		return segment.index < nodes.size() && RefersToSameObject(*nodes[segment.index], segment);
+		auto segment_idx = segment.GetIndex();
+		return segment_idx < nodes.size() && RefersToSameObject(*nodes[segment_idx], segment);
 	}
 
 	//! Erase all segments after a specific segment
@@ -212,15 +242,15 @@ public:
 		string error;
 		error = StringUtil::Format("Attempting to find row number \"%lld\" in %lld nodes\n", row_number, nodes.size());
 		for (idx_t i = 0; i < nodes.size(); i++) {
-			error += StringUtil::Format("Node %lld: Start %lld, Count %lld", i, nodes[i]->row_start,
-			                            nodes[i]->node->count.load());
+			error += StringUtil::Format("Node %lld: Start %lld, Count %lld", i, nodes[i]->GetRowStart(),
+			                            nodes[i]->GetCount());
 		}
 		throw InternalException("Could not find node in column segment tree!\n%s", error);
 	}
 
 	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) const {
 		// load segments until the row number is within bounds
-		while (nodes.empty() || (row_number >= (nodes.back()->row_start + nodes.back()->node->count))) {
+		while (nodes.empty() || (row_number >= nodes.back()->GetRowEnd())) {
 			if (!LoadNextSegment(l)) {
 				break;
 			}
@@ -236,15 +266,15 @@ public:
 			if (index >= nodes.size()) {
 				string segments;
 				for (auto &entry : nodes) {
-					segments += StringUtil::Format("Start %d Count %d", entry->row_start, entry->node->count.load());
+					segments += StringUtil::Format("Start %d Count %d", entry->GetRowStart(), entry->GetCount());
 				}
 				throw InternalException("Segment tree index not found for row number %d\nSegments:%s", row_number,
 				                        segments);
 			}
 			auto &entry = *nodes[index];
-			if (row_number < entry.row_start) {
+			if (row_number < entry.GetRowStart()) {
 				upper = index - 1;
-			} else if (row_number >= entry.row_start + entry.node->count) {
+			} else if (row_number >= entry.GetRowEnd()) {
 				lower = index + 1;
 			} else {
 				result = index;
@@ -256,10 +286,10 @@ public:
 
 	void Verify(SegmentLock &) const {
 #ifdef DEBUG
-		idx_t base_start = nodes.empty() ? 0 : nodes[0]->row_start;
+		idx_t base_start = nodes.empty() ? 0 : nodes[0]->GetRowStart();
 		for (idx_t i = 0; i < nodes.size(); i++) {
-			D_ASSERT(nodes[i]->row_start == base_start);
-			base_start += nodes[i]->node->count;
+			D_ASSERT(nodes[i]->GetRowStart() == base_start);
+			base_start += nodes[i]->GetCount();
 		}
 #endif
 	}
@@ -304,7 +334,7 @@ protected:
 
 private:
 	//! The nodes in the tree, can be binary searched
-	mutable vector<shared_ptr<SegmentNode<T>>> nodes;
+	mutable vector<unique_ptr<SegmentNode<T>>> nodes;
 	//! Lock to access or modify the nodes
 	mutable mutex node_lock;
 	//! Base row id (row id of the first segment)
@@ -355,7 +385,7 @@ private:
 			}
 
 			T &operator*() const {
-				return *BaseSegmentIterator::current->node;
+				return BaseSegmentIterator::current->GetNode();
 			}
 		};
 
@@ -431,13 +461,9 @@ private:
 	void AppendSegmentInternal(SegmentLock &l, shared_ptr<T> segment, idx_t row_start) const {
 		D_ASSERT(segment);
 		// add the node to the list of nodes
-		auto node = make_uniq<SegmentNode<T>>();
-		node->row_start = row_start;
-		node->node = std::move(segment);
-		node->index = nodes.size();
-		node->next = nullptr;
+		auto node = make_uniq<SegmentNode<T>>(row_start, std::move(segment), nodes.size());
 		if (!nodes.empty()) {
-			nodes.back()->next = node.get();
+			nodes.back()->SetNext(*node);
 		}
 		nodes.push_back(std::move(node));
 	}
@@ -447,7 +473,7 @@ private:
 			row_start = base_row_id;
 		} else {
 			auto &last_node = nodes.back();
-			row_start = last_node->row_start + last_node->node->count;
+			row_start = last_node->GetRowEnd();
 		}
 		AppendSegmentInternal(l, std::move(segment), row_start);
 	}
