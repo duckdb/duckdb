@@ -1047,6 +1047,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"http_retry_wait_ms", "httpfs"},
     {"http_timeout", "httpfs"},
     {"httpfs_client_implementation", "httpfs"},
+    {"iceberg_via_aws_sdk_for_catalog_interactions", "iceberg"},
     {"mysql_bit1_as_boolean", "mysql_scanner"},
     {"mysql_debug_show_queries", "mysql_scanner"},
     {"mysql_experimental_filter_pushdown", "mysql_scanner"},
