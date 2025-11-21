@@ -648,8 +648,8 @@ void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_off
 	}
 }
 
-SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                     OperatorSourceInput &input) const {
+SourceResultType PhysicalUngroupedAggregate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                             OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalSinkState>();
 	D_ASSERT(gstate.finished);
 

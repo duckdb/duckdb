@@ -267,6 +267,7 @@ bool MetricsUtils::IsQueryGlobalMetric(MetricsType type) {
         case MetricsType::CHECKPOINT_LATENCY:
         case MetricsType::SYSTEM_PEAK_BUFFER_MEMORY:
         case MetricsType::SYSTEM_PEAK_TEMP_DIR_SIZE:
+        case MetricsType::TOTAL_MEMORY_ALLOCATED:
         case MetricsType::WAITING_TO_ATTACH_LATENCY:
             return true;
         default:

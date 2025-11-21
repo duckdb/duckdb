@@ -113,6 +113,18 @@ TabCompletion Linenoise::TabComplete() const {
 	buf[pos] = '\0';
 	completionCallback(buf, reinterpret_cast<linenoiseCompletions *>(&result));
 	buf[pos] = prev_char;
+	for (auto &completion : result.completions) {
+		idx_t copy_offset = pos;
+		if (completion.extra_char != '\0') {
+			if (buf[pos] == completion.extra_char) {
+				// if the buffer already has the extra char at this position do not add it again
+				// i.e. if we are completing 'file.parq[CURSOR]' - complete to 'file.parquet' and not 'file.parquet''
+				copy_offset++;
+			}
+			completion.extra_char_pos = completion.completion.size() - 1;
+		}
+		completion.completion += buf + copy_offset;
+	}
 	return result;
 }
 
@@ -123,29 +135,43 @@ TabCompletion Linenoise::TabComplete() const {
  * The state of the editing is encapsulated into the pointed linenoiseState
  * structure as described in the structure definition. */
 bool Linenoise::CompleteLine(KeyPress &next_key) {
-	int nwritten;
-
+	next_key.action = KEY_NULL;
 	completion_list = TabComplete();
 	auto &completions = completion_list.completions;
 	// we only start rendering completion suggestions once we start tabbing through them
 	render_completion_suggestion = false;
 	if (completions.empty()) {
 		Terminal::Beep();
-		next_key.action = KEY_NULL;
 	} else {
 		bool stop = false;
 		bool accept_completion = false;
-		completion_idx = 0;
+		// check if there are ties between completions
+		bool has_ties = false;
+		if (completion_list.completions.size() > 1) {
+			has_ties = completion_list.completions[0].score == completion_list.completions[1].score;
+		}
+		if (has_ties) {
+			// if there are ties we don't auto-complete immediately
+			// instead we display the list of suggestions
+			completion_idx = optional_idx();
+			render_completion_suggestion = true;
+		} else {
+			// if there are no ties we immediately accept the first completion suggestion
+			completion_idx = 0;
+		}
 
+		idx_t action_count = 0;
 		while (!stop) {
+			action_count++;
 			HandleTerminalResize();
 			/* Show completion or original buffer */
-			if (completion_idx < completions.size()) {
+			if (completion_idx.IsValid()) {
 				Linenoise saved = *this;
 
-				len = completions[completion_idx].completion.size();
-				pos = completions[completion_idx].cursor_pos;
-				buf = (char *)completions[completion_idx].completion.c_str();
+				auto &completion = completions[completion_idx.GetIndex()];
+				len = completion.completion.size();
+				pos = completion.cursor_pos;
+				buf = (char *)completion.completion.c_str();
 				RefreshLine();
 				len = saved.len;
 				pos = saved.pos;
@@ -164,20 +190,34 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 			Linenoise::Log("\nComplete Character %d\n", (int)key_press.action);
 			switch (key_press.action) {
 			case TAB: /* tab */
-				completion_idx = (completion_idx + 1) % completions.size();
+				if (action_count == 1 && !has_ties) {
+					// if we had an "instant complete" as we had a clear winner - tab complete again from this position
+					// instead of cycling through this series of completions
+					next_key = key_press;
+					accept_completion = true;
+					stop = true;
+					break;
+				}
+				if (!completion_idx.IsValid()) {
+					completion_idx = 0;
+				} else {
+					completion_idx = (completion_idx.GetIndex() + 1) % completions.size();
+				}
 				render_completion_suggestion = true;
 				break;
 			case ESC: { /* escape */
 				switch (key_press.sequence) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
-					if (completion_idx == 0) {
-						// pressing shift-tab at the first completion cancels completion
+					if (!completion_idx.IsValid()) {
+						// pressing shift-tab when we don't have a selected completion means we abort searching
 						RefreshLine();
 						next_key.action = ENTER;
 						stop = true;
+					} else if (completion_idx.GetIndex() == 0) {
+						completion_idx = optional_idx();
 					} else {
-						completion_idx--;
+						completion_idx = completion_idx.GetIndex() - 1;
 					}
 					render_completion_suggestion = true;
 					break;
@@ -201,18 +241,21 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 				stop = true;
 				break;
 			}
-			if (stop && accept_completion && completion_idx < completions.size()) {
-				/* Update buffer and return */
-				if (completion_idx < completions.size()) {
-					nwritten = snprintf(buf, buflen, "%s", completions[completion_idx].completion.c_str());
-					pos = completions[completion_idx].cursor_pos;
-					len = nwritten;
-				}
+		}
+		if (accept_completion && completion_idx.IsValid()) {
+			auto &accepted_completion = completions[completion_idx.GetIndex()];
+			if (accepted_completion.extra_char != '\0' && next_key.action == accepted_completion.extra_char) {
+				next_key.action = KEY_NULL;
 			}
+			/* Update buffer and return */
+			int nwritten = snprintf(buf, buflen, "%s", accepted_completion.completion.c_str());
+			pos = accepted_completion.cursor_pos;
+			len = nwritten;
 		}
 	}
 	// no longer completing - clear list of completions
 	completion_list.completions.clear();
+	completion_idx = optional_idx();
 	if (next_key.action == ENTER) {
 		// if we accepted the completion by pressing ENTER
 		next_key.action = KEY_NULL;
@@ -383,7 +426,7 @@ size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
 		if (cols >= ws.ws_col) {
 			// exceeded width - move to next line
 			rows++;
-			cols = 0;
+			cols = plen;
 		}
 		if (rows > target_row) {
 			// we have skipped our target row - that means "target_col" was out of range for this row
@@ -785,6 +828,22 @@ void Linenoise::EditDeleteAll() {
 	RefreshLine();
 }
 
+void Linenoise::SetCursorPosition(int x, int y) {
+	int current_row, current_col, cols, rows;
+	// key presses are *relative to the current cursor*
+	// first get the current cursor location
+	PositionToColAndRow(pos, current_row, current_col, rows, cols);
+	// adjust the location based on the provided x / y
+	current_col += x;
+	current_row += y;
+	if (current_col < 0 || current_row < 0 || current_row > rows) {
+		// out of bounds - ignore
+		return;
+	}
+	pos = ColAndRowToPosition(current_row, current_col);
+	RefreshLine();
+}
+
 void Linenoise::EditCapitalizeNextWord(Capitalization capitalization) {
 	size_t next_pos = pos;
 
@@ -1055,7 +1114,7 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	continuation_markers = true;
 	insert = false;
 	search_index = 0;
-	completion_idx = 0;
+	completion_idx = optional_idx();
 	rendered_completion_lines = 0;
 	render_completion_suggestion = false;
 
@@ -1317,7 +1376,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 	key_press.action = c;
 	if (key_press.action == ESC) {
 		// for ESC we need to read an escape sequence
-		key_press.sequence = Terminal::ReadEscapeSequence(ifd);
+		key_press.sequence = Terminal::ReadEscapeSequence(ifd, key_press);
 	}
 	return true;
 #endif
@@ -1384,9 +1443,11 @@ int Linenoise::Edit() {
 				}
 				continue;
 			}
-			if (!CompleteLine(key_press)) {
-				/* Return on errors */
-				return len;
+			while (key_press.action == TAB) {
+				if (!CompleteLine(key_press)) {
+					/* Return on errors */
+					return len;
+				}
 			}
 			/* Read next character when 0 */
 			if (key_press.action == KEY_NULL) {
@@ -1548,17 +1609,19 @@ int Linenoise::Edit() {
 		case ESC: /* escape sequence */ {
 			EscapeSequence escape = key_press.sequence;
 			switch (escape) {
-			case EscapeSequence::ALT_LEFT_ARROW:
+			case EscapeSequence::CTRL_UP:
 				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_START);
 				break;
-			case EscapeSequence::ALT_RIGHT_ARROW:
+			case EscapeSequence::CTRL_DOWN:
 				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_END);
 				break;
 			case EscapeSequence::CTRL_MOVE_BACKWARDS:
+			case EscapeSequence::ALT_LEFT_ARROW:
 			case EscapeSequence::ALT_B:
 				EditMoveWordLeft();
 				break;
 			case EscapeSequence::CTRL_MOVE_FORWARDS:
+			case EscapeSequence::ALT_RIGHT_ARROW:
 			case EscapeSequence::ALT_F:
 				EditMoveWordRight();
 				break;
@@ -1617,6 +1680,10 @@ int Linenoise::Edit() {
 			case EscapeSequence::DELETE_KEY:
 				EditDelete();
 				break;
+			case EscapeSequence::MOUSE_CLICK:
+				// mouse click
+				SetCursorPosition(key_press.position.ws_col, key_press.position.ws_row);
+				break;
 			default:
 				Linenoise::Log("Unrecognized escape\n");
 				break;
@@ -1647,6 +1714,9 @@ int Linenoise::Edit() {
 			break;
 		case CTRL_X: /* ctrl+x, insert newline */
 			EditInsertMulti("\r\n");
+			break;
+		case CTRL_Q: /* ctrl+q enables mouse tracking for a single click */
+			Terminal::EnableMouseTracking();
 			break;
 		case CTRL_Y:
 			// unsupported
