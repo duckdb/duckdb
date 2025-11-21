@@ -1152,7 +1152,7 @@ void ShellState::SetTextMode() {
 	setTextMode(out, 1);
 }
 
-SuccessState ShellState::RenderQuery(RowRenderer &renderer, const string &query) {
+SuccessState ShellState::RenderQuery(ShellRenderer &renderer, const string &query) {
 	auto &con = *conn;
 	auto result = con.SendQuery(query);
 	if (result->HasError()) {
@@ -1233,79 +1233,6 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 		return true;
 	}
 	return false;
-}
-
-SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &query_result) {
-	idx_t nCol = query_result.ColumnCount();
-	ResultMetadata result(query_result);
-
-	RowData row_data;
-	row_data.data.resize(nCol, string());
-	row_data.is_null.resize(nCol, false);
-	row_data.row_index = 0;
-
-	renderer.RenderHeader(result);
-	for (auto &row : query_result) {
-		if (seenInterrupt) {
-			PrintF("Interrupt\n");
-			return SuccessState::FAILURE;
-		}
-		for (idx_t c = 0; c < nCol; c++) {
-			if (row.IsNull(c)) {
-				row_data.is_null[c] = true;
-				row_data.data[c] = renderer.NullValue();
-			} else {
-				row_data.is_null[c] = false;
-				row_data.data[c] = row.GetValue<string>(c);
-			}
-		}
-		renderer.RenderRow(result, row_data);
-		row_data.row_index++;
-	}
-	renderer.RenderFooter(result);
-	return SuccessState::SUCCESS;
-}
-
-void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result) {
-	for (auto &column_name : result.metadata.column_names) {
-		column_name = renderer.ConvertValue(column_name.c_str());
-	}
-	for (auto &row : res) {
-		vector<string> row_data;
-		for (idx_t c = 0; c < result.ColumnCount(); c++) {
-			auto str_val = row.GetValue<string>(c);
-			row_data.push_back(renderer.ConvertValue(str_val.c_str()));
-		}
-		result.data.push_back(std::move(row_data));
-	}
-	renderer.Analyze(result);
-}
-
-/*
-** Run a prepared statement and output the result in one of the
-** table-oriented formats: RenderMode::Column, RenderMode::Markdown, RenderMode::Table,
-** RenderMode::Box or RenderMode::DuckBox
-**
-** This is different from ordinary exec_prepared_stmt() in that
-** it has to run the entire query and gather the results into memory
-** first, in order to determine column widths, before providing
-** any output.
-*/
-void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
-	ColumnarResult result(res);
-	auto column_renderer = GetColumnRenderer();
-	ConvertColumnarResult(*column_renderer, res, result);
-
-	column_renderer->RenderHeader(result.metadata);
-
-	for (idx_t r = 0; r < result.data.size(); r++) {
-		RowData row_data;
-		row_data.data = std::move(result.data[r]);
-		row_data.row_index = r;
-
-		column_renderer->RenderRow(result.metadata, row_data);
-	}
-	column_renderer->RenderFooter(result.metadata);
 }
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
@@ -1418,10 +1345,6 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// we should use a pager
 		pager_setup = SetupPager();
 	}
-	if (ShellRenderer::IsColumnar(cMode)) {
-		RenderColumnarResult(res);
-		return SuccessState::SUCCESS;
-	}
 	if (cMode == RenderMode::DESCRIBE) {
 		RenderDescribe(res);
 		return SuccessState::SUCCESS;
@@ -1430,7 +1353,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return RenderDuckBoxResult(res);
 	}
 	// row rendering
-	auto renderer = GetRowRenderer();
+	auto renderer = GetRenderer();
 	return RenderQueryResult(*renderer, res);
 }
 
@@ -2560,7 +2483,7 @@ bool ShellState::DisplaySchemas(const vector<string> &args) {
 			return false;
 		}
 	}
-	auto renderer = GetRowRenderer(mode);
+	auto renderer = GetRenderer(mode);
 	renderer->show_header = false;
 
 	string sSelect;

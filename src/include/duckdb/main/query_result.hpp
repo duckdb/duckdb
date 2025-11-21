@@ -135,56 +135,54 @@ private:
 	class QueryResultIterator;
 	class QueryResultRow {
 	public:
-		explicit QueryResultRow(QueryResultIterator &iterator_p, idx_t row_idx) : iterator(iterator_p), row(0) {
+		explicit QueryResultRow() : row(0) {
 		}
 
-		QueryResultIterator &iterator;
+		shared_ptr<DataChunk> chunk;
 		idx_t row;
 
 		bool IsNull(idx_t col_idx) const {
-			return iterator.chunk->GetValue(col_idx, row).IsNull();
+			return chunk->GetValue(col_idx, row).IsNull();
 		}
 		template <class T>
 		T GetValue(idx_t col_idx) const {
-			return iterator.chunk->GetValue(col_idx, row).GetValue<T>();
+			return chunk->GetValue(col_idx, row).GetValue<T>();
 		}
 		Value GetBaseValue(idx_t col_idx) const {
-			return iterator.chunk->GetValue(col_idx, row);
+			return chunk->GetValue(col_idx, row);
 		}
 	};
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		explicit QueryResultIterator(optional_ptr<QueryResult> result_p)
-		    : current_row(*this, 0), result(result_p), base_row(0) {
+		explicit QueryResultIterator(optional_ptr<QueryResult> result_p = nullptr) : result(result_p), base_row(0) {
 			if (result) {
-				chunk = shared_ptr<DataChunk>(result->Fetch().release());
-				if (!chunk) {
+				current_row.chunk = shared_ptr<DataChunk>(result->Fetch().release());
+				if (!current_row.chunk) {
 					result = nullptr;
 				}
 			}
 		}
 
 		QueryResultRow current_row;
-		shared_ptr<DataChunk> chunk;
 		optional_ptr<QueryResult> result;
 		idx_t base_row;
 
 	public:
 		void Next() {
-			if (!chunk) {
+			if (!current_row.chunk) {
 				return;
 			}
 			current_row.row++;
-			if (current_row.row >= chunk->size()) {
-				base_row += chunk->size();
-				chunk = shared_ptr<DataChunk>(result->Fetch().release());
+			if (current_row.row >= current_row.chunk->size()) {
+				base_row += current_row.chunk->size();
+				current_row.chunk = shared_ptr<DataChunk>(result->Fetch().release());
 				current_row.row = 0;
-				if (!chunk || chunk->size() == 0) {
+				if (!current_row.chunk || current_row.chunk->size() == 0) {
 					// exhausted all rows
 					base_row = 0;
 					result = nullptr;
-					chunk.reset();
+					current_row.chunk.reset();
 				}
 			}
 		}
@@ -196,16 +194,21 @@ private:
 		bool operator!=(const QueryResultIterator &other) const {
 			return result != other.result || base_row != other.base_row || current_row.row != other.current_row.row;
 		}
+		bool operator==(const QueryResultIterator &other) const {
+			return !(*this != other);
+		}
 		const QueryResultRow &operator*() const {
 			return current_row;
 		}
 	};
 
 public:
-	QueryResultIterator begin() { // NOLINT: match stl API
+	using iterator = QueryResultIterator;
+
+	iterator begin() { // NOLINT: match stl API
 		return QueryResultIterator(this);
 	}
-	QueryResultIterator end() { // NOLINT: match stl API
+	iterator end() { // NOLINT: match stl API
 		return QueryResultIterator(nullptr);
 	}
 

@@ -26,11 +26,124 @@ ShellRenderer::ShellRenderer(ShellState &state)
 void ShellRenderer::RenderFooter(ResultMetadata &result) {
 }
 
+string ShellRenderer::NullValue() {
+	return state.nullValue;
+}
+
+void ShellRenderer::Analyze(RenderingQueryResult &result) {
+}
+
+// RenderingResultIterator is an iterator that EITHER
+// (1) iterates over a query result
+// (2) iterates over a materialized result
+struct RenderingResultIterator {
+public:
+	explicit RenderingResultIterator(optional_ptr<RenderingQueryResult> result_p) : result(result_p) {
+		if (!result) {
+			return;
+		}
+		auto &query_result = result->result;
+		auto nCol = query_result.ColumnCount();
+		row_data.data.resize(nCol, string());
+		row_data.is_null.resize(nCol, false);
+		row_data.row_index = 0;
+		if (!result->is_converted) {
+			result_iterator = query_result.begin();
+		}
+		AssignData();
+	}
+
+	optional_ptr<RenderingQueryResult> result;
+	duckdb::QueryResult::iterator result_iterator;
+	RowData row_data;
+
+public:
+	void AssignData() {
+		auto &query_result = result->result;
+		auto nCol = query_result.ColumnCount();
+		if (!result->is_converted) {
+			// result is not converted - read from query result
+			if (result_iterator == query_result.end()) {
+				// exhausted
+				result = nullptr;
+				return;
+			}
+			auto &row = *result_iterator;
+			// convert the result
+			for (idx_t c = 0; c < nCol; c++) {
+				if (row.IsNull(c)) {
+					row_data.is_null[c] = true;
+				} else {
+					row_data.is_null[c] = false;
+					row_data.data[c] = row.GetValue<string>(c);
+				}
+			}
+			return;
+		}
+		// result is already converted - just copy it over
+		if (row_data.row_index >= result->data.size()) {
+			result = nullptr;
+			return;
+		}
+		row_data.data = std::move(result->data[row_data.row_index]);
+	}
+
+	void Next() {
+		if (!result) {
+			return;
+		}
+		// iterate to next position
+		row_data.row_index++;
+		if (!result->is_converted) {
+			++result_iterator;
+		}
+		// read data from this position
+		AssignData();
+	}
+
+	RenderingResultIterator &operator++() {
+		Next();
+		return *this;
+	}
+	bool operator!=(const RenderingResultIterator &other) const {
+		return result != other.result;
+		;
+	}
+	RowData &operator*() {
+		return row_data;
+	}
+};
+
+RenderingResultIterator RenderingQueryResult::begin() {
+	return RenderingResultIterator(*this);
+}
+
+RenderingResultIterator RenderingQueryResult::end() {
+	return RenderingResultIterator(nullptr);
+}
+
+SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &query_result) {
+	RenderingQueryResult result(query_result);
+
+	renderer.Analyze(result);
+
+	renderer.RenderHeader(result.metadata);
+	for (auto &row_data : result) {
+		if (seenInterrupt) {
+			PrintF("Interrupt\n");
+			return SuccessState::FAILURE;
+		}
+		renderer.RenderRow(result.metadata, row_data);
+	}
+	renderer.RenderFooter(result.metadata);
+	return SuccessState::SUCCESS;
+}
+
 //===--------------------------------------------------------------------===//
 // Result Metadata
 //===--------------------------------------------------------------------===//
 string GetTypeName(duckdb::LogicalType &type) {
-switch (type.id()) {
+	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";
 	case duckdb::LogicalTypeId::TINYINT:
@@ -68,7 +181,7 @@ switch (type.id()) {
 		return "BLOB";
 	default:
 		return "NULL";
-}
+	}
 }
 
 ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
@@ -104,9 +217,24 @@ void ColumnRenderer::RenderAlignedValue(ResultMetadata &result, idx_t c) {
 	state.Print(string(rspace, ' '));
 }
 
-void ColumnRenderer::Analyze(ColumnarResult &result) {
-	// compute the column widths
+void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 	auto &state = ShellState::Get();
+	for (auto &column_name : result.metadata.column_names) {
+		column_name = ConvertValue(column_name.c_str());
+	}
+	auto &query_result = result.result;
+	// materialize the query result
+	for (auto &row : query_result) {
+		vector<string> row_data;
+		for (idx_t c = 0; c < result.ColumnCount(); c++) {
+			auto str_val = row.GetValue<string>(c);
+			row_data.push_back(ConvertValue(str_val.c_str()));
+		}
+		result.data.push_back(std::move(row_data));
+	}
+	result.is_converted = true;
+
+	// compute the column widths
 	for (idx_t c = 0; c < result.ColumnCount(); c++) {
 		int w = c < state.colWidth.size() ? state.colWidth[c] : 0;
 		if (w < 0) {
@@ -399,23 +527,6 @@ public:
 	}
 };
 
-unique_ptr<ColumnRenderer> ShellState::GetColumnRenderer() {
-	switch (cMode) {
-	case RenderMode::COLUMN:
-		return unique_ptr<ColumnRenderer>(new ModeColumnRenderer(*this));
-	case RenderMode::TABLE:
-		return unique_ptr<ColumnRenderer>(new ModeTableRenderer(*this));
-	case RenderMode::MARKDOWN:
-		return unique_ptr<ColumnRenderer>(new ModeMarkdownRenderer(*this));
-	case RenderMode::BOX:
-		return unique_ptr<ColumnRenderer>(new ModeBoxRenderer(*this));
-	case RenderMode::LATEX:
-		return unique_ptr<ColumnRenderer>(new ModeLatexRenderer(*this));
-	default:
-		throw std::runtime_error("Unsupported mode for GetColumnRenderer");
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // Row Renderers
 //===--------------------------------------------------------------------===//
@@ -423,10 +534,6 @@ RowRenderer::RowRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
 void RowRenderer::RenderHeader(ResultMetadata &result) {
-}
-
-string RowRenderer::NullValue() {
-	return state.nullValue;
 }
 
 class ModeLineRenderer : public RowRenderer {
@@ -946,38 +1053,48 @@ public:
 	}
 };
 
-unique_ptr<RowRenderer> ShellState::GetRowRenderer() {
-	return GetRowRenderer(cMode);
+unique_ptr<ShellRenderer> ShellState::GetRenderer() {
+	return GetRenderer(cMode);
 }
 
-unique_ptr<RowRenderer> ShellState::GetRowRenderer(RenderMode mode) {
+unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 	switch (mode) {
 	case RenderMode::LINE:
-		return unique_ptr<RowRenderer>(new ModeLineRenderer(*this));
+		return make_uniq<ModeLineRenderer>(*this);
 	case RenderMode::EXPLAIN:
-		return unique_ptr<RowRenderer>(new ModeExplainRenderer(*this));
+		return make_uniq<ModeExplainRenderer>(*this);
 	case RenderMode::LIST:
-		return unique_ptr<RowRenderer>(new ModeListRenderer(*this));
+		return make_uniq<ModeListRenderer>(*this);
 	case RenderMode::HTML:
-		return unique_ptr<RowRenderer>(new ModeHtmlRenderer(*this));
+		return make_uniq<ModeHtmlRenderer>(*this);
 	case RenderMode::TCL:
-		return unique_ptr<RowRenderer>(new ModeTclRenderer(*this));
+		return make_uniq<ModeTclRenderer>(*this);
 	case RenderMode::CSV:
-		return unique_ptr<RowRenderer>(new ModeCsvRenderer(*this));
+		return make_uniq<ModeCsvRenderer>(*this);
 	case RenderMode::ASCII:
-		return unique_ptr<RowRenderer>(new ModeAsciiRenderer(*this));
+		return make_uniq<ModeAsciiRenderer>(*this);
 	case RenderMode::QUOTE:
-		return unique_ptr<RowRenderer>(new ModeQuoteRenderer(*this));
+		return make_uniq<ModeQuoteRenderer>(*this);
 	case RenderMode::JSON:
-		return unique_ptr<RowRenderer>(new ModeJsonRenderer(*this, true));
+		return make_uniq<ModeJsonRenderer>(*this, true);
 	case RenderMode::JSONLINES:
-		return unique_ptr<RowRenderer>(new ModeJsonRenderer(*this, false));
+		return make_uniq<ModeJsonRenderer>(*this, false);
 	case RenderMode::INSERT:
-		return unique_ptr<RowRenderer>(new ModeInsertRenderer(*this));
+		return make_uniq<ModeInsertRenderer>(*this);
 	case RenderMode::SEMI:
-		return unique_ptr<RowRenderer>(new ModeSemiRenderer(*this));
+		return make_uniq<ModeSemiRenderer>(*this);
 	case RenderMode::PRETTY:
-		return unique_ptr<RowRenderer>(new ModePrettyRenderer(*this));
+		return make_uniq<ModePrettyRenderer>(*this);
+	case RenderMode::COLUMN:
+		return make_uniq<ModeColumnRenderer>(*this);
+	case RenderMode::TABLE:
+		return make_uniq<ModeTableRenderer>(*this);
+	case RenderMode::MARKDOWN:
+		return make_uniq<ModeMarkdownRenderer>(*this);
+	case RenderMode::BOX:
+		return make_uniq<ModeBoxRenderer>(*this);
+	case RenderMode::LATEX:
+		return make_uniq<ModeLatexRenderer>(*this);
 	default:
 		throw std::runtime_error("Unsupported mode for GetRowRenderer");
 	}

@@ -12,6 +12,7 @@
 
 namespace duckdb_shell {
 struct ShellState;
+struct RenderingResultIterator;
 
 struct ResultMetadata {
 	explicit ResultMetadata(duckdb::QueryResult &result);
@@ -25,21 +26,28 @@ struct ResultMetadata {
 	}
 };
 
-struct ColumnarResult {
-	explicit ColumnarResult(duckdb::QueryResult &result) : metadata(result) {}
-
-	ResultMetadata metadata;
-	vector<vector<string>> data;
-
-	idx_t ColumnCount() const {
-		return metadata.ColumnCount();
-	}
-};
-
 struct RowData {
 	vector<string> data;
 	vector<bool> is_null;
 	idx_t row_index = 0;
+};
+
+struct RenderingQueryResult {
+	explicit RenderingQueryResult(duckdb::QueryResult &result) : result(result), metadata(result), is_converted(false) {
+	}
+
+	duckdb::QueryResult &result;
+	ResultMetadata metadata;
+	vector<vector<string>> data;
+	bool is_converted = false;
+
+	idx_t ColumnCount() const {
+		return metadata.ColumnCount();
+	}
+
+public:
+	RenderingResultIterator begin(); // NOLINT: match stl API
+	RenderingResultIterator end();   // NOLINT: match stl API
 };
 
 class ShellRenderer {
@@ -53,19 +61,21 @@ public:
 	string row_sep;
 
 public:
+	virtual void Analyze(RenderingQueryResult &result);
 	virtual void RenderHeader(ResultMetadata &result) = 0;
 	virtual void RenderRow(ResultMetadata &result, RowData &row) = 0;
 	virtual void RenderFooter(ResultMetadata &result);
 	static bool IsColumnar(RenderMode mode);
+	virtual string NullValue();
 };
 
 class ColumnRenderer : public ShellRenderer {
 public:
 	explicit ColumnRenderer(ShellState &state);
 
-	void Analyze(ColumnarResult &result);
+	void Analyze(RenderingQueryResult &result) override;
 	virtual string ConvertValue(const char *value);
-	virtual void RenderRow(ResultMetadata &result, RowData &row) override;
+	void RenderRow(ResultMetadata &result, RowData &row) override;
 
 	virtual const char *GetColumnSeparator() = 0;
 	virtual const char *GetRowSeparator() = 0;
@@ -86,7 +96,6 @@ public:
 
 public:
 	virtual void RenderHeader(ResultMetadata &result) override;
-	virtual string NullValue();
 };
 
 } // namespace duckdb_shell
