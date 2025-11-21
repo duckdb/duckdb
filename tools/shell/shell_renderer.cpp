@@ -309,18 +309,18 @@ unique_ptr<ColumnRenderer> ShellState::GetColumnRenderer() {
 RowRenderer::RowRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
-void RowRenderer::Render(RowResult &result) {
+void RowRenderer::Render(ResultMetadata &result, RowData &row) {
 	if (first_row) {
 		RenderHeader(result);
 		first_row = false;
 	}
-	RenderRow(result);
+	RenderRow(result, row);
 }
 
-void RowRenderer::RenderHeader(RowResult &result) {
+void RowRenderer::RenderHeader(ResultMetadata &result) {
 }
 
-void RowRenderer::RenderFooter(RowResult &result) {
+void RowRenderer::RenderFooter(ResultMetadata &result) {
 }
 
 string RowRenderer::NullValue() {
@@ -332,7 +332,7 @@ public:
 	explicit ModeLineRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void Render(RowResult &result) override {
+	void Render(ResultMetadata &result, RowData &row) override {
 		if (first_row) {
 			auto &col_names = result.column_names;
 			// determine the render width by going over the column names
@@ -348,11 +348,11 @@ public:
 			state.Print(state.rowSeparator);
 		}
 		// render the row
-		RenderRow(result);
+		RenderRow(result, row);
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < data.size(); i++) {
 			idx_t space_count = header_width - col_names[i].size();
@@ -374,8 +374,8 @@ public:
 	explicit ModeExplainRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		if (data.size() != 2) {
 			return;
 		}
@@ -402,7 +402,7 @@ public:
 	explicit ModeListRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(RowResult &result) override {
+	void RenderHeader(ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
@@ -416,8 +416,8 @@ public:
 		state.Print(row_sep);
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
 				state.Print(col_sep);
@@ -433,7 +433,7 @@ public:
 	explicit ModeHtmlRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(RowResult &result) override {
+	void RenderHeader(ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
@@ -447,8 +447,8 @@ public:
 		state.Print("</tr>\n");
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		state.Print("<tr>");
 		for (idx_t i = 0; i < data.size(); i++) {
 			state.Print("<td>");
@@ -494,7 +494,7 @@ public:
 	explicit ModeTclRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(RowResult &result) override {
+	void RenderHeader(ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
@@ -508,8 +508,8 @@ public:
 		state.Print(row_sep);
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
 				state.Print(col_sep);
@@ -525,12 +525,12 @@ public:
 	explicit ModeCsvRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void Render(RowResult &result) override {
+	void Render(ResultMetadata &result, RowData &row) override {
 		state.SetBinaryMode();
-		RowRenderer::Render(result);
+		RowRenderer::Render(result, row);
 		state.SetTextMode();
 	}
-	void RenderHeader(RowResult &result) override {
+	void RenderHeader(ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
@@ -541,8 +541,8 @@ public:
 		state.Print(row_sep);
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			state.OutputCSV(data[i].c_str(), i < data.size() - 1);
 		}
@@ -557,7 +557,7 @@ public:
 		row_sep = "\n";
 	}
 
-	void RenderHeader(RowResult &result) override {
+	void RenderHeader(ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
@@ -571,8 +571,8 @@ public:
 		state.Print(row_sep);
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
 				state.Print(col_sep);
@@ -588,7 +588,7 @@ public:
 	explicit ModeQuoteRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderHeader(RowResult &result) override {
+	void RenderHeader(ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
@@ -602,10 +602,10 @@ public:
 		state.Print(row_sep);
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		auto &types = result.types;
-		auto &is_null = result.is_null;
+		auto &is_null = row.is_null;
 		for (idx_t i = 0; i < data.size(); i++) {
 			if (i > 0) {
 				state.Print(col_sep);
@@ -629,7 +629,7 @@ public:
 	explicit ModeJsonRenderer(ShellState &state, bool json_array) : RowRenderer(state), json_array(json_array) {
 	}
 
-	void Render(RowResult &result) override {
+	void Render(ResultMetadata &result, RowData &row) override {
 		if (first_row) {
 			if (json_array) {
 				// wrap all JSON objects in an array
@@ -644,14 +644,14 @@ public:
 			}
 			state.Print("\n{");
 		}
-		RenderRow(result);
+		RenderRow(result, row);
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
-		auto &is_null = result.is_null;
+		auto &is_null = row.is_null;
 		for (idx_t i = 0; i < col_names.size(); i++) {
 			if (i > 0) {
 				state.Print(",");
@@ -682,7 +682,7 @@ public:
 		state.Print("}");
 	}
 
-	void RenderFooter(RowResult &result) override {
+	void RenderFooter(ResultMetadata &result) override {
 		if (json_array) {
 			state.Print("]\n");
 		} else {
@@ -702,11 +702,11 @@ public:
 	explicit ModeInsertRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;
-		auto &is_null = result.is_null;
+		auto &is_null = row.is_null;
 
 		state.Print("INSERT INTO ");
 		state.Print(state.zDestTable);
@@ -741,9 +741,9 @@ public:
 	explicit ModeSemiRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void RenderRow(RowResult &result) override {
+	void RenderRow(ResultMetadata &result, RowData &row) override {
 		/* .schema and .fullschema output */
-		state.PrintSchemaLine(result.data[0].c_str(), "\n");
+		state.PrintSchemaLine(row.data[0].c_str(), "\n");
 	}
 };
 
@@ -756,8 +756,8 @@ public:
 		return duckdb::StringUtil::CharacterIsSpace(c);
 	}
 
-	void RenderRow(RowResult &result) override {
-		auto &data = result.data;
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		auto &data = row.data;
 		/* .schema and .fullschema with --indent */
 		if (data.size() != 1) {
 			throw std::runtime_error("row must have exactly one value for pretty rendering");

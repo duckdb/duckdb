@@ -1151,18 +1151,6 @@ void ShellState::SetBinaryMode() {
 void ShellState::SetTextMode() {
 	setTextMode(out, 1);
 }
-/*
-** This is the callback routine that the shell
-** invokes for each row of a query result.
-*/
-int ShellState::RenderRow(RowRenderer &renderer, RowResult &result) {
-	auto &data = result.data;
-	if (data.empty()) {
-		return 0;
-	}
-	renderer.Render(result);
-	return 0;
-}
 
 SuccessState ShellState::RenderQuery(RowRenderer &renderer, const string &query) {
 	auto &con = *conn;
@@ -1290,34 +1278,34 @@ string GetTypeName(duckdb::LogicalType &type) {
 }
 
 SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &query_result) {
-	RowResult result;
+	ResultMetadata result;
 	// initialize the result and the column names
 	idx_t nCol = query_result.ColumnCount();
 	result.column_names.reserve(nCol);
-	result.data.reserve(nCol);
 	result.types.reserve(nCol);
-	result.is_null.resize(nCol, false);
 	for (idx_t c = 0; c < nCol; c++) {
 		result.column_names.push_back(query_result.names[c]);
 		result.types.push_back(query_result.types[c]);
 	}
+
+	RowData row_data;
+	row_data.data.resize(nCol, string());
+	row_data.is_null.resize(nCol, false);
 	for (auto &row : query_result) {
 		if (seenInterrupt) {
 			PrintF("Interrupt\n");
 			return SuccessState::FAILURE;
 		}
-		result.is_null.clear();
-		result.is_null.resize(nCol, false);
-		result.data.clear();
 		for (idx_t c = 0; c < nCol; c++) {
 			if (row.IsNull(c)) {
-				result.is_null[c] = true;
-				result.data.push_back(renderer.NullValue());
+				row_data.is_null[c] = true;
+				row_data.data[c] = renderer.NullValue();
 			} else {
-				result.data.push_back(row.GetValue<string>(c));
+				row_data.is_null[c] = false;
+				row_data.data[c] = row.GetValue<string>(c);
 			}
 		}
-		RenderRow(renderer, result);
+		renderer.Render(result, row_data);
 	}
 	renderer.RenderFooter(result);
 	return SuccessState::SUCCESS;

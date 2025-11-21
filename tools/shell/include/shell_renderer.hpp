@@ -36,11 +36,14 @@ struct ColumnarResult {
 	vector<string> type_names;
 };
 
-struct RowResult {
-	vector<string> column_names;
+struct RowData {
 	vector<string> data;
-	vector<duckdb::LogicalType> types;
 	vector<bool> is_null;
+};
+
+struct ResultMetadata {
+	vector<string> column_names;
+	vector<duckdb::LogicalType> types;
 };
 
 class ColumnRenderer : public ShellRenderer {
@@ -67,11 +70,11 @@ public:
 	bool first_row = true;
 
 public:
-	virtual void Render(RowResult &result);
+	virtual void Render(ResultMetadata &result, RowData &row);
 
-	virtual void RenderHeader(RowResult &result);
-	virtual void RenderRow(RowResult &result) = 0;
-	virtual void RenderFooter(RowResult &result);
+	virtual void RenderHeader(ResultMetadata &result);
+	virtual void RenderRow(ResultMetadata &result, RowData &row) = 0;
+	virtual void RenderFooter(ResultMetadata &result);
 
 	virtual string NullValue();
 };

@@ -335,8 +335,6 @@ public:
 	int RunInitialCommand(const char *sql, bool bail);
 	void AddError();
 
-	int RenderRow(RowRenderer &renderer, RowResult &result);
-
 	SuccessState ExecuteSQL(const string &zSql);
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
