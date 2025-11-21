@@ -96,7 +96,7 @@ jobs:
       - uses: actions/download-artifact@v4
         name: Download extensions
         with:
-          pattern: extensions-${{ github.sha }}*
+          pattern: extensions-${{ inputs.duckdb_ref }}*
           path: /tmp/repository_generation/extensions
 
       - name: Print all extensions
@@ -117,7 +117,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
-          name: extension-repository-${{ github.sha }}
+          name: extension-repository-${{ inputs.duckdb_ref }}
           path: |
             /tmp/merged_repository/**/*.duckdb_extension*
 
@@ -134,13 +134,13 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: extension-repository-${{ github.sha }}
+          pattern: extension-repository-${{ inputs.duckdb_ref }}
           path: /tmp
 
       - name: List extensions to deploy
         shell: bash
         run: |
-          tree /tmp/extension-repository-${{ github.sha }}
+          tree /tmp/extension-repository-${{ inputs.duckdb_ref }}
 
       - name: Deploy extensions
         shell: bash
@@ -152,4 +152,4 @@ jobs:
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
           pip install awscli
-          ./scripts/extension-upload-repository.sh /tmp/extension-repository-${{ github.sha }}
+          ./scripts/extension-upload-repository.sh /tmp/extension-repository-${{ inputs.duckdb_ref }}
