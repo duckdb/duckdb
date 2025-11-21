@@ -140,8 +140,7 @@ public:
 	DUCKDB_API void AddToCounter(MetricType type, const idx_t amount);
 
 	//! Start/End a timer for a specific metric type.
-	DUCKDB_API void StartTimer(MetricType type);
-	DUCKDB_API void EndTimer(MetricType type);
+	DUCKDB_API ActiveTimer StartTimer(MetricType type);
 
 	DUCKDB_API void StartExplainAnalyze();
 

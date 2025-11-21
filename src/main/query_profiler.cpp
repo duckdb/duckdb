@@ -272,16 +272,8 @@ idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.total_bytes_written;
 }
 
-void QueryProfiler::StartTimer(const MetricType type) {
-	if (IsEnabled()) {
-		query_metrics.StartTimer(type);
-	}
-}
-
-void QueryProfiler::EndTimer(MetricType type) {
-	if (!IsEnabled()) {
-		query_metrics.EndTimer(type);
-	}
+ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
+	return ActiveTimer(*this, type, IsEnabled());
 }
 
 string QueryProfiler::ToString(ExplainFormat explain_format) const {

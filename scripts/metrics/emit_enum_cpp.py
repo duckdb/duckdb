@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from asyncore import file_wrapper
 from typing import Dict, List, Tuple
 from pathlib import Path
 
@@ -51,13 +53,47 @@ def _setup_hpp(out_hpp: Path, f: IndentedFileWriter, metric_index: MetricIndex):
         f.write_indented(1, f"{g.upper()},")
     f.write("};\n\n")
 
+    count_per_type: Dict[str, int] = {}
+
     f.write("enum class MetricType : uint8_t {\n")
-    for metric in metric_index.all_metrics():
-        f.write_indented(1, f"{metric},")
+    previous_end = None
+    for t in metric_index.types_index():
+        t_name = t.replace("Value::", "").upper()
+
+        start = "START_" + t_name
+        end = "END_" + t_name
+
+        metrics = list(metric_index.types_index()[t])
+        count_per_type[t_name + "_METRIC_COUNT"] = len(metrics)
+
+        f.write_indented(1, f"// {t_name}")
+        if previous_end is None:
+            # First type starts at 0
+            f.write_indented(1, f"{start} = 0,")
+        else:
+            # Subsequent types start where previous ended
+            f.write_indented(1, f"{start} = {previous_end},")
+
+        # First metric equals START
+        f.write_indented(1, f"{metrics[0]} = {start},")
+
+        # Middle metrics
+        for m in metrics[1:]:
+            f.write_indented(1, f"{m},")
+
+        # END equals last metric
+        f.write_indented(1, f"{end} = {metrics[-1]},")
+
+        previous_end = end
+
     f.write("};\n")
 
     f.write(HPP_TYPEDEFS)
     f.write('class MetricsUtils {\n')
+    f.write('public:\n')
+    for t in count_per_type:
+        f.write_indented(1, f"static constexpr const idx_t {t} = {count_per_type[t]};")
+    f.write('\n')
     f.write('public:\n')
 
 

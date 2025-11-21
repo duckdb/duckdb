@@ -21,6 +21,44 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
+class QueryProfiler;
+
+struct ActiveTimer {
+public:
+	ActiveTimer(QueryProfiler &query_profiler, const MetricType metric, const bool is_active = true) : query_profiler(query_profiler), metric(metric), is_active(is_active) {
+		// start on constructor
+		if (!is_active) {
+			return;
+		}
+		profiler.Start();
+	}
+
+	~ActiveTimer() {
+		if (is_active) {
+			// automatically end in destructor
+			EndTimer();
+		}
+	}
+
+	// Automatically called in the destructor.
+	void EndTimer() {
+		if (!is_active) {
+			return;
+		}
+		// stop profiling and report
+		is_active = false;
+		profiler.End();
+		query_profiler.IncrementMetric(metric, profiler.Elapsed());
+	}
+
+
+private:
+	QueryProfiler &query_profiler;
+	const MetricType metric;
+	Profiler profiler;
+	bool is_active;
+};
+
 //! Top level query metrics.
 struct QueryMetrics {
 	QueryMetrics() : query_name(""), total_bytes_read(0), total_bytes_written(0), total_memory_allocated(0), wal_replay_entry_count(0) {};
