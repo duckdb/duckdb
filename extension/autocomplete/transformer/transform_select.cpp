@@ -1,3 +1,4 @@
+#include "ast/distinct_clause.hpp"
 #include "ast/join_prefix.hpp"
 #include "ast/join_qualifier.hpp"
 #include "ast/limit_percent_result.hpp"
@@ -56,7 +57,11 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformBaseSelect(PEGTransf
                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
-	transformer.TransformOptional<vector<unique_ptr<ResultModifier>>>(list_pr, 2, select_statement->node->modifiers);
+	vector<unique_ptr<ResultModifier>> result_modifiers;
+	transformer.TransformOptional<vector<unique_ptr<ResultModifier>>>(list_pr, 2, result_modifiers);
+	for (auto &mod : result_modifiers) {
+		select_statement->node->modifiers.push_back(std::move(mod));
+	}
 	auto with_clause = list_pr.Child<OptionalParseResult>(0);
 	if (with_clause.HasResult()) {
 		select_statement->node->cte_map = transformer.Transform<CommonTableExpressionMap>(with_clause.optional_result);
@@ -114,9 +119,7 @@ unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectFrom(PEGTransformer
 unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectFromClause(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list =
-	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
+	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
 	auto opt_from = list_pr.Child<OptionalParseResult>(1);
 	if (opt_from.HasResult()) {
 		select_node->from_table = transformer.Transform<unique_ptr<TableRef>>(opt_from.optional_result);
@@ -130,14 +133,12 @@ unique_ptr<SelectNode> PEGTransformerFactory::TransformFromSelectClause(PEGTrans
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto select_node = make_uniq<SelectNode>();
-	select_node->from_table = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
+	select_node->select_list.push_back(make_uniq<StarExpression>());
 	auto opt_select = list_pr.Child<OptionalParseResult>(1);
 	if (opt_select.HasResult()) {
-		select_node->select_list =
-		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_select.optional_result);
-	} else {
-		select_node->select_list.push_back(make_uniq<StarExpression>());
+		select_node = transformer.Transform<unique_ptr<SelectNode>>(opt_select.optional_result);
 	}
+	select_node->from_table = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
 	return select_node;
 }
 
@@ -161,16 +162,60 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformFromClause(PEGTransformer &
 	return result_table_ref;
 }
 
-vector<unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformSelectClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<SelectNode> PEGTransformerFactory::TransformSelectClause(PEGTransformer &transformer,
+                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = make_uniq<SelectNode>();
 	auto opt_distinct = list_pr.Child<OptionalParseResult>(1);
 	if (opt_distinct.HasResult()) {
-		// TODO(Dtenwolde)
-		throw NotImplementedException("Distinct clause is not yet implemented.");
+		auto distinct_clause = transformer.Transform<DistinctClause>(opt_distinct.optional_result);
+		if (distinct_clause.is_distinct) {
+			auto distinct_modifier = make_uniq<DistinctModifier>();
+			for (auto &distinct_on : distinct_clause.distinct_targets) {
+				distinct_modifier->distinct_on_targets.push_back(distinct_on->Copy());
+			}
+			result->modifiers.push_back(std::move(distinct_modifier));
+		}
 	}
 	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
-	return target_list;
+	for (auto &expr_ptr : target_list) {
+		result->select_list.push_back(std::move(expr_ptr));
+	}
+	return result;
+}
+
+DistinctClause
+PEGTransformerFactory::TransformDistinctClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<DistinctClause>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+DistinctClause
+PEGTransformerFactory::TransformDistinctOn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	DistinctClause result;
+	result.is_distinct = true;
+	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 1, result.distinct_targets);
+	return result;
+}
+
+DistinctClause
+PEGTransformerFactory::TransformDistinctAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	DistinctClause result;
+	result.is_distinct = false;
+	return result;
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformDistinctOnTargets(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> result;
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	for (auto &expr : expr_list) {
+		result.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	}
+	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PEGTransformer &transformer,

@@ -7,6 +7,7 @@
 #include "ast/add_column_entry.hpp"
 #include "ast/column_elements.hpp"
 #include "ast/create_table_as.hpp"
+#include "ast/distinct_clause.hpp"
 #include "ast/extension_repository_info.hpp"
 #include "ast/generic_copy_option.hpp"
 #include "ast/insert_values.hpp"
@@ -722,7 +723,8 @@ private:
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformIntervalParameter(PEGTransformer &transformer,
 	                                                               optional_ptr<ParseResult> parse_result);
-	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformSubqueryExpression(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,
@@ -801,8 +803,16 @@ private:
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformFromClause(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformSelectClause(PEGTransformer &transformer,
-	                                                                  optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectNode> TransformSelectClause(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static DistinctClause TransformDistinctClause(PEGTransformer &transformer,
+	                                                                    optional_ptr<ParseResult> parse_result);
+	static DistinctClause TransformDistinctOn(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformDistinctOnTargets(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
+	static DistinctClause TransformDistinctAll(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionArgument(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

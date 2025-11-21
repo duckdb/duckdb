@@ -1318,7 +1318,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalParameter(P
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSubqueryExpression(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformSubqueryExpression(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	bool is_not = list_pr.Child<OptionalParseResult>(0).HasResult();
 	bool is_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
