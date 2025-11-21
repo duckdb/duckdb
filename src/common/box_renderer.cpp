@@ -1757,7 +1757,7 @@ void BoxRendererImplementation::ComputeRenderWidths(list<ColumnDataCollection> &
 						}
 						rows_left--;
 					}
-					bool can_add_extra_row = rows_left > min_leftover_rows;
+					bool can_add_extra_row = current_row + 1 < extra_rows.size() || rows_left > min_leftover_rows;
 					auto &extra_row = extra_rows[current_row++];
 					idx_t start_pos = current_pos;
 					// stretch out the remainder on this row
