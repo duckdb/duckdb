@@ -13,20 +13,6 @@
 namespace duckdb_shell {
 struct ShellState;
 
-class ShellRenderer {
-public:
-	explicit ShellRenderer(ShellState &state);
-	virtual ~ShellRenderer() = default;
-
-	ShellState &state;
-	bool show_header;
-	string col_sep;
-	string row_sep;
-
-public:
-	static bool IsColumnar(RenderMode mode);
-};
-
 struct ResultMetadata {
 	explicit ResultMetadata(duckdb::QueryResult &result);
 
@@ -56,6 +42,22 @@ struct RowData {
 	idx_t row_index = 0;
 };
 
+class ShellRenderer {
+public:
+	explicit ShellRenderer(ShellState &state);
+	virtual ~ShellRenderer() = default;
+
+	ShellState &state;
+	bool show_header;
+	string col_sep;
+	string row_sep;
+
+public:
+	virtual void RenderHeader(ResultMetadata &result) = 0;
+	virtual void RenderRow(ResultMetadata &result, RowData &row) = 0;
+	virtual void RenderFooter(ResultMetadata &result);
+	static bool IsColumnar(RenderMode mode);
+};
 
 class ColumnRenderer : public ShellRenderer {
 public:
@@ -63,9 +65,7 @@ public:
 
 	void Analyze(ColumnarResult &result);
 	virtual string ConvertValue(const char *value);
-	virtual void RenderHeader(ResultMetadata &result) = 0;
-	virtual void RenderRow(RowData &row);
-	virtual void RenderFooter(ResultMetadata &result);
+	virtual void RenderRow(ResultMetadata &result, RowData &row) override;
 
 	virtual const char *GetColumnSeparator() = 0;
 	virtual const char *GetRowSeparator() = 0;
@@ -85,9 +85,7 @@ public:
 	explicit RowRenderer(ShellState &state);
 
 public:
-	virtual void RenderHeader(ResultMetadata &result);
-	virtual void RenderRow(ResultMetadata &result, RowData &row) = 0;
-	virtual void RenderFooter(ResultMetadata &result);
+	virtual void RenderHeader(ResultMetadata &result) override;
 	virtual string NullValue();
 };
 

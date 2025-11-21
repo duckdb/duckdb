@@ -23,6 +23,9 @@ ShellRenderer::ShellRenderer(ShellState &state)
     : state(state), show_header(state.showHeader), col_sep(state.colSeparator), row_sep(state.rowSeparator) {
 }
 
+void ShellRenderer::RenderFooter(ResultMetadata &result) {
+}
+
 //===--------------------------------------------------------------------===//
 // Result Metadata
 //===--------------------------------------------------------------------===//
@@ -90,9 +93,6 @@ string ColumnRenderer::ConvertValue(const char *value) {
 	return value ? value : state.nullValue;
 }
 
-void ColumnRenderer::RenderFooter(ResultMetadata &result) {
-}
-
 void ColumnRenderer::RenderAlignedValue(ResultMetadata &result, idx_t c) {
 	auto &header_value = result.column_names[c];
 	idx_t w = column_width[c];
@@ -132,7 +132,7 @@ void ColumnRenderer::Analyze(ColumnarResult &result) {
 	}
 }
 
-void ColumnRenderer::RenderRow(RowData &row) {
+void ColumnRenderer::RenderRow(ResultMetadata &result, RowData &row) {
 	auto &state = ShellState::Get();
 	auto colSep = GetColumnSeparator();
 	auto rowSep = GetRowSeparator();
@@ -423,9 +423,6 @@ RowRenderer::RowRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
 void RowRenderer::RenderHeader(ResultMetadata &result) {
-}
-
-void RowRenderer::RenderFooter(ResultMetadata &result) {
 }
 
 string RowRenderer::NullValue() {

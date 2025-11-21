@@ -1303,7 +1303,7 @@ void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
 		row_data.data = std::move(result.data[r]);
 		row_data.row_index = r;
 
-		column_renderer->RenderRow(row_data);
+		column_renderer->RenderRow(result.metadata, row_data);
 	}
 	column_renderer->RenderFooter(result.metadata);
 }
