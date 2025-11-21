@@ -144,14 +144,14 @@ idx_t ContainerMetadataCollection::Serialize(data_ptr_t dest) const {
 
 	idx_t types_offset = container_type.size() - count_in_segment;
 	data_ptr_t types_data = (data_ptr_t)(container_type.data()); // NOLINT: c-style cast (for const)
-	BitpackingPrimitives::PackBuffer<uint8_t, true>(dest, types_data + types_offset, count_in_segment,
+	BitpackingPrimitives::PackBuffer<uint8_t>(dest, types_data + types_offset, count_in_segment,
 	                                                CONTAINER_TYPE_BITWIDTH);
 	dest += types_size;
 
 	if (!number_of_runs.empty()) {
 		idx_t runs_offset = number_of_runs.size() - runs_in_segment;
 		data_ptr_t run_data = (data_ptr_t)(number_of_runs.data()); // NOLINT: c-style cast (for const)
-		BitpackingPrimitives::PackBuffer<uint8_t, true>(dest, run_data + runs_offset, runs_in_segment,
+		BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment,
 		                                                RUN_CONTAINER_SIZE_BITWIDTH);
 		dest += runs_size;
 	}
