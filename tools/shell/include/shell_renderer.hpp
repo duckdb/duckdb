@@ -39,6 +39,7 @@ struct ColumnarResult {
 struct RowData {
 	vector<string> data;
 	vector<bool> is_null;
+	idx_t row_index = 0;
 };
 
 struct ResultMetadata {
@@ -67,15 +68,10 @@ class RowRenderer : public ShellRenderer {
 public:
 	explicit RowRenderer(ShellState &state);
 
-	bool first_row = true;
-
 public:
-	virtual void Render(ResultMetadata &result, RowData &row);
-
 	virtual void RenderHeader(ResultMetadata &result);
 	virtual void RenderRow(ResultMetadata &result, RowData &row) = 0;
 	virtual void RenderFooter(ResultMetadata &result);
-
 	virtual string NullValue();
 };
 

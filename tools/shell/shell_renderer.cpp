@@ -309,14 +309,6 @@ unique_ptr<ColumnRenderer> ShellState::GetColumnRenderer() {
 RowRenderer::RowRenderer(ShellState &state) : ShellRenderer(state) {
 }
 
-void RowRenderer::Render(ResultMetadata &result, RowData &row) {
-	if (first_row) {
-		RenderHeader(result);
-		first_row = false;
-	}
-	RenderRow(result, row);
-}
-
 void RowRenderer::RenderHeader(ResultMetadata &result) {
 }
 
@@ -332,26 +324,22 @@ public:
 	explicit ModeLineRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void Render(ResultMetadata &result, RowData &row) override {
-		if (first_row) {
-			auto &col_names = result.column_names;
-			// determine the render width by going over the column names
-			header_width = 5;
-			for (idx_t i = 0; i < col_names.size(); i++) {
-				auto len = col_names[i].size();
-				if (len > header_width) {
-					header_width = len;
-				}
+	void RenderHeader(ResultMetadata &result) override {
+		auto &col_names = result.column_names;
+		// determine the render width by going over the column names
+		header_width = 5;
+		for (idx_t i = 0; i < col_names.size(); i++) {
+			auto len = col_names[i].size();
+			if (len > header_width) {
+				header_width = len;
 			}
-			first_row = false;
-		} else {
-			state.Print(state.rowSeparator);
 		}
-		// render the row
-		RenderRow(result, row);
 	}
 
 	void RenderRow(ResultMetadata &result, RowData &row) override {
+		if (row.row_index > 0) {
+			state.Print(state.rowSeparator);
+		}
 		auto &data = row.data;
 		auto &col_names = result.column_names;
 		for (idx_t i = 0; i < data.size(); i++) {
@@ -525,11 +513,6 @@ public:
 	explicit ModeCsvRenderer(ShellState &state) : RowRenderer(state) {
 	}
 
-	void Render(ResultMetadata &result, RowData &row) override {
-		state.SetBinaryMode();
-		RowRenderer::Render(result, row);
-		state.SetTextMode();
-	}
 	void RenderHeader(ResultMetadata &result) override {
 		if (!show_header) {
 			return;
@@ -542,11 +525,13 @@ public:
 	}
 
 	void RenderRow(ResultMetadata &result, RowData &row) override {
+		state.SetBinaryMode();
 		auto &data = row.data;
 		for (idx_t i = 0; i < data.size(); i++) {
 			state.OutputCSV(data[i].c_str(), i < data.size() - 1);
 		}
 		state.Print(row_sep);
+		state.SetTextMode();
 	}
 };
 
@@ -629,25 +614,22 @@ public:
 	explicit ModeJsonRenderer(ShellState &state, bool json_array) : RowRenderer(state), json_array(json_array) {
 	}
 
-	void Render(ResultMetadata &result, RowData &row) override {
-		if (first_row) {
-			if (json_array) {
-				// wrap all JSON objects in an array
-				state.Print("[");
-			}
-			state.Print("{");
-			first_row = false;
-		} else {
+	void RenderHeader(ResultMetadata &result) override {
+		if (json_array) {
+			// wrap all JSON objects in an array
+			state.Print("[");
+		}
+		state.Print("{");
+	}
+
+	void RenderRow(ResultMetadata &result, RowData &row) override {
+		if (row.row_index > 0) {
 			if (json_array) {
 				// wrap all JSON objects in an array
 				state.Print(",");
 			}
 			state.Print("\n{");
 		}
-		RenderRow(result, row);
-	}
-
-	void RenderRow(ResultMetadata &result, RowData &row) override {
 		auto &data = row.data;
 		auto &types = result.types;
 		auto &col_names = result.column_names;

@@ -1291,6 +1291,9 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 	RowData row_data;
 	row_data.data.resize(nCol, string());
 	row_data.is_null.resize(nCol, false);
+	row_data.row_index = 0;
+
+	renderer.RenderHeader(result);
 	for (auto &row : query_result) {
 		if (seenInterrupt) {
 			PrintF("Interrupt\n");
@@ -1305,7 +1308,8 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 				row_data.data[c] = row.GetValue<string>(c);
 			}
 		}
-		renderer.Render(result, row_data);
+		renderer.RenderRow(result, row_data);
+		row_data.row_index++;
 	}
 	renderer.RenderFooter(result);
 	return SuccessState::SUCCESS;
