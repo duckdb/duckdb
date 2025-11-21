@@ -39,8 +39,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 		on_conflict_info = transformer.Transform<unique_ptr<OnConflictInfo>>(on_conflict_clause.optional_result);
 		result->on_conflict_info = std::move(on_conflict_info);
 		result->table_ref = std::move(insert_target);
-	}
-	if (or_action_opt.HasResult()) {
+	} else if (or_action_opt.HasResult()) {
 		on_conflict_info->action_type = transformer.Transform<OnConflictAction>(or_action_opt.optional_result);
 		result->on_conflict_info = std::move(on_conflict_info);
 		result->table_ref = std::move(insert_target);
@@ -80,7 +79,9 @@ unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictClause(PEGT
 		auto expression_target =
 		    transformer.Transform<OnConflictExpressionTarget>(on_conflict_target_opt.optional_result);
 		result->indexed_columns = expression_target.indexed_columns;
-		result->condition = std::move(expression_target.where_clause);
+		if (expression_target.where_clause) {
+			result->condition = std::move(expression_target.where_clause);
+		}
 	}
 	return result;
 }
@@ -113,7 +114,7 @@ unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictUpdate(PEGT
 	auto result = make_uniq<OnConflictInfo>();
 	result->action_type = OnConflictAction::UPDATE;
 	result->set_info = transformer.Transform<unique_ptr<UpdateSetInfo>>(list_pr.Child<ListParseResult>(3));
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 4, result->condition);
+	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 4, result->set_info->condition);
 	return result;
 }
 

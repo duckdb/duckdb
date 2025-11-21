@@ -13,7 +13,8 @@
         "test/sql/delete/test_segment_deletes.test",
         "test/sql/types/union/union_join.test",
         "test/sql/catalog/did_you_mean.test",
-        "test/sql/storage/wal/wal_view_storage.test"
+        "test/sql/storage/wal/wal_view_storage.test",
+        "test/sql/upsert/postgres/planner_preprocessing.test"
       ]
     },
     {
@@ -148,7 +149,8 @@
         "test/sql/show_select/test_describe_quoted.test",
         "test/sql/show_select/test_summarize_quoted.test",
         "test/sql/pragma/test_show_tables.test",
-        "test/sql/export/export_quoted_enum.test"
+        "test/sql/export/export_quoted_enum.test",
+        "test/sql/catalog/test_quoted_column_name.test"
       ]
     },
     {

@@ -26,6 +26,11 @@ PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transfor
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(0));
+	auto setop_select = list_pr.Child<OptionalParseResult>(1);
+	if (setop_select.HasResult()) {
+		// TODO(Dtenwolde)
+		throw NotImplementedException("Union has not yet been implemented");
+	}
 	vector<unique_ptr<ResultModifier>> result_modifiers;
 	transformer.TransformOptional<vector<unique_ptr<ResultModifier>>>(list_pr, 2, result_modifiers);
 	for (auto &result_modifier : result_modifiers) {
@@ -159,8 +164,11 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformFromClause(PEGTransformer &
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformSelectClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	// TODO(Dtenwolde) Do something with opt_distinct
 	auto opt_distinct = list_pr.Child<OptionalParseResult>(1);
+	if (opt_distinct.HasResult()) {
+		// TODO(Dtenwolde)
+		throw NotImplementedException("Distinct clause is not yet implemented.");
+	}
 	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
 	return target_list;
 }
