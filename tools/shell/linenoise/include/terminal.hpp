@@ -31,6 +31,7 @@ enum KEY_ACTION {
 	CTRL_N = 14,    /* Ctrl-n */
 	CTRL_O = 15,    /* Ctrl-O */
 	CTRL_P = 16,    /* Ctrl-p */
+	CTRL_Q = 17,    /* Ctrl-q */
 	CTRL_R = 18,    /* Ctrl-r */
 	CTRL_S = 19,    /* Ctrl-s */
 	CTRL_T = 20,    /* Ctrl-t */
@@ -88,7 +89,13 @@ enum class EscapeSequence {
 	ALT_RIGHT_ARROW,
 	ALT_BACKSLASH,
 	CTRL_UP,
-	CTRL_DOWN
+	CTRL_DOWN,
+	MOUSE_CLICK
+};
+
+struct TerminalSize {
+	int ws_col = 0;
+	int ws_row = 0;
 };
 
 struct KeyPress {
@@ -105,11 +112,7 @@ struct KeyPress {
 
 	char action = KEY_NULL;
 	EscapeSequence sequence = EscapeSequence::INVALID;
-};
-
-struct TerminalSize {
-	int ws_col = 0;
-	int ws_row = 0;
+	TerminalSize position;
 };
 
 class Terminal {
@@ -117,6 +120,8 @@ public:
 	static int IsUnsupportedTerm();
 	static int EnableRawMode();
 	static void DisableRawMode();
+	static void EnableMouseTracking();
+	static void DisableMouseTracking();
 	static bool IsMultiline();
 	static void SetMultiLine(int ml);
 
@@ -130,7 +135,7 @@ public:
 	static char *EditNoTTY();
 	static int EditRaw(char *buf, size_t buflen, const char *prompt);
 
-	static EscapeSequence ReadEscapeSequence(int ifd);
+	static EscapeSequence ReadEscapeSequence(int ifd, KeyPress &key_press);
 
 #if defined(_WIN32) || defined(WIN32)
 	static HANDLE GetConsoleInput();

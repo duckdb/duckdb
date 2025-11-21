@@ -109,6 +109,7 @@ public:
 	void EditRemoveSpaces();
 	void EditSwapCharacter();
 	void EditSwapWord();
+	void SetCursorPosition(int x, int y);
 
 	void StartSearch();
 	void CancelSearch();

@@ -810,6 +810,22 @@ void Linenoise::EditDeleteAll() {
 	RefreshLine();
 }
 
+void Linenoise::SetCursorPosition(int x, int y) {
+	int current_row, current_col, cols, rows;
+	// key presses are *relative to the current cursor*
+	// first get the current cursor location
+	PositionToColAndRow(pos, current_row, current_col, rows, cols);
+	// adjust the location based on the provided x / y
+	current_col += x;
+	current_row += y;
+	if (current_col < 0 || current_row < 0 || current_row > rows) {
+		// out of bounds - ignore
+		return;
+	}
+	pos = ColAndRowToPosition(current_row, current_col);
+	RefreshLine();
+}
+
 void Linenoise::EditCapitalizeNextWord(Capitalization capitalization) {
 	size_t next_pos = pos;
 
@@ -1343,7 +1359,7 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 	key_press.action = c;
 	if (key_press.action == ESC) {
 		// for ESC we need to read an escape sequence
-		key_press.sequence = Terminal::ReadEscapeSequence(ifd);
+		key_press.sequence = Terminal::ReadEscapeSequence(ifd, key_press);
 	}
 	return true;
 #endif
@@ -1639,6 +1655,10 @@ int Linenoise::Edit() {
 			case EscapeSequence::DELETE_KEY:
 				EditDelete();
 				break;
+			case EscapeSequence::MOUSE_CLICK:
+				// mouse click
+				SetCursorPosition(key_press.position.ws_col, key_press.position.ws_row);
+				break;
 			default:
 				Linenoise::Log("Unrecognized escape\n");
 				break;
@@ -1669,6 +1689,9 @@ int Linenoise::Edit() {
 			break;
 		case CTRL_X: /* ctrl+x, insert newline */
 			EditInsertMulti("\r\n");
+			break;
+		case CTRL_Q: /* ctrl+q enables mouse tracking for a single click */
+			Terminal::EnableMouseTracking();
 			break;
 		case CTRL_Y:
 			// unsupported
