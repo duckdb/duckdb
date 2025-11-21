@@ -225,12 +225,14 @@ bool RoaringCompressState::CanStore(idx_t container_size_in_tuples, const Contai
 	idx_t runs_count = metadata_collection.GetRunContainerCount();
 	idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
 #ifdef DEBUG
-	//! Assert that whatever is already stored can actually fit on the segment
-	idx_t current_metadata_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
-	(void)current_metadata_size;
-	auto used_data_space = GetUsedDataSpace();
-	used_data_space = AlignValue<idx_t, 8>(used_data_space);
-	D_ASSERT(used_data_space + current_metadata_size <= GetAvailableSpace());
+	{
+		//! Assert that whatever is already stored can actually fit on the segment
+		idx_t current_metadata_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+		(void)current_metadata_size;
+		auto used_data_space = GetUsedDataSpace();
+		used_data_space = AlignValue<idx_t, 8>(used_data_space);
+		D_ASSERT(used_data_space + current_metadata_size <= GetAvailableSpace());
+	}
 #endif
 	idx_t new_data_space = 0;
 	if (metadata.IsUncompressed()) {
