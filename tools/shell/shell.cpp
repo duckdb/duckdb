@@ -1541,7 +1541,6 @@ SuccessState ShellState::RenderDuckBoxResult(duckdb::QueryResult &res) {
 		}
 		config.decimal_separator = decimal_separator;
 		config.thousand_separator = thousand_separator;
-		config.max_width = max_width;
 		config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
 		duckdb::BoxRenderer renderer(config);
 		auto &materialized = res.Cast<duckdb::MaterializedQueryResult>();
