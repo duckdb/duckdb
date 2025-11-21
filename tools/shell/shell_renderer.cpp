@@ -24,6 +24,63 @@ ShellRenderer::ShellRenderer(ShellState &state)
 }
 
 //===--------------------------------------------------------------------===//
+// Result Metadata
+//===--------------------------------------------------------------------===//
+string GetTypeName(duckdb::LogicalType &type) {
+switch (type.id()) {
+	case duckdb::LogicalTypeId::BOOLEAN:
+		return "BOOLEAN";
+	case duckdb::LogicalTypeId::TINYINT:
+		return "TINYINT";
+	case duckdb::LogicalTypeId::SMALLINT:
+		return "SMALLINT";
+	case duckdb::LogicalTypeId::INTEGER:
+		return "INTEGER";
+	case duckdb::LogicalTypeId::BIGINT:
+		return "BIGINT";
+	case duckdb::LogicalTypeId::FLOAT:
+		return "FLOAT";
+	case duckdb::LogicalTypeId::DOUBLE:
+		return "DOUBLE";
+	case duckdb::LogicalTypeId::DECIMAL:
+		return "DECIMAL";
+	case duckdb::LogicalTypeId::DATE:
+		return "DATE";
+	case duckdb::LogicalTypeId::TIME:
+		return "TIME";
+	case duckdb::LogicalTypeId::TIMESTAMP:
+	case duckdb::LogicalTypeId::TIMESTAMP_NS:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+		return "TIMESTAMP";
+	case duckdb::LogicalTypeId::VARCHAR:
+		return "VARCHAR";
+	case duckdb::LogicalTypeId::LIST:
+		return "LIST";
+	case duckdb::LogicalTypeId::MAP:
+		return "MAP";
+	case duckdb::LogicalTypeId::STRUCT:
+		return "STRUCT";
+	case duckdb::LogicalTypeId::BLOB:
+		return "BLOB";
+	default:
+		return "NULL";
+}
+}
+
+ResultMetadata::ResultMetadata(duckdb::QueryResult &result) {
+	// initialize the result and the column names
+	idx_t nCol = result.ColumnCount();
+	column_names.reserve(nCol);
+	types.reserve(nCol);
+	for (idx_t c = 0; c < nCol; c++) {
+		column_names.push_back(result.names[c]);
+		types.push_back(result.types[c]);
+		type_names.push_back(GetTypeName(result.types[c]));
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Column Renderers
 //===--------------------------------------------------------------------===//
 ColumnRenderer::ColumnRenderer(ShellState &state) : ShellRenderer(state) {
@@ -33,11 +90,11 @@ string ColumnRenderer::ConvertValue(const char *value) {
 	return value ? value : state.nullValue;
 }
 
-void ColumnRenderer::RenderFooter(ColumnarResult &result) {
+void ColumnRenderer::RenderFooter(ResultMetadata &result) {
 }
 
-void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t c) {
-	auto &header_value = result.data[0][c];
+void ColumnRenderer::RenderAlignedValue(ResultMetadata &result, idx_t c) {
+	auto &header_value = result.column_names[c];
 	idx_t w = column_width[c];
 	idx_t n = state.RenderLength(header_value);
 	idx_t lspace = (w - n) / 2;
@@ -50,15 +107,20 @@ void ColumnRenderer::RenderAlignedValue(ColumnarResult &result, idx_t c) {
 void ColumnRenderer::Analyze(ColumnarResult &result) {
 	// compute the column widths
 	auto &state = ShellState::Get();
-	for (idx_t i = 0; i < result.column_count; i++) {
-		int w = i < state.colWidth.size() ? state.colWidth[i] : 0;
+	for (idx_t c = 0; c < result.ColumnCount(); c++) {
+		int w = c < state.colWidth.size() ? state.colWidth[c] : 0;
 		if (w < 0) {
 			right_align.push_back(true);
 			w = -w;
 		} else {
 			right_align.push_back(false);
 		}
-		column_width.push_back(static_cast<idx_t>(w));
+		idx_t render_width = static_cast<idx_t>(w);
+		idx_t column_name_width = state.RenderLength(result.metadata.column_names[c]);
+		if (column_name_width > render_width) {
+			render_width = column_name_width;
+		}
+		column_width.push_back(render_width);
 	}
 	for (auto &row : result.data) {
 		for (idx_t column_idx = 0; column_idx < row.size(); column_idx++) {
@@ -94,13 +156,13 @@ public:
 	explicit ModeColumnRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	void RenderHeader(ColumnarResult &result) override {
+	void RenderHeader(ResultMetadata &result) override {
 		if (!show_header) {
 			return;
 		}
-		auto column_count = result.column_count;
+		auto column_count = result.ColumnCount();
 		for (idx_t c = 0; c < column_count; c++) {
-			state.UTF8WidthPrint(column_width[c], result.data[0][c], right_align[c]);
+			state.UTF8WidthPrint(column_width[c], result.column_names[c], right_align[c]);
 			state.Print(c == column_count - 1 ? "\n" : "  ");
 		}
 		for (idx_t i = 0; i < column_count; i++) {
@@ -122,8 +184,8 @@ public:
 	explicit ModeTableRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	void RenderHeader(ColumnarResult &result) override {
-		auto column_count = result.column_count;
+	void RenderHeader(ResultMetadata &result) override {
+		auto column_count = result.ColumnCount();
 		state.PrintRowSeparator(column_count, "+", column_width);
 		state.Print("| ");
 		for (idx_t c = 0; c < column_count; c++) {
@@ -133,8 +195,8 @@ public:
 		state.PrintRowSeparator(column_count, "+", column_width);
 	}
 
-	void RenderFooter(ColumnarResult &result) override {
-		auto column_count = result.column_count;
+	void RenderFooter(ResultMetadata &result) override {
+		auto column_count = result.ColumnCount();
 		state.PrintRowSeparator(column_count, "+", column_width);
 	}
 
@@ -160,8 +222,8 @@ public:
 		return StringUtil::Replace(result, "|", "\\|");
 	}
 
-	void RenderHeader(ColumnarResult &result) override {
-		auto column_count = result.column_count;
+	void RenderHeader(ResultMetadata &result) override {
+		auto column_count = result.ColumnCount();
 		state.Print(GetRowStart());
 		for (idx_t c = 0; c < column_count; c++) {
 			if (c > 0) {
@@ -242,8 +304,8 @@ public:
 		return result;
 	}
 
-	void RenderHeader(ColumnarResult &result) override {
-		auto column_count = result.column_count;
+	void RenderHeader(ResultMetadata &result) override {
+		auto column_count = result.ColumnCount();
 		print_box_row_separator(column_count, BOX_23, BOX_234, BOX_34, column_width);
 		state.Print(BOX_13 " ");
 		for (idx_t c = 0; c < column_count; c++) {
@@ -253,8 +315,8 @@ public:
 		print_box_row_separator(column_count, BOX_123, BOX_1234, BOX_134, column_width);
 	}
 
-	void RenderFooter(ColumnarResult &result) override {
-		auto column_count = result.column_count;
+	void RenderFooter(ResultMetadata &result) override {
+		auto column_count = result.ColumnCount();
 		print_box_row_separator(column_count, BOX_12, BOX_124, BOX_14, column_width);
 	}
 
@@ -304,8 +366,8 @@ public:
 	explicit ModeLatexRenderer(ShellState &state) : ColumnRenderer(state) {
 	}
 
-	void RenderHeader(ColumnarResult &result) override {
-		auto column_count = result.column_count;
+	void RenderHeader(ResultMetadata &result) override {
+		auto column_count = result.ColumnCount();
 
 		state.Print("\\begin{tabular}{|");
 		for (idx_t i = 0; i < column_count; i++) {
@@ -324,7 +386,7 @@ public:
 		state.Print("\\hline\n");
 	}
 
-	void RenderFooter(ColumnarResult &) override {
+	void RenderFooter(ResultMetadata &) override {
 		state.Print("\\hline\n");
 		state.Print("\\end{tabular}\n");
 	}

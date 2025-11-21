@@ -1235,58 +1235,9 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 	return false;
 }
 
-string GetTypeName(duckdb::LogicalType &type) {
-	switch (type.id()) {
-	case duckdb::LogicalTypeId::BOOLEAN:
-		return "BOOLEAN";
-	case duckdb::LogicalTypeId::TINYINT:
-		return "TINYINT";
-	case duckdb::LogicalTypeId::SMALLINT:
-		return "SMALLINT";
-	case duckdb::LogicalTypeId::INTEGER:
-		return "INTEGER";
-	case duckdb::LogicalTypeId::BIGINT:
-		return "BIGINT";
-	case duckdb::LogicalTypeId::FLOAT:
-		return "FLOAT";
-	case duckdb::LogicalTypeId::DOUBLE:
-		return "DOUBLE";
-	case duckdb::LogicalTypeId::DECIMAL:
-		return "DECIMAL";
-	case duckdb::LogicalTypeId::DATE:
-		return "DATE";
-	case duckdb::LogicalTypeId::TIME:
-		return "TIME";
-	case duckdb::LogicalTypeId::TIMESTAMP:
-	case duckdb::LogicalTypeId::TIMESTAMP_NS:
-	case duckdb::LogicalTypeId::TIMESTAMP_MS:
-	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP";
-	case duckdb::LogicalTypeId::VARCHAR:
-		return "VARCHAR";
-	case duckdb::LogicalTypeId::LIST:
-		return "LIST";
-	case duckdb::LogicalTypeId::MAP:
-		return "MAP";
-	case duckdb::LogicalTypeId::STRUCT:
-		return "STRUCT";
-	case duckdb::LogicalTypeId::BLOB:
-		return "BLOB";
-	default:
-		return "NULL";
-	}
-}
-
 SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryResult &query_result) {
-	ResultMetadata result;
-	// initialize the result and the column names
 	idx_t nCol = query_result.ColumnCount();
-	result.column_names.reserve(nCol);
-	result.types.reserve(nCol);
-	for (idx_t c = 0; c < nCol; c++) {
-		result.column_names.push_back(query_result.names[c]);
-		result.types.push_back(query_result.types[c]);
-	}
+	ResultMetadata result(query_result);
 
 	RowData row_data;
 	row_data.data.resize(nCol, string());
@@ -1316,19 +1267,12 @@ SuccessState ShellState::RenderQueryResult(RowRenderer &renderer, duckdb::QueryR
 }
 
 void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryResult &res, ColumnarResult &result) {
-	// fetch the column count, column names and types
-	result.column_count = res.ColumnCount();
-	vector<string> header_row;
-	for (idx_t c = 0; c < result.column_count; c++) {
-		header_row.push_back(renderer.ConvertValue(res.names[c].c_str()));
-		result.types.push_back(res.types[c]);
-		result.type_names.push_back(GetTypeName(res.types[c]));
+	for (auto &column_name : result.metadata.column_names) {
+		column_name = renderer.ConvertValue(column_name.c_str());
 	}
-	result.data.push_back(std::move(header_row));
-
 	for (auto &row : res) {
 		vector<string> row_data;
-		for (idx_t c = 0; c < result.column_count; c++) {
+		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto str_val = row.GetValue<string>(c);
 			row_data.push_back(renderer.ConvertValue(str_val.c_str()));
 		}
@@ -1348,20 +1292,20 @@ void ShellState::ConvertColumnarResult(ColumnRenderer &renderer, duckdb::QueryRe
 ** any output.
 */
 void ShellState::RenderColumnarResult(duckdb::QueryResult &res) {
-	ColumnarResult result;
+	ColumnarResult result(res);
 	auto column_renderer = GetColumnRenderer();
 	ConvertColumnarResult(*column_renderer, res, result);
 
-	column_renderer->RenderHeader(result);
+	column_renderer->RenderHeader(result.metadata);
 
-	for (idx_t r = 1; r < result.data.size(); r++) {
+	for (idx_t r = 0; r < result.data.size(); r++) {
 		RowData row_data;
 		row_data.data = std::move(result.data[r]);
-		row_data.row_index = r - 1;
+		row_data.row_index = r;
 
 		column_renderer->RenderRow(row_data);
 	}
-	column_renderer->RenderFooter(result);
+	column_renderer->RenderFooter(result.metadata);
 }
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {

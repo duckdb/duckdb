@@ -27,11 +27,27 @@ public:
 	static bool IsColumnar(RenderMode mode);
 };
 
-struct ColumnarResult {
-	idx_t column_count = 0;
-	vector<vector<string>> data;
+struct ResultMetadata {
+	explicit ResultMetadata(duckdb::QueryResult &result);
+
+	vector<string> column_names;
 	vector<duckdb::LogicalType> types;
 	vector<string> type_names;
+
+	idx_t ColumnCount() const {
+		return column_names.size();
+	}
+};
+
+struct ColumnarResult {
+	explicit ColumnarResult(duckdb::QueryResult &result) : metadata(result) {}
+
+	ResultMetadata metadata;
+	vector<vector<string>> data;
+
+	idx_t ColumnCount() const {
+		return metadata.ColumnCount();
+	}
 };
 
 struct RowData {
@@ -40,10 +56,6 @@ struct RowData {
 	idx_t row_index = 0;
 };
 
-struct ResultMetadata {
-	vector<string> column_names;
-	vector<duckdb::LogicalType> types;
-};
 
 class ColumnRenderer : public ShellRenderer {
 public:
@@ -51,9 +63,9 @@ public:
 
 	void Analyze(ColumnarResult &result);
 	virtual string ConvertValue(const char *value);
-	virtual void RenderHeader(ColumnarResult &result) = 0;
+	virtual void RenderHeader(ResultMetadata &result) = 0;
 	virtual void RenderRow(RowData &row);
-	virtual void RenderFooter(ColumnarResult &result);
+	virtual void RenderFooter(ResultMetadata &result);
 
 	virtual const char *GetColumnSeparator() = 0;
 	virtual const char *GetRowSeparator() = 0;
@@ -61,7 +73,7 @@ public:
 		return nullptr;
 	}
 
-	void RenderAlignedValue(ColumnarResult &result, idx_t c);
+	void RenderAlignedValue(ResultMetadata &result, idx_t c);
 
 protected:
 	vector<idx_t> column_width;
