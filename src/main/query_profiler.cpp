@@ -257,9 +257,7 @@ void QueryProfiler::EndQuery() {
 				info.metrics[MetricsType::QUERY_NAME] = query_metrics.query;
 			}
 			for (const auto &global_info_entry : query_metrics.query_global_info.metrics) {
-				if (info.Enabled(settings, global_info_entry.first)) {
-					info.metrics[global_info_entry.first] = global_info_entry.second;
-				}
+				info.metrics[global_info_entry.first] = global_info_entry.second;
 			}
 			if (info.Enabled(settings, MetricsType::LATENCY)) {
 				info.metrics[MetricsType::LATENCY] = query_metrics.latency.Elapsed();
