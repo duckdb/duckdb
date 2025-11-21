@@ -1380,8 +1380,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			vector<MetaBlockPointer> read_deletes_pointers;
 			if (!pointer_copy.deletes_pointers.empty()) {
 				auto root_delete = pointer_copy.deletes_pointers[0];
-				auto vm = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(),
-				                                         row_group.start);
+				auto vm = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager());
 				read_deletes_pointers = vm->GetStoragePointers();
 			}
 
