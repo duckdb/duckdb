@@ -33,7 +33,7 @@ string AttachTaskTypeToString(AttachTaskType task_type) {
 	case AttachTaskType::CHECKPOINT:
 		return "CHECKPOINT";
 	default:
-		return "Unknown";
+		return "UNKNOWN";
 	}
 }
 

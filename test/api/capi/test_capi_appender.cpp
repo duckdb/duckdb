@@ -1,5 +1,6 @@
 #include "capi_tester.hpp"
 #include "duckdb.h"
+#include "duckdb/function/table/system_functions.hpp"
 
 #include <thread>
 #include <random>
@@ -1256,21 +1257,6 @@ TEST_CASE("Test upserting using the C API", "[capi]") {
 	tester.Cleanup();
 }
 
-string generate_random_string(idx_t length) {
-	const string characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-	std::random_device random_device;
-	std::mt19937 generator(random_device());
-
-	std::uniform_int_distribution<> distribution(0, characters.size() - 1);
-
-	string random_string;
-	for (size_t i = 0; i < length; ++i) {
-		random_string += characters[distribution(generator)];
-	}
-	return random_string;
-}
-
 bool has_error(const duckdb_state state, atomic<bool> &success, const string &message) {
 	if (state == DuckDBError) {
 		success = false;
@@ -1281,26 +1267,16 @@ bool has_error(const duckdb_state state, atomic<bool> &success, const string &me
 }
 
 TEST_CASE("Test the appender with parallel appends and multiple data types in the C API", "[capi]") {
-	string query = R"(
-    CREATE TABLE IF NOT EXISTS test (
-		id BIGINT,
-		int_col INTEGER,
-		smallint_col SMALLINT,
-		bigint_col BIGINT,
-		decimal_col DECIMAL(10,2),
-		numeric_col NUMERIC(10,2),
-		real_col REAL,
-		double_col DOUBLE PRECISION,
-		char_col CHAR(5),
-		varchar_col VARCHAR(50),
-		text_col TEXT,
-		date_col DATE,
-		time_col TIME,
-		timestamp_col TIMESTAMP,
-		boolean_col BOOLEAN,
-		bytea_col BYTEA,
-		uuid_col UUID,
-		json_col VARCHAR))"; // This was a JSON in the original issue.
+	auto test_types = TestAllTypesFun::GetTestTypes(false, false);
+
+	string query = "CREATE TABLE IF NOT EXISTS test (";
+	for (auto &type : test_types) {
+		if (type.name == "union") {
+			type.name = "union_col";
+		}
+		query += type.name + " " + type.type.ToString() + ", ";
+	}
+	query += ")";
 
 	char *err_msg;
 
@@ -1322,8 +1298,8 @@ TEST_CASE("Test the appender with parallel appends and multiple data types in th
 	atomic<bool> success {true};
 	duckdb::vector<std::thread> threads;
 
-	for (idx_t i = 0; i < 10; i++) {
-		threads.emplace_back([db, &success]() {
+	for (idx_t i = 0; i < 5; i++) {
+		threads.emplace_back([db, &success, test_types]() {
 			// Create thread-local connection.
 			duckdb_connection t_conn;
 			if (has_error(duckdb_connect(db, &t_conn), success, "failed to create connection")) {
@@ -1344,98 +1320,29 @@ TEST_CASE("Test the appender with parallel appends and multiple data types in th
 			}
 			duckdb_destroy_result(&t_ret);
 
-			std::srand(static_cast<unsigned int>(std::time(nullptr)));
-
-			for (int j = 0; j < 3000; j++) {
+			for (int j = 0; j < 2060; j++) {
 				if (!success) {
 					return;
 				}
-
-				auto huge_int = duckdb_double_to_hugeint(0.4);
-				duckdb_decimal decimal;
-				decimal.width = 10;
-				decimal.scale = 2;
-				decimal.value = huge_int;
-				auto decimal_value = duckdb_create_decimal(decimal);
-
-				string char_5 = generate_random_string(5);
-				string char_50 = generate_random_string(50);
-				string char_200 = generate_random_string(200);
-
-				duckdb_date date = {std::rand()};
-				duckdb_time time = {std::rand()};
-				duckdb_timestamp ts = {std::rand()};
 
 				// Begin row.
 				if (has_error(duckdb_appender_begin_row(t_app), success, "failed to begin append to row")) {
 					return;
 				}
 
-				// Append values.
-				if (has_error(duckdb_append_int64(t_app, 1 + std::rand()), success, "failed to append int64")) {
-					return;
-				}
-				if (has_error(duckdb_append_int32(t_app, 5 + std::rand()), success, "failed to append int32")) {
-					return;
-				}
-				if (has_error(duckdb_append_int16(t_app, std::rand() % 25000), success, "failed to append int16")) {
-					return;
-				}
-				if (has_error(duckdb_append_int64(t_app, 8 + std::rand()), success,
-				              "failed to append int64 (not PK column)")) {
-					return;
-				}
-				if (has_error(duckdb_append_value(t_app, decimal_value), success, "failed to append decimal")) {
-					return;
-				}
-				if (has_error(duckdb_append_value(t_app, decimal_value), success, "failed to append numeric")) {
-					return;
-				}
-				if (has_error(duckdb_append_float(t_app, 0.03 * std::rand()), success, "failed to append float")) {
-					return;
-				}
-				if (has_error(duckdb_append_double(t_app, 0.04 * std::rand()), success, "failed to append double")) {
-					return;
-				}
-				if (has_error(duckdb_append_varchar(t_app, char_5.c_str()), success, "failed to append varchar 5")) {
-					return;
-				}
-				if (has_error(duckdb_append_varchar(t_app, char_50.c_str()), success, "failed to append varchar 50")) {
-					return;
-				}
-				if (has_error(duckdb_append_varchar(t_app, char_200.c_str()), success,
-				              "failed to append varchar 200")) {
-					return;
-				}
-				if (has_error(duckdb_append_date(t_app, date), success, "failed to append date")) {
-					return;
-				}
-				if (has_error(duckdb_append_time(t_app, time), success, "failed to append time")) {
-					return;
-				}
-				if (has_error(duckdb_append_timestamp(t_app, ts), success, "failed to append timestamp")) {
-					return;
-				}
-				if (has_error(duckdb_append_bool(t_app, std::rand() % 2), success, "failed to append bool")) {
-					return;
-				}
-				if (has_error(duckdb_append_varchar_length(t_app, char_200.c_str(), 200), success,
-				              "failed to append varchar 200")) {
-					return;
-				}
-				if (has_error(duckdb_append_null(t_app), success, "failed to append NULL UUID")) {
-					return;
-				}
-				if (has_error(duckdb_append_null(t_app), success, "failed to append NULL JSON")) {
+				// Append all values.
+				for (const auto &type : test_types) {
+					auto value = type.min_value;
+					duckdb_value val_ptr = reinterpret_cast<duckdb_value>(&value);
+					if (has_error(duckdb_append_value(t_app, val_ptr), success, "failed to append value to row")) {
+						return;
+					};
 				}
 
 				// End row.
 				if (has_error(duckdb_appender_end_row(t_app), success, "failed to append end row")) {
 					return;
 				}
-
-				// Clean up.
-				duckdb_destroy_value(&decimal_value);
 			}
 
 			// COMMIT and clean up.
