@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/row_group_pruner.hpp"
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -185,7 +186,8 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 		}
 	}
 	// Only sort row groups by primary order column and prune with limit if set
-	return make_uniq<RowGroupOrderOptions>(column_index, order_by, order_type, column_type, combined_limit, 0);
+	return make_uniq<RowGroupOrderOptions>(column_index, order_by, order_type, column_type, combined_limit,
+	                                       NumericCast<uint64_t>(0));
 }
 
 } // namespace duckdb

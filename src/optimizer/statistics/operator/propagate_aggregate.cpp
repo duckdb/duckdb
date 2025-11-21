@@ -84,7 +84,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			const auto &col_ref = aggr_expr.children[0]->Cast<BoundColumnRefExpression>();
 			if (!col_ref.return_type.IsNumeric() && !col_ref.return_type.IsTemporal()) {
-				// TODO: If these are strings or some other fancy type, we might not have statistics
+				// Only use NumericStats (StringStats min/max may be truncated)
 				return;
 			}
 
@@ -133,61 +133,57 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		return;
 	}
 	idx_t count = 0;
-	for (auto &stats : partition_stats) {
+	vector<Value> min_max_results;
+	min_max_results.reserve(min_max_bindings.size());
+
+	for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
+		auto &stats = partition_stats[partition_idx];
 		if (stats.count_type == CountType::COUNT_APPROXIMATE) {
 			// we cannot get an exact count
 			return;
 		}
 		count += stats.count;
-	}
-	vector<Value> min_max_results;
-	if (!min_max_bindings.empty()) {
-		min_max_results.reserve(min_max_bindings.size());
-		// TODO: combine this with previous loop
-		for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
-			auto &stats = partition_stats[partition_idx];
-			if (!stats.partition_row_group) {
+
+		if (!stats.partition_row_group) {
+			return;
+		}
+		for (idx_t agg_idx = 0; agg_idx < min_max_bindings.size(); agg_idx++) {
+			const auto &binding = min_max_bindings[agg_idx];
+			const column_t column_index = get.GetColumnIds()[binding.column_index].GetPrimaryIndex(); // TODO: Pull
+			// these out
+			auto column_stats = stats.partition_row_group->GetColumnStatistics(column_index);
+			if (!NumericStats::HasMinMax(*column_stats)) {
+				// TODO: This also returns if an entire rowgroup is null. In that case, we could skip/compare null
 				return;
 			}
-			for (idx_t agg_idx = 0; agg_idx < min_max_bindings.size(); agg_idx++) {
-				const auto &binding = min_max_bindings[agg_idx];
-				const column_t column_index = get.GetColumnIds()[binding.column_index].GetPrimaryIndex();
-				auto column_stats = stats.partition_row_group->GetColumnStatistics(column_index);
-				if (!NumericStats::HasMinMax(*column_stats)) {
-					// FIXME: This also returns if an entire rowgroup is null. In that case, we could skip/compare null
-					return;
-				}
-				if (partition_idx == 0) {
-					min_max_results.push_back(comparators[agg_idx]->GetVal(*column_stats));
-				} else {
-					auto rhs = comparators[agg_idx]->GetVal(*column_stats);
-					min_max_results[agg_idx] = comparators[agg_idx]->Compare(min_max_results[agg_idx], rhs);
-				}
+			if (partition_idx == 0) {
+				min_max_results.push_back(comparators[agg_idx]->GetVal(*column_stats));
+			} else {
+				auto rhs = comparators[agg_idx]->GetVal(*column_stats);
+				min_max_results[agg_idx] = comparators[agg_idx]->Compare(min_max_results[agg_idx], rhs);
 			}
 		}
 	}
 
-	// we got an exact count - replace the entire aggregate with a scan of the result
+	// we got an exact count/min/max - replace the entire aggregate with a scan of the result
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
 	for (idx_t min_max_index = 0; min_max_index < min_max_results.size(); min_max_index++) {
 		auto expr = make_uniq<BoundConstantExpression>(min_max_results[min_max_index]);
-		// FIXME: Take name from aggregate expressions
-		expr->SetAlias(get.names[min_max_bindings[min_max_index].column_index]);
 		agg_results.push_back(std::move(expr));
-
 		types.push_back(min_max_results[min_max_index].GetTypeMutable());
 	}
 
 	for (idx_t aggregate_index = 0; aggregate_index < count_star_idxs.size(); ++aggregate_index) {
 		auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));
 		const idx_t count_star_idx = count_star_idxs[aggregate_index];
-		count_result->SetAlias(aggr.expressions[count_star_idx]->GetName());
-
-		agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idxs[aggregate_index]),
-		                    std::move(count_result));
-
+		agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idx), std::move(count_result));
 		types.push_back(LogicalType::BIGINT);
+	}
+
+	// Set column names
+	for (idx_t expr_idx = 0; expr_idx < agg_results.size(); expr_idx++) {
+		agg_results[expr_idx]->SetAlias(aggr.expressions[expr_idx]->GetAlias());
 	}
 
 	vector<vector<unique_ptr<Expression>>> expressions;
