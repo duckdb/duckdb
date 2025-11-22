@@ -759,4 +759,3 @@ expected_results['tcl'] = '''"l_orderkey" "l_partkey" "l_suppkey" "l_linenumber"
 
 def get_expected_output(mode):
     return expected_results[mode]
-

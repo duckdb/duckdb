@@ -236,6 +236,10 @@ void ColumnRenderer::Analyze(RenderingQueryResult &result) {
 	auto &query_result = result.result;
 	// materialize the query result
 	for (auto &row : query_result) {
+		if (state.seenInterrupt) {
+			state.PrintF("Interrupt\n");
+			return;
+		}
 		vector<string> row_data;
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto str_val = row.GetValue<string>(c);
@@ -1070,7 +1074,7 @@ public:
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
 public:
 	DuckBoxRenderer(ShellState &state, bool highlight)
-		: shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
+	    : shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
 	}
 
 	void RenderLayout(const string &text) override {
@@ -1108,6 +1112,9 @@ public:
 	}
 
 	void PrintText(const string &text, HighlightElementType element_type) {
+		if (shell_highlight.state.seenInterrupt) {
+			return;
+		}
 		if (highlight) {
 			shell_highlight.PrintText(text, output, element_type);
 		} else {
@@ -1121,7 +1128,8 @@ private:
 	bool highlight = true;
 };
 
-ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {}
+ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(state) {
+}
 
 SuccessState ModeDuckBoxRenderer::RenderQueryResult(ShellState &state, RenderingQueryResult &result) {
 	DuckBoxRenderer result_renderer(state, state.HighlightResults());
