@@ -63,3 +63,20 @@ SELECT * FROM left_table l
 ASOF JOIN right_table r
 ON l.symbol = r.symbol AND l.ts >= r.ts AND false;
 ----
+
+query IITTIITTI rowsort
+SELECT * FROM left_table l
+ASOF JOIN right_table r
+ON l.symbol = r.symbol AND l.ts >= r.ts AND l.price + r.bid > 300;
+----
+2	2024-01-01 10:05:00	A	151.000	2	2024-01-01 10:04:00	A	150.500	0
+3	2024-01-01 10:10:00	B	380.000	3	2024-01-01 10:09:00	B	379.000	1
+
+query IITTIITTI rowsort
+SELECT * FROM left_table l
+ASOF LEFT JOIN right_table r
+ON l.symbol = r.symbol AND l.ts >= r.ts AND l.price + r.bid > 300;
+----
+1	2024-01-01 10:00:00	A	150.000	NULL	NULL	NULL	NULL	NULL
+2	2024-01-01 10:05:00	A	151.000	2	2024-01-01 10:04:00	A	150.500	0
+3	2024-01-01 10:10:00	B	380.000	3	2024-01-01 10:09:00	B	379.000	1

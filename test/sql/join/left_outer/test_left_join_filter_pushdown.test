@@ -66,3 +66,13 @@ LEFT JOIN right_table r ON l.id = r.id AND false;
 3	2	60	NULL	NULL	NULL
 4	2	90	NULL	NULL	NULL
 5	99	100	NULL	NULL	NULL
+
+query IIIIII rowsort
+SELECT * FROM left_table l
+LEFT JOIN right_table r ON l.id = r.id AND l.amount + r.budget > 1100;
+----
+1	1	50	NULL	NULL	NULL
+2	1	75	2	2	2000
+3	2	60	3	1	1500
+4	2	90	NULL	NULL	NULL
+5	99	100	NULL	NULL	NULL

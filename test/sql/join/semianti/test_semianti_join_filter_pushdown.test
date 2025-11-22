@@ -78,3 +78,18 @@ ANTI JOIN empty_table e ON l.id = e.id;
 3	2	60
 4	2	90
 5	3	100
+
+query III rowsort
+SELECT * FROM left_table l
+SEMI JOIN right_table r ON l.id = r.id AND l.amount + r.budget > 1100;
+----
+2	1	75
+3	2	60
+
+query III rowsort
+SELECT * FROM left_table l
+ANTI JOIN right_table r ON l.id = r.id AND l.amount + r.budget > 1100;
+----
+1	1	50
+4	2	90
+5	3	100

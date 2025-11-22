@@ -48,3 +48,10 @@ query IIIIII rowsort
 SELECT * FROM left_table l
 INNER JOIN right_table r ON l.id = r.id AND false;
 ----
+
+query IIIIII rowsort
+SELECT * FROM left_table l
+INNER JOIN right_table r ON l.id = r.id AND l.amount + r.budget > 1100;
+----
+2	1	75	2	2	2000
+3	2	60	3	1	1500
