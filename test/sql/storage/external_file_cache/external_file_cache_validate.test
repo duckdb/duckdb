@@ -34,7 +34,6 @@ select current_setting('validate_external_file_cache');
 ----
 false
 
-# Query should still work fine
 query I
 select sum(col1) from '__TEST_DIR__/test_validate.parquet';
 ----

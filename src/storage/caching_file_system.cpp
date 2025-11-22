@@ -60,8 +60,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
     : context(context), caching_file_system(caching_file_system_p),
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p),
-      validate(GetValidationOption(path_p, caching_file_system_p.db)), cached_file(cached_file_p),
-      position(0) {
+      validate(GetValidationOption(path_p, caching_file_system_p.db)), cached_file(cached_file_p), position(0) {
 	if (!external_file_cache.IsEnabled() || validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();

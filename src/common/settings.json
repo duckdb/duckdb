@@ -937,6 +937,13 @@
         ]
     },
     {
+        "name": "validate_external_file_cache",
+        "description": "Whether to validate external file cache entries by checking version tag or last modification timestamp.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "write_buffer_row_group_count",
         "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
         "type": "UBIGINT",
