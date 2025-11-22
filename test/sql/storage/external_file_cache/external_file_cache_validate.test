@@ -1,0 +1,41 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_validate.test
+# description: Test the validate_external_file_cache setting
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+copy (select 1 as col1, 2 as col2 from range(100)) to '__TEST_DIR__/test_validate.parquet';
+
+statement ok
+set prefetch_all_parquet_files=true;
+
+# Test 1: With validation enabled (default), queries should work.
+statement ok
+set validate_external_file_cache=true;
+
+query I
+select current_setting('validate_external_file_cache');
+----
+true
+
+query I
+select count(*) from '__TEST_DIR__/test_validate.parquet';
+----
+100
+
+# Test 2: With validation disabled, queries should still work.
+statement ok
+set validate_external_file_cache=false;
+
+# Verify setting
+query I
+select current_setting('validate_external_file_cache');
+----
+false
+
+# Query should still work fine
+query I
+select sum(col1) from '__TEST_DIR__/test_validate.parquet';
+----
+100

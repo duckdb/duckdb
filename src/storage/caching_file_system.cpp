@@ -14,7 +14,7 @@ namespace duckdb {
 namespace {
 
 // Return whether cache validation is enabled for the given path and config.
-bool GetValidationOption(QueryContext context, const OpenFileInfo &path, DatabaseInstance &db) {
+bool GetValidationOption(const OpenFileInfo &path, DatabaseInstance &db) {
 	// Check if file option is explicitly provided.
 	if (path.extended_info) {
 		const auto &open_options = path.extended_info->options;
@@ -25,12 +25,6 @@ bool GetValidationOption(QueryContext context, const OpenFileInfo &path, Databas
 			}
 			return BooleanValue::Get(validate_entry->second);
 		}
-	}
-
-	// If file option not provided, use context setting.
-	if (context.Valid()) {
-		auto &config = DBConfig::GetConfig(*context.context);
-		return config.options.validate_external_file_cache;
 	}
 
 	// Fall back to database config
@@ -66,7 +60,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
     : context(context), caching_file_system(caching_file_system_p),
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p),
-      validate(GetValidationOption(context, path_p, caching_file_system_p.db)), cached_file(cached_file_p),
+      validate(GetValidationOption(path_p, caching_file_system_p.db)), cached_file(cached_file_p),
       position(0) {
 	if (!external_file_cache.IsEnabled() || validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
