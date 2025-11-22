@@ -171,7 +171,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 
 		if (side == JoinSide::NONE) {
 			if (CanEliminate(context, type, expr)) {
-				continue; // Successfully eliminated
+				continue;
 			}
 		} else if (side == JoinSide::LEFT) {
 			if (CanPushToLeftChild(type)) {
@@ -230,10 +230,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 
 	// validate ASOF join conditions
 	if (is_asof) {
-		if (conditions.empty()) {
-			throw BinderException("ASOF JOIN requires at least one inequality condition");
-		}
-
 		idx_t asof_idx = conditions.size();
 		for (size_t c = 0; c < conditions.size(); ++c) {
 			auto &cond = conditions[c];
@@ -301,7 +297,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 	// Case 3: Has join conditions and arbitrary expressions - decide based on join type
 	if (!arbitrary_expressions.empty()) {
 		// for inner and semi join create comparison join + filter on top
-		if (type == JoinType::INNER || type == JoinType::SEMI) {
+		if (type == JoinType::INNER) {
 			auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 			comp_join->conditions = std::move(conditions);
 			comp_join->children.push_back(std::move(left_child));
